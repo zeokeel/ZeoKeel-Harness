@@ -46,6 +46,7 @@ import { createInstallKeyStore } from '@zeokeel/dsh-wasm-apps-host/app-proof'
 import { provideAppAiRunner } from './app-ai-runner.ts'
 import { assertRequiredClientEntries, assertRequiredRowsActive } from './startup-rows.ts'
 import { fatalBootIdentity, reportFatalBootFailure, type FatalBootChoice } from './fatal-boot.ts'
+import { backupProfilePatch, enterFatalSafeMode, profilePatchPath, type FatalRecoveryTargets } from './fatal-recovery.ts'
 import { provideWasmAppsWindows } from './wasm-apps-windows.ts'
 import { applyInstallDshHome, isSystemWorkingDirectory } from './desktop-home.ts'
 import { macAppBundlePath, writeMacosUpdateBootFailureMarker } from './macos-update-install.ts'
@@ -326,12 +327,59 @@ async function reportFatalStartupFailure(
         detail: copy.fatalBootDetail(reason, logDirectory),
         openLogs: copy.fatalBootOpenLogs,
         retry: copy.fatalBootRetry,
+        safeMode: copy.fatalBootSafeMode,
+        backupPatch: copy.fatalBootBackupPatch,
         quit: copy.fatalBootQuit,
       },
       logDirectory,
       log: message => { logger.error(message) },
     },
   )
+}
+
+/**
+ * Execute one fatal-dialog recovery exit (P1 safe mode / patch backup).
+ *
+ * Runs between the dialog and the relaunch, with the profile possibly broken —
+ * so it only touches files, and it must not throw past this function: a failed
+ * recovery exits non-zero instead of pretending a restart will help.
+ * @param action - recovery the user picked.
+ * @param logger - persistent diagnostics sink.
+ * @returns 0 when the caller may relaunch, 1 when the recovery itself failed.
+ */
+async function runFatalRecovery(
+  action: 'safe-mode' | 'backup-patch',
+  logger: DesktopLogger,
+): Promise<number> {
+  const targets: FatalRecoveryTargets = {
+    // Same formulas as `start()`: the recovery must act on the data root this
+    // launch would have used, including the channel-scoped userData directory.
+    homeDir: applyInstallDshHome({ productDir: CHANNEL_PROFILE?.homeDir }),
+    profileName: DESKTOP_PROFILE_NAME,
+    statePath: join(app.getPath('userData'), 'plugin-management', 'state.json'),
+  }
+  try {
+    if (action === 'safe-mode') {
+      const report = await enterFatalSafeMode(targets)
+      logger.error(`${BIN_NAME}: fatal recovery: safe mode ${JSON.stringify(report)}`)
+    } else {
+      const backupPath = backupProfilePatch(profilePatchPath(targets))
+      logger.error(`${BIN_NAME}: fatal recovery: patch backup ${JSON.stringify({ backupPath })}`)
+    }
+    return 0
+  } catch (recoveryCause) {
+    const message = recoveryCause instanceof Error ? recoveryCause.message : String(recoveryCause)
+    logger.error(`${BIN_NAME}: fatal recovery ${action} failed: ${message}`)
+    // The dialog already closed; this is the only way left to tell the user the
+    // chosen exit did not work (and it must never throw on the fatal path).
+    try {
+      const copy = desktopStartupCopy(DEFAULT_HOST_LOCALE)
+      dialog.showErrorBox(copy.fatalBootTitle(PRODUCT_NAME), message)
+    } catch {
+      // Nothing else may throw here: the caller still exits non-zero.
+    }
+    return 1
+  }
 }
 
 /** Notify once after the UI is ready; stderr carries the exact paths. */
@@ -791,8 +839,17 @@ async function start(): Promise<void> {
     // **可选视图** `mountedRuntime`（窗口内是 undefined），而 `nativeExit`/`shutdown`
     // 在窗口之前就已构造，两条退出语句因此永远有对象可用。
     const action = await reportFatalStartupFailure(cause, mountedRuntime, electronLogger)
-    if (action === 'retry') nativeExit.requestRelaunch()
-    await shutdown.request(action === 'retry' ? 0 : 1)
+    let exitCode = 1
+    if (action === 'retry') {
+      nativeExit.requestRelaunch()
+      exitCode = 0
+    } else if (action === 'safe-mode' || action === 'backup-patch') {
+      // 恢复操作本身也可能失败（权限、磁盘满）。失败时**不重启**：重启只会再弹
+      // 同一个对话框，用户会以为按钮没生效；改为留在原地非零退出并写日志。
+      exitCode = await runFatalRecovery(action, electronLogger)
+      if (exitCode === 0) nativeExit.requestRelaunch()
+    }
+    await shutdown.request(exitCode)
   }
 }
 

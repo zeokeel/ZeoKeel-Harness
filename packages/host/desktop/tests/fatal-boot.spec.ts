@@ -31,6 +31,8 @@ const COPY: FatalBootDialogCopy = {
   detail: 'boom\n\n日志目录：/tmp/example/logs',
   openLogs: '打开日志',
   retry: '重试',
+  safeMode: '安全模式',
+  backupPatch: '备份补丁并重启',
   quit: '退出',
 }
 
@@ -43,22 +45,34 @@ interface Surface {
 function surface(responses: readonly number[]): Surface {
   const queue = [...responses]
   return {
-    showMessageBoxSync: vi.fn(() => queue.shift() ?? 2),
+    showMessageBoxSync: vi.fn(() => queue.shift() ?? 4),
     showErrorBox: vi.fn(),
     openPath: vi.fn(async () => ''),
   }
 }
 
 describe('致命启动错误面（B-02）', () => {
-  it('按钮顺序即返回值语义：打开日志 / 重试 / 退出', () => {
+  it('按钮顺序即返回值语义：打开日志 / 重试 / 安全模式 / 备份补丁 / 退出', () => {
     const options = fatalBootDialogOptions(COPY)
     expect(options.type).toBe('error')
-    expect(options.buttons).toEqual(['打开日志', '重试', '退出'])
+    expect(options.buttons).toEqual(['打开日志', '重试', '安全模式', '备份补丁并重启', '退出'])
     // 默认 = 打开日志（致命失败的第一动作是取证）；Esc/关窗 = 退出（不是"重试"：
-    // 用户没改任何东西之前重试只会再失败一次）。
+    // 用户没改任何东西之前重试只会再失败一次）。两个恢复出口排在重试之后：
+    // 用户要先从日志里看出"是不是我装的插件/patch 弄坏的"。
     expect(options.defaultId).toBe(0)
-    expect(options.cancelId).toBe(2)
+    expect(options.cancelId).toBe(4)
     expect(options.detail).toContain('/tmp/example/logs')
+  })
+
+  it('选「安全模式」/「备份补丁」返回各自的恢复出口', async () => {
+    await expect(reportFatalBootFailure(
+      surface([2]) as unknown as FatalBootSurface,
+      { copy: COPY, logDirectory: '/tmp/example/logs' },
+    )).resolves.toBe('safe-mode')
+    await expect(reportFatalBootFailure(
+      surface([3]) as unknown as FatalBootSurface,
+      { copy: COPY, logDirectory: '/tmp/example/logs' },
+    )).resolves.toBe('backup-patch')
   })
 
   it('选「重试」返回 retry，且不再打开日志', async () => {
@@ -69,7 +83,7 @@ describe('致命启动错误面（B-02）', () => {
   })
 
   it('选「退出」（或关窗）返回 quit', async () => {
-    const ui = surface([2])
+    const ui = surface([4])
     await expect(reportFatalBootFailure(ui as unknown as FatalBootSurface, { copy: COPY, logDirectory: '/tmp/example/logs' })).resolves.toBe('quit')
     expect(ui.openPath).not.toHaveBeenCalled()
   })

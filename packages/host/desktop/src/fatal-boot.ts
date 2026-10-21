@@ -9,8 +9,8 @@
  * 于是"必要行没激活""数据根不可写""YAML 解析失败"这类故障表现为
  * **双击之后什么都没有**。
  *
- * 本模块只做一件事：把那次失败变成一个**原生错误面**，并给出三个出口
- * （打开日志 / 重试 / 退出）。它与 Electron 的具体实例解耦（`FatalBootSurface`
+ * 本模块只做一件事：把那次失败变成一个**原生错误面**，并给出五个出口
+ * （打开日志 / 重试 / 安全模式并重启 / 备份补丁并重启 / 退出）。它与 Electron 的具体实例解耦（`FatalBootSurface`
  * 注入），因此行为可以在 vitest 里逐条钉住，而不是只能靠读源码。
  *
  * 两条硬约束（都是"静默"的反面）：
@@ -29,7 +29,7 @@
  * 「打开日志」不是终局：它打开目录后重新弹出同一个对话框（用户看完日志可以直接
  * 重试），因此不会出现在返回值里。
  */
-export type FatalBootChoice = 'retry' | 'quit'
+export type FatalBootChoice = 'retry' | 'safe-mode' | 'backup-patch' | 'quit'
 
 /**
  * 致命路径的"身份取值"：产品名 + 当前语言。
@@ -70,6 +70,10 @@ export interface FatalBootDialogCopy {
   readonly openLogs: string
   /** 「重试」按钮文案。 */
   readonly retry: string
+  /** 「安全模式（禁用第三方插件）并重启」按钮文案。 */
+  readonly safeMode: string
+  /** 「备份补丁并重启」按钮文案。 */
+  readonly backupPatch: string
   /** 「退出」按钮文案。 */
   readonly quit: string
 }
@@ -99,9 +103,11 @@ export interface FatalBootSurface {
 /**
  * 对话框选项（按钮顺序 = 返回值语义的唯一真源）。
  *
- * 顺序：0 = 打开日志（平台默认按钮）、1 = 重试、2 = 退出（Esc/关闭窗口）。
+ * 顺序：0 = 打开日志（平台默认按钮）、1 = 重试、2 = 安全模式并重启、
+ * 3 = 备份补丁并重启、4 = 退出（Esc/关闭窗口）。
  * 「打开日志」放在默认位是刻意的：致命启动失败的第一动作是**取证**，
- * 而"重试"在没有改任何东西之前只会再失败一次。
+ * 而"重试"在没有改任何东西之前只会再失败一次；两个恢复出口排在重试之后，
+ * 因为用户要先知道"是不是我装的插件/patch 弄坏的"。
  * @param copy - localized dialog copy.
  * @returns options for `dialog.showMessageBoxSync`.
  */
@@ -111,9 +117,9 @@ export function fatalBootDialogOptions(copy: FatalBootDialogCopy): FatalBootDial
     title: copy.title,
     message: copy.message,
     detail: copy.detail,
-    buttons: [copy.openLogs, copy.retry, copy.quit],
+    buttons: [copy.openLogs, copy.retry, copy.safeMode, copy.backupPatch, copy.quit],
     defaultId: 0,
-    cancelId: 2,
+    cancelId: 4,
     noLink: true,
   }
 }
@@ -129,7 +135,8 @@ const MAX_OPEN_LOGS_ROUNDS = 10
  * 只会把"用户什么都没看到"变成"用户什么都没看到 + 没有日志"。
  * @param surface - native dialog/shell projection.
  * @param input - localized copy, log directory, and optional diagnostic sink.
- * @returns `'retry'`（调用方重启进程）或 `'quit'`（非零码退出）。
+ * @returns `'retry'`（调用方重启进程）、`'safe-mode'` / `'backup-patch'`
+ *   （调用方执行恢复操作后重启），或 `'quit'`（非零码退出）。
  */
 export async function reportFatalBootFailure(
   surface: FatalBootSurface,
@@ -157,6 +164,8 @@ export async function reportFatalBootFailure(
       return 'quit'
     }
     if (response === 1) return 'retry'
+    if (response === 2) return 'safe-mode'
+    if (response === 3) return 'backup-patch'
     if (response !== 0) return 'quit'
     try {
       const failure = await surface.openPath(input.logDirectory)

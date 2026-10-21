@@ -193,7 +193,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // 此前 exit 0）现在当场判红，合成负例 `b14-timeout-budget-below-registered` 是这条
   // 判据的钉子。⇒ 该守卫脚本内容变了，摘要按本表上方的纪律在同一批里复算更新。
   ['check:workflows', { script: 'node scripts/check-workflows.mjs', argvTail: [], digest: '377b8b5b0af4557236a0b5d9407b8dade6bf65b1487960aabbcc0388cbcc3dc9' }],
-  ['check:ci-scripts', { script: 'node scripts/verify-ci-scripts.mjs', argvTail: [], digest: 'fdf339f6e5383e4e408d83f549a3ec4df9a568a7658aca8ff0d28e66563a9bac' }],
+  ['check:ci-scripts', { script: 'node scripts/verify-ci-scripts.mjs', argvTail: [], digest: '29282f2389fa4f1f9aa9723c234fdd2479aaf04e9799e0c3d57480f0d7c3d039' }],
   ['check:patch-resolutions', { script: 'node scripts/verify-patch-resolutions.mjs', argvTail: [], digest: '6dcde2281311235a57722608d91e6a1fa59734411ad65cda76ea2bdc43145c83' }],
   ['check:patch-pin', { script: 'node scripts/check-patch-pin.mjs', argvTail: [], digest: 'a8fe5b45df5dfadd7a87332b31f9e14c4a6722a41f21cf0f0d9afa6450a3ba84' }],
   ['check:patches', { script: 'node scripts/verify-patches.mjs', argvTail: [], digest: '22131d86472ff930f22687192b07216c5cf74ab594d0091a6766e661a2c24683' }],
@@ -209,7 +209,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // FIX-48③ 起：本脚本 run-id 化（证据目录 `temp/wasm-client-only/runs/<run-id>/`），
   // 摘要在同一个 PR 里同步（可评审的 diff）。
   ['check:wasm-client-only', { script: 'bash scripts/verify-wasm-client-only.sh', argvTail: ['--portable'], digest: 'e666a0c6caa588af64985ac0ccb4f4174d7e4266722b050d032abe322350241f' }],
-  ['check:integration-tests', { script: 'node scripts/check-integration-tests.mjs', argvTail: [], digest: '4b3c4e5cca3f80fa1d4d13dafa1b5710246e4df657a39e46c75c49e573c1eb88' }],
+  ['check:integration-tests', { script: 'node scripts/check-integration-tests.mjs', argvTail: [], digest: '3270b6b2395a59429146ec287c2e46596d78f609f964ab8e6836b6915de6d782' }],
   // 守卫脚本**内容**的判据（第十轮审计 C-06/C-17）。它的判据面里同时包含:
   //   · 本表每条 `digest` ↔ 该守卫脚本的 sha256(内容替换/符号链接替换都红);
   //   · 门禁自己依赖的解析器(`node_modules/yaml`)的**文件集** sha256 ↔ 登记值。

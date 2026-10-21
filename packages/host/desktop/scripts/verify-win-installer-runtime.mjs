@@ -42,6 +42,27 @@ export const REQUIRED_RESOURCE_FILES = ['LICENSE', 'THIRD_PARTY_NOTICES.md']
 /** Hard limits for one installer/uninstaller invocation. */
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 const UNINSTALL_TIMEOUT_MS = 5 * 60 * 1000
+/** How long to wait for the uninstaller's detached cleanup to finish. */
+const CLEANUP_POLL_TIMEOUT_MS = 60_000
+const CLEANUP_POLL_INTERVAL_MS = 250
+
+/**
+ * Poll a predicate until it holds (or fail).
+ *
+ * NSIS uninstallers may return before their self-deletion finishes (the stub
+ * often hands off to a temp copy), so "process exited" is not "files are gone".
+ * @param predicate - async check.
+ * @param timeoutMs - hard limit.
+ * @param label - what we were waiting for (error message).
+ */
+export async function waitFor(predicate, timeoutMs, label) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    if (await predicate()) return
+    if (Date.now() >= deadline) throw new Error(`timed out waiting for ${label}`)
+    await new Promise(resolvePromise => setTimeout(resolvePromise, CLEANUP_POLL_INTERVAL_MS))
+  }
+}
 
 /**
  * Run one process with a hard timeout.
@@ -224,10 +245,13 @@ export async function verifyInstallerRuntime(installerPath, options = {}) {
     if (uninstaller === undefined) throw new Error(`no uninstaller found in ${installDir}`)
     const uninstall = await run(join(installDir, uninstaller), ['/S'], UNINSTALL_TIMEOUT_MS)
     if (uninstall.code !== 0) throw new Error(`silent uninstall failed with exit code ${String(uninstall.code)}`)
-    if (fs.exists(installDir)) throw new Error(`uninstall left files behind: ${installDir}`)
-    if (await registry.read('HKCU', CURRENT_APP_GUID) !== undefined) {
-      throw new Error('uninstall left the HKCU install key behind')
-    }
+    // 卸载器的自删除/清理可能是它退出之后才完成的（临时副本接力），所以轮询到干净为止。
+    await waitFor(() => !fs.exists(installDir), CLEANUP_POLL_TIMEOUT_MS, `removal of ${installDir}`)
+    await waitFor(
+      async () => (await registry.read('HKCU', CURRENT_APP_GUID)) === undefined,
+      CLEANUP_POLL_TIMEOUT_MS,
+      'removal of the HKCU install key',
+    )
     steps.push('silent-uninstall')
 
     return { installDir, steps }

@@ -1,15 +1,19 @@
 /**
- * P1（2026-10-21）：致命启动失败的**恢复出口**。
+ * P1（2026-10-21，反证审查后重写）：致命启动失败的**恢复出口**。
  *
- * `fatal-boot` 给出的「安全模式」与「备份补丁」两个出口，必须能在 profile 本身
- * 才是故障原因的时候工作 —— 因此它们只做文件操作：不加载 profile、不解析 patch
- * YAML、不依赖 Electron。这里逐条钉住可观察行为：
- *  1. 备份是**移动**（原文件消失、内容留在 `.bak-<时间戳>`），不删除用户数据；
- *  2. 安全模式只禁用**可变**（第三方）bundle，launcher 自有层不动；
- *  3. 插件状态是**合并**写入：其它 profile 的禁用集合逐字保留；
- *  4. profile 清单坏掉时仍然备份补丁，并如实报告，而不是让恢复本身抛错。
+ * 2026-10-21 的四路反证（安全 / 状态 / 测试 / 打包）打穿了第一版设计：
+ * 「安全模式」把安装面自有的 17 个 bundle（含 `@zeokeel/dsh-enterprise`）当成第三方
+ * 写进持久禁用集合，下一次组合必抛 "missing the @zeokeel/dsh-enterprise bundle
+ * layer" —— 一键把客户端变成永久起不来，而桌面组合里根本没有"重新启用"入口。
+ *
+ * 现在的语义（本文件钉住的判据）：
+ *  1. 安全模式只写**一次性标记**（component: desktop-safe-mode.ts），启动成功即清；
+ *  2. 只筛「可变 且 不属于安装面」的 bundle —— 安装面层被筛掉必然启动环；
+ *  3. 先写标记、再搬补丁：标记写失败时补丁原样不动（不留半成品）；
+ *  4. 两个用户补丁（profile 与 `$DSH_HOME`）都要备份：home 补丁同样会抛死；
+ *  5. 「备份补丁」无事可做时必须报错，绝不"成功重启"骗用户。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -17,19 +21,30 @@ import {
   backupProfilePatch,
   desktopProfileDirectory,
   enterFatalSafeMode,
+  homePatchPath,
+  performFatalRecovery,
   profilePatchPath,
   readProfileBundleNames,
+  safeModeCandidates,
   type FatalRecoveryTargets,
 } from '../src/fatal-recovery.ts'
+import { readSafeModeBundles } from '../src/desktop-safe-mode.ts'
+import { desktopInstallationBundle, effectiveDisabledBundles, ensureDesktopProfile } from '../src/profile.ts'
 
 const roots: string[] = []
 
-/** Immutable launcher-owned bundle (never disabled by safe mode). */
-const CORE = '@deepseek-ai/dsh-desktop-app'
-/** Third-party bundle a user installed into the profile. */
+/** Launcher-owned carrier layer: filtering it guarantees a boot loop. */
+const CARRIER = '@zeokeel/dsh-enterprise'
+/** Bundled feature module: installation-owned as well. */
+const FEATURE = '@zeokeel/dsh-browser'
+/** Immutable upstream layer. */
+const IMMUTABLE = '@deepseek-ai/dsh-desktop-app'
+/** Third-party bundle a user installed (the only safe-mode target). */
 const THIRD_PARTY = '@acme/third-party-bundle'
+/** Second third-party bundle, to prove sorting/dedup. */
+const THIRD_PARTY_B = '@acme/another-bundle'
 
-/** Build an isolated home + plugin-state path. */
+/** Isolated home + plugin-management directory. */
 function sandbox(): FatalRecoveryTargets {
   const root = mkdtempSync(join(tmpdir(), 'fatal-recovery-'))
   roots.push(root)
@@ -38,30 +53,26 @@ function sandbox(): FatalRecoveryTargets {
   return {
     homeDir,
     profileName: 'desktop',
-    statePath: join(root, 'userData', 'plugin-management', 'state.json'),
+    safeModePath: join(root, 'userData', 'plugin-management', 'safe-mode.json'),
   }
 }
 
-/** Write the profile manifest that lists the profile's direct bundles. */
+/** Write the profile manifest that lists direct bundles. */
 function writeManifest(targets: FatalRecoveryTargets, bundles: readonly string[]): void {
   const directory = desktopProfileDirectory(targets)
   mkdirSync(directory, { recursive: true })
   writeFileSync(join(directory, 'package.json'), `${JSON.stringify({ name: 'desktop', dsh: { profile: { bundles } } }, undefined, 2)}\n`)
 }
 
-/** Write the user-editable patch the recovery is expected to move aside. */
-function writePatch(targets: FatalRecoveryTargets, content: string): string {
-  const path = profilePatchPath(targets)
+/** Write a user patch at the given path. */
+function writePatch(path: string, content: string): void {
+  mkdirSync(join(path, '..'), { recursive: true })
   writeFileSync(path, content)
-  return path
 }
 
-/** Read the persisted disabled sets, keyed by profile name. */
-function readState(targets: FatalRecoveryTargets): Record<string, string[]> {
-  const parsed = JSON.parse(readFileSync(targets.statePath, 'utf8')) as {
-    profiles: { profileName: string, disabledBundles: string[] }[]
-  }
-  return Object.fromEntries(parsed.profiles.map(profile => [profile.profileName, profile.disabledBundles]))
+/** Marker contents as a sorted list. */
+function markerBundles(targets: FatalRecoveryTargets): string[] {
+  return [...readSafeModeBundles(targets.safeModePath).bundles].sort()
 }
 
 afterEach(() => {
@@ -69,38 +80,34 @@ afterEach(() => {
 })
 
 describe('恢复路径与备份', () => {
-  it('profile 目录固定在 <home>/profiles/<name>，补丁是目录下的 cordis.patch.yml', () => {
+  it('profile 目录固定在 <home>/profiles/<name>，两个补丁分别是 profile 内与 home 根', () => {
     const targets = sandbox()
     expect(desktopProfileDirectory(targets)).toBe(join(targets.homeDir, 'profiles', 'desktop'))
     expect(profilePatchPath(targets)).toBe(join(targets.homeDir, 'profiles', 'desktop', 'cordis.patch.yml'))
+    expect(homePatchPath(targets)).toBe(join(targets.homeDir, 'cordis.patch.yml'))
   })
 
-  it('没有补丁时不备份（返回 undefined，不创建文件）', () => {
+  it('没有补丁时备份返回 undefined（不创建文件），重名时追加序号且不覆盖', () => {
     const targets = sandbox()
     expect(backupProfilePatch(profilePatchPath(targets))).toBeUndefined()
-    expect(existsSync(profilePatchPath(targets))).toBe(false)
-  })
 
-  it('备份是移动：原路径消失、备份内容逐字保留，二次备份不覆盖第一次', () => {
-    const targets = sandbox()
-    writeManifest(targets, [CORE])
-    const patch = writePatch(targets, '- insert:\n    - id: user-row\n')
+    const patch = profilePatchPath(targets)
+    writePatch(patch, 'first\n')
     const first = backupProfilePatch(patch, new Date('2026-10-21T12:00:00.000Z'))
     expect(first).toBe(`${patch}.bak-2026-10-21T12-00-00-000Z`)
-    expect(existsSync(patch)).toBe(false)
-    expect(readFileSync(first as string, 'utf8')).toBe('- insert:\n    - id: user-row\n')
-    expect(backupProfilePatch(patch)).toBeUndefined()
+    expect(readFileSync(first as string, 'utf8')).toBe('first\n')
 
-    writePatch(targets, '- insert:\n    - id: second\n')
+    writePatch(patch, 'second\n')
     const second = backupProfilePatch(patch, new Date('2026-10-21T12:00:00.000Z'))
     expect(second).not.toBe(first)
-    expect(readFileSync(second as string, 'utf8')).toBe('- insert:\n    - id: second\n')
+    expect(readFileSync(second as string, 'utf8')).toBe('second\n')
+    expect(readFileSync(first as string, 'utf8')).toBe('first\n')
   })
 
-  it('清单只读 dsh.profile.bundles；缺失返回空数组，类型错误则报错', () => {
+  it('清单只读 dsh.profile.bundles；缺失返回空数组，类型错误报错', () => {
     const targets = sandbox()
-    writeManifest(targets, [CORE, THIRD_PARTY])
-    expect(readProfileBundleNames(desktopProfileDirectory(targets))).toEqual([CORE, THIRD_PARTY])
+    writeManifest(targets, [CARRIER, THIRD_PARTY])
+    expect(readProfileBundleNames(desktopProfileDirectory(targets))).toEqual([CARRIER, THIRD_PARTY])
 
     writeFileSync(join(desktopProfileDirectory(targets), 'package.json'), '{"name":"desktop"}\n')
     expect(readProfileBundleNames(desktopProfileDirectory(targets))).toEqual([])
@@ -108,54 +115,126 @@ describe('恢复路径与备份', () => {
     writeFileSync(join(desktopProfileDirectory(targets), 'package.json'), '{"dsh":{"profile":{"bundles":"nope"}}}\n')
     expect(() => readProfileBundleNames(desktopProfileDirectory(targets))).toThrow(/dsh\.profile\.bundles/u)
   })
+
+  it('安全模式候选只包含三方包：安装面层与 immutable 层一律排除（2026-10-21 P0 回归）', () => {
+    expect(safeModeCandidates([CARRIER, FEATURE, IMMUTABLE, THIRD_PARTY, THIRD_PARTY_B, THIRD_PARTY]))
+      .toEqual([THIRD_PARTY_B, THIRD_PARTY])
+    // 真实调用方：安装面层名单来自 profile.ts（渠道裁剪与否都在集合里）。
+    expect(safeModeCandidates([CARRIER])).toEqual([])
+  })
 })
 
-describe('安全模式', () => {
-  it('备份补丁 + 只禁用第三方 bundle，且合并其它 profile 的禁用集合', async () => {
+describe('真实 profile 数据面（2026-10-21 P0 回归）', () => {
+  it('真实清单里安装面 bundle 存在，且安全模式候选与它们永久无交集', () => {
     const targets = sandbox()
-    writeManifest(targets, [CORE, THIRD_PARTY])
-    writePatch(targets, '- insert: []\n')
-    // 先写一份"别的 profile 已经禁用了一个包"的状态：合并写不能把它冲掉。
-    mkdirSync(join(targets.statePath, '..'), { recursive: true })
-    writeFileSync(targets.statePath, `${JSON.stringify({
-      version: 1,
-      profiles: [{ profileName: 'other', disabledBundles: ['@acme/kept-disabled'] }],
-    }, undefined, 2)}\n`)
+    ensureDesktopProfile(targets.homeDir)
+    const bundles = readProfileBundleNames(desktopProfileDirectory(targets))
+    // 真实 profile 至少包含十条自有层之一；没有它这个回归测试就失去意义。
+    expect(bundles).toContain(CARRIER)
+    const installation = bundles.filter(name => desktopInstallationBundle(name))
+    expect(installation).toContain(CARRIER)
+    const candidates = safeModeCandidates(bundles)
+    for (const name of candidates) {
+      expect(installation, `${name} 属于安装面，安全模式不得禁用`).not.toContain(name)
+    }
+  })
+
+  it('组合消费侧的并集过滤：安全模式集合里的安装面层会被剔除', () => {
+    const persistent = new Set(['@acme/old-disabled'])
+    const safeMode = new Set([CARRIER, FEATURE, IMMUTABLE, THIRD_PARTY])
+    expect([...effectiveDisabledBundles(persistent, safeMode)].sort())
+      .toEqual(['@acme/old-disabled', THIRD_PARTY])
+  })
+})
+
+describe('安全模式（一次性标记）', () => {
+  it('写标记 + 备份两个补丁，且绝不写插件持久状态', async () => {
+    const targets = sandbox()
+    writeManifest(targets, [CARRIER, FEATURE, IMMUTABLE, THIRD_PARTY, THIRD_PARTY_B])
+    writePatch(profilePatchPath(targets), '- insert: []\n')
+    writePatch(homePatchPath(targets), '- insert: []\n')
 
     const report = await enterFatalSafeMode(targets, new Date('2026-10-21T12:00:00.000Z'))
+    expect(report.disabledBundles).toEqual([THIRD_PARTY_B, THIRD_PARTY])
     expect(report.backupPath).toBe(`${profilePatchPath(targets)}.bak-2026-10-21T12-00-00-000Z`)
-    expect(existsSync(profilePatchPath(targets))).toBe(false)
-    expect(report.disabledBundles).toEqual([THIRD_PARTY])
-    expect(report.manifestError).toBeUndefined()
-    expect(readState(targets)).toEqual({
-      desktop: [THIRD_PARTY],
-      other: ['@acme/kept-disabled'],
-    })
+    expect(report.homeBackupPath).toBe(`${homePatchPath(targets)}.bak-2026-10-21T12-00-00-000Z`)
+    expect(markerBundles(targets)).toEqual([THIRD_PARTY_B, THIRD_PARTY])
+
+    // 插件持久状态（plugin-management/state.json）不该被安全模式碰过。
+    const statePath = join(targets.safeModePath, '..', 'state.json')
+    expect(existsSync(statePath)).toBe(false)
+    // 标记文件是私有的（0600），目录 0700 —— 与 plugin state 同一档。
+    expect(statSync(targets.safeModePath).mode & 0o777).toBe(0o600)
+    expect(statSync(join(targets.safeModePath, '..')).mode & 0o777).toBe(0o700)
   })
 
-  it('重复执行幂等：已禁用的不重复、已备份的不再产生第二个备份', async () => {
+  it('标记先写、补丁后搬：标记写失败时补丁原样不动（不留半成品）', async () => {
     const targets = sandbox()
-    writeManifest(targets, [CORE, THIRD_PARTY])
-    writePatch(targets, '- insert: []\n')
-    await enterFatalSafeMode(targets)
-    const second = await enterFatalSafeMode(targets)
-    expect(second.backupPath).toBeUndefined()
-    expect(readState(targets).desktop).toEqual([THIRD_PARTY])
+    writeManifest(targets, [CARRIER, THIRD_PARTY])
+    writePatch(profilePatchPath(targets), '- insert: []\n')
+    // 让 plugin-management 的父路径是一个普通文件 ⇒ 建目录/写标记必失败。
+    mkdirSync(join(targets.safeModePath, '..', '..'), { recursive: true })
+    writeFileSync(join(targets.safeModePath, '..'), 'not a directory')
+
+    await expect(enterFatalSafeMode(targets)).rejects.toThrow()
+    expect(existsSync(profilePatchPath(targets))).toBe(true)
+    expect(readFileSync(profilePatchPath(targets), 'utf8')).toBe('- insert: []\n')
   })
 
-  it('清单坏掉时仍然备份补丁，并如实报告原因', async () => {
+  it('清单坏掉时不动任何文件并如实报告（performFatalRecovery 抛错⇒调用方非零退出）', async () => {
     const targets = sandbox()
-    const directory = desktopProfileDirectory(targets)
-    mkdirSync(directory, { recursive: true })
-    writeFileSync(join(directory, 'package.json'), '{ not json')
-    writePatch(targets, '- insert: []\n')
+    mkdirSync(desktopProfileDirectory(targets), { recursive: true })
+    writeFileSync(join(desktopProfileDirectory(targets), 'package.json'), '{ not json')
+    writePatch(profilePatchPath(targets), '- insert: []\n')
 
     const report = await enterFatalSafeMode(targets)
-    expect(report.backupPath).toBeDefined()
-    expect(existsSync(report.backupPath as string)).toBe(true)
-    expect(report.disabledBundles).toEqual([])
     expect(report.manifestError).toContain('JSON')
-    // 没有可禁用的 bundle 时不写状态文件（避免把"清单读不到"变成一次空写入）。
-    expect(existsSync(targets.statePath)).toBe(false)
+    expect(existsSync(profilePatchPath(targets))).toBe(true)
+    expect(existsSync(targets.safeModePath)).toBe(false)
+
+    await expect(performFatalRecovery('safe-mode', targets)).rejects.toThrow(/cannot read the profile manifest/u)
+  })
+
+  it('没有三方包时不写标记、不搬补丁，并要求改用「备份补丁」', async () => {
+    const targets = sandbox()
+    writeManifest(targets, [CARRIER, FEATURE, IMMUTABLE])
+    writePatch(profilePatchPath(targets), '- insert: []\n')
+
+    const report = await enterFatalSafeMode(targets)
+    expect(report.disabledBundles).toEqual([])
+    expect(existsSync(targets.safeModePath)).toBe(false)
+    expect(existsSync(profilePatchPath(targets))).toBe(true)
+
+    await expect(performFatalRecovery('safe-mode', targets))
+      .rejects.toThrow(/no third-party bundle to disable/u)
+  })
+
+  it('重复进入幂等：补丁已搬走时只重写标记，不报错', async () => {
+    const targets = sandbox()
+    writeManifest(targets, [CARRIER, THIRD_PARTY])
+    writePatch(profilePatchPath(targets), '- insert: []\n')
+
+    const first = await enterFatalSafeMode(targets)
+    const second = await enterFatalSafeMode(targets)
+    expect(first.backupPath).toBeDefined()
+    expect(second.backupPath).toBeUndefined()
+    expect(markerBundles(targets)).toEqual([THIRD_PARTY])
+  })
+})
+
+describe('备份补丁动作', () => {
+  it('两个补丁都备份；都没有时报错（绝不"成功重启"骗用户）', async () => {
+    const targets = sandbox()
+    writePatch(profilePatchPath(targets), '- insert: []\n')
+    writePatch(homePatchPath(targets), '- insert: []\n')
+    const report = await performFatalRecovery('backup-patch', targets)
+    expect(report.backupPath).toBeDefined()
+    expect(report.homeBackupPath).toBeDefined()
+    expect(existsSync(profilePatchPath(targets))).toBe(false)
+    expect(existsSync(homePatchPath(targets))).toBe(false)
+
+    const empty = sandbox()
+    mkdirSync(desktopProfileDirectory(empty), { recursive: true })
+    await expect(performFatalRecovery('backup-patch', empty)).rejects.toThrow(/nothing to back up/u)
   })
 })

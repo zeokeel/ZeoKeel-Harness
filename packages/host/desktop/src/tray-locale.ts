@@ -377,8 +377,8 @@ const startupCopy: Record<DesktopLocale, DesktopStartupCopy> = {
     fatalBootDetail: (reason, logDirectory) =>
       `${reason}\n\nLogs: ${logDirectory}\n\n`
       + 'Open the log folder to see the full error. If Retry keeps failing, choose Safe Mode to '
-      + 'disable third-party plugins (your patch is backed up first), or Back Up Patch to start '
-      + 'from an empty profile patch. Neither deletes sessions or settings.',
+      + 'leave third-party plugins out of the next start (your own patches are backed up first), '
+      + 'or Back Up Patch to start from empty user patches. Neither deletes sessions or settings.',
     fatalBootOpenLogs: 'Open Logs',
     fatalBootRetry: 'Retry',
     fatalBootSafeMode: 'Safe Mode (Disable Plugins)',
@@ -404,7 +404,7 @@ const startupCopy: Record<DesktopLocale, DesktopStartupCopy> = {
     fatalBootMessage: product => `${product} 启动失败，已关闭。`,
     fatalBootDetail: (reason, logDirectory) =>
       `${reason}\n\n日志目录：${logDirectory}\n\n`
-      + '可点「打开日志」查看完整错误。若「重试」仍失败，可选「安全模式」禁用第三方插件后重启'
+      + '可点「打开日志」查看完整错误。若「重试」仍失败，可选「安全模式」在下次启动时跳过第三方插件'
       + '（会先备份你的补丁），或选「备份补丁并重启」从空补丁启动；两者都不删除会话与设置。',
     fatalBootOpenLogs: '打开日志',
     fatalBootRetry: '重试',

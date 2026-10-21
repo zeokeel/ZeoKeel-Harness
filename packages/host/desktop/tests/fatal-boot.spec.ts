@@ -122,11 +122,19 @@ describe('main.ts / startup-rows.ts 的接线与注释一致性（B-02）', () =
   const mainSource = readFileSync(fileURLToPath(new URL('../src/main.ts', import.meta.url)), 'utf8')
   const rowsSource = readFileSync(fileURLToPath(new URL('../src/startup-rows.ts', import.meta.url)), 'utf8')
 
-  /** 致命 catch 块（`errorCause` 那一个）的源码片段。 */
+  /**
+   * 致命 catch 块（`errorCause` 那一个）的源码片段。
+   *
+   * 用"catch 块结尾"而不是固定 1500 字切片：切片余量会随 main.ts 增长而耗尽，
+   * 届时断言会以"找不到恢复调用"的方式假红（2026-10-21 反证审查 D 指出余量只剩
+   * 294 字符）。这里取到下一个顶格两空格的块结束，长度随代码自然伸缩。
+   */
   function fatalCatch(): string {
     const at = mainSource.indexOf('electronLogger.errorCause(cause)')
     expect(at, 'main.ts 必须保留致命路径的 errorCause').toBeGreaterThan(-1)
-    return mainSource.slice(at, at + 1_500)
+    const end = mainSource.indexOf('\n  }\n', at)
+    expect(end, 'main.ts 致命 catch 块必须能定位到结尾').toBeGreaterThan(at)
+    return mainSource.slice(at, end)
   }
 
   it('致命 catch 真的调用原生错误面，且顺序在退出之前', () => {
@@ -146,7 +154,13 @@ describe('main.ts / startup-rows.ts 的接线与注释一致性（B-02）', () =
     }
     expect(mainSource).toContain("from './fatal-boot.ts'")
     // 重试必须走既有的 relaunch 通道（code 0 才真重启，见 shutdown.ts）。
-    expect(fatalCatch()).toContain('requestRelaunch()')
+    const block = fatalCatch()
+    expect(block).toContain('requestRelaunch()')
+    // 两个恢复出口必须真的接在 catch 里：删掉分支、改成恒重启、或把 shutdown 提到
+    // 恢复之前，都会让这里的 token 判据变红（2026-10-21 反证审查 D 的 C1–C9）。
+    expect(block, '致命路径必须调用恢复执行器').toContain('runFatalRecovery(action, electronLogger)')
+    expect(block, '恢复成功后必须重启').toContain('if (exitCode === 0) nativeExit.requestRelaunch()')
+    expect(block, '退出码必须由恢复结果决定').toContain('await shutdown.request(exitCode)')
   })
 
   it('详情里的日志目录与日志系统同源（<userData>/logs）', () => {

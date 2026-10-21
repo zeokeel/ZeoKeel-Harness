@@ -46,7 +46,8 @@ import { createInstallKeyStore } from '@zeokeel/dsh-wasm-apps-host/app-proof'
 import { provideAppAiRunner } from './app-ai-runner.ts'
 import { assertRequiredClientEntries, assertRequiredRowsActive } from './startup-rows.ts'
 import { fatalBootIdentity, reportFatalBootFailure, type FatalBootChoice } from './fatal-boot.ts'
-import { backupProfilePatch, enterFatalSafeMode, profilePatchPath, type FatalRecoveryTargets } from './fatal-recovery.ts'
+import { performFatalRecovery, type FatalRecoveryTargets } from './fatal-recovery.ts'
+import { clearSafeModeMarker, readSafeModeBundles, safeModeMarkerPath } from './desktop-safe-mode.ts'
 import { provideWasmAppsWindows } from './wasm-apps-windows.ts'
 import { applyInstallDshHome, isSystemWorkingDirectory } from './desktop-home.ts'
 import { macAppBundlePath, writeMacosUpdateBootFailureMarker } from './macos-update-install.ts'
@@ -351,21 +352,20 @@ async function runFatalRecovery(
   action: 'safe-mode' | 'backup-patch',
   logger: DesktopLogger,
 ): Promise<number> {
-  const targets: FatalRecoveryTargets = {
-    // Same formulas as `start()`: the recovery must act on the data root this
-    // launch would have used, including the channel-scoped userData directory.
-    homeDir: applyInstallDshHome({ productDir: CHANNEL_PROFILE?.homeDir }),
-    profileName: DESKTOP_PROFILE_NAME,
-    statePath: join(app.getPath('userData'), 'plugin-management', 'state.json'),
-  }
   try {
-    if (action === 'safe-mode') {
-      const report = await enterFatalSafeMode(targets)
-      logger.error(`${BIN_NAME}: fatal recovery: safe mode ${JSON.stringify(report)}`)
-    } else {
-      const backupPath = backupProfilePatch(profilePatchPath(targets))
-      logger.error(`${BIN_NAME}: fatal recovery: patch backup ${JSON.stringify({ backupPath })}`)
+    // Target resolution is part of the protected region: `applyInstallDshHome`
+    // throws for an unsafe DSH_HOME, which is one of the startup failures this
+    // dialog exists to recover from (2026-10-21 review D/C: it used to sit
+    // outside the try and escaped as an unhandled rejection).
+    const targets: FatalRecoveryTargets = {
+      // Same formulas as `start()`: the recovery must act on the data root this
+      // launch would have used, including the channel-scoped userData directory.
+      homeDir: applyInstallDshHome({ productDir: CHANNEL_PROFILE?.homeDir }),
+      profileName: DESKTOP_PROFILE_NAME,
+      safeModePath: safeModeMarkerPath(app.getPath('userData')),
     }
+    const report = await performFatalRecovery(action, targets)
+    logger.error(`${BIN_NAME}: fatal recovery ${action}: ${JSON.stringify(report)}`)
     return 0
   } catch (recoveryCause) {
     const message = recoveryCause instanceof Error ? recoveryCause.message : String(recoveryCause)
@@ -667,7 +667,15 @@ async function start(): Promise<void> {
       electronLogger.error(`${BIN_NAME}: system proxy use is enabled by ${SYSTEM_PROXY_POLICY.source}; host proxy settings apply to every request`)
     }
     const pluginManagementStatePath = join(app.getPath('userData'), 'plugin-management', 'state.json')
+    const safeModePath = safeModeMarkerPath(app.getPath('userData'))
     const activeProfileName = DESKTOP_PROFILE_NAME
+    // 安全模式是"一次性"的：本组合读标记、成功后立刻清掉（见 desktop-safe-mode.ts）。
+    // 读失败只登记，绝不阻断启动 —— 恢复标记坏了不该变成新的致命原因。
+    const safeMode = readSafeModeBundles(safeModePath)
+    if (safeMode.problem !== undefined) electronLogger.error(`${BIN_NAME}: ${safeMode.problem}`)
+    if (safeMode.bundles.size > 0) {
+      electronLogger.error(`${BIN_NAME}: composing in safe mode without ${safeMode.bundles.size} third-party bundle(s)`)
+    }
     const prepared = await prepareDesktopProfile(
       process.env.DSH_TELEMETRY_DISABLED,
       homeDir,
@@ -677,6 +685,7 @@ async function start(): Promise<void> {
       // 必须显式注入：插件在纯 Node 宿主里无从得知 userData，缺席时窗口管理器
       // **整个不构造**（`index.ts` 的 `userDataDir === undefined` 分支）。
       app.getPath('userData'),
+      safeMode.bundles,
     )
     const releasePackageResolver = installProfilePackageResolver(prepared.bareModuleBaseUrl)
     // Electron does not patch `child_process.spawn`/`spawnSync` for asar paths
@@ -799,6 +808,12 @@ async function start(): Promise<void> {
     // "Failed to load plugins"而宿主启动成功。判据取可观测结果（条目列表），
     // 见 src/startup-rows.ts 的 REQUIRED_CLIENT_ENTRIES。
     assertRequiredClientEntries(ctx)
+    // 安全模式标记在**宿主挂载 + 必需行/客户端条目都通过**之后才清除：只以
+    // `prepareDesktopProfile` 成功为界会让"组合过了、挂载才炸"的第三方插件在下次
+    // 重启又被加载回来（2026-10-21 反证审查 A：恢复必须真的救到可运行状态）。
+    if (safeMode.bundles.size > 0 && clearSafeModeMarker(safeModePath)) {
+      electronLogger.error(`${BIN_NAME}: left safe mode after a successful boot`)
+    }
     // 0.1.7: the desktop's own settings live in this plugin's profile entry
     // (`desktop-shell`) and are read through the settings form projection; the
     // live-change signal is `settings/document-updated`.

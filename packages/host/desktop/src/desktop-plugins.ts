@@ -237,55 +237,6 @@ export function readDesktopDisabledBundles(
   return new Set(profile?.disabledBundles ?? [])
 }
 
-/**
- * Add bundle names to one profile's disabled set, preserving every other profile.
- *
- * Used by fatal safe mode, which runs **before** the profile can be loaded and
- * therefore cannot go through the preview/disable service. The merge is the
- * same shape the service persists (sorted, de-duplicated, size-capped), so a
- * later plugin-manager write cannot be surprised by a foreign schema.
- * @param statePath - Desktop-private plugin-management state file.
- * @param profileName - profile whose disabled set is extended.
- * @param packageNames - bundle package names to disable.
- */
-export async function recordDesktopDisabledBundles(
-  statePath: string,
-  profileName: string,
-  packageNames: readonly string[],
-): Promise<void> {
-  assertDesktopProfileName(profileName)
-  const additions = [...new Set(packageNames)].sort(stableCompare)
-  if (additions.some(name => !safePackageName(name))) {
-    throw new Error(`${BIN_NAME}: disabled bundle name is invalid`)
-  }
-  if (additions.length > MAX_DISABLED_BUNDLES) {
-    throw new Error(`${BIN_NAME}: too many bundles to disable at once`)
-  }
-  await ensurePrivateStateDirectory(statePath)
-  await withFileLock(statePath, async () => {
-    const state = readState(statePath)
-    const others = state.profiles.filter(candidate => candidate.profileName !== profileName)
-    const existing = state.profiles.find(candidate => candidate.profileName === profileName)
-    if (existing === undefined && others.length >= MAX_PROFILES) {
-      throw new Error(`${BIN_NAME}: plugin-management state contains too many profiles`)
-    }
-    const merged = [...new Set([...(existing?.disabledBundles ?? []), ...additions])].sort(stableCompare)
-    if (merged.length > MAX_DISABLED_BUNDLES) {
-      throw new Error(`${BIN_NAME}: plugin-management state contains too many disabled bundles`)
-    }
-    const profiles = [...others, { profileName, disabledBundles: merged }]
-      .sort((left, right) => stableCompare(left.profileName, right.profileName))
-    const rendered = renderState(parseState({ version: STATE_VERSION, profiles }))
-    if (Buffer.byteLength(rendered, 'utf8') > MAX_STATE_BYTES) {
-      throw new Error(`${BIN_NAME}: plugin-management state is too large`)
-    }
-    await writeFileAtomic(statePath, rendered, {
-      mode: STATE_FILE_MODE,
-      dirMode: STATE_DIRECTORY_MODE,
-    })
-  })
-}
-
 /** Only explicit product bundles are immutable; every other resolved direct layer is user-disableable. */
 export function desktopPluginBundleMutable(packageName: string): boolean {
   return safePackageName(packageName) && !IMMUTABLE_BUNDLES.has(packageName)

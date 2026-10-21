@@ -316,6 +316,9 @@ describe('published package surface', () => {
     // 变异：删掉任一条 ⇒ macOS 打包在签名阶段失败（本地 Linux 测不出，只有 CI 的 mac runner 会红）。
     expect(manifest.build?.files).toContain('!**/node_modules/@deepseek-ai/libreoffice-kit/**')
     expect(manifest.build?.files).toContain('!**/node_modules/@deepseek-ai/libreoffice-kit-*/**')
+    // 一键安装器不再展示 EULA 页（见 nsis 段），所以 MIT 与第三方声明必须随包分发。
+    expect(manifest.build?.files).toContain('LICENSE')
+    expect(manifest.build?.files).toContain('THIRD_PARTY_NOTICES.md')
     expect(manifest.build?.mac?.icon).toBe('build/app-icon-mac.png')
     expect(manifest.build?.win?.icon).toBe('build/app-icon.png')
     expect(manifest.build?.win?.target).toEqual([{

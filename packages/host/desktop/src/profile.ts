@@ -42,6 +42,7 @@ import { resolveBundledSpeechModel } from './speech-model-bundle.ts'
 import { bundledPackageManager, type BundledRuntimes } from './bundled-runtimes.ts'
 import {
   activeDesktopProfileLayers,
+  desktopPluginBundleMutable,
   readDesktopDisabledBundles,
 } from './desktop-plugins.ts'
 
@@ -143,6 +144,39 @@ const DESKTOP_LAYER_CARRIER_BUNDLE = '@zeokeel/dsh-enterprise'
  * 所以"自有"这个集合必须**恒**包含全部功能模块层，与开关无关。
  */
 const INSTALLATION_BUNDLE_SET = new Set<string>([...REQUIRED_BUNDLES, ...FEATURE_MODULE_BUNDLES])
+
+/**
+ * Whether a bundle ships with this installation (launcher-owned layer).
+ *
+ * Safe mode must never filter these out: `prepareDesktopProfile` fails hard when
+ * the carrier layer is missing, so disabling one would turn the recovery into a
+ * guaranteed boot loop.
+ * @param packageName - bundle package name.
+ * @returns true for required layers and every bundled feature module.
+ */
+export function desktopInstallationBundle(packageName: string): boolean {
+  return INSTALLATION_BUNDLE_SET.has(packageName)
+}
+
+/**
+ * Union the persisted plugin disables with the one-boot safe-mode set.
+ *
+ * Exported for the P0 regression test (2026-10-21): a marker written by an older
+ * build — or a hand-edited plugin state — must not be able to filter out an
+ * installation-owned layer, because `prepareDesktopProfile` fails hard when the
+ * carrier layer is missing.
+ * @param persistent - package names disabled through the plugin manager.
+ * @param safeMode - package names listed by the one-boot safe-mode marker.
+ * @returns the disabled set the composition should use.
+ */
+export function effectiveDisabledBundles(
+  persistent: ReadonlySet<string>,
+  safeMode?: ReadonlySet<string>,
+): Set<string> {
+  const filtered = [...(safeMode ?? [])]
+    .filter(name => desktopPluginBundleMutable(name) && !desktopInstallationBundle(name))
+  return new Set<string>([...persistent, ...filtered])
+}
 
 /**
  * 本次运行**真的该装配**的 bundle 层（= 必需层减去被关闭模块的层）。
@@ -1007,6 +1041,9 @@ function omitUnresolvedOptionalEntries(
  * @param pluginStatePath - optional Desktop-private disabled-bundle state.
  * @param userDataDir - optional Electron userData directory (channel-scoped) handed to
  *   the application-window host row for its geometry memory and content cache.
+ * @param safeModeBundles - optional third-party bundles the fatal-dialog safe mode
+ *   leaves out of this one composition (the marker is cleared after a successful
+ *   start, so this never outlives one boot).
  * @returns root config, profile metadata, and ordered patches.
  */
 export async function prepareDesktopProfile(
@@ -1015,6 +1052,7 @@ export async function prepareDesktopProfile(
   platform: NodeJS.Platform = process.platform,
   pluginStatePath?: string,
   userDataDir?: string,
+  safeModeBundles?: ReadonlySet<string>,
 ): Promise<PreparedDesktopProfile> {
   const profileName = DESKTOP_PROFILE_NAME
   const profileDir = ensureDesktopProfile(home)
@@ -1026,9 +1064,13 @@ export async function prepareDesktopProfile(
   // the loader already does.
   const profile = loadProfile(BIN_NAME, profileName, INSTALL_ANCHOR, home)
   const resolution = await createRuntimeResolution({ installAnchor: INSTALL_ANCHOR, profile, home })
-  const disabledBundles = pluginStatePath === undefined
+  const persistentDisabled = pluginStatePath === undefined
     ? new Set<string>()
     : readDesktopDisabledBundles(pluginStatePath, profileName)
+  // Safe mode is one-boot only (`desktop-safe-mode.ts` proves why a persistent
+  // disable would be a trap), and the union re-filters at the point where the
+  // composition actually consumes the set (see `effectiveDisabledBundles`).
+  const disabledBundles = effectiveDisabledBundles(persistentDisabled, safeModeBundles)
   const rootConfig = join(profileDir, DESKTOP_PROFILE_ROOT)
   const bareModuleBaseUrl = pathToFileURL(join(profile.dir, 'package.json')).href
   writeFileSync(rootConfig, '[]\n')

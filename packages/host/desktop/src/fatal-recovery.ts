@@ -4,28 +4,34 @@
  * The profile is the most common reason a packaged Desktop cannot start (a
  * third-party bundle or a hand-edited `cordis.patch.yml` that no longer
  * composes), and the user's only other option today is deleting directories by
- * hand — which also throws away their sessions. These two operations give the
- * fatal dialog a way out **without booting Cordis**: pure file surgery on the
- * profile directory and the Desktop-private plugin state file, run after the
- * user picks an exit and before the relaunch.
+ * hand — which also throws away their sessions. These operations give the fatal
+ * dialog a way out **without booting Cordis**: pure file surgery on the profile
+ * directory and the private userData directory, run after the user picks an exit
+ * and before the relaunch.
  *
- * Constraints, all inherited from the fatal path:
+ * Safe mode deliberately writes a **one-boot marker** (`desktop-safe-mode.ts`)
+ * rather than the plugin state: the launcher has no "enable plugin" operation
+ * and its plugin-management UI is disabled, so a persistent disable would be a
+ * one-way trap. The marker is cleared once the profile composes again.
+ *
+ * Two rules inherited from the fatal path:
  *  - never load or compose the profile (it may be the thing that is broken);
- *  - never require Electron, the Host, or the network;
- *  - never destroy user data: the patch is **renamed** to a timestamped backup
- *    next to it, and disabling bundles only adds names to the plugin state that
- *    the plugin manager already owns.
+ *  - only disable bundles **outside the installation set** — launcher-owned
+ *    layers (`@zeokeel/*`, bundled feature modules) must never be filtered out,
+ *    because the profile composition fails hard when its carrier layer is
+ *    missing (that would turn the recovery into a guaranteed boot loop).
  *
  * @module dsh-plugin-desktop/fatal-recovery
  */
 
 import { existsSync, readFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
-import { resolveProfileDir } from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_PATCH_FILENAME, resolveProfileDir } from '@deepseek-ai/dsh-app-boot'
+import { writeSafeModeMarker } from './desktop-safe-mode.ts'
 import {
   desktopPluginBundleMutable,
-  recordDesktopDisabledBundles,
 } from './desktop-plugins.ts'
+import { desktopInstallationBundle } from './profile.ts'
 
 /** Locations the recovery operations touch; all absolute. */
 export interface FatalRecoveryTargets {
@@ -33,17 +39,19 @@ export interface FatalRecoveryTargets {
   readonly homeDir: string
   /** Desktop profile name (`desktop`). */
   readonly profileName: string
-  /** Desktop-private plugin-management state (`<userData>/plugin-management/state.json`). */
-  readonly statePath: string
+  /** One-boot safe-mode marker inside `<userData>/plugin-management`. */
+  readonly safeModePath: string
 }
 
 /** Outcome of one recovery operation, suitable for the log line before relaunch. */
 export interface FatalRecoveryReport {
-  /** Backup path, or `undefined` when there was no patch to move. */
+  /** Profile-patch backup path, or `undefined` when there was none. */
   readonly backupPath?: string
-  /** Mutable bundles that were written into the disabled set. */
+  /** Harness-home patch backup path, or `undefined` when there was none. */
+  readonly homeBackupPath?: string
+  /** Third-party bundles the next boot will leave out of the composition. */
   readonly disabledBundles: readonly string[]
-  /** Why the profile manifest could not be read (safe mode then only backs up the patch). */
+  /** Why the profile manifest could not be read (safe mode then has nothing to disable). */
   readonly manifestError?: string
 }
 
@@ -54,7 +62,18 @@ export function desktopProfileDirectory(targets: FatalRecoveryTargets): string {
 
 /** The user-editable profile patch (the last composition layer). */
 export function profilePatchPath(targets: FatalRecoveryTargets): string {
-  return join(desktopProfileDirectory(targets), 'cordis.patch.yml')
+  return join(desktopProfileDirectory(targets), PROFILE_PATCH_FILENAME)
+}
+
+/**
+ * The machine-wide patch (`$DSH_HOME/cordis.patch.yml`).
+ *
+ * It is composed after the profile layers, so a broken file there produces the
+ * exact same fatal dialog; a recovery that only moves the profile patch would
+ * report success and then fail identically (2026-10-21 review A).
+ */
+export function homePatchPath(targets: FatalRecoveryTargets): string {
+  return join(targets.homeDir, PROFILE_PATCH_FILENAME)
 }
 
 /**
@@ -106,41 +125,92 @@ export function readProfileBundleNames(profileDirectory: string): string[] {
 }
 
 /**
- * Safe mode: back the patch up, then disable every mutable (third-party) bundle.
+ * Third-party bundles safe mode may filter for one boot.
  *
- * Only bundles the plugin manager would let a user disable are touched, so the
- * launcher-owned layers always stay composed; the next successful start shows
- * the disabled entries in the plugin manager, where the user can re-enable them
- * one by one instead of guessing.
- * @param targets - profile and state paths.
+ * "Third-party" = mutable to the plugin manager **and** outside the installation
+ * set. The second half is load-bearing: filtering out a launcher-owned layer
+ * makes `prepareDesktopProfile` fail with "desktop profile is missing the
+ * @zeokeel/dsh-enterprise bundle layer", i.e. the recovery would guarantee the
+ * same fatal dialog again.
+ * @param bundles - names from the profile manifest.
+ * @returns sorted, de-duplicated names that are safe to leave out.
+ */
+export function safeModeCandidates(bundles: readonly string[]): string[] {
+  return [...new Set(bundles)]
+    .filter(name => desktopPluginBundleMutable(name) && !desktopInstallationBundle(name))
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+}
+
+/**
+ * Safe mode: leave every third-party bundle out of the next composition, and
+ * back the user's patch up so a broken patch cannot re-break that same boot.
+ *
+ * Ordering matters: the marker is written **before** the patch is moved, so a
+ * failed marker write leaves the profile untouched. If a patch move then fails,
+ * the marker survives and the next launch still composes in safe mode.
+ * @param targets - profile and marker locations.
  * @param now - injectable clock (tests).
- * @returns what was moved and disabled.
+ * @returns what was moved and which bundles the marker filters.
  */
 export async function enterFatalSafeMode(
   targets: FatalRecoveryTargets,
   now: Date = new Date(),
 ): Promise<FatalRecoveryReport> {
   const profileDirectory = desktopProfileDirectory(targets)
-  const backupPath = backupProfilePatch(join(profileDirectory, 'cordis.patch.yml'), now)
-
-  let manifestError: string | undefined
-  let bundles: string[] = []
+  let bundles: string[]
   try {
     bundles = readProfileBundleNames(profileDirectory)
   } catch (cause) {
-    // The manifest itself being unreadable is the other plausible cause of the
-    // fatal failure; the patch backup above is still worth doing, so report
-    // instead of throwing.
-    manifestError = cause instanceof Error ? cause.message : String(cause)
+    const manifestError = cause instanceof Error ? cause.message : String(cause)
+    // Without the manifest there is no way to tell third-party bundles apart,
+    // so safe mode has nothing safe to do. Report instead of guessing.
+    return { disabledBundles: [], manifestError }
   }
 
-  const disabled = bundles.filter(name => desktopPluginBundleMutable(name))
-  if (disabled.length > 0) {
-    await recordDesktopDisabledBundles(targets.statePath, targets.profileName, disabled)
+  const candidates = safeModeCandidates(bundles)
+  if (candidates.length === 0) return { disabledBundles: [] }
+
+  await writeSafeModeMarker(targets.safeModePath, candidates, now)
+  const backupPath = backupProfilePatch(profilePatchPath(targets), now)
+  const homeBackupPath = backupProfilePatch(homePatchPath(targets), now)
+  return {
+    ...(backupPath === undefined ? {} : { backupPath }),
+    ...(homeBackupPath === undefined ? {} : { homeBackupPath }),
+    disabledBundles: candidates,
+  }
+}
+
+/**
+ * Run one recovery exit; throws only when the recovery itself could not be done
+ * (the caller then exits non-zero instead of relaunching into the same dialog).
+ * @param action - which exit the user picked.
+ * @param targets - resolved profile/marker locations.
+ * @param now - injectable clock (tests).
+ * @returns report for the log line.
+ */
+export async function performFatalRecovery(
+  action: 'safe-mode' | 'backup-patch',
+  targets: FatalRecoveryTargets,
+  now: Date = new Date(),
+): Promise<FatalRecoveryReport> {
+  if (action === 'safe-mode') {
+    const report = await enterFatalSafeMode(targets, now)
+    if (report.manifestError !== undefined) {
+      throw new Error(`safe mode cannot read the profile manifest: ${report.manifestError}`)
+    }
+    if (report.disabledBundles.length === 0) {
+      throw new Error('safe mode found no third-party bundle to disable; use "Back Up Patch" instead')
+    }
+    return report
+  }
+  const backupPath = backupProfilePatch(profilePatchPath(targets), now)
+  const homeBackupPath = backupProfilePatch(homePatchPath(targets), now)
+  if (backupPath === undefined && homeBackupPath === undefined) {
+    throw new Error('no user patch found; nothing to back up')
   }
   return {
     ...(backupPath === undefined ? {} : { backupPath }),
-    disabledBundles: disabled,
-    ...(manifestError === undefined ? {} : { manifestError }),
+    ...(homeBackupPath === undefined ? {} : { homeBackupPath }),
+    disabledBundles: [],
   }
 }

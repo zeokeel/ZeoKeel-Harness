@@ -195,16 +195,18 @@ export const ATTRIBUTION_HEADER_READERS: readonly string[] = [
 /**
  * 提到该头名、但**既不是读方也不是写方**的文件（只在注释/文本里出现）。
  *
- * 目前三处：
+ * 目前两处：
  *  - 客户端 `app-ai.ts` 的"不做（明确留给别的层）"清单（**明确声明不做发送方**）；
- *  - 不可变迁移 `0076_usage_app_id.sql` 里解释 `usage.app_id` 列语义的注释；
  *  - 网关的会话 id 归因模块（`app_session_id.go`）：解释"为什么不再读自报头"。
+ *
+ * **不登记** `migrations-pg/0076_usage_app_id.sql`：那是已发布不可变迁移，按仓库规则
+ * 不能随改名改写（`check:migration-range` 的"已应用迁移永不原地修改"），所以它里面
+ * 仍写旧头名；本判据的扫描目标是**新头名**的出现面，历史迁移不在其中。
  *
  * 单列而不是塞进读方表，是为了让"平台侧没有自报头发送方"这件事在登记表上一眼可见。
  */
 export const ATTRIBUTION_HEADER_TEXT_ONLY: readonly string[] = [
   'packages/client/wasm-apps/src/client/app-ai.ts',
-  'server/internal/serverstore/migrations-pg/0076_usage_app_id.sql',
   'server/internal/llmgateway/app_session_id.go',
 ]
 

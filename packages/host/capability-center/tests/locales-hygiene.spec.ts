@@ -1,7 +1,7 @@
 /**
  * 能力中心客户端字典（`src/client/locales.ts`）的卫生回归。
  *
- * 2026-10-13：本文件由 `@picoaide/dsh-enterprise` 的 `tests/locales-hygiene.spec.ts`
+ * 2026-10-13：本文件由 `@zeokeel/dsh-enterprise` 的 `tests/locales-hygiene.spec.ts`
  * **同形搬来并覆盖同一组判据**（那里的 75 个 `capability.*` 键随能力中心的客户端面
  * 整块搬进本包）：
  *   1. zh/en 键集完全一致（编译器之外再钉一次，防止 en 多出孤儿键）；

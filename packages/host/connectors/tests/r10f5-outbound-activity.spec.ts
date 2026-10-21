@@ -62,11 +62,11 @@ function def(origin: string, headers: Record<string, string>): ConnectorDef {
 }
 
 async function connectAndAuthorize(h: ReturnType<typeof createHarness>): Promise<RegisteredTransport> {
-  await callRoute(h, '/api/pico/connectors/probe-mcp/connect', 'POST')
+  await callRoute(h, '/api/zeokeel/connectors/probe-mcp/connect', 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline) {
-    const res = await callRoute(h, '/api/pico/connectors/probe-mcp/state', 'GET')
+    const res = await callRoute(h, '/api/zeokeel/connectors/probe-mcp/state', 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } }).request?.authorizeUrl
     if (url) break
     await new Promise(resolve => setTimeout(resolve, 25))
@@ -153,7 +153,7 @@ describe('R10-B-06: a call that never settles must not charge every later rebuil
         // pass because nothing was ever counted).
         await announceNewToken(dir, 'at-r10f5-b6-1')
         const firstAt = Date.now()
-        h.emit('pico/connector-credentials-changed', { id: 'probe-mcp' })
+        h.emit('zeokeel/connector-credentials-changed', { id: 'probe-mcp' })
         await waitFor(() => h.configs.length === 3, 15_000)
         expect(timeoutLines(h), '前置：第一次重建确实撞上了在途调用').toBe(1)
         expect(Date.now() - firstAt, '前置：等待确实等满了 grace').toBeGreaterThanOrEqual(GRACE_MS - 50)
@@ -161,7 +161,7 @@ describe('R10-B-06: a call that never settles must not charge every later rebuil
         // (2) The criterion: the ticket that outlived the grace is given back,
         // so the next rebuild neither waits the grace again nor lies about it.
         await announceNewToken(dir, 'at-r10f5-b6-2')
-        h.emit('pico/connector-credentials-changed', { id: 'probe-mcp' })
+        h.emit('zeokeel/connector-credentials-changed', { id: 'probe-mcp' })
         await waitFor(() => h.configs.length === 4, 15_000)
         expect(
           timeoutLines(h),

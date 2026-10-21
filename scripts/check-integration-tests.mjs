@@ -975,8 +975,8 @@ function runTest(testPath, base) {
   })
 }
 
-const SESSION_COOKIE = 'picoaide_session'
-const OIDC_STATE_COOKIE = 'picoaide_oidc_state_oidc'
+const SESSION_COOKIE = 'zeokeel_session'
+const OIDC_STATE_COOKIE = 'zeokeel_oidc_state_oidc'
 const DEEP_LINK_TOKEN = 't0ken-' + 'a1b2c3d4'.repeat(5)
 const CHANNEL_GOOD = {
   channel_id: 'official',
@@ -991,9 +991,9 @@ const CHANNEL_GOOD = {
   favicon_url: '/api/client/v2/channel/favicon',
 }
 // 门户页假响应：既含新版结构断言要的「客户端下载」一节，也含品牌名
-// （旧脚本的判据是 `'下载客户端' in body or 'PicoAide' in body` —— 让"修复前"的
+// （旧脚本的判据是 `'下载客户端' in body or 'ZeoKeel' in body` —— 让"修复前"的
 // 失败**只剩**渠道契约那一条，取证才没有噪音）。
-const PORTAL_HTML = '<!doctype html><html><body><h1>PicoAide Harness</h1><h2>客户端下载</h2>'
+const PORTAL_HTML = '<!doctype html><html><body><h1>ZeoKeel Harness</h1><h2>客户端下载</h2>'
   + '<a class="dl" href="/updates/client/example.AppImage">下载</a></body></html>'
 const LOGIN_FORM_HTML = '<!doctype html><html><body><form method="post" action="/dex/auth/local?req=x">'
   + '<input type="text" name="login"><input type="password" name="password"></form></body></html>'
@@ -1196,7 +1196,7 @@ function startGateway(scenario) {
         // 这里换成"真契约被破坏"的形态 ⇒ 新判据必须咬住）。
         return redirect(302, `${origin}/not-a-deep-link?token=${DEEP_LINK_TOKEN}`)
       }
-      return redirect(302, `picoaide://auth?token=${DEEP_LINK_TOKEN}&user=admin`)
+      return redirect(302, `zeokeel://auth?token=${DEEP_LINK_TOKEN}&user=admin`)
     }
     if (path === '/api/client/v2/auth/me' && req.method === 'GET') {
       const bearer = String(req.headers.authorization ?? '')
@@ -1993,7 +1993,7 @@ for (const file of mjsFiles) {
 // 现场:`electron-shots.mjs` 的 8 条运行期断言**零守卫覆盖** —— 把
 // `check('Step2 品牌 Acme AI', brand === true)` 改成 `check('Step2 品牌 Acme AI', true)`
 // (4 个 needle 字面量全部保留)之后,本守卫仍然 **EXIT=0**;而同一处断言还钉着已退役的
-// 旧品牌夹具 `Acme AI`(当前实现渲染服务端渠道的 `login.display_name`,回落 `PicoAide`)
+// 旧品牌夹具 `Acme AI`(当前实现渲染服务端渠道的 `login.display_name`,回落 `ZeoKeel`)
 // ⇒ 在今天的正确环境里**永远不可能 PASS**。
 //
 // 处置(三层,缺一不可):
@@ -2688,7 +2688,7 @@ for (const test of CONTRACT_TESTS) {
  *
  * 三档，与 `follow()` 的形态判定一一对应：
  *   · `http-absolute` —— 带 `http(s)://` scheme（跨 origin 那一跳只能是它）；
- *   · `deep-link`     —— **自定义 scheme**（`picoaide://auth?token=…`）= 桌面深链；
+ *   · `deep-link`     —— **自定义 scheme**（`zeokeel://auth?token=…`）= 桌面深链；
  *   · `relative`      —— 路径 / 查询 / 片段（`/dex/approval?…`）⇒ **必须按当前 URL 归一化**，
  *                        它不是深链（真 Dex 的 `/auth` → `/auth/local` 就是这一档）。
  * @param location - `Location` 头的原值。
@@ -5807,7 +5807,7 @@ function localCompositeActionDirs(text) {
  * ⇒ 标记词的下一位就是目标，而且它已经过同一套常量传播（`> "$T"` → `scripts/x.sh`）。
  * 标记词用下划线开头、不含 `=`，不会被词法器当成赋值或旗标。
  */
-const WRITE_REDIRECT_SENTINEL = '__picoaide_write_redirect_target__'
+const WRITE_REDIRECT_SENTINEL = '__zeokeel_write_redirect_target__'
 /** fd 复制（`2>&1` / `>&2`）：**没有文件目标**，取词前整段删掉（否则 `2` 会被当成目标词）。 */
 const WRITE_FD_DUPLICATION = /(?:^|[\s;&|(])\d*>&\d*/gu
 /**
@@ -7104,7 +7104,7 @@ function ciExecutionSurface(options) {
     /**
      * 一个词**像不像仓内相对路径**（决定"命令位是路径形态"那条判据要不要开口）。
      *
-     * `docs/*` / `refs/tags/v*` / `/app/picoaide-server` / `1 静态守卫（…）` 这些是**通配**、
+     * `docs/*` / `refs/tags/v*` / `/app/zeokeel-server` / `1 静态守卫（…）` 这些是**通配**、
      * **绝对路径**、**散文** —— 它们不是"仓内载体路径"，各自的判据在别处（`mentioning` 文本网、
      * token 网）。不加这一层会把真仓的 glob 与中文提示语读成"读不懂的载体"。
      * @param word - 命令位/参数位上的词。

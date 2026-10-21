@@ -207,7 +207,7 @@ X，然后重新打开。"剩下的四步 —— 退出应用、拖进「应用�
 - **`hdiutil create` 在本机砂箱里跑不了**（返回"操作不被允许"），所以"造一个 DMG 再挂"
   这一步进不了自动化用例；`tests/macos-update-helper.integration.spec.ts` 喂的是**解开的**
   应用包路径（帮手不关心它挂在哪）。作为补偿，2026-10-09 用**真实已公证 DMG**
-  （`PicoAide-Harness-2.7.3-beta.2-mac.dmg`，147 MiB，内含 379 MiB 的应用）手工跑过一遍
+  （`ZeoKeel-Harness-2.7.3-beta.2-mac.dmg`，147 MiB，内含 379 MiB 的应用）手工跑过一遍
   生产路径（`prepareMacosInPlaceUpdate` 用真 runner + 真帮手脚本，只把重启命令换成
   `/usr/bin/true`）：
   - 真 `hdiutil attach -nobrowse -readonly -noverify -mountpoint <userData>/updates/macos/image`

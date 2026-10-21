@@ -11,11 +11,11 @@
  * area while the agent drives the browser. Closing the window (user X or the
  * shell's hide button) hides it — only the agent's `browser_close` truly
  * destroys it.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import { browserDefaultTitle } from './runtime.ts'
-import { DEFAULT_HOST_LOCALE, type HostLocale } from '@picoaide/dsh-host-locale'
+import { DEFAULT_HOST_LOCALE, type HostLocale } from '@zeokeel/dsh-host-locale'
 import type { CdpTransport } from './cdp.ts'
 
 /** The minimal native view surface the browser runtime drives. */
@@ -279,11 +279,11 @@ export interface ElectronAdapter {
  *
  * The formula has ONE implementation — `./surface.ts` (`browserPartitionFor`),
  * re-exported here so the long-standing import path keeps working. The
- * `@picoaide/dsh-wasm-apps-host/partition` mirror is pinned against it by
+ * `@zeokeel/dsh-wasm-apps-host/partition` mirror is pinned against it by
  * `tests/partition-parity.spec.ts`.
  *
  * CROSS-PACKAGE CONSTRAINT (2026-08-22): the encoding intentionally mirrors
- * `@picoaide/dsh-connectors` `encodeSegment` (user-scope.ts) byte-for-byte —
+ * `@zeokeel/dsh-connectors` `encodeSegment` (user-scope.ts) byte-for-byte —
  * the two are implemented separately because cross-package runtime imports
  * are forbidden, but they must NEVER diverge (a divergence would let the
  * browser partition name collide with, or shadow, a connectors user dir, or
@@ -299,7 +299,7 @@ export const BROWSER_PARTITION = browserPartitionFor(null)
 /** Height (DIP) of the control-shell toolbar area overlaid by tab views. */
 export const BROWSER_SHELL_TOOLBAR_HEIGHT = 66
 
-/** Default browser window size (DIP) — matches the PicoAide main window
+/** Default browser window size (DIP) — matches the ZeoKeel main window
  * defaults so the browser opens at the same footprint (2026-09-07 用户反馈). */
 const BROWSER_WINDOW_DEFAULT = { width: 1280, height: 840 }
 /** Browser window minimums (mirror the main window 900×640). */

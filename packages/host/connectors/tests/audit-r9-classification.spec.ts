@@ -98,7 +98,7 @@ async function rowAfterConnect(
   let row: { status?: string, error?: string, errorCode?: string } = {}
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
-    const res = await callRoute(harness, `/api/pico/connectors/${id}/state`, 'GET')
+    const res = await callRoute(harness, `/api/zeokeel/connectors/${id}/state`, 'GET')
     row = JSON.parse(res.body) as typeof row
     if (row.status === 'error' || row.status === 'unauthorized') return row
     await new Promise(resolve => setTimeout(resolve, 25))
@@ -150,7 +150,7 @@ it('a policy-blocked authorize/token endpoint published by discovery stays `unau
 
   const dir = mkdtempSync(join(tmpdir(), 'r9-classify-'))
   const harness = createHarness([def], dir)
-  await callRoute(harness, '/api/pico/connectors/evil-mcp/connect', 'POST')
+  await callRoute(harness, '/api/zeokeel/connectors/evil-mcp/connect', 'POST')
   const row = await rowAfterConnect(harness, 'evil-mcp')
   harness.dispose()
 
@@ -171,7 +171,7 @@ it('a server-side definition without fetchToken is a configuration error, not `u
   } as unknown as ConnectorDef
   const dir = mkdtempSync(join(tmpdir(), 'r9-classify-ss-'))
   const harness = createHarness([def], dir)
-  await callRoute(harness, '/api/pico/connectors/ss/connect', 'POST')
+  await callRoute(harness, '/api/zeokeel/connectors/ss/connect', 'POST')
   const row = await rowAfterConnect(harness, 'ss')
   harness.dispose()
 

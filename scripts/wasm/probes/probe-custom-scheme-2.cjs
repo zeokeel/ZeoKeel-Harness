@@ -6,11 +6,11 @@
  *     style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;
  *     connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'）
  *    服务页面 → 内联脚本/同源 fetch/原生表单 POST 是否照常工作（`'self'` 是否解析成
- *    `picoaide-app://<app_id>`）。失败 ⇒ 容器方案必须改 CSP，属于"开工前必须知道"的事。
+ *    `zeokeel-app://<app_id>`）。失败 ⇒ 容器方案必须改 CSP，属于"开工前必须知道"的事。
  * 2. **分区（partition）注册**：内置浏览器视图跑在 `persist:*` 分区里；
  *    `protocol.handle` 注册在 **partition session** 上时，页面能否加载并同源 fetch。
  * 3. **客户端 UI（http://127.0.0.1:<port>）能不能驱动应用**：从 http 页面 fetch
- *    `picoaide-app://<app_id>/…`（跨源）是否被拦。这决定"应用页与客户端自有 UI 的
+ *    `zeokeel-app://<app_id>/…`（跨源）是否被拦。这决定"应用页与客户端自有 UI 的
  *    隔离是否成立"，以及服务端还需不需要替代 Origin 判据。
  *
  * 运行：xvfb-run -a env HOME=… electron --no-sandbox scripts/wasm/probes/probe-custom-scheme-2.cjs
@@ -19,7 +19,7 @@ const http = require('node:http')
 const { app, BrowserWindow, protocol, session } = require('electron')
 const { attest } = require('./probe-attest.cjs')
 
-const SCHEME = 'picoaide-app'
+const SCHEME = 'zeokeel-app'
 protocol.registerSchemesAsPrivileged([{
   scheme: SCHEME,
   privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: false, stream: true, codeCache: true },

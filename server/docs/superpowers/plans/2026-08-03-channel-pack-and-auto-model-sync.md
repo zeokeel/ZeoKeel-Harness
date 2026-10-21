@@ -411,7 +411,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func syncTestDB(t *testing.T) (*sql.DB, int64) {
@@ -508,8 +508,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/llmgateway/channels"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway/channels"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // SyncResult 描述一个 provider 的同步结果。
@@ -1002,7 +1002,7 @@ git commit -m "feat: provider channel field, channels list, manual sync endpoint
 go llmgateway.SyncLoop(db, time.Hour, nil)
 ```
 
-需 import `github.com/picoaide/picoaide/internal/llmgateway`(已 import)与 `time`(已 import)。
+需 import `github.com/zeokeel/zeokeel-harness/server/internal/llmgateway`(已 import)与 `time`(已 import)。
 
 - [ ] **Step 2: 构建验证**
 
@@ -1071,7 +1071,7 @@ git commit -m "feat: webadmin channel select, model caps display, manual sync"
 
 ```bash
 # 起服务端
-PICOAI_ADMIN_PASSWORD='x' bin/picoaide-server -addr :8080 -data /tmp/ds --bootstrap-admin admin &
+ZEOKEEL_ADMIN_PASSWORD='x' bin/zeokeel-server -addr :8080 -data /tmp/ds --bootstrap-admin admin &
 # 建 provider(渠道 deepseek + 真实 key)
 curl -s -X POST http://127.0.0.1:8080/api/admin/providers -H '...' -d '{"name":"deepseek","channel":"deepseek","api_key":"sk-..."}'
 # 立即同步

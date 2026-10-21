@@ -85,8 +85,8 @@ function runHelper(options: {
 } = {}): Runner {
   const root = mkdtempSync(join(tmpdir(), 'dsh-macos-update-it-'))
   temporary.push(root)
-  const target = join(root, 'Applications', 'PicoAide Harness.app')
-  const source = join(root, 'Volume', 'PicoAide Harness.app')
+  const target = join(root, 'Applications', 'ZeoKeel Harness.app')
+  const source = join(root, 'Volume', 'ZeoKeel Harness.app')
   const userDataPath = join(root, 'userData')
   makeSignedBundle(target, '1.0.0', 'OLD-BUILD')
   makeSignedBundle(source, options.nextVersion ?? '2.0.0', 'NEW-BUILD')
@@ -108,8 +108,8 @@ function runHelper(options: {
     bundlePath: target,
     mountPoint: join(root, 'mount'),
     sourcePath: source,
-    stagingPath: join(root, 'Applications', '.PicoAide Harness.app.update-2.0.0.app'),
-    backupPath: join(root, 'Applications', '.PicoAide Harness.app.backup-2.0.0.app'),
+    stagingPath: join(root, 'Applications', '.ZeoKeel Harness.app.update-2.0.0.app'),
+    backupPath: join(root, 'Applications', '.ZeoKeel Harness.app.backup-2.0.0.app'),
     bundleIdentifier: 'ai.test.integration',
   }
   mkdirSync(plan.mountPoint, { recursive: true })
@@ -165,8 +165,8 @@ describe.skipIf(process.platform !== 'darwin')('macOS update helper (real /bin/s
     expect(readFileSync(runner.resultPath, 'utf8')).toContain('status=ok')
     expect(readFileSync(runner.logPath, 'utf8')).toContain('left for the host to reclaim')
     expect(readdirSync(join(runner.plan.bundlePath, '..')).sort()).toEqual([
-      '.PicoAide Harness.app.backup-2.0.0.app',
-      'PicoAide Harness.app',
+      '.ZeoKeel Harness.app.backup-2.0.0.app',
+      'ZeoKeel Harness.app',
     ])
   })
 
@@ -231,7 +231,7 @@ describe.skipIf(process.platform !== 'darwin')('macOS update helper (real /bin/s
     // 或 `yarn dev` 都能写出一条"看起来对"的标记。标记必须点名 bundle。
     const runner = runHelper()
     const marker = setInterval(() => {
-      writeFileSync(runner.bootMarkerPath, 'version=2.0.0\nbundle=/Volumes/Other/PicoAide Harness.app\n', 'utf8')
+      writeFileSync(runner.bootMarkerPath, 'version=2.0.0\nbundle=/Volumes/Other/ZeoKeel Harness.app\n', 'utf8')
     }, 50)
     const code = await runner.exited
     clearInterval(marker)

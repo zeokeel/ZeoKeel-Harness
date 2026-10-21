@@ -126,14 +126,14 @@ describe('代理环境清理', () => {
       NO_PROXY: 'localhost',
       [NODE_ENV_PROXY_FLAG]: '1',
       PATH: '/usr/bin',
-      DSH_HOME: '/home/u/.picoaide-harness',
+      DSH_HOME: '/home/u/.zeokeel-harness',
     }
     const removed = stripProxyEnvironment(env)
     expect(removed).toEqual(['HTTP_PROXY', 'https_proxy', 'NO_PROXY', NODE_ENV_PROXY_FLAG])
     for (const name of [...PROXY_ENV_NAMES, NODE_ENV_PROXY_FLAG]) expect(env[name]).toBeUndefined()
     // 非代理名一字不动（尤其 DSH_ 与 PATH）。
     expect(env.PATH).toBe('/usr/bin')
-    expect(env.DSH_HOME).toBe('/home/u/.picoaide-harness')
+    expect(env.DSH_HOME).toBe('/home/u/.zeokeel-harness')
   })
 
   it('本来就没有代理配置时什么都不报', () => {

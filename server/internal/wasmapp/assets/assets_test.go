@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
-	"github.com/picoaide/picoaide/internal/wasmapp/wasmmod"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/wasmmod"
 )
 
 // 本文件守"内存资源集"的全部对外语义（2026-09-20 起随包资源不再落盘，磁盘版
@@ -59,7 +59,7 @@ func TestBuildAndReadRoundTrip(t *testing.T) {
 	if set.Has("nope.css") {
 		t.Fatalf("Has(nope.css) 必须为假：%v", set.List())
 	}
-	want := []string{"index.html", "picoaide.app.json", "static/app.css", "static/app.js", "static/logo.png"}
+	want := []string{"index.html", "zeokeel.app.json", "static/app.css", "static/app.js", "static/logo.png"}
 	if got := set.List(); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("List = %v，期望 %v（必须按字典序）", got, want)
 	}
@@ -265,7 +265,7 @@ func TestBuildInjectsConfigAsReservedAsset(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 	if bare.Has(limits.AppConfigFileName) {
-		t.Fatal("没有传入配置时不得注入 picoaide.app.json")
+		t.Fatal("没有传入配置时不得注入 zeokeel.app.json")
 	}
 }
 

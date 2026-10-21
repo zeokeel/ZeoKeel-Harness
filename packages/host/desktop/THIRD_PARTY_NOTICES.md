@@ -1,5 +1,5 @@
 # Third-Party Notices
-PicoAide Harness distributes the following third-party packages inside its installers.
+ZeoKeel Harness distributes the following third-party packages inside its installers.
 Each package ships with its own license text in the application files; this list records
 the package names, versions, and licenses for transparency.
 | Package | Version | License |
@@ -376,17 +376,17 @@ the package names, versions, and licenses for transparency.
 | @opentelemetry/sdk-metrics | 2.11.0 | Apache-2.0 |
 | @opentelemetry/sdk-trace | 2.11.0 | Apache-2.0 |
 | @opentelemetry/semantic-conventions | 1.43.0 | Apache-2.0 |
-| @picoaide/dsh-account-card | 0.1.0 | MIT |
-| @picoaide/dsh-browser | 0.1.0 | MIT |
-| @picoaide/dsh-capability-center | 0.1.0 | MIT |
-| @picoaide/dsh-connectors | 0.1.0 | MIT |
-| @picoaide/dsh-enterprise | 0.1.0 | MIT |
-| @picoaide/dsh-foot-menu | 0.1.0 | MIT |
-| @picoaide/dsh-gateway-client | 0.1.0 | MIT |
-| @picoaide/dsh-host-home | 0.1.0 | MIT |
-| @picoaide/dsh-host-locale | 0.1.0 | MIT |
-| @picoaide/dsh-wasm-apps | 0.1.0 | MIT |
-| @picoaide/dsh-wasm-apps-host | 0.1.0 | MIT |
+| @zeokeel/dsh-account-card | 0.1.0 | MIT |
+| @zeokeel/dsh-browser | 0.1.0 | MIT |
+| @zeokeel/dsh-capability-center | 0.1.0 | MIT |
+| @zeokeel/dsh-connectors | 0.1.0 | MIT |
+| @zeokeel/dsh-enterprise | 0.1.0 | MIT |
+| @zeokeel/dsh-foot-menu | 0.1.0 | MIT |
+| @zeokeel/dsh-gateway-client | 0.1.0 | MIT |
+| @zeokeel/dsh-host-home | 0.1.0 | MIT |
+| @zeokeel/dsh-host-locale | 0.1.0 | MIT |
+| @zeokeel/dsh-wasm-apps | 0.1.0 | MIT |
+| @zeokeel/dsh-wasm-apps-host | 0.1.0 | MIT |
 | @protobufjs/aspromise | 1.1.2 | BSD-3-Clause |
 | @protobufjs/base64 | 1.1.2 | BSD-3-Clause |
 | @protobufjs/codegen | 2.0.5 | BSD-3-Clause |

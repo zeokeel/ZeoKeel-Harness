@@ -28,7 +28,7 @@ const patch = readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')
 describe('宿主半边：行契约', () => {
   it('声明稳定的插件名与（空的）依赖面', () => {
     expect(name).toBe('dsh-wasm-apps')
-    // 本地 API 面（/api/pico/apps/wasm/*）由 @picoaide/dsh-enterprise 注册，
+    // 本地 API 面（/api/zeokeel/apps/wasm/*）由 @zeokeel/dsh-enterprise 注册，
     // 这里不注入任何宿主服务 —— 空 inject 是有意的，不是漏写。
     expect(inject).toEqual([])
   })
@@ -41,7 +41,7 @@ describe('宿主半边：行契约', () => {
 
 describe('装配声明：客户端 bundle + profile 行', () => {
   it('dsh.client 声明 web 平台且注入 locale/slots', () => {
-    expect(manifest.name).toBe('@picoaide/dsh-wasm-apps')
+    expect(manifest.name).toBe('@zeokeel/dsh-wasm-apps')
     expect(manifest.dsh.client.platform).toBe('web')
     expect(manifest.dsh.client.inject).toContain('@deepseek-ai/dsh-client-locale')
     expect(manifest.dsh.client.inject).toContain('@deepseek-ai/dsh-client-ui-slots')
@@ -56,7 +56,7 @@ describe('装配声明：客户端 bundle + profile 行', () => {
 
   it('cordis.patch.yml 把本包插进 profile（id 稳定，name 与包名一致）', () => {
     expect(manifest.dsh.bundle.patch).toBe('./cordis.patch.yml')
-    expect(patch).toContain('- id: picoaide-wasm-apps')
-    expect(patch).toContain("name: '@picoaide/dsh-wasm-apps'")
+    expect(patch).toContain('- id: zeokeel-wasm-apps')
+    expect(patch).toContain("name: '@zeokeel/dsh-wasm-apps'")
   })
 })

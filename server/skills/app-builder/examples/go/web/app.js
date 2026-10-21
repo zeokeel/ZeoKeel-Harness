@@ -11,7 +11,7 @@
  *   3. 失败一律是 JSON 信封 `{"error":{"code","message"}}` —— 读 `message` 给人看，
  *      `code` 进 `console.error` 便于排障，**不要只说"失败了"**。
  *
- * AI 走**客户端 AI loop**：页面 `fetch('/__picoaide/ai/chat')` 由客户端本地处理
+ * AI 走**客户端 AI loop**：页面 `fetch('/__zeokeel/ai/chat')` 由客户端本地处理
  * （绝不转发服务端），拿到回答后 POST 回本应用的 `/api/summaries` 落库。
  */
 'use strict'
@@ -81,7 +81,7 @@ var summariesView = {
 }
 
 /** 身份与应用信息（页面标题、AI 保留路径都来自后端，页面不写死）。 */
-var app = { title: '团队共享便签', ai_chat_path: '/__picoaide/ai/chat' }
+var app = { title: '团队共享便签', ai_chat_path: '/__zeokeel/ai/chat' }
 
 function loadWhoami() {
   return callAPI('/api/whoami').then(function (data) {

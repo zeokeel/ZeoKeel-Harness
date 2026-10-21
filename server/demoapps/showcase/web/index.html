@@ -103,9 +103,9 @@
               <span class="mono">auth.mode</span>，<b>不比对、也不校验名单里的账号是否存在</b>
               （否则等于账号枚举接口）。</p>
             <p><b>R24</b>：名单判定永远在应用侧 —— 入口第一件事就是读自己的
-              <span class="mono">picoaide.app.json</span> 比对，不在名单里返回 403 页面并
+              <span class="mono">zeokeel.app.json</span> 比对，不在名单里返回 403 页面并
               <b>显示本人账号</b>（那是作者发现名单拼错的唯一途径）。</p>
-            <p>名单必须放 <span class="mono">picoaide.app.json</span>（平台保留资源，永不直出）；
+            <p>名单必须放 <span class="mono">zeokeel.app.json</span>（平台保留资源，永不直出）；
               放进会被直出的非保留资源，等于把名单公开给任何能打开应用的人。</p>
           </div>
         </details>
@@ -202,7 +202,7 @@
         </div>
         <div class="out" data-out="static" aria-live="polite" role="status"></div>
         <p class="tip">宿主规则：包内存在的 <b>非保留资源</b> 由宿主按路径直接返回（不执行 wasm，响应带 ETag）；
-          不存在就交给 wasm（这里会看到应用自己的 404 信封）。而 <span class="mono">picoaide.app.json</span>
+          不存在就交给 wasm（这里会看到应用自己的 404 信封）。而 <span class="mono">zeokeel.app.json</span>
           是保留资源，宿主永不直出。</p>
       </div>
     </section>
@@ -235,7 +235,7 @@
         </div>
       </header>
       <div class="cardBody">
-        <p class="tip"><span class="mono">POST /__picoaide/ai/chat</span> 由客户端本地处理（首次会弹一次性授权卡），
+        <p class="tip"><span class="mono">POST /__zeokeel/ai/chat</span> 由客户端本地处理（首次会弹一次性授权卡），
           应用侧只负责发问题、按 SSE 增量渲染。服务端应用库与这条链路无关。</p>
         <label class="label" for="aiPrompt">问一句话</label>
         <textarea class="input" id="aiPrompt" rows="2" maxlength="500"
@@ -332,7 +332,7 @@
     </section>
 
     <footer class="foot">
-      <p>手机竖屏窗口比例由 <span class="mono">picoaide.app.json</span> 的
+      <p>手机竖屏窗口比例由 <span class="mono">zeokeel.app.json</span> 的
         <span class="mono">window.ratio</span> 声明，客户端强制锁定。</p>
       <p class="mono footMeta" id="footMeta">等第一次请求…</p>
     </footer>

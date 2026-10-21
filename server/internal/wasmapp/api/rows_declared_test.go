@@ -1,6 +1,6 @@
 package api
 
-// 本文件是**作者声明敏感列**（`picoaide.app.json` 的 `sensitive_columns`，§5.9 第 8 点
+// 本文件是**作者声明敏感列**（`zeokeel.app.json` 的 `sensitive_columns`，§5.9 第 8 点
 // 后半）在**脱敏面**（`GET …/rows`）的行为判据。
 //
 // 判据（每条都能被单独打坏）：
@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/appdb"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appdb"
 )
 
 // declaredSensitiveCfg 是 goodConfig 的副本 + 作者声明（不改动共享夹具）。

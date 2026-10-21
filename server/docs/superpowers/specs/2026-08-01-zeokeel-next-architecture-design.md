@@ -1,11 +1,11 @@
-# PicoAide(Next)架构设计文档
+# ZeoKeel(Next)架构设计文档
 
 > **2026-08-19 注记**:自研 Electron 客户端(desktop/)与浏览器插件已下线删除,仓库仅保留服务端接口与 webadmin 管理端。本文档为历史设计与计划,服务端相关部分仍有效,客户端相关部分不再适用。
 
-> 项目:picoaide-next(全新重写)
+> 项目:zeokeel-next(全新重写)
 > 日期:2026-08-01
 > 状态:设计定稿,待实施
-> 上一代:picoaide(沙箱模式)已冻结,本仓库仅作参考,零代码迁移
+> 上一代:zeokeel(沙箱模式)已冻结,本仓库仅作参考,零代码迁移
 
 ---
 
@@ -16,7 +16,7 @@
 | D1 | 产品形态 | 企业内网桌面 AI 办公智能体 | 沙箱模式能力受限(无法操作真实桌面);同类产品已验证桌面客户端 + 本地执行形态 |
 | D2 | 与旧项目关系 | 全新仓库、全新重写,零继承 | 用户决策:干净起步,架构按新形态自由设计 |
 | D3 | Agent 循环位置 | 客户端本地运行 | 操作本机文件/浏览器/屏幕必须在本地;会话/记忆本地存储,离线可用 |
-| D4 | 旧沙箱模式 | 退役 | 服务端不再跑沙箱/picoagent |
+| D4 | 旧沙箱模式 | 退役 | 服务端不再跑沙箱/zeokeelagent |
 | D5 | 客户端技术栈 | Electron + React + TypeScript | Electron 桌面壳成熟度远超 Wails(WebView 跨平台差异/调试/打包生态);React 聊天 UI 生态最丰富 |
 | D6 | Agent 引擎 | Vercel AI SDK(`ai` + `@ai-sdk/openai-compatible`,TS) | 事实标准的 TS LLM/Agent 框架;streamText 流式输出一流;多步工具循环自管(不依赖易变的工作流运行时);provider baseURL 直连自研网关 |
 | D7 | 服务端技术栈 | Go | 网关/认证/知识库重负载场景 Go 稳、部署单二进制 |
@@ -30,7 +30,7 @@
 | D15 | 沙盒执行 | `@ai-sdk/sandbox-just-bash` 本地受限会话运行 Agent 生成的不可信代码 | AI SDK 官方**本地** bash 沙盒,受限会话跑 untrusted 代码/脚本,数据不出本机、离线可用;不用 Vercel 云端沙盒(与"数据不出本机"定位冲突且需生产凭证);本地工具(文件/桌面)仍直连用户授权目录 |
 | D16 | 服务端管理 | 极简 Web 管理页 | 用户管理/商城上架/用量统计需要界面 |
 | D17 | 前端框架 | React + TypeScript(不用 Vue) | AI 聊天组件/流式渲染生态 React 最丰富,与 AI SDK 原生契合 |
-| D18 | 仓库名 | picoaide-next | 与旧仓库 picoaide 区分 |
+| D18 | 仓库名 | zeokeel-next | 与旧仓库 zeokeel 区分 |
 | D19 | 客户端本地存储 | better-sqlite3 | Node 生态最稳的同步 SQLite 驱动,主进程内使用;原生模块需 `@electron/rebuild` 匹配 Electron ABI |
 | D20 | 客户端本地 MCP | 官方 @modelcontextprotocol/sdk(Client) | MCP 标准 TypeScript SDK,stdio + HTTP 双传输 |
 | D21 | 客户端 OCR | tesseract.js | 纯 JS/WASM,三平台免系统依赖,惰性加载 |
@@ -45,7 +45,7 @@
 
 ### 1.1 上一代问题
 
-PicoAide(旧)是浏览器 Web UI + 服务端沙箱(overlayfs + netns)模式,存在四类根本问题:
+ZeoKeel(旧)是浏览器 Web UI + 服务端沙箱(overlayfs + netns)模式,存在四类根本问题:
 
 1. **能力受限**:沙箱只能做纯数字世界任务(文本/代码/API),无法操作真实桌面——不能生成并直接交付 Office 文档、不能操作本机应用、不能屏幕识别/OCR、不能做 RPA 自动化。
 2. **产物割裂**:Agent 产物在服务端沙箱,用户需手动下载,体验断裂。
@@ -77,7 +77,7 @@ PicoAide(旧)是浏览器 Web UI + 服务端沙箱(overlayfs + netns)模式,存�
 ### 2.1 架构图
 
 ```
-┌─────────────── 桌面客户端 picoaide-desktop (Electron: main + renderer) ──────┐
+┌─────────────── 桌面客户端 zeokeel-desktop (Electron: main + renderer) ──────┐
 │                                                                              │
 │  React UI (renderer, 全新写)                                                  │
 │  ├─ 登录页:服务器 URL/端口 + 用户名/密码                                     │
@@ -101,7 +101,7 @@ PicoAide(旧)是浏览器 Web UI + 服务端沙箱(overlayfs + netns)模式,存�
                              │ HTTPS(WSS)
                              │ Bearer token
 ┌────────────────────────────▼─────────────────────────────────────────────────┐
-│  服务端 picoaide-server (Go,私有化可部署)                                     │
+│  服务端 zeokeel-server (Go,私有化可部署)                                     │
 │                                                                              │
 │  ├─ 认证:LDAP / OIDC / 本地账号(全新实现,参考旧 authsource 设计)              │
 │  ├─ AI 网关:OpenAI 兼容 /v1/chat/completions 代理                              │
@@ -179,14 +179,14 @@ renderer (React UI) ──contextBridge──▶ preload ──ipcMain──▶ 
 3. 判断标准:新增代码前先搜仓库是否已有等价函数/组件;重复 2 次即提取。
 
 - **main 进程**:Agent 引擎、本地工具、better-sqlite3、MCP 运行时、网关客户端、token 存储(不在 renderer 持敏感数据)
-- **renderer 进程**:纯 UI,经 preload 的 `window.picoaide.*` API 与 main 通信,流式事件经 ipc 推送
+- **renderer 进程**:纯 UI,经 preload 的 `window.zeokeel.*` API 与 main 通信,流式事件经 ipc 推送
 - **preload 脚本**:contextBridge 暴露白名单 API(登录/发消息/事件订阅/设置/确认),contextIsolation 开启
 
 ### 3.2 目录结构(仓库全景)
 
 ```
-picoaide-next/
-├── go.mod                        # 单 module:github.com/picoaide/picoaide(服务端)
+zeokeel-next/
+├── go.mod                        # 单 module:github.com/zeokeel/zeokeel-harness/server(服务端)
 ├── Makefile                      # 构建/测试/打包
 ├── .github/workflows/ci.yml      # CI:go test + 客户端 test/typecheck/build + 三平台打包
 ├── cmd/server/main.go            # 服务端网关入口
@@ -224,8 +224,8 @@ picoaide-next/
 │       ├── safe.go               # SafePathSegment 等
 │       └── crypto.go             # AES-GCM 加密(凭证/密钥,master key 走 env/0600 文件)
 ├── desktop/                      # Electron 客户端(TypeScript monorepo 子包)
-│   ├── package.json              # name: picoaide-desktop,electron-vite 构建
-│   ├── electron-builder.yml      # 三平台打包配置(含 picoaide:// 协议注册/asarUnpack)
+│   ├── package.json              # name: zeokeel-desktop,electron-vite 构建
+│   ├── electron-builder.yml      # 三平台打包配置(含 zeokeel:// 协议注册/asarUnpack)
 │   ├── electron.vite.config.ts   # main/preload/renderer 三段构建
 │   ├── src/
 │   │   ├── main/                 # 主进程(Node)
@@ -269,7 +269,7 @@ picoaide-next/
 │   │   └── renderer/             # React UI
 │   │       ├── src/
 │   │       │   ├── App.tsx / main.tsx
-│   │       │   ├── api/picoaide.ts        # preload API 封装
+│   │       │   ├── api/zeokeel.ts        # preload API 封装
 │   │       │   ├── components/            # ui/(shadcn)+ ChatInput/Messages/ToolCalls/Artifacts/ConfirmModal
 │   │       │   ├── pages/                # Login/Main/Settings
 │   │       │   └── stores/               # Zustand:chat/auth/connection
@@ -392,7 +392,7 @@ export type AgentEvent =
   | { type: 'error'; data: string }
 ```
 
-renderer 经 preload 暴露的 `window.picoaide.onAgentEvent(cb)` 订阅(底层 ipcRenderer.on),打字机渲染 `text_delta`,工具卡片渲染 `tool_start/end`。cancel 后引擎发 `canceled` 事件并置 `status='failed'`。
+renderer 经 preload 暴露的 `window.zeokeel.onAgentEvent(cb)` 订阅(底层 ipcRenderer.on),打字机渲染 `text_delta`,工具卡片渲染 `tool_start/end`。cancel 后引擎发 `canceled` 事件并置 `status='failed'`。
 
 #### 3.3.4 三模式
 
@@ -440,15 +440,15 @@ Agent 发起高危工具(注册表标记 needsApproval)
 
 存储根目录:
 
-- Linux:`~/.local/share/picoaide/`;**Portable 模式(仅 Windows/Linux)**:exe 同目录存在 `portable.txt` → 数据目录 = exe 同目录/data(不可写时回退系统目录),解压即用、数据随程序目录移动
-- macOS:`~/Library/Application Support/picoaide/`(一律标准数据目录,不做 portable;dmg 拖入 Applications 即用)
-- Windows:`%APPDATA%/picoaide/`;**Portable 模式**同上(数据在 exe 同目录/data)
+- Linux:`~/.local/share/zeokeel/`;**Portable 模式(仅 Windows/Linux)**:exe 同目录存在 `portable.txt` → 数据目录 = exe 同目录/data(不可写时回退系统目录),解压即用、数据随程序目录移动
+- macOS:`~/Library/Application Support/zeokeel/`(一律标准数据目录,不做 portable;dmg 拖入 Applications 即用)
+- Windows:`%APPDATA%/zeokeel/`;**Portable 模式**同上(数据在 exe 同目录/data)
 
 文件布局:
 
 ```
-picoaide/
-├── picoaide.db          # 主库(WAL 模式)
+zeokeel/
+├── zeokeel.db          # 主库(WAL 模式)
 ├── config.json          # 服务端 URL/token(权限 0600)
 ├── workspaces/<conv-id>/   # 产物(无项目会话)
 ├── skills/<name>/       # 已安装技能
@@ -561,7 +561,7 @@ skill-name-v1.2.3.tar.gz
 ```
 Electron 主进程                       浏览器(Chrome/Edge)
 ┌───────────────────────┐  WebSocket  ┌────────────────────────┐
-│ cdp_server.ts         │◄───────────►│ 插件 picoaide-bridge    │
+│ cdp_server.ts         │◄───────────►│ 插件 zeokeel-bridge    │
 │ 固定监听 127.0.0.1:54321│  JSON-RPC   │  (MV3 扩展,后台常连)    │
 │ 无鉴权(仅回环地址)      │            │  tabs/activeTab/scripting│
 └───────────────────────┘            └────────────────────────┘
@@ -621,7 +621,7 @@ type BrowserProvider interface {    // 浏览器认证:oidc(与密码认证独�
 
 - **local**:用户名密码,argon2id 哈希(SQLite users 表)
 - **ldap**:go-ldap v3,绑定查询 + 组映射(用户名过 `EscapeFilter` 防注入)
-- **oidc**:授权码流 + state 绑定 + PKCE(verifier 服务端存 session,重启失效可接受,注明);服务端回调 `/api/auth/oidc/callback` → **颁发正式 api_token(90 天,与登录 token 同构)** → 重定向 `picoaide://auth?token=...`(客户端注册自定义协议接收;**协议拉起由 OS 弹窗确认;URL 日志风险经此缓解,不缩短 token 时效**);客户端深链处理:解析 token → saveSession → 进入主界面——回调归属明确为服务端(修正旧"本地端口回调"设计)
+- **oidc**:授权码流 + state 绑定 + PKCE(verifier 服务端存 session,重启失效可接受,注明);服务端回调 `/api/auth/oidc/callback` → **颁发正式 api_token(90 天,与登录 token 同构)** → 重定向 `zeokeel://auth?token=...`(客户端注册自定义协议接收;**协议拉起由 OS 弹窗确认;URL 日志风险经此缓解,不缩短 token 时效**);客户端深链处理:解析 token → saveSession → 进入主界面——回调归属明确为服务端(修正旧"本地端口回调"设计)
 - webadmin 的"绑定 LDAP 组"管理功能推迟二期(组映射仍用于认证,仅无管理界面)
 
 #### 4.1.2 Token 认证(客户端)
@@ -642,7 +642,7 @@ CREATE TABLE api_tokens (
 - 登录:`POST /api/auth/login` → 服务端验证 → 返回 `{token, user}`(user 含 is_admin/status;资源可见性由服务端按用户/部门授权过滤)
 - 后续请求:`Authorization: Bearer <token>`;`VerifyToken` 校验:存在 / 未吊销 / **未过期** / 关联用户有效
 - 登录限流:10 次/5 分钟(按 IP+用户名;**有界**内存滑动窗口,条目过期清理,防内存膨胀)
-- 超管引导:`--bootstrap-admin` 启动参数(env `PICOAI_ADMIN_PASSWORD` 设密码),首次启动无超管时创建;**不提供"首注册即超管"的注册端点**(存在抢先接管与 TOCTOU 风险)
+- 超管引导:`--bootstrap-admin` 启动参数(env `ZEOKEEL_ADMIN_PASSWORD` 设密码),首次启动无超管时创建;**不提供"首注册即超管"的注册端点**(存在抢先接管与 TOCTOU 风险)
 - 服务端管理页另用 session cookie(HttpOnly + SameSite=Lax,可选 Secure)+ CSRF(HMAC 双窗口)
 
 ### 4.2 AI 网关
@@ -705,7 +705,7 @@ CREATE INDEX idx_usage_user_time ON usage(user_id, created_at);
 #### 4.2.4 密钥管理
 
 - 上游 key 存 `gateway_providers.api_key_enc`(展平 KV 仅为 settings 表,**密钥不落 settings**),AES-GCM 加密落盘
-- master key 来自 `PICOAI_MASTER_KEY` 环境变量,未设置则首次启动生成 32 字节随机密钥写 `data/master.key`(权限 0600);**master key 不存数据库**(与密文同库则加密形同虚设)
+- master key 来自 `ZEOKEEL_MASTER_KEY` 环境变量,未设置则首次启动生成 32 字节随机密钥写 `data/master.key`(权限 0600);**master key 不存数据库**(与密文同库则加密形同虚设)
 - 管理页配置,超管可见(掩码展示)
 
 ### 4.3 Skill 商城
@@ -795,8 +795,8 @@ kb_folders / kb_documents / kb_folder_users / kb_folder_groups / kb_audit_logs
 | token | 只存 SHA-256 hash;支持吊销;**过期策略(默认 90 天,expires_at 校验)** |
 | 上游密钥/插件凭证 | AES-GCM 加密落库;HTTPS 传输;管理页掩码;master key 走 env/0600 文件(不落库) |
 | 客户端 token | Electron safeStorage(OS 密钥链)优先;**Windows 无密钥链时回退不落盘(每次启动重登)**,其余平台回退 config.json 0600 |
-| 超管引导 | `--bootstrap-admin` 需 env `PICOAI_ADMIN_PASSWORD`(缺失则启动失败,不打印密码到日志) |
-| master key | env `PICOAI_MASTER_KEY` 或 `data/master.key`(0600);**data 目录 0700**;轮换无(列为已知限制) |
+| 超管引导 | `--bootstrap-admin` 需 env `ZEOKEEL_ADMIN_PASSWORD`(缺失则启动失败,不打印密码到日志) |
+| master key | env `ZEOKEEL_MASTER_KEY` 或 `data/master.key`(0600);**data 目录 0700**;轮换无(列为已知限制) |
 | 高危操作 | 删除/截屏/剪贴板读取/命令审批/kb_upload/浏览器操作类工具 → UI 确认弹窗(60s 超时拒绝,自弹窗可见起算);弹窗展示**实际命令串/代码/URL**(与执行串一致);命令按"白名单+无拼接+路径边界"判定(拒绝控制字符/裸 `$`/find/`~user`/`--opt=/path`) |
 | 浏览器插件桥 | 仅绑定回环地址 127.0.0.1:54321(不对外网开放);**无鉴权(零配置)——本机任意进程可连,与客户端同信任级(2026-08-12 裁决:信任模型=本机进程即员工本人,属设计内行为非安全边界,风险见 §9)**;插件未连接时工具明确报错 |
 | 插件工具 | MCP 插件工具按风险启发式强制审批(动词表:delete/remove/write/exec/shell/http/post/put/send/upload/publish/push/sync/purge/clear/truncate/unlink/rm 等,大小写不敏感,**best-effort 仅减噪,安全边界=安装弹窗(preview nonce 二次确认)**);stdio 命令白名单客户端运行时强制校验 |
@@ -851,7 +851,7 @@ kb_folders / kb_documents / kb_folder_users / kb_folder_groups / kb_audit_logs
 
 - **AI 生成测试**:每个任务完成实现后,由 AI 编码代理读取实现代码,自动生成/补全:单元测试(正常/边界/异常分支)、mock(模型/上游/IdP/进程)、E2E 脚本;生成后必须经"红-绿"验证(先看测试失败于未实现行为,再看实现后通过),禁止"为绿而绿"的测试
 - **执行自动化**:所有测试进 CI(GitHub Actions)——job1 Go 全量、job2 desktop Vitest+typecheck+build、job3 webadmin build、阶段 4 追加三平台测试+打包矩阵(ubuntu/windows/macos runner 各跑本平台 npm test 与打包)
-- **审批测试钩子**:引擎支持 env 钩子(`PICOAI_TEST_AUTO_APPROVE=1` 自动允许 / `=0` 自动拒绝),**仅测试/CI 构建启用,打包产物不含钩子路径**,E2E 无需人工点弹窗;单测仍直接测 `confirm(requestId, ok)` 全分支
+- **审批测试钩子**:引擎支持 env 钩子(`ZEOKEEL_TEST_AUTO_APPROVE=1` 自动允许 / `=0` 自动拒绝),**仅测试/CI 构建启用,打包产物不含钩子路径**,E2E 无需人工点弹窗;单测仍直接测 `confirm(requestId, ok)` 全分支
 - **浏览器插件 E2E**:Playwright 驱动真实 Chrome/Edge 加载 `browser-extension/`(MV3),连接真实客户端 CDP 端口,断言 tabInfo/getContent/click/navigate 全链路(CI 用 `xvfb-run` 无头)
 - **自动化覆盖边界(保留人工)**:
   - 真实企业环境联调(真实 LDAP/OIDC 服务器、真实内网系统/页面)——CI 无法复现,阶段验收人工

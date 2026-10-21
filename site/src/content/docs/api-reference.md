@@ -1,6 +1,6 @@
 ---
 title: API 参考
-description: PicoAide Harness 服务端 HTTP API：命名空间、认证与会话、按功能分组的端点表、错误信封，以及版本与兼容承诺。
+description: ZeoKeel Harness 服务端 HTTP API：命名空间、认证与会话、按功能分组的端点表、错误信封，以及版本与兼容承诺。
 ---
 
 本页是服务端 HTTP 接口的公开参考。**唯一真源是代码**——全部路径、方法与鉴权集中声明在 `server/internal/router/router.go` 一处；本页与该文件不一致时以代码为准。
@@ -152,7 +152,7 @@ description: PicoAide Harness 服务端 HTTP API：命名空间、认证与会�
 | DELETE | `/api/client/v2/apps/wasm/uploads/:upload_id` | Bearer | 主动放弃并回收磁盘 |
 | POST | `/api/client/v2/apps/wasm/:app_id/request` | Bearer | **应用执行的唯一入口**：应用请求信封在此被解码并执行，身份由客户端注入 |
 | POST | `/api/client/v2/apps/wasm/proof` | Bearer | 签发持有性证明（绑定「哪个员工 + 哪把令牌 + 哪个应用」） |
-| POST | `/api/client/v2/apps/wasm/:app_id/open` | Bearer | 打开校验与计数；响应头 `X-PicoAide-App-Version` 是客户端内容缓存键的唯一来源 |
+| POST | `/api/client/v2/apps/wasm/:app_id/open` | Bearer | 打开校验与计数；响应头 `X-ZeoKeel-App-Version` 是客户端内容缓存键的唯一来源 |
 | GET | `/api/client/v2/apps/wasm/:app_id/availability` | Bearer | 标识唯一性预查（只读，不编译、不占版本号） |
 | GET | `/api/client/v2/apps/wasm/:app_id/releases` | Bearer | 发布者本人的版本历史与审核结论（含被拒理由）。非发布者一律 404，且与「应用不存在」逐字节同形 |
 | POST | `/api/client/v2/apps/wasm/:app_id/publish`、`/api/client/v2/apps/wasm/:app_id/unpublish` | Bearer | 上架 / 下架（发布者本人） |

@@ -1,7 +1,7 @@
 // Package clientrelease 下发随服务端镜像一起发布的客户端安装包。
 //
 // 客户端安装包**随服务端镜像发布**(CI 三平台 job 产出 → 镜像内
-// /opt/picoaide/client/),服务端直接把那个目录对外提供。于是客户端从
+// /opt/zeokeel/client/),服务端直接把那个目录对外提供。于是客户端从
 // **它登录的这台服务端**取包:员工机器不需要访问任何外网,且客户端版本
 // 天然跟随服务端版本 —— "客户端升了服务端没升"在结构上不可能发生。
 //
@@ -27,13 +27,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Dir 客户端资产的镜像内目录,由 Dockerfile 的 ENV 固定(/opt/picoaide/client)。
+// Dir 客户端资产的镜像内目录,由 Dockerfile 的 ENV 固定(/opt/zeokeel/client)。
 // 服务端直接读它 —— 镜像层里的文件随镜像升级而更新,正是要的语义。
 var Dir = func() string {
-	if v := os.Getenv("PICOAI_CLIENT_RELEASE_DIR"); v != "" {
+	if v := os.Getenv("ZEOKEEL_CLIENT_RELEASE_DIR"); v != "" {
 		return v
 	}
-	return "/opt/picoaide/client"
+	return "/opt/zeokeel/client"
 }()
 
 // 下载链路的写截止时间(2026-09-21 实测缺陷的修复)。
@@ -106,7 +106,7 @@ type Handlers struct {
 
 // NewHandlers 构造端点集合。
 // @param version - 服务端版本(compile-time 注入)。
-// @param channel - 本部署所属渠道(PICOAI_CHANNEL,缺省 official)。
+// @param channel - 本部署所属渠道(ZEOKEEL_CHANNEL,缺省 official)。
 func NewHandlers(version func() string, channel string) *Handlers {
 	if channel == "" {
 		channel = "official"
@@ -392,7 +392,7 @@ func allowedAssetName(name string) bool {
 
 // PublicBaseURLEnv 显式声明本服务端对外可达地址的环境变量(如
 // https://ai.example.com,允许带子路径)。配置后是下载地址的**唯一权威来源**。
-const PublicBaseURLEnv = "PICOAI_PUBLIC_BASE_URL"
+const PublicBaseURLEnv = "ZEOKEEL_PUBLIC_BASE_URL"
 
 // originUnavailableReason 是"给不出安全下载地址"时的兜底原因说明
 // (下发给客户端/体现在服务端日志里,供运维定位)。
@@ -544,7 +544,7 @@ func ForwardedProtoIsHTTPS(raw string) bool {
 
 // resolveOrigin 判定客户端可达来源。
 //
-// 优先级:显式配置(PICOAI_PUBLIC_BASE_URL,配了就是唯一权威)→ XFP:https
+// 优先级:显式配置(ZEOKEEL_PUBLIC_BASE_URL,配了就是唯一权威)→ XFP:https
 // → TLS → 回环 Host(http,本地开发)→ 无法提供安全地址。
 func resolveOrigin(in originInput) Origin {
 	if raw := strings.TrimSpace(os.Getenv(PublicBaseURLEnv)); raw != "" {
@@ -579,7 +579,7 @@ func resolveOrigin(in originInput) Origin {
 // 拒绝 query/fragment、相对地址、非 http(s) scheme **以及 userinfo(凭据)**。
 //
 // 为什么必须在这里拒绝 userinfo（R28 审计 AB1-01 = P2，真跑复现）：本函数是"对外地址"
-// （`PICOAI_PUBLIC_BASE_URL` 环境变量 / settings `server.base_url`）的**唯一**规范化实现，
+// （`ZEOKEEL_PUBLIC_BASE_URL` 环境变量 / settings `server.base_url`）的**唯一**规范化实现，
 // 它的返回值会被拼进**公开未认证**端点 `/api/client/v2/updates/manifest` 的下载 URL
 // （以及门户页的下载地址）。修前它只查 scheme/host，然后返回 `strings.TrimRight(raw,"/")`
 // **原串** ⇒ 管理员按"对外地址要经基础认证"的最自然写法配 `https://user:pass@host` 时：

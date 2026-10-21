@@ -115,13 +115,13 @@ function createProbeHarness(
 
   const ctx = {
     get: (name: string) => {
-      if (name === 'picoSession') return { getSession: () => ({ username: 'user-a' }) }
+      if (name === 'zeokeelSession') return { getSession: () => ({ username: 'user-a' }) }
       if (name === 'connection') return fence
       if (name === 'desktopRuntime') return { locale: 'zh' }
       return undefined
     },
     on: (event: string, handler: (next: unknown) => void) => {
-      if (event === 'pico/session-changed') sessionHandlers.push(handler)
+      if (event === 'zeokeel/session-changed') sessionHandlers.push(handler)
       const list = eventHandlers.get(event) ?? []
       list.push(handler as (...args: unknown[]) => void)
       eventHandlers.set(event, list)
@@ -188,7 +188,7 @@ function createProbeHarness(
 async function awaitAuthorizeUrl(h: ProbeHarness, deadlineMs = 8_000): Promise<string> {
   const deadline = Date.now() + deadlineMs
   for (;;) {
-    const res = await callRoute(h as never, '/api/pico/connectors/example-mcp/state', 'GET')
+    const res = await callRoute(h as never, '/api/zeokeel/connectors/example-mcp/state', 'GET')
     const url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request?.authorizeUrl
     if (url !== undefined) return url
     if (Date.now() > deadline) throw new Error('no authorize URL')
@@ -212,7 +212,7 @@ describe('R11-B-01: a refresh landing inside the registration window is not caug
 
     // ---- day 1: authorize + connect while the token is still valid ----------
     const day1 = createProbeHarness([def(server.origin)], dir)
-    await callRoute(day1 as never, '/api/pico/connectors/example-mcp/connect', 'POST')
+    await callRoute(day1 as never, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(day1))
     await waitFor(() => day1.connects.length === 1 && day1.connects[0]?.ok === true, 15_000)
     expect(day1.connects[0]?.error, 'day 1 must connect with a valid token').toBeUndefined()
@@ -232,7 +232,7 @@ describe('R11-B-01: a refresh landing inside the registration window is not caug
 
     // ---- a re-registration (session restore) with a refresh interleaved -----
     const day2 = createProbeHarness([def(server.origin)], dir, async () => {
-      const res = await callRoute(day2 as never, '/api/pico/connectors/example-mcp/refresh', 'POST')
+      const res = await callRoute(day2 as never, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
       expect(res.status, 'the panel refresh must succeed').toBe(200)
     })
     await waitFor(() => day2.connects.length === 1 && day2.connects[0]?.settled === true, 20_000)
@@ -275,12 +275,12 @@ describe('R11-B-01: a refresh landing inside the registration window is not caug
     // OBSERVABILITY (not a discriminator): the row claims the connector is
     // usable while the transport it just tried to load is dead — the exact
     // "row says connected, every call fails" surface R9-D-1 was about.
-    const row = JSON.parse((await callRoute(day2 as never, '/api/pico/connectors/example-mcp/state', 'GET')).body) as { status?: string }
+    const row = JSON.parse((await callRoute(day2 as never, '/api/zeokeel/connectors/example-mcp/state', 'GET')).body) as { status?: string }
     expect(row.status, `the row must not claim a working connector — ${evidence}`).toBe('connected')
 
     // Control: once the registration IS recorded, the same refresh reaches the
     // record — so the window is exactly the registration.
-    const manual = await callRoute(day2 as never, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const manual = await callRoute(day2 as never, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(manual.status).toBe(200)
     const afterManual = await store.readCredential('example-mcp')
     expect((day2.configs[0]?.headers ?? {})[EXTRA_HEADER]).toBe(`Bearer ${afterManual?.accessToken as string}`)

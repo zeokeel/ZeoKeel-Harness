@@ -47,7 +47,7 @@ import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import * as SessionPersistenceJsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createAppAiRunner } from '../src/app-ai-runner.ts'
-// 直接引**源文件**（不是 `@picoaide/dsh-wasm-apps-host/ai-chat` 的构建产物）：本用例判的就是
+// 直接引**源文件**（不是 `@zeokeel/dsh-wasm-apps-host/ai-chat` 的构建产物）：本用例判的就是
 // 这次改动的源码，走 lib 会拿旧产物测出假绿（本仓登记过的"本地绿、CI 红"形态）。
 import {
   AI_HIDDEN_SESSION_ID_MAX_BYTES,

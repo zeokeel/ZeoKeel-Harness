@@ -142,7 +142,7 @@ describe('开关识别：受管清单每一名 × 单横线/双横线的全矩�
       // 三根横线不是"更宽的同一种形态"：真机对照 `---remote-debugging-port=9453`
       // **没有**开监听（Chromium 只吃一或两根），Node 侧同样不认。
       '---inspect=9337', '---remote-debugging-port=9453', '----inspect',
-      '--lang=zh-CN', '--no-sandbox', '--proxy-server=http://x', 'picoaide://x',
+      '--lang=zh-CN', '--no-sandbox', '--proxy-server=http://x', 'zeokeel://x',
     ]) {
       expect(matchDebugSwitch(argument), `${argument} 不得命中`).toBeUndefined()
     }
@@ -303,7 +303,7 @@ describe('判定：打包态逐个拒绝（单/双横线同等），开发态一
   })
 
   it('正常启动（无调试开关）在打包态照旧放行', () => {
-    const gate = detect({ argv: ['--no-sandbox', '--lang=zh-CN', 'picoaide://x'] })
+    const gate = detect({ argv: ['--no-sandbox', '--lang=zh-CN', 'zeokeel://x'] })
     expect(gate).toMatchObject({ refused: false, escaped: false, hatch: false })
     expect(gate.matches).toEqual([])
   })
@@ -318,13 +318,13 @@ describe('判定：打包态逐个拒绝（单/双横线同等），开发态一
   it('逃生门的真值口径与出口策略同源：关闭值不算开', () => {
     for (const off of ['', ' ', '0', 'false', 'no', 'off']) {
       expect(detect({ argv: ['--inspect'], env: { [ALLOW_DEBUG_SWITCHES_ENV]: off } }).refused,
-        `PICOAI_ALLOW_DEBUG_SWITCHES=${JSON.stringify(off)} 必须仍然拒绝`).toBe(true)
+        `ZEOKEEL_ALLOW_DEBUG_SWITCHES=${JSON.stringify(off)} 必须仍然拒绝`).toBe(true)
     }
     expect(detect({ argv: ['--inspect'], env: { [ALLOW_DEBUG_SWITCHES_ENV.toLowerCase()]: 'yes' } }).escaped).toBe(true)
   })
 
   it('逃生门变量名逐字固定（E2E/探针/文档/HANDOFF 都按这个名字写）', () => {
-    expect(ALLOW_DEBUG_SWITCHES_ENV).toBe('PICOAI_ALLOW_DEBUG_SWITCHES')
+    expect(ALLOW_DEBUG_SWITCHES_ENV).toBe('ZEOKEEL_ALLOW_DEBUG_SWITCHES')
   })
 })
 
@@ -334,7 +334,7 @@ describe('文案与留痕', () => {
     const message = debugSwitchRefusalMessage(gate)
     expect(message).toContain('--inspect=9337')
     // 期望值写死在这里（不从被测模块取常量）：自指等式杀不掉"把取值改错"的变异。
-    expect(message).toContain('PICOAI_ALLOW_DEBUG_SWITCHES=1')
+    expect(message).toContain('ZEOKEEL_ALLOW_DEBUG_SWITCHES=1')
     expect(message).toContain('yarn dev')
     expect(message).toContain('--remote-debugging-port')
     // 中英双写：模块作用域拿不到 locale（app.getLocale() ready 前返回空串，实测见模块注释）。
@@ -346,7 +346,7 @@ describe('文案与留痕', () => {
   it('逃生门留痕：只有 escaped 时才给日志行，且点名变量与开关', () => {
     expect(debugSwitchEscapeLogLine(detect({ argv: ['--inspect'] }))).toBeUndefined()
     const line = debugSwitchEscapeLogLine(detect({ argv: ['--inspect'], env: { [ALLOW_DEBUG_SWITCHES_ENV]: '1' } }))
-    expect(line).toContain('PICOAI_ALLOW_DEBUG_SWITCHES')
+    expect(line).toContain('ZEOKEEL_ALLOW_DEBUG_SWITCHES')
     expect(line).toContain('--inspect')
   })
 })

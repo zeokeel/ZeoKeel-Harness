@@ -91,9 +91,9 @@ function manifestResponse(version: unknown, digest = 'a'.repeat(64)): Response {
     client: {
       version,
       assets: {
-        'mac-universal': { url: `${releases}/PicoAide-Harness-${String(version)}-mac.dmg`, sha256: digest, size: 0 },
-        'win-x64': { url: `${releases}/PicoAide-Harness-${String(version)}-x64-Setup.exe`, sha256: digest, size: 0 },
-        'linux-x64': { url: `${releases}/PicoAide-Harness-${String(version)}-x86_64.AppImage`, sha256: digest, size: 0 },
+        'mac-universal': { url: `${releases}/ZeoKeel-Harness-${String(version)}-mac.dmg`, sha256: digest, size: 0 },
+        'win-x64': { url: `${releases}/ZeoKeel-Harness-${String(version)}-x64-Setup.exe`, sha256: digest, size: 0 },
+        'linux-x64': { url: `${releases}/ZeoKeel-Harness-${String(version)}-x86_64.AppImage`, sha256: digest, size: 0 },
       },
     },
   })
@@ -136,7 +136,7 @@ function installerNameFor(version: string): string {
 
 /** 测试清单里下载地址的前缀(与服务端镜像布局同形)。 */
 function manifestAssetURL(version: string): string {
-  return `${SERVER}/updates/client/${version}/PicoAide-Harness-${version}-${process.platform === 'darwin' ? 'mac.dmg' : process.platform === 'win32' ? 'x64-Setup.exe' : 'x86_64.AppImage'}`
+  return `${SERVER}/updates/client/${version}/ZeoKeel-Harness-${version}-${process.platform === 'darwin' ? 'mac.dmg' : process.platform === 'win32' ? 'x64-Setup.exe' : 'x86_64.AppImage'}`
 }
 
 /**
@@ -217,7 +217,7 @@ async function createHarness(options: {
   const refresh = vi.fn()
   const registrationDispose = vi.fn()
   const showManualCheckResult = vi.fn(options.showManualCheckResult ?? (async () => {}))
-  const downloadUpdate = vi.fn(options.downloadUpdate ?? (async () => '/tmp/picoaide-installer'))
+  const downloadUpdate = vi.fn(options.downloadUpdate ?? (async () => '/tmp/zeokeel-installer'))
   const announceUpdateReady = vi.fn(options.announceUpdateReady ?? (async () => {}))
   const installUpdate = vi.fn(options.installUpdate ?? (async () => {}))
   const publishedStates = vi.fn()
@@ -258,7 +258,7 @@ async function createHarness(options: {
       return disposer
     },
     // 会话服务由 enterprise 提供;这里给最小替身,让插件能读到服务端地址。
-    get: (name: string) => name === 'picoSession'
+    get: (name: string) => name === 'zeokeelSession'
       ? { getSession: () => session }
       : undefined,
     on: (event: string, handler: (...args: unknown[]) => void) => {
@@ -287,7 +287,7 @@ async function createHarness(options: {
     checkNow: updatesAdapter.checkNow,
     emitSession: (next: { serverURL?: string } | null) => {
       session = next
-      for (const handler of listeners.get('pico/session-changed') ?? []) handler(next)
+      for (const handler of listeners.get('zeokeel/session-changed') ?? []) handler(next)
     },
     dispose: async () => { await disposer?.() },
   }
@@ -419,7 +419,7 @@ describe('desktop update Host plugin', () => {
     // 现象：后台检查走完下载并通报"可安装"（假计时器推进 initialDelayMs 后）。
     await vi.waitFor(() => { expect(harness.announceUpdateReady).toHaveBeenCalledWith('2.1.0', expect.any(String)) }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
     expect(harness.showManualCheckResult).not.toHaveBeenCalled()
-    expect(harness.tray.label()).toBe('PicoAide Harness 2.1.0 Ready to Install')
+    expect(harness.tray.label()).toBe('ZeoKeel Harness 2.1.0 Ready to Install')
     // 现象：状态文件真的落到磁盘并读回 v2 形状（真实 I/O）。
     await vi.waitFor(async () => {
       expect(JSON.parse(await readFile(harness.statePath, 'utf8'))).toEqual({
@@ -461,16 +461,16 @@ describe('desktop update Host plugin', () => {
     expect(source.manifestURL).toBe(OFFICIAL_MANIFEST_URL)
     expect(signal).toBeInstanceOf(AbortSignal)
     expect(signal.aborted).toBe(false)
-    expect(harness.tray.label()).toBe('Downloading PicoAide Harness 2.1.0…')
+    expect(harness.tray.label()).toBe('Downloading ZeoKeel Harness 2.1.0…')
     // 下载期间绝不打断用户:没有对话框、没有系统通知。
     expect(harness.announceUpdateReady).not.toHaveBeenCalled()
     expect(harness.showManualCheckResult).not.toHaveBeenCalled()
     expect(harness.notifications).toEqual([])
 
-    resolveDownload('/tmp/picoaide-installer')
+    resolveDownload('/tmp/zeokeel-installer')
     // 现象：下载 promise 落定后托盘标签变为"可安装"。
-    await vi.waitFor(() => { expect(harness.tray.label()).toBe('PicoAide Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
-    expect(harness.announceUpdateReady).toHaveBeenCalledWith('2.1.0', '/tmp/picoaide-installer')
+    await vi.waitFor(() => { expect(harness.tray.label()).toBe('ZeoKeel Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
+    expect(harness.announceUpdateReady).toHaveBeenCalledWith('2.1.0', '/tmp/zeokeel-installer')
     expect(harness.notifications).toEqual([])
   })
 
@@ -540,7 +540,7 @@ describe('desktop update Host plugin', () => {
 
       await harness.tray.invoke()
       // 现象：下载完成后托盘标签进入"可安装"。
-      await vi.waitFor(() => { expect(harness.tray.label()).toBe('PicoAide Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
+      await vi.waitFor(() => { expect(harness.tray.label()).toBe('ZeoKeel Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
       expect(harness.downloadUpdate).toHaveBeenCalledOnce()
 
       // 第二个动作 = 安装(不是再下一次):已下载的文件**通过归属复检之后**被交给平台安装流程。
@@ -585,7 +585,7 @@ describe('desktop update Host plugin', () => {
       // 现象：第一次点击触发检查 + 下载（与"下载后交给安装器"那条用例同一条路径）。
       await harness.tray.invoke()
       // 现象：下载完成后托盘标签进入"可安装"。
-      await vi.waitFor(() => { expect(harness.tray.label()).toBe('PicoAide Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
+      await vi.waitFor(() => { expect(harness.tray.label()).toBe('ZeoKeel Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
 
       // 现象：第二次点击把已下载的载荷交给平台安装流程（这一步在夹具里被改成抛错）。
       await harness.tray.invoke()
@@ -638,7 +638,7 @@ describe('desktop update Host plugin', () => {
       })
 
       // 现象：启动期复用校验读状态文件与磁盘安装包后给出"可安装"（真实 I/O）。
-      await vi.waitFor(() => { expect(harness.tray.label()).toBe('PicoAide Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.REAL_IO_MS })
+      await vi.waitFor(() => { expect(harness.tray.label()).toBe('ZeoKeel Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.REAL_IO_MS })
       expect(harness.downloadUpdate).not.toHaveBeenCalled()
       expect(harness.announceUpdateReady).not.toHaveBeenCalled()
       await harness.dispose()
@@ -745,7 +745,7 @@ describe('desktop update Host plugin', () => {
   it('retries a transient transfer failure and succeeds on the next attempt', async () => {
     const downloadUpdate = vi.fn()
       .mockRejectedValueOnce(new Error('socket hang up'))
-      .mockResolvedValueOnce('/tmp/picoaide-installer')
+      .mockResolvedValueOnce('/tmp/zeokeel-installer')
     const harness = await createHarness({
       packaged: false,
       request: async () => manifestResponse('2.1.0'),
@@ -754,13 +754,13 @@ describe('desktop update Host plugin', () => {
 
     await harness.tray.invoke()
     // 现象：一次传输失败后重试成功（退避 1ms）并进入"可安装"。
-    await vi.waitFor(() => { expect(harness.tray.label()).toBe('PicoAide Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
+    await vi.waitFor(() => { expect(harness.tray.label()).toBe('ZeoKeel Harness 2.1.0 Ready to Install') }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
 
     // 网络抖动不该让用户看到失败:重试一次就成功,并且中间态暴露了第几次尝试。
     expect(downloadUpdate).toHaveBeenCalledTimes(2)
     const states = harness.publishedStates.mock.calls.map(call => call[0] as { retryAttempt: number })
     expect(states.some(state => state.retryAttempt === 2)).toBe(true)
-    expect(harness.announceUpdateReady).toHaveBeenCalledWith('2.1.0', '/tmp/picoaide-installer')
+    expect(harness.announceUpdateReady).toHaveBeenCalledWith('2.1.0', '/tmp/zeokeel-installer')
     expect(harness.notifications).toEqual([])
     expect(harness.warnings).toEqual([])
   })
@@ -778,7 +778,7 @@ describe('desktop update Host plugin', () => {
           onProgress?.({ receivedBytes: 1024, totalBytes: 2048 })
           throw new Error('socket hang up')
         })
-        .mockResolvedValueOnce('/tmp/picoaide-installer'),
+        .mockResolvedValueOnce('/tmp/zeokeel-installer'),
     })
 
     try {
@@ -845,7 +845,7 @@ describe('desktop update Host plugin', () => {
       config: { ...testConfig, transferRetryDelaysMs: [10_000] },
       downloadUpdate: vi.fn()
         .mockRejectedValueOnce(new Error('socket hang up'))
-        .mockResolvedValueOnce('/tmp/picoaide-installer'),
+        .mockResolvedValueOnce('/tmp/zeokeel-installer'),
     })
     const publishedDelays = (): number[] => harness.publishedStates.mock.calls
       .map(call => (call[0] as { retryDelayMs: number }).retryDelayMs)
@@ -906,7 +906,7 @@ describe('desktop update Host plugin', () => {
     expect(harness.notifications).toEqual([])
     expect(harness.warnings).toEqual([])
     // 传输失败后仍然"有可用新版本"(用户还能再点一次),但错误已可见。
-    expect(harness.tray.label()).toBe('PicoAide Harness 2.1.0 Available')
+    expect(harness.tray.label()).toBe('ZeoKeel Harness 2.1.0 Available')
     expect(harness.publishedStates).toHaveBeenLastCalledWith(expect.objectContaining({ lastError: 'network' }))
   })
 
@@ -1114,7 +1114,7 @@ describe('desktop update channel from the manifest (prerelease installs)', () =>
     await vi.advanceTimersByTimeAsync(testConfig.initialDelayMs)
     // 现象：预发布清单 → 通报"可安装"（假计时器）。
     await vi.waitFor(() => { expect(harness.announceUpdateReady).toHaveBeenCalledWith('2.1.0-rc.2', expect.any(String)) }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
-    expect(harness.tray.label()).toBe('PicoAide Harness 2.1.0-rc.2 Ready to Install')
+    expect(harness.tray.label()).toBe('ZeoKeel Harness 2.1.0-rc.2 Ready to Install')
     // 现象：状态文件写入并读回（真实 I/O）。
     await vi.waitFor(async () => {
       expect(JSON.parse(await readFile(harness.statePath, 'utf8'))).toEqual({
@@ -1157,12 +1157,12 @@ describe('desktop update channel from the manifest (prerelease installs)', () =>
     await vi.advanceTimersByTimeAsync(testConfig.initialDelayMs)
     // 复用校验要先读状态文件与磁盘(真实 I/O),再回落到"可安装"。
     // 现象：重启后复用校验读状态与真实磁盘安装包 → 托盘"可安装"（真实 I/O）。
-    await vi.waitFor(() => { expect(restarted.tray.label()).toBe('PicoAide Harness 2.1.0-rc.2 Ready to Install') }, { timeout: WAIT_BUDGETS.REAL_IO_MS })
+    await vi.waitFor(() => { expect(restarted.tray.label()).toBe('ZeoKeel Harness 2.1.0-rc.2 Ready to Install') }, { timeout: WAIT_BUDGETS.REAL_IO_MS })
     await vi.advanceTimersByTimeAsync(testConfig.intervalMs)
     // 后续轮询看到"这一版已经在待安装位":不重下、也不再提示。
     expect(restarted.downloadUpdate).not.toHaveBeenCalled()
     expect(restarted.announceUpdateReady).not.toHaveBeenCalled()
-    expect(restarted.tray.label()).toBe('PicoAide Harness 2.1.0-rc.2 Ready to Install')
+    expect(restarted.tray.label()).toBe('ZeoKeel Harness 2.1.0-rc.2 Ready to Install')
 
     await restarted.dispose()
   })

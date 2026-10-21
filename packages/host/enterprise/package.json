@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-enterprise",
+  "name": "@zeokeel/dsh-enterprise",
   "version": "0.1.0",
-  "description": "Enterprise login + server-side LLM gateway for PicoAide Harness",
+  "description": "Enterprise login + server-side LLM gateway for ZeoKeel Harness",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -72,7 +72,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-store",
         "@deepseek-ai/dsh-client-ui-theme",
-        "@picoaide/dsh-foot-menu"
+        "@zeokeel/dsh-foot-menu"
       ],
       "platform": "web"
     }
@@ -104,9 +104,9 @@
     "@deepseek-ai/dsh-tool-skill": "0.2.1-rc.2",
     "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.4",
-    "@picoaide/dsh-gateway-client": "workspace:*",
-    "@picoaide/dsh-host-locale": "workspace:*",
     "@sentry/node": "^7.120.0",
+    "@zeokeel/dsh-gateway-client": "workspace:*",
+    "@zeokeel/dsh-host-locale": "workspace:*",
     "adm-zip": "^0.6.0",
     "tar": "^7.5.0",
     "yaml": "^2.9.0"
@@ -133,10 +133,10 @@
     "@deepseek-ai/dsh-sandbox": "0.2.1-rc.2",
     "@deepseek-ai/dsh-scope": "0.2.1-rc.2",
     "@deepseek-ai/dsh-util-values": "0.2.1-rc.2",
-    "@picoaide/dsh-foot-menu": "workspace:*",
-    "@picoaide/dsh-panel-surface": "workspace:*",
     "@types/node": "^22.20.0",
     "@types/react": "^18",
+    "@zeokeel/dsh-foot-menu": "workspace:*",
+    "@zeokeel/dsh-panel-surface": "workspace:*",
     "dsh-plugin-desktop": "workspace:*",
     "electron": "44.0.0",
     "react": "18.3.1",

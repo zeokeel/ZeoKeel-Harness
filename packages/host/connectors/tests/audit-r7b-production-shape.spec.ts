@@ -79,7 +79,7 @@ interface RegisteredTransport {
 }
 
 async function state(h: ReturnType<typeof createHarness>, id: string): Promise<{ status: string, request?: { authorizeUrl?: string } | null }> {
-  const res = await callRoute(h, `/api/pico/connectors/${id}/state`, 'GET')
+  const res = await callRoute(h, `/api/zeokeel/connectors/${id}/state`, 'GET')
   return JSON.parse(res.body) as { status: string, request?: { authorizeUrl?: string } | null }
 }
 
@@ -95,7 +95,7 @@ async function awaitAuthorizeUrl(h: ReturnType<typeof createHarness>, id: string
 
 /** Run the connector's real authorization flow and return its registered config. */
 async function register(h: ReturnType<typeof createHarness>): Promise<RegisteredTransport> {
-  await callRoute(h, '/api/pico/connectors/real-mcp/connect', 'POST')
+  await callRoute(h, '/api/zeokeel/connectors/real-mcp/connect', 'POST')
   await completeAuthorization(await awaitAuthorizeUrl(h, 'real-mcp'))
   await waitFor(() => h.configs.length === 1, 8000)
   return h.configs[0] as unknown as RegisteredTransport

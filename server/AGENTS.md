@@ -1,8 +1,8 @@
-# AGENTS.md — PicoAide Harness 服务端
+# AGENTS.md — ZeoKeel Harness 服务端
 
 > 本文件是给 AI 编码代理的项目级指令。先读它,再读服务端文档(`server/docs/01-architecture.md` 与 `server/docs/03-api-reference.md`)。代码与文档冲突时以代码为准,并同步修订文档。
 >
-> 服务端是 PicoAide Harness 平台的企业管控面,与桌面客户端(`packages/host/desktop`、`packages/host/*` 与 `packages/client/*`)同属一个仓库;员工/第三方客户端经 HTTP 接口(`/api/client/v2/*` 与 `/v1/*` 网关)接入。
+> 服务端是 ZeoKeel Harness 平台的企业管控面,与桌面客户端(`packages/host/desktop`、`packages/host/*` 与 `packages/client/*`)同属一个仓库;员工/第三方客户端经 HTTP 接口(`/api/client/v2/*` 与 `/v1/*` 网关)接入。
 
 ## 1. 项目是什么(一句话)
 
@@ -25,7 +25,7 @@
 4. **每任务结束必须 commit**,提交信息 `feat:|fix:|test:|docs:|chore:` 单行 ≤72 字符。
 5. **安全边界不得绕过**:凭证 AES-GCM 加密、API token 只存哈希、TOFU 证书校验(客户端接入方)、限流/审计——一律不许为省事而移除。
 6. **管理端 HTTP 走 `/api/server/admin/*`(session + CSRF)**:错误统一信封 `{"error":{"code":"ERR_CODE","message":"..."}}`。
-7. **对外内容只走渠道配置(2026-09-10)**:客户端登录页/界面与服务端门户看到的一切（名称、标语、欢迎语、标识、主题色）来自**渠道配置**（镜像内 `/opt/picoaide/channel/`，构建时由私有仓 `picoaide/channels` 注入，见 `internal/channel`）。**不要再新增在线编辑这些内容的接口** —— 改内容 = 改渠道配置并重新构建镜像，这样内容可审计。旧的 `internal/brand`（上传/快照/开关）与 `brand:*` 权限已删除。
+7. **对外内容只走渠道配置(2026-09-10)**:客户端登录页/界面与服务端门户看到的一切（名称、标语、欢迎语、标识、主题色）来自**渠道配置**（镜像内 `/opt/zeokeel/channel/`，构建时由私有仓 `zeokeel/channels` 注入，见 `internal/channel`）。**不要再新增在线编辑这些内容的接口** —— 改内容 = 改渠道配置并重新构建镜像，这样内容可审计。旧的 `internal/brand`（上传/快照/开关）与 `brand:*` 权限已删除。
 8. **镜像只从更新服务器分发**：不经任何镜像仓库（GHCR 已下线）。客户端安装包随服务端镜像发布，由服务端自身下发（`internal/clientrelease`）。
 
 ## 4. 架构总览
@@ -104,14 +104,14 @@ make test              # go test ./... -count=1(服务端全量;不依赖数据�
 make test-server       # 服务端各业务域测试(目录通配 internal/... + cmd/...;-p $(TEST_PARALLEL) 默认 4)
 make test-server-fast  # 同 test-server 但不带 -count=1 → 无改动时整轮命中 go test 结果缓存(实测全仓 0.3s)
 make webadmin          # cd webadmin && npm run build(产物内嵌进服务端二进制)
-make build-server      # make webadmin + go build -o bin/picoaide-server
+make build-server      # make webadmin + go build -o bin/zeokeel-server
 make docker-image      # 本地构建服务端镜像(发布镜像走更新服务器,不经镜像仓库)
 make check             # gofmt + go vet + test-server + webadmin 测试与构建(发布门禁)
 make check-fast        # 开发循环:gofmt + vet + test-server-fast + webadmin 单测(不建 webadmin 产物,实测 15.6s)
-# 测试库:每个 DB 用例从模板库 picoaide_tmpl_<迁移哈希> 克隆(见 internal/serverstore/dbtest.go),
+# 测试库:每个 DB 用例从模板库 zeokeel_tmpl_<迁移哈希> 克隆(见 internal/serverstore/dbtest.go),
 #   不再逐用例重放 77 个迁移(单用例固定开销 1.5s → ~0.1s);换迁移/跨月会自动生成新模板库,
 #   模板不可用时自动回落到"空库 + 全量迁移"。提速实测见 ../../docs/decisions/2026-09-10-verification-speedup.md。
-PICOAI_ADMIN_PASSWORD=x bin/picoaide-server -addr :8080 -data ./data --bootstrap-admin admin
+ZEOKEEL_ADMIN_PASSWORD=x bin/zeokeel-server -addr :8080 -data ./data --bootstrap-admin admin
 go run scripts/mock-upstream.go 起假上游  # 无外网/无 key 环境验证网关
 # 生产部署:按 ../../docs/deploy/AI-DEPLOY.md 执行(脚本已下线,交付物=一个镜像)
 # 数据库: PostgreSQL 唯一。-db-driver 仅接受 pg(默认;pg-external 为历史兼容别名,部署层已不用),-pg-dsn 必填;
@@ -119,8 +119,8 @@ go run scripts/mock-upstream.go 起假上游  # 无外网/无 key 环境验证�
 #   老数据需先在历史版本完成迁移。
 #   迁移执行器(ApplyMigrations,R27-FIX39):① 每条迁移事务带**有界等锁预算**——启动期并发持锁
 #   (pg_dump/长查询/idle in transaction)时 fail-loud,不再无界静默挂死;预算可用
-#   PICOAI_MIGRATION_LOCK_TIMEOUT_MS 调(缺省 5 分钟;互斥锁等待用
-#   PICOAI_MIGRATION_ADVISORY_TIMEOUT_MS、慢迁移告警阈值用 PICOAI_MIGRATION_SLOW_MS);
+#   ZEOKEEL_MIGRATION_LOCK_TIMEOUT_MS 调(缺省 5 分钟;互斥锁等待用
+#   ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS、慢迁移告警阈值用 ZEOKEEL_MIGRATION_SLOW_MS);
 #   ② 每条迁移前后各一行 `migrate:` 日志 + AccessExclusiveLock 窗口采样(慢迁移单独一条
 #   `migrate: SLOW migration` 告警,可 grep 出"哪张表被锁了多久");
 #   ③ schema_migrations 有 checksum 列:已应用迁移与随包文件不一致 ⇒ 启动 fail-loud
@@ -132,6 +132,6 @@ go run scripts/mock-upstream.go 起假上游  # 无外网/无 key 环境验证�
 
 ## 9. 文档与实施
 
-- 架构设计:docs/superpowers/specs/2026-08-01-picoaide-next-architecture-design.md(ADR、安全设计、错误边界;历史设计文档)
-- 实施计划:docs/superpowers/plans/2026-08-01-picoaide-next-full-implementation.md(阶段 1 服务端网关仍有效;阶段 2/3 客户端相关已下线)
+- 架构设计:docs/superpowers/specs/2026-08-01-zeokeel-next-architecture-design.md(ADR、安全设计、错误边界;历史设计文档)
+- 实施计划:docs/superpowers/plans/2026-08-01-zeokeel-next-full-implementation.md(阶段 1 服务端网关仍有效;阶段 2/3 客户端相关已下线)
 - 部署:../../docs/deploy/AI-DEPLOY.md(唯一部署说明:首次部署/升级/回滚/排障)与 docs/DEPLOY.md(容器化设计说明)、docs/02-build-deploy.md(构建、systemd、CI)

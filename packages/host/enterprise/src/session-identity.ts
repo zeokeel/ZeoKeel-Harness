@@ -20,11 +20,11 @@
  *   `location.reload()` —— **这是让四个整页面板与账号卡一起归零的唯一机制**
  *   （面板分属三个互不可 import 的 client bundle，各自抄一份轮询正是本仓反复
  *   出现的失效形态）；
- * - `/api/pico/auth/state` 的 `identity` 字段：任何未来想自己比较的消费方都用
+ * - `/api/zeokeel/auth/state` 的 `identity` 字段：任何未来想自己比较的消费方都用
  *   同一个值，不再各拼各的。
  *
  * 本模块只依赖 `Session` 的**类型**，是零副作用叶子（不 import cordis、不读盘）。
- * @module @picoaide/dsh-enterprise/session-identity
+ * @module @zeokeel/dsh-enterprise/session-identity
  */
 
 import type { Session } from './server-connector/config.ts'

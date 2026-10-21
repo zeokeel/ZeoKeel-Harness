@@ -1,41 +1,41 @@
 # Enterprise Host rows: the bare entry carries the package's client bundle
-# declaration (account surfaces), the session service provides `picoSession`,
+# declaration (account surfaces), the session service provides `zeokeelSession`,
 # then the gateway-model and bootstrap listeners react to its changes, and the
 # auth-gate owns the login gate. The skill store's local API and its telemetry
-# row moved to `@picoaide/dsh-capability-center` (2026-10-13, P0-b) so that
+# row moved to `@zeokeel/dsh-capability-center` (2026-10-13, P0-b) so that
 # turning that module off really removes its code from the bundle; auth-gate
 # hands the shared local-route fence to those rows through the
-# `picoLocalRoutes` service.
+# `zeokeelLocalRoutes` service.
 - insert:
-    - id: picoaide-enterprise
-      name: '@picoaide/dsh-enterprise'
-    - id: picoaide-session
-      name: '@picoaide/dsh-enterprise/session-service'
-    - id: picoaide-gateway-model
-      name: '@picoaide/dsh-enterprise/gateway-model'
-    - id: picoaide-bootstrap
-      name: '@picoaide/dsh-enterprise/bootstrap'
-    - id: picoaide-error-reporting
-      name: '@picoaide/dsh-enterprise/error-reporting'
-    - id: picoaide-auth-gate
-      name: '@picoaide/dsh-enterprise/auth-gate'
-    - id: picoaide-channel-sync
-      name: '@picoaide/dsh-enterprise/channel-sync'
+    - id: zeokeel-enterprise
+      name: '@zeokeel/dsh-enterprise'
+    - id: zeokeel-session
+      name: '@zeokeel/dsh-enterprise/session-service'
+    - id: zeokeel-gateway-model
+      name: '@zeokeel/dsh-enterprise/gateway-model'
+    - id: zeokeel-bootstrap
+      name: '@zeokeel/dsh-enterprise/bootstrap'
+    - id: zeokeel-error-reporting
+      name: '@zeokeel/dsh-enterprise/error-reporting'
+    - id: zeokeel-auth-gate
+      name: '@zeokeel/dsh-enterprise/auth-gate'
+    - id: zeokeel-channel-sync
+      name: '@zeokeel/dsh-enterprise/channel-sync'
 # Enterprise model governance: models come from the gateway after login only.
 # The upstream models settings page lets users define custom providers, so it
 # is disabled from the composition. bootstrap.ts keeps the gateway catalog in
-# the `picoaide-gateway-llm` row and clears it on logout.
+# the `zeokeel-gateway-llm` row and clears it on logout.
 - id: ui-settings-models
   disabled: true
 # web_search 服务端代理(0043):官方 key 不得以任何形式出现在客户端直连配置中。
 # 覆盖 base bundle 的 apiKeyEnv=DEEPSEEK_API_KEY——即使登出后 bootstrap 将
 # user 层清空,composition 兜底也不再指向官方 key,而是指向网关 token。
 # 会话建立后 bootstrap.ts 再写入具体 serverURL/baseURL/model。登出态下
-# baseURL 回落官方端点,但 PICOAI_GATEWAY_TOKEN 已被 gateway-model unset,
+# baseURL 回落官方端点,但 ZEOKEEL_GATEWAY_TOKEN 已被 gateway-model unset,
 # 搜索在凭据解析处失败(未见官方端点即缺 key),不会构成直连泄露。
 - id: web-search-deepseek
   config:
-    apiKeyEnv: PICOAI_GATEWAY_TOKEN
+    apiKeyEnv: ZEOKEEL_GATEWAY_TOKEN
 # 网关鉴权：**0.1.7-rc.2 引入、0.2.1-rc.2 复核仍成立** —— `protocol` 已从
 # `llm-deepseek` 删除，配了直接抛错
 # （`llm-deepseek/src/config.ts:207` → `llm-deepseek: protocol is not configurable;
@@ -50,20 +50,20 @@
 # 用 `registerDeepSeekProvider(..., { resolveAuth })` 决定。上游的
 # `@deepseek-ai/dsh-llm-deepseek-api-key` 硬编码 `x-api-key`（对只认 Bearer 的网关
 # 必然 401，且没有换头的接缝），所以本组合**禁用它那一行**，改插自研的
-# `@picoaide/dsh-enterprise/gateway-llm`（同 Config 形状、同 provider 路由
+# `@zeokeel/dsh-enterprise/gateway-llm`（同 Config 形状、同 provider 路由
 # `deepseek-official`，令牌取自 credentials 服务并作为 `Authorization: Bearer` 发出）。
 #
 # 这两行必须成对：只禁用不插入 ⇒ 没有任何插件注册 `deepseek-official` ⇒ bootstrap 的
 # `agent-default-model` 指向不存在的路由，模型面全灭；只插入不禁用 ⇒ 两个适配器抢同一个
-# provider 路由。行 id `picoaide-gateway-llm` 就是设置命名空间（0.1.7 起
+# provider 路由。行 id `zeokeel-gateway-llm` 就是设置命名空间（0.1.7 起
 # `SettingsForms` 按 profile 条目 id 找表单），`gateway-model.ts`/`bootstrap.ts` 按同一
 # 常量写入 —— 唯一真源在 `packages/host/enterprise/src/gateway-contract.ts`。
 # `gateway-llm.ts` 在装载时校验行 id，对不上直接抛错。
 - id: llm-deepseek
   disabled: true
 - insert:
-    - id: picoaide-gateway-llm
-      name: '@picoaide/dsh-enterprise/gateway-llm'
+    - id: zeokeel-gateway-llm
+      name: '@zeokeel/dsh-enterprise/gateway-llm'
       config: {}
 # Local skill discovery: the web-app bundle disables the host skill
 # provider rows (presets own local discovery), but the desktop has no
@@ -73,14 +73,14 @@
 # already live in the web-app bundle. Fresh ids avoid colliding with the
 # disabled placeholder rows in the web-app bundle.
 - insert:
-    - id: pico-skill-filesystem
+    - id: zeokeel-skill-filesystem
       name: '@deepseek-ai/dsh-skill-filesystem'
-    - id: pico-tool-skill
+    - id: zeokeel-tool-skill
       name: '@deepseek-ai/dsh-tool-skill'
 # Enterprise brand: product name and window title for the native shell (the
 # desktop Config schema defaults stay upstream-compatible).
 - id: desktop-shell
   config:
     mode: compatibility
-    productName: 'PicoAide Harness'
-    windowTitle: 'PicoAide Harness'
+    productName: 'ZeoKeel Harness'
+    windowTitle: 'ZeoKeel Harness'

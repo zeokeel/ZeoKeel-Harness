@@ -69,9 +69,9 @@
 | F10 | 版本切换 | **每次「打开」动作都向服务端校验当前生效版本**（见 F16 与 §5.1b）；已打开窗口**不主动刷新**，下次导航自然生效 |
 | F11 | 静态资源缓存 | 客户端按 `app_id + version` 缓存；**每次打开都校验版本，版本变化 ⇒ 立即清掉该应用的客户端缓存**（**绝不动应用数据库**）；下架/冻结/删除时同样清缓存 |
 | F12 | 外链与下载 | 应用页内的 http(s) 外链 ⇒ 内置浏览器新标签 + 应用窗口内**提示条**（§19 Q9，说明"已在浏览器窗口打开"）；下载沿用内置浏览器既有策略（原生保存对话框 + 下载审计）+ 应用窗口**最小反馈**「已开始下载，进度见浏览器窗口」 |
-| F13 | 浏览器存储 | **实测（2026-09-19 主控最小复现，Linux / Electron 43.4.0 / 默认 session，`origin=picoaide-app://demo-a`、`isSecureContext=true`）**：`localStorage` ✅ 可读写往返；`IndexedDB` ✅ open+upgrade+put+事务完成；**`Cache Storage` ⚠️ 不可用** —— `caches.open()` 成功，但 `cache.put()` 抛 `TypeError: Request scheme 'picoaide-app' is unsupported`（Chromium 只对 http/https 请求 scheme 支持 Cache）。⇒ **允许 `localStorage` 与 `IndexedDB`，禁止依赖 `Cache Storage`**（作者文档与 §19 Q10 对照表必须写明）。**隔离已实测成立**（主控最小复现 `temp/w0d-rootcause/isolation.cjs`，用 `webPreferences.session` 正确绑定分区、以 **session 对象同一性**实证窗口真在目标分区）：**同分区同 origin 重载可读回**（正对照）、**换分区后读不到**、**同分区换 app_id 读不到** ⇒ `localStorage`/`IndexedDB` 均按 origin 与按 `persist:` 分区双重隔离；文档仍**建议**状态放应用库（可迁移、可审计）。**生命周期（§19 Q10）**：作者文档加**对照表**（`db.*` 服务端永不随缓存清理 / 浏览器存储随清缓存与切账号被清）；应用**下架/冻结/删除时同批清浏览器存储**（与 F11 清缓存同一触发） |
+| F13 | 浏览器存储 | **实测（2026-09-19 主控最小复现，Linux / Electron 43.4.0 / 默认 session，`origin=zeokeel-app://demo-a`、`isSecureContext=true`）**：`localStorage` ✅ 可读写往返；`IndexedDB` ✅ open+upgrade+put+事务完成；**`Cache Storage` ⚠️ 不可用** —— `caches.open()` 成功，但 `cache.put()` 抛 `TypeError: Request scheme 'zeokeel-app' is unsupported`（Chromium 只对 http/https 请求 scheme 支持 Cache）。⇒ **允许 `localStorage` 与 `IndexedDB`，禁止依赖 `Cache Storage`**（作者文档与 §19 Q10 对照表必须写明）。**隔离已实测成立**（主控最小复现 `temp/w0d-rootcause/isolation.cjs`，用 `webPreferences.session` 正确绑定分区、以 **session 对象同一性**实证窗口真在目标分区）：**同分区同 origin 重载可读回**（正对照）、**换分区后读不到**、**同分区换 app_id 读不到** ⇒ `localStorage`/`IndexedDB` 均按 origin 与按 `persist:` 分区双重隔离；文档仍**建议**状态放应用库（可迁移、可审计）。**生命周期（§19 Q10）**：作者文档加**对照表**（`db.*` 服务端永不随缓存清理 / 浏览器存储随清缓存与切账号被清）；应用**下架/冻结/删除时同批清浏览器存储**（与 F11 清缓存同一触发） |
 | F14 | 管理端 | 应用中心列表/审核/上下架/冻结/归属转移照旧；**删除**访问级别里的 `public` 与"入口链接"展示；历史审计标签保留；**新增打开计数运营视图**（见 F16） |
-| F15 | 渠道白标 | 深链 scheme 与 **app origin scheme 均来自渠道包**（`desktop.deep_link_scheme` / `desktop.app_origin_scheme`）；**所有渠道必须显式配置**（含 official/beta；official/beta 取值 = `picoaide-app`，两者**共用同一命名空间**）；取值惯例 = `<深链 scheme>-app`，但**以显式配置为准**（不派生、不回落）；CI 硬校验：必填 + 正则 + 与深链 scheme 不同值 + 跨渠道唯一 |
+| F15 | 渠道白标 | 深链 scheme 与 **app origin scheme 均来自渠道包**（`desktop.deep_link_scheme` / `desktop.app_origin_scheme`）；**所有渠道必须显式配置**（含 official/beta；official/beta 取值 = `zeokeel-app`，两者**共用同一命名空间**）；取值惯例 = `<深链 scheme>-app`，但**以显式配置为准**（不派生、不回落）；CI 硬校验：必填 + 正则 + 与深链 scheme 不同值 + 跨渠道唯一 |
 | F16 | **打开校验与打开计数**（新增，2026-09-19 追加） | 每次打开应用都调一次服务端（§5.1b）：①返回**当前生效版本**并与本地缓存比对，不一致 ⇒ 清该应用客户端缓存后再加载（**不触碰应用数据库**）；②服务端据此**记录一次打开**（**每次打开都 +1**，不做事先去重；去重指标由 UV 承担），供管理端做运营：列表列（今日/7 日 PV+UV）+ 详情页日趋势 + **热门应用 TOP N 看板** + **按部门聚合**；③**对员工可见（§19 Q11）**：应用详情/应用中心展示「**今日已被打开 N 次**」，并在隐私说明里写明"平台记录打开次数用于运营" |
 
 **明确不做**（本版）：浏览器访问入口（含"请用客户端打开"引导页）、匿名访问、应用多开、应用内 Service Worker、应用直连网络（现状即禁止）、降级/兼容通道。
@@ -89,9 +89,9 @@
 ```
 ┌─ 桌面客户端（Electron 主进程内跑 DSH 宿主）────────────────────────────┐
 │  应用中心（client 插件）                                                │
-│    「打开」→ 会话闸门 → 本机路由 POST /api/pico/wasm-apps/open          │
+│    「打开」→ 会话闸门 → 本机路由 POST /api/zeokeel/wasm-apps/open          │
 │                          │                                             │
-│  新包 @picoaide/dsh-wasm-apps-host（宿主插件 + Electron 适配器）        │
+│  新包 @zeokeel/dsh-wasm-apps-host（宿主插件 + Electron 适配器）        │
 │    ├ 窗口管理：单应用单窗口 / 聚焦导航 / 按应用记忆尺寸 / 锁定宽高比      │
 │    ├ 协议 handler：<app-scheme>://<app_id>/<path> → 信封 → 平台 API      │
 │    └ 深链：<scheme>://app/<app_id>[?path=] → 会话闸门 → 打开/导航窗口    │
@@ -118,12 +118,12 @@
 | 项 | 值 |
 | --- | --- |
 | 方法与路径 | `POST /api/client/v2/apps/wasm/:app_id/request` |
-| 认证 | `Authorization: Bearer <员工令牌>`（必需）**＋ `X-Pico-App-Proof`（必需，见 §20）**；审计账号拒绝 |
+| 认证 | `Authorization: Bearer <员工令牌>`（必需）**＋ `X-ZeoKeel-App-Proof`（必需，见 §20）**；审计账号拒绝 |
 | 请求体 | `{"method","path","query","host","headers","body"}`，`DisallowUnknownFields`；`body` 为 base64（空体发 `""`，**不省略键**） |
 | `host` | 只接受 `<app-scheme>://<app_id>` 或裸 `<app_id>`；app_id 来自**路由路径**，绝不从 host 反解；**scheme/host 归一化（ToLower+TrimSpace）后比较**，端口/路径/凭据等形态不符才 400（"大小写混淆"**不是**拒绝理由 —— R1-SRV-6 订正） |
 | `headers` | 白名单：`origin`、`content-type`、`accept`、`accept-language`、`if-none-match`、`if-modified-since`、`user-agent`、`x-requested-with`；条数 ≤24、单值 ≤8 KiB。**客户端必须转发同一份白名单**（现实现是短黑名单 + 无条数/大小闸 ⇒ Chromium 的 `sec-ch-ua*`/`priority` 等头会让整次导航 400；R1-CLI-5 订正：白名单常量单一真源 + 跨包对拍 + 探针枚举真实头集合） |
 | 请求体上限 | 解码后 ≤ `limits.AppRequestBodyMaxBytes`（1 MiB）；信封 ≤ `1 MiB×4/3 + 64 KiB`（已入 `largeBodyRoutes`） |
-| 响应体 | `{"status","headers","body","truncated"}`；`headers` 为多值 map；`body` base64；权威上限 `AppResponseBodyMaxBytes`（8 MiB，管线判定，超限整单失败）。**版本头（新增，缓存键的唯一来源）**：宿主在成功响应上写 `X-PicoAide-App-Version: <version>`（客户端只剔逐跳头，天然透传）——解决 R1-DAT-12/CLI-3 指出的"缓存键 version 无来源"。**`truncated` 语义（R1-SRV-11/SEC-10 订正）**：兜底截断**不得**当成功——客户端收到 `truncated:true` 一律按 502/`INVALID_PLATFORM_RESPONSE` 处理并渲染错误页；该键**总是出现**（不用 `omitempty`） |
+| 响应体 | `{"status","headers","body","truncated"}`；`headers` 为多值 map；`body` base64；权威上限 `AppResponseBodyMaxBytes`（8 MiB，管线判定，超限整单失败）。**版本头（新增，缓存键的唯一来源）**：宿主在成功响应上写 `X-ZeoKeel-App-Version: <version>`（客户端只剔逐跳头，天然透传）——解决 R1-DAT-12/CLI-3 指出的"缓存键 version 无来源"。**`truncated` 语义（R1-SRV-11/SEC-10 订正）**：兜底截断**不得**当成功——客户端收到 `truncated:true` 一律按 502/`INVALID_PLATFORM_RESPONSE` 处理并渲染错误页；该键**总是出现**（不用 `omitempty`） |
 | 响应头处理 | `Set-Cookie` **整条丢弃**、逐跳头与 `Content-Length` 剔除。**缓存命中时也必须重新写入宿主安全头**（CSP/nosniff/XFO/Referrer-Policy —— 否则命中即失去"不能联网"与安全头强制；R1-SEC-4 订正） |
 | 失败渲染 | 文档导航（`Accept: text/html`）⇒ 可读 HTML 失败页；应用 fetch（`/api/*` 或 `Accept: application/json`）⇒ JSON 信封 |
 | **错误分层·传输层（外层 HTTP）**（R1-SRV-7 订正；同一表内分两层，客户端按"外层优先"分流） | 401 `AUTH_REQUIRED`（缺令牌）/`AUTH_FAILED`（无效/过期/被吊销）、**401 `PROOF_REQUIRED` / `PROOF_EXPIRED` / `PROOF_MISMATCH` / `PROOF_REPLAYED`**（缺 / 过期 / 绑定不符 / **非幂等请求的 jti 重放**，§20/§23.1；第四个码由 L1 实施时提出并经主控裁定保留 —— 重放是"绑定完全正确、只是用过了"，并进 `PROOF_MISMATCH` 会把"客户端在重试同一请求"误诊成"配置/环境不符"）、403（审计账号/权限）、400 `VALIDATION`（信封或 host 形态）、413 `BODY_TOO_LARGE`、429 `RATE_LIMITED`、503（关停中） |
@@ -135,7 +135,7 @@
 | 项 | 值 |
 | --- | --- |
 | 方法与路径 | `POST /api/client/v2/apps/wasm/:app_id/open` |
-| 认证 | `Authorization: Bearer <员工令牌>`（必需）**＋ `X-Pico-App-Proof`（必需，见 §20/§23）**；审计账号拒绝。⚠️ **`open` 端点同样要求 proof**（R2S-6 订正：否则被盗 bearer 可刷 open/探版本与标题/刷计数） |
+| 认证 | `Authorization: Bearer <员工令牌>`（必需）**＋ `X-ZeoKeel-App-Proof`（必需，见 §20/§23）**；审计账号拒绝。⚠️ **`open` 端点同样要求 proof**（R2S-6 订正：否则被盗 bearer 可刷 open/探版本与标题/刷计数） |
 | 请求体 | `{"current_version":"<客户端缓存的版本，可空>"}`（未知字段拒） |
 | 成功响应 | `{"version":"1.2.3","release_id":123,"title":"…","changed":true\|false,"opens":{"today":{"pv":N,"uv":M}}}`；`changed=true` ⇔ 服务端版本 ≠ `current_version`（客户端据此清缓存）。**单一权威**：只有 `changed`（`cache` 字段删除 —— R1-CLI-7 订正）。**`opens` 字段（主控 2026-09-19 补齐跨泳道契约空洞，L3-status 提出）**：随本响应回传**当日**计数，供应用页显示「今日已被打开 N 次」（§19 Q11 / F16 ③）——**不额外增加往返**；**计数 best-effort ⇒ 计数失败时 `opens` 缺省（或为 `null`），客户端必须不渲染该行、也不得显示 0**（与"计数失败不影响打开"一致）。**读源（冻结，L1 实施时提出并经主控裁定）**：`opens.today` **读明细表**（`wasm_app_opens`）以保证"**本次调用计数在内**"，**不读日汇总** —— 日汇总由 5 min 定时器刷新，读它会让今天的数字**稳定少 1**；历史窗口与看板（`GET /api/server/admin/wasm-apps/:app_id/opens`）读**日汇总**（明细只保留 90 天）。明细的 90 天保留期保证"今天"的行永远在 |
 | **谁调用（冻结，R1-CLI-7）** | **宿主的本机打开路由调用平台 `open`**（客户端半边不持 bearer；面板只调本机路由）；深链打开同样由宿主执行。**登录闸门也在宿主**（客户端半边的"面板层拦截"只是 UX 表现，§16.1/§19 Q4） |
@@ -185,12 +185,12 @@
 
 | 项 | 值 |
 | --- | --- |
-| 方法与路径 | `POST /api/pico/wasm-apps/open`（prefix 路由，handler 内按 method 分发） |
+| 方法与路径 | `POST /api/zeokeel/wasm-apps/open`（prefix 路由，handler 内按 method 分发） |
 | 请求体 | `{"app_id":"<app_id>"}`（未知字段拒） |
 | 前置 | **持有性证明**（`packages/host/desktop/src/write-proof.ts` 同口径） |
 | 成功 | `200 {"window":"opened"\|"focused","url":"<app-scheme>://<app_id>/"}` |
 | 失败 | 未登录 ⇒ `401 AUTH_REQUIRED`（**面板层拦截**，客户端弹登录后自动继续）；app_id 非法 ⇒ 400；应用不存在 ⇒ 404；协议/分区未就绪 ⇒ 503（**不得**静默回落浏览器）；已有窗口 ⇒ 返回 `focused` 并导航到目标路径 |
-| 事件 | 宿主广播 `pico/wasm-app-open {app_id, url}`（深链路径消费） |
+| 事件 | 宿主广播 `zeokeel/wasm-app-open {app_id, url}`（深链路径消费） |
 
 ### 5.3 深链
 
@@ -201,7 +201,7 @@
 - 多渠道并存：链接只对所属渠道的 scheme 生效；跨渠道不工作属预期。**载体与文案（§19 Q5，冻结）**：**主窗口一次性 toast**：「这个链接属于另一家企业的客户端，请让对方用你们客户端的『复制链接』重发」（zh/en 两版走 `host-locale`）。
 ---
 
-## 6. 应用作者契约（`picoaide.app.json` / appcfg）
+## 6. 应用作者契约（`zeokeel.app.json` / appcfg）
 
 | 字段 | 取值 | 说明 |
 | --- | --- | --- |
@@ -220,18 +220,18 @@
 
 ## 7. 客户端设计
 
-### 7.1 新包 `@picoaide/dsh-wasm-apps-host`（已落地为基线）
+### 7.1 新包 `@zeokeel/dsh-wasm-apps-host`（已落地为基线）
 
 | 模块 | 职责 | 现状 |
 | --- | --- | --- |
 | `app-protocol.ts` | 纯原语：URL 解析（app_id 只取 host 段）、信封编解码、头过滤、base64、三档体积闸门、Set-Cookie/逐跳头剔除 | ✅ 落地（本模块单测在包内；**包级用例数见 §16 基线**，不在此按模块标注） |
 | `handler.ts` | 五步 handler：合成 Origin → Bearer POST → 还原 Response；401 清会话；错误信封透传；导航 HTML / fetch JSON 分流；出站预算竞速 | ✅ 落地 |
-| `session.ts` | `picoSession` 最小接口 + 订阅（含 `isRestored` 补发） | ✅ 落地 |
+| `session.ts` | `zeokeelSession` 最小接口 + 订阅（含 `isRestored` 补发） | ✅ 落地 |
 | `partition.ts` | 浏览器分区名镜像 | ✅ 落地 |
 | `deep-link.ts` | `<scheme>://app/<app_id>[?path=]` 严格解析 | ✅ 落地（scheme 注入待接线） |
 | `electron-adapter.ts` | 特权 scheme 注册 + 默认/分区 session 注册 + `session.defaultSession.fetch` 出站 | ✅ 落地 |
 | `pages.ts` / `locale.ts` | zh/en 可读页；按调用解析 locale（禁模块级冻结） | ✅ 落地 |
-| `index.ts` | 插件入口（`inject: ['picoSession','webServer']`）：本机路由、分区跟随、深链监听 | ✅ 落地 |
+| `index.ts` | 插件入口（`inject: ['zeokeelSession','webServer']`）：本机路由、分区跟随、深链监听 | ✅ 落地 |
 | **`windows.ts`（待建）** | 窗口管理：单应用单窗口、聚焦导航、尺寸记忆、宽高比锁定、生命周期清理 | ⛔ 本版新增（§7.2） |
 
 ### 7.2 窗口管理（本版新增，F3）
@@ -247,7 +247,7 @@
 - **分区与权限守卫（冻结；R1-CLI-2 提出、R2C-2 统一口径）**：应用窗口**复用内置浏览器的按用户分区**（这样 AI 工具面才能经共享 tab 注册表寻址同一批 webContents），但**分区名必须含服务端哈希**（`persist:agent-browser-<user>@<server-hash>`，避免换服务端跨租户串味）；权限守卫的 **request + check 两个 handler** 必须在**分区初始化时**安装（不是"建 tab 时才装"——Electron 缺 check handler 时默认放行 camera/mic/geolocation）；与应用共用分区的代价（浏览器"清除数据"会一并清掉应用页的浏览器存储）已认账（§17），应用持久状态应放应用库。
 - **特权注册的取值时序（冻结，R1-CLI-8）**：`registerAppScheme(scheme)` 必须在 `app.whenReady()` **之前**调用，因此 scheme **不得**取自插件 Config（apply 期才可见）——取值来源 = `main.ts` 模块作用域读取的渠道配置（已有 `CHANNEL_PROFILE` 读值），缺省派生 `<deep_link_scheme>-app`；幂等标志按 scheme 记录（不是模块级布尔）。
 - **尺寸/比例数值规则（冻结，R1-CLI-11）**：`setAspectRatio(ratio, extraSize)` 的 `extraSize` = 自绘 chrome 的额外高度；**程序化 resize（含恢复记忆尺寸）不受 ratio 约束 ⇒ 恢复路径必须自己按 ratio 校正**；比例极端时以"**先夹到可用区间（0.25–4.0）→ 再按工作区裁剪**"为准；最小尺寸 = `max(320×240, 按 ratio 反算的最小值)`；尺寸/位置记忆文件 = `<userData>/wasm-apps-windows.json`（原子写、按 `app_id` 键、随账号切换清空）。
-- **旧账本迁移（冻结，R1-CLI-14）**：内置浏览器的旧标签账本里可能存在 `picoaide-app://…` 条目（基线把应用开在浏览器标签里）⇒ 启动恢复时**丢弃**这些条目并记 warn（避免 W2 后出现浏览器窗口里的孤儿应用标签）。
+- **旧账本迁移（冻结，R1-CLI-14）**：内置浏览器的旧标签账本里可能存在 `zeokeel-app://…` 条目（基线把应用开在浏览器标签里）⇒ 启动恢复时**丢弃**这些条目并记 warn（避免 W2 后出现浏览器窗口里的孤儿应用标签）。
 - **AI 控制权的默认态（冻结，产品第四轮）**：应用窗口**默认由人操作**（胶囊显示「交给 AI」），点击后交给 AI（蒙版 + 胶囊变「我来操作」）；同一个按钮双向，与既有三面可见口径一致（`browser_list_tabs` 的 `kind:'app'` 行 + 侧边栏提示同步）。
 - **一次性引导（冻结，产品第四轮）**：首次打开应用中心显示一次性引导卡（应用是什么 / 怎么让 AI 做一个 / 怎么分享），关闭后不再出现（记在 `<userData>`）。
 
@@ -264,9 +264,9 @@
 
 - 键：`app_id + version`；值：响应字节 + 头（ETag/Content-Type/Cache-Control 白名单）。
 - **304 的范围（R1-DAT-11/SEC-4/CLI-3 订正，冻结）**：本地缓存命中**只允许宿主直出静态子资源**；**文档导航与 `/api/*` 一律回源**（否则本地缓存成为绕过准入/下架/吊销的第二入口）。服务端 `no-store` 的响应**一律不缓存**；缓存命中后重新叠加宿主安全头。
-- **版本来源（冻结）**：`X-PicoAide-App-Version` 响应头（§5.1）；缓存键 = `<session-scope> + app_id + version + path`。客户端不得自行推断版本。
+- **版本来源（冻结）**：`X-ZeoKeel-App-Version` 响应头（§5.1）；缓存键 = `<session-scope> + app_id + version + path`。客户端不得自行推断版本。
 - **每次打开都要校验版本（防缓存，冻结）**：打开动作先调 §5.1b 的 `open` 端点；`changed=true` ⇒ **清该应用在当前 `session-scope` 下的全部版本缓存**再加载；**新建窗口=硬闸门**（失败 ⇒ 本地错误页，不回退旧缓存）；**聚焦已开窗口=软闸门**（保留当前内容 + 顶部横幅提示"无法确认最新版本"+ 重试，**不得**把正常运行的应用打成错误页 —— R1-CLI-7 订正）。
-- **安全头的 CSP 不得写死 app scheme（主控 2026-09-20 裁定）**：宿主在缓存命中/回源时叠加的 CSP 用 **`connect-src 'self'`** —— 在应用 origin（`<渠道 scheme>://<app_id>`）下 `'self'` 天然解析为该应用自己的 origin（即协议 handler），既实现"应用不能主动发起 XHR/fetch 型网络请求"（§6），又**不含任何渠道字面量**。任何把 `picoaide-app:` 之类官方 scheme 写进 CSP/安全头的写法都是渠道化缺陷（UX-2/CHN-3 同类）。
+- **安全头的 CSP 不得写死 app scheme（主控 2026-09-20 裁定）**：宿主在缓存命中/回源时叠加的 CSP 用 **`connect-src 'self'`** —— 在应用 origin（`<渠道 scheme>://<app_id>`）下 `'self'` 天然解析为该应用自己的 origin（即协议 handler），既实现"应用不能主动发起 XHR/fetch 型网络请求"（§6），又**不含任何渠道字面量**。任何把 `zeokeel-app:` 之类官方 scheme 写进 CSP/安全头的写法都是渠道化缺陷（UX-2/CHN-3 同类）。
 - **服务端×账号双作用域（R1-SEC-3 订正）**：`session-scope` = `<serverURL 哈希> + <用户名哈希>`（不只用户名）；跨服务端/跨账号都不得命中彼此的缓存。
 - **绝不动应用数据库**：清缓存只删客户端内容缓存目录；服务端 `db.*` 数据、资源抽取目录、平台数据根一律不动（判据见 §13.3）。
 - **用户作用域（安全不变量）**：缓存路径必须含**当前员工会话作用域**（`userData/wasm-apps-cache/<session-scope>/<app_id>/<version>/`，`session-scope` = 服务端地址 + 用户名的哈希），并在登出/切换账号/切换渠道时清空——否则同一台机器上换账号登录会读到上一个人的应用页面（数据泄漏）。
@@ -276,7 +276,7 @@
 
 ### 7.6 会话闸门（F2/F6/F8）
 
-- **面板层拦截**：应用中心「打开」先查 `ctx.picoSession.isLoggedIn()`；未登录 ⇒ 弹客户端登录（不开窗口），登录成功后自动继续。
+- **面板层拦截**：应用中心「打开」先查 `ctx.zeokeelSession.isLoggedIn()`；未登录 ⇒ 弹客户端登录（不开窗口），登录成功后自动继续。
 - **深链路径**：同样先过闸门；未登录 ⇒ 主窗口弹登录 + 记住待打开目标（`app_id` + `path`），登录成功后打开。
 - **待打开目标队列（冻结）**：深链可在客户端启动早期、甚至在宿主装配完成之前到达 ⇒ 维护一个有界队列（≤8 条，TTL 5 min，按 `app_id + path` 去重）；宿主就绪后按 FIFO 消费；登录闸门未通过时保留队首并在登录成功后自动继续；过期项直接丢弃并记一条 warn（不弹错误）。
 - **运行中 401**（令牌过期/吊销）⇒ 应用窗口渲染"会话已过期"+「重新登录」；**保留当前路径**，登录后回到该路径继续。
@@ -289,7 +289,7 @@
 
 ### 7.8 渠道参数注入（§10）
 
-desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profile 行 config）；**不得**在包里写死 `picoaide`/`picoaide-app`。
+desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profile 行 config）；**不得**在包里写死 `zeokeel`/`zeokeel-app`。
 
 ---
 
@@ -326,10 +326,10 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 
 | 项 | 冻结做法 |
 | --- | --- |
-| 服务端注入 | `setupWasmPlatform` 启动期调用 `channel.AppOriginScheme()`，存入 `Server.appScheme`；**唯一** origin 构造点从包级函数 `PicoaideAppOrigin(appID)` 改为**方法** `(*Server).AppOrigin(appID)`，`api` 层的 host 校验必须经它（否则 api 与管线各持一个 scheme） |
-| fail-loud 边界 | **只在"配置存在但字段缺失/非法"时**拒绝启动（与既有 `channel.Load()` 的"目录缺失 ⇒ 中性 fallback"约定不冲突）。**official/beta 不豁免字段**（两者都必须显式写 `picoaide-app`）；仅豁免**跨渠道唯一性**（公共渠道共用 `picoaide-app` 命名空间）（R2I-13 订正） |
+| 服务端注入 | `setupWasmPlatform` 启动期调用 `channel.AppOriginScheme()`，存入 `Server.appScheme`；**唯一** origin 构造点从包级函数 `ZeoKeelAppOrigin(appID)` 改为**方法** `(*Server).AppOrigin(appID)`，`api` 层的 host 校验必须经它（否则 api 与管线各持一个 scheme） |
+| fail-loud 边界 | **只在"配置存在但字段缺失/非法"时**拒绝启动（与既有 `channel.Load()` 的"目录缺失 ⇒ 中性 fallback"约定不冲突）。**official/beta 不豁免字段**（两者都必须显式写 `zeokeel-app`）；仅豁免**跨渠道唯一性**（公共渠道共用 `zeokeel-app` 命名空间）（R2I-13 订正） |
 | 形状 | 正则与两端既有实现**逐字一致**：`^[a-z][a-z0-9+.-]{1,31}$`（不是无上界版本）；由 CI 三条负例覆盖（缺字段 / 与 `deep_link_scheme` 同值 / 非法格式） |
-| 不得一起改 | `abi.ABIVersion = "picoaide-app/1"` 是**独立契约**（帧协议版本），与 origin scheme 无关 |
+| 不得一起改 | `abi.ABIVersion = "zeokeel-app/1"` 是**独立契约**（帧协议版本），与 origin scheme 无关 |
 | 合成请求 | `URL.Scheme = <app-scheme>`、`Host = <app_id>`；`selfOrigin(r)` 客户端模式返回 `<app-scheme>://<app_id>`（**W4 删除旧路径后这是唯一分支** —— W4 前旧路径仍走 `edge.SelfOrigin(r)`，但**W4 必须同批删掉该引用**，不得留下任何对 `SelfOrigin` 的残留调用，R2C-16）；`respond.go`/`static.go`/`WriteAppNotFound` **全部**走它（`edge` 内任何写安全头的函数都必须**接受调用方传入的 selfOrigin**，包内不得自行推导 —— 见 §8.4）。CSP 目前忽略 selfOrigin 参数，但不得依赖这一点 |
 | 大小写 | scheme/host **归一化后比较**（`ToLower` + `TrimSpace`）；只有形态或取值不符才 400。**不**把"大小写混淆"当作拒绝理由（R1-SRV-6 订正，与实现一致） |
 
@@ -376,12 +376,12 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | 迁移 | 内容 | 说明 |
 | --- | --- | --- |
 | `0073_drop_wasm_sessions` | **停机窗口内**执行：`SET LOCAL lock_timeout='5s';` → `DROP TABLE IF EXISTS app_sessions;` → `DROP TABLE IF EXISTS employee_sessions;`（**不加 CASCADE**；顺序不可颠倒，FK 在 `0070:68`；索引随表消失） | ⚠️ DROP 取 ACCESS EXCLUSIVE，旧实例在跑会挂死部署 ⇒ **先停旧实例**。同批必须删的非 session 包调用点见 §8.4 表（含 `options.go:54`、`serve.go:141-169/347-366`、`cmd/server/wasmapp.go:359`、`main.go:576`、`router.go:76-80/121-126`） |
-| `0074_wasm_access_public_to_login` | **按 0071 同款 jsonb 往返改写**（R1-DAT-2/3/4 订正）：限定 `kind='wasm_app'`、`config_json IS JSON OBJECT`、`jsonb_exists(config_json,'access')`、`config_json->>'access'='public'` ⇒ `jsonb_set(...,'{access}','"login"')`；**不得出现半角 `?`**（`rewritePlaceholders` 会改写，用 `jsonb_exists`/`->>`）；结尾 `DO` 段 fail-loud 自检；幂等口径=第二次命中 0 行且字节不变。**磁盘资产改写 = 选项 A（已拍板）**：抄 `appseed.go` 的 temp+fsync+rename 一次性改写 `<data_root>/apps/<app_id>/assets/<release>/picoaide.app.json` | ⚠️ 三条事实订正：①字面 `REPLACE('"access":"public"')` **漏掉 jsonb 形态**（`{"access": "public", …}` 带空格）；②**运行期权威在磁盘资产**，但**读侧已把 public 映射为 login**，因此改写磁盘的**真实意义 = 应用自读配置（`assets.read`）时不再看到 `public`、口径彻底退场**（否则应用可能自行实现"匿名可用"行为）；③必须与 `legacyAnonymous` 的清理同批（W4） |
+| `0074_wasm_access_public_to_login` | **按 0071 同款 jsonb 往返改写**（R1-DAT-2/3/4 订正）：限定 `kind='wasm_app'`、`config_json IS JSON OBJECT`、`jsonb_exists(config_json,'access')`、`config_json->>'access'='public'` ⇒ `jsonb_set(...,'{access}','"login"')`；**不得出现半角 `?`**（`rewritePlaceholders` 会改写，用 `jsonb_exists`/`->>`）；结尾 `DO` 段 fail-loud 自检；幂等口径=第二次命中 0 行且字节不变。**磁盘资产改写 = 选项 A（已拍板）**：抄 `appseed.go` 的 temp+fsync+rename 一次性改写 `<data_root>/apps/<app_id>/assets/<release>/zeokeel.app.json` | ⚠️ 三条事实订正：①字面 `REPLACE('"access":"public"')` **漏掉 jsonb 形态**（`{"access": "public", …}` 带空格）；②**运行期权威在磁盘资产**，但**读侧已把 public 映射为 login**，因此改写磁盘的**真实意义 = 应用自读配置（`assets.read`）时不再看到 `public`、口径彻底退场**（否则应用可能自行实现"匿名可用"行为）；③必须与 `legacyAnonymous` 的清理同批（W4） |
 | 迁移回归测试（必须） | 新增 `migration_0074_test.go`（照 `migration_0071_test.go` 模式）：①紧凑形态改写 ②jsonb 形态改写 ③已含 `login` 行逐字节不变 ④`kind != 'wasm_app'` 行不得被改 ⑤坏 JSON 行跳过且不 panic | 仓库惯例：每条数据迁移都有 `migration_00NN_test.go` |
 | 生成物与技能登记（必须，一次跑完） | `go generate ./internal/wasmapp/limits` 重生成 **5 个产物**：`limits/limits.json`、`limits/limits.md`、`appcfg/appcfg.json`、`skills/app-builder/references/limits.md`、`references/app-config.md`；**同时**改 `appcfgspec.go` 的取值来源为 `AccessWritableValues`，并同步 `TestAccessContractMatchesABIAndDesign` 与旧基线 §4.2 行；`SKILL.md` version 提版 + `skillseed/skill_version_test.go:48 seededSkillDigests` 登记新摘要 | 漏任一项：`limits_gen_test.go`/`appcfgspec_gen_test.go` 逐字节门禁红、`TestBuiltinSkillVersionTracksContent` 红 |
 | 演示应用存量 | 清单真源 `server/demoapps/demos.json` + `appdemo/**`：**保留 app_id 只改 `access=login`**（改标题去掉"匿名可达"），`appseed` 对已存在行跳过且 heal 不覆盖标题 ⇒ 需一次性改写 DB 行 + 磁盘资产 + 标题 | 只删清单会让 DB 行/磁盘 public 永久残留 |
 | `0075_wasm_app_opens` | 新建 `wasm_app_opens`（明细，90 天保留）+ `wasm_app_opens_daily`（日汇总，长期；主键 `(app_id, day, dept_id)`），列集与口径见 §8.9（已定稿） | 与 §5.1b/§8.9 配套；清理作业随迁移落地 |
-| `0076_usage_app_dimension` | `usage` 系列表增加**应用维度**（§21.4）：`app_id` 列（默认空）+ 索引 `(app_id, created_at)`；**`usage` 是分区表 ⇒ 必须按 0063 的同款做法递归加列/索引**（`ALTER TABLE ... ADD COLUMN` 对分区父表递归生效，索引需逐分区或建在父表上并确认子分区继承） | ⚠️ W1 与 0075 同批；非应用调用 `app_id` 为空 ⇒ 既有口径不受影响；**只在该请求确属客户端会话链路时才记录 `X-Pico-App-Id`**（§21.4，否则归因可伪造） |
+| `0076_usage_app_dimension` | `usage` 系列表增加**应用维度**（§21.4）：`app_id` 列（默认空）+ 索引 `(app_id, created_at)`；**`usage` 是分区表 ⇒ 必须按 0063 的同款做法递归加列/索引**（`ALTER TABLE ... ADD COLUMN` 对分区父表递归生效，索引需逐分区或建在父表上并确认子分区继承） | ⚠️ W1 与 0075 同批；非应用调用 `app_id` 为空 ⇒ 既有口径不受影响；**只在该请求确属客户端会话链路时才记录 `X-ZeoKeel-App-Id`**（§21.4，否则归因可伪造） |
 
 其它：客户端窗口尺寸/缓存写在 `userData`（见 §7.2/§7.5，含用户维度）；**不涉及服务端数据**。
 验收 SQL（必须落在 W4 判据里）：`SELECT count(*) FROM apps WHERE kind='wasm_app' AND config_json::jsonb->>'access'='public'` **= 0**；`SELECT to_regclass('public.app_sessions') IS NULL AND to_regclass('public.employee_sessions') IS NULL`；`git grep -nE '"access"\s*:\s*"public"' -- server/demoapps server/skills docs/wasm-app-authoring.md` **零命中**。
@@ -396,7 +396,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | 派生规则 | 缺省（仅本地开发）为 `<deep_link_scheme>-app` |
 | 约束 | 必须匹配 **`^[a-z][a-z0-9+.-]{1,31}$`**（与 §8.3 逐字一致，**不是无上界版本**）、不得与 `deep_link_scheme` 相同、不得与其它渠道冲突、不得是 `http/https/file/data/javascript/about` |
 | 注入链 | `ci-channels.sh` → `brand-prepare` → `build/channel.json` → desktop 组装期注入 profile 行 config → 新包 `registerAppScheme(appOriginScheme)` |
-| **取值时序与三个终点（冻结，R2C-13/CHN-13 订正）** | 同一份真源 `channel.json`，**三个消费者、两个时刻**，不得混为一谈：①**特权注册**（`registerSchemesAsPrivileged`）**必须早于 `app.whenReady()`** ⇒ 取值只能来自 `main.ts` **模块作用域**读取的渠道包（**不能**来自插件 Config、**不能**来自任何运行期路由）；②**宿主/新包的 `config.appOriginScheme`** 在**组装期**由 profile 行注入（apply 期可见）；③**客户端渲染进程**在**运行期**经 §16.1 的本机只读路由 `GET /api/pico/wasm-apps/channel` 取 `{appOriginScheme, deepLinkScheme, productName}`（用于分享链接与文案，**不参与特权注册**）。三处取值必须相等（同一渠道包），**对拍判据**：desktop 组装探针断言 ①=②=③ |
+| **取值时序与三个终点（冻结，R2C-13/CHN-13 订正）** | 同一份真源 `channel.json`，**三个消费者、两个时刻**，不得混为一谈：①**特权注册**（`registerSchemesAsPrivileged`）**必须早于 `app.whenReady()`** ⇒ 取值只能来自 `main.ts` **模块作用域**读取的渠道包（**不能**来自插件 Config、**不能**来自任何运行期路由）；②**宿主/新包的 `config.appOriginScheme`** 在**组装期**由 profile 行注入（apply 期可见）；③**客户端渲染进程**在**运行期**经 §16.1 的本机只读路由 `GET /api/zeokeel/wasm-apps/channel` 取 `{appOriginScheme, deepLinkScheme, productName}`（用于分享链接与文案，**不参与特权注册**）。三处取值必须相等（同一渠道包），**对拍判据**：desktop 组装探针断言 ①=②=③ |
 | 服务端 | 服务端镜像内含本渠道配置 ⇒ 以 `channel.AppOriginScheme()` 为**唯一**合法 scheme（不信任客户端声明）；未配置 ⇒ 启动期 fail-loud |
 | 同机多渠道 | 官方与渠道客户端 scheme 不同 ⇒ origin 天然隔离；跨渠道深链不工作属预期 |
 
@@ -413,8 +413,8 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | 客户端 UI → 应用 | 不同 origin，且 UI 侧有持有性证明 | 实测：`http://127.0.0.1` 页面 fetch 应用 origin 失败 |
 | 公网 → 应用 | 不存在应用 origin（无 DNS/证书/路由） | I1 断言 |
 | 应用 → 浏览器存储 | 允许但按 origin 隔离；**无 cookie** | 探针（W0-D，**待跑＝当前无证据**） |
-| **本机路由 → 平台** | 渲染层持宿主签发的一次性 proof（`X-Pico-Host-Proof`）；**不依赖 Cookie/Host/Origin/端口**（§22.2 R2） | 用例：不带 proof 的本机调用 ⇒ 401 |
-| **应用窗口 → 平台（持有性）** | bearer **＋** 安装密钥绑定的 app-proof（`X-Pico-App-Proof`，§23.1）：proof 绑 `(user_id, bearer hash, install_id, serverURL, app_id, exp, jti)` ⇒ **不可跨应用/跨用户搬运**，非幂等请求 jti 去重 ⇒ **不可重放**；**签发要求安装签名 + 一次性 nonce** ⇒ 平台端多了一道"必须是已注册安装"的门与可审计/可吊销的注册表。⚠️ **注册是 TOFU**（见 §17 认账 7）：**仅持 bearer 者仍可为"尚未注册的" install_id 注册自己的公钥并签发** —— 本机制**不**把"bearer 泄露"变成"不可用"，它抬高的是"无法冒充既有安装 + 无法搬运/重放 proof"，真正的边界见 §17 认账 7 | 用例：无/过期/跨应用重放/跨用户/跨安装 ⇒ 401（§13.1 I2）；jti 重放 ⇒ 401 |
+| **本机路由 → 平台** | 渲染层持宿主签发的一次性 proof（`X-ZeoKeel-Host-Proof`）；**不依赖 Cookie/Host/Origin/端口**（§22.2 R2） | 用例：不带 proof 的本机调用 ⇒ 401 |
+| **应用窗口 → 平台（持有性）** | bearer **＋** 安装密钥绑定的 app-proof（`X-ZeoKeel-App-Proof`，§23.1）：proof 绑 `(user_id, bearer hash, install_id, serverURL, app_id, exp, jti)` ⇒ **不可跨应用/跨用户搬运**，非幂等请求 jti 去重 ⇒ **不可重放**；**签发要求安装签名 + 一次性 nonce** ⇒ 平台端多了一道"必须是已注册安装"的门与可审计/可吊销的注册表。⚠️ **注册是 TOFU**（见 §17 认账 7）：**仅持 bearer 者仍可为"尚未注册的" install_id 注册自己的公钥并签发** —— 本机制**不**把"bearer 泄露"变成"不可用"，它抬高的是"无法冒充既有安装 + 无法搬运/重放 proof"，真正的边界见 §17 认账 7 | 用例：无/过期/跨应用重放/跨用户/跨安装 ⇒ 401（§13.1 I2）；jti 重放 ⇒ 401 |
 
 > **证据强度（R1-SEC-11 / R2T-8）**：本表"实测"与 §2.3 同一批采集 —— **Linux 单平台、单次运行、证据未入库**；标"待跑"者当前**无证据**，不得作为已成立的安全结论引用。
 
@@ -436,10 +436,10 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 ## 12. 部署与发布
 
 - **删除三项前置**：通配域名、通配证书、Caddy 通配站点块；`.env.example`/compose/Caddyfile/部署文档已完成同步（D3）。
-- **env 保留**：`PICOAI_TRUSTED_PROXIES`（客户端 IP 归属）、`PICOAI_APPS_EXTRA_RESERVED`（保留字）；**删除** `PICOAI_APPS_BASE_DOMAIN`、`PICOAI_TRUSTED_PROXIES_EXPLICIT`。
+- **env 保留**：`ZEOKEEL_TRUSTED_PROXIES`（客户端 IP 归属）、`ZEOKEEL_APPS_EXTRA_RESERVED`（保留字）；**删除** `ZEOKEEL_APPS_BASE_DOMAIN`、`ZEOKEEL_TRUSTED_PROXIES_EXPLICIT`。
 - **升级**：服务端与客户端**必须同版本**；旧客户端删除换票后无法打开应用；**不做降级通道**。
 - **回滚（R1-OPS-1/DAT-9 订正，必须同步改发布说明）**：`0073` 是 `DROP TABLE`、`0074` 改写配置 ⇒ **回滚 ≠ 只换镜像**。正确口径：**停服 → 恢复升级前 `pg_dump` → 回退镜像 → 客户端重装**；只回退镜像会让旧二进制逐请求 `42P01`（`migrate.go` 只跳过已应用版本，**启动不报错**，症状是运行期 500）。仅 `v2.7.5` 线（不含 0069）可只回退镜像。**发布说明里"回滚不需要数据变换"必须删掉/改写**（`docs/releases/v2.7.6-beta.5.md:16` 的迁移清单要补 0073/0074/0075），并在 AI-DEPLOY 增本版回滚专段。
-- **存量部署清理（R1-OPS-2/OPS-9）**：三项前置虽已从仓库删除，但**已上线部署**若配过通配 DNS/证书/反代通配块，升级后仍会把主站铺到任意子域 ⇒ 必须给**可执行清理清单与判据**（例：`curl --resolve x.<DOMAIN>:443:<IP> https://x.<DOMAIN>/` 应失败或非 200）；`.env`/`settings` 里残留的 `PICOAI_APPS_BASE_DOMAIN`/`wasm.apps_base_domain` 现在**静默失效**，启动要 warn 并给清理命令。
+- **存量部署清理（R1-OPS-2/OPS-9）**：三项前置虽已从仓库删除，但**已上线部署**若配过通配 DNS/证书/反代通配块，升级后仍会把主站铺到任意子域 ⇒ 必须给**可执行清理清单与判据**（例：`curl --resolve x.<DOMAIN>:443:<IP> https://x.<DOMAIN>/` 应失败或非 200）；`.env`/`settings` 里残留的 `ZEOKEEL_APPS_BASE_DOMAIN`/`wasm.apps_base_domain` 现在**静默失效**，启动要 warn 并给清理命令。
 - **升级窗口的可诊断性（R1-OPS-5）**：两个方向都要有信号 —— ①服务端先升：旧客户端打不开时，服务端要能记录"旧路径命中"计数/日志（并在可能时给可读提示页）；②客户端先升：命中"路由不存在"的 404 必须与"应用不存在"可区分（能力探针或独立错误码），排障表写进部署文档。
 - **发布范围**：`v2.7.6-beta.5` **包含全部内容**（独立窗口 + 渠道 scheme + 基础改进），发布说明按最终落地范围回改（D4 已写一版，需二次回改）。
 
@@ -463,7 +463,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | 不变量 | 行为级判据 | 变异验证（改坏必红） | 部署级判据 |
 | --- | --- | --- | --- |
 | I1 公网无应用 origin | 请求 `<app_id>.<基域>`（任意方法）⇒ **404，且不返回应用内容**（不是 200/410/换票 302） | 恢复 HostGate 子域路由 ⇒ 该用例红 | 未配置任何基域变量时，客户端内打开应用仍成功（真机 E2E） |
-| I2 身份只来自 bearer **＋客户端持有性证明** | 无 bearer ⇒ 401；伪造 Cookie/Query 身份 ⇒ 仍 401；撤销令牌后 ⇒ 401；**缺 `X-Pico-App-Proof` ⇒ 401 `PROOF_REQUIRED`；过期 ⇒ 401 `PROOF_EXPIRED`；`(user_id, install_id, app_id)` 任一绑定不符/跨应用重放 ⇒ 401 `PROOF_MISMATCH`；非幂等请求同 `jti` 第二次 ⇒ 401**（§23.1） | 让 `clientFrameUser` 回落到 Cookie/参数 ⇒ 对应用例红；**去掉 proof 校验（或只校验签名不校验绑定）⇒ proof 用例红** | 服务端日志/调用事件含 `user_id`，匿名面不存在；**`request` 与 `open` 两个端点都要求 proof**（只挂一个 ⇒ 审计记 P1） |
+| I2 身份只来自 bearer **＋客户端持有性证明** | 无 bearer ⇒ 401；伪造 Cookie/Query 身份 ⇒ 仍 401；撤销令牌后 ⇒ 401；**缺 `X-ZeoKeel-App-Proof` ⇒ 401 `PROOF_REQUIRED`；过期 ⇒ 401 `PROOF_EXPIRED`；`(user_id, install_id, app_id)` 任一绑定不符/跨应用重放 ⇒ 401 `PROOF_MISMATCH`；非幂等请求同 `jti` 第二次 ⇒ 401**（§23.1） | 让 `clientFrameUser` 回落到 Cookie/参数 ⇒ 对应用例红；**去掉 proof 校验（或只校验签名不校验绑定）⇒ proof 用例红** | 服务端日志/调用事件含 `user_id`，匿名面不存在；**`request` 与 `open` 两个端点都要求 proof**（只挂一个 ⇒ 审计记 P1） |
 | I3 Origin 合成与校验 | 非幂等缺 Origin/异源 Origin ⇒ 403；`Origin == <app-scheme>://<app_id>` ⇒ 通过 | 判据改为"缺失即放行" ⇒ 对应用例红 | 客户端 handler 确实补了 Origin（组装探针） |
 | I4 每应用独立 origin | 跨应用 fetch 失败；客户端 UI（http 源）fetch 应用失败；cookie 不可用 | 允许跨应用 fetch ⇒ 探针红 | 三平台探针各跑一次（W6） |
 | I5 唯一服务端入口 | 路由表里应用请求只有 `…/:app_id/request`（无 anon/login/app-ticket/旧子域树）；信封 6 键解析（`query` 不带 `?`、空体 `""`） | 加回 anon 路由或旧子域路由 ⇒ 路由完整性用例红 | 旧客户端表现为"打不开"（无子域可解析/无换票端点）——这是**有意**的，发布说明写明必须同版本升级；服务端不提供降级页 |
@@ -501,7 +501,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | --- | --- |
 | W0-D 新增探针 | 自定义协议下 `localStorage`/`sessionStorage`/`IndexedDB`：可用性 + 按 app_id 隔离 + 与客户端 UI 隔离；输出 `VERDICT` |
 | W1 服务端收口 | `go test ./internal/wasmapp/... ./internal/router/...`（真 PG）全绿；变异：Origin 判据放开、host 判据放开、public 写侧放开 ⇒ 各自用例必红 |
-| W2 客户端窗口化 | `yarn workspace @picoaide/dsh-wasm-apps-host check`、`@picoaide/dsh-wasm-apps check`、`dsh-browser check` 全绿 + 真机：打开/聚焦/尺寸记忆/比例锁定/缓存命中/401/离线 |
+| W2 客户端窗口化 | `yarn workspace @zeokeel/dsh-wasm-apps-host check`、`@zeokeel/dsh-wasm-apps check`、`dsh-browser check` 全绿 + 真机：打开/聚焦/尺寸记忆/比例锁定/缓存命中/401/离线 |
 | W3 渠道 scheme | `GITHUB_REF_NAME=v2.7.6-beta.5 bash scripts/ci-channels.sh …` 正例通过、缺字段/与深链同值/非法格式负例中止；desktop 组装探针断言注入值 |
 | W4 删除波次 | §13 零残留断言 + `make check` 全绿 + `session`/`edge/hostgate.go`/`anonlimit` 路径不存在 |
 | W5 文档与发布 | 三项前置零残留、发布说明含"必须同版本升级"、作者文档含 window 字段与"无 cookie" |
@@ -519,7 +519,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 
 **第三轮问答（Q1–Q9，**已定稿**；结论同 §5.1b/§8.9，问题原文保留作留痕）**：Q1 计数口径（每次/同用户 N 分钟去重/每人每天每应用一次）；Q2 指标集（PV/UV 之外是否要"失败次数/打开时长"）；Q3 明细保留期与汇总粒度；Q4 管理端展示位置与导出；Q5 版本校验端点是否合并计数（现草案=合并）；Q6 清缓存范围（该应用全部版本 vs 仅旧版本）；Q7 离线/端点失败时是否允许用旧缓存（现草案=不允许）；Q8 是否需要"热门应用"实时看板；Q9 计数是否按部门/渠道聚合。
 
-**被本次推翻的早期决策**（记录留痕）：内置浏览器标签承载 → **独立窗口**；固定 `picoaide-app://` → **渠道化 `<scheme>-app`**；`public` 读侧映射 login → **彻底退场**；未登录在标签页内提示 → **面板层拦截**；"版本切换=下次导航自然生效"（无打开期校验）→ **每次打开都校验版本**。
+**被本次推翻的早期决策**（记录留痕）：内置浏览器标签承载 → **独立窗口**；固定 `zeokeel-app://` → **渠道化 `<scheme>-app`**；`public` 读侧映射 login → **彻底退场**；未登录在标签页内提示 → **面板层拦截**；"版本切换=下次导航自然生效"（无打开期校验）→ **每次打开都校验版本**。
 
 ---
 
@@ -532,7 +532,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | R1-2 | 服务端工程师（SRV） | **0×P0 + 7×P1 + 5×P2**：scheme 无服务端落点、`legacyAnonymous` 使 I2 暂时不成立、0074 按字面改写 0 行且漏 `kind`、删除清单自相矛盾（`WriteAppNotFound` 调 `SelfOrigin`）、`sessionKey` 恒空导致 AI 令牌失去会话级吊销、错误分层未定义、大小写判据与实现不符 | 已就地订正 §8.2/§8.3/§8.4/§5.1/§9；其余进 W1/W4 |
 | R1-3 | 桌面客户端工程师（CLI） | **4×P0 + 8×P1 + 2×P2**：跨包接线通道不存在（`kind:'app'` 无落地路径）、应用窗口分区**无权限守卫**、§18.1 声称的订正在正文缺失、打开路由三处不一致；P1 含白名单不同构、登录闸门服务不存在、F16 归属未定、特权注册时序、`?path=` 未实现、窗口无脚本导致"重试/重登"无承载、ratio 三项前提缺失 | 已就地订正 §5.1/§5.1b/§7.2/§7.5；接线与窗口契约进 W2 |
 | R1-4 | 运维与部署（OPS） | **1×P0 + 5×P1 + 3×P2**：P0=回滚承诺与 0073/0074 矛盾且被发布说明抄成"回滚不需要数据变换"；P1=存量通配面清理无步骤/判据、W3 只证明 beta、fail-loud 与既有兜底约定冲突、升级窗口双向无信号、可观测性整块缺失 | 已就地订正 §12/§13；可观测性与清理清单进 W5/W6 |
-| R1-5 | 产品体验（UX） | **3×P0 + 9×P1 + 4×P2**：P0=路由错位（同 SEC/CLI）、渠道 scheme 硬编码、`pico/wasm-app-open` 事件零消费者；P1 含未登录交互未实现、`?path=` 被丢弃、错误文案指错方向、承诺的按钮不存在、目录无分享入口、无搜索、冻结口径、历史 public 无运营路径、AI 控制权落点未定义 | 产品决策已由 §19 落定（15 条）；实现进 W2/W5 |
+| R1-5 | 产品体验（UX） | **3×P0 + 9×P1 + 4×P2**：P0=路由错位（同 SEC/CLI）、渠道 scheme 硬编码、`zeokeel/wasm-app-open` 事件零消费者；P1 含未登录交互未实现、`?path=` 被丢弃、错误文案指错方向、承诺的按钮不存在、目录无分享入口、无搜索、冻结口径、历史 public 无运营路径、AI 控制权落点未定义 | 产品决策已由 §19 落定（15 条）；实现进 W2/W5 |
 | R1-6 | 数据与迁移（DAT） | **0×P0 + 8×P1 + 7×P2**：运行期权威是**磁盘资产**而非 DB 列（只改 DB 不兑现 I6）、0074 需 jsonb 往返 + `kind` 限定 + 回归测试、0073 缺停机/锁口径、生成物与 skillseed 登记缺落点、发布说明回滚口径错误、客户端缓存缺用户维度、缓存 304 成第二入口、缓存键版本无来源、缓存路径 Windows 权限无意义 | 已就地订正 §9/§7.5/§12；其余进 W1/W4 |
 | R1-7 | 测试与判据（TST） | **7×P0 + 6×P1 + 5×P2**：探针判据双向失效（已修）、`go test` 可被 Skip 吞成零断言绿（已修）、W0-D 探针不存在、W2 真机判据无实现、路由常量分叉、W6 端到端完全缺失、I6 被绿测试钉死；并判定"§13 八行里只有 W1 变异与 W4 文件不存在是真正机器可判" | 已修 §13 前两条 + 补 7 条强制要求（§13 前言）；其余进 W1–W6 |
 | R1-8 | 红队对抗（RED） | **11 条攻击判定**：成立 = 拿到 bearer 即可绕开客户端使用任意应用（P1，见 §20）、无地址栏+标题固定+身份预填 ⇒ 钓鱼（P1）、跨应用顶层导航换壳（P1）、"不能联网"为假（导航外带，P1）、任意网页可发起带身份导航型 GET（P2）；不成立 = 跨应用读数据、伪造身份、进程内抢注、直连 handler、服务端缓存投毒；另给"文档过度自信 10 条"（把一次实测当通则） | 窗口闸门/分区守卫已写进 §7.2；§6"不能联网"表述订正；§20 决 A/B |
@@ -564,9 +564,9 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | 波次 | 输入 | 产出 | 判据 | 依赖 / 不可并行原因 |
 | --- | --- | --- | --- | --- |
 | **W0-D**（**前移到 W2 之前**） | 契约 §3/§7.5；探针脚本 | `probe-web-storage.cjs`（localStorage/sessionStorage/IndexedDB 可用性 + 按 origin/分区隔离）+ 输出落盘 `temp/wasm-client-only/` 或 `scripts/wasm/probes/` | 探针自判定 + 退出码；结论写回 §7.5/F13（不可用则改口径） | 无依赖；**必须在 W2 缓存/存储实现之前**，否则 W2 返工 |
-| **W1** 服务端收口 | 契约 §5.1/§5.1b/§8.2/§8.3/§8.4/§9/§20/§23 | ①`access` 严格两值 + appcfg 规格收敛 + **生成物重生成（appcfg 侧）**；②**app-proof 服务端侧**（签发端点进 router、校验接进 `request`/`open`、每部署密钥 = 复用 `util.EnsureMasterKey` 或新 `app-proof.key`，**落在 `<dataDir>`**）；③**F16 服务端侧**：`POST …/:app_id/open` + `X-PicoAide-App-Version` 响应头 + 迁移 **0075**（计数表）+ **0076**（`usage` 应用维度）；④`Options.AppOrigin` 注入（api 层拿不到 `*Server`，R2I-9）+ 补 `clientreq.go:225`/`client.go:77` 两处 scheme 常量；⑤`legacyAnonymous` 与 I2 的时序说明 + 用例；⑥头白名单单一真源 = **Go 常量**，产出 `wasm-app-headers.json` 供客户端对拍（R2I-11） | `go test ./internal/wasmapp/... ./internal/router/...`（真 PG，**用例级 0 skip**）+ 变异（Origin/host/public/proof 各一条） | 无；**被 R2I-6/7 阻塞的点已在本行消解**；与 W3 动同一批文件 ⇒ **W3 不得与 W1 并行改 `clientreq.go`/`client.go`** |
-| **W2** 客户端窗口化与接线 | W1 端点；§22 seam；**R2I-2 裁决**（见下） | ①`windows.ts`（依赖/inject、建窗适配器签名、状态文件 schema + `@deepseek-ai/dsh-atomic-write`、旧账本丢弃点、下架/冻结/删除关窗的触发源）；②**跨包路由常量单一真源 + 相等断言**（两端 spec 同批改）；③`hostRequestSurface` seam + `X-Pico-Host-Proof`（去 Cookie/Host/Origin/端口）；④缓存（`session-scope`+version+path、304 仅静态、命中重写安全头）；⑤面板层登录拦截 + 深链队列 + 一次性授权（F/AI 桥同族）；⑥guard/导航修正（§22.2 R4 + session 级 `onBeforeRequest`，按 app_id 判）；⑦app-proof **客户端侧**（安装密钥 + 惰性签发 + 续签模块）；⑧AI 工具寻址（`app_id` 参数、id 空间、是否占 maxTabs/写账本） | 三包 `check` + 真机：点击后 **1 s 内出现窗口或可读错误页**；跨包常量断言；缓存隔离（A/B 账号不互读） | 依赖 W1（端点/版本头）；**被 R2I-2（窗口载体）阻塞** |
-| **W3** 渠道 scheme | §10；私有渠道仓 | ①`channel.json` 加 `app_origin_scheme`（**全部渠道必填**；official/beta 取值 = `picoaide-app`，公共渠道共用命名空间）；②CI：逐渠道必填校验 + **跨渠道唯一性扫描（只看字段名，不回显品牌）**；③注入链五处（`main.ts` 早期注册取值 + 新包 + browser guard/tools 文案 + client open-app + client 分享 fail-closed）；④渠道仓改动**先 push** 再打 tag；⑤渠道仓 commit pin 或写进产物（R2I-16） | 正式 tag 名（或合成夹具）正负例；`verify-ci-scripts.mjs` 夹具同步；三包用例改造 | 依赖 W1 的 scheme 参数化（同一批文件）；**不可与 W1 并行改 `clientreq.go`/`client.go`** |
+| **W1** 服务端收口 | 契约 §5.1/§5.1b/§8.2/§8.3/§8.4/§9/§20/§23 | ①`access` 严格两值 + appcfg 规格收敛 + **生成物重生成（appcfg 侧）**；②**app-proof 服务端侧**（签发端点进 router、校验接进 `request`/`open`、每部署密钥 = 复用 `util.EnsureMasterKey` 或新 `app-proof.key`，**落在 `<dataDir>`**）；③**F16 服务端侧**：`POST …/:app_id/open` + `X-ZeoKeel-App-Version` 响应头 + 迁移 **0075**（计数表）+ **0076**（`usage` 应用维度）；④`Options.AppOrigin` 注入（api 层拿不到 `*Server`，R2I-9）+ 补 `clientreq.go:225`/`client.go:77` 两处 scheme 常量；⑤`legacyAnonymous` 与 I2 的时序说明 + 用例；⑥头白名单单一真源 = **Go 常量**，产出 `wasm-app-headers.json` 供客户端对拍（R2I-11） | `go test ./internal/wasmapp/... ./internal/router/...`（真 PG，**用例级 0 skip**）+ 变异（Origin/host/public/proof 各一条） | 无；**被 R2I-6/7 阻塞的点已在本行消解**；与 W3 动同一批文件 ⇒ **W3 不得与 W1 并行改 `clientreq.go`/`client.go`** |
+| **W2** 客户端窗口化与接线 | W1 端点；§22 seam；**R2I-2 裁决**（见下） | ①`windows.ts`（依赖/inject、建窗适配器签名、状态文件 schema + `@deepseek-ai/dsh-atomic-write`、旧账本丢弃点、下架/冻结/删除关窗的触发源）；②**跨包路由常量单一真源 + 相等断言**（两端 spec 同批改）；③`hostRequestSurface` seam + `X-ZeoKeel-Host-Proof`（去 Cookie/Host/Origin/端口）；④缓存（`session-scope`+version+path、304 仅静态、命中重写安全头）；⑤面板层登录拦截 + 深链队列 + 一次性授权（F/AI 桥同族）；⑥guard/导航修正（§22.2 R4 + session 级 `onBeforeRequest`，按 app_id 判）；⑦app-proof **客户端侧**（安装密钥 + 惰性签发 + 续签模块）；⑧AI 工具寻址（`app_id` 参数、id 空间、是否占 maxTabs/写账本） | 三包 `check` + 真机：点击后 **1 s 内出现窗口或可读错误页**；跨包常量断言；缓存隔离（A/B 账号不互读） | 依赖 W1（端点/版本头）；**被 R2I-2（窗口载体）阻塞** |
+| **W3** 渠道 scheme | §10；私有渠道仓 | ①`channel.json` 加 `app_origin_scheme`（**全部渠道必填**；official/beta 取值 = `zeokeel-app`，公共渠道共用命名空间）；②CI：逐渠道必填校验 + **跨渠道唯一性扫描（只看字段名，不回显品牌）**；③注入链五处（`main.ts` 早期注册取值 + 新包 + browser guard/tools 文案 + client open-app + client 分享 fail-closed）；④渠道仓改动**先 push** 再打 tag；⑤渠道仓 commit pin 或写进产物（R2I-16） | 正式 tag 名（或合成夹具）正负例；`verify-ci-scripts.mjs` 夹具同步；三包用例改造 | 依赖 W1 的 scheme 参数化（同一批文件）；**不可与 W1 并行改 `clientreq.go`/`client.go`** |
 | **W4** 删除波次 | §8.4 + §9 | ①删 `session/**`、`anonlimit/**`、`edge` 主机门控、router 旧端点、基域配置面、`entry_url` **三处 emit**（`publish.go:825`/`read.go:512`/`release.go:85`）；②迁移 **0073**（DROP，停服窗口）+ **0074**（jsonb 往返 + kind 限定 + 资产目录改写 = **A**）；③`limits` 匿名四项 + 换票/会话项 ⇒ **生成物第二次重生成**；④`skillseed` 版本登记（重算摘要）；⑤`server/demoapps/**`、`refapp/**`、技能/文档的 `ai.chat` 改写 | `make check` + §9 验收 SQL（`public` 计数=0、`to_regclass IS NULL`）+ 零残留三分法 | 依赖 W1/W2/W3；**删除与 W1 的 `legacyAnonymous` 时序必须一次到位** |
 | **W5** 管理端与文档 | §3 F14/F16、§19、§21.1 | ①webadmin：访问级别筛选 + 公告模板 + **F16 视图**（PV/UV 列 + 趋势 + TOP N + 部门聚合）+ **AI 用量面板**；②作者文档/技能：window 字段、无 cookie、无 `ai.chat`、AI 前端桥范例、存储对照表、可发现性/空态/冻结口径 | `npm test`（webadmin）+ 文案存在性 + 生成物一致 | 依赖 W1（字段/接口）；与 W2 的客户端文案需对拍 |
 | **W6** 验证 | 全部 | ①`scripts/verify-wasm-client-only.sh` **入库** + `scripts/wasm/probes/*` + `package.json` 的 `check:wasm-client-only` + `check-workspaces.mjs` 的 `GUARDS` 同步（PG 相关 go test 归 **server job**）；②三平台协议探针 + 真机端到端（真 PG + 真 wasm + 真协议页 + CDP 断言）；③`PROBE-RESULTS.md` 落盘；④V1 独立复验（按本文件逐条 + 变异） | 脚本退出码 + 三分表 + 变异矩阵 | 依赖 W1–W5 |
@@ -581,16 +581,16 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | 面 | 冻结内容 |
 | --- | --- |
 | 窗口 | `windows.ts` 用**独立 `BrowserWindow`** 承载应用（不占用浏览器窗口）；单应用单窗口、聚焦导航、尺寸/比例记忆见 §7.2 |
-| **surface 抽象** | 新增 `surface` 概念：`{ kind: 'browser-tab' \| 'app', id, webContents }`。**工具实现只写一份**（navigate/snapshot/eval/get_text/wait_for…），按 surface 分派；browser 包**导出一个 surface seam**（新增 `exports` 子路径，例如 `@picoaide/dsh-browser/surface`），新包通过它注册/取得 surface —— 由此 `packages/host/wasm-apps-host` 的 `needs` 与 `package.json` 依赖要同步登记（`check-workspaces.mjs` 的 `needs: []` 改为 `['@picoaide/dsh-browser']`） |
+| **surface 抽象** | 新增 `surface` 概念：`{ kind: 'browser-tab' \| 'app', id, webContents }`。**工具实现只写一份**（navigate/snapshot/eval/get_text/wait_for…），按 surface 分派；browser 包**导出一个 surface seam**（新增 `exports` 子路径，例如 `@zeokeel/dsh-browser/surface`），新包通过它注册/取得 surface —— 由此 `packages/host/wasm-apps-host` 的 `needs` 与 `package.json` 依赖要同步登记（`check-workspaces.mjs` 的 `needs: []` 改为 `['@zeokeel/dsh-browser']`） |
 | AI 寻址 | 工具新增可选 `app_id`；`browser_list_tabs` 输出加 `kind`/`app_id`（**schema 需扩**，`additionalProperties:false`）；**应用窗口不吃 maxTabs=16 配额、不写浏览器标签账本**；无显式目标时的默认寻址**只指向浏览器当前标签**（应用窗口必须显式给 `app_id`，避免误操作） |
 | 胶囊/蒙版 | 从 browser 的 shell 页**抽成共享组件**（同一份实现），应用窗口自带一份挂载点；**控制权状态仍按 surface 记**（每个应用窗口独立"人/AI"归属），不再依赖池级 `pool.controlled` |
 | 权限守卫 | 归属 = **分区初始化**（不是建 tab 时）；`installPermissionGuard` 提升为分区级 `ensureSessionGuard`，浏览器与应用窗口共用；request + check 两个 handler 都必须装 |
 | 导航闸门 | 归属 = **应用窗口模块**（`will-navigate`/`will-frame-navigate`/`setWindowOpenHandler` 判"同 app origin"）+ **session 级 `webRequest.onBeforeRequest`**（按 webContentsId/initiator 判"只有应用窗口能请求 app scheme"）；`classifyNavigation` 要按 surface kind 分流（浏览器标签不得导航到 app scheme，但 AI 对应用窗口的 navigate 必须放行） |
-| `windows.ts` 契约 | `inject: ['picoSession','webServer'(seam), 'browserSurface']`；建窗适配器扩 `WasmAppsHostAdapter`（`createAppWindow/openAppWindow/focusAppWindow/closeAppWindow/setAspectRatio` + `onBeforeRequest`/`will-navigate` 钩子）；状态文件 `<userData>/wasm-apps-windows.json`（schema：`{version, apps: {<app_id>: {width,height,x,y,ratio?,lastPath?}}}`，**原子写优先复用 `@deepseek-ai/dsh-atomic-write`**；**原子写已复用上游 `@deepseek-ai/dsh-atomic-write`（2026-09-20，W6/W7 切换完成）**：`dsh-wasm-apps-host` 的 `dependencies` 已声明 `"@deepseek-ai/dsh-atomic-write": "0.1.5-rc.2"`（与 `packages/host/desktop` 同值；`yarn.lock` 仅新增该 workspace 条目、离线 install 7.3 s）；**包内本地 `atomicWriteFile` 助手已删除**，全部写入点（`windows.ts` 窗口状态 / `app-proof.ts` 安装密钥 / `ai-authorization.ts` AI 授权记录）统一走 `writeFileAtomic(path, body, { mode: 0o600, dirMode: 0o700 })`；判据 = `atomic-write.spec.ts`（原子提交 / 失败不留半个文件 / 权限位）+ `atomic-write-wiring.spec.ts`（模块解析到上游包、调用点经替身计数确实调用它、本地同名符号不得复活）。**两处口径勘误**：① **上游与本地助手都不做 fsync**（上游 `.d.ts` 明写 *Crash durability (fsync) is out of scope*）⇒ 原句 `temp + fsync + rename` 与两版实现**均不符**，该持久性缺口**自 W2 起存在、本版未修**（如实认账，未擅自扩大改动）；② 上游权限位**必须逐调用点显式声明**（`mode` 必填、`dirMode` 漏传即回落 mkdir 默认）⇒"唯一实现"的约束从"一份代码"改为「**一处语义 + 每个调用点可见的权限位 + 接线判据**」；旧标签账本迁移 = browser store 的 groups 账本，**丢弃 `url` 以 app scheme 开头的条目并 warn** |
-| 生命周期触发源 | 应用下架/冻结/删除 ⇒ 关窗清缓存的触发源 = **下次打开时的 `open` 端点响应**（`enabled=false`/`frozen`）+ 客户端在 `pico/session-changed`/应用中心刷新时按目录对比（**不做服务端推送**，R2I-3 明确） |
+| `windows.ts` 契约 | `inject: ['zeokeelSession','webServer'(seam), 'browserSurface']`；建窗适配器扩 `WasmAppsHostAdapter`（`createAppWindow/openAppWindow/focusAppWindow/closeAppWindow/setAspectRatio` + `onBeforeRequest`/`will-navigate` 钩子）；状态文件 `<userData>/wasm-apps-windows.json`（schema：`{version, apps: {<app_id>: {width,height,x,y,ratio?,lastPath?}}}`，**原子写优先复用 `@deepseek-ai/dsh-atomic-write`**；**原子写已复用上游 `@deepseek-ai/dsh-atomic-write`（2026-09-20，W6/W7 切换完成）**：`dsh-wasm-apps-host` 的 `dependencies` 已声明 `"@deepseek-ai/dsh-atomic-write": "0.1.5-rc.2"`（与 `packages/host/desktop` 同值；`yarn.lock` 仅新增该 workspace 条目、离线 install 7.3 s）；**包内本地 `atomicWriteFile` 助手已删除**，全部写入点（`windows.ts` 窗口状态 / `app-proof.ts` 安装密钥 / `ai-authorization.ts` AI 授权记录）统一走 `writeFileAtomic(path, body, { mode: 0o600, dirMode: 0o700 })`；判据 = `atomic-write.spec.ts`（原子提交 / 失败不留半个文件 / 权限位）+ `atomic-write-wiring.spec.ts`（模块解析到上游包、调用点经替身计数确实调用它、本地同名符号不得复活）。**两处口径勘误**：① **上游与本地助手都不做 fsync**（上游 `.d.ts` 明写 *Crash durability (fsync) is out of scope*）⇒ 原句 `temp + fsync + rename` 与两版实现**均不符**，该持久性缺口**自 W2 起存在、本版未修**（如实认账，未擅自扩大改动）；② 上游权限位**必须逐调用点显式声明**（`mode` 必填、`dirMode` 漏传即回落 mkdir 默认）⇒"唯一实现"的约束从"一份代码"改为「**一处语义 + 每个调用点可见的权限位 + 接线判据**」；旧标签账本迁移 = browser store 的 groups 账本，**丢弃 `url` 以 app scheme 开头的条目并 warn** |
+| 生命周期触发源 | 应用下架/冻结/删除 ⇒ 关窗清缓存的触发源 = **下次打开时的 `open` 端点响应**（`enabled=false`/`frozen`）+ 客户端在 `zeokeel/session-changed`/应用中心刷新时按目录对比（**不做服务端推送**，R2I-3 明确） |
 | sessionKey 接缝 | `ServeClientRequest(w, r, appID, user, **sessionKey**)` 显式传参（不用 context）；sessionKey = `serverstore.TokenHash(bearer)[:32]`；登出/改密/禁用的回调点 = `serverauth` 的四处（`handler.go:533` 登出、`:370` 改密、`admin.go:551/735/1058` 重置/禁用/删除）——若本期不接回调，按 §17 认账 |
 | 0075 维护者 | UV 与日汇总由 **Go 定时器**（照 `internal/balance` 范式）每分钟/每五分钟 upsert（`usage_ledger.go:122` 同款批算）；**明细先汇总后清理**（不得先删后汇，否则 UV 永久丢失）；用户当天换部门 ⇒ 以**打开时刻**的部门为准（同一用户当天可出现在两个部门行，UV 按 `(app_id,day,dept)` 去重） |
-| **客户端运行期取 scheme（原称"渲染进程 scheme 注入"）** | 落地形态 = 新增**本机只读路由** `GET /api/pico/wasm-apps/channel`（seam 之内）返回 `{appOriginScheme, deepLinkScheme, productName}`；客户端 `open-app.ts` 的 `APP_PROTOCOL` 常量改为**运行期读取**；`setAppShareScheme()` 由应用中心挂载时调用；未拿到 ⇒ 分享入口不渲染（fail-closed）。⚠️ **本行只是第③个消费者**（运行期），**不参与**特权注册（`registerSchemesAsPrivileged` 的取值时序见 §10"取值时序与三个终点"，R2C-13/CHN-13 订正） |
+| **客户端运行期取 scheme（原称"渲染进程 scheme 注入"）** | 落地形态 = 新增**本机只读路由** `GET /api/zeokeel/wasm-apps/channel`（seam 之内）返回 `{appOriginScheme, deepLinkScheme, productName}`；客户端 `open-app.ts` 的 `APP_PROTOCOL` 常量改为**运行期读取**；`setAppShareScheme()` 由应用中心挂载时调用；未拿到 ⇒ 分享入口不渲染（fail-closed）。⚠️ **本行只是第③个消费者**（运行期），**不参与**特权注册（`registerSchemesAsPrivileged` 的取值时序见 §10"取值时序与三个终点"，R2C-13/CHN-13 订正） |
 
 ---
 
@@ -603,7 +603,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 5. **审计明细不含应用请求**（只落 `wasm_call_events`），合规口径已在文档写明。
 6. **跨渠道深链不工作**属预期，需在渠道文案说明。
 7. **客户端持有性证明不做"设备"绑定，只做"安装"绑定；且安装注册是 TOFU（必须如实认账，不得写成更强）**（§23.1 A′ 取代 §20.1）：proof 由 **Ed25519 安装密钥**签发，private key 存 `safeStorage`（无钥匙串 ⇒ 0600 文件）。**TOFU 的后果**：任何持有效 bearer 的调用方都能为**尚未注册**的 install_id 注册一把自己持有的公钥（注册只需"一个签名 + 一次性 nonce"，攻击者用自己的密钥即可满足）⇒ **仅拿到 bearer 仍能注册新安装并自助签发**（多一次往返）；单个用户的安装密钥数有上限（换机余量），且注册表可审计/可吊销。**因此 R2-P0-3 的闭合口径是**：proof 不再是 bearer 的等价物 —— **绑 app_id（不可跨应用）、绑 install_id（不可冒充既有安装）、一次性 nonce（不可重放）、jti 去重（非幂等不可重复提交）**；**"bearer 泄露即可用任意应用"这一条仍然成立**（在注册新安装之后），真正抬高它需要更强的用户级第二因子（客户端登录态绑定 / 设备指纹 / DPoP / OS keychain 强绑定 / 硬件密钥），本期不做，留待客户要求。另：同机同用户进程若同时拿到 bearer 与该私钥，可直接复用既有安装身份（能读同一用户文件系统的进程即可，含本机恶意软件）。
-8. **应用 AI 无归因的老客户端**（§21.4）：老客户端不带 `X-Pico-App-Id` ⇒ 计费正常但应用维度归因缺失。
+8. **应用 AI 无归因的老客户端**（§21.4）：老客户端不带 `X-ZeoKeel-App-Id` ⇒ 计费正常但应用维度归因缺失。
 9. **应用 AI"不限"依赖传输层超时与运维安全阀**（§21.5）：业务层不设上限，传输层默认 30 min idle；卡死会话的风险由安全阀兜底。
 10. **应用 AI 无工具≠无风险**（§21.5）：应用可用 messages 诱导模型输出有害/越权内容，或诱导员工手动泄露信息。
 11. **服务端 wasm 不再具备任何 AI 能力**（§21.7）：依赖 AI 的应用必须改成"前端调 AI → 结果回传 wasm"；迁移面 = `server/demoapps/appdemo/**`、`server/skills/app-builder/**`（SKILL/示例/references）、`docs/wasm-app-authoring.md`、`server/internal/wasmapp/refapp/**`，全部随 W4 同批改写。
@@ -623,7 +623,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | §5.1 host 判据"大小写混淆一律 400" | 改为"归一化后比较；只有形态/取值不符才 400" | SRV-6 |
 | §5.1 错误码 | **拆成"传输层（外层 HTTP）"与"应用管线（内层信封 status）"两张表**；410 注明 `status=410 但 code 复用 NOT_FOUND`；403 注明"跨源写 / 审计账号"两个来源 | SRV-7 |
 | §5.1 响应体 `truncated` | 明确"兜底截断即按 502/`INVALID_PLATFORM_RESPONSE` 处理，不得把截断字节当成功交给渲染器"；并说明键是否省略 | SRV-11 |
-| §7.5 缓存 | 304 **只允许宿主直出静态子资源**；文档导航与 `/api/*` 一律回源（避免成为绕过准入的第二入口）；缓存路径含 `session-scope` + 会话切换清空；**版本来源**改为宿主统一加 `X-PicoAide-App-Version` 响应头（客户端只剔逐跳头） | DAT-10/11/12 |
+| §7.5 缓存 | 304 **只允许宿主直出静态子资源**；文档导航与 `/api/*` 一律回源（避免成为绕过准入的第二入口）；缓存路径含 `session-scope` + 会话切换清空；**版本来源**改为宿主统一加 `X-ZeoKeel-App-Version` 响应头（客户端只剔逐跳头） | DAT-10/11/12 |
 | §8.2 身份投影 | 补归一化口径（`display_name` trim、部门取第一个组名）+ 账号可用性对拍（禁用/删除 ⇒ 401）+ **会话键替代**（bearer SHA-256 前 16 字节 hex；或认账 45 min 令牌存活） | SRV-5/SRV-10/DAT-13 |
 | §8.3 自身源 | 新增"**scheme 参数化的唯一落点**"：`Server.appScheme` 由 `channel.AppOriginScheme()` 注入、`AppOrigin` 改方法、fail-loud 边界、正则与既有实现逐字一致、`abi.ABIVersion` 不得同改 | SRV-1/SRV-9 |
 | §8.4 删除清单 | 改为**逐调用点**并修掉自相矛盾：`WriteAppNotFound` 必须与 `SelfOrigin` 同批改签名；补 `options.go`/`serve.go`/`cmd/server`/`router` 具体行；补"服务端 HTML 失败页语言归属"（`session.PreferredLocale` 删除后的落点） | SRV-4/SRV-8/DAT-1 |
@@ -637,7 +637,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | 波次 | 整改项（对应 finding） |
 | --- | --- |
 | **W1** | `legacyAnonymous` 与 I2 的时序（SRV-2）；迁移 0073/0074 + 回归测试（DAT-1..5）；appcfg 规格收敛 + 5 产物重生成 + skillseed 登记（DAT-7/8）；公开匿名读路径的变异判据 |
-| **W2** | 打开链路端到端接通：**路由常量单一真源 + 跨包相等断言**（TST-5/UX-1/R2-P0-1，**两端 spec 都要改，不许各自钉死自己的字符串**）、`windows.ts`（含尺寸/比例/状态文件契约，SRV 缺口 5）、`kind:'app'` tab 注册与控制权 UI（UX-3/UX-12）、缓存实现（含用户维度/版本头/304 限制）、面板层登录拦截与深链队列（UX-4/UX-5/TST-12）；**新增（§22 迁移就绪）**：本机路由的 `hostRequestSurface` seam + `X-Pico-Host-Proof` 请求头授权（去掉 Cookie/Host/Origin/端口耦合）、浏览器标签侧的 app scheme 导航/弹窗拒绝（§22.2 R4，纠 C4 勘误） |
+| **W2** | 打开链路端到端接通：**路由常量单一真源 + 跨包相等断言**（TST-5/UX-1/R2-P0-1，**两端 spec 都要改，不许各自钉死自己的字符串**）、`windows.ts`（含尺寸/比例/状态文件契约，SRV 缺口 5）、`kind:'app'` tab 注册与控制权 UI（UX-3/UX-12）、缓存实现（含用户维度/版本头/304 限制）、面板层登录拦截与深链队列（UX-4/UX-5/TST-12）；**新增（§22 迁移就绪）**：本机路由的 `hostRequestSurface` seam + `X-ZeoKeel-Host-Proof` 请求头授权（去掉 Cookie/Host/Origin/端口耦合）、浏览器标签侧的 app scheme 导航/弹窗拒绝（§22.2 R4，纠 C4 勘误） |
 | **W3** | 渠道 scheme 参数化（服务端 `Server.appScheme`、客户端 5 处注入、browser guard、分享 fail-closed）+ CI 三条负例 + **正式 tag 名 dry-run**（SRV-1/9、UX-2、TST-13、OPS-3/4） |
 | **W4** | §8.4 全部删除项 + 验后 SQL + `git grep` 三分法（SRV-4、TST-7/10/11、DAT-1） |
 | **W5** | 作者文档补 `window.*` 与可发现性口径（UX-13/TST-15）；webadmin 访问级别筛选与历史 public 运营动作（UX-11）；部署文档清理/回滚/排障三节（OPS-2/5/6/9） |
@@ -689,7 +689,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | --- | --- |
 | 凭据 | `app-proof`：服务端签发的**短时**证明（默认 TTL **15 min**，可配），签名密钥随服务端镜像，绑定 `(user_id, bearer token 的 SHA-256, 服务端地址)`；**设备维度本期不做**（见 20.3 认账） |
 | 签发 | `POST /api/client/v2/apps/wasm/proof`（BearerAuth）⇒ `{proof, expires_at}`；登录后**惰性**首次签发（宿主在首个应用请求前取一次） |
-| 携带 | 宿主在 `open` 与 `request` 上带 `X-Pico-App-Proof: <proof>`（与 Bearer 并列） |
+| 携带 | 宿主在 `open` 与 `request` 上带 `X-ZeoKeel-App-Proof: <proof>`（与 Bearer 并列） |
 | 服务端强制 | 两个端点都要求：缺失 ⇒ 401 `proof_required`；过期 ⇒ 401 `proof_expired`；绑定不匹配 ⇒ 401 `proof_mismatch`。**`request` 端点的准入顺序：BearerAuth → app-proof → 信封/host 形态 → Origin（非幂等）** |
 | 刷新 | 宿主在过期前静默续签（同签发端点）；续签失败 ⇒ 按会话过期流程（§7.6/F8） |
 | 吊销 | 登出/改密/禁用 ⇒ bearer 失效 ⇒ proof 同步失效（绑定 token hash，无需额外吊销表） |
@@ -734,7 +734,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 
 ```
 应用页（客户端内，<app-scheme>://<app_id>/…）
-  fetch('/__picoaide/ai/chat', {method:'POST', body:{messages, stream:true}})
+  fetch('/__zeokeel/ai/chat', {method:'POST', body:{messages, stream:true}})
         │  保留路径：协议 handler **本地**处理，绝不转发平台
         ▼
 协议 handler（新包）
@@ -743,10 +743,10 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
   ③ 在该会话上跑一轮 ctx.agentLoop（**仅对话**：工具集为空、平台给定系统提示、无记忆注入）
   ④ assistant 增量以 SSE 回给应用页；页面关闭/取消 ⇒ ctx.agentLoop.cancel
         ▼
-客户端既有 LLM 链路（llm-deepseek → 平台 /v1）＋ 出站头 X-Pico-App-Id（归因）
+客户端既有 LLM 链路（llm-deepseek → 平台 /v1）＋ 出站头 X-ZeoKeel-App-Id（归因）
 ```
 
-**保留路径（冻结，主控 2026-09-19 订正文档内漂移）**：唯一保留路径 = **`POST /__picoaide/ai/chat`**（**双下划线**；§22.1 曾写成单下划线的 `/_picoaide/ai/*`，以本处为准）。规则：①协议 handler 对 `path` 以 `__picoaide/` 开头的请求**本地处理、绝不转发平台**；②应用不得定义同前缀路由（发布校验拒绝）；③**其余 `__picoaide/*` 路径一律 404**（不做通配转发）。
+**保留路径（冻结，主控 2026-09-19 订正文档内漂移）**：唯一保留路径 = **`POST /__zeokeel/ai/chat`**（**双下划线**；§22.1 曾写成单下划线的 `/_zeokeel/ai/*`，以本处为准）。规则：①协议 handler 对 `path` 以 `__zeokeel/` 开头的请求**本地处理、绝不转发平台**；②应用不得定义同前缀路由（发布校验拒绝）；③**其余 `__zeokeel/*` 路径一律 404**（不做通配转发）。
 
 **请求/响应契约**：请求 `{messages:[{role,content}], stream:bool}`（未知字段拒；`messages` ≤64 条、单条 ≤16 KiB）；非流式返回 `{content, usage?}`；流式 `text/event-stream`，发 `delta` 事件、以 `done` 收尾；错误一律 JSON 信封（`app_ai_denied` / `app_ai_unavailable` / `ai_balance_insufficient` / `ai_rate_limited` / `ai_cancelled`）。
 
@@ -758,7 +758,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 
 ### 21.4 应用维度归因（新增）
 
-- 隐藏会话元数据带 `app_id`；该会话产生的 LLM 请求出站带 `X-Pico-App-Id: <app_id>`。
+- 隐藏会话元数据带 `app_id`；该会话产生的 LLM 请求出站带 `X-ZeoKeel-App-Id: <app_id>`。
 - 服务端只在**该请求确属客户端会话链路**时记录该头（非会话请求带该头一律忽略并记 warn），避免任意调用方伪造归因。
 - `usage` 新增应用维度（新迁移 + 索引），管理端 AI 用量面板与打开计数同页展示。
 - 老客户端不带该头 ⇒ 归因缺失但计费正常（**认账**）。
@@ -789,8 +789,8 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 
 **2026-09-20 实施期实测后追加的认账（每条都有 file:line 证据，见 `temp/wasm-client-only/fix-app-ai.md`）**：
 
-⑤ **`X-Pico-App-Id` 出站头做不出来（§21.4 的实现路径需改判）**：chat 出站头的**唯一构造点**在上游 `deepseek-harness/packages/**/llm-deepseek/src/adapter.ts:539-551`，而 `GenerateOptions`/`LlmCallConfig`/`llm/stream`（对 loop 请求深冻结）**都没有 header 通道** ⇒ 在不改上游 submodule 的前提下加不上这个头。
-**替代路径（主控 2026-09-20 裁定，待实施）**：隐藏会话 id 本身就是 `app:<app_id>`，而出站头 `x-deepseek-harness-session-id` **天然带应用身份** ⇒ 服务端应**按会话 id 前缀派生归因**（`app:` ⇒ `app_id`），**不需要新头**。现状 = 服务端 `internal/llmgateway/app_attribution.go:36-65` 仍只读 `X-Pico-App-Id`、且**不校验该请求是否属会话链路** ⇒ §21.6 判据 8 的后半（伪造头的非会话请求被忽略并 warn）**在服务端未实现**。**本版如实认账：应用维度用量在真实环境里不会有数据**（面板按「统计尚未上线/无归因」显示，不显示 0）。
+⑤ **`X-ZeoKeel-App-Id` 出站头做不出来（§21.4 的实现路径需改判）**：chat 出站头的**唯一构造点**在上游 `deepseek-harness/packages/**/llm-deepseek/src/adapter.ts:539-551`，而 `GenerateOptions`/`LlmCallConfig`/`llm/stream`（对 loop 请求深冻结）**都没有 header 通道** ⇒ 在不改上游 submodule 的前提下加不上这个头。
+**替代路径（主控 2026-09-20 裁定，待实施）**：隐藏会话 id 本身就是 `app:<app_id>`，而出站头 `x-deepseek-harness-session-id` **天然带应用身份** ⇒ 服务端应**按会话 id 前缀派生归因**（`app:` ⇒ `app_id`），**不需要新头**。现状 = 服务端 `internal/llmgateway/app_attribution.go:36-65` 仍只读 `X-ZeoKeel-App-Id`、且**不校验该请求是否属会话链路** ⇒ §21.6 判据 8 的后半（伪造头的非会话请求被忽略并 warn）**在服务端未实现**。**本版如实认账：应用维度用量在真实环境里不会有数据**（面板按「统计尚未上线/无归因」显示，不显示 0）。
 
 > **2026-09-24 实施补记（R13-GB，替代路径已落地，且 id 形态按"账号作用域"加固）**：
 > 隐藏会话 id 由 `app:<app_id>` 改为 **`app:<app_id>#<账号作用域>`**（作用域 =
@@ -799,14 +799,14 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 > 与 assistant 回复；两路独立审计 B-P0-1 / R13-E-04 命中同一缺陷）。`app_id` 仍然**紧贴
 > 前缀**（服务端取第一个 `#` 之前的那段），所以 §21.4 的"按前缀派生归因"一字未改：
 > 服务端 `internal/llmgateway/app_session_id.go`（形状真源 `app-session-id.json`）+ 网关
-> 只认这条链路、自报头 `X-Pico-App-Id` 只识别并记 warn（§21.6 判据 8 的后半从此**已实现**）。
+> 只认这条链路、自报头 `X-ZeoKeel-App-Id` 只识别并记 warn（§21.6 判据 8 的后半从此**已实现**）。
 > 旧形态 `app:<app_id>` 继续归因（历史会话与未升级客户端不失效）。客户端两半：id 构造在
 > `packages/host/wasm-apps-host/src/ai-chat.ts`，换账号释放活体会话在
-> `packages/host/desktop/src/app-ai-runner.ts`（订阅 `pico/session-changed`，实现收口在叶子包
-> `@picoaide/dsh-host-locale/session-events`）。因此 §21.6 判据 5 的"元数据含 `app_id`"
+> `packages/host/desktop/src/app-ai-runner.ts`（订阅 `zeokeel/session-changed`，实现收口在叶子包
+> `@zeokeel/dsh-host-locale/session-events`）。因此 §21.6 判据 5 的"元数据含 `app_id`"
 > 仍按⑥那样读作"会话 id 可判定"，判据 8 的两半（正确归因 + 伪造头被忽略）现在都有用例。
 ⑥ **隐藏会话"元数据含 `app_id`"做不到**：`SessionHeader` 字段集封闭 + jsonl 头白名单会拒掉额外键（file:line 见该报告）⇒ `app_id` 目前只能从**会话 id** 与**出站会话头**推得。§21.6 判据 5 的"元数据含 `app_id`"应改为"**会话 id 前缀可判定**"。
-⑦ **客户端 UI 侧的应用 AI 面板到不了协议 handler**：`AppAiPanel` 渲染在客户端 UI（loopback 源），它 `fetch('/__picoaide/ai/chat')` 走的是 loopback 服务端，而该路径**全仓只有协议 handler 一处**（应用窗口内才是协议源）⇒ 面板的聊天链路**当前不通**（本轮只补齐了它的授权路由与宿主侧记录/撤销）。修法二选一（待拍板）：①给面板走一条**宿主本机 HTTP 路由**（与 `/api/pico/wasm-apps/open` 同族）；②面板不再承担聊天，只做"授权/用量/说明"，聊天由应用页自己调保留路径。**本版认账：面板聊天不可用。**
+⑦ **客户端 UI 侧的应用 AI 面板到不了协议 handler**：`AppAiPanel` 渲染在客户端 UI（loopback 源），它 `fetch('/__zeokeel/ai/chat')` 走的是 loopback 服务端，而该路径**全仓只有协议 handler 一处**（应用窗口内才是协议源）⇒ 面板的聊天链路**当前不通**（本轮只补齐了它的授权路由与宿主侧记录/撤销）。修法二选一（待拍板）：①给面板走一条**宿主本机 HTTP 路由**（与 `/api/zeokeel/wasm-apps/open` 同族）；②面板不再承担聊天，只做"授权/用量/说明"，聊天由应用页自己调保留路径。**本版认账：面板聊天不可用。**
 ⑧ **R2-L2-2 只做了一半**：`open` 响应 404/410 ⇒ 关窗 + 清缓存的触发源已实现（并修掉它的前置阻塞：此前**所有** 404 都被当"端点不存在"）；"客户端按目录对比"这一触发源**未做**。
 ⑨ **持久性缺口（自 W2 起）**：窗口状态与安装密钥的原子写**没有 fsync**（本地助手与上游 `@deepseek-ai/dsh-atomic-write` 都没有；上游 `.d.ts` 明写 *Crash durability (fsync) is out of scope*）⇒ "rename 已提交但数据仍在页缓存"的掉电窗口存在。
 
@@ -820,10 +820,10 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 
 | 面 | 今天的形态 | 零端口下的形态 | 迁移成本 |
 | --- | --- | --- | --- |
-| 应用内容与 AI 桥 | **我们自己的协议 handler**（`<app-scheme>://`）+ 保留路径 **`POST /__picoaide/ai/chat`**（§21.2） | 同（与端口无关） | **零** |
+| 应用内容与 AI 桥 | **我们自己的协议 handler**（`<app-scheme>://`）+ 保留路径 **`POST /__zeokeel/ai/chat`**（§21.2） | 同（与端口无关） | **零** |
 | 平台调用 | HTTPS + Bearer + app-proof，走 Chromium 栈 | 同 | **零** |
 | 应用窗口 | Electron `BrowserWindow`/view/分区 | 同 | **零** |
-| 客户端 UI → 本机打开路由 | `ctx.webServer.register('/api/pico/wasm-apps/open')`（**loopback 端口**） | 上游零端口的宿主请求通道（帧管道） | **小**（前提是本节的 R1/R2/R3 被遵守） |
+| 客户端 UI → 本机打开路由 | `ctx.webServer.register('/api/zeokeel/wasm-apps/open')`（**loopback 端口**） | 上游零端口的宿主请求通道（帧管道） | **小**（前提是本节的 R1/R2/R3 被遵守） |
 | 打开路由的授权 | `connection` 的 BrowserAuth cookie（`dsh-auth-*`）+ Host/Origin 围栏 + `http://127.0.0.1:${ctx.webServer.port}` 期望 Origin（`index.ts:292`） | 无 Cookie/Host/Origin ⇒ 必须换成**传输无关的持有性令牌** | **中**（不换就是重写） |
 | 客户端 UI 页面 | loopback HTTP 服务 | `dsh-app://` | 平台级迁移（不属于本次范围） |
 
@@ -832,7 +832,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 | # | 规则 | 判据（机器可查） |
 | --- | --- | --- |
 | **R1** | **本机 API 只冻结"路径 + 语义"，不冻结传输**：宿主侧所有本机路由经**唯一 seam**（`hostRequestSurface` 适配器：今天映射到 `ctx.webServer.register`，将来映射到零端口请求通道）注册 | 新包/客户端里 `webServer` 字面量只允许出现在 seam 模块；`grep -rn 'ctx.webServer' packages/host/wasm-apps-host/src` 仅 seam 一处 |
-| **R2** | **本机 API 的授权不得依赖 Cookie / Host / Origin / 端口**（零端口下都不存在）：必须用**请求头携带的持有性令牌**（与 §20 的 app-proof 同族；今天由宿主签发一次性 token 给渲染层，渲染层每次带 `X-Pico-Host-Proof`） | `grep -rn 'dsh-auth\|127.0.0.1\|webServer.port' packages/host/wasm-apps-host/src` 在 seam 之外**零命中**；用例：不带 proof 头的本机调用 ⇒ 401 |
+| **R2** | **本机 API 的授权不得依赖 Cookie / Host / Origin / 端口**（零端口下都不存在）：必须用**请求头携带的持有性令牌**（与 §20 的 app-proof 同族；今天由宿主签发一次性 token 给渲染层，渲染层每次带 `X-ZeoKeel-Host-Proof`） | `grep -rn 'dsh-auth\|127.0.0.1\|webServer.port' packages/host/wasm-apps-host/src` 在 seam 之外**零命中**；用例：不带 proof 头的本机调用 ⇒ 401 |
 | **R3** | **应用侧路径不得触碰本机服务**：应用页只能与「自己的 origin（协议 handler）」和「平台 HTTPS」说话；协议 handler 不得回调 loopback（否则零端口下直接死） | 用例：断言 handler 出站只有平台 URL；`grep -rn '<app-scheme>.*127.0.0.1'` 零命中 |
 | **R4** | **浏览器面不得能导航到 app scheme**（这是 §20.2 发起者绑定的另一半）：内置浏览器标签**不**允许 `will-navigate`/`window.open` 到 `<app-scheme>:`；只有应用窗口可以。任务书 C4 里"内置浏览器放行应用协议"的条目**作废**（R2 审计 P0-2 指出设计/任务书/代码三方矛盾） | 用例：http(s) 页面 `location.href='<app-scheme>://x/'` ⇒ **零新窗口、零请求**；`guard.ts` 的白名单只对应用窗口生效 |
 
@@ -841,7 +841,7 @@ desktop 组装期把 `deepLinkScheme` 与 `appOriginScheme` 注入新包（profi
 1. 把 seam 的实现从 `ctx.webServer.register` 换成零端口请求通道（**一处**）。
 2. 打开路由的 proof 从 Cookie 形态换成/复用 R2 的请求头令牌（**一处**校验点）。
 3. `write-proof.ts` 的 `requestRejection` 依赖（Cookie + Host/Origin 围栏）在零端口下换成宿主侧的调用方校验（**一处**）。
-4. 客户端 UI 的 `/api/pico/*` 相对路径不变（上游零端口仍以路径路由），无需改调用点。
+4. 客户端 UI 的 `/api/zeokeel/*` 相对路径不变（上游零端口仍以路径路由），无需改调用点。
 5. 跑 §13 的六组判据 + 真机探针（**判据不变**）。
 
 > 结论：**按 R1–R4 落地后，迁到零端口 = 换两个 seam 实现 + 跑一遍既有判据**，不需要重写应用协议、AI 桥、窗口管理、服务端或作者契约。

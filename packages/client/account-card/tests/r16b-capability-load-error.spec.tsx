@@ -17,7 +17,7 @@
  *   - `console.warn` 打一条可检索的行（`[capability] loading the <section> section failed: …`）。
  * 没有 message（形状漂移/非 Error）时保持原来那句「加载失败」。
  *
- * 为什么这条判据住在 `@picoaide/dsh-account-card`：与同目录
+ * 为什么这条判据住在 `@zeokeel/dsh-account-card`：与同目录
  * `capability-delisted-badge.spec.tsx` 同一取舍（enterprise 的测试环境是 node，
  * 没有 jsdom/react-dom；account-card 已声明该依赖边且自带 jsdom）。
  *

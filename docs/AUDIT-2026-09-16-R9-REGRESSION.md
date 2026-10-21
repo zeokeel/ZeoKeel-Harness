@@ -43,7 +43,7 @@
 | P2-2 | 连接器失败**分类**迁移漏包：RFC 8414 元数据里被出站策略拒绝的 authorize/token 端点落 `error`（base 是 `unauthorized`），英文界面还被套回通用兜底 | `39692cac6e` | 这两步走 `flowUrl()`（带稳定 code）；刷新路径解包 `cause` 保留「出站策略拒绝」语义 |
 | P2-3 | `server-side` 定义缺 `fetchToken`（配置错误）被误判成「需要授权」，面板让用户去重新授权一个永不可能成功的连接器 | `39692cac6e` | 改回普通 Error（配置错误 ≠ 授权问题） |
 | P2-4 | shell 页 `empty` 文案是唯一未转义的 HTML 汇点（i18n 把写死的 `<br/>` 搬进了译文表） | `39692cac6e` | 文案改 `\n` 分行 + 渲染器逐行转义后自己插 `<br/>`；`lang` 属性同步转义 |
-| P2-5 | 语言切换到达不了**已打开**的浏览器窗口：两个 chrome 页按请求渲染、创建后不再请求，切语言后工具栏/胶囊/面板/查看器全停旧语言 | `39692cac6e` | 桌面在语言**真变化**时 emit `pico/locale-changed`；浏览器只 reload 两个 chrome 页（不碰标签页），全程异常围栏 |
+| P2-5 | 语言切换到达不了**已打开**的浏览器窗口：两个 chrome 页按请求渲染、创建后不再请求，切语言后工具栏/胶囊/面板/查看器全停旧语言 | `39692cac6e` | 桌面在语言**真变化**时 emit `zeokeel/locale-changed`；浏览器只 reload 两个 chrome 页（不碰标签页），全程异常围栏 |
 | P2-6 | `capabilities` 里 `AppOfficialMap` 查询失败被吞：审批队列/能力中心把所有官方内容标成非官方（与事实相反的管理视图） | 部分（`9510ab058f` 只修了 skills 分支） | 三处一律 fail-loud 500（skills / agents / 能力中心） |
 | P2-7 | 门禁假绿：`--concurrency <非数字>` ⇒ 0 个 worker，**7 个根守卫与 desktop check 一个都不跑**且 exit 0 | pre-existing（本轮修） | 非法值直接报错退出（实测用法错误 exit 2） |
 | P2-8 | i18n 机制漏网：`branding` 的「关于」导航标签硬编码英文；`/` 索引渲染拿不到请求头 ⇒ 浏览器部署首屏恒中文而同浏览器 `/login` 是英文 | `39692cac6e` | 标签改 thunk + 字典键；`hostLocale` 增加「客户端设置偏好」一档（运行时之下、请求头之上） |

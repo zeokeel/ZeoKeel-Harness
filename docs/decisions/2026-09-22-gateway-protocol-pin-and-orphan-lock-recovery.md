@@ -79,7 +79,7 @@ settings 的解析顺序是 schema 缺省 → **组装 base** → user 层，缺
 `<home>/settings.yaml.lock` 与 `<home>/.credentials.yaml.lock` 做一次判定。
 
 **每条删除判据都自带证据，不依赖"同一数据根只有一个实例"**——那个前提是错的：
-渠道包可以共用数据根（beta 渠道的 `home_dir` 就是官方目录 `.picoaide-harness`），
+渠道包可以共用数据根（beta 渠道的 `home_dir` 就是官方目录 `.zeokeel-harness`），
 而 Electron 单实例锁在**按渠道分流**的 userData 里，两个渠道的客户端可以同时跑在
 同一数据根上。
 
@@ -146,7 +146,7 @@ settings 的解析顺序是 schema 缺省 → **组装 base** → user 层，缺
 | **能力**：真组合树里 settings 带**现场形态**的 `llm-deepseek` 段（无 protocol）时，解析值仍是 chat-completions 且该段其它字段保留 | 同上（`ctx.settings.get` 读的就是适配器读的那份值） | patch 被静默跳过/被替换 → 红 |
 | 打包产物必须含 `lib/document-lock-recovery.js` 与 `lib/network-policy.js`（`lib/main.js` 静态 import 的两个独立 tsdown 入口） | `scripts/verify-packaged-runtime.ts` 的 `REQUIRED_PACKAGED_RUNTIME_ENTRIES`（afterPack 逐条断言） | 入口改名/漏构建 → 打包门禁红（否则 import 期 `ERR_MODULE_NOT_FOUND`，窗口都起不来） |
 | **产物自证**：归档里**桌面自身每个** `lib/**/*.js` 的相对 `./x.js` import 都必须在归档内（含内容哈希 chunk；chunk 引用 chunk 也判） | `scripts/verify-packaged-runtime.ts` 的 `assertRelativeImportsPresent`（asar 布局） | 去掉某个 chunk / 把判据退回"只查 main.js" → 对应用例红（已知边界：`../`、`.cjs`/`.mjs`、`require(` 不入判据；物理布局分支不跑，注释已写明） |
-| **覆盖面**：`@picoaide/*` 插件包**包内** chunk 不在 afterPack 判据内，兜它的是 `scripts/verify-profile-boot.mjs`（`yarn check` 内、真组合树 boot，缺 chunk 会抛）与 `e2e:client`（只在 Linux CI 跑） | 同上注释 + 两条 spine 判据 | 删插件包内 chunk → 冒烟红（`verify:closure` **不是**兜底：它只走 package.json 依赖/peer 图） |
+| **覆盖面**：`@zeokeel/*` 插件包**包内** chunk 不在 afterPack 判据内，兜它的是 `scripts/verify-profile-boot.mjs`（`yarn check` 内、真组合树 boot，缺 chunk 会抛）与 `e2e:client`（只在 Linux CI 跑） | 同上注释 + 两条 spine 判据 | 删插件包内 chunk → 冒烟红（`verify:closure` **不是**兜底：它只走 package.json 依赖/peer 图） |
 | **复检的内容比较**：注入 `readFile` 返回与判定时不同的字节 ⇒ 必须拒绝删除（与文件系统/inode 复用/时间戳精度无关）；读取次数判据钉"stat 与类型守卫都在读之前" | `tests/document-lock-recovery.spec.ts`（`re-checks content…` / `short-circuits on the stat comparison…` / `never reads a swapped-in symlink…` / `compares the re-read bytes…`） | 去掉内容比较 / 把读提到 stat 之前 / 绕过 `readFile` 接缝 → **任何文件系统**都红；"把 `isFile()` 守卫挪到读之后"只在**复用 inode** 的文件系统（ext4，CI 的形态）上红 |
 
 ## 4. 升级注意
@@ -173,8 +173,8 @@ use a Messages-compatible baseURL`），配了这个键的行**激活即抛错**
 
 - 组装期**禁用**上游那一行 `llm-deepseek`（它是 `@deepseek-ai/dsh-llm-deepseek-api-key`，
   `resolveAuth` 硬编码 `x-api-key`，没有换头的接缝 ⇒ 对只认 `Authorization: Bearer` 的
-  网关必然 401），并插入自研行 `picoaide-gateway-llm`
-  （`@picoaide/dsh-enterprise/gateway-llm`）：同一份 Config 形状、同一个 provider 路由
+  网关必然 401），并插入自研行 `zeokeel-gateway-llm`
+  （`@zeokeel/dsh-enterprise/gateway-llm`）：同一份 Config 形状、同一个 provider 路由
   `deepseek-official`，令牌在**每次请求前**从 `credentials` 服务解析，作为
   `Authorization: Bearer` 发出；缺令牌时抛 `MISSING_CREDENTIAL` 且**一个请求都不发**。
 - `gateway-model.ts` 只写 `baseURL`（不再写 `protocol`，也不再写 `apiKeyEnv` —— 后者在本行的

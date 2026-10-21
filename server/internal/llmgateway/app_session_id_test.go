@@ -13,13 +13,13 @@ package llmgateway
 //	   客户端那侧由 `packages/host/wasm-apps-host/src/app-session-id-contract.spec.ts`
 //	   跑同一个文件的另一半（用户 + 服务端 + 应用 ⇒ session_id）。任何一端改了形状，
 //	   另一端必红。
-//	③ **非会话链路不归因**：普通会话 id / 自报头（`X-Pico-App-Id`）/ 畸形前缀一律空串。
+//	③ **非会话链路不归因**：普通会话 id / 自报头（`X-ZeoKeel-App-Id`）/ 畸形前缀一律空串。
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // TestAppSessionIDContractMatchesPlatformRules 钉住"契约 == 平台权威规则"。

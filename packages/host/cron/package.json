@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-cron",
+  "name": "@zeokeel/dsh-cron",
   "version": "0.1.0",
-  "description": "Host cron scheduler for PicoAide Harness: 5-field cron parsing, Host-authoritative job ledger, missed-trigger semantics, and a scheduled job executor (task / prompt actions)",
+  "description": "Host cron scheduler for ZeoKeel Harness: 5-field cron parsing, Host-authoritative job ledger, missed-trigger semantics, and a scheduled job executor (task / prompt actions)",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -27,7 +27,7 @@
         "@deepseek-ai/dsh-client-store",
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-slots",
-        "@picoaide/dsh-foot-menu"
+        "@zeokeel/dsh-foot-menu"
       ],
       "platform": "web"
     }
@@ -47,7 +47,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.4",
-    "@picoaide/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
@@ -85,11 +85,11 @@
     "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
     "@deepseek-ai/dsh-timeout": "0.2.1-rc.2",
     "@deepseek-ai/dsh-workspace": "0.2.1-rc.2",
-    "@picoaide/dsh-foot-menu": "workspace:*",
-    "@picoaide/dsh-panel-surface": "workspace:*",
     "@types/node": "^22.20.0",
     "@types/react": "~18.3.1",
     "@types/react-dom": "^18.3.5",
+    "@zeokeel/dsh-foot-menu": "workspace:*",
+    "@zeokeel/dsh-panel-surface": "workspace:*",
     "dsh-plugin-desktop": "workspace:*",
     "jsdom": "^25.0.0",
     "react": "^18.3.1",

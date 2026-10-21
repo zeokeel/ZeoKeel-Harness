@@ -43,7 +43,7 @@ describe('ServerInfo update check', () => {
         latest: '2.6.0',
         update_available: true,
         image_tag: 'v2.6.0',
-        manifest_url: 'https://release.picoaide.com/official/latest.json',
+        manifest_url: 'https://release.zeokeel.com/official/latest.json',
         checked_at: '2026-08-31T02:00:00Z',
       },
     })
@@ -56,7 +56,7 @@ describe('ServerInfo update check', () => {
     expect(screen.getByText('v2.6.0')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /查看更新信息/ })).toHaveAttribute(
       'href',
-      'https://release.picoaide.com/official/latest.json',
+      'https://release.zeokeel.com/official/latest.json',
     )
   })
 
@@ -69,7 +69,7 @@ describe('ServerInfo update check', () => {
         latest: '2.6.0',
         update_available: false,
         image_tag: 'v2.6.0',
-        manifest_url: 'https://release.picoaide.com/official/latest.json',
+        manifest_url: 'https://release.zeokeel.com/official/latest.json',
         checked_at: '2026-08-31T02:00:00Z',
       },
     })

@@ -958,7 +958,7 @@ describe('2026-09-15 BUG-04：browser_fill_form 的提交目标与受控写入',
 
     const error = await fail(harness.runtime.fillForm(1, [
       { field: 'user', value: 'alice' },
-      { field: 'q', value: 'picoaide' },
+      { field: 'q', value: 'zeokeel' },
     ], true))
     expect(error.message).toMatch(/ambiguous/u)
     expect(run.submitted).toEqual([])

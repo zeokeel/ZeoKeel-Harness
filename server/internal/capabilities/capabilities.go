@@ -17,10 +17,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/marketplace"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/marketplace"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // CapabilityKind is the content type discriminator.
@@ -394,7 +394,7 @@ func listCapabilities(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		includeMarket := src == "" || src == "market"
 		includeOrg := src == "" || src == "market" || src == "org"
 		// own:作者本人上传的任意状态行(「我的」分区专用)。客户端
-		// /api/pico/capabilities?source=local 经宿主转换为 source=own,
+		// /api/zeokeel/capabilities?source=local 经宿主转换为 source=own,
 		// 用于渲染本地上传行的 status/reason 徽章(2026-09-01 契约修复:
 		// 此前 org 仅 approved 且 a6eed6397d 过滤掉 own 非 approved 行,
 		// 徽章与拒因恒空)。

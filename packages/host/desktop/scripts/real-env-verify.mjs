@@ -1,6 +1,6 @@
 /**
  * Real-environment client verification: drive the packaged app against the
- * real picoaide gateway with a provided test account, walk every client
+ * real zeokeel gateway with a provided test account, walk every client
  * surface, capture screenshots, and emit a Markdown report.
  *
  * Usage:
@@ -123,7 +123,7 @@ async function clickLabel(label, waitMs = 2500) {
  */
 async function openFootMenu(waitMs = 700) {
   const clicked = await ev(`(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row === null || row.offsetParent === null) return 'NOT_FOUND'
     if (row.getAttribute('aria-expanded') === 'true') return 'ALREADY_OPEN'
     row.click()
@@ -132,7 +132,7 @@ async function openFootMenu(waitMs = 700) {
   if (clicked === 'NOT_FOUND') return 'NOT_FOUND'
   await wait(waitMs)
   const open = await ev(`(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row === null) return false
     const menu = document.getElementById(row.getAttribute('aria-controls') ?? '')
     return row.getAttribute('aria-expanded') === 'true' && menu !== null && getComputedStyle(menu).display !== 'none'
@@ -143,7 +143,7 @@ async function openFootMenu(waitMs = 700) {
 
 /**
  * 点开「更多」浮层里的一个条目（先开浮层），并断言面板真的接管了中列。
- * @param label - 条目文案（`.pico-foot-menu-item` 的可见文本）。
+ * @param label - 条目文案（`.zeokeel-foot-menu-item` 的可见文本）。
  * @param panelId - 期望的 panel-surface PanelId。
  * @param waitMs - settle time after the click.
  * @returns `'CLICKED'` / `'NOT_FOUND'` / `'OPEN_FAILED'` / `'NOT_ACTIVE'`.
@@ -152,7 +152,7 @@ async function openPanelFromFootMenu(label, panelId, waitMs = 3000) {
   const opened = await openFootMenu()
   if (opened !== 'OPENED' && opened !== 'ALREADY_OPEN') return opened === 'NOT_FOUND' ? 'NOT_FOUND' : 'OPEN_FAILED'
   const clicked = await ev(`(() => {
-    const items = [...document.querySelectorAll('.pico-foot-menu-item')].filter(b => b.offsetParent)
+    const items = [...document.querySelectorAll('.zeokeel-foot-menu-item')].filter(b => b.offsetParent)
     const hit = items.find(b => (b.textContent ?? '').trim() === ${esc(label)})
     if (hit === undefined) return 'NOT_FOUND'
     hit.click()
@@ -289,7 +289,7 @@ try {
   // `schedules` 面板接管 main；不再有 data-dsh-panel-active（那是自研面板协议）。
   const scheduleOpened = await openFootMenu()
   const scheduleClicked = await ev(`(() => {
-    const items = [...document.querySelectorAll('.pico-foot-menu-item')].filter(b => b.offsetParent)
+    const items = [...document.querySelectorAll('.zeokeel-foot-menu-item')].filter(b => b.offsetParent)
     const hit = items.find(b => (b.textContent ?? '').trim() === '自动化任务')
     if (hit === undefined) return 'NOT_FOUND'
     hit.click()
@@ -335,7 +335,7 @@ try {
 // --- report ---
 const failed = results.filter(r => !r.ok)
 const lines = [
-  '# PicoAide Harness 真实环境客户端验证报告',
+  '# ZeoKeel Harness 真实环境客户端验证报告',
   '',
   `- 时间：${new Date().toISOString()}`,
   `- 服务：${SERVER}`,

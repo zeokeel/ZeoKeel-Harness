@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // LocalProvider authenticates against the local users table.

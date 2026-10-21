@@ -17,7 +17,7 @@ vi.mock('../components/chart-lazy', () => ({
 //   限制项 = 原「应用平台」页,测试在 AppPlatform.test.tsx(渲染 app-center/Limits)
 //
 // 2026-09-19 WASM 客户端专属改造:原「设置」子页(应用域名/泛域名)整页删除 ——
-// 应用只在桌面客户端内以 `picoaide-app://<app_id>/` 打开,服务端的基域配置面
+// 应用只在桌面客户端内以 `zeokeel-app://<app_id>/` 打开,服务端的基域配置面
 // (`wasm.apps_base_domain`、`GET/PUT /wasm-apps/domain`)随之删除(契约 §4.4/§4.5)。
 // 本文件里那一整组设置页用例随之删除;`access:'public'` 夹具**保留为历史值用例**,
 // 断言新口径(渲染成「已退役（历史值）」而不是「公开」)。

@@ -23,7 +23,7 @@ import * as SentryNode from '@sentry/node'
  *    错误"里,`enabled !== true`、`validateBootstrap` 回退 `EMPTY`、init 抛错
  *    三条路径此前**连日志都没有**,管理员在后台看到的是"健康"与"坏掉"一模一样;
  *  - **正向心跳**(P1-2):`web.error_reporting_heartbeat` 打开后,每次进程启动发
- *    一条带 `picoaide.heartbeat` tag 的 info 事件,**只对该 tag 绕过**等级阈值
+ *    一条带 `zeokeel.heartbeat` tag 的 info 事件,**只对该 tag 绕过**等级阈值
  *    —— `error_reporting_level` 的语义**未改变**;
  *  - **状态上报服务端**(P1-3):把状态回传管理端,管理员一眼看到 N 台已启用 /
  *    M 台失败,不再靠猜;
@@ -33,7 +33,7 @@ import * as SentryNode from '@sentry/node'
 export const name = 'error-reporting'
 
 /** Services consumed: the session service providing login/logout lifecycle. */
-export const inject = ['picoSession']
+export const inject = ['zeokeelSession']
 
 /** Desktop release 版本:从 dsh-plugin-desktop 包读取真实产品版本(如 2.4.0),
  * 用于 GlitchTip 按版本区分报错(release 字段)。读取失败回退 0.1.0。 */
@@ -195,7 +195,7 @@ export const SDK_REJECTED_DSN_REASON =
 const LEVEL_RANK: Record<string, number> = { debug: 10, info: 20, warning: 30, error: 40, fatal: 50 }
 
 /** 心跳事件的 tag 名:只有带它的 event 才绕过等级阈值(D4 的显式例外)。 */
-export const HEARTBEAT_TAG = 'picoaide.heartbeat'
+export const HEARTBEAT_TAG = 'zeokeel.heartbeat'
 
 // 每进程只发一次心跳(重 init/登出重登不重复);开关打开时才置位。
 let heartbeatSent = false
@@ -334,8 +334,8 @@ export function captureRendererError(payload: RendererErrorPayload): boolean {
   try {
     const error = new Error(payload.message === '' ? 'renderer error' : payload.message)
     if (typeof payload.stack === 'string' && payload.stack !== '') error.stack = payload.stack
-    const tags: Record<string, string> = { 'picoaide.process': 'renderer', 'picoaide.kind': payload.type }
-    if (typeof payload.url === 'string' && payload.url !== '') tags['picoaide.url'] = payload.url
+    const tags: Record<string, string> = { 'zeokeel.process': 'renderer', 'zeokeel.kind': payload.type }
+    if (typeof payload.url === 'string' && payload.url !== '') tags['zeokeel.url'] = payload.url
     const extra: Record<string, unknown> = {
       source: payload.source,
       lineno: payload.lineno,
@@ -364,7 +364,7 @@ export function captureRendererError(payload: RendererErrorPayload): boolean {
  *
  * ★ 修复轮 1(F-10,复核结论 P2):此前崩溃面走 `captureMessage(message, 'error')`
  *   —— 第二参是 **level**,不带 tags,于是崩溃事件在后台**没有任何 tag**
- *   (对照 `captureRendererError` 带 `picoaide.process=renderer`),无法用统一 tag
+ *   (对照 `captureRendererError` 带 `zeokeel.process=renderer`),无法用统一 tag
  *   一次筛出"渲染进程相关问题"。现在改成 `captureMessage(message, { level, tags,
  *   extra })`(CaptureContext 形式),tag 与异常分支保持一致。
  */
@@ -378,10 +378,10 @@ export function captureRendererGone(details: { reason: string; exitCode?: number
     const exitCode = details.exitCode ?? 0
     const message = `渲染进程崩溃 (reason: ${details.reason}, exitCode: ${String(exitCode)})`
     const tags: Record<string, string> = {
-      'picoaide.process': 'renderer',
-      'picoaide.kind': 'render-process-gone',
-      'picoaide.reason': details.reason,
-      'picoaide.exit_code': String(exitCode),
+      'zeokeel.process': 'renderer',
+      'zeokeel.kind': 'render-process-gone',
+      'zeokeel.reason': details.reason,
+      'zeokeel.exit_code': String(exitCode),
     }
     const extra: Record<string, unknown> = { reason: details.reason, exitCode }
     if (typeof mod.captureMessage === 'function') {
@@ -507,7 +507,7 @@ export async function reportErrorReportingStatus(
   // 已成功或已在飞 ⇒ 不重复发。
   if (reportedStatusKeys.has(key) || pendingStatusKeys.has(key)) return false
   pendingStatusKeys.add(key)
-  const body: Record<string, string> = { state: value.state, release: `picoaide-desktop@${DESKTOP_VERSION}` }
+  const body: Record<string, string> = { state: value.state, release: `zeokeel-desktop@${DESKTOP_VERSION}` }
   if ('reason' in value && value.reason !== '') body.reason = value.reason.slice(0, 200)
   if ('dsnHost' in value && value.dsnHost !== undefined && value.dsnHost !== '') body.dsn_host = value.dsnHost
   if ('level' in value && value.level !== '') body.level = value.level
@@ -535,7 +535,7 @@ export function apply(ctx: Context): void {
   ctx.logger?.debug('error-reporting: plugin applied')
   // release 用桌面客户端包版本(粗粒度够用;sourcemap 可按需细化)。
   // 编译期由 tsdown define 注入;缺省回退 "0.1.0"(与 enterprise package.json 一致)。
-  const release = `picoaide-desktop@${DESKTOP_VERSION}`
+  const release = `zeokeel-desktop@${DESKTOP_VERSION}`
   // Z2-01：会话代际守卫（唯一实现见 session-epoch.ts）。本插件的 await 面最深
   // （bootstrap 缺省 15s + initSentry 最长 1.5s 冲刷），而它落地的是"错误往哪台
   // 采集端发"：迟到的旧响应会把 Sentry DSN 改回上一台服务端（栈/URL/用户名外泄），

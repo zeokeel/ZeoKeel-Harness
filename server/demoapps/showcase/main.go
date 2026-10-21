@@ -37,8 +37,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/demoapps/internal/demoapp"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/demoapps/internal/demoapp"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 )
 
 // ---------------------------------------------------------------------------
@@ -289,8 +289,8 @@ func handleWhoami(a *demoapp.App) demoapp.Response {
 		"explain": map[string]string{
 			"login":     "login：要求登录。登录后全员可用 —— 平台注入身份（user）并把 auth.mode 置为 login，应用不需要任何登录逻辑。",
 			"whitelist": "whitelist：要求登录「且」应用自己比对名单。平台同样只注入身份与模式（auth.mode=whitelist），不比对、也不校验名单里的账号是否存在（否则等于账号枚举接口）。",
-			"r24":       "R24：名单判定永远在应用侧。应用的入口第一件事就是读自己的 picoaide.app.json 比对，不在名单里返回 403 页面并显示「本人账号」。",
-			"where":     "名单放 picoaide.app.json（平台保留资源，永不直出）：放进会被直出的非保留资源，等于把名单公开给任何能打开应用的人。",
+			"r24":       "R24：名单判定永远在应用侧。应用的入口第一件事就是读自己的 zeokeel.app.json 比对，不在名单里返回 403 页面并显示「本人账号」。",
+			"where":     "名单放 zeokeel.app.json（平台保留资源，永不直出）：放进会被直出的非保留资源，等于把名单公开给任何能打开应用的人。",
 		},
 		"traces": a.Traces(),
 	})
@@ -427,7 +427,7 @@ func handleRun(a *demoapp.App) demoapp.Response {
 
 	// 7) 包内资源：入口页（非保留资源）与配置（保留资源）。
 	steps = append(steps, assetStep(a, "asset_entry", "包内资源 · assets.read(\"index.html\")", demoapp.EntryAssetPath))
-	steps = append(steps, assetStep(a, "asset_config", "保留资源 · assets.read(\"picoaide.app.json\")", demoapp.AppConfigPath))
+	steps = append(steps, assetStep(a, "asset_config", "保留资源 · assets.read(\"zeokeel.app.json\")", demoapp.AppConfigPath))
 
 	// 收尾：把表里最近的行读出来（历史证据）。
 	from = len(a.Traces())
@@ -938,7 +938,7 @@ func envelopeText(herr *demoapp.HostError) string {
 
 // serveAsset 在 wasm 里读一次包内资源（宿主直出没命中时才会走到）。
 //
-// 保留资源与宿主命名空间**必须**在这里挡住：`picoaide.app.json` 里有名单，
+// 保留资源与宿主命名空间**必须**在这里挡住：`zeokeel.app.json` 里有名单，
 // 平台永不直出它，应用自己也不能把它当普通资源发出去。
 func serveAsset(a *demoapp.App) (demoapp.Response, bool) {
 	logical := strings.TrimPrefix(a.Path(), "/")
@@ -948,7 +948,7 @@ func serveAsset(a *demoapp.App) (demoapp.Response, bool) {
 	if strings.EqualFold(logical, demoapp.AppConfigPath) {
 		return demoapp.Fail(404, "NOT_FOUND", "保留资源不对外直出：它只由应用自己用 assets.read 读取"), true
 	}
-	if logical == "__picoaide" || strings.HasPrefix(logical, "__picoaide/") {
+	if logical == "__zeokeel" || strings.HasPrefix(logical, "__zeokeel/") {
 		return demoapp.Fail(404, "NOT_FOUND", "宿主保留命名空间：请求到不了应用，这里只是兜底"), true
 	}
 	asset, herr := a.AssetRead(logical)

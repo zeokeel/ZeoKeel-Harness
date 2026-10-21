@@ -3,7 +3,7 @@
  *
  *  · F1：`apply()` 同步跑完，而 `SessionService.restore()` 的赋值/emit 都在
  *    `await` 之后 —— 带持久会话开机时 `currentUser()` 在构造那一刻常为 null，
- *    分区/store 会先落在匿名桶上。旧实现只靠 `pico/session-changed` 纠正，
+ *    分区/store 会先落在匿名桶上。旧实现只靠 `zeokeel/session-changed` 纠正，
  *    这正是本轮现场 P0 的同一结构（一次性采样 + 只等一个可能不来的事件）。
  *  · F2：用户切换链把 `closeAll` 放链首，一次抛错就跳过分区/store/交接切换
  *    （界面已换账号、浏览器还在旧账号的数据上）。
@@ -42,7 +42,7 @@ function harness(options: HarnessOptions = {}): Record<string, unknown> {
     : { username: options.username }
   return {
     get: (name: string) => {
-      if (name === 'picoSession') {
+      if (name === 'zeokeelSession') {
         const restored = (): boolean => options.restoredRef?.value ?? options.restored === true
         return { isRestored: restored, getSession: () => session }
       }
@@ -50,7 +50,7 @@ function harness(options: HarnessOptions = {}): Record<string, unknown> {
       return undefined
     },
     on: (event: string, listener: (next: unknown) => void) => {
-      if (event === 'pico/session-changed') sessionListeners.push(listener)
+      if (event === 'zeokeel/session-changed') sessionListeners.push(listener)
       return () => {}
     },
     effect: (fn: () => unknown) => {
@@ -90,19 +90,19 @@ describe('启动期等"会话已恢复"再建浏览器窗口（审计 F1）', ()
     // 恢复完成 → 立刻 prewarm（测试宿主里建窗失败，正好给出可断言的信号）
     restoredRef.value = true
     await new Promise((resolve) => { setTimeout(resolve, 250) })
-    expect(warn).toHaveBeenCalledWith('pico-browser: prewarm failed', expect.any(Error))
+    expect(warn).toHaveBeenCalledWith('zeokeel-browser: prewarm failed', expect.any(Error))
   })
 
-  it('没有 picoSession 的宿主（headless/单测）不等，照旧立刻 prewarm', async () => {
+  it('没有 zeokeelSession 的宿主（headless/单测）不等，照旧立刻 prewarm', async () => {
     const warn = vi.fn()
     const ctx = harness({ username: null })
     ;(ctx.logger as { warn: unknown }).warn = warn
-    // 抹掉 picoSession 服务：isRestored 不可用 ⇒ 不等待
+    // 抹掉 zeokeelSession 服务：isRestored 不可用 ⇒ 不等待
     const original = ctx.get as (name: string) => unknown
-    ctx.get = (name: string) => name === 'picoSession' ? undefined : original(name)
+    ctx.get = (name: string) => name === 'zeokeelSession' ? undefined : original(name)
     apply(ctx as never, {})
     await new Promise((resolve) => { setTimeout(resolve, 150) })
-    expect(warn).toHaveBeenCalledWith('pico-browser: prewarm failed', expect.any(Error))
+    expect(warn).toHaveBeenCalledWith('zeokeel-browser: prewarm failed', expect.any(Error))
   })
 })
 
@@ -121,7 +121,7 @@ describe('用户切换链的容错与顺序（审计 F2）', () => {
     // 且清理失败后其后的身份切换/预热必须照做。
     expect(calls).toEqual(['close', 'scope', 'ops', 'rebuild'])
     expect(warn).toHaveBeenCalledWith(
-      'pico-browser: closing tabs during the user switch failed',
+      'zeokeel-browser: closing tabs during the user switch failed',
       expect.any(Error),
     )
   })
@@ -153,7 +153,7 @@ describe('fence 判据与闸门同口径（审计 F3）', () => {
   it('fence 只有一半可用时，写面按 503 fail-closed（不是 401）', async () => {
     const ctx = harness({ fence: { requestRejection: 'nope' } })
     apply(ctx as never, {})
-    const route = routes.find((r) => r.kind === 'prefix' && r.path === '/api/pico/browser')
+    const route = routes.find((r) => r.kind === 'prefix' && r.path === '/api/zeokeel/browser')
     expect(route).toBeDefined()
     let code = 0
     const res = {
@@ -162,7 +162,7 @@ describe('fence 判据与闸门同口径（审计 F3）', () => {
     } as unknown as never
     await route!.handler({
       method: 'POST',
-      url: '/api/pico/browser/takeover',
+      url: '/api/zeokeel/browser/takeover',
       headers: { host: '127.0.0.1:3080', origin: 'http://127.0.0.1:3080', 'sec-fetch-site': 'same-origin' },
       socket: { remoteAddress: '127.0.0.1' },
       [Symbol.asyncIterator]: async function* () { yield Buffer.from('{}') },

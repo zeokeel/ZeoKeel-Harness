@@ -17,7 +17,7 @@
 # attempt 必须共用前缀,理由见下面 `RUN` 那一段)。`<TOKEN>` =
 # HMAC(R2_SECRET_ACCESS_KEY, RUN) 的前 16 位 —— 只有持有 R2 凭据的 job 能算出这个
 # 前缀,因此**无法按 run id 猜出对象地址**(桶本身是公开读的:
-# release.picoaide.com 的 R2 自定义域)。`<index>` 是 channels.list 里的行号:
+# release.zeokeel.com 的 R2 自定义域)。`<index>` 是 channels.list 里的行号:
 # 中转路径不含渠道 id,渠道身份全程不出现在任何公开处。
 #
 # 用法(两组凭据都要给:aws CLI 认 AWS_*,R2_* 用于端点/桶名与 HMAC 种子):

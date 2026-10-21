@@ -16,9 +16,9 @@
  *  1. 前提（因果）：超长名字确实被 pinned 上游注册表加载、被 `listInstalledSkills`
  *     列出 —— 所以"删不掉"是真缺陷，不是我们多列了一行；
  *  2. 安装器：`uninstallSkill` 必须删得掉（旧实现抛 `NAME_INVALID`）；
- *  3. 路由面（三类入口都过）：市场 `/api/pico/skills/:name/uninstall`、
- *     内置 `/api/pico/skills/builtin/:name/uninstall`、
- *     组织 `/api/pico/shared-skills/:name/:version/uninstall` 三条都回 200；
+ *  3. 路由面（三类入口都过）：市场 `/api/zeokeel/skills/:name/uninstall`、
+ *     内置 `/api/zeokeel/skills/builtin/:name/uninstall`、
+ *     组织 `/api/zeokeel/shared-skills/:name/:version/uninstall` 三条都回 200；
  *  4. 反向对照（写侧上限**不许**放宽）：同一个名字走 `install` 与 `packSkill` 仍然
  *     400/抛 —— 写侧规则只决定"我们装什么"，不决定"能不能删掉盘上那一份"。
  *
@@ -124,9 +124,9 @@ describe('R21-A1-04 超长名字：运行时加载/面板列得出 ⇒ 删除面
 
     // 三条入口分属两个 prefix 路由（技能面 / 组织共享面）。
     const routes: ReadonlyArray<readonly [label: string, route: string, url: string]> = [
-      ['市场', '/api/pico/skills', `/api/pico/skills/${LONG_NAME}/uninstall`],
-      ['内置', '/api/pico/skills', `/api/pico/skills/builtin/${LONG_NAME}/uninstall`],
-      ['组织', '/api/pico/shared-skills', `/api/pico/shared-skills/${LONG_NAME}/1.0.0/uninstall`],
+      ['市场', '/api/zeokeel/skills', `/api/zeokeel/skills/${LONG_NAME}/uninstall`],
+      ['内置', '/api/zeokeel/skills', `/api/zeokeel/skills/builtin/${LONG_NAME}/uninstall`],
+      ['组织', '/api/zeokeel/shared-skills', `/api/zeokeel/shared-skills/${LONG_NAME}/1.0.0/uninstall`],
     ]
     for (const [label, route, url] of routes) {
       await seedLongNamedSkill(skillsDir)
@@ -149,7 +149,7 @@ describe('R21-A1-04 超长名字：运行时加载/面板列得出 ⇒ 删除面
 
     const h = harness(SESSION)
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/skills')(fakeReq('POST', `/api/pico/skills/${LONG_NAME}/install`), res)
+    await h.handler('/api/zeokeel/skills')(fakeReq('POST', `/api/zeokeel/skills/${LONG_NAME}/install`), res)
     expect(read().code, '安装面（写侧）必须继续拒超长名字').toBe(400)
 
     const dir = await seedLongNamedSkill(skillsDir)

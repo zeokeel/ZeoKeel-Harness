@@ -163,9 +163,9 @@ describe('advanced desktop layout', () => {
 
   it('selects a registered main panel and rejects an unknown key', () => {
     const layout = new DesktopLayoutState(1440)
-    layout.retainMainPanels(['conversation', 'pico-cron'])
-    layout.selectPanel('pico-cron' as MainPanelId)
-    expect(layout.getSnapshot().panelInfo.activePanelId).toBe('pico-cron')
+    layout.retainMainPanels(['conversation', 'zeokeel-cron'])
+    layout.selectPanel('zeokeel-cron' as MainPanelId)
+    expect(layout.getSnapshot().panelInfo.activePanelId).toBe('zeokeel-cron')
     expect(() => { layout.selectPanel('missing' as MainPanelId) }).toThrow('is not registered')
     // A panel that disappears must not stay selected.
     layout.retainMainPanels(['conversation'])

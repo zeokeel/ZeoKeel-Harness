@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	wasmregistry "github.com/picoaide/picoaide/internal/wasmapp/registry"
+	wasmregistry "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // 本文件是审计 S7-R §3.4「顺带发现」的判据化（2026-10-04，修复代理 P2）：
@@ -111,7 +111,7 @@ func TestServingSideAcceptsRouteStaticSegmentsButStillBlocksReserved(t *testing.
 //
 // 扫不到 registry import / 一个调用点都没有 ⇒ **Fatal**（判据的扫描面缺失不得静默通过）。
 func TestAppServerOnlyCallsServingVariant(t *testing.T) {
-	const registryImport = "github.com/picoaide/picoaide/internal/wasmapp/registry"
+	const registryImport = "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 	const servingSel = "ValidateAppIDForServing"
 	const writeSel = "ValidateAppID"
 

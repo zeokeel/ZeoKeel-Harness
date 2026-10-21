@@ -10,7 +10,7 @@
  * 页面**不需要脚本**：即使渲染器给自定义协议响应套上 `default-src 'none'`，
  * 文字也照常可读（样式会退化，可读性不退化）。
  *
- * @module @picoaide/dsh-wasm-apps-host/pages
+ * @module @zeokeel/dsh-wasm-apps-host/pages
  */
 
 import { hostCopy, type HostLocale } from './locale.ts'

@@ -71,7 +71,7 @@ describe('conn-6: a NUL byte is never a usable environment name', () => {
   })
 
   it('lets the real MCP registration succeed with a clean env map', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'pico-conn6-'))
+    const base = await mkdtemp(join(tmpdir(), 'zeokeel-conn6-'))
     cleanups.push(async () => { await rm(base, { recursive: true, force: true }) })
     const envOut = join(base, 'child-env.json')
     const def: ConnectorDef = {

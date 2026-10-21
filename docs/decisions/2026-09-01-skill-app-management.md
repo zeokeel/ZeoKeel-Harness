@@ -35,7 +35,7 @@
 ### 2.2 「本地版本 == 线上版本就拒绝」目前无从谈起
 
 - 客户端上传只发 `{ name }`，**从不发版本号**（`CapabilityCenterPanel.tsx` 的 `upload()`）；
-- host 代理把版本**硬编码兜底为 `'1.0.0'`**（`auth-gate.ts` `/api/pico/shared-skills/upload`）；
+- host 代理把版本**硬编码兜底为 `'1.0.0'`**（`auth-gate.ts` `/api/zeokeel/shared-skills/upload`）；
 - `packSkill()` 只从 frontmatter 取 displayName/description，**version 取入参**，本地 `SKILL.md` 的 `version:` 从未参与上传；
 - 于是员工第二次上传同一技能必然撞上 `1.0.0` → 409「该技能版本已被占用」，只能等被拒后覆盖重提。
 
@@ -159,7 +159,7 @@ Release（版本快照，一次性写入）
 4. 正文（去除 frontmatter 后）≥ 50 字符（`BODY_EMPTY`）——拒绝空壳技能；
 5. invocation 策略字段若存在必须合法（`INVOCATION_INVALID`）——上游解析失败会**静默忽略整个技能**；
 6. 归档安全：无越界路径、无符号/硬链接、≤16MB、解包后不超上限（沿用 `assertArchiveSafe`）；
-7. **禁止包内自带溯源**：出现 `metadata.picoaide` 段或 `.picoaide/` 目录即拒（`PROVENANCE_FORBIDDEN`）——溯源块只能由安装器写入，否则归属可被伪造。
+7. **禁止包内自带溯源**：出现 `metadata.zeokeel` 段或 `.zeokeel/` 目录即拒（`PROVENANCE_FORBIDDEN`）——溯源块只能由安装器写入，否则归属可被伪造。
 
 ### 5.4 现行校验的口子（实测，必须收紧）
 
@@ -194,7 +194,7 @@ Release（版本快照，一次性写入）
 | `FRONTMATTER_INVALID` | 422 | frontmatter 缺失或非法 YAML |
 | `BODY_EMPTY` | 422 | 技能正文为空 |
 | `INVOCATION_INVALID` | 422 | 调用策略字段非法，会导致技能被运行时忽略 |
-| `PROVENANCE_FORBIDDEN` | 422 | 包内不得自带溯源标记（`metadata.picoaide` / `.picoaide/`） |
+| `PROVENANCE_FORBIDDEN` | 422 | 包内不得自带溯源标记（`metadata.zeokeel` / `.zeokeel/`） |
 | `MANIFEST_MISMATCH` | 422 | 请求参数与包内元数据不一致 |
 | `ARCHIVE_INVALID` | 422 | 归档结构非法或不安全 |
 | `VERSION_EXISTS` | 409 | 该版本已存在（含被拒/已删），请升版本号 |
@@ -222,7 +222,7 @@ changelog: 补充生育报销与居转户章节。 # 非首版必填
 ```
 
 **文件本身要求**：UTF-8 **无 BOM**、LF 行尾、`SKILL.md` 位于归档顶层。
-**禁止**：`metadata.picoaide` 段与 `.picoaide/` 目录（安装器专用，包内自带即拒）。
+**禁止**：`metadata.zeokeel` 段与 `.zeokeel/` 目录（安装器专用，包内自带即拒）。
 
 ### 5.8 路由
 
@@ -258,7 +258,7 @@ changelog: 补充生育报销与居转户章节。 # 非首版必填
 
 ```yaml
 metadata:
-  picoaide:
+  zeokeel:
     app_id: team-knowledge-wiki
     version: 1.2.0
     channel: market
@@ -266,13 +266,13 @@ metadata:
     release_checksum: sha256:…
 ```
 
-**(b) `<skill_dir>/.picoaide/release.json`**（机器可读权威源，0600，安装器写入）：包含上述字段 + `installed_at` + `archive_checksum`。它取代现有的 `.install-version` 标记文件。
+**(b) `<skill_dir>/.zeokeel/release.json`**（机器可读权威源，0600，安装器写入）：包含上述字段 + `installed_at` + `archive_checksum`。它取代现有的 `.install-version` 标记文件。
 
 ### 7.2 匹配优先级
 
 ```
-.picoaide/release.json 的 app_id
-  → frontmatter metadata.picoaide.app_id
+.zeokeel/release.json 的 app_id
+  → frontmatter metadata.zeokeel.app_id
   → 目录名
   → frontmatter name
 ```
@@ -281,7 +281,7 @@ metadata:
 
 ### 7.3 本地改动检测（dirty）
 
-安装后重算技能目录的内容 checksum（排除 `.picoaide/`），与 `release_checksum` 比对：
+安装后重算技能目录的内容 checksum（排除 `.zeokeel/`），与 `release_checksum` 比对：
 
 | 状态 | 能力中心展示 | 上传按钮行为 |
 |---|---|---|
@@ -355,7 +355,7 @@ metadata:
 - 管理端 `/api/server/admin/capability-locks`（GET/PUT/DELETE），审计 `capability_lock`/`capability_unlock`；webadmin 能力中心页新增「锁定管理」面板。
 
 **P4 溯源与规范化**
-- 安装器写 `.picoaide/release.json`（appId/version/channel/server/内容哈希/安装时间），取代 `.install-version` 的单值语义；`packSkill` **排除 `.picoaide/`**，否则重新上传会被自己的 `PROVENANCE_FORBIDDEN` 拦下；
+- 安装器写 `.zeokeel/release.json`（appId/version/channel/server/内容哈希/安装时间），取代 `.install-version` 的单值语义；`packSkill` **排除 `.zeokeel/`**，否则重新上传会被自己的 `PROVENANCE_FORBIDDEN` 拦下；
 - `computeSkillContentHash` 重算内容哈希做 dirty 判定；能力中心卡片显示「市场 vX」与「已本地修改」徽章；
 - `skillmanifest.NormalizeSkillMD` + `POST /api/server/admin/skills/:name/normalize`：把存量不合规包改写为合规内容并作为 **patch+1 新版本**入库（中文 name → title、剥 BOM、补 version/author/category、剥离自带溯源块）；**拒绝编造 description**（缺失即报错要人工补写）；入库前用与上传同一套 `Parse` 自检。
 
@@ -378,7 +378,7 @@ metadata:
 - **市场管理端上传也接入统一内核**（`AdminPublish=true`：跳过锁定与配额、发布即 approved），至此三条上传路径真正共用一份实现。
 - **changelog 非首版必填**：规则依赖「是否已有历史版本」，因此落在发布内核而非清单解析。
 - **客户端预检**（`packages/host/enterprise/src/manifest-precheck.ts`）：与服务端同一套规则的前 7 步、**错误码逐字一致**，打包后立即本地报错，不必等一次网络往返；8 条单测覆盖必填矩阵与文法边界。
-- **智能体溯源**：安装写 `.picoaide/release.json`、打包排除该目录、能力中心显示来源与「已本地修改」，与技能同构。
+- **智能体溯源**：安装写 `.zeokeel/release.json`、打包排除该目录、能力中心显示来源与「已本地修改」，与技能同构。
 - **卡片显示运行时调用名**：运行时名与应用 ID 不同时显式提示（如 `workspace-cli` → 调用名 `dws`），此前只能装完才发现。
 - **webadmin 表单精简**：不再手填版本/作者/描述（包内即真相），编辑态隐藏版本字段（元数据 PUT 改版本服务端已拒绝）。
 - **`conflict` 兼容残留**：改为恒 false 并注明原因（P2 后跨渠道同名结构上不可能）。
@@ -402,7 +402,7 @@ metadata:
 4. 含 BOM / 中文 `name` / `name ≠ app_id` 的归档**无法进库**（三类各一条测试）；
 5. **必填字段矩阵测试**：`name`/`version`/`title`/`description`/`author`/`category` 逐个缺失各一条用例，均返回 `MISSING_FIELD` 并指明字段名；
 6. **命名/版本文法测试**：`My-Skill`、`my.skill`、`my_skill`、`my--skill`、`my-skill-` 五种命名与 `v1`、`abc`、`1.0` 三种版本号全部被拒（当前实现会放行其中大多数）；
-7. 包内自带 `metadata.picoaide` 或 `.picoaide/` 的归档被拒（`PROVENANCE_FORBIDDEN`）；
+7. 包内自带 `metadata.zeokeel` 或 `.zeokeel/` 的归档被拒（`PROVENANCE_FORBIDDEN`）；
 8. 客户端预检与服务端校验对同一个非法包给出**同一个错误码**（规则一份、两处执行）；
 9. 客户端对每个本地技能能给出「归属 App + 版本 + 是否本地修改」三态；
 10. 存量规范化后，30 个市场技能真机发现数 = 30（复跑 `temp/skillprobe/probe.mjs`）；
@@ -412,7 +412,7 @@ metadata:
 
 - **兼容期双写**：P2 期间新旧表并存，需保证审批动作只写一处（以新表为准，旧表只读转发），否则状态会分叉。
 - **强制 `name == app_id` 是破坏性约定**：会拒绝掉 内部技能中心 现行的发布规范（`skill-publish-helper` 技能明文要求 `name` 写中文名）。**需要同步修订该技能与 GitLab 仓库的发布规范文档**，否则上游持续产出不合规包。
-- **本地改动检测的边界**：技能运行时可能在自己目录里写缓存文件，会误判 dirty。落地时需要一份排除清单（`.picoaide/`、`node_modules/`、`__pycache__/` 等），或只对 `SKILL.md` + `references/` 计算 checksum。
+- **本地改动检测的边界**：技能运行时可能在自己目录里写缓存文件，会误判 dirty。落地时需要一份排除清单（`.zeokeel/`、`node_modules/`、`__pycache__/` 等），或只对 `SKILL.md` + `references/` 计算 checksum。
 - 智能体预设的版本号目前也由客户端兜底 `1.0.0`，与技能同病，P1 一并修。
 
 ### P5 实施记录（2026-09-01）

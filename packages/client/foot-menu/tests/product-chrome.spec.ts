@@ -24,7 +24,7 @@ describe('hideProductChrome', () => {
 
   it('hides the official account trigger (second 更多) but keeps its own foot trigger', () => {
     document.body.innerHTML = `
-      <button class="pico-foot-menu-trigger" aria-haspopup="menu" aria-label="更多功能">更多</button>
+      <button class="zeokeel-foot-menu-trigger" aria-haspopup="menu" aria-label="更多功能">更多</button>
       <button aria-haspopup="menu" aria-label="账号菜单">更多</button>
     `
     hideProductChrome(document)

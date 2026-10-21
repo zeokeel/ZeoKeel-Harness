@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // 本文件是 R1-rt-1（内存四笔账不感知 cgroup）的回归护栏。

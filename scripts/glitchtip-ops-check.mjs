@@ -23,8 +23,8 @@
  *   --base-url <url>     GlitchTip 站点        env GLITCHTIP_BASE_URL   （★ 必填，无默认值）
  *   --ssh <user@host>    生产主机              env GLITCHTIP_SSH_HOST   （★ 只读容器核查必填；
  *                                                                       仅用 --base-url 查 API 时可省）
- *   --org <slug>         组织 slug             env GLITCHTIP_ORG        （默认 picoaide）
- *   --project <slug>     项目 slug             env GLITCHTIP_PROJECT    （默认 picoaide-web）
+ *   --org <slug>         组织 slug             env GLITCHTIP_ORG        （默认 zeokeel）
+ *   --project <slug>     项目 slug             env GLITCHTIP_PROJECT    （默认 zeokeel-web）
  *   --cookies <path>     管理员 cookie jar     env GLITCHTIP_COOKIES    （默认见 resolveCookieJar）
  *   --ssh-key <path>     ssh 私钥              env GLITCHTIP_SSH_KEY    （默认 ~/.ssh/id_ed25519）
  *   --container <name>   容器名                env GLITCHTIP_CONTAINER  （默认 glitchtip-web-1）
@@ -67,10 +67,10 @@ const HELP = `glitchtip-ops-check.mjs — GlitchTip 自托管 DSN 域名核查�
 
 参数（站点与主机必须显式给出 —— 本脚本不含任何生产地址默认值）:
   --base-url <url>      GlitchTip 站点（★ 必填；env GLITCHTIP_BASE_URL）
-  --org <slug>          组织 slug（env GLITCHTIP_ORG，默认 picoaide）
-  --project <slug>      项目 slug（env GLITCHTIP_PROJECT，默认 picoaide-web）
+  --org <slug>          组织 slug（env GLITCHTIP_ORG，默认 zeokeel）
+  --project <slug>      项目 slug（env GLITCHTIP_PROJECT，默认 zeokeel-web）
   --cookies <path>      管理员 cookie jar（env GLITCHTIP_COOKIES；默认依次尝试
-                        ./.glitchtip-recon/c.txt 与 ~/.cache/picoaide/glitchtip-cookies.txt；
+                        ./.glitchtip-recon/c.txt 与 ~/.cache/zeokeel/glitchtip-cookies.txt；
                         只发送 jar 中 domain/path/secure 匹配目标站点的 cookie）
   --ssh <user@host>     生产主机（★ 只读容器核查必填；env GLITCHTIP_SSH_HOST）
   --ssh-key <path>      ssh 私钥（env GLITCHTIP_SSH_KEY，默认 ~/.ssh/id_ed25519）
@@ -137,7 +137,7 @@ function resolveCookieJar(explicit) {
   // 只做候选路径探测，不读取内容、不复制凭据。
   const workspaceJar = path.resolve(process.cwd(), '.glitchtip-recon', 'c.txt');
   if (existsSync(workspaceJar)) return workspaceJar;
-  return path.join(homedir(), '.cache', 'picoaide', 'glitchtip-cookies.txt');
+  return path.join(homedir(), '.cache', 'zeokeel', 'glitchtip-cookies.txt');
 }
 
 let argv;
@@ -186,8 +186,8 @@ if (wantsApply && !confirmedYes) {
 // 现在:缺 --base-url/GLITCHTIP_BASE_URL 直接 exit 2;缺主机时只做 API 核查(不 ssh)。
 const cfg = {
   baseUrl: String(argv.values.get('--base-url') ?? process.env.GLITCHTIP_BASE_URL ?? '').replace(/\/+$/, ''),
-  org: argv.values.get('--org') ?? process.env.GLITCHTIP_ORG ?? 'picoaide',
-  project: argv.values.get('--project') ?? process.env.GLITCHTIP_PROJECT ?? 'picoaide-web',
+  org: argv.values.get('--org') ?? process.env.GLITCHTIP_ORG ?? 'zeokeel',
+  project: argv.values.get('--project') ?? process.env.GLITCHTIP_PROJECT ?? 'zeokeel-web',
   cookieJar: resolveCookieJar(argv.values.get('--cookies')),
   sshHost: String(argv.values.get('--ssh') ?? process.env.GLITCHTIP_SSH_HOST ?? '').trim(),
   sshKey: String(argv.values.get('--ssh-key') ?? process.env.GLITCHTIP_SSH_KEY ?? path.join(homedir(), '.ssh', 'id_ed25519')),

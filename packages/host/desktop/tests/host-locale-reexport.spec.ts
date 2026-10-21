@@ -2,7 +2,7 @@
  * `dsh-plugin-desktop/host-locale` 的**兼容面**契约（2026-09-20 构建环修复，路线 A）。
  *
  * 为什么这条断言必须单独存在：`host-locale` 的实现已迁到零依赖叶子包
- * `@picoaide/dsh-host-locale`（`packages/host/host-locale`），desktop 这边只剩一行
+ * `@zeokeel/dsh-host-locale`（`packages/host/host-locale`），desktop 这边只剩一行
  * `export *`。语义判据全部随实现迁走且**逐字保留**（叶子包
  * `tests/host-locale.spec.ts`，14 例），所以本文件刻意**不重复**那些用例 ——
  * 它钉的是另一件事：`enterprise`（7 个文件）与 `cron` 仍然 import

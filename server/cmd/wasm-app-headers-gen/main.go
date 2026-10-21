@@ -16,7 +16,7 @@
 //
 // 为什么生成器住在 cmd/（而不是 api 包内）：`api` 包是服务端二进制的一部分，
 // 往里塞一个写文件的 main 会污染生产依赖；`cmd/` 是仓库既有惯例
-// （cmd/picoaide-limits-gen / picoaide-wasm-imports-gen 同款）。
+// （cmd/zeokeel-limits-gen / zeokeel-wasm-imports-gen 同款）。
 package main
 
 import (
@@ -26,11 +26,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/api"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/api"
 )
 
 // modulePath 用于确认"向上找到的确实是本仓的 server/"。
-const modulePath = "github.com/picoaide/picoaide"
+const modulePath = "github.com/zeokeel/zeokeel-harness/server"
 
 // headersJSONRelPath 是生成物相对**模块根**（server/）的路径。
 //

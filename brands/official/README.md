@@ -1,6 +1,6 @@
 # brands/official — 官方品牌文件夹（唯一事实源）
 
-本目录是 PicoAide Harness 官方渠道的品牌**唯一事实源**。所有 logo 图形、图标、品牌文案一律从本目录派生；禁止在仓库其他地方维护/编造品牌资产。
+本目录是 ZeoKeel Harness 官方渠道的品牌**唯一事实源**。所有 logo 图形、图标、品牌文案一律从本目录派生；禁止在仓库其他地方维护/编造品牌资产。
 
 ## 目录内容
 
@@ -51,7 +51,7 @@ brands/<channel-id>/          # 复制 brands/official/ 后修改：
 ## 官网边界（重要）
 
 **官网只接收官方渠道，其他渠道不需要。**
-- `site/`（www.picoaide.com）是 **official 渠道专属品牌面**：直接 import 本文件夹的 `logo.svg` / `logo-dark.svg`（starlight light/dark 双 logo）。
+- `site/`（www.zeokeel.com）是 **official 渠道专属品牌面**：直接 import 本文件夹的 `logo.svg` / `logo-dark.svg`（starlight light/dark 双 logo）。
 - 渠道化复制（`brands/<channel-id>/`）**不会**驱动官网；官网永远只读 `brands/official/`——企业渠道的产品面只有安装包与运行时品牌（服务端 brand API），不产出官网/门户站点。
 - 若某企业将来也要官网/门户，那属于单独的交付物，走独立管线，不挂在本文件夹的派生链上。
 - 因此：不要把 `chains` 里 site 相关项纳入渠道派生；`brand-prepare.mjs` 只服务桌面客户端打包链。

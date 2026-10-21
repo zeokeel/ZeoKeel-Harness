@@ -11,7 +11,7 @@
  * 才是真正对外的那个。这里只保留 DOM 内的 `<link rel=icon>` 覆盖：它对
  * **已经加载完的页面**仍然必要（登录页/恢复页在客户端插件装载前就会取一次图标）。
  *
- * The desktop assembly does not include `@picoaide/dsh-branding` (web-only),
+ * The desktop assembly does not include `@zeokeel/dsh-branding` (web-only),
  * so this module carries the favicon surface for the desktop client.
  */
 

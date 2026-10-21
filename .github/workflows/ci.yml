@@ -265,8 +265,8 @@ jobs:
           "${{ steps.frozen-launchers.outputs.node }}" scripts/check-verdict-credential.mjs --dir "$verdict_dir" --nonce-file "$verdict_dir/nonce" --status "$status" --pattern '^check-install-integrity: VERDICT PASS judge-bodies=[0-9]+' --min judge-bodies 1 --expect github-sha "$GITHUB_SHA" > "$verdict_dir/verdict"
           cat "$verdict_dir/verdict"
           verdict_lines=0
-          if grep -q "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
-            grep -c "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
+          if grep -q "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
+            grep -c "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
             read -r verdict_lines < "$verdict_dir/count"
           fi
           if [ "$verdict_lines" -ne 1 ]; then
@@ -380,8 +380,8 @@ jobs:
           "${{ steps.frozen-launchers.outputs.node }}" scripts/check-verdict-credential.mjs --dir "$verdict_dir" --nonce-file "$verdict_dir/nonce" --status "$status" --pattern '^check-root-guards: VERDICT PASS guards=[1-9][0-9]*' --min guards 1 > "$verdict_dir/verdict"
           cat "$verdict_dir/verdict"
           verdict_lines=0
-          if grep -q "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
-            grep -c "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
+          if grep -q "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
+            grep -c "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
             read -r verdict_lines < "$verdict_dir/count"
           fi
           if [ "$verdict_lines" -ne 1 ]; then
@@ -434,8 +434,8 @@ jobs:
           "${{ steps.frozen-launchers.outputs.node }}" scripts/check-verdict-credential.mjs --dir "$verdict_dir" --nonce-file "$verdict_dir/nonce" --status "$status" --pattern '^check-guard-parser-integrity: OK — [0-9]+ 条守卫脚本' > "$verdict_dir/verdict"
           cat "$verdict_dir/verdict"
           verdict_lines=0
-          if grep -q "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
-            grep -c "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
+          if grep -q "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
+            grep -c "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
             read -r verdict_lines < "$verdict_dir/count"
           fi
           if [ "$verdict_lines" -ne 1 ]; then
@@ -588,8 +588,8 @@ jobs:
           "${{ steps.frozen-launchers.outputs.node }}" scripts/check-verdict-credential.mjs --dir "$verdict_dir" --nonce-file "$verdict_dir/nonce" --status "$status" --pattern '^check-install-integrity: VERDICT PASS judge-bodies=[0-9]+' --min judge-bodies 1 --expect github-sha "$GITHUB_SHA" > "$verdict_dir/verdict"
           cat "$verdict_dir/verdict"
           verdict_lines=0
-          if grep -q "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
-            grep -c "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
+          if grep -q "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
+            grep -c "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
             read -r verdict_lines < "$verdict_dir/count"
           fi
           if [ "$verdict_lines" -ne 1 ]; then
@@ -866,8 +866,8 @@ jobs:
           "${{ steps.frozen-launchers.outputs.node }}" scripts/check-verdict-credential.mjs --dir "$verdict_dir" --nonce-file "$verdict_dir/nonce" --status "$status" --pattern '^check-workspaces: VERDICT PASS planned=[0-9]+ executed=[0-9]+' --min planned 1 --equal planned executed > "$verdict_dir/verdict"
           cat "$verdict_dir/verdict"
           verdict_lines=0
-          if grep -q "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
-            grep -c "picoaide-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
+          if grep -q "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict"; then
+            grep -c "zeokeel-verdict: PASS nonce=$nonce " "$verdict_dir/verdict" > "$verdict_dir/count"
             read -r verdict_lines < "$verdict_dir/count"
           fi
           if [ "$verdict_lines" -ne 1 ]; then
@@ -1166,15 +1166,15 @@ jobs:
               # 18/ 子目录,容器立即退出(No such container)。挂载点必须放开写权限。
               PG18_MOUNT="$(mktemp -d -p "${RUNNER_TEMP:-/tmp}")"
               chmod 0777 "$PG18_MOUNT"
-              if ! PG18_CID="$(docker run -d --rm --name picoaide-ci-pg18 \
-                -e POSTGRES_USER=picoaide -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=picoaide \
+              if ! PG18_CID="$(docker run -d --rm --name zeokeel-ci-pg18 \
+                -e POSTGRES_USER=zeokeel -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=zeokeel \
                 -v "$PG18_MOUNT:/var/lib/postgresql" postgres:18-alpine)"; then
                 echo "::error::docker run postgres:18-alpine 启动失败(详见上方 docker 输出)"
                 rm -rf "$PG18_MOUNT"
                 exit 1
               fi
               sleep 8
-              if ! docker ps --format '{{.Names}}' | grep -qx picoaide-ci-pg18; then
+              if ! docker ps --format '{{.Names}}' | grep -qx zeokeel-ci-pg18; then
                 echo "::error::postgres:18-alpine 未能在挂载 /var/lib/postgresql 下启动(请检查 compose 挂载点)"
                 docker logs "$PG18_CID" 2>&1 | tail -20 || true
                 docker rm -f "$PG18_CID" >/dev/null 2>&1 || true
@@ -1195,8 +1195,8 @@ jobs:
           fi
       - uses: actions/upload-artifact@v7
         with:
-          name: picoaide-server-linux-amd64
-          path: server/bin/picoaide-server
+          name: zeokeel-server-linux-amd64
+          path: server/bin/zeokeel-server
           if-no-files-found: error
 
   desktop-linux:
@@ -1214,7 +1214,7 @@ jobs:
       # 路径由 github.workspace 推导而**不是** runner.temp：job 级 env 里 `runner` 上下文
       # 不可用（GitHub 解析期报 `Unrecognized named-value: 'runner'` ⇒ 整个 workflow 文件
       # 失效、所有 run 0 秒 startup failure —— 2026-10-08 实测踩过，别再改回去）。
-      PICOAI_RUNTIME_CACHE: ${{ github.workspace }}/../picoaide-runtimes
+      ZEOKEEL_RUNTIME_CACHE: ${{ github.workspace }}/../zeokeel-runtimes
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1234,11 +1234,11 @@ jobs:
       # 随包 agent 运行时（node/pnpm/python）的**制品缓存**（2026-10-08）：三套官方预编译
       # 制品约 90MB/平台，就位发生在打包入口内（`prepareChannelPackaging()`，无需额外步骤）；
       # 缓存让重复打包跳过下载。key 挂 `runtimes.json` 的哈希 —— 它与 `yarn.lock` 无关
-      # （换运行时版本只改那一个文件）。`PICOAI_RUNTIME_CACHE` 由 job 级 env 给所有步骤。
+      # （换运行时版本只改那一个文件）。`ZEOKEEL_RUNTIME_CACHE` 由 job 级 env 给所有步骤。
       - name: Cache bundled agent runtimes
         uses: actions/cache@v6
         with:
-          path: ${{ github.workspace }}/../picoaide-runtimes
+          path: ${{ github.workspace }}/../zeokeel-runtimes
           key: runtimes-${{ runner.os }}-${{ hashFiles('packages/host/desktop/runtimes.json') }}
           restore-keys: |
             runtimes-${{ runner.os }}-
@@ -1390,7 +1390,7 @@ jobs:
       # 路径由 github.workspace 推导而**不是** runner.temp：job 级 env 里 `runner` 上下文
       # 不可用（GitHub 解析期报 `Unrecognized named-value: 'runner'` ⇒ 整个 workflow 文件
       # 失效、所有 run 0 秒 startup failure —— 2026-10-08 实测踩过，别再改回去）。
-      PICOAI_RUNTIME_CACHE: ${{ github.workspace }}/../picoaide-runtimes
+      ZEOKEEL_RUNTIME_CACHE: ${{ github.workspace }}/../zeokeel-runtimes
       # Windows 安装器的 7z 压缩级别（2026-10-08 定案）。app-builder-lib 的
       # `compute7zCompressArgs` 读这个变量：非空即以 `-mx=<n>` 覆盖配置里的级别，
       # 并跳过 `-mfb=258 -mpass=15`（那两条是 maximum 档额外耗时的来源）。
@@ -1420,11 +1420,11 @@ jobs:
       # 随包 agent 运行时（node/pnpm/python）的**制品缓存**（2026-10-08）：三套官方预编译
       # 制品约 90MB/平台，就位发生在打包入口内（`prepareChannelPackaging()`，无需额外步骤）；
       # 缓存让重复打包跳过下载。key 挂 `runtimes.json` 的哈希 —— 它与 `yarn.lock` 无关
-      # （换运行时版本只改那一个文件）。`PICOAI_RUNTIME_CACHE` 由 job 级 env 给所有步骤。
+      # （换运行时版本只改那一个文件）。`ZEOKEEL_RUNTIME_CACHE` 由 job 级 env 给所有步骤。
       - name: Cache bundled agent runtimes
         uses: actions/cache@v6
         with:
-          path: ${{ github.workspace }}/../picoaide-runtimes
+          path: ${{ github.workspace }}/../zeokeel-runtimes
           key: runtimes-${{ runner.os }}-${{ hashFiles('packages/host/desktop/runtimes.json') }}
           restore-keys: |
             runtimes-${{ runner.os }}-
@@ -1541,7 +1541,7 @@ jobs:
       # 路径由 github.workspace 推导而**不是** runner.temp：job 级 env 里 `runner` 上下文
       # 不可用（GitHub 解析期报 `Unrecognized named-value: 'runner'` ⇒ 整个 workflow 文件
       # 失效、所有 run 0 秒 startup failure —— 2026-10-08 实测踩过，别再改回去）。
-      PICOAI_RUNTIME_CACHE: ${{ github.workspace }}/../picoaide-runtimes
+      ZEOKEEL_RUNTIME_CACHE: ${{ github.workspace }}/../zeokeel-runtimes
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1561,11 +1561,11 @@ jobs:
       # 随包 agent 运行时（node/pnpm/python）的**制品缓存**（2026-10-08）：三套官方预编译
       # 制品约 90MB/平台，就位发生在打包入口内（`prepareChannelPackaging()`，无需额外步骤）；
       # 缓存让重复打包跳过下载。key 挂 `runtimes.json` 的哈希 —— 它与 `yarn.lock` 无关
-      # （换运行时版本只改那一个文件）。`PICOAI_RUNTIME_CACHE` 由 job 级 env 给所有步骤。
+      # （换运行时版本只改那一个文件）。`ZEOKEEL_RUNTIME_CACHE` 由 job 级 env 给所有步骤。
       - name: Cache bundled agent runtimes
         uses: actions/cache@v6
         with:
-          path: ${{ github.workspace }}/../picoaide-runtimes
+          path: ${{ github.workspace }}/../zeokeel-runtimes
           key: runtimes-${{ runner.os }}-${{ hashFiles('packages/host/desktop/runtimes.json') }}
           restore-keys: |
             runtimes-${{ runner.os }}-
@@ -1814,7 +1814,7 @@ jobs:
   # 发布(2026-09-10 改版):GitHub Release **仍然发布**,但内容物从"客户端安装包"
   # 改为"服务端镜像压缩包"。两条分发面分工见
   # docs/planning/2026-09-10-r2-update-server-runbook.md §0.1:
-  #   - 更新服务器(R2 release.picoaide.com):热分发面,只留最近 3 个版本,服务端
+  #   - 更新服务器(R2 release.zeokeel.com):热分发面,只留最近 3 个版本,服务端
   #     updatecheck 与客户部署从这里取;
   #   - GitHub Release(本 job):冷存档 + 变更记录,永久保留全部历史版本镜像,
   #     审计/查变更/取更老版本镜像时用。
@@ -1932,7 +1932,7 @@ jobs:
           bash scripts/ci-build-channel-images.sh \
             --list channels.list --artifacts release-artifacts --out release-bundle
 
-      # 更新服务器(R2)上传:每个渠道写自己的目录 `release.picoaide.com/<channel>/`,
+      # 更新服务器(R2)上传:每个渠道写自己的目录 `release.zeokeel.com/<channel>/`,
       # 品牌渠道也走这里 —— R2 是它们的**唯一**分发面。R2 secrets 未配置时跳过而非
       # 失败,保证 GitHub Release 本身可用(上传细节与保留策略见
       # docs/planning/2026-09-10-r2-update-server-runbook.md §5)。
@@ -1954,7 +1954,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-          REPO="picoaide/picoaide-harness"
+          REPO="zeokeel/ZeoKeel-Harness"
           # 说明(**公开发布面**,2026-09-11 定案):tag 必须有策展发布说明
           # (docs/releases/<tag>.md,模板 TEMPLATE.md);缺失即失败,绝不静默回退
           # 自动生成的 PR 列表 —— 版本页是给客户与运维看的,不是 CI 日志。
@@ -1982,11 +1982,11 @@ jobs:
           # 只进 R2 自己的目录,绝不进公开 Release(2026-09-10 定案)。
           PUBLIC="${{ steps.images.outputs.public_channel }}"
           test -n "${PUBLIC}" || { echo "::error::未解析出公开渠道"; exit 1; }
-          test -f "release-bundle/${PUBLIC}/picoaide-server-${TAG#v}-amd64.zip" \
+          test -f "release-bundle/${PUBLIC}/zeokeel-server-${TAG#v}-amd64.zip" \
             || { echo "::error::公开渠道的镜像包不存在,拒绝发布空 Release"; exit 1; }
           # Release 名 = tag 本身,不加产品名前缀(2026-09-11 定案):Releases 页左侧
-          # 列表宽度固定,"PicoAide Harness v2.6.9-beta.5" 会被截断成
-          # "PicoAide Harness v2.6…" —— 一页十几个版本号全都看不见,只剩重复前缀。
+          # 列表宽度固定,"ZeoKeel Harness v2.6.9-beta.5" 会被截断成
+          # "ZeoKeel Harness v2.6…" —— 一页十几个版本号全都看不见,只剩重复前缀。
           # 产品名由仓库与页面标题承载,Release 名只回答"是哪个版本"。
           if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
             echo "Release ${TAG} already exists — updating title/notes/flags and clobbering assets"
@@ -2036,7 +2036,7 @@ jobs:
       - uses: actions/github-script@v8
         with:
           script: |
-            const marker = '<!-- picoaide-ci-artifacts -->'
+            const marker = '<!-- zeokeel-ci-artifacts -->'
             const docsOnly = '${{ needs.changes.outputs.code }}' === 'false'
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             // ── 三态文案必须由 needs 派生(R28 审计 AB2-A-02)────────────────────
@@ -2053,7 +2053,7 @@ jobs:
               'desktop-macos': '${{ needs.desktop-macos.result }}',
             }
             const artifacts = {
-              server: '`picoaide-server-linux-amd64` — Go 服务端二进制',
+              server: '`zeokeel-server-linux-amd64` — Go 服务端二进制',
               'desktop-linux': '`desktop-Linux` — AppImage（含 `e2e-report` 客户端 E2E 结果）',
               'desktop-windows': '`desktop-Windows-installer` — NSIS Setup',
               'desktop-macos': '`desktop-macOS` — DMG',

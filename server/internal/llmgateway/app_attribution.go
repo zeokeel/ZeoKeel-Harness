@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 应用维度归因（迁移 0076 / 契约 §21.4 / §21.7⑤）。
@@ -19,7 +19,7 @@ import (
 // ## 这个标签的信任等级（R14-K · D-04：口径必须与代码判据逐字一致）
 //
 // ⚠️ **标签的值完全来自客户端请求头，它不是服务端可验证的事实**。初版设计的
-// `X-Pico-App-Id` 在客户端发不出来（§21.7⑤：出站头唯一构造点没有 header 通道），
+// `X-ZeoKeel-App-Id` 在客户端发不出来（§21.7⑤：出站头唯一构造点没有 header 通道），
 // 于是改成读隐藏会话 id 的 `app:` 前缀 —— 但**前缀同样由客户端构造**：任何持员工
 // Bearer 的调用方都能发 `x-deepseek-harness-session-id: app:<任意 app_id>#…`。
 //
@@ -59,7 +59,7 @@ import (
 // appIDFromRequest 读本次请求的**应用会话链路**并派生应用标识（无归因 ⇒ 空串）。
 //
 // 只认会话 id 的 `app:` 前缀（见 `app_session_id.go` 的长注释）：自报头
-// `X-Pico-App-Id` 被显式忽略并记一条日志 —— "归因静默消失"在运营面上与"没人用"长得
+// `X-ZeoKeel-App-Id` 被显式忽略并记一条日志 —— "归因静默消失"在运营面上与"没人用"长得
 // 一样，所以忽略这件事必须留下痕迹。
 //
 // ⚠️ 这里只做**形状**判定（授权/存在性在 bindUsageAppID 里，同一个已钉事务内）。

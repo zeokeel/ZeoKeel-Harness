@@ -1,5 +1,5 @@
 /**
- * `picoFootMenu` 登记表的契约用例（冻结契约 §2.2）。
+ * `zeokeelFootMenu` 登记表的契约用例（冻结契约 §2.2）。
  *
  * 这是"五个插件的底部条目到底还在不在"的**第一层**证据：条目跨 bundle 只能走这个
  * 服务，登记表把"注销幂等 / 排序 / 引用稳定 / 发布"任何一条做错，界面上就是
@@ -19,9 +19,9 @@ function entry(id: string, order: number, extra: Partial<FootMenuEntry> = {}): F
   return { id, order, title: () => id, activate: () => undefined, ...extra }
 }
 
-describe('picoFootMenu 登记表', () => {
+describe('zeokeelFootMenu 登记表', () => {
   it('服务名常量就是注入键（消费者 inject 与 provide 同源）', () => {
-    expect(FOOT_MENU_SERVICE).toBe('picoFootMenu')
+    expect(FOOT_MENU_SERVICE).toBe('zeokeelFootMenu')
   })
 
   it('空表快照是空数组', () => {

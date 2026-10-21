@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/updatecheck"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/updatecheck"
 )
 
 // fakeChecker 实现 UpdateChecker 接口,测试可注入固定结果/错误。
@@ -40,7 +40,7 @@ func TestHandleServerInfoUpdateCheck(t *testing.T) {
 		Latest:          "2.6.0",
 		UpdateAvailable: true,
 		ImageTag:        "v2.6.0",
-		ManifestURL:     "https://release.picoaide.com/official/latest.json",
+		ManifestURL:     "https://release.zeokeel.com/official/latest.json",
 		CheckedAt:       "2026-08-31T00:00:00Z",
 	}}}
 	r := gin.New()
@@ -80,7 +80,7 @@ func TestHandleServerInfoUpdateCheck(t *testing.T) {
 	if resp.UpdateCheck.ImageTag != "v2.6.0" {
 		t.Errorf("image_tag = %q, want v2.6.0", resp.UpdateCheck.ImageTag)
 	}
-	if resp.UpdateCheck.ManifestURL != "https://release.picoaide.com/official/latest.json" {
+	if resp.UpdateCheck.ManifestURL != "https://release.zeokeel.com/official/latest.json" {
 		t.Errorf("manifest_url = %q", resp.UpdateCheck.ManifestURL)
 	}
 }

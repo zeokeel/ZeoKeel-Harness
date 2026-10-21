@@ -34,11 +34,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/sharedskills"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // r5bItem 是能力中心条目的完整投影（比共享夹具多带 is_owner/delisted/author）。

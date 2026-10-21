@@ -39,7 +39,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { afterEach, describe, expect, it } from 'vitest'
 import { provideAppAiRunner } from '../src/app-ai-runner.ts'
-import { WASM_APPS_AI_RUNNER_SERVICE } from '@picoaide/dsh-wasm-apps-host'
+import { WASM_APPS_AI_RUNNER_SERVICE } from '@zeokeel/dsh-wasm-apps-host'
 
 const REPO = fileURLToPath(new URL('../../../../', import.meta.url))
 

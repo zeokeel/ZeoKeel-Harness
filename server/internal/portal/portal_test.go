@@ -90,7 +90,7 @@ func TestRenderEscapesChannelContent(t *testing.T) {
 // 与模板真实行为(渲染空态提示)相反。现在按产品真实意图断言**空态**:
 // 断言改查真实片段与文案,注释同步。
 func TestRenderOmitsEmptyBlocks(t *testing.T) {
-	html := Render(View{Name: "PicoAide", AdminURL: "/admin/"})
+	html := Render(View{Name: "ZeoKeel", AdminURL: "/admin/"})
 	if strings.Contains(html, "{{") || strings.Contains(html, "undefined") {
 		t.Fatalf("模板未正确执行: %s", html[:200])
 	}
@@ -114,7 +114,7 @@ func TestRenderOmitsEmptyBlocks(t *testing.T) {
 // 有下载项时渲染按钮,地址原样透传(服务端拼好的绝对/相对地址)。
 func TestRenderDownloads(t *testing.T) {
 	html := Render(View{
-		Name: "PicoAide", AdminURL: "/admin/",
+		Name: "ZeoKeel", AdminURL: "/admin/",
 		Downloads: []Platform{
 			{Name: "Windows", Meta: "x64 · .exe", URL: "/updates/client/a.exe"},
 			{Name: "macOS", Meta: "该平台暂无可用安装包"},
@@ -141,7 +141,7 @@ func TestRenderDownloads(t *testing.T) {
 // 是空话),也不该摆三张一模一样的"暂无"死卡 —— 换一块说清原因的提示;
 // 有一条可用就照常显示卡片。
 func TestRenderLeadOnlyWhenDownloadable(t *testing.T) {
-	allOff := Render(View{Name: "PicoAide", AdminURL: "/admin/", Downloads: []Platform{
+	allOff := Render(View{Name: "ZeoKeel", AdminURL: "/admin/", Downloads: []Platform{
 		{Name: "Windows", Meta: "该平台暂无可用安装包"},
 		{Name: "macOS", Meta: "该平台暂无可用安装包"},
 	}})
@@ -154,7 +154,7 @@ func TestRenderLeadOnlyWhenDownloadable(t *testing.T) {
 	if strings.Contains(allOff, "该平台暂无可用安装包") {
 		t.Fatal("全部平台不可用时不应再逐张渲染不可用卡片")
 	}
-	oneOn := Render(View{Name: "PicoAide", AdminURL: "/admin/", Downloads: []Platform{
+	oneOn := Render(View{Name: "ZeoKeel", AdminURL: "/admin/", Downloads: []Platform{
 		{Name: "Windows", Meta: "x64 · .exe", URL: "/updates/client/a.exe"},
 		{Name: "macOS", Meta: "该平台暂无可用安装包"},
 	}})
@@ -174,7 +174,7 @@ func TestRenderLeadOnlyWhenDownloadable(t *testing.T) {
 // 页面不再有任何按钮式管理入口(管理员仍可从页脚低调进入,直接访问 /admin/ 亦可)。
 func TestRenderDownloadFirstAndNoAdminCallToAction(t *testing.T) {
 	html := Render(View{
-		Name: "PicoAide", Tagline: "企业级 AI 办公智能体平台",
+		Name: "ZeoKeel", Tagline: "企业级 AI 办公智能体平台",
 		Welcome:  "统一接入企业内网 AI 能力。",
 		AdminURL: "/admin/", Version: "2.7.2",
 		Downloads: []Platform{
@@ -219,7 +219,7 @@ func TestRenderDownloadFirstAndNoAdminCallToAction(t *testing.T) {
 // 并不知道访客用哪个主题。
 func TestRenderLogoThemeVariants(t *testing.T) {
 	const light, dark = "/api/client/v2/channel/logo", "/api/client/v2/channel/logo-dark"
-	both := Render(View{Name: "PicoAide", AdminURL: "/admin/", LogoURL: light, LogoDarkURL: dark})
+	both := Render(View{Name: "ZeoKeel", AdminURL: "/admin/", LogoURL: light, LogoDarkURL: dark})
 	if !strings.Contains(both, "prefers-color-scheme: dark") {
 		t.Fatal("深色主题应切换到暗色版 logo")
 	}
@@ -230,7 +230,7 @@ func TestRenderLogoThemeVariants(t *testing.T) {
 		t.Fatal("浅色版仍是默认 img 源")
 	}
 	// 渠道没做暗色版(LogoDarkURL 为空)时不得给出会 404 的 source
-	onlyLight := Render(View{Name: "PicoAide", AdminURL: "/admin/", LogoURL: light})
+	onlyLight := Render(View{Name: "ZeoKeel", AdminURL: "/admin/", LogoURL: light})
 	if strings.Contains(onlyLight, "prefers-color-scheme: dark") {
 		t.Fatal("渠道未配暗色版时不应渲染 dark source")
 	}
@@ -238,7 +238,7 @@ func TestRenderLogoThemeVariants(t *testing.T) {
 		t.Fatal("只有浅色版时应照常渲染")
 	}
 	// 完全没配 logo:退回文字标识,不能出现空 img
-	if noLogo := Render(View{Name: "PicoAide", AdminURL: "/admin/"}); strings.Contains(noLogo, "<img") {
+	if noLogo := Render(View{Name: "ZeoKeel", AdminURL: "/admin/"}); strings.Contains(noLogo, "<img") {
 		t.Fatal("未配 logo 时应使用文字标识")
 	}
 }
@@ -246,7 +246,7 @@ func TestRenderLogoThemeVariants(t *testing.T) {
 // 下载区之后必须有功能说明(员工据此判断"装完能干什么"),且顺序在下载之后。
 func TestRenderFeatures(t *testing.T) {
 	html := Render(View{
-		Name: "PicoAide", AdminURL: "/admin/",
+		Name: "ZeoKeel", AdminURL: "/admin/",
 		Downloads: []Platform{{Name: "Windows", Meta: "x64 · .exe", URL: "/updates/client/a.exe"}},
 	})
 

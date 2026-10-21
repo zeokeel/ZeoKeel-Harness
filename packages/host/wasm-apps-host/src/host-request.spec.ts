@@ -31,7 +31,7 @@ function fakeContext(services: Record<string, unknown>) {
   return { ctx, routes }
 }
 
-const PREFIX = '/api/pico/wasm-apps'
+const PREFIX = '/api/zeokeel/wasm-apps'
 
 function request(pathname: string, method = 'POST', headers: Record<string, string> = {}): SurfaceRequest {
   return {
@@ -53,7 +53,7 @@ describe('host proof authority (R2: 请求头持有性令牌，不用 Cookie/Hos
     expect(issued.expiresAt).toBe(1_000 + 1_000)
     expect(authority.verify({ [HOST_PROOF_HEADER]: issued.proof })).toBeNull()
     // 大小写不敏感（单测直接给大写头名；真实 node 已小写化，但未来传输不该假定）。
-    expect(authority.verify({ 'X-Pico-Host-Proof': issued.proof })).toBeNull()
+    expect(authority.verify({ 'X-ZeoKeel-Host-Proof': issued.proof })).toBeNull()
   })
 
   it('distinguishes expiry from a missing proof', () => {

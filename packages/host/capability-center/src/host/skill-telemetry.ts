@@ -1,9 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import { SESSION_CHANGED_EVENT } from '@picoaide/dsh-host-locale/session-events'
-import { fetchJSON } from '@picoaide/dsh-gateway-client/auth'
-import type { Session } from '@picoaide/dsh-gateway-client/config'
+import { SESSION_CHANGED_EVENT } from '@zeokeel/dsh-host-locale/session-events'
+import { fetchJSON } from '@zeokeel/dsh-gateway-client/auth'
+import type { Session } from '@zeokeel/dsh-gateway-client/config'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveSkillsDir } from './skill-install.ts'
@@ -39,25 +39,25 @@ import { resolveSkillsDir } from './skill-install.ts'
 export const name = 'skill-telemetry'
 
 /** Services consumed: the session service (bearer token) and the model tool registry. */
-export const inject = ['picoSession', 'tools']
+export const inject = ['zeokeelSession', 'tools']
 
 /**
- * `picoSession` 服务在本模块里需要的**最小结构面**（探测式）。
+ * `zeokeelSession` 服务在本模块里需要的**最小结构面**（探测式）。
  *
  * 不 `declare module '@deepseek-ai/cordis' { interface Context { … } }`：那会在
- * 同一个 TS program 里与 provider（`@picoaide/dsh-enterprise/session-service`）的
+ * 同一个 TS program 里与 provider（`@zeokeel/dsh-enterprise/session-service`）的
  * 声明争同一个成员名，形状一旦不同就是 TS2717。探测 + 结构类型是本仓既有的跨包
- * 服务读法（先例：`wasm-apps-host/src/session.ts` 探测 `picoSession`、
+ * 服务读法（先例：`wasm-apps-host/src/session.ts` 探测 `zeokeelSession`、
  * `connectors/src/index.ts` 探测 `workspaceRegistry`）。
  */
-interface PicoSessionProbe {
+interface ZeoKeelSessionProbe {
   getSession(): Session | null
 }
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /** 会话变化（登录/登出/恢复完成）。形状与 provider 的声明逐字一致。 */
-    'pico/session-changed'(session: { username?: string; token?: string; serverURL?: string } | null): void
+    'zeokeel/session-changed'(session: { username?: string; token?: string; serverURL?: string } | null): void
   }
 }
 
@@ -65,10 +65,10 @@ declare module '@deepseek-ai/cordis' {
 function currentSession(ctx: Context): Session | null {
   // 结构探测而不是必需依赖：最小组合（单测、无头嵌入）里 `get` 可能整个缺席 ——
   // 那时按"未登录"处理（不上报），与探测面其余方法同一口径。
-  const viaGet = (typeof ctx.get === 'function' ? ctx.get('picoSession') : undefined) as PicoSessionProbe | undefined
+  const viaGet = (typeof ctx.get === 'function' ? ctx.get('zeokeelSession') : undefined) as ZeoKeelSessionProbe | undefined
   // `ctx.get('<服务名>')` 与"服务属性"在真实 Cordis 里是同一条服务（`Service` 基类
   // 两者都挂）；最小夹具常常只摆了属性。两条都探，语义与只探一条相同。
-  const probe = viaGet ?? (ctx as unknown as { picoSession?: PicoSessionProbe }).picoSession
+  const probe = viaGet ?? (ctx as unknown as { zeokeelSession?: ZeoKeelSessionProbe }).zeokeelSession
   return typeof probe?.getSession === 'function' ? probe.getSession() : null
 }
 
@@ -79,14 +79,14 @@ function currentSession(ctx: Context): Session | null {
  * 为什么定义在这里、而不是只放在某个常量模块里：哨兵只有在**本模块真正被装配**的
  * 那条路径上才有意义 —— 没被引用的字符串会被打包器/链接器一起丢掉，"产物里没有这个
  * 串"于是既可能是"模块被裁掉了"、也可能只是"串被优化掉了"。所以它由 `apply()`
- * 写进一行装配日志（这一行是技能模块自己的 loader 行 `picoaide-skill-telemetry`：
+ * 写进一行装配日志（这一行是技能模块自己的 loader 行 `zeokeel-skill-telemetry`：
  * 模块被裁掉时它不会被执行，串也就不会出现在产物里）。
  *
  * **它只是副证**（不要把它当承重判据）：承重的是依赖图/文件清单（模块是否真的没被
  * 打进去），而且哨兵判据必须**双侧** —— 开启变体里必须也存在，这个量具才算数。
  * 串的命名规则唯一真源是 `channel-constants.ts` 的 `featureSentinel()`。
  */
-export const SKILLS_FEATURE_SENTINEL = 'picoaide.feature.skills.v1'
+export const SKILLS_FEATURE_SENTINEL = 'zeokeel.feature.skills.v1'
 
 // ---- 可靠性窗口:同一调用只报一次(键带账号+服务端作用域,集合有上界) ----
 
@@ -223,7 +223,7 @@ async function installedVersion(name: string): Promise<string | undefined> {
  * ⚠️ **会话必须在观察点同步取**（第二十八轮 FIX-40 ③ 收口；第二十九轮 FIX-44 ② 已从
  * `KNOWN_UNGUARDED_ENTRIES` 迁到 `ENTRY_EXEMPTIONS` —— 它是**等价机制**而不是
  * "没装代际"，见该表的登记理由）。被修的形态是"在 await 之后才读会话"：修前两个观察点都是
- * `void installedVersion(name).then(() => reportSkillCall(ctx.picoSession.getSession(), …))`
+ * `void installedVersion(name).then(() => reportSkillCall(ctx.zeokeelSession.getSession(), …))`
  * —— 会话是在 `installedVersion` 的 **await 续体里**才读的，于是"读版本文件期间用户换了
  * 账号/服务端"这条普通时序会把**上一账号**的技能调用记到**新账号**名下（作用域与令牌
  * 全指向新账号，`reportScope` 的去重键也随之错位）。版本读取是本地文件 IO，窗口很窄但
@@ -238,7 +238,7 @@ async function installedVersion(name: string): Promise<string | undefined> {
 export function apply(ctx: Context): void {
   // 渠道功能模块 `skills` 的装配哨兵（见 SKILLS_FEATURE_SENTINEL 的说明）：
   // 一行 info 日志，让"这个模块在这次装配里真的到位了"在端到端产物里有一条可查的痕迹。
-  ctx.logger?.info?.(`picoaide-skill-telemetry: registered (${SKILLS_FEATURE_SENTINEL})`)
+  ctx.logger?.info?.(`zeokeel-skill-telemetry: registered (${SKILLS_FEATURE_SENTINEL})`)
   ctx.on('tools/result', (exec: ToolExecution, result: ToolExecutionResult) => {
     if (exec.name !== 'skill') return
     if (result.isError) return
@@ -257,14 +257,14 @@ export function apply(ctx: Context): void {
     if (source?.kind !== 'skill-invocation') return
     const skillName = typeof source.name === 'string' ? source.name : ''
     if (skillName === '') return
-    // 同上：`_session` 是上游会话对象（不携带服务端/令牌），所以作用域仍从 `picoSession`
+    // 同上：`_session` 是上游会话对象（不携带服务端/令牌），所以作用域仍从 `zeokeelSession`
     // 取 —— 但取的是**事件发生的此刻**，不是 await 之后的某一代。
     const session = currentSession(ctx)
     void installedVersion(skillName)
       .then((version) => reportSkillCall(session, skillName, version, callIdOf(event.data.id)))
   })
 
-  // picoSession 声明依赖 + 会话变更时无需重挂监听(会话在调用时惰性读取)。
+  // zeokeelSession 声明依赖 + 会话变更时无需重挂监听(会话在调用时惰性读取)。
   //
   // 会话/账号变更时**刻意不清空**幂等集合:作用域(账号 + 服务端)已经在键里,所以
   // 换账号后别人的条目根本不会被命中;清空反而会把同一账号在同一次会话里已经上报过

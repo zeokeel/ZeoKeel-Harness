@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 变异验证（§5.5「变异验证」）：

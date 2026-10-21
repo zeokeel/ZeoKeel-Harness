@@ -69,7 +69,7 @@ describe('功能模块摘除面是变体裁剪的唯一声明', () => {
     for (const surface of FEATURE_MODULE_SURFACES) {
       for (const id of surface.rows) expect(REQUIRED_DESKTOP_ROWS).toContain(id)
     }
-    expect(REQUIRED_DESKTOP_ROWS).toContain('picoaide-skill-telemetry')
+    expect(REQUIRED_DESKTOP_ROWS).toContain('zeokeel-skill-telemetry')
   })
 
   it('每个模块的包名都在 profile 的 bundle 层清单里（否则摘依赖只是"不加载"）', () => {
@@ -125,7 +125,7 @@ describe('功能模块摘除面是变体裁剪的唯一声明', () => {
     expect(all).toEqual([...REQUIRED_DESKTOP_ROWS])
     const closed = requiredDesktopRows({ skills: false, apps: true, connectors: true })
     expect(all.filter(id => !closed.includes(id)))
-      .toEqual(['picoaide-capability-center', 'picoaide-skill-telemetry'])
+      .toEqual(['zeokeel-capability-center', 'zeokeel-skill-telemetry'])
     expect(requiredDesktopRows({ skills: false })).toEqual(closed)
   })
 
@@ -134,10 +134,10 @@ describe('功能模块摘除面是变体裁剪的唯一声明', () => {
     expect(prunedFeatureBundles(undefined)).toEqual([])
     expect(prunedFeatureRows(undefined)).toEqual([])
     expect(closedFeatureModules({ skills: false })).toEqual(['skills'])
-    expect(prunedFeatureBundles({ skills: false })).toEqual(['@picoaide/dsh-capability-center'])
+    expect(prunedFeatureBundles({ skills: false })).toEqual(['@zeokeel/dsh-capability-center'])
     expect(prunedFeatureRows({ skills: false }))
-      .toEqual(['picoaide-capability-center', 'picoaide-skill-telemetry'])
-    expect(prunedFeatureRows({ connectors: false })).toEqual(['pico-connectors'])
+      .toEqual(['zeokeel-capability-center', 'zeokeel-skill-telemetry'])
+    expect(prunedFeatureRows({ connectors: false })).toEqual(['zeokeel-connectors'])
     // 畸形取值方向必须是"开着"：把 `'false'` 当关会去加载一个不在包里的模块。
     expect(closedFeatureModules({ skills: 'false' as unknown as boolean })).toEqual([])
   })
@@ -146,13 +146,13 @@ describe('功能模块摘除面是变体裁剪的唯一声明', () => {
 describe('变体清单（temp/channel-variant.json）', () => {
   it('全开变体不产清单（官方/全开 = 逐字节等价于改造前的落点）', () => {
     expect(manifestFor(source([]))).toBeUndefined()
-    const dir = tempDir('pico-variant-full-')
+    const dir = tempDir('zeokeel-variant-full-')
     expect(applyChannelVariant(source([]), dir)).toBeUndefined()
     expect(existsSync(join(dir, 'channel-variant.json'))).toBe(false)
   })
 
   it('全开构建会删掉上一次变体留下的清单（残留比"没生效"更糟）', () => {
-    const dir = tempDir('pico-variant-stale-')
+    const dir = tempDir('zeokeel-variant-stale-')
     const written = applyChannelVariant(source(['skills']), dir)
     expect(written?.variant).toBe('apps,connectors')
     expect(readChannelVariantManifest(dir)).toBeDefined()
@@ -162,22 +162,22 @@ describe('变体清单（temp/channel-variant.json）', () => {
   })
 
   it('关闭 skills 时的清单内容（包 / bundle / 行 / 目录逐条）', () => {
-    const dir = tempDir('pico-variant-skills-')
+    const dir = tempDir('zeokeel-variant-skills-')
     const manifest = applyChannelVariant(source(['skills']), dir)
     expect(manifest).toEqual({
       schema: CHANNEL_VARIANT_SCHEMA,
       variant: 'apps,connectors',
       modules: ['skills'],
-      packages: ['@picoaide/dsh-capability-center'],
-      bundles: ['@picoaide/dsh-capability-center'],
-      rows: ['picoaide-capability-center', 'picoaide-skill-telemetry'],
+      packages: ['@zeokeel/dsh-capability-center'],
+      bundles: ['@zeokeel/dsh-capability-center'],
+      rows: ['zeokeel-capability-center', 'zeokeel-skill-telemetry'],
       directories: ['packages/host/capability-center'],
     })
     expect(readChannelVariantManifest(dir)).toEqual(manifest)
   })
 
   it('schema / 形状不认识的清单一律读成"没有清单"（不猜、不裁）', () => {
-    const dir = tempDir('pico-variant-schema-')
+    const dir = tempDir('zeokeel-variant-schema-')
     mkdirSync(dir, { recursive: true })
     const file = join(dir, 'channel-variant.json')
     writeFileSync(file, '{ not json')
@@ -190,9 +190,9 @@ describe('变体清单（temp/channel-variant.json）', () => {
       schema: CHANNEL_VARIANT_SCHEMA,
       variant: 'skills',
       modules: ['skills'],
-      packages: ['@picoaide/dsh-capability-center'],
-      bundles: ['@picoaide/dsh-capability-center'],
-      rows: ['picoaide-capability-center'],
+      packages: ['@zeokeel/dsh-capability-center'],
+      bundles: ['@zeokeel/dsh-capability-center'],
+      rows: ['zeokeel-capability-center'],
       directories: ['packages/host/capability-center'],
     }))
     expect(readChannelVariantManifest(dir)?.variant).toBe('skills')
@@ -204,7 +204,7 @@ describe('今天裁剪不了的模块必须拒建，而不是"照常构建"', ()
     const closed = source(['apps'])
     expect(() => assertChannelVariantSupported(closed)).toThrow(/features\.apps=false/u)
     expect(() => assertChannelVariantSupported(closed)).toThrow(/main,app-ai-runner,wasm-apps-windows/u)
-    const dir = tempDir('pico-variant-blocked-')
+    const dir = tempDir('zeokeel-variant-blocked-')
     expect(() => applyChannelVariant(closed, dir)).toThrow(/不支持被真正裁出产物/u)
     // 拒建时**不**留下清单：半份清单会让下游按"要裁 apps"折表，而包其实还在。
     expect(existsSync(join(dir, 'channel-variant.json'))).toBe(false)
@@ -218,9 +218,9 @@ describe('今天裁剪不了的模块必须拒建，而不是"照常构建"', ()
     expect(manifest?.variant).toBe('apps')
     expect(manifest?.directories).toEqual(['packages/host/capability-center', 'packages/host/connectors'])
     expect(manifest?.rows).toEqual([
-      'picoaide-capability-center',
-      'picoaide-skill-telemetry',
-      'pico-connectors',
+      'zeokeel-capability-center',
+      'zeokeel-skill-telemetry',
+      'zeokeel-connectors',
     ])
   })
 })
@@ -249,11 +249,11 @@ describe('构建侧清单 ↔ 运行期过滤器必须给出同一个答案（�
 
 describe('打包输入侧：staging package.json 的裁剪', () => {
   /**
-   * 造一个最小桌面包根：白名单四项齐备 + 一份带 `@picoaide/*` 依赖的 manifest。
+   * 造一个最小桌面包根：白名单四项齐备 + 一份带 `@zeokeel/*` 依赖的 manifest。
    * 用例只驱动 `stagePackAppRoot()` 的清单折叠那一段，不需要真实产物。
    */
   function fakePackageRoot(): string {
-    const root = mkdtempSync(join(tmpdir(), 'pico-pack-root-'))
+    const root = mkdtempSync(join(tmpdir(), 'zeokeel-pack-root-'))
     created.push(root)
     for (const dir of ['lib', 'build']) mkdirSync(join(root, dir), { recursive: true })
     writeFileSync(join(root, 'lib', 'index.js'), 'export {}\n')
@@ -264,11 +264,11 @@ describe('打包输入侧：staging package.json 的裁剪', () => {
       main: 'lib/index.js',
       dependencies: {
         '@deepseek-ai/dsh-base': '0.2.0-rc.2',
-        '@picoaide/dsh-capability-center': 'workspace:*',
-        '@picoaide/dsh-connectors': 'workspace:*',
-        '@picoaide/dsh-enterprise': 'workspace:*',
+        '@zeokeel/dsh-capability-center': 'workspace:*',
+        '@zeokeel/dsh-connectors': 'workspace:*',
+        '@zeokeel/dsh-enterprise': 'workspace:*',
       },
-      build: { appId: 'ai.deepseek.dsh.desktop' },
+      build: { appId: 'com.zeokeel.harness' },
       scripts: { build: 'tsdown' },
     }, null, 2)}\n`)
     return root
@@ -288,9 +288,9 @@ describe('打包输入侧：staging package.json 的裁剪', () => {
       expect(staged.scripts).toBeUndefined()
       expect(Object.keys(staged.dependencies)).toEqual([
         '@deepseek-ai/dsh-base',
-        '@picoaide/dsh-capability-center',
-        '@picoaide/dsh-connectors',
-        '@picoaide/dsh-enterprise',
+        '@zeokeel/dsh-capability-center',
+        '@zeokeel/dsh-connectors',
+        '@zeokeel/dsh-enterprise',
       ])
     } finally {
       cleanup()
@@ -308,8 +308,8 @@ describe('打包输入侧：staging package.json 的裁剪', () => {
       }
       expect(Object.keys(staged.dependencies)).toEqual([
         '@deepseek-ai/dsh-base',
-        '@picoaide/dsh-connectors',
-        '@picoaide/dsh-enterprise',
+        '@zeokeel/dsh-connectors',
+        '@zeokeel/dsh-enterprise',
       ])
     } finally {
       cleanup()
@@ -327,7 +327,7 @@ describe('打包输入侧：staging package.json 的裁剪', () => {
       schema: CHANNEL_VARIANT_SCHEMA,
       variant: 'none',
       modules: ['skills'],
-      packages: ['@picoaide/dsh-does-not-exist'],
+      packages: ['@zeokeel/dsh-does-not-exist'],
       bundles: [],
       rows: [],
       directories: [],

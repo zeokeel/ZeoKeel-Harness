@@ -47,7 +47,7 @@ resolutions 按仓库既有惯例登记 exact + `^` 两个键；护栏 `packages
 | `src/token-lifetime.ts` | `expires_in` 解析、`REFRESH_LEAD_MS=60s`、`REFRESH_SWEEP_INTERVAL_MS=60s` |
 | `src/store.ts` | 凭据新增 `expiresAt` / `refreshedAt`（读取时对非法时间戳做净化） |
 | `src/auth.ts` | 换 token 与旧刷新路径都把 `expires_in` 落成绝对 `expiresAt`；导出 `discoverMcpOAuth` 供刷新路径复用（保持唯一发现实现） |
-| `src/index.ts` | 注册 MCP 时挂 `authProvider`（HTTP）；每 60s 心跳按 `expiresAt` 提前续期；`pico/connector-credentials-changed` 事件让 stdio 服务器重新注册（新令牌进子进程 env）；新增 `POST /api/pico/connectors/:id/refresh`；列表返回 `expiresAt/refreshedAt/canRefresh/refreshing` |
+| `src/index.ts` | 注册 MCP 时挂 `authProvider`（HTTP）；每 60s 心跳按 `expiresAt` 提前续期；`zeokeel/connector-credentials-changed` 事件让 stdio 服务器重新注册（新令牌进子进程 env）；新增 `POST /api/zeokeel/connectors/:id/refresh`；列表返回 `expiresAt/refreshedAt/canRefresh/refreshing` |
 | `src/client/ConnectorsSection.tsx` | 卡片显示「令牌有效期至 …」/「上次刷新 …」，连接状态下多一个「刷新令牌」按钮 |
 
 ### 3.3 失败语义（用户可见）
@@ -69,7 +69,7 @@ resolutions 按仓库既有惯例登记 exact + `^` 两个键；护栏 `packages
 
 - 探针 `temp/mcp-auth-probe/`（`@modelcontextprotocol/sdk` 1.30.0 + 假授权/假 MCP 服务器，不触网）：provider 持有效令牌 → 自动注入；令牌过期 → 401 触发刷新重试；中途轮换 → 自动恢复；refresh token 失效 → 抛 `InvalidGrantError` 且**零浏览器尝试**；无凭据 → 干净报错。
 - 单测 `packages/host/connectors/tests/token-refresh.spec.ts`（15 例，真实 HTTP 假授权服务器）：发现形态 / 静态端点形态 / 轮换保留 / 死 grant → `reauthorize` / 5xx → `transient` / 并发单飞只发一次 grant / 心跳只刷一次 / 手动刷新路由（响应不含任何令牌材料）/ stdio 令牌变更后重新注册 / **心跳在无任何工具调用时把过期令牌刷新并重注册 stdio 服务器**。
-- 门禁：`yarn workspace @picoaide/dsh-connectors check` 与整仓 `yarn check`（含 `verify-patches` 在仓库外对 pristine tarball 的 dry-run 与逐字节对拍）。
+- 门禁：`yarn workspace @zeokeel/dsh-connectors check` 与整仓 `yarn check`（含 `verify-patches` 在仓库外对 pristine tarball 的 dry-run 与逐字节对拍）。
 - 未做真机（需客户 IdP 交互授权）：某客户渠道的线上刷新未在真实服务端跑过，首次升级后建议观察一次令牌到期是否自动续期。
 
 ## 4.1 两处实现细节（踩过才定下来的）

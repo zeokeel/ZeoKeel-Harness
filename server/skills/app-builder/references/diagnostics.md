@@ -51,7 +51,7 @@
 | `DB_DENIED` | 具体被拒的语句，以及 `details.reason` | 一次只发一条语句；只用 `SELECT`/`INSERT`/`UPDATE`/`DELETE`；建表走 `db.define`；不碰保留行号列。**参数化不是平台检查项**：字面量 SQL 一样通过，值要用 `args` 占位自己挡住注入。`reason = statement_timeout` 时**不是 SQL 写错**，而是单语句超过 5 秒（加条件/加 `LIMIT`，或拆成多次调用） |
 | `DB_LIMIT` | 是不是「库写满」（507 **只有**这一个含义，外加单行超过 168 KiB 这一种"一行都返回不了"） | 库满 100 MB 是硬上限（平台不给扩容旋钮）⇒ 清理历史数据或做汇总表。**行数/字节超限不报错**：`db.query` 截断并置 `truncated=true` ⇒ 按它分页（`LIMIT`/`OFFSET`）；语句超时看上一行的 `DB_DENIED` |
 | `APP_QUEUE_FULL` | `max_queue_wait_ms` | 应用侧并发压到 1；收到 429 按 `Retry-After`（1 秒）退避，不要立刻重试；把多次小请求合并 |
-| 客户端 AI loop 错误码（`app_ai_denied` / `app_ai_unavailable` / `app_ai_invalid` / `ai_balance_insufficient` / `ai_rate_limited` / `ai_cancelled`） | 应用前端的 `fetch('/__picoaide/ai/chat')` 返回（**不是** wasm 的 `reason_code`：wasm 侧没有任何 AI 能力，日志里不会出现 AI 宿主错误码） | 未授权 ⇒ 引导使用者到**应用详情页的 AI 面板**点「撤销授权」旁边的授权入口重新授权（撤销入口只有这一个，设置页里没有）；宿主不可用 ⇒ 提示稍后重试，**不要绕回 wasm 侧自己实现**；请求体不合法 ⇒ 检查 `messages` 条数与单条长度；余额不足 ⇒ 提示去桌面客户端看余额，**不显示金额、不要重试**；限流 ⇒ 稍后重试、不要在循环里猛调；`ai_cancelled` ⇒ 页面关闭/主动取消导致的正常收尾，不要当故障 |
+| 客户端 AI loop 错误码（`app_ai_denied` / `app_ai_unavailable` / `app_ai_invalid` / `ai_balance_insufficient` / `ai_rate_limited` / `ai_cancelled`） | 应用前端的 `fetch('/__zeokeel/ai/chat')` 返回（**不是** wasm 的 `reason_code`：wasm 侧没有任何 AI 能力，日志里不会出现 AI 宿主错误码） | 未授权 ⇒ 引导使用者到**应用详情页的 AI 面板**点「撤销授权」旁边的授权入口重新授权（撤销入口只有这一个，设置页里没有）；宿主不可用 ⇒ 提示稍后重试，**不要绕回 wasm 侧自己实现**；请求体不合法 ⇒ 检查 `messages` 条数与单条长度；余额不足 ⇒ 提示去桌面客户端看余额，**不显示金额、不要重试**；限流 ⇒ 稍后重试、不要在循环里猛调；`ai_cancelled` ⇒ 页面关闭/主动取消导致的正常收尾，不要当故障 |
 | `AUTH_REQUIRED` | `auth.mode` / 请求是否来自登录态 | 平台一律要求登录（没有匿名面；历史 `public` 配置读取侧按 `login` 处理）：确认请求来自已登录的客户端，或引导用户先登录 |
 | `MODULE_KILLED` | 请求是否被取消（用户关页面/超时） | 与超时同处理：拆小、缩短单次工作 |
 

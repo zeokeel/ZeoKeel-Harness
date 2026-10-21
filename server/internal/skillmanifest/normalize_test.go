@@ -81,7 +81,7 @@ func TestNormalizeRefusesToInventDescription(t *testing.T) {
 
 func TestNormalizeDropsSelfDeclaredProvenance(t *testing.T) {
 	md := "---\nname: demo\nversion: 1.0.0\nauthor: a\ncategory: b\n" +
-		"description: 这是一段足够长的技能描述用于测试。\nmetadata:\n  picoaide:\n    app_id: forged\n---\n\n" +
+		"description: 这是一段足够长的技能描述用于测试。\nmetadata:\n  zeokeel:\n    app_id: forged\n---\n\n" +
 		"本技能用于服务端单元测试:正文需要足够长才能通过空壳校验,因此这里补充了两句完整的说明文字,描述该技能的用途、触发时机与使用方式,确保长度稳稳超过五十字的下限要求。\n"
 	out, changes, err := NormalizeSkillMD(md, NormalizeOptions{AppID: "demo"})
 	if err != nil {

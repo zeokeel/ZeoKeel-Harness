@@ -10,7 +10,7 @@
  *   - **per-name 锁**（F3 的修复）：两端必须锁在**同一个落点**上，否则"互斥"只是
  *     各自以为自己锁住了 —— 复审实测的终态（内容是插件版 + 溯源是市场版、且不可
  *     自愈）会原样复现；
- *   - **标记落点**（`.picoaide/release.json`）：两端读写同一个文件才有"归属"可言。
+ *   - **标记落点**（`.zeokeel/release.json`）：两端读写同一个文件才有"归属"可言。
  *
  * 判据按仓库既有的跨端对拍风格写：**读对方源码文本**（不是 import —— vendored 包与
  * 企业包之间禁止跨包 import），集合相等，**找不到字面量即 throw**（缺失不能被静默
@@ -124,7 +124,7 @@ describe('F4 跨端契约对拍（读对方源码文本，找不到即 throw）'
     expect(fromVendor, '同一件事（拿不到 per-name 锁）两端必须报同一个码，否则排障与面板兜底会对不上').toBe(fromEnterprise)
   })
 
-  it('安装器标记落点（.picoaide / release.json）两端同值', () => {
+  it('安装器标记落点（.zeokeel / release.json）两端同值', () => {
     const dirPattern = /const PROVENANCE_DIR = '([^']+)'/u
     expect(literal(vendorSrc, dirPattern, 'PROVENANCE_DIR', VENDOR_FILE))
       .toBe(literal(enterpriseSrc, dirPattern, 'PROVENANCE_DIR', ENTERPRISE_FILE))
@@ -285,14 +285,14 @@ describe('R4-D-8 技能名语法四处同源', () => {
 
 /**
  * 造一棵"什么都有"的技能树（模块级夹具，N1 与 N1b 两组共用）：嵌套目录 / 空目录 / 二进制 / 非 ASCII 名 /
- * 大小写与连字符（`localeCompare` 与字节序不同的名字）/ 符号链接 / 顶层 `.picoaide`。
+ * 大小写与连字符（`localeCompare` 与字节序不同的名字）/ 符号链接 / 顶层 `.zeokeel`。
  * 创建顺序刻意与排序顺序相反（先 z 后 a），任何"按 readdir 原始顺序"的实现都会分叉。
  * @param dir - 目标目录（必须已存在）。
  */
 const buildParityTree = async (dir: string): Promise<void> => {
   await mkdir(join(dir, 'scripts', 'nested'), { recursive: true })
   await mkdir(join(dir, 'references'), { recursive: true }) // 空目录（必须进哈希）
-  await mkdir(join(dir, '.picoaide'), { recursive: true }) // 顶层私有目录（必须被排除）
+  await mkdir(join(dir, '.zeokeel'), { recursive: true }) // 顶层私有目录（必须被排除）
   await writeFile(join(dir, 'scripts', 'zz.mjs'), 'zz\n')
   await writeFile(join(dir, 'scripts', 'aa.mjs'), 'aa\n')
   await writeFile(join(dir, 'scripts', 'nested', 'deep.txt'), 'deep\n')
@@ -301,13 +301,13 @@ const buildParityTree = async (dir: string): Promise<void> => {
   await writeFile(join(dir, 'a-b.md'), 'dash\n')
   await writeFile(join(dir, 'aB.md'), 'camel\n')
   await writeFile(join(dir, '二进制.bin'), Buffer.from([0, 1, 2, 255, 0, 65]))
-  await writeFile(join(dir, '.picoaide', 'release.json'), '{"appId":"probe"}\n')
+  await writeFile(join(dir, '.zeokeel', 'release.json'), '{"appId":"probe"}\n')
   await symlink(join(dir, 'SKILL.md'), join(dir, 'link-to-skill.md')) // 两侧都按"不看"处理
 }
 
 describe('N1 内容基准哈希：安装器 computeSkillContentHash === 同步器 skillContentChecksum', () => {
   it('同一棵树：两侧哈希逐字相同；内容变了两侧一起变且仍相同', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-hash-parity-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-hash-parity-'))
     try {
       await buildParityTree(root)
       const fromInstaller = await computeSkillContentHash(root)
@@ -324,13 +324,13 @@ describe('N1 内容基准哈希：安装器 computeSkillContentHash === 同步�
     }
   })
 
-  it('顶层 .picoaide/ 两侧都排除（写溯源本身不得让这份内容变脏）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-hash-parity-'))
+  it('顶层 .zeokeel/ 两侧都排除（写溯源本身不得让这份内容变脏）', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-hash-parity-'))
     try {
       await buildParityTree(root)
       const before = skillContentChecksum(root)
-      await writeFile(join(root, '.picoaide', 'release.json'), '{"appId":"probe","archiveChecksum":"x"}\n')
-      await writeFile(join(root, '.picoaide', 'extra.json'), '{}\n')
+      await writeFile(join(root, '.zeokeel', 'release.json'), '{"appId":"probe","archiveChecksum":"x"}\n')
+      await writeFile(join(root, '.zeokeel', 'extra.json'), '{}\n')
       expect(skillContentChecksum(root)).toBe(before)
       expect(await computeSkillContentHash(root)).toBe(before)
     } finally {
@@ -339,12 +339,12 @@ describe('N1 内容基准哈希：安装器 computeSkillContentHash === 同步�
   })
 
   it('.install-version 两侧都**计入**（所以同步器必须先写它、再算基准）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-hash-parity-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-hash-parity-'))
     try {
       await buildParityTree(root)
       const before = skillContentChecksum(root)
       await writeFile(join(root, '.install-version'), '8')
-      expect(skillContentChecksum(root), '.install-version 是内容树的一部分（安装器只排除顶层 .picoaide）').not.toBe(before)
+      expect(skillContentChecksum(root), '.install-version 是内容树的一部分（安装器只排除顶层 .zeokeel）').not.toBe(before)
       expect(skillContentChecksum(root)).toBe(await computeSkillContentHash(root))
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -369,7 +369,7 @@ describe('N1b 禁用字段：两端同值且都不进内容哈希', () => {
   })
 
   it('写入/清除该字段：两侧哈希都不变；改正文：两侧都变且仍相同', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-hash-n1b-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-hash-n1b-'))
     try {
       await buildParityTree(root)
       const base = await computeSkillContentHash(root)

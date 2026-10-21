@@ -122,7 +122,7 @@ function startHoldingProxy(target: string, holdAt = 2): Promise<{
 async function waitForAuthorizeUrl(h: Harness, previous?: string): Promise<string> {
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
-    const res = await callRoute(h, '/api/pico/connectors/example-mcp/state', 'GET')
+    const res = await callRoute(h, '/api/zeokeel/connectors/example-mcp/state', 'GET')
     const request = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request
     const url = request?.authorizeUrl
     if (typeof url === 'string' && url !== '' && url !== previous) return url
@@ -146,14 +146,14 @@ describe('a superseded registration must not steal the live provider', () => {
     await new Promise(resolve => setTimeout(resolve, 100))
 
     // Registration A: authorize, then park in the held discovery request.
-    await callRoute(h, '/api/pico/connectors/example-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     const firstUrl = await waitForAuthorizeUrl(h)
     await completeAuthorization(firstUrl)
     await proxy.arrived
 
     // Registration B: a second connect supersedes A's intent. Its discovery
     // request is forwarded immediately, so B loads a transport while A waits.
-    await callRoute(h, '/api/pico/connectors/example-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     await completeAuthorization(await waitForAuthorizeUrl(h, firstUrl))
     await waitFor(() => h.configs.length === 1, 15_000)
 
@@ -163,7 +163,7 @@ describe('a superseded registration must not steal the live provider', () => {
     await new Promise(resolve => setTimeout(resolve, 300))
 
     // An out-of-band refresh must reach the transport that is actually live.
-    const refreshed = await callRoute(h, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const refreshed = await callRoute(h, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(refreshed.status).toBe(200)
     const live = h.configs[0] as unknown as { authProvider?: { tokens: () => Promise<{ refresh_token?: string } | undefined> } }
     // 读 SDK 面视图会**顺带保鲜**（`tokens()` 已改为"快过期先续期"），所以基准

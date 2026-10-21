@@ -19,4 +19,4 @@
  */
 
 /** 客户端请求宿主执行一次"标题栏双击"动作（macOS 语义）。 */
-export const DESKTOP_TITLEBAR_DOUBLE_CLICK_PATH = '/api/pico/desktop/window/titlebar-double-click'
+export const DESKTOP_TITLEBAR_DOUBLE_CLICK_PATH = '/api/zeokeel/desktop/window/titlebar-double-click'

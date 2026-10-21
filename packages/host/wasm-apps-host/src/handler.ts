@@ -1,10 +1,10 @@
 /**
- * 协议 handler：`picoaide-app://<app_id>/<path>?<query>` → 平台 JSON 信封 →
+ * 协议 handler：`zeokeel-app://<app_id>/<path>?<query>` → 平台 JSON 信封 →
  * Chromium `Response`（契约 §2 的五步，逐字实现）。
  *
  * 这一层**只做传输与身份注入**：
  *  - 它不判定准入、不读静态、不执行 wasm（那些全在服务端 `appserver.serveApp`）；
- *  - 身份唯一来源是 `ctx.picoSession` 的员工令牌，以 `Authorization: Bearer`
+ *  - 身份唯一来源是 `ctx.zeokeelSession` 的员工令牌，以 `Authorization: Bearer`
  *    发给平台（**绝不**进信封 —— 信封会交给应用自己的请求管线）；
  *  - 它是本模型的**信任边界**：`Origin` 必须由它合成（§4.3：自定义协议下
  *    浏览器一个 Origin/Referer/Sec-Fetch-* 都不发），因此这里 fail-closed：
@@ -13,7 +13,7 @@
  * 依赖全部注入（`deps.fetch` / `deps.session` / `deps.clearSession`），所以本模块
  * 不 import electron、可在纯 Node 下单测。
  *
- * @module @picoaide/dsh-wasm-apps-host/handler
+ * @module @zeokeel/dsh-wasm-apps-host/handler
  */
 
 import {
@@ -61,7 +61,7 @@ export interface AppSchemeHandlerDeps {
   /**
    * 本安装的应用源 scheme（渠道包 `desktop.app_origin_scheme`，组装期注入）。
    *
-   * §7.8 冻结：**不在这里写死** `picoaide-app`。它是 Origin 合成与 URL 校验的
+   * §7.8 冻结：**不在这里写死** `zeokeel-app`。它是 Origin 合成与 URL 校验的
    * 唯一依据，也是"别的渠道的链接进不来"的隔离面。
    */
   appOriginScheme: string
@@ -75,10 +75,10 @@ export interface AppSchemeHandlerDeps {
   hostLocale: (acceptLanguage: string | null) => HostLocale
   /**
    * 客户端持有性证明（§20.1/§23.1）：`request` 与 `open` 都必须带
-   * `X-Pico-App-Proof`。缺席（异常宿主/单测）⇒ 不带该头，平台会拒（fail-closed）。
+   * `X-ZeoKeel-App-Proof`。缺席（异常宿主/单测）⇒ 不带该头，平台会拒（fail-closed）。
    */
   appProof?: { get(appId: string, force?: boolean): Promise<string | null>, invalidate(): void } | undefined
-  /** 应用 AI 桥（§21；本地处理 `/__picoaide/ai/chat`，绝不转发平台）。缺席 ⇒ 503。 */
+  /** 应用 AI 桥（§21；本地处理 `/__zeokeel/ai/chat`，绝不转发平台）。缺席 ⇒ 503。 */
   aiChat?: ((appId: string, body: Uint8Array, signal: AbortSignal) => Promise<AiChatOutcome>) | undefined
   /**
    * 本机内容缓存（§7.5 / F11）。缺席 ⇒ 一律回源（**不是**"缓存坏了"，只是不缓存）。
@@ -91,7 +91,7 @@ export interface AppSchemeHandlerDeps {
   cacheScope?: (() => CacheScope | undefined) | undefined
   /**
    * 某应用**当前已知的生效版本**（缓存键的第三段；唯一来源是平台响应头
-   * `X-PicoAide-App-Version`，由打开校验记下）。未知 ⇒ 不读不写缓存
+   * `X-ZeoKeel-App-Version`，由打开校验记下）。未知 ⇒ 不读不写缓存
    * （拿一个猜出来的版本号当键 = 改版后继续发旧内容）。
    */
   cacheVersion?: ((appId: string) => string | undefined) | undefined
@@ -193,12 +193,12 @@ export function createAppSchemeHandler(
           return ''
         }
       })()
-      warn(`pico-wasm-apps-host: refused a malformed app URL (${rawPath})`)
+      warn(`zeokeel-wasm-apps-host: refused a malformed app URL (${rawPath})`)
       return htmlResponse(400, invalidRequestPage(locale, `url=${rawPath}`))
     }
     const method = request.method.toUpperCase()
     if (!(APP_METHODS as readonly string[]).includes(method)) {
-      warn(`pico-wasm-apps-host: refused method ${method} for app ${url.appId}`)
+      warn(`zeokeel-wasm-apps-host: refused method ${method} for app ${url.appId}`)
       return localError(locale, navigation, {
         status: 405,
         code: 'METHOD_NOT_ALLOWED',
@@ -214,20 +214,20 @@ export function createAppSchemeHandler(
     const session = deps.session()
     if (session === null) {
       // 契约 §2：一律要求登录，没有匿名面。这里给**可读页面**（不是空白页）。
-      warn(`pico-wasm-apps-host: refused ${url.appId} without a session`)
+      warn(`zeokeel-wasm-apps-host: refused ${url.appId} without a session`)
       return htmlResponse(401, signInRequiredPage(locale))
     }
 
-    // ---- `__picoaide` 命名空间是**宿主保留面**：只有 AI 桥这一条路径存在 ----
-    // §21.2 规则②③（R2-X-3）：其余 `__picoaide/*` 一律 **404**，**绝不**当普通应用
+    // ---- `__zeokeel` 命名空间是**宿主保留面**：只有 AI 桥这一条路径存在 ----
+    // §21.2 规则②③（R2-X-3）：其余 `__zeokeel/*` 一律 **404**，**绝不**当普通应用
     // 请求转发平台 —— 否则"保留路径"就成了一句空话（转发出去等于把宿主内部命名空间
     // 暴露成应用可探测/可打穿的面，且平台会把它当应用自己的路径处理）。
     //
-    // R2-L2-3：**`/__picoaide`（无尾斜杠）也是保留面**。只判 `startsWith('/__picoaide/')`
+    // R2-L2-3：**`/__zeokeel`（无尾斜杠）也是保留面**。只判 `startsWith('/__zeokeel/')`
     // 会把该形态漏进"普通应用请求"分支（转发平台）。判据集中在
     // {@link isReservedHostPath}，与服务端 `reservedPathPrefix` 的口径一致（两端一起改）。
     if (isReservedHostPath(url.path) && url.path !== AI_CHAT_PATH) {
-      warn(`pico-wasm-apps-host: refused a reserved host path (${url.path.slice(0, 80)})`)
+      warn(`zeokeel-wasm-apps-host: refused a reserved host path (${url.path.slice(0, 80)})`)
       return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'no such host bridge' } }), {
         status: 404,
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
@@ -319,12 +319,12 @@ export function createAppSchemeHandler(
     try {
       body = new Uint8Array(await request.arrayBuffer())
     } catch (cause) {
-      warn(`pico-wasm-apps-host: reading the app request body failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: reading the app request body failed (${cause instanceof Error ? cause.message : String(cause)})`)
       return htmlResponse(400, invalidRequestPage(locale, 'request body unreadable'))
     }
     const built = buildRequestEnvelope({ scheme: deps.appOriginScheme, url, method, headers: request.headers, body })
     if (!built.ok) {
-      warn(`pico-wasm-apps-host: refused an oversized app request (${built.reason} ${String(built.actual)} > ${String(built.limit)})`)
+      warn(`zeokeel-wasm-apps-host: refused an oversized app request (${built.reason} ${String(built.actual)} > ${String(built.limit)})`)
       return htmlResponse(413, invalidRequestPage(locale, `${built.reason}: ${String(built.actual)} > ${String(built.limit)}`))
     }
 
@@ -344,7 +344,7 @@ export function createAppSchemeHandler(
     })
 
     /**
-     * 一次出站尝试：带 `X-Pico-App-Proof`（§20.1/§23.1：`request` 与 `open` 都带）。
+     * 一次出站尝试：带 `X-ZeoKeel-App-Proof`（§20.1/§23.1：`request` 与 `open` 都带）。
      * @param forceProof - true 时强制重新签发（401 重签一次再重试）。
      * @returns 平台响应。
      */
@@ -392,7 +392,7 @@ export function createAppSchemeHandler(
       }
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause)
-      warn(`pico-wasm-apps-host: gateway request for ${url.appId} failed (${detail})`)
+      warn(`zeokeel-wasm-apps-host: gateway request for ${url.appId} failed (${detail})`)
       const timeout = controller.signal.aborted
       return localError(locale, navigation, {
         status: 502,
@@ -427,7 +427,7 @@ export function createAppSchemeHandler(
       })()
       const code = readPlatformError(body)?.code ?? ''
       if (code.startsWith('proof_')) {
-        warn(`pico-wasm-apps-host: the platform rejected the app proof for ${url.appId} (${code})`)
+        warn(`zeokeel-wasm-apps-host: the platform rejected the app proof for ${url.appId} (${code})`)
         return localError(locale, navigation, {
           status: 401,
           code,
@@ -442,7 +442,7 @@ export function createAppSchemeHandler(
       }
       // 与 enterprise 出站约定一致：401 清会话（渲染层的 tripwire 会回登录页）。
       deps.clearSession()
-      warn(`pico-wasm-apps-host: the platform rejected the session while serving ${url.appId}`)
+      warn(`zeokeel-wasm-apps-host: the platform rejected the session while serving ${url.appId}`)
       return htmlResponse(401, sessionExpiredPage(locale))
     }
     let parsed: unknown
@@ -481,7 +481,7 @@ export function createAppSchemeHandler(
     // ② 响应信封（§4.2）。
     const envelope = parseResponseEnvelope(parsed)
     if (!envelope.ok) {
-      warn(`pico-wasm-apps-host: invalid platform response for ${url.appId} (${envelope.reason})`)
+      warn(`zeokeel-wasm-apps-host: invalid platform response for ${url.appId} (${envelope.reason})`)
       return localError(locale, navigation, {
         status: 502,
         code: 'INVALID_PLATFORM_RESPONSE',
@@ -505,7 +505,7 @@ export function createAppSchemeHandler(
     }
     const bytes = decodeBase64Body(envelope.envelope.body)
     if (bytes === null) {
-      warn(`pico-wasm-apps-host: undecodable base64 body for ${url.appId}`)
+      warn(`zeokeel-wasm-apps-host: undecodable base64 body for ${url.appId}`)
       return localError(locale, navigation, {
         status: 502,
         code: 'INVALID_PLATFORM_RESPONSE',
@@ -517,7 +517,7 @@ export function createAppSchemeHandler(
       // §5.1 / R2S-10 冻结：兜底截断**不得**当成功交给渲染器 —— 截断的字节不是
       // 应用要的页面（半截 HTML 会渲染成乱码、半截 JSON 会解析失败），按 502/
       // `INVALID_PLATFORM_RESPONSE` 处理并给出可读错误页。
-      warn(`pico-wasm-apps-host: the platform truncated the response body for ${url.appId}`)
+      warn(`zeokeel-wasm-apps-host: the platform truncated the response body for ${url.appId}`)
       return localError(locale, navigation, {
         status: 502,
         code: 'INVALID_PLATFORM_RESPONSE',
@@ -537,7 +537,7 @@ export function createAppSchemeHandler(
     // 的字节交给渲染器）。
     let locallyTruncated = false
     if (payload.byteLength > APP_RESPONSE_BODY_MAX_BYTES) {
-      warn(`pico-wasm-apps-host: truncating a ${String(payload.byteLength)}-byte response for ${url.appId}`)
+      warn(`zeokeel-wasm-apps-host: truncating a ${String(payload.byteLength)}-byte response for ${url.appId}`)
       payload = payload.subarray(0, APP_RESPONSE_BODY_MAX_BYTES)
       locallyTruncated = true
     }

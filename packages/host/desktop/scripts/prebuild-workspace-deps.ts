@@ -14,9 +14,9 @@
  *
  * 2026-09-20(构建环修复,路线 A + A 扩展)**修正这段顺序**:desktop 有三条真实的
  * 前置构建边——`src/host-locale.ts` / `src/desktop-home.ts` 各是一行 re-export
- * (两个零依赖叶子包 `@picoaide/dsh-host-locale` / `@picoaide/dsh-host-home` 的
+ * (两个零依赖叶子包 `@zeokeel/dsh-host-locale` / `@zeokeel/dsh-host-home` 的
  * lib/types),`src/main.ts`/`src/app-ai-runner.ts` 静态 import
- * `@picoaide/dsh-wasm-apps-host`(它自己又读 `@picoaide/dsh-browser/guard`)。
+ * `@zeokeel/dsh-wasm-apps-host`(它自己又读 `@zeokeel/dsh-browser/guard`)。
  * 而 browser 的 tsc 只读两个叶子包的 lib/types（2026-10-13 起不再读 connectors 的
  * 类型：契约在 `src/connectors-contract.ts` 本地声明），connectors 只读两个叶子包 ⇒
  * 正确顺序是:**叶子包 → connectors → browser → wasm-apps-host → desktop → 其余**。
@@ -36,7 +36,7 @@
  * `outputFiles()` 里**残留**文件的最旧 mtime,而并发会话的 `yarn check` 会为别的包
  * 跑 tsdown(`clean: true` ⇒ `Cleaning N files`),可能正好在本函数与下游 tsc 之间把
  * 某个包的 `lib/` 清空。此时残留文件依旧"新" ⇒ 判定通过 ⇒ 跳过重建 ⇒ 下游报
- * `TS7016: Could not find a declaration file for module '@picoaide/dsh-wasm-apps-host'`
+ * `TS7016: Could not find a declaration file for module '@zeokeel/dsh-wasm-apps-host'`
  * (实测 dsh-plugin-desktop 因此红 458s,并级联跳过 enterprise/cron/account-card)。
  * 现在 isUpToDate() 在 mtime 之外**还要求每个声明产物真的存在**:
  *   1. 该包 `package.json` 的 `exports` 每个子路径解析出的每个目标(`types` /
@@ -101,24 +101,24 @@ export const WORKSPACE_PACKAGES: readonly WorkspacePackage[] = [
   //    lib/types（desktop 的 `src/{host-locale,desktop-home}.ts` 各是一行 re-export）；
   //    panel-surface 是四个客户端面板（定时任务 / 能力中心 / 连接器 / 应用中心）
   //    共用的中列装载器与视觉语言，被它们的 client bundle 内联 ⇒ 同样必须先产出。
-  { workspace: '@picoaide/dsh-host-locale', dir: 'packages/host/host-locale', deps: [] },
-  { workspace: '@picoaide/dsh-host-home', dir: 'packages/host/host-home', deps: [] },
-  { workspace: '@picoaide/dsh-panel-surface', dir: 'packages/client/panel-surface', deps: [] },
+  { workspace: '@zeokeel/dsh-host-locale', dir: 'packages/host/host-locale', deps: [] },
+  { workspace: '@zeokeel/dsh-host-home', dir: 'packages/host/host-home', deps: [] },
+  { workspace: '@zeokeel/dsh-panel-surface', dir: 'packages/client/panel-surface', deps: [] },
   // 0a) 宿主侧**网关客户端**的共享叶子包（2026-10-13 P0-b）：只读 host-locale 的
   //     lib/types ⇒ 排在它之后；enterprise / 能力中心 / 应用宿主三个消费方又都排在
   //     本包之后。它没有出边通往任何模块包，故不引入新的构建环。
-  { workspace: '@picoaide/dsh-gateway-client', dir: 'packages/host/gateway-client', deps: ['packages/host/host-locale'] },
+  { workspace: '@zeokeel/dsh-gateway-client', dir: 'packages/host/gateway-client', deps: ['packages/host/host-locale'] },
   // 0b) 底部「更多」行（2026-09-21 并道改造）：它把 panel-surface 的
   //     `activePanelId` / `PANEL_ACTIVE_ATTR` 内联进自己的 client bundle，因此
   //     **必须排在 panel-surface 之后**；五个面板插件（cron / enterprise /
   //     connectors / browser / wasm-apps）的类型面读它的 `./client` 声明
   //     （type-only import），所以它们又都排在它之后 —— 无环。
-  { workspace: '@picoaide/dsh-foot-menu', dir: 'packages/client/foot-menu', deps: ['packages/client/panel-surface'] },
-  // 0c) 能力中心（技能商店）的**客户端面**（2026-10-13 从 `@picoaide/dsh-enterprise`
-  //     整块搬出）：`@picoaide/dsh-panel-surface` 被内联进它的 client bundle
+  { workspace: '@zeokeel/dsh-foot-menu', dir: 'packages/client/foot-menu', deps: ['packages/client/panel-surface'] },
+  // 0c) 能力中心（技能商店）的**客户端面**（2026-10-13 从 `@zeokeel/dsh-enterprise`
+  //     整块搬出）：`@zeokeel/dsh-panel-surface` 被内联进它的 client bundle
   //     （读 panel-surface 的 lib/types + lib/client.js）⇒ 必须排在 panel-surface
-  //     之后；`@picoaide/dsh-foot-menu` 的 `./client` 声明是它的 type-only 输入
-  //     （`ctx.picoFootMenu`）⇒ 排在 foot-menu 之后。两条边都不成环（两个依赖都
+  //     之后；`@zeokeel/dsh-foot-menu` 的 `./client` 声明是它的 type-only 输入
+  //     （`ctx.zeokeelFootMenu`）⇒ 排在 foot-menu 之后。两条边都不成环（两个依赖都
   //     没有通往本包的出边）。
   //
   //     与 `scripts/check-workspaces.mjs` 的 `PACKAGES[*].needs` 有**一处刻意不同**：
@@ -130,30 +130,30 @@ export const WORKSPACE_PACKAGES: readonly WorkspacePackage[] = [
   //     host-home（`dshHomeSafe` + 技能库根 `resolveSkillsDir`）、gateway-client
   //     （网关调用与错误分类）。三条都是无出边的叶子节点。
   {
-    workspace: '@picoaide/dsh-capability-center',
+    workspace: '@zeokeel/dsh-capability-center',
     dir: 'packages/host/capability-center',
     deps: ['packages/client/panel-surface', 'packages/client/foot-menu', 'packages/host/host-locale', 'packages/host/host-home', 'packages/host/gateway-client'],
   },
   // 1) connectors：只读两个叶子包（`host-copy.ts` / `user-scope.ts`）—— 路线 A 扩展
   //    之后它**不再** import 桌面包，所以排在叶子包之后即可。
   {
-    workspace: '@picoaide/dsh-connectors',
+    workspace: '@zeokeel/dsh-connectors',
     dir: 'packages/host/connectors',
     deps: ['packages/host/host-home', 'packages/host/host-locale', 'packages/client/panel-surface', 'packages/client/foot-menu'],
   },
   // 2) browser：三个叶子包 + connectors 的 `lib/`。
   //    2026-10-13（去连接器耦合）：`src/index.ts` **不再**读 connectors 的 lib/types
   //    （契约改在 `src/connectors-contract.ts` 本地声明 ⇒ connectors/lib 不在时
-  //    tsc 也过），改静态 import 数据根叶子包 `@picoaide/dsh-host-home`；
+  //    tsc 也过），改静态 import 数据根叶子包 `@zeokeel/dsh-host-home`；
   //    `deps` 里仍留 connectors，因为 `tests/*.spec.ts` 值导入真实 `ConnectorStore`
   //    造夹具、运行期惰性 require 也解析到它的 `lib/`。
   {
-    workspace: '@picoaide/dsh-browser',
+    workspace: '@zeokeel/dsh-browser',
     dir: 'packages/host/browser',
     deps: ['packages/host/host-home', 'packages/host/host-locale', 'packages/host/connectors', 'packages/client/foot-menu'],
   },
   // 3) 客户端专属 WASM 应用 origin：`electron-adapter.ts` 值导入
-  //    `@picoaide/dsh-browser/guard` ⇒ 必须排在 browser 之后、desktop 之前
+  //    `@zeokeel/dsh-browser/guard` ⇒ 必须排在 browser 之后、desktop 之前
   //    （desktop 的 main.ts/app-ai-runner.ts 静态 import 它）。
   // 2026-09-24：`src/session.ts` 的订阅契约收口到叶子包（`session-events` 子路径）
   // ⇒ 它也是 wasm-apps-host 的构建输入。
@@ -162,7 +162,7 @@ export const WORKSPACE_PACKAGES: readonly WorkspacePackage[] = [
   // `app-routes.ts`）⇒ 构建输入多两条：host-home（`dshHomeSafe`）与 gateway-client
   // （网关调用 + 会话形状）。两条都无出边通往本包的前置节点。
   {
-    workspace: '@picoaide/dsh-wasm-apps-host',
+    workspace: '@zeokeel/dsh-wasm-apps-host',
     dir: 'packages/host/wasm-apps-host',
     deps: ['packages/host/browser', 'packages/host/host-locale', 'packages/host/host-home', 'packages/host/gateway-client'],
   },
@@ -176,21 +176,21 @@ export const WORKSPACE_PACKAGES: readonly WorkspacePackage[] = [
   // 2026-09-23：`loopback.ts` 四份合一后，enterprise 也直接读叶子包的
   // `./loopback` 子路径（原先实现住在自己包里）⇒ 这条边加上 host-locale。
   {
-    workspace: '@picoaide/dsh-enterprise',
+    workspace: '@zeokeel/dsh-enterprise',
     dir: 'packages/host/enterprise',
     // 2026-10-13（P0-b）：`server-connector/{auth,config,electron}` 的实现收敛到
     // `packages/host/gateway-client`（本包保留同名 re-export）⇒ 多一条构建输入。
     deps: ['packages/host/host-locale', 'packages/host/gateway-client', 'packages/host/desktop', 'packages/client/panel-surface', 'packages/client/foot-menu'],
   },
-  { workspace: '@picoaide/dsh-account-card', dir: 'packages/client/account-card', deps: ['packages/host/desktop'] },
-  { workspace: '@picoaide/dsh-wasm-apps', dir: 'packages/client/wasm-apps', deps: ['packages/client/panel-surface', 'packages/client/foot-menu'] },
-  { workspace: '@picoaide/dsh-branding', dir: 'packages/client/branding', deps: ['packages/host/desktop'] },
+  { workspace: '@zeokeel/dsh-account-card', dir: 'packages/client/account-card', deps: ['packages/host/desktop'] },
+  { workspace: '@zeokeel/dsh-wasm-apps', dir: 'packages/client/wasm-apps', deps: ['packages/client/panel-surface', 'packages/client/foot-menu'] },
+  { workspace: '@zeokeel/dsh-branding', dir: 'packages/client/branding', deps: ['packages/host/desktop'] },
   // cron 的 tsc 仍读 desktop 的 lib/types（`dsh-plugin-desktop/host-locale` 与
   // `dsh-plugin-desktop/desktop-home` 两条 re-export 子路径）—— 它不在环上，
   // 两条子路径都保留，故这条边继续登记。2026-09-23 起它还直接读叶子包的
   // `./loopback` 子路径（`loopback.ts` 四份合一的落点），故加上 host-locale。
   {
-    workspace: '@picoaide/dsh-cron',
+    workspace: '@zeokeel/dsh-cron',
     dir: 'packages/host/cron',
     deps: ['packages/host/host-locale', 'packages/host/desktop', 'packages/client/panel-surface', 'packages/client/foot-menu'],
   },
@@ -323,7 +323,7 @@ function collectExportTargets(value: unknown, out: string[] = []): string[] {
 /**
  * 该包 `package.json` 的 `exports` 声明的产物文件(相对包根、POSIX 形状、去重排序)。
  *
- * 这是本缺陷的主判据:`@picoaide/dsh-wasm-apps-host` 的
+ * 这是本缺陷的主判据:`@zeokeel/dsh-wasm-apps-host` 的
  * `exports["."].types = ./lib/types/index.d.ts` 在并发 clean 之后消失,而 mtime
  * 判定照样通过 —— 声明的 `types`/`default` 目标必须逐个存在,才算"构建完整"。
  */

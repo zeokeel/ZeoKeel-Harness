@@ -69,7 +69,7 @@ function assetNameFor(version: string): string {
   const suffix = process.platform === 'darwin'
     ? 'mac.dmg'
     : process.platform === 'win32' ? 'x64-Setup.exe' : 'x86_64.AppImage'
-  return `PicoAide-Harness-${version}-${suffix}`
+  return `ZeoKeel-Harness-${version}-${suffix}`
 }
 
 /** 一份**本平台合法**的最小安装包夹具（复用校验里有平台容器魔数检查）。 */
@@ -112,9 +112,9 @@ function manifest(base: string, version: string, digest: string): Response {
     client: {
       version,
       assets: {
-        'mac-universal': { url: `${releases}/PicoAide-Harness-${version}-mac.dmg`, sha256: digest, size: 0 },
-        'win-x64': { url: `${releases}/PicoAide-Harness-${version}-x64-Setup.exe`, sha256: digest, size: 0 },
-        'linux-x64': { url: `${releases}/PicoAide-Harness-${version}-x86_64.AppImage`, sha256: digest, size: 0 },
+        'mac-universal': { url: `${releases}/ZeoKeel-Harness-${version}-mac.dmg`, sha256: digest, size: 0 },
+        'win-x64': { url: `${releases}/ZeoKeel-Harness-${version}-x64-Setup.exe`, sha256: digest, size: 0 },
+        'linux-x64': { url: `${releases}/ZeoKeel-Harness-${version}-x86_64.AppImage`, sha256: digest, size: 0 },
       },
     },
   })
@@ -198,7 +198,7 @@ async function fixture(options: {
 
   const runtime = {
     locale: 'en',
-    productName: 'PicoAide Harness',
+    productName: 'ZeoKeel Harness',
     updates: {
       isPackaged: true,
       currentVersion: '2.0.0',
@@ -232,7 +232,7 @@ async function fixture(options: {
     desktopRuntime: runtime,
     logger: { warn: vi.fn() },
     effect: (register: () => (() => void | Promise<void>)) => { disposer = register(); return disposer },
-    get: (name: string) => name === 'picoSession' ? { getSession: () => session, isRestored: () => true } : undefined,
+    get: (name: string) => name === 'zeokeelSession' ? { getSession: () => session, isRestored: () => true } : undefined,
     on: (event: string, handler: (...args: unknown[]) => void) => {
       const set = listeners.get(event) ?? new Set()
       set.add(handler)
@@ -254,7 +254,7 @@ async function fixture(options: {
     finishDownload: (path: string) => { pending.shift()?.(path) },
     switchTo: (serverURL: string) => {
       session = { serverURL }
-      for (const handler of listeners.get('pico/session-changed') ?? []) handler(session)
+      for (const handler of listeners.get('zeokeel/session-changed') ?? []) handler(session)
     },
     invokeInstall: () => {
       for (const entry of tray?.submenu?.() ?? []) entry.invoke()

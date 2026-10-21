@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-connectors",
+  "name": "@zeokeel/dsh-connectors",
   "version": "0.1.0",
-  "description": "Connector framework (OAuth/device/token/cli auth + MCP registration) and built-in connectors for PicoAide Harness",
+  "description": "Connector framework (OAuth/device/token/cli auth + MCP registration) and built-in connectors for ZeoKeel Harness",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -32,7 +32,7 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-store",
-        "@picoaide/dsh-foot-menu"
+        "@zeokeel/dsh-foot-menu"
       ],
       "platform": "web"
     }
@@ -52,8 +52,8 @@
   "dependencies": {
     "@deepseek-ai/dsh-mcp-client": "0.2.1-rc.2",
     "@modelcontextprotocol/client": "2.0.0",
-    "@picoaide/dsh-host-home": "workspace:*",
-    "@picoaide/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-host-home": "workspace:*",
+    "@zeokeel/dsh-host-locale": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
@@ -79,10 +79,10 @@
     "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
     "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "@picoaide/dsh-foot-menu": "workspace:*",
-    "@picoaide/dsh-panel-surface": "workspace:*",
     "@types/node": "^22.20.0",
     "@types/react": "^18",
+    "@zeokeel/dsh-foot-menu": "workspace:*",
+    "@zeokeel/dsh-panel-surface": "workspace:*",
     "react": "18.3.1",
     "tsdown": "0.22.2",
     "typescript": "6.0.3",

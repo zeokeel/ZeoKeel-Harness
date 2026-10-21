@@ -1,6 +1,6 @@
 // Command compilechild 是编译模块测试用的**故障注入子进程**。
 //
-// 它实现与 cmd/picoaide-app-compile 相同的父子协议（单行 JSON），但行为可控：
+// 它实现与 cmd/zeokeel-app-compile 相同的父子协议（单行 JSON），但行为可控：
 //
 //	-sleep 2s     收到 compile 请求后先睡 2 s（模拟"编译太慢"⇒ 父侧超时杀进程）
 //	-crash       收到 compile 请求后直接 os.Exit(9)（模拟 OOM 被杀）
@@ -67,7 +67,7 @@ func main() {
 			if *badexit {
 				os.Exit(3)
 			}
-			_ = enc.Encode(response{OK: true, Version: "picoaide-app-compile/1"})
+			_ = enc.Encode(response{OK: true, Version: "zeokeel-app-compile/1"})
 		case "compile":
 			if *crash {
 				os.Exit(9)

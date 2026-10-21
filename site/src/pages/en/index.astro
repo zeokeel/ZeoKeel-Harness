@@ -250,8 +250,8 @@ const groups = {
 
 <Layout
   lang="en"
-  title="PicoAide Harness — enterprise AI platform, privately deployed"
-  description="PicoAide Harness combines a desktop client, a local agent engine and an enterprise server. Deploy one container image on your own network; clients ship with the server and employee machines stay off the public internet."
+  title="ZeoKeel Harness — enterprise AI platform, privately deployed"
+  description="ZeoKeel Harness combines a desktop client, a local agent engine and an enterprise server. Deploy one container image on your own network; clients ship with the server and employee machines stay off the public internet."
 >
   <Header locale="en" />
 
@@ -261,9 +261,9 @@ const groups = {
       <div class="hero__brand">
         <picture>
           <source srcset={logoDark.src} media="(prefers-color-scheme: dark)" />
-          <img src={logo.src} alt="PicoAide Harness" width="52" height="52" class="hero__logo" />
+          <img src={logo.src} alt="ZeoKeel Harness" width="52" height="52" class="hero__logo" />
         </picture>
-        <span class="hero__brandname">PicoAide Harness</span>
+        <span class="hero__brandname">ZeoKeel Harness</span>
       </div>
 
       <h1 class="hero__title">Turn individual AI habits<br />into <em>organisational capability</em></h1>
@@ -304,7 +304,7 @@ const groups = {
         </div>
       </div>
 
-      <Image class="hero__shot" src={mainShot} alt="PicoAide Harness desktop client" width={1120} height={711} format="webp" quality={82} />
+      <Image class="hero__shot" src={mainShot} alt="ZeoKeel Harness desktop client" width={1120} height={711} format="webp" quality={82} />
     </div>
   </section>
 
@@ -515,15 +515,15 @@ const groups = {
           <span>Run on the deployment host · see <a href="/en/deployment/compose/">container deployment</a></span>
         </div>
         <pre><code>{`# 1) Verify and import the image (<version> comes from latest.json -> server.version, without the leading v)
-curl -fL -O https://release.picoaide.com/official/releases/<version>/picoaide-server-<version>-amd64.zip
-unzip -p picoaide-server-<version>-amd64.zip image.tar | docker load
+curl -fL -O https://release.zeokeel.com/official/releases/<version>/zeokeel-server-<version>-amd64.zip
+unzip -p zeokeel-server-<version>-amd64.zip image.tar | docker load
 
 # 2) Export the stack files (the image carries compose / Caddyfile / client installers)
-docker run --rm -v /opt/picoaide:/out -e PICOAI_UNPACK_STACK=/out \\
-  picoaide-harness-server:<version>
+docker run --rm -v /opt/zeokeel:/out -e ZEOKEEL_UNPACK_STACK=/out \\
+  zeokeel-harness-server:<version>
 
 # 3) Fill in .env, start, and confirm the health probe
-cd /opt/picoaide && docker compose up -d
+cd /opt/zeokeel && docker compose up -d
 curl -k https://<your-domain>/healthz`}</code></pre>
       </div>
 
@@ -531,7 +531,7 @@ curl -k https://<your-domain>/healthz`}</code></pre>
         <div class="note note--accent">
           <h3>Data stays in bind mounts</h3>
           <p>
-            <code>picoaide-data/</code> (including <code>master.key</code>) and <code>pg-data/</code>
+            <code>zeokeel-data/</code> (including <code>master.key</code>) and <code>pg-data/</code>
             live in the deployment directory. Upgrades replace the image, never the data; a rollback
             is a pointer change.
           </p>
@@ -728,7 +728,7 @@ curl -k https://<your-domain>/healthz`}</code></pre>
       </div>
 
       <div class="updates">
-        <a class="update" href="https://github.com/picoaide/picoaide-harness/releases" target="_blank" rel="noopener">
+        <a class="update" href="https://github.com/zeokeel/ZeoKeel-Harness/releases" target="_blank" rel="noopener">
           <div class="update__meta"><span class="update__badge">GitHub</span></div>
           <h3 class="update__title">Release archive</h3>
           <p class="update__desc">
@@ -830,7 +830,7 @@ curl -k https://<your-domain>/healthz`}</code></pre>
       <p>Pull one image and follow one guide for deployment, upgrade and rollback. Employee machines stay off the public internet.</p>
       <div class="actions actions--center">
         <a class="btn btn--light" href="/en/deployment/">Read the deployment guide<span class="btn__arrow">→</span></a>
-        <a class="btn btn--ghost-light" href="https://github.com/picoaide/picoaide-harness" target="_blank" rel="noopener">View on GitHub</a>
+        <a class="btn btn--ghost-light" href="https://github.com/zeokeel/ZeoKeel-Harness" target="_blank" rel="noopener">View on GitHub</a>
       </div>
     </div>
   </section>

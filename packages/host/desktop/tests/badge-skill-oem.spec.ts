@@ -44,7 +44,7 @@ describe('badge skill OEM branding', () => {
     } as never)
     if (provider === undefined) throw new Error('badge provider was not registered')
     const candidate = await first(provider.list())
-    expect(candidate.description).toContain('PicoAide Harness')
+    expect(candidate.description).toContain('ZeoKeel Harness')
     name = 'Acme OEM'
     expect((await provider.get(candidate)).content).toContain('Powered by Acme OEM')
   })

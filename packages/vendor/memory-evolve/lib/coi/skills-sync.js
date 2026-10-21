@@ -25,7 +25,7 @@
  * 「已本地修改」。现在：
  *   - **每次自己写内容**（首次安装 / 升版换入 / 内容同一性采纳）之后都写一份
  *     `archiveChecksum` = {@link skillContentChecksum}（与企业侧
- *     `computeSkillContentHash` 逐字节同源的整树哈希，排除顶层 `.picoaide/`、
+ *     `computeSkillContentHash` 逐字节同源的整树哈希，排除顶层 `.zeokeel/`、
  *     含 `.install-version`；两实现的等价性由企业包
  *     `tests/skill-channel-parity.spec.ts` 用真实 fixture 对拍）；
  *   - 整树换入之前比对基准：不一致 ⇒ **如实拒收**（`refused` +
@@ -43,7 +43,7 @@
  *      集合之外）；复检不成立就**只收回自己刚写的标记**并 `refused` —— 否则那个窗口
  *      里落进来的用户字节会被盖上 plugin 溯源，下一次随包升版时被整树换入静默删除；
  *   2. **标记读取有类型/体积闸门**（{@link readSmallRegularFile}）：`lstat` 必须是
- *      普通文件 + 64KiB 上限 + `O_NONBLOCK` 按 fd 复验 —— `.picoaide/release.json`
+ *      普通文件 + 64KiB 上限 + `O_NONBLOCK` 按 fd 复验 —— `.zeokeel/release.json`
  *      是 FIFO 时裸 `readFileSync` 会让**开机同步永久阻塞**（复审实测 12s 不返回）；
  *   3. **与安装器共用同一把 per-name 文件锁**（{@link SKILL_LOCK_DIR}）：拿到锁才
  *      判定/换入，拿不到就 `refused`（`SKILL_LOCKED`）—— 并发的终态是"内容是插件版 +
@@ -110,19 +110,19 @@ const SKILL_TEMP_DIR = '.skill-tmp'
  * 是"用户已明确移除"的**持久终态**：`<skills>/.skill-removed/<name>.json`。
  *
  * 落点与既有的安装器私有区同源（技能库根下的点号私有目录，读写都不进技能发现
- * 与能力中心列表），与 `.skill-locks` / `.skill-tmp` / `.picoaide` 同类。
+ * 与能力中心列表），与 `.skill-locks` / `.skill-tmp` / `.zeokeel` 同类。
  */
 const SKILL_REMOVED_DIR = '.skill-removed'
 
 /**
  * 安装器写在技能目录里的**非技能内容**（A9 修复，2026-09-23 独立审计）：
  * 整目录换入时必须从旧目录搬进新内容，否则——
- *   - `.picoaide/release.json`（来源徽章 + 「是否被本地修改」的判据）消失，
+ *   - `.zeokeel/release.json`（来源徽章 + 「是否被本地修改」的判据）消失，
  *     同步后该技能在能力中心退回"用户自制"；
  *   - `.install-version`（遥测读的已装版本）消失。
  * 两者都由客户端安装器写，本插件只负责**不丢**它们。
  */
-const INSTALLER_MARKERS = ['.picoaide', '.install-version']
+const INSTALLER_MARKERS = ['.zeokeel', '.install-version']
 
 /**
  * 本插件写下的溯源目录/文件名，与 enterprise 安装器的
@@ -133,7 +133,7 @@ const INSTALLER_MARKERS = ['.picoaide', '.install-version']
  * 两侧同值由 enterprise 的 `tests/skill-channel-parity.spec.ts` 读源码文本对拍
  * （找不到字面量即 throw）。
  */
-const PROVENANCE_DIR = '.picoaide'
+const PROVENANCE_DIR = '.zeokeel'
 const PROVENANCE_FILE = 'release.json'
 
 /**
@@ -233,7 +233,7 @@ const STALE_SWAP_MAX_AGE_MS = 6 * 60 * 60 * 1000
  * 插件内置的技能清单（目录名 = 技能名）—— **只含本插件自己的技能**。
  *
  * ⚠️ **平台技能不在这个清单里**（2026-09-18，用户口径 + 独立审计 P1-1 的修复）：
- * 平台内置的 WASM 应用作者手册（原名 `picoaide-app-builder`，2026-09-19 改名
+ * 平台内置的 WASM 应用作者手册（原名 `zeokeel-app-builder`，2026-09-19 改名
  * `app-builder`）是**平台内置技能**：内容随服务端镜像发布
  * （`GET /api/client/v2/skills/builtin`），由员工在客户端「能力中心 → 平台内置技能」
  * **按需安装**。
@@ -346,7 +346,7 @@ function readSmallRegularFile(file, maxBytes) {
  *
  * 判据与企业包安装器的 `isStoreProvenance`（`skill-install.ts:483-485`）
  * **逐条同源**，三件事必须同时成立才算"这份内容不是用户手写的"：
- *   1. `<dir>/.picoaide/release.json` 可读且是 JSON 对象（读取本身先过
+ *   1. `<dir>/.zeokeel/release.json` 可读且是 JSON 对象（读取本身先过
  *      {@link readSmallRegularFile} 的类型/体积闸门）；
  *   2. `appId` 是 string 且**等于目录名**（目录被改名/被占用时不算）；
  *   3. `channel` 是已知的商店渠道取值（见 {@link STORE_CHANNELS}；未知取值按
@@ -387,7 +387,7 @@ function readStoreProvenance(destDir, name) {
  * 自己的笔记/脚本一起被删、还被补上 `channel: 'plugin'` 的溯源（能力中心此后按
  * "商店来源"对待）。实测（W4 probe5 情形 1）：用户文件消失、`installedOrigin`
  * 从 `local` 翻 `store`，全程零确认。它同时是 P1-2 的一半：市场装进来的同名技能
- * 会被换回插件版而 `.picoaide` 原样保留 ⇒ 内容与徽章归属不一致。
+ * 会被换回插件版而 `.zeokeel` 原样保留 ⇒ 内容与徽章归属不一致。
  *
  * 判据（**同一个函数同时决定覆盖与不覆盖**，不在调用点各写一遍）：
  *   - 目录不存在 → 允许（首次安装，正常路径）；
@@ -438,7 +438,7 @@ function classifySyncTarget(destDir, name) {
  * 目标目录是不是随包技能目录的**逐字副本**（P1-1 兼容路径的判据，内容同一性）。
  *
  * **背景**：写溯源的 A9 修复不在任何已发布版本里 ⇒ 现场存在"旧版插件同步落下、
- * 目录里没有 `.picoaide`"的技能目录。来源闸门会把它们按用户自制拒收：今天无碍
+ * 目录里没有 `.zeokeel`"的技能目录。来源闸门会把它们按用户自制拒收：今天无碍
  * （磁盘状态与旧行为相同），但**将来**插件升 `x-version` 时它们不会更新。这个判据
  * 给它们一次自证机会（见 {@link syncBuiltinSkills} 的采纳分支）。
  *
@@ -466,7 +466,7 @@ function classifySyncTarget(destDir, name) {
  * @param {string} srcDir - 插件包内技能目录。
  * @param {string} destDir - 目标技能目录。
  * @param {{ignoreTopLevel?: string[]}} [options] - 忽略目标目录**根**上的这些条目
- *   （只给"写后复检"用：那时 `.picoaide` / `.install-version` 是**我们自己刚写的**，
+ *   （只给"写后复检"用：那时 `.zeokeel` / `.install-version` 是**我们自己刚写的**，
  *   它们不属于技能内容；判定前的首次比较必须用完整条目集合）。
  * @returns {boolean} 逐字相同为 true。
  */
@@ -861,7 +861,7 @@ export function syncBuiltinSkills(pluginSkillsDir, userSkillsDir) {
               written = writePluginProvenance(destDir, name, skillVersion(srcText), userSkillsDir)
             } catch (error) {
               // 失败即拒（不换入、不改内容）。`writePluginProvenance` 自己已经把它
-              // 本次写下的标记收回了；这里再收一次**空** `.picoaide/`：同一性检查
+              // 本次写下的标记收回了；这里再收一次**空** `.zeokeel/`：同一性检查
               // 刚刚证明它原本不存在，所以只删空目录（`rmdirSync` 非空即失败，绝不
               // 递归删任何东西）—— 否则那个空目录会让下一次开机的同一性判据恒不成立，
               // 把这一份永久挡在门外（无法自愈）。
@@ -1063,7 +1063,7 @@ function preserveDisableFlag(destDir, stagingDir, anchorDir) {
  * {@link sweepStaleSwapDirs} 收拾。
  *
  * A9（2026-09-23）追加一条：换入前后**安装器标记不丢**——旧目录的
- * `.picoaide/`.install-version 先搬进新内容，再补一份本插件自己的 provenance
+ * `.zeokeel/`.install-version 先搬进新内容，再补一份本插件自己的 provenance
  * （channel: 'plugin'），见 {@link stashInstallerMarkers} / {@link writePluginProvenance}。
  *
  * @param {string} srcDir - 插件包内技能目录。
@@ -1113,7 +1113,7 @@ function syncSkillDirSafe(srcDir, destDir, anchorDir) {
     for (const rel of listFilesRel(srcDir)) {
       writeFileAtomicSafeAt(join(stagingDir, rel), readFileSync(join(srcDir, rel)), { anchorDir })
     }
-    // A9（2026-09-23）：整目录换入**不丢安装器标记**——旧目录里的 `.picoaide/`
+    // A9（2026-09-23）：整目录换入**不丢安装器标记**——旧目录里的 `.zeokeel/`
     // 与 `.install-version` 先搬进新内容，随同一次原子 rename 回到位；目标没有
     // provenance 时再补一份本插件自己的（channel: 'plugin'），使能力中心不会把
     // 随包装上的技能当成"用户自制"。两步都在换入之前完成，所以没有"换入成功但
@@ -1273,14 +1273,14 @@ function restoreInstallerMarkerBytes(destDir, snapshot, anchorDir) {
  * 算法（与 `packages/host/enterprise/src/skill-install.ts` 的
  * `computeSkillContentHash` 逐字节一致 —— 跨包 import 禁止，所以这里是**本地复刻**
  * 而不是共享模块，等价性由企业包 `tests/skill-channel-parity.spec.ts` 用真实
- * fixture（嵌套目录 / 空目录 / 二进制 / 非 ASCII 名 / 符号链接 / 顶层 `.picoaide`）
+ * fixture（嵌套目录 / 空目录 / 二进制 / 非 ASCII 名 / 符号链接 / 顶层 `.zeokeel`）
  * 对拍，任何一侧漂移都会立刻打红）：
  *   - `sha256`；
  *   - 逐层 `readdir({ withFileTypes: true })` 后按 `name.localeCompare` 排序（两侧
  *     同一个表达式 ⇒ 同一份 Node/ICU 下同序）；
  *   - 目录 → `D:<相对路径>\n`；普通文件 → `F:<相对路径>:` + 原始字节 + `\n`
  *     （不解码、不做编码归一化）；
- *   - **只排除顶层的 `.picoaide/`**（安装器/本插件的溯源目录，写它不得让内容变脏）；
+ *   - **只排除顶层的 `.zeokeel/`**（安装器/本插件的溯源目录，写它不得让内容变脏）；
  *     `.install-version` 是内容的一部分，因此它必须在算基准**之前**写到最终字节；
  *   - 符号链接等其它条目两侧都按"不看"处理（既不是目录也不是普通文件）。
  *
@@ -1346,7 +1346,7 @@ function pluginContentDirty(destDir, own) {
  * 补齐/刷新本插件自己的来源溯源（A9 + R4-B-1 修复，2026-09-23；
  * `archiveChecksum` 基准为独立复审 N1 追加）。
  *
- * 目标没有 `.picoaide/release.json` 时写一份 `channel: 'plugin'` 的：
+ * 目标没有 `.zeokeel/release.json` 时写一份 `channel: 'plugin'` 的：
  * 字段与 enterprise 安装器 `writeProvenance` 一致（`appId` / `version` /
  * `channel` / `installedAt` / `archiveChecksum`），版本号取 SKILL.md 的
  * `x-version`（没有则 `''`）。
@@ -1359,11 +1359,11 @@ function pluginContentDirty(destDir, own) {
  * 企业包的对拍用例钉住）。
  *
  * **写的顺序不可换**：`.install-version` 先写到最终字节（它是内容树的一部分，被算进
- * 哈希），然后算基准，最后写 `release.json`（顶层 `.picoaide/` 被排除在哈希之外，
+ * 哈希），然后算基准，最后写 `release.json`（顶层 `.zeokeel/` 被排除在哈希之外，
  * 写它不影响基准）。顺序反了，基准就会与盘上内容差一个文件 ⇒ 下一次比对恒判"脏"。
  *
  * **R4-B-1（P3，第四轮独立审计）：随包升版后，我们自己写的那份溯源必须跟着换。**
- * `stashInstallerMarkers` 会把旧目录的 `.picoaide/` 与 `.install-version` 搬进新内容
+ * `stashInstallerMarkers` 会把旧目录的 `.zeokeel/` 与 `.install-version` 搬进新内容
  * （A9），而旧实现的"只在缺失时写"因此对它们全部跳过 ⇒ 整树换入新内容（frontmatter
  * `x-version: 1 → 2`）之后，盘上的 `release.json.version` 与 `.install-version` 仍是
  * **旧值 1**。消费端把它当权威：能力中心显示 `prov.version`、技能调用遥测直接上报
@@ -1408,7 +1408,7 @@ function writePluginProvenance(stagingDir, name, xVersion, anchorDir) {
     }
     // 2) 基准 = 此刻整棵内容树的内容哈希。
     const archiveChecksum = skillContentChecksum(stagingDir)
-    // 3) `release.json` 最后写（顶层 `.picoaide/` 被排除在哈希之外，写它不影响基准）。
+    // 3) `release.json` 最后写（顶层 `.zeokeel/` 被排除在哈希之外，写它不影响基准）。
     if (own !== null) {
       const next = { ...own, archiveChecksum, ...(version === '' ? {} : { version }) }
       writeFileAtomicSafeAt(releaseFile, `${JSON.stringify(next, null, 2)}\n`, { anchorDir })
@@ -1455,12 +1455,12 @@ function readOwnPluginProvenance(dir, name) {
  * 收回**自己刚写下**的溯源标记（F1 的写后复检失败路径，独立复审 r3）。
  *
  * 只删 `written` 里点名的文件（逐个 `unlinkSync`），并且只用**非递归** `rmdirSync`
- * 收掉已经空掉的 `.picoaide/`：非空即失败 —— 绝不递归删任何东西，用户在那个窗口里
- * 落进 `.picoaide/` 的字节一个都不会被删。
+ * 收掉已经空掉的 `.zeokeel/`：非空即失败 —— 绝不递归删任何东西，用户在那个窗口里
+ * 落进 `.zeokeel/` 的字节一个都不会被删。
  *
  * @param {string} dir - 技能目录。
  * @param {string[]} written - {@link writePluginProvenance} 的返回值（可为空数组：
- *   仅尝试收掉空 `.picoaide/`，用于"写失败但可能已建出空目录"的场景）。
+ *   仅尝试收掉空 `.zeokeel/`，用于"写失败但可能已建出空目录"的场景）。
  * @returns {void}
  */
 function discardPluginProvenance(dir, written) {

@@ -4,7 +4,7 @@
  * ## 为什么消费点必须在这里（R16B-03）
  *
  * 这个意图的两端原本都在面板里（写：目录行的「打开」；读：面板挂载 effect），而
- * `@picoaide/dsh-panel-surface` 在**非激活**态把面板渲染成 `null` —— 组件不存在，
+ * `@zeokeel/dsh-panel-surface` 在**非激活**态把面板渲染成 `null` —— 组件不存在，
  * 它的挂载 effect 自然不会跑。客户端登录又走**整文档导航**（`auth-gate` 登录成功后
  * `location.replace('/')`）⇒ "登录成功"那一刻没有任何代码去读那个意图。它于是活到
  * 用户**下一次**打开应用中心才被兑现：用户当初点的"登录后自动打开"没有发生，而一次
@@ -33,7 +33,7 @@
  * 会让一次持续性失败（应用已删/协议未就绪）在每次页面加载时重试，与面板里
  * `continuePendingOpen` 的"失败就清掉意图（不循环）"同口径。
  *
- * @module @picoaide/dsh-wasm-apps/client/open-intent-resume
+ * @module @zeokeel/dsh-wasm-apps/client/open-intent-resume
  */
 
 import { loadAppAiIdentity } from './app-ai.ts'
@@ -47,7 +47,7 @@ export const OPEN_INTENT_WARN_PREFIX = '[open-intent]'
 export interface OpenIntentResumeDeps {
   /** 意图存储（缺省 `sessionStorage`，与写意图的那一侧同一份）。 */
   store?: OpenIntentStore | null
-  /** 登录态取数（缺省读本机 `/api/pico/auth/state`；非空用户名 = 已登录）。 */
+  /** 登录态取数（缺省读本机 `/api/zeokeel/auth/state`；非空用户名 = 已登录）。 */
   loginStateLoader?: () => Promise<boolean>
   /** 打开动作（缺省 {@link openAppEntry}；测试注入假实现用）。 */
   open?: (appId: string) => Promise<OpenResult>
@@ -67,7 +67,7 @@ export type OpenIntentResumeOutcome =
   | { kind: 'failed', appId: string, failure: OpenFailure }
 
 /**
- * 缺省登录态取数：复用应用 AI 的身份解析（`/api/pico/auth/state`；作用域非 `null`
+ * 缺省登录态取数：复用应用 AI 的身份解析（`/api/zeokeel/auth/state`；作用域非 `null`
  * = 已登录，且用户与服务端地址两段都拿到了）。
  *
  * 与 `AppCenterPanel.loadLoginState` 的缺省实现**逐字同口径** —— 两处必须一致，否则

@@ -23,7 +23,7 @@ import (
 )
 
 // sseWriteRefreshKey 是本次请求上次续期时间的 context 键(见 touchSSEWriteDeadline)。
-const sseWriteRefreshKey = "picoaide.llmgateway.sseWriteRefreshedAt"
+const sseWriteRefreshKey = "zeokeel.llmgateway.sseWriteRefreshedAt"
 
 // sseWriteWindow 是每次续期把写截止时间推到的时长。
 //

@@ -27,15 +27,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/features"
-	"github.com/picoaide/picoaide/internal/portal"
-	"github.com/picoaide/picoaide/internal/router"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/updatecheck"
-	"github.com/picoaide/picoaide/webadmin"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/features"
+	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/updatecheck"
+	"github.com/zeokeel/zeokeel-harness/server/webadmin"
 )
 
 // ---------------------------------------------------------------------------
@@ -581,12 +581,12 @@ func TestV2RealDB(t *testing.T) {
 // 审计发现的两个入口都在**启动期**挡:①显式配置了渠道却解析不出来,回落
 // official 会让渠道部署接受官方清单、把品牌洗掉;②镜像内的渠道内容与本进程
 // 按的渠道不一致,典型成因是 .env/compose 覆盖了镜像自带的渠道声明
-// (仓库自带 compose 曾把 PICOAI_CHANNEL 默认写死 official,正是这条)。
+// (仓库自带 compose 曾把 ZEOKEEL_CHANNEL 默认写死 official,正是这条)。
 
 // ---- 缺陷 4 回归(2026-09-10):非官方渠道漏配 deep_link_scheme 必须启动期报错 ----
 //
-// DeepLinkScheme() 在缺字段/畸形时回落厂商 scheme(picoaide)—— 官方/beta 是
-// 向后兼容;但品牌渠道漏配意味着客户在浏览器"打开 picoaide?"确认框里看到
+// DeepLinkScheme() 在缺字段/畸形时回落厂商 scheme(zeokeel)—— 官方/beta 是
+// 向后兼容;但品牌渠道漏配意味着客户在浏览器"打开 zeokeel?"确认框里看到
 // 厂商名(白标失败),必须在启动期 fail-loud。
 
 // writeChannelDirRaw 造一个内容自定的渠道目录(带 desktop 段等)。
@@ -621,13 +621,13 @@ func TestResolveStartupChannelDeepLinkScheme(t *testing.T) {
 			name:      "官方缺 deep_link_scheme 通过",
 			channelID: "official",
 			config: `{"schema":1,"channel_id":"official","identity":{"display_name":"X"},
-				"desktop":{"app_origin_scheme":"picoaide-app"}}`,
+				"desktop":{"app_origin_scheme":"zeokeel-app"}}`,
 		},
 		{
 			name:      "beta 缺 deep_link_scheme 通过",
 			channelID: "beta",
 			config: `{"schema":1,"channel_id":"beta","identity":{"display_name":"X"},
-				"desktop":{"app_origin_scheme":"picoaide-app"}}`,
+				"desktop":{"app_origin_scheme":"zeokeel-app"}}`,
 		},
 		{
 			// app_origin_scheme 的**独立** fail-loud：公共渠道同样不豁免（§8.3）。
@@ -694,7 +694,7 @@ func TestResolveStartupChannelDeepLinkScheme(t *testing.T) {
 // ---- 缺陷 1 回归(2026-09-10):门户下载入口与更新清单同一口径 ----
 //
 // 门户的内置下载地址只在能给出安全(https)来源时显示;否则不显示入口并把
-// 原因写进下载区(运维据此配置 PICOAI_PUBLIC_BASE_URL)。管理员配置的
+// 原因写进下载区(运维据此配置 ZEOKEEL_PUBLIC_BASE_URL)。管理员配置的
 // portal.client_download_* 覆盖地址不受影响。
 
 // withPortalReleaseDir 造一个带三平台资产的客户端资产目录。
@@ -810,7 +810,7 @@ func TestResolveStartupChannelAcceptsMatchingImageChannel(t *testing.T) {
 }
 
 // 这条就是 compose 覆盖场景:镜像是 acme,而部署侧(旧的 compose 默认值)
-// 把 PICOAI_CHANNEL 设成了 official —— 必须拒绝启动,而不是按 official 跑。
+// 把 ZEOKEEL_CHANNEL 设成了 official —— 必须拒绝启动,而不是按 official 跑。
 func TestResolveStartupChannelRejectsDeployOverride(t *testing.T) {
 	dir := writeChannelDir(t, "acme")
 	pointChannelDir(t, dir)
@@ -928,8 +928,8 @@ func TestRealDBGateNeverSilentlySkipsWhenReachable(t *testing.T) {
 		})
 	}
 	// 跳过的理由必须带上 DSN 主机与库名(排障),且不得回显口令。
-	got := dsnTarget("postgres://user:s3cret@db.example.com:5432/picoaide_test?sslmode=disable")
-	if got != "db.example.com:5432/picoaide_test" {
+	got := dsnTarget("postgres://user:s3cret@db.example.com:5432/zeokeel_test?sslmode=disable")
+	if got != "db.example.com:5432/zeokeel_test" {
 		t.Fatalf("dsnTarget = %q, want 主机+库名", got)
 	}
 	if strings.Contains(got, "s3cret") {

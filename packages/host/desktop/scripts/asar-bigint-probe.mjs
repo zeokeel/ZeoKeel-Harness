@@ -59,7 +59,7 @@ const context = {
   electronPlatformName: 'linux',
   arch: 1,
   packager: {
-    appInfo: { productFilename: 'PicoAide Harness' },
+    appInfo: { productFilename: 'ZeoKeel Harness' },
     executableName: 'dsh-plugin-desktop',
   },
 }

@@ -28,7 +28,7 @@ import (
 // 判据：三个集合必须**逐元素相等**，任一方向不一致即红：
 //
 //	① 磁盘：`server/skills/` 下真实存在的技能目录（判据自己 walk，不看任何清单）；
-//	② 镜像：`server/Dockerfile` 里 `COPY skills/<name>/ /opt/picoaide/skills/<name>/`
+//	② 镜像：`server/Dockerfile` 里 `COPY skills/<name>/ /opt/zeokeel/skills/<name>/`
 //	   的清单（**真解析** Dockerfile 文本：先拼续行、再丢整行注释、再按 COPY 指令取
 //	   "源 → 目标"，一行一个技能；不是查"某个字符串出现过"）；
 //	③ 登记：本文件的 `builtinSkillRegistry`（技能集合的唯一真源）+ 摘要登记表
@@ -119,7 +119,7 @@ import (
 //     （非空判据 + ⑧ 两条独立喊：前者 Fatal，后者逐条列出引用它的技能文件）；
 //   - 把注入 COPY 整行挪进 demoassets 中间阶段 ⇒ 红（落点不在最终阶段）；
 //   - 注入 COPY 之后在最终阶段 `RUN echo … > <技能目录>/scripts/pack-assets.mjs` ⇒ 红
-//     （用 `$PICOAI_SKILL_SEED_DIR` 写的同形变体同样红）；
+//     （用 `$ZEOKEEL_SKILL_SEED_DIR` 写的同形变体同样红）；
 //   - 把打包器同字节复制成 `server/demoapps/scripts/pack-assets-backup.mjs`、或放到
 //     `packages/` 下 ⇒ 都红（仓库级副本扫描，改前只扫技能源树）；
 //   - 删掉 `scripts/pack-assets.mjs` 的注入 COPY（登记表照旧）⇒ 红（落点数 + 注入落点 0 条）；
@@ -147,9 +147,9 @@ const (
 	// repoServerRoot 是 Dockerfile 的**构建上下文**（`docker buildx build … server`）——
 	// COPY 的源路径都相对它解析，判据要按同一口径把源路径映射回磁盘。
 	repoServerRoot = "../../../server"
-	// imageSkillSeedDir 是 Dockerfile 里 `PICOAI_SKILL_SEED_DIR` 的取值，也是
+	// imageSkillSeedDir 是 Dockerfile 里 `ZEOKEEL_SKILL_SEED_DIR` 的取值，也是
 	// `skillseed.Dir` 的缺省 —— COPY 的目标必须落在它下面，否则服务端一个技能都扫不到。
-	imageSkillSeedDir = "/opt/picoaide/skills"
+	imageSkillSeedDir = "/opt/zeokeel/skills"
 	// repoRootPath 是仓库根（相对本包目录，与 `repoSkillDir` 同一口径）。
 	//
 	// 用途只有一个：第 ⑦ 项 a 的"中性源在**源树**里只此一份"是**仓库级**承诺
@@ -258,7 +258,7 @@ var skillFileInjections = []skillFileInjection{
 		Reason: "演示应用的资产打包器与随技能分发的打包器**必须是同一份实现**（打出来的段格式、拒绝清单、" +
 			"总量预算口径都要求两边逐字一致；各自留一份必然漂）。唯一实现在中性的 server/demoapps/scripts/ 下，" +
 			"Dockerfile 从这同一个源 COPY 到两个落点：演示应用打包阶段（/demo/pack-assets.mjs）与技能目录" +
-			"（/opt/picoaide/skills/app-builder/scripts/pack-assets.mjs）。技能源树里不再留副本。",
+			"（/opt/zeokeel/skills/app-builder/scripts/pack-assets.mjs）。技能源树里不再留副本。",
 	},
 }
 
@@ -384,7 +384,7 @@ func TestBuiltinSkillInventoryMatchesDiskDockerfileAndDigests(t *testing.T) {
 			"  登记表有、server/skills/ 没有：%v\n"+
 			"  → 新增一个平台内置技能必须**三处一起改**：\n"+
 			"      ① 磁盘：server/skills/<name>/SKILL.md（frontmatter 齐备，目录名 == name）；\n"+
-			"      ② 镜像：server/Dockerfile 加一行 `COPY skills/<name>/ /opt/picoaide/skills/<name>/`；\n"+
+			"      ② 镜像：server/Dockerfile 加一行 `COPY skills/<name>/ /opt/zeokeel/skills/<name>/`；\n"+
 			"      ③ 登记：本文件 builtinSkillRegistry 加 `{Dir: \"<name>\", Shipped: true}` +\n"+
 			"         skill_version_test.go 的 seededSkillDigests 加一组 `\"<name>\": {<内容摘要>: \"<version>\"}`。\n"+
 			"  只想留在仓库里不下发 ⇒ 登记为 `{Shipped: false, Reason: \"…\"}`（豁免逐条显式）。",
@@ -468,14 +468,14 @@ func TestBuiltinSkillInventoryMatchesDiskDockerfileAndDigests(t *testing.T) {
 		}
 	}
 
-	// ⑥ Dockerfile 的 PICOAI_SKILL_SEED_DIR ↔ skillseed 实际扫描的目录：COPY 的落点与
+	// ⑥ Dockerfile 的 ZEOKEEL_SKILL_SEED_DIR ↔ skillseed 实际扫描的目录：COPY 的落点与
 	// 服务端读资产的目录是同一个契约，写歪了技能一个都扫不到（而清单接口会安静地返回空数组）。
-	if got, ok := dockerfileEnv(t, dockerfileRaw, "PICOAI_SKILL_SEED_DIR"); !ok {
-		t.Errorf("server/Dockerfile 没有 `ENV PICOAI_SKILL_SEED_DIR=…` —— 服务端扫不到任何内置技能")
+	if got, ok := dockerfileEnv(t, dockerfileRaw, "ZEOKEEL_SKILL_SEED_DIR"); !ok {
+		t.Errorf("server/Dockerfile 没有 `ENV ZEOKEEL_SKILL_SEED_DIR=…` —— 服务端扫不到任何内置技能")
 	} else if got != imageSkillSeedDir {
-		t.Errorf("server/Dockerfile 的 PICOAI_SKILL_SEED_DIR = %q，判据/服务端缺省 = %q", got, imageSkillSeedDir)
+		t.Errorf("server/Dockerfile 的 ZEOKEEL_SKILL_SEED_DIR = %q，判据/服务端缺省 = %q", got, imageSkillSeedDir)
 	}
-	if os.Getenv("PICOAI_SKILL_SEED_DIR") == "" && Dir != imageSkillSeedDir {
+	if os.Getenv("ZEOKEEL_SKILL_SEED_DIR") == "" && Dir != imageSkillSeedDir {
 		t.Errorf("skillseed.Dir = %q，而 Dockerfile 与判据都用 %q（两边必须同源）", Dir, imageSkillSeedDir)
 	}
 
@@ -542,7 +542,7 @@ func TestBuiltinSkillInventoryMatchesDiskDockerfileAndDigests(t *testing.T) {
 				seedLandings++
 				if l.Dest != wantSeedDest {
 					t.Errorf("server/Dockerfile:%d 把中性源 %q 注入到 %q，而不是 %q（注入落点必须逐字等于 "+
-						"`<PICOAI_SKILL_SEED_DIR>/<技能>/<Dest>`，否则镜像里技能文档引用的相对路径失效）。",
+						"`<ZEOKEEL_SKILL_SEED_DIR>/<技能>/<Dest>`，否则镜像里技能文档引用的相对路径失效）。",
 						l.Line, inj.Source, l.Dest, wantSeedDest)
 				}
 			} else {
@@ -655,7 +655,7 @@ func imageSkillTreeOf(t *testing.T, skill string, byKey map[string]skillFileInje
 // （尺寸/条目/路径/manifest 规则）时全部判据仍然绿，而运行期会把整条技能记成坏资产跳过：
 // 清单为空、员工装不到，只在启动日志与管理端诊断里可见。
 //
-// 装配语义**取自 Dockerfile 本身**（最后一个构建阶段里落进 `PICOAI_SKILL_SEED_DIR` 的
+// 装配语义**取自 Dockerfile 本身**（最后一个构建阶段里落进 `ZEOKEEL_SKILL_SEED_DIR` 的
 // COPY）：① 技能目录整棵；② 由中性源注入的文件，落点逐字取 COPY 的目标。于是这棵树是
 // 构建语义的产物，而不是把 `skillFileInjections` 再抄一遍 —— 注入 COPY 被删掉时这棵树
 // 会一起少掉那个文件（第 ⑦ 项的落点数与第 ⑤ 项的摘要对拍各自独立喊）。
@@ -679,7 +679,7 @@ func imageSkillAssetRoot(t *testing.T) string {
 			if !l.InSeed {
 				continue // 非技能目录落点（如演示应用打包阶段）不进这棵树
 			}
-			// l.Dest = <PICOAI_SKILL_SEED_DIR>/<技能>/<Dest>（解析期已逐字核对过形态）。
+			// l.Dest = <ZEOKEEL_SKILL_SEED_DIR>/<技能>/<Dest>（解析期已逐字核对过形态）。
 			rel := strings.TrimPrefix(l.Dest, imageSkillSeedDir+"/")
 			dst := filepath.Join(root, filepath.FromSlash(rel))
 			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
@@ -1037,10 +1037,10 @@ func assertFinalStageRunsLeaveSeedDirAlone(t *testing.T, insns []dockerfileInstr
 			continue
 		}
 		text := strings.Join(ins.Args, " ")
-		if !strings.Contains(text, imageSkillSeedDir) && !strings.Contains(text, "PICOAI_SKILL_SEED_DIR") {
+		if !strings.Contains(text, imageSkillSeedDir) && !strings.Contains(text, "ZEOKEEL_SKILL_SEED_DIR") {
 			continue
 		}
-		t.Fatalf("server/Dockerfile:%d 在**最终镜像阶段**（%s）的 RUN 里出现了技能目录（%s / PICOAI_SKILL_SEED_DIR）：\n"+
+		t.Fatalf("server/Dockerfile:%d 在**最终镜像阶段**（%s）的 RUN 里出现了技能目录（%s / ZEOKEEL_SKILL_SEED_DIR）：\n"+
 			"  RUN %s\n"+
 			"  → 判据只解析 COPY/ADD，RUN 能在技能目录里写出判据看不见的字节（注入文件的字节就不再等于中性源，\n"+
 			"    而 seededSkillDigests 登记的仍是中性源的摘要）。文本面分不清「读」与「写」，所以最终阶段的 RUN\n"+
@@ -1147,11 +1147,11 @@ func dockerfileSkillCopies(
 		destClean := path.Clean(dest)
 		destIsSeed := destClean == imageSkillSeedDir || strings.HasPrefix(destClean, imageSkillSeedDir+"/")
 		// 落进 seed 目录的 COPY/ADD 必须在**最后一个构建阶段**：中间阶段不参与最终镜像，
-		// 文件到不了 /opt/picoaide/skills（而 dest 字符串、落点数、摘要模型可以全对）。
+		// 文件到不了 /opt/zeokeel/skills（而 dest 字符串、落点数、摘要模型可以全对）。
 		if destIsSeed && ins.Stage != lastStage {
 			t.Fatalf("server/Dockerfile:%d 的 %s 把内容放进技能目录 %s，但它不在**最后一个构建阶段**"+
 				"（本指令在阶段 %d：%s；最后一个阶段是 %d：%s）——\n"+
-				"  中间阶段不会进入最终镜像，这个文件到不了 /opt/picoaide/skills，员工装到的技能会缺它。\n"+
+				"  中间阶段不会进入最终镜像，这个文件到不了 /opt/zeokeel/skills，员工装到的技能会缺它。\n"+
 				"  → 把这条 COPY/ADD 移到最后一个阶段（技能目录的内容只能由最终阶段的 COPY/ADD 决定）。",
 				ins.Line, ins.Op, imageSkillSeedDir, ins.Stage, dockerfileStageFrom(insns, ins.Stage),
 				lastStage, dockerfileStageFrom(insns, lastStage))
@@ -1185,7 +1185,7 @@ func dockerfileSkillCopies(
 			if !strings.HasPrefix(destClean, "/") {
 				t.Fatalf("server/Dockerfile:%d 把中性源 %q COPY 到相对路径 %q —— 相对 WORKDIR 解析，"+
 					"判据读不出它落在哪，无法对账「中性源被放到了哪几个落点」。请写绝对路径"+
-					"（注入技能目录的那一条必须是 `<PICOAI_SKILL_SEED_DIR>/<技能>/<Dest>`）。",
+					"（注入技能目录的那一条必须是 `<ZEOKEEL_SKILL_SEED_DIR>/<技能>/<Dest>`）。",
 					ins.Line, src, dest)
 			}
 			if destIsSeed {
@@ -1229,7 +1229,7 @@ func dockerfileSkillCopies(
 			}
 			if rel == "" {
 				t.Fatalf("server/Dockerfile:%d 的 %s 源 %q 指向整个 skills/ 根 —— 技能清单必须**逐目录列出**"+
-					"（`COPY skills/<name>/ /opt/picoaide/skills/<name>/`，一行一个技能），否则判据读不出"+
+					"（`COPY skills/<name>/ /opt/zeokeel/skills/<name>/`，一行一个技能），否则判据读不出"+
 					"「哪些技能进了镜像」（R13-F-05）。", ins.Line, ins.Op, s)
 			}
 			dir, rest, _ := strings.Cut(rel, "/")
@@ -1267,7 +1267,7 @@ func dockerfileSkillCopies(
 		want := imageSkillSeedDir + "/" + ref.dir
 		if destClean != want {
 			t.Fatalf("server/Dockerfile:%d 把 skills/%s/ COPY 到 %q，而不是 %q —— "+
-				"服务端只扫 `PICOAI_SKILL_SEED_DIR`（%s）下的一层技能目录（skillseed.go 的 loadLocked）。"+
+				"服务端只扫 `ZEOKEEL_SKILL_SEED_DIR`（%s）下的一层技能目录（skillseed.go 的 loadLocked）。"+
 				"整个技能目录只允许出现在「下发」这一条 COPY 里；某个构建阶段要用技能里的文件，"+
 				"请按文件 COPY（`COPY skills/%s/<相对路径> <目标>`，判据认这种形态并会核对技能已登记）。",
 				ins.Line, ref.dir, destClean, want, imageSkillSeedDir, ref.dir)

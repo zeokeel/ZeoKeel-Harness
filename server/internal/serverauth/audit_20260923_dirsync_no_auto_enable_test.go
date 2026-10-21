@@ -21,7 +21,7 @@ import (
 
 	"github.com/go-ldap/ldap/v3"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func TestDirectorySyncDoesNotReviveAdminDisabledAccount(t *testing.T) {

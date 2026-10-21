@@ -26,7 +26,7 @@ describe('desktopUserDataDirectoryName (随渠道的第二份数据根)', () => 
     // 同一组 (产品名, 渠道 id) 不可能拼出两个相同的目录名:渠道 id 形状固定
     // (小写字母/数字/连字符,无括号),所以末尾那段 ` (<id>)` 唯一可解码。
     const names = new Map<string, string>()
-    for (const product of ['Acme Harness', 'Acme', 'PicoAide Harness', 'Harness']) {
+    for (const product of ['Acme Harness', 'Acme', 'ZeoKeel Harness', 'Harness']) {
       for (const id of ['acme', 'acme-staging', 'beta', 'zeta', 'acme-2']) {
         const name = desktopUserDataDirectoryName(product, id)
         const key = `${product}/${id}`
@@ -57,11 +57,11 @@ describe('desktopUserDataDirectoryName (随渠道的第二份数据根)', () => 
 describe('defaultDesktopUserDataDirectory (无 Electron 的等价实现)', () => {
   it('resolves the platform app-data directory plus the data directory name', () => {
     expect(defaultDesktopUserDataDirectory('win32', { APPDATA: 'C:\\Users\\Example\\AppData\\Roaming' }, 'ignored'))
-      .toBe('C:\\Users\\Example\\AppData\\Roaming\\PicoAide Harness')
+      .toBe('C:\\Users\\Example\\AppData\\Roaming\\ZeoKeel Harness')
     expect(defaultDesktopUserDataDirectory('darwin', {}, '/Users/example'))
-      .toBe('/Users/example/Library/Application Support/PicoAide Harness')
+      .toBe('/Users/example/Library/Application Support/ZeoKeel Harness')
     expect(defaultDesktopUserDataDirectory('linux', { XDG_CONFIG_HOME: '/home/example/.config' }, '/home/example'))
-      .toBe('/home/example/.config/PicoAide Harness')
+      .toBe('/home/example/.config/ZeoKeel Harness')
   })
 
   it('uses the channel-specific name when one is given', () => {

@@ -1,9 +1,9 @@
 /**
- * 应用 AI 桥（设计总纲 §21，冻结）：`POST /__picoaide/ai/chat` 由**协议 handler 本地
+ * 应用 AI 桥（设计总纲 §21，冻结）：`POST /__zeokeel/ai/chat` 由**协议 handler 本地
  * 处理**，绝不转发平台。
  *
  * ```
- * 应用页 fetch('/__picoaide/ai/chat', {messages, stream})
+ * 应用页 fetch('/__zeokeel/ai/chat', {messages, stream})
  *         │  协议 handler 本地拦截（这一条路径不进信封、不出站）
  *         ▼
  * ① 首次授权闸门（用户 × 应用；未授权 ⇒ 403 app_ai_denied，不消耗任何 token）
@@ -54,14 +54,14 @@
  * `resume`（它反而**不能**迁移：那份日志里已经混进了多个账号的对话，迁移到任何一个
  * 账号头上都是把别人的内容记成他的）。它仍是该机的历史记录，诊断包照常列出。
  *
- * @module @picoaide/dsh-wasm-apps-host/ai-chat
+ * @module @zeokeel/dsh-wasm-apps-host/ai-chat
  */
 
 import { createHash } from 'node:crypto'
 import { encodePartitionSegment, serverPartitionHash } from './partition.ts'
 
 /** 保留路径（§21.2 冻结；协议 handler 本地处理，绝不外发）。 */
-export const AI_CHAT_PATH = '/__picoaide/ai/chat'
+export const AI_CHAT_PATH = '/__zeokeel/ai/chat'
 
 /** 隐藏会话前缀（§21.1 Q5 / 契约 `app-session-id.json`：`app:`）。 */
 export const AI_HIDDEN_SESSION_PREFIX = 'app:'
@@ -100,7 +100,7 @@ const AI_ROLES = ['user', 'assistant'] as const
  * 租户（测试/正式并存）里的身份。
  */
 export interface AiChatScope {
-  /** 当前员工（`picoSession` 的 `username`）。 */
+  /** 当前员工（`zeokeelSession` 的 `username`）。 */
   readonly userId: string
   /** 当前服务端地址（取不到 ⇒ 只按账号分域，不影响会话可用性）。 */
   readonly serverURL?: string | null
@@ -543,7 +543,7 @@ const RELEASE_PENDING_ERROR_NAME = 'AppAiSessionReleasePendingError'
 /** 把 runner 的失败映射成契约里的错误码（不泄漏上游细节）。 */
 function mapTurnFailure(cause: unknown, warn: (message: string) => void): { kind: 'json', status: number, body: Record<string, unknown> } {
   const message = cause instanceof Error ? cause.message : String(cause)
-  warn(`pico-wasm-apps-host: an application AI turn failed (${message})`)
+  warn(`zeokeel-wasm-apps-host: an application AI turn failed (${message})`)
   if (cause instanceof Error && cause.name === 'AbortError') {
     return { kind: 'json', status: 499, body: { error: { code: 'ai_cancelled', message: 'the turn was cancelled' } } }
   }

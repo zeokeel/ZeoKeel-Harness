@@ -17,18 +17,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	"github.com/picoaide/picoaide/internal/wasmapp/hostcap"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
-	"github.com/picoaide/picoaide/internal/wasmapp/wasmmod"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/hostcap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/wasmmod"
 )
 
 // 本文件是 §6.2 的**同步发布链路**（R30）与 §4.2 的预检（validate）。
@@ -167,7 +167,7 @@ type staged struct {
 // 跨端契约：客户端侧的同一个字面量在
 // `packages/host/enterprise/src/wasm-apps.ts` 的 `CLIENT_BUDGET_HEADER`，由
 // `tests/wasm-apps.spec.ts` 的一条**读本文件**的对拍用例钉住（缺任一侧即失败）。
-const ClientBudgetHeader = "X-Pico-Client-Budget-Ms"
+const ClientBudgetHeader = "X-ZeoKeel-Client-Budget-Ms"
 
 // parseClientBudgetHint 解析 `ClientBudgetHeader`；`ok=false` = "没有可用声明"（回落总预算）。
 //
@@ -463,7 +463,7 @@ func (h *Handlers) prepare(c *gin.Context, appID string, wasm []byte, rawConfig 
 		// 平台侧的权威副本 = **解析并归一化之后**的配置（whitelist 去重/去空白、
 		// access 的缺省落定；旧 schema 的 login_required/visible 在这里被映射掉，
 		// 因此重新发布后写出的就是新 schema）。写原始字节会让应用读到的名单与平台校验过的
-		// 名单出现看不见的差异（§4.2：「应用用 assets.read("picoaide.app.json") 读」）。
+		// 名单出现看不见的差异（§4.2：「应用用 assets.read("zeokeel.app.json") 读」）。
 		canon, merr := json.Marshal(cfg)
 		if merr != nil {
 			return nil, internalErr("应用配置序列化失败", merr)
@@ -492,10 +492,10 @@ func (h *Handlers) prepare(c *gin.Context, appID string, wasm []byte, rawConfig 
 	if xerr != nil {
 		return nil, apperr.From(xerr)
 	}
-	// C2 保留前缀闸门（§21.2 规则②，R2-X-3）：应用**不得**占用 `__picoaide/` 前缀。
+	// C2 保留前缀闸门（§21.2 规则②，R2-X-3）：应用**不得**占用 `__zeokeel/` 前缀。
 	//
 	// 为什么必须在发布期拒（而不是像工具链段那样"忽略并报告"）：那个前缀由**宿主**
-	// 本地处理（规则①：`path` 以 `__picoaide/` 开头的请求绝不转发平台），随包资源里
+	// 本地处理（规则①：`path` 以 `__zeokeel/` 开头的请求绝不转发平台），随包资源里
 	// 出现同名路径时，应用以为自己的路由生效了 —— 实际请求被宿主截走，症状是
 	// "本地开发好的接口，发布后 404/拿到宿主的响应"，而平台侧没有任何报错。
 	// 静默忽略等于把这个谜题留给作者。
@@ -509,7 +509,7 @@ func (h *Handlers) prepare(c *gin.Context, appID string, wasm []byte, rawConfig 
 	// （否则非法资源名会先占掉一个版本号），且要指到具体哪个段（details.section）。
 	st.sections, st.skipped = assets.SplitSections(sections)
 	// 重名闸门只罩**保留下来的资源段**：工具链元数据（`name`/`producers`/…）与平台
-	// 独占的 `picoaide.app.json` 本来就可能重复出现或被忽略，对它们报错没有意义。
+	// 独占的 `zeokeel.app.json` 本来就可能重复出现或被忽略，对它们报错没有意义。
 	if aerr := checkDuplicateSections(st.sections, sectionCounts); aerr != nil {
 		return nil, aerr
 	}
@@ -571,20 +571,20 @@ func (h *Handlers) compileModule(c *gin.Context, appID string, wasm []byte) (*co
 //
 // 契约原文（§21.2 保留路径，冻结）：
 //
-//	①协议 handler 对 `path` 以 `__picoaide/` 开头的请求**本地处理、绝不转发平台**；
-//	②应用**不得**定义同前缀路由（发布校验拒绝）；③其余 `__picoaide/*` 一律 404。
+//	①协议 handler 对 `path` 以 `__zeokeel/` 开头的请求**本地处理、绝不转发平台**；
+//	②应用**不得**定义同前缀路由（发布校验拒绝）；③其余 `__zeokeel/*` 一律 404。
 //
 // 服务端能静态看到的唯一"路由面"是随包资源（自定义段）的名字（应用的真实路由写在
 // wasm 里，平台不做反编译）⇒ 这里拒的是**资源路径**占用保留前缀。应用内部若自己
-// 处理 `__picoaide/…`，请求在宿主层就被截走（规则①③），平台看不到也管不着；
+// 处理 `__zeokeel/…`，请求在宿主层就被截走（规则①③），平台看不到也管不着；
 // 这条闸门保证的是"作者不会以为随包资源能提供该前缀的响应"。
-const reservedPathPrefix = "__picoaide/"
+const reservedPathPrefix = "__zeokeel/"
 
 // checkReservedPathPrefix 拒绝占用平台保留前缀的随包资源（§21.2 规则②）。
 //
 // 错误码取既有的 `ASSET_DENIED`（"资源路径被拒"）：它就是这个语义，且已在
 // assets 包用于越界/非法段；新增一个码要同步契约与文档，而这里不需要。
-// 提示里点名 §21.2，让作者知道该走宿主桥（`__picoaide/ai/chat`）而不是自己实现。
+// 提示里点名 §21.2，让作者知道该走宿主桥（`__zeokeel/ai/chat`）而不是自己实现。
 func checkReservedPathPrefix(sections map[string][]byte) *apperr.Error {
 	var offenders []string
 	for name := range sections {
@@ -618,7 +618,7 @@ func checkReservedPathPrefix(sections map[string][]byte) *apperr.Error {
 // `assets.Store.Write` 的"拒绝覆盖"用的码；磁盘版删除后，这里是它唯一的触发点）。
 //
 // 判据只罩 `kept`（真正会成为资源的段）：工具链元数据段（`name`/`producers`/…）与
-// 平台独占的 `picoaide.app.json` 本来就可能重复出现或被忽略，对它们报错没有意义。
+// 平台独占的 `zeokeel.app.json` 本来就可能重复出现或被忽略，对它们报错没有意义。
 func checkDuplicateSections(kept map[string][]byte, counts map[string]int) *apperr.Error {
 	var dup []string
 	dupCounts := make(map[string]int)
@@ -656,7 +656,7 @@ func checkDuplicateSections(kept map[string][]byte, counts map[string]int) *appe
 //     分流用的 `assets.IsLogicalAssetPath` 只是**纯字符串预判**，不做长度校验 ——
 //     超长段名会走到这里才被拒。错误码沿用 `ASSET_DENIED`（与 assets 包同一个语义）。
 //  2. 单文件与总量 ≤ `limits.SectionTotalMaxBytes`。总量口径与 `assets.Build` 逐字
-//     一致 = 全部资源之和，**再加平台注入的 `picoaide.app.json`**（它也是资源集里的
+//     一致 = 全部资源之和，**再加平台注入的 `zeokeel.app.json`**（它也是资源集里的
 //     一条，配置同样占额度）。
 func checkPublishAssets(kept map[string][]byte, cfgJSON []byte) *apperr.Error {
 	var total int64

@@ -18,8 +18,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 )
 
 // gatewayFileRouteKeys 收集一棵路由树里 /api/server/admin/gateway/files* 的

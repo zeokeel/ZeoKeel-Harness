@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-wasm-apps-host",
+  "name": "@zeokeel/dsh-wasm-apps-host",
   "version": "0.1.0",
-  "description": "WASM app platform host face: the picoaide-app:// origin handler plus the /api/pico/apps/wasm* app-store routes and wasm_app_* tools",
+  "description": "WASM app platform host face: the zeokeel-app:// origin handler plus the /api/zeokeel/apps/wasm* app-store routes and wasm_app_* tools",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -55,10 +55,10 @@
     "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/dsh-util-values": "0.2.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.4",
-    "@picoaide/dsh-browser": "workspace:*",
-    "@picoaide/dsh-gateway-client": "workspace:*",
-    "@picoaide/dsh-host-home": "workspace:*",
-    "@picoaide/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-browser": "workspace:*",
+    "@zeokeel/dsh-gateway-client": "workspace:*",
+    "@zeokeel/dsh-host-home": "workspace:*",
+    "@zeokeel/dsh-host-locale": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.4",

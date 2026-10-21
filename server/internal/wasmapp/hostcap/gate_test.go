@@ -29,8 +29,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 func TestRegisteredMethodsMatchClosedList(t *testing.T) {
@@ -106,7 +106,7 @@ func TestNoExtraMethodsAccepted(t *testing.T) {
 		"ai.embed", "ai.models", "http.fetch", "net.dial", "fs.read", "fs.open",
 		"env.get", "proc.spawn", "assets.write", "assets.list", "assets.readdir",
 		"log.debug", "sql.raw", "", " ", "LOG", "db.query ", " db.query",
-		"picoaide.app.json", "abi.pong",
+		"zeokeel.app.json", "abi.pong",
 	}
 	for _, m := range hostile {
 		_, e := c.Dispatch(context.Background(), m, nil)

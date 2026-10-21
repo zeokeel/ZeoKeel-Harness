@@ -259,14 +259,14 @@ func TestParseIdentityMismatch(t *testing.T) {
 
 // 溯源块只能由安装器写入,包内自带即可伪造「来自市场某应用」。
 func TestParseRejectsSelfDeclaredProvenance(t *testing.T) {
-	withDir := append(entries(), ".picoaide/release.json")
+	withDir := append(entries(), ".zeokeel/release.json")
 	_, err := Parse(withDir, goodMD(nil), "")
 	assertCode(t, err, CodeProvenanceForbidden, "")
 
 	md := strings.Replace(goodMD(nil), "---\n\n",
-		"metadata:\n  picoaide:\n    app_id: forged\n---\n\n", 1)
+		"metadata:\n  zeokeel:\n    app_id: forged\n---\n\n", 1)
 	_, err = Parse(entries(), md, "")
-	assertCode(t, err, CodeProvenanceForbidden, "metadata.picoaide")
+	assertCode(t, err, CodeProvenanceForbidden, "metadata.zeokeel")
 }
 
 // 普通 metadata 必须照常放行(上游原样保留,技能可用它携带自定义信息)。

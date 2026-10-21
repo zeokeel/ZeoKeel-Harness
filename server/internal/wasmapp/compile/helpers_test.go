@@ -17,7 +17,7 @@ import (
 // 纪律（本模块的验收要求）：子进程测试必须**真起进程**（go build 现场产出二进制到
 // t.TempDir()），不许 mock 掉。因此这里提供两个"真构建"：
 //
-//	buildCompileChild  真编译 cmd/picoaide-app-compile → 临时目录
+//	buildCompileChild  真编译 cmd/zeokeel-app-compile → 临时目录
 //	writeGuestModule   真用 GOOS=wasip1 GOARCH=wasm 编译一个 Go guest → .wasm
 //
 // 变异方式（各测试文件顶部另注）：把 ChildBinary 指回本进程自身（冒充子进程）会让
@@ -61,12 +61,12 @@ var (
 func buildCompileChildOnce(t *testing.T) string {
 	t.Helper()
 	childOnce.Do(func() {
-		childDir, childErr = os.MkdirTemp("", "picoaide-compile-child-")
+		childDir, childErr = os.MkdirTemp("", "zeokeel-compile-child-")
 		if childErr != nil {
 			return
 		}
-		out := filepath.Join(childDir, "picoaide-app-compile")
-		cmd := exec.Command("go", "build", "-o", out, "./cmd/picoaide-app-compile")
+		out := filepath.Join(childDir, "zeokeel-app-compile")
+		cmd := exec.Command("go", "build", "-o", out, "./cmd/zeokeel-app-compile")
 		cmd.Dir = serverRoot(t)
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if b, err := cmd.CombinedOutput(); err != nil {

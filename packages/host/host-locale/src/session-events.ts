@@ -3,7 +3,7 @@
  *
  * ## 为什么它必须是一份共享实现
  *
- * `pico/session-changed` 有三个消费方（enterprise 的一整套同步插件、wasm-apps-host 的
+ * `zeokeel/session-changed` 有三个消费方（enterprise 的一整套同步插件、wasm-apps-host 的
  * 窗口/缓存作用域、desktop 的应用 AI 执行面），而**裸 `ctx.on` 会漏掉最常见的那次事件**：
  * `SessionService.restore()` 在**构造期**就启动（`void this.restore().finally(…)`），
  * 它 emit 的那一刻可能早于任何插件的 `apply()` —— 于是"重启后带着有效会话"这条路径上，
@@ -40,17 +40,17 @@
  *
  * 放在 `session-events` 而不是新开一个子路径，是因为两者是同一件事的两半：本模块知道
  * **会话什么时候变**，代际计数器就是"变了几次"的唯一读数 —— 而且
- * `node_modules/@picoaide/dsh-host-locale/lib/session-events.js` 已经在打包必需清单里，
+ * `node_modules/@zeokeel/dsh-host-locale/lib/session-events.js` 已经在打包必需清单里，
  * 不引入新的打包面（新增子路径就必须同步 `REQUIRED_PACKAGED_RUNTIME_ENTRIES`）。
  *
- * @module @picoaide/dsh-host-locale/session-events
+ * @module @zeokeel/dsh-host-locale/session-events
  */
 
 /** 会话变化事件名（enterprise `SESSION_CHANGED_EVENT` 逐字一致）。 */
-export const SESSION_CHANGED_EVENT = 'pico/session-changed'
+export const SESSION_CHANGED_EVENT = 'zeokeel/session-changed'
 
-/** `picoSession` 服务的结构探测面（本模块只关心这两项）。 */
-export interface PicoSessionProbe {
+/** `zeokeelSession` 服务的结构探测面（本模块只关心这两项）。 */
+export interface ZeoKeelSessionProbe {
   /** 持久化会话是否已经恢复完成（`restore()` 的 `finally` 里置位）。 */
   isRestored?: () => boolean
   /** 当前会话（未登录 ⇒ `null`）。 */
@@ -64,7 +64,7 @@ export interface PicoSessionProbe {
  * 兼容）：叶子包不能 import cordis，而消费方传进来的就是真实的 `Context`。
  *
  * `get` 是**可选**的：真实 Cordis 上下文一定有它，但本仓不少用例用结构替身
- * （`{ on, emit, picoSession }`）驱动这条契约，替身只挂服务属性、没有注册表。
+ * （`{ on, emit, zeokeelSession }`）驱动这条契约，替身只挂服务属性、没有注册表。
  */
 export interface SessionEventContext {
   /** 注册事件监听，返回取消订阅函数。 */
@@ -72,24 +72,24 @@ export interface SessionEventContext {
   /** 探测服务（缺席 ⇒ `undefined`）。 */
   get?(name: string): unknown
   /** Cordis 把服务同时挂成上下文的属性（结构替身常用这一面）。 */
-  picoSession?: PicoSessionProbe
+  zeokeelSession?: ZeoKeelSessionProbe
 }
 
-/** `picoSession` 服务的注册名（`SessionService` 的 `super(ctx, 'picoSession')`）。 */
-export const PICO_SESSION_SERVICE = 'picoSession'
+/** `zeokeelSession` 服务的注册名（`SessionService` 的 `super(ctx, 'zeokeelSession')`）。 */
+export const ZEOKEEL_SESSION_SERVICE = 'zeokeelSession'
 
 /**
  * 探测当前会话服务（两种上下文形态都认，见 {@link SessionEventContext}）。
  *
  * **顺序有讲究**：有 `get` 就只用它 —— 真实 Cordis 上下文在服务尚未注册时读属性
- * （`ctx.picoSession`）不是"返回 undefined"那么无害，而 `get` 明确返回 undefined。
+ * （`ctx.zeokeelSession`）不是"返回 undefined"那么无害，而 `get` 明确返回 undefined。
  * 只有在 `get` 整个缺席（结构替身）时才回落到属性面。
  * @param ctx - 上下文。
  * @returns 会话服务（或缺席）。
  */
-function probeSession(ctx: SessionEventContext): PicoSessionProbe | undefined {
-  if (typeof ctx.get === 'function') return ctx.get(PICO_SESSION_SERVICE) as PicoSessionProbe | undefined
-  return ctx.picoSession
+function probeSession(ctx: SessionEventContext): ZeoKeelSessionProbe | undefined {
+  if (typeof ctx.get === 'function') return ctx.get(ZEOKEEL_SESSION_SERVICE) as ZeoKeelSessionProbe | undefined
+  return ctx.zeokeelSession
 }
 
 /**
@@ -105,7 +105,7 @@ function probeSession(ctx: SessionEventContext): PicoSessionProbe | undefined {
  *
  * ## "没有会话"的哨兵只有一个：`null`（2026-10 审计 C2-2）
  *
- * 本函数有**两条投递通道**：`pico/session-changed` 事件，以及上面那次补发。事件通道
+ * 本函数有**两条投递通道**：`zeokeel/session-changed` 事件，以及上面那次补发。事件通道
  * 由 `SessionService` 投递，它一直用 `null`（`subscribeSession` 里的事件签名就是
  * `(session: Session | null) => void`）；补发通道此前把"探测不到服务"投成
  * `undefined` ⇒ **同一个订阅按到达方式给出两种哨兵**，而消费方只认一种：
@@ -119,16 +119,16 @@ function probeSession(ctx: SessionEventContext): PicoSessionProbe | undefined {
  * 「服务缺席 ⇒ 补发 null，不是 undefined」＋ enterprise 侧的
  * `tests/session-sentinel.spec.ts`（真 `apply()` 的行为面）。
  *
- * @param ctx - 上下文（只需 `on`，外加 `get` 或 `picoSession` 之一）。
+ * @param ctx - 上下文（只需 `on`，外加 `get` 或 `zeokeelSession` 之一）。
  * @param listener - 收到会话（或未登录状态）时的回调。**必须幂等**：它可能被立即调用一次。
- * @param probe - 探测 `picoSession`（缺省 = {@link probeSession}；wasm-apps-host 用它注入
+ * @param probe - 探测 `zeokeelSession`（缺省 = {@link probeSession}；wasm-apps-host 用它注入
  *   自己的归一化读取）。
  * @returns 取消订阅的函数。
  */
 export function subscribeSessionChanges<S = unknown>(
   ctx: SessionEventContext,
   listener: (session: S) => void,
-  probe: () => PicoSessionProbe | undefined = () => probeSession(ctx),
+  probe: () => ZeoKeelSessionProbe | undefined = () => probeSession(ctx),
 ): () => void {
   const off = ctx.on(SESSION_CHANGED_EVENT, listener)
   const service = probe()

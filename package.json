@@ -1,8 +1,8 @@
 {
-  "name": "picoaide-harness",
+  "name": "zeokeel-harness",
   "version": "2.8.3-beta.4",
   "private": true,
-  "description": "PicoAide Harness product workspace",
+  "description": "ZeoKeel Harness product workspace",
   "license": "MIT",
   "packageManager": "yarn@4.18.0",
   "engines": {
@@ -78,9 +78,9 @@
     }
   },
   "scripts": {
-    "build": "yarn workspace @picoaide/dsh-enterprise build && yarn workspace dsh-plugin-desktop build",
-    "typecheck": "yarn workspace @picoaide/dsh-enterprise typecheck && yarn workspace dsh-plugin-desktop typecheck",
-    "test": "yarn workspace @picoaide/dsh-enterprise test && yarn workspace dsh-plugin-desktop test",
+    "build": "yarn workspace @zeokeel/dsh-enterprise build && yarn workspace dsh-plugin-desktop build",
+    "typecheck": "yarn workspace @zeokeel/dsh-enterprise typecheck && yarn workspace dsh-plugin-desktop typecheck",
+    "test": "yarn workspace @zeokeel/dsh-enterprise test && yarn workspace dsh-plugin-desktop test",
     "check:layout": "node scripts/verify-layout.mjs",
     "check:workflows": "node scripts/check-workflows.mjs",
     "check:ci-scripts": "node scripts/verify-ci-scripts.mjs",
@@ -113,9 +113,9 @@
     "upstream:version": "cd deepseek-harness && corepack pnpm --version",
     "upstream:install": "cd deepseek-harness && corepack pnpm install --frozen-lockfile",
     "upstream:build": "cd deepseek-harness && corepack pnpm run build",
-    "build:connectors": "yarn workspace @picoaide/dsh-connectors build",
-    "typecheck:connectors": "yarn workspace @picoaide/dsh-connectors typecheck",
-    "test:connectors": "yarn workspace @picoaide/dsh-connectors test",
+    "build:connectors": "yarn workspace @zeokeel/dsh-connectors build",
+    "typecheck:connectors": "yarn workspace @zeokeel/dsh-connectors typecheck",
+    "test:connectors": "yarn workspace @zeokeel/dsh-connectors test",
     "dist:linux": "yarn workspace dsh-plugin-desktop dist:linux",
     "version": "node scripts/version.mjs",
     "version:set": "node scripts/version.mjs set",

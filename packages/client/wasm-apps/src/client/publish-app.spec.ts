@@ -1,7 +1,7 @@
 /**
  * 发布编排客户端半边的纯逻辑测试（FIX-38）。
  *
- * 这一层是**面板与宿主 `/api/pico/apps/wasm/publish` 之间的唯一契约**，因此断言
+ * 这一层是**面板与宿主 `/api/zeokeel/apps/wasm/publish` 之间的唯一契约**，因此断言
  * 全部对着"线上真实会发出去的字节"，而不是对着内部变量：
  *
  *  - 请求体字段名 = 服务端 `appcfg` 的封闭字段集（`access` / `whitelist` / `purpose` /
@@ -318,7 +318,7 @@ describe('submitPublish：一次请求走宿主编排（不自己分片）', () 
     bytes: new Uint8Array(size).fill(3),
   })
 
-  it('成功：POST /api/pico/apps/wasm/publish，解析出版本/状态（入口链接已不在契约里）', async () => {
+  it('成功：POST /api/zeokeel/apps/wasm/publish，解析出版本/状态（入口链接已不在契约里）', async () => {
     const calls: Array<{ url: string, init: RequestInit }> = []
     const result = await submitPublish(DRAFT, file(8), {
       fetch: (async (url: unknown, init?: RequestInit) => {
@@ -524,7 +524,7 @@ describe('parsePublishOutcome：形状不对不假装成功', () => {
 describe('模块级常量', () => {
   it('发布路径与宿主路由前缀逐字一致', () => {
     // 宿主：packages/host/enterprise/src/wasm-apps.ts 的 WASM_APPS_PREFIX。
-    expect(PUBLISH_PATH).toBe('/api/pico/apps/wasm/publish')
+    expect(PUBLISH_PATH).toBe('/api/zeokeel/apps/wasm/publish')
   })
 
   it('没有第二份分片判定常量（编排只有宿主那一份）', async () => {
@@ -636,7 +636,7 @@ describe('checkAppIdAvailability：提交前问一次服务端', () => {
       }) as unknown as typeof fetch,
     })
     // 路径与宿主白名单逐字一致：多一段少一段都会让宿主的逐后缀分发回 404。
-    expect(calls).toEqual(['/api/pico/apps/wasm/brand-new/availability'])
+    expect(calls).toEqual(['/api/zeokeel/apps/wasm/brand-new/availability'])
     expect(outcome.ok).toBe(true)
     if (!outcome.ok) throw new Error('unreachable')
     expect(outcome.availability.available).toBe(true)
@@ -714,7 +714,7 @@ describe('checkAppIdAvailability：提交前问一次服务端', () => {
         })
       }) as unknown as typeof fetch,
     })
-    expect(calls[0]).toBe('/api/pico/apps/wasm/has%20space%2Fslash/availability')
+    expect(calls[0]).toBe('/api/zeokeel/apps/wasm/has%20space%2Fslash/availability')
   })
 
   it('形状不认识 ⇒ UNEXPECTED_RESPONSE（fail-closed：绝不默认成"可用"）', async () => {

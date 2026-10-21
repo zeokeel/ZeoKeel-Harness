@@ -5,7 +5,7 @@
  * 本入口即可 —— 它会被内联进各自的产物（不进 tsdown 的 `external`），React 仍由
  * 平台模块表提供。
  *
- * @module @picoaide/dsh-panel-surface/client
+ * @module @zeokeel/dsh-panel-surface/client
  */
 
 export {

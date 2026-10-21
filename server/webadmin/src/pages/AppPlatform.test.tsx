@@ -175,8 +175,8 @@ function goStructJSONTags(relPath: string, structName: string): string[] {
  * 用例（例如给 `applimits.Limits` 加一个 `future_knob` 字段），断言门禁立刻点名。
  * CI 不设这两个变量，因此门禁读的就是真源本身。
  */
-const GO_FIELD_SOURCE = process.env.PICOAI_GO_LIMITS_SRC ?? '../../../internal/wasmapp/applimits/applimits.go'
-const GO_BUDGET_SOURCE = process.env.PICOAI_GO_BUDGET_SRC ?? '../../../internal/wasmapp/readyz/readyz.go'
+const GO_FIELD_SOURCE = process.env.ZEOKEEL_GO_LIMITS_SRC ?? '../../../internal/wasmapp/applimits/applimits.go'
+const GO_BUDGET_SOURCE = process.env.ZEOKEEL_GO_BUDGET_SRC ?? '../../../internal/wasmapp/readyz/readyz.go'
 
 /** 服务端 Limits 的 wire 字段集(= 前端表单必须覆盖的那个集合)。 */
 function goLimitFields(): string[] {

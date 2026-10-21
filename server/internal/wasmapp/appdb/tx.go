@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 本文件实现 §5.1 的 `db.tx`：ABI 层是 tx_begin / tx_commit / tx_rollback。

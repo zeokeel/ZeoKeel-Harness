@@ -29,11 +29,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // EnvMemoryProfile 是选择档位的环境变量名（空 = 默认档）。
-const EnvMemoryProfile = "PICOAI_WASM_MEMORY_PROFILE"
+const EnvMemoryProfile = "ZEOKEEL_WASM_MEMORY_PROFILE"
 
 // Profile 是一个内存档位的全部数值（**运行期强制的唯一输入**）。
 type Profile struct {

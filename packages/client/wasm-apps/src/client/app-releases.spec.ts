@@ -39,12 +39,12 @@ const RELEASES_PAYLOAD = {
 
 describe('本机路径：app_id 是路径段（必须编码），后缀与宿主/服务端逐字一致', () => {
   it('后缀是 releases（宿主只读代理白名单里有它，否则请求到不了服务端）', () => {
-    expect(releasesPath('roster')).toBe('/api/pico/apps/wasm/roster/releases')
+    expect(releasesPath('roster')).toBe('/api/zeokeel/apps/wasm/roster/releases')
   })
 
   it('app_id 里的非安全字符被编码（不制造第二个路径段）', () => {
     const path = releasesPath('a/b?c#d')
-    expect(path).toBe('/api/pico/apps/wasm/a%2Fb%3Fc%23d/releases')
+    expect(path).toBe('/api/zeokeel/apps/wasm/a%2Fb%3Fc%23d/releases')
     expect(path.split('/').at(-1)).toBe('releases')
   })
 })
@@ -190,7 +190,7 @@ describe('请求：GET 一次，失败永不抛', () => {
       }) as unknown as typeof fetch,
     })
     expect(result.ok).toBe(true)
-    expect(seen[0]!.url).toBe('/api/pico/apps/wasm/roster/releases')
+    expect(seen[0]!.url).toBe('/api/zeokeel/apps/wasm/roster/releases')
     expect(seen[0]!.init.method).toBe('GET')
     expect(seen[0]!.init.body).toBeUndefined()
   })

@@ -45,8 +45,8 @@ describe('voice mic status route', () => {
         schema: 1, platform, permission: 'not-applicable', canRequest: false,
       })
     }
-    expect(VOICE_MIC_STATUS_PATH).toBe('/api/pico/voice/mic')
-    expect(VOICE_MIC_REQUEST_PATH).toBe('/api/pico/voice/mic/request')
+    expect(VOICE_MIC_STATUS_PATH).toBe('/api/zeokeel/voice/mic')
+    expect(VOICE_MIC_REQUEST_PATH).toBe('/api/zeokeel/voice/mic/request')
   })
 
   it('passes the macOS TCC state through and only offers a request when undetermined', () => {

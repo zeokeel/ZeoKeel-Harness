@@ -1,3 +1,3 @@
-module picoaide.test/guests
+module zeokeel.test/guests
 
 go 1.25

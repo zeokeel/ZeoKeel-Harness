@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
 )
 
 // wasmPlatform 是关闭态的替身：字段名与打开态保持一致（装配代码逐字不变），

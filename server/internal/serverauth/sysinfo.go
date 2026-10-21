@@ -14,8 +14,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/updatecheck"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/updatecheck"
 )
 
 // sysinfoResponse 是 /api/server/admin/server-info 的响应体。

@@ -5,14 +5,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // 本文件是**编译子进程环境变量的白名单**（§4.3「参数 / 环境变量」+ R31 的 env 纪律）。
 //
 // 威胁：编译子进程处理的是攻击者的字节。如果它继承了宿主 env，那么一次成功的
 // 代码执行（或仅仅是一次"读取自身环境并写进编译产物/日志"的路径）就能拿到
-// PG DSN（直连平台数据库）、master key（解密全部凭据）与所有 PICOAI_* 配置。
+// PG DSN（直连平台数据库）、master key（解密全部凭据）与所有 ZEOKEEL_* 配置。
 // 子进程**不需要**这些：它只读一个模块文件、写一个缓存目录。
 //
 // 因此这里刻意用**白名单**而不是黑名单（黑名单永远会漏掉下一个新增的密钥变量），
@@ -35,7 +35,7 @@ var compileEnvAllowlist = []string{"PATH", "TMPDIR", "TZ", "LANG"}
 // 语义细节（都是刻意的）：
 //   - **未设置的允许项不会被补**：子进程自己会用它的默认值；
 //   - **空值的允许项会被传**：显式空值（如 `TZ=`）与"未设置"语义不同，传空值是保真；
-//   - 白名单**外**的一切（含 PG_DSN / PICOAI_* / MASTER_KEY / 任何 *_KEY / *_DSN）
+//   - 白名单**外**的一切（含 PG_DSN / ZEOKEEL_* / MASTER_KEY / 任何 *_KEY / *_DSN）
 //     一律丢弃，不做任何"看起来无害就放行"的判断；
 //   - 传入 nil 表示"没有父环境"，返回 nil（不是空切片：让 exec 见到"无环境"而不是
 //     "空环境"这两种语义之一由平台定，父侧总是显式传 os.Environ()）。
@@ -85,7 +85,7 @@ func CompileProcessEnvKeys(env []string) []string {
 //
 // ⚠️ 安全边界（不许放松）：**父环境里的同名变量不会被透传**（它不在 compileEnvAllowlist）。
 // 这里的值永远由平台算出来 —— `parent` 只提供 PATH/TMPDIR/TZ/LANG 四项。测试注入
-// `PICOAI_COMPILE_MEMORY_PAGES=999` 的父环境时，子进程读到的仍是实参 memoryPages。
+// `ZEOKEEL_COMPILE_MEMORY_PAGES=999` 的父环境时，子进程读到的仍是实参 memoryPages。
 //
 // memoryPages=0 ⇒ 编译期默认（limits.InstanceMemoryPages）：调用方没解析出生效值时的
 // 回落，与 runtime.New 的 MemoryPages=0 分支同语义。

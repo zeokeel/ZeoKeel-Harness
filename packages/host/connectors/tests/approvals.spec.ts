@@ -25,7 +25,7 @@ afterEach(async () => {
 })
 
 async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-conn-approvals-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-approvals-'))
   cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
   return dir
 }
@@ -83,7 +83,7 @@ describe('ConnectorApprovalStore', () => {
 
 describe('policy primitives', () => {
   it('rejects the bootstrap/loader env keys and the product namespaces', () => {
-    for (const key of ['PATH', 'path', 'Path', 'NODE_OPTIONS', 'NODE_PATH', 'LD_PRELOAD', 'DSH_HOME', 'DSH_ANYTHING', 'ELECTRON_RUN_AS_NODE', 'PICOAIDE_CONNECTOR_ACCESS_TOKEN', 'HTTPS_PROXY']) {
+    for (const key of ['PATH', 'path', 'Path', 'NODE_OPTIONS', 'NODE_PATH', 'LD_PRELOAD', 'DSH_HOME', 'DSH_ANYTHING', 'ELECTRON_RUN_AS_NODE', 'ZEOKEEL_CONNECTOR_ACCESS_TOKEN', 'HTTPS_PROXY']) {
       expect(isDeniedEnvKey(key), key).toBe(true)
     }
     for (const key of ['GLITCHTIP_TOKEN', 'GLITCHTIP_ORGANIZATION', 'MY_KEY']) {

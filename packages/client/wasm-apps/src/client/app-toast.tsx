@@ -14,18 +14,18 @@
  * `AppToastHost`（拿不到 `ctx`）。两者之间用 `useSyncExternalStore` 连起来，
  * 既不引入第二个 React root，也不让插件去碰 DOM。
  *
- * @module @picoaide/dsh-wasm-apps/client/app-toast
+ * @module @zeokeel/dsh-wasm-apps/client/app-toast
  */
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { t } from './locales.ts'
 
 // 声明宿主侧广播的事件（客户端编译面不加载宿主模块的声明）——与
-// `enterprise/src/client/channel-store.ts` 对 `pico/channel-changed` 的做法一致。
+// `enterprise/src/client/channel-store.ts` 对 `zeokeel/channel-changed` 的做法一致。
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /** 收到一条属于**另一家企业客户端**的深链（§5.3；宿主发出）。 */
-    'pico/wasm-app-deep-link-foreign'(payload?: { url?: string }): void
+    'zeokeel/wasm-app-deep-link-foreign'(payload?: { url?: string }): void
   }
 }
 
@@ -35,7 +35,7 @@ declare module '@deepseek-ai/cordis' {
  * 触发条件（§5.3）：收到一条深链，但它的 scheme **属于另一个渠道/安装**
  * （跨渠道不工作属预期，不能静默丢弃 —— 用户要知道该找谁）。
  */
-export const APP_FOREIGN_DEEP_LINK_EVENT = 'pico/wasm-app-deep-link-foreign'
+export const APP_FOREIGN_DEEP_LINK_EVENT = 'zeokeel/wasm-app-deep-link-foreign'
 
 /** toast 的类型（目前只有一种；保留联合类型是为了以后加别的提示时不改签名）。 */
 export type AppToast = { kind: 'foreign-deep-link' }
@@ -121,11 +121,11 @@ export function AppToastHost() {
   useEffect(() => () => { clearAppToast() }, [])
   if (toast === null) return null
   return (
-    <div style={TOAST} role="status" className="pico-app-toast" data-role="app-toast" data-toast={toast.kind}>
+    <div style={TOAST} role="status" className="zeokeel-app-toast" data-role="app-toast" data-toast={toast.kind}>
       <span data-role="toast-text">{t(TOAST_TEXT_KEYS[toast.kind])}</span>
       <button
         type="button"
-        className="pico-app-toast-dismiss"
+        className="zeokeel-app-toast-dismiss"
         data-action="toast-dismiss"
         style={DISMISS}
         aria-label={t('appCenter.toast.dismiss')}

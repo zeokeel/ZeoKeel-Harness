@@ -1,6 +1,6 @@
 /**
  * Child process for the F1 (TOCTOU) regression：造一份"内容与随包技能逐字相同、
- * 没有 `.picoaide` 溯源"的历史副本（= 会走"内容同一性采纳"分支的形态），跑一次
+ * 没有 `.zeokeel` 溯源"的历史副本（= 会走"内容同一性采纳"分支的形态），跑一次
  * `syncBuiltinSkills`，把落点事实打印成一行 JSON。
  *
  * 用法：
@@ -52,7 +52,7 @@ console.log(JSON.stringify({
   entry: results.find((r) => r.name === NAME),
   skill: readIf(join(dest, 'SKILL.md')),
   notes: readIf(join(dest, 'MY-NOTES.md')),
-  provenance: readIf(join(dest, '.picoaide', 'release.json')),
+  provenance: readIf(join(dest, '.zeokeel', 'release.json')),
   installVersion: readIf(join(dest, '.install-version')),
   destEntries: existsSync(dest) ? readdirSync(dest).sort() : [],
   rootEntries: readdirSync(userSkills).sort(),

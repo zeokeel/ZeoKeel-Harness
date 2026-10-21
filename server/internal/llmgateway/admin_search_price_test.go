@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestAdminGatewaySearchPrice 覆盖 0085 的管理端读写与校验：

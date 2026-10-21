@@ -33,8 +33,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
 )
 
 // releaseConfig 读某个版本行的**权威配置**（= 应用 assets.read 读到的那一份同源）。

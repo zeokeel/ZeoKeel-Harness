@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/cachetrust"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/cachetrust"
 )
 
 // IsolationMode 是编译子进程的 OS 级隔离策略（R31 / §15.1 第 14 条）。
@@ -49,7 +49,7 @@ func (m IsolationMode) String() string {
 // 部署形态需要它：默认档 `IsolationAuto` 在隔离不可用时**只警告并继续**，
 // 而"生产要不要接受无隔离编译"是运维决策，不该由代码替他决定。设成
 // `require` 即 fail-closed（隔离不可用则启动失败）。
-const IsolationEnvVar = "PICOAI_COMPILE_ISOLATION"
+const IsolationEnvVar = "ZEOKEEL_COMPILE_ISOLATION"
 
 // IsolationFromEnv 读取 IsolationEnvVar 并解析成 IsolationMode。
 //
@@ -145,12 +145,12 @@ type Logger interface {
 	Printf(format string, args ...any)
 }
 
-// ChildBinaryName 是编译子进程的二进制名（与 cmd/picoaide-app-compile 目录名一致）。
+// ChildBinaryName 是编译子进程的二进制名（与 cmd/zeokeel-app-compile 目录名一致）。
 //
 // 为什么放在本包而不是 limits：limits 是**应用作者可见的上限真源**（§4 的护栏表），
 // 而这是部署形态的内部约定（两个二进制同目录）。放进去会让 limits 变成杂物间，
 // 反而削弱"§4 的每个数字都有出处"这条纪律。
-const ChildBinaryName = "picoaide-app-compile"
+const ChildBinaryName = "zeokeel-app-compile"
 
 // DefaultIdleTimeout 是常驻编译子进程的空闲退出时间。
 //
@@ -427,7 +427,7 @@ func New(opt Options) (*Compiler, error) {
 		// wazero 的磁盘缓存是读 + 写：子进程命中就直接加载那份"机器码"并干跑它 ——
 		// 能布置缓存目录的人因此可以在编译进程里执行代码（auto 档常常没有 OS 级隔离）。
 		// 换一个本进程新建的 0700 临时目录：既不读攻击者的条目，也不往里写。
-		tmp, terr := os.MkdirTemp("", "picoaide-compile-cache-")
+		tmp, terr := os.MkdirTemp("", "zeokeel-compile-cache-")
 		if terr != nil {
 			return nil, fmt.Errorf("compile: 缓存目录不可信，且无法创建替代缓存目录: %w", terr)
 		}
@@ -765,7 +765,7 @@ func (c *Compiler) runJob(j *job) {
 //
 // ⚠️ 编译侧**不需要**像执行侧那样做"缓存目录被外部删除"的自愈（R5-A-2 的对照面，实测）：
 // 子进程对每次请求都新建一份 wazero Runtime 与 `NewCompilationCacheWithDir(req.CacheDir)`
-// （cmd/picoaide-app-compile/main.go：`server` 是"无跨请求状态"的），因此目录被删之后
+// （cmd/zeokeel-app-compile/main.go：`server` 是"无跨请求状态"的），因此目录被删之后
 // **下一次编译会自己把分片目录建回来**。这条前提由 cache_selfheal_test.go 的特征化用例
 // 钉住（变异：把子进程的 cache 提升为进程级 ⇒ 用例红）。
 func (c *Compiler) compileOne(modulePath string) (*Result, *apperr.Error) {
@@ -879,7 +879,7 @@ func (c *Compiler) ensureChild(modulePath string) (*childProcess, *apperr.Error)
 
 	proc, err := c.spawnChild(needDir)
 	if err != nil {
-		return nil, apperr.From(err).WithHint("编译进程不可用：请检查部署镜像里是否有 picoaide-app-compile 二进制与隔离工具（bwrap）")
+		return nil, apperr.From(err).WithHint("编译进程不可用：请检查部署镜像里是否有 zeokeel-app-compile 二进制与隔离工具（bwrap）")
 	}
 	c.childProc = proc
 	return proc, nil
@@ -889,7 +889,7 @@ func (c *Compiler) ensureChild(modulePath string) (*childProcess, *apperr.Error)
 //
 // env：**只**传白名单（§4.3）+ 平台自己算出的部署级参数（CompileChildEnv：生效的
 // 单实例内存上限，R1-rt-7b）。这不是"清理"，是"白名单"——父环境里的
-// PG_DSN / master key / PICOAI_* 一律不进子进程（子进程读的是攻击者的字节）。
+// PG_DSN / master key / ZEOKEEL_* 一律不进子进程（子进程读的是攻击者的字节）。
 func (c *Compiler) spawnChild(moduleDir string) (*childProcess, error) {
 	env := CompileChildEnv(c.envSource(), c.opt.MemoryPages)
 	// 只读绑定集合 = 声明的 ReadableDirs ∪ 本次模块所在目录 ∪ 子进程二进制所在目录。
@@ -911,7 +911,7 @@ func (c *Compiler) spawnChild(moduleDir string) (*childProcess, error) {
 	// 常驻子进程的 argv 里根本没有 cache_dir，它只出现在请求里）。
 	// ⚠️ `-cache-dir` 必须与请求里的 `cache_dir` **同一个值**（`childCacheDir`）：
 	// 子进程启动时会记下这个声明，并在每个请求上做一致性自检
-	//（cmd/picoaide-app-compile/main.go 的 declaredCacheDir 比对），不一致直接回
+	//（cmd/zeokeel-app-compile/main.go 的 declaredCacheDir 比对），不一致直接回
 	// INTERNAL。五轮审计实测：这里曾漏改成 `c.cache` ⇒ 在"缓存不可信"这条分支上
 	// **每一次真实编译都失败**（而只断言结构体的用例完全看不出来）。
 	args := append([]string{
@@ -955,8 +955,8 @@ func startupSelfCheckError(perr *apperr.Error) *apperr.Error {
 	e = e.WithDetail("stage", "startup_self_check")
 	// 这条 hint 是可运维的：自检失败几乎总是"二进制不对/跑不起来"，不是模块的问题。
 	e = e.WithHint(
-		"部署检查：picoaide-app-compile 必须与 picoaide-server 同目录、同一版本（协议版本不符会让自检失败）",
-		"手工复跑：`picoaide-app-compile -request '{\"op\":\"ping\"}'` 应输出 {\"ok\":true,\"version\":\"picoaide-app-compile/1\"}",
+		"部署检查：zeokeel-app-compile 必须与 zeokeel-server 同目录、同一版本（协议版本不符会让自检失败）",
+		"手工复跑：`zeokeel-app-compile -request '{\"op\":\"ping\"}'` 应输出 {\"ok\":true,\"version\":\"zeokeel-app-compile/1\"}",
 	)
 	return e
 }

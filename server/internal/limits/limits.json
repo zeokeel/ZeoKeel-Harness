@@ -104,7 +104,7 @@
       "Unit": "bytes",
       "Section": "§4.2",
       "Title": "应用配置文件上限",
-      "Note": "picoaide.app.json，不计入 wasm 上限"
+      "Note": "zeokeel.app.json，不计入 wasm 上限"
     },
     {
       "Key": "app_config_whitelist_max",
@@ -376,7 +376,7 @@
       "Unit": "count",
       "Section": "§21.2",
       "Title": "AI 桥消息条数上限",
-      "Note": "应用前端 fetch('/__picoaide/ai/chat') 的 messages 数组长度"
+      "Note": "应用前端 fetch('/__zeokeel/ai/chat') 的 messages 数组长度"
     },
     {
       "Key": "ai_bridge_message_max_bytes",

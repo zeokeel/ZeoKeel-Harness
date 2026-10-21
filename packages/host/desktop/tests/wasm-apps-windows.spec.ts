@@ -20,8 +20,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { WASM_APPS_WINDOW_ADAPTER_SERVICE } from '@picoaide/dsh-wasm-apps-host'
-import { APP_WINDOWS_STATE_FILE, createWasmAppsWindows, type WasmAppsWindowAdapter } from '@picoaide/dsh-wasm-apps-host/windows'
+import { WASM_APPS_WINDOW_ADAPTER_SERVICE } from '@zeokeel/dsh-wasm-apps-host'
+import { APP_WINDOWS_STATE_FILE, createWasmAppsWindows, type WasmAppsWindowAdapter } from '@zeokeel/dsh-wasm-apps-host/windows'
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { provideWasmAppsWindows } from '../src/wasm-apps-windows.ts'
@@ -92,17 +92,17 @@ describe('provideWasmAppsWindows（桌面壳 → 插件的服务接线）', () =
     const ctx = new Context()
     live.push(ctx)
     provideWasmAppsWindows(ctx, recordingAdapter())
-    // 这一行就是 `@picoaide/dsh-wasm-apps-host/src/index.ts:403` 的做法。
+    // 这一行就是 `@zeokeel/dsh-wasm-apps-host/src/index.ts:403` 的做法。
     const service = ctx.get(WASM_APPS_WINDOW_ADAPTER_SERVICE) as WasmAppsWindowAdapter | undefined
     expect(service, '没有 provider ⇒ 窗口管理器根本不会构造（现象：回 opened 但没有窗口）').toBeDefined()
 
     const windows = createWasmAppsWindows({
       adapter: service!,
-      appScheme: 'picoaide-app',
-      productName: 'PicoAide Harness',
+      appScheme: 'zeokeel-app',
+      productName: 'ZeoKeel Harness',
       userDataDir: dir,
       partition: () => 'persist:agent-browser-alice',
-      urlFor: (appId, path) => `picoaide-app://${appId}${path}`,
+      urlFor: (appId, path) => `zeokeel-app://${appId}${path}`,
       titleFor: appId => (appId === 'my-notes' ? '我的笔记' : undefined),
       workArea: () => ({ x: 0, y: 0, width: 1920, height: 1080 }),
       warn: message => { throw new Error(`unexpected warn: ${message}`) },
@@ -113,8 +113,8 @@ describe('provideWasmAppsWindows（桌面壳 → 插件的服务接线）', () =
     expect(first.window).toBe('opened')
     // 建窗必须落在**应用 origin** 上（http(s) 会绕过整个应用闸门）。
     expect(adapter.created).toEqual([{
-      url: 'picoaide-app://my-notes/',
-      title: '我的笔记 · PicoAide Harness',
+      url: 'zeokeel-app://my-notes/',
+      title: '我的笔记 · ZeoKeel Harness',
       width: 1280,
       height: 720,
     }])
@@ -128,7 +128,7 @@ describe('provideWasmAppsWindows（桌面壳 → 插件的服务接线）', () =
     const again = await windows.open('my-notes', '/notes')
     expect(again.window).toBe('focused')
     expect(adapter.created).toHaveLength(1)
-    expect(adapter.focused).toEqual(['picoaide-app://my-notes/notes'])
+    expect(adapter.focused).toEqual(['zeokeel-app://my-notes/notes'])
 
     // 状态文件落在 `<userData>/wasm-apps-windows.json`（§16.1 冻结 schema，原子写）。
     const state = JSON.parse(await readFile(join(dir, APP_WINDOWS_STATE_FILE), 'utf8')) as {
@@ -158,7 +158,7 @@ describe('provideWasmAppsWindows（桌面壳 → 插件的服务接线）', () =
     expect(main).toMatch(/prepareDesktopProfile\([\s\S]{0,400}?app\.getPath\('userData'\),\s*\)/)
 
     // 注入链的另一半在 `profile.ts`：把注入写成"只有传了才出现"的同时，必须真的有
-    // 一处把它放进 `pico-wasm-apps-host` 行的 config（拼错键名/放错行都会静默）。
+    // 一处把它放进 `zeokeel-wasm-apps-host` 行的 config（拼错键名/放错行都会静默）。
     const profile = readFileSync(new URL('../src/profile.ts', import.meta.url), 'utf8')
     expect(profile).toMatch(/userDataDir\?: string/)
     expect(profile).toMatch(/\.\.\.\(userDataDir === undefined \|\| userDataDir === '' \? \{\} : \{ userDataDir \}\)/)
@@ -180,7 +180,7 @@ describe('provideWasmAppsWindows（桌面壳 → 插件的服务接线）', () =
 /** 防止"用替身把契约换掉"：真实适配器的构造入口必须存在（形状由另一个 spec 钉住）。 */
 describe('真实适配器入口', () => {
   it('electron-adapter 子路径导出 createRealElectronWindowAdapter（main.ts 的 import 目标）', async () => {
-    const module = await vi.importActual<typeof import('@picoaide/dsh-wasm-apps-host/electron-adapter')>('@picoaide/dsh-wasm-apps-host/electron-adapter')
+    const module = await vi.importActual<typeof import('@zeokeel/dsh-wasm-apps-host/electron-adapter')>('@zeokeel/dsh-wasm-apps-host/electron-adapter')
     expect(module.createRealElectronWindowAdapter).toBeTypeOf('function')
     expect(module.createRealElectronAdapter).toBeTypeOf('function')
   })

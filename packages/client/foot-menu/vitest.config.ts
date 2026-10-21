@@ -3,9 +3,9 @@ import { defineConfig } from 'vitest/config'
 
 /**
  * 默认 `node`（服务契约与纯函数用例足够）；**挂载类**用例（「更多」行与浮层）在文件头
- * 用 `// @vitest-environment jsdom` 单独切换 —— 与 `@picoaide/dsh-wasm-apps` 同一取舍。
+ * 用 `// @vitest-environment jsdom` 单独切换 —— 与 `@zeokeel/dsh-wasm-apps` 同一取舍。
  *
- * `resolve.alias`：`@picoaide/dsh-panel-surface/client` 指向**源码**而不是 `lib/`。
+ * `resolve.alias`：`@zeokeel/dsh-panel-surface/client` 指向**源码**而不是 `lib/`。
  *
  * 为什么（2026-09-25 审计 FIX-29 P2）：`panel-focus-handoff.spec.tsx` 要同时跑真装载器
  * 与真浮层，而判据必须咬住**源码** —— 指向 `lib/` 时，"删掉 `container.focus()`"或
@@ -16,7 +16,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   resolve: {
     alias: {
-      '@picoaide/dsh-panel-surface/client': fileURLToPath(
+      '@zeokeel/dsh-panel-surface/client': fileURLToPath(
         new URL('../panel-surface/src/client/index.ts', import.meta.url),
       ),
     },

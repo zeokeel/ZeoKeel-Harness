@@ -1,5 +1,5 @@
 import type {} from '@deepseek-ai/dsh-client-connection'
-/** PicoAide Harness Host plugin: owns the selected native shell generation. */
+/** ZeoKeel Harness Host plugin: owns the selected native shell generation. */
 
 import { fileURLToPath } from 'node:url'
 import type { Context, Volatile } from '@deepseek-ai/cordis'
@@ -64,11 +64,11 @@ import type {} from './runtime.ts'
 /** Stable Cordis plugin name. */
 export const name = 'desktop-shell'
 
-// picoaide:// deep-link event forwarded by the desktop shell (auth callback);
+// zeokeel:// deep-link event forwarded by the desktop shell (auth callback);
 // the enterprise plugin listens and completes OIDC/OpenID login.
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'pico/deep-link'(url: string): void
+    'zeokeel/deep-link'(url: string): void
     /**
      * The user-visible language actually changed (in-app locale setting).
      *
@@ -76,7 +76,7 @@ declare module '@deepseek-ai/cordis' {
      * chrome pages) are already open by then and cannot re-render themselves;
      * they listen for this event and re-serve (2026-09-16 R9 audit).
      */
-    'pico/locale-changed'(locale: DesktopLocale): void
+    'zeokeel/locale-changed'(locale: DesktopLocale): void
   }
 }
 
@@ -200,8 +200,8 @@ export interface Config {
  * the pinned upstream vendors); a second copy is what made TS2883 fire here.
  */
 export const Config = z.object({
-  productName: z.string().default('PicoAide Harness'),
-  windowTitle: z.string().default('PicoAide Harness'),
+  productName: z.string().default('ZeoKeel Harness'),
+  windowTitle: z.string().default('ZeoKeel Harness'),
   port: z.number().step(1).min(0).max(65_535).default(0).volatile(),
   width: z.number().step(1).min(800).default(1280),
   height: z.number().step(1).min(600).default(840),
@@ -249,8 +249,8 @@ export function apply(ctx: Context, config: Config): void {
   const runtime = ctx.get('desktopRuntime')
   if (runtime === undefined) {
     process.stderr.write(
-      'dsh-plugin-desktop: this profile is composed with the PicoAide Harness shell, which requires the desktop launcher (desktopRuntime).\n'
-      + 'Start it with `dsh-desktop`, or select this profile inside the packaged PicoAide Harness application.\n'
+      'dsh-plugin-desktop: this profile is composed with the ZeoKeel Harness shell, which requires the desktop launcher (desktopRuntime).\n'
+      + 'Start it with `dsh-desktop`, or select this profile inside the packaged ZeoKeel Harness application.\n'
       + 'The desktop terminal, profile, and update rows stay inactive in an ordinary DSH boot.\n',
     )
     return
@@ -528,13 +528,13 @@ export function apply(ctx: Context, config: Config): void {
     // embedded browser's chrome) to re-serve in the new language. Only on a real
     // change: a settings write that keeps the same preference must not reload
     // anything.
-    if (runtime.locale !== before) ctx.emit('pico/locale-changed', runtime.locale)
+    if (runtime.locale !== before) ctx.emit('zeokeel/locale-changed', runtime.locale)
   })
-  // picoaide:// deep links (auth callback): forward to Host consumers.
-  // The enterprise plugin listens for 'pico/deep-link' and completes the
+  // zeokeel:// deep links (auth callback): forward to Host consumers.
+  // The enterprise plugin listens for 'zeokeel/deep-link' and completes the
   // OIDC/OpenID login by storing the token from the link.
   runtime.setDeepLinkHandler(url => {
-    ctx.emit('pico/deep-link', url)
+    ctx.emit('zeokeel/deep-link', url)
   })
   ctx.effect(
     () => runtime.schedule({

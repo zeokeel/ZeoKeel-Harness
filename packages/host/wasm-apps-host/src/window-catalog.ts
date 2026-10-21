@@ -17,7 +17,7 @@
  * `windows.ts`（{@link parseDeclaredWindowGeometry} / {@link resolveDeclaredWindowSize}），
  * 本模块只负责"把目录拉下来、按 app_id 取那一行"。
  *
- * @module @picoaide/dsh-wasm-apps-host/window-catalog
+ * @module @zeokeel/dsh-wasm-apps-host/window-catalog
  */
 
 import { parseDeclaredWindowGeometry, type DeclaredWindowGeometry } from './windows.ts'
@@ -112,26 +112,26 @@ export function createWindowCatalog(deps: WindowCatalogDeps): WindowCatalog {
         signal: controller.signal,
       })
       if (!response.ok) {
-        warn(`pico-wasm-apps-host: the platform catalog lookup failed (HTTP ${String(response.status)}); window geometry falls back to the defaults`)
+        warn(`zeokeel-wasm-apps-host: the platform catalog lookup failed (HTTP ${String(response.status)}); window geometry falls back to the defaults`)
         return
       }
       const text = await response.text()
       if (text.length > CATALOG_BODY_MAX_CHARS) {
-        warn(`pico-wasm-apps-host: the platform catalog is ${String(text.length)} chars (> ${String(CATALOG_BODY_MAX_CHARS)}); skipping the window-geometry fallback`)
+        warn(`zeokeel-wasm-apps-host: the platform catalog is ${String(text.length)} chars (> ${String(CATALOG_BODY_MAX_CHARS)}); skipping the window-geometry fallback`)
         return
       }
       let parsed: unknown
       try {
         parsed = JSON.parse(text)
       } catch {
-        warn('pico-wasm-apps-host: the platform catalog was not valid JSON; window geometry falls back to the defaults')
+        warn('zeokeel-wasm-apps-host: the platform catalog was not valid JSON; window geometry falls back to the defaults')
         return
       }
       const list = (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed))
         ? (parsed as { apps?: unknown }).apps
         : undefined
       if (!Array.isArray(list)) {
-        warn('pico-wasm-apps-host: the platform catalog had no apps array; window geometry falls back to the defaults')
+        warn('zeokeel-wasm-apps-host: the platform catalog had no apps array; window geometry falls back to the defaults')
         return
       }
       const next = new Map<string, DeclaredWindowGeometry | null>()
@@ -146,7 +146,7 @@ export function createWindowCatalog(deps: WindowCatalogDeps): WindowCatalog {
       lastFailedKey = null
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause)
-      warn(`pico-wasm-apps-host: the platform catalog lookup failed (${detail}); window geometry falls back to the defaults`)
+      warn(`zeokeel-wasm-apps-host: the platform catalog lookup failed (${detail}); window geometry falls back to the defaults`)
     } finally {
       clearTimeout(timer)
     }

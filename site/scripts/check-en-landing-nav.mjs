@@ -125,9 +125,9 @@ const FROZEN_ROOT_FOOTER = {
     {
       title: '社区',
       links: [
-        { label: 'GitHub', href: 'https://github.com/picoaide/picoaide-harness' },
-        { label: '版本归档', href: 'https://github.com/picoaide/picoaide-harness/releases', blank: true },
-        { label: '提交 Issue', href: 'https://github.com/picoaide/picoaide-harness/issues', blank: true },
+        { label: 'GitHub', href: 'https://github.com/zeokeel/ZeoKeel-Harness' },
+        { label: '版本归档', href: 'https://github.com/zeokeel/ZeoKeel-Harness/releases', blank: true },
+        { label: '提交 Issue', href: 'https://github.com/zeokeel/ZeoKeel-Harness/issues', blank: true },
         { label: '关于我们', href: '/about/' },
       ],
     },

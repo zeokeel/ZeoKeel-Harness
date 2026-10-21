@@ -349,7 +349,7 @@ function harness(
           }
         : undefined),
     logger: { info: vi.fn(), warn: loggerWarn, error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -421,13 +421,13 @@ afterEach(async () => {
 })
 
 describe('R18B-01 ③：本机路由端到端（安装/卸载都不再返回裸成功）', () => {
-  it('POST /api/pico/skills/:name/install ⇒ 422 RESIDUE（项目根同名）', async () => {
+  it('POST /api/zeokeel/skills/:name/install ⇒ 422 RESIDUE（项目根同名）', async () => {
     await seed(join(world.project, '.dsh', 'skills'), 'alpha', 'alpha', 'FROM-PROJECT')
     const h = harness(SESSION, [world.project])
     stubGateway(h, await skillArchive('alpha', 'FROM-HUB'))
 
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/alpha/install'), res)
+    await h.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/alpha/install'), res)
     console.log('[③/安装] HTTP =', read().code, JSON.stringify(read().body))
     expect(read().code).toBe(422)
     expect(read().body.code).toBe('RESIDUE')
@@ -436,7 +436,7 @@ describe('R18B-01 ③：本机路由端到端（安装/卸载都不再返回裸�
     expect(h.gateway.some(u => u.includes('/marketplace/skills/alpha/archive'))).toBe(true)
   })
 
-  it('POST /api/pico/skills/:name/uninstall ⇒ 422 RESIDUE（项目根那份会接管）', async () => {
+  it('POST /api/zeokeel/skills/:name/uninstall ⇒ 422 RESIDUE（项目根那份会接管）', async () => {
     const projectCopy = await seed(join(world.project, '.dsh', 'skills'), 'alpha', 'alpha', 'FROM-PROJECT')
     const projectMd = await readFile(join(projectCopy, 'SKILL.md'), 'utf8')
     await installSkillArchive({
@@ -450,7 +450,7 @@ describe('R18B-01 ③：本机路由端到端（安装/卸载都不再返回裸�
     const h = harness(SESSION, [world.project])
 
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/alpha/uninstall'), res)
+    await h.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/alpha/uninstall'), res)
     console.log('[③/卸载] HTTP =', read().code, JSON.stringify(read().body))
     expect(read().code).toBe(422)
     expect(read().body.code).toBe('RESIDUE')
@@ -462,14 +462,14 @@ describe('R18B-01 ③：本机路由端到端（安装/卸载都不再返回裸�
     const noWorkspaces = harness(SESSION, [])
     stubGateway(noWorkspaces, archive)
     const install = fakeRes()
-    await noWorkspaces.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/alpha/install'), install.res)
+    await noWorkspaces.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/alpha/install'), install.res)
     expect(install.read().code, '没有项目根时不得误报 RESIDUE').toBe(200)
 
     // 登记了工作区、但项目根里没有同名技能：同样放行。
     const withWorkspace = harness(SESSION, [world.project])
     stubGateway(withWorkspace, archive)
     const uninstall = fakeRes()
-    await withWorkspace.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/alpha/uninstall'), uninstall.res)
+    await withWorkspace.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/alpha/uninstall'), uninstall.res)
     console.log('[③/反向] uninstall =', uninstall.read().code, JSON.stringify(uninstall.read().body))
     expect(uninstall.read().code).toBe(200)
     await expect(stat(join(world.skillsDir, 'alpha'))).rejects.toThrow()
@@ -495,7 +495,7 @@ describe('R19A-S2-05/06/07：项目根只来自"仍在使用的工作区"', () =
       const h = harness(SESSION, [gone])
       stubGateway(h, await skillArchive('delta', 'FROM-HUB'))
       const { res, read } = fakeRes()
-      await h.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/delta/install'), res)
+      await h.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/delta/install'), res)
       console.log('[S2-05] HTTP =', read().code, '| logger.warn =', JSON.stringify(h.logger.warn.mock.calls.map(c => String(c[0]))))
       expect(read().code, '陈旧登记项不得贡献项目根').toBe(200)
       expect(existsSync(join(world.skillsDir, 'delta', 'SKILL.md'))).toBe(true)
@@ -520,7 +520,7 @@ describe('R19A-S2-05/06/07：项目根只来自"仍在使用的工作区"', () =
       const h = harness(SESSION, [{ path: projA }, { path: projB, sessionIds: [] }])
       stubGateway(h, await skillArchive('gamma', 'FROM-HUB'))
       const { res, read } = fakeRes()
-      await h.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/gamma/install'), res)
+      await h.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/gamma/install'), res)
       console.log('[S2-06] HTTP =', read().code, '| logger.warn =', JSON.stringify(h.logger.warn.mock.calls.map(c => String(c[0]))))
       expect(read().code, '没有会话的工作区不可能成为任何会话的 cwd ⇒ 不参与判定').toBe(200)
       expect(existsSync(join(world.skillsDir, 'gamma', 'SKILL.md'))).toBe(true)
@@ -530,7 +530,7 @@ describe('R19A-S2-05/06/07：项目根只来自"仍在使用的工作区"', () =
       const live = harness(SESSION, [{ path: projB, sessionIds: ['session-1'] }])
       stubGateway(live, await skillArchive('gamma', 'FROM-HUB'))
       const liveRes = fakeRes()
-      await live.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/gamma/install'), liveRes.res)
+      await live.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/gamma/install'), liveRes.res)
       console.log('[S2-06/反向] HTTP =', liveRes.read().code, JSON.stringify(liveRes.read().body).slice(0, 200))
       expect(liveRes.read().code).toBe(422)
       expect(String(liveRes.read().body.error)).toContain(projB)
@@ -549,7 +549,7 @@ describe('R19A-S2-05/06/07：项目根只来自"仍在使用的工作区"', () =
       const h = harness(SESSION, [projB], { registryThrows: true })
       stubGateway(h, await skillArchive('theta', 'FROM-HUB'))
       const { res, read } = fakeRes()
-      await h.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/theta/install'), res)
+      await h.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/theta/install'), res)
       console.log('[S2-07] HTTP =', read().code, '| logger.warn =', JSON.stringify(h.logger.warn.mock.calls.map(c => String(c[0]))))
       // 方向仍是"放行"（注册表读不出来时不能把整个安装面卡死），但**必须留痕**：
       // 修前 logger.warn 零调用 ⇒ 判据静默退化成 R18B-01 修前的世界。
@@ -576,7 +576,7 @@ describe('R19A-S2-05/06/07：项目根只来自"仍在使用的工作区"', () =
 
       const h = harness(SESSION, [])
       const { res, read } = fakeRes()
-      await h.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/builtin/epsilon/uninstall'), res)
+      await h.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/builtin/epsilon/uninstall'), res)
       console.log('[S2-09] HTTP =', read().code, JSON.stringify(read().body).slice(0, 200))
       expect(read().code).toBe(422)
       expect(read().body.code).toBe('RESIDUE')

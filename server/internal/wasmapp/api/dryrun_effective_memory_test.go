@@ -6,10 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile/testdata/wasmtest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 )
 
 // R5（2026-09-19，审计残留 P2）：发布干跑必须取**运行时生效**的单实例内存上限，

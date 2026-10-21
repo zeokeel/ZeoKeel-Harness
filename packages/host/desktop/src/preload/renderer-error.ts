@@ -61,10 +61,10 @@ const gate = new RendererErrorGate()
  * 两个世界共享同一份 DOM,`window.dispatchEvent` 在两个世界都能收到 —— 这是
  * **唯一**不需要给页面任何能力的回传通路。
  */
-export const RENDERER_ERROR_BRIDGE_EVENT = 'picoaide:desktop/renderer-error-bridge'
+export const RENDERER_ERROR_BRIDGE_EVENT = 'zeokeel:desktop/renderer-error-bridge'
 
 /** 主世界里标记"注入已装"的属性名(去重,避免重复注册监听器)。 */
-const MAIN_WORLD_FLAG = '__picoaideRendererErrorInstalled'
+const MAIN_WORLD_FLAG = '__zeokeelRendererErrorInstalled'
 
 function send(report: RendererErrorPayload): void {
   if (!gate.accept(report)) return

@@ -1,6 +1,6 @@
 # 2026-09-06「新建会话失败 + 权限跳回」诊断报告（含修复与验证）
 
-诊断对象：桌面产品 PicoAide Harness v2.6.7-beta.2（win32，Electron 43.4.0，DSH 0.1.2-rc.1），数据源：用户诊断包
+诊断对象：桌面产品 ZeoKeel Harness v2.6.7-beta.2（win32，Electron 43.4.0，DSH 0.1.2-rc.1），数据源：用户诊断包
 `diagnostics-1788670585487-08ffd48e-5e0d-4120-8b96-3537b7e8c270.zip`（09-06 导出，含 10 份日志 + 1 份 crash dump）
 + 用户真实环境截图（会话内 `resume failed … preset "standard" failed to mount: 23 rows name plugins that cannot be resolved`
 + `(gateway/internal)`）+ 本地打包版复现 + 真实服务端（harness.example.com / test-user）端到端验证。

@@ -983,7 +983,7 @@ func usageBoundAlignedToBeijingMonths(bound string) bool {
 // 读取方只在"关系此刻不是**任何**分区树的分区（relispartition=false）+ 叶子表 +
 // 标记可解析"时才按我们自己的残留处理（见 ownedDetachedLeftover）。任何别的
 // 调用点都不得写这个标记：写错一个标记就是把别人的表列进 DROP 名单。
-const usageRetentionOwnedCommentPrefix = "picoaide:usage-retention:owned"
+const usageRetentionOwnedCommentPrefix = "zeokeel:usage-retention:owned"
 
 // usageRetentionOwnedComment 渲染标记原文：版本号 + 摘之前声明的北京日窗口。
 // 窗口取"判据窗口 ∪ 声明边界"（retentionWindowUnion）—— 前者在边界读不懂时兜底，
@@ -2337,7 +2337,7 @@ func retentionBackfillBudget(db *sql.DB, from, to time.Time, extraSources []stri
 //
 // R10-D-01（P1）：这一步必须在**进入临界区之前**完成 —— 临界区持有 usage 的
 // ACCESS EXCLUSIVE，而 ensureUsageDailyPartition 可能真的建表（DDL 走连接池，
-// 池上限可能被配成 1：PICOAI_DB_MAX_OPEN_CONNS / 测试里的 SetMaxOpenConns(1)，
+// 池上限可能被配成 1：ZEOKEEL_DB_MAX_OPEN_CONNS / 测试里的 SetMaxOpenConns(1)，
 // 持有事务连接时再向池里要第二条连接会自锁）。临界区里因此只允许**事务句柄上的
 // 纯 DML**（聚合 + 两条 UPSERT）。
 func ensureRetentionLedgerRelations(db *sql.DB, from, to time.Time) error {
@@ -3914,7 +3914,7 @@ func reclaimUsagePartitionAtomically(db *sql.DB, rel string, shape usageRelation
 	// 提交成功后 release 是 no-op；每条提前返回的出口都先把连接放回池。
 	defer tx.release()
 	// 先回滚（= 结束事务 + 把连接放回池）再去问 catalog：`db` 是连接池，池上限
-	// 可能被配成 1（PICOAI_DB_MAX_OPEN_CONNS / 测试里的 SetMaxOpenConns(1)），
+	// 可能被配成 1（ZEOKEEL_DB_MAX_OPEN_CONNS / 测试里的 SetMaxOpenConns(1)），
 	// 在持有事务连接时再向池里要第二条连接会自锁。
 	rollback := func() { tx.rollback() }
 

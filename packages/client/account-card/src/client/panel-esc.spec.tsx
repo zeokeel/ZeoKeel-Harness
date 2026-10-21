@@ -5,7 +5,7 @@
  * ## 被这条用例钉住的缺陷
  *
  * 账户行是常驻侧栏的（四个整页面板打开时它也在），它的浮层是**内层模态**。
- * 整页面板的 Esc 唯一权威是装载器 `@picoaide/dsh-panel-surface`：它在 `document`
+ * 整页面板的 Esc 唯一权威是装载器 `@zeokeel/dsh-panel-surface`：它在 `document`
  * 上按 `[role="dialog"][aria-modal="true"]`（或 alertdialog）**让位**给内层模态。
  * 浮层此前只声明了 `role="dialog"`、**没有 `aria-modal`**，装载器因此不认它 ——
  * 同一次按键被两层各处理一次（两个监听器都在 document 上，先注册的装载器 +
@@ -51,7 +51,7 @@ import {
   hasInnerModal,
   mountPanelSurface,
   type PanelSurfaceHandle,
-} from '@picoaide/dsh-panel-surface/client'
+} from '@zeokeel/dsh-panel-surface/client'
 import { AccountCard } from './AccountCard.tsx'
 import { setActiveLocale } from './locales.ts'
 
@@ -82,10 +82,10 @@ beforeEach(() => {
   document.documentElement.removeAttribute(PANEL_ACTIVE_ATTR)
   vi.stubGlobal('fetch', vi.fn(async (input: unknown): Promise<Response> => {
     const url = typeof input === 'string' ? input : String(input)
-    if (url.startsWith('/api/pico/auth/state')) {
+    if (url.startsWith('/api/zeokeel/auth/state')) {
       return jsonResponse({ loggedIn: true, username: USERNAME, serverURL: 'https://gw.example' })
     }
-    if (url.startsWith('/api/pico/account/usage')) {
+    if (url.startsWith('/api/zeokeel/account/usage')) {
       return jsonResponse({
         data: {
           balance_money: 89.65,

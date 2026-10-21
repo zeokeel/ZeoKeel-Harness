@@ -1,5 +1,5 @@
 // Package updatecheck checks our own update server (Cloudflare R2 behind
-// https://release.picoaide.com) for a newer stable server version.
+// https://release.zeokeel.com) for a newer stable server version.
 //
 // 2026-09-10 起更新源**只有** R2 静态 manifest,不再查询 GitHub Releases:
 // 国内网络对 api.github.com 不可达且匿名限流(60 次/小时/IP,企业出口共用
@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // 渠道 id:官方(稳定)与 beta(我们自己内测)是保留渠道,其余为品牌渠道。
@@ -37,16 +37,16 @@ const (
 // DefaultEndpoint 是官方渠道的更新清单地址。
 //
 // 其它渠道用 DefaultEndpointFor(channel) 取自己的目录
-// (如 https://release.picoaide.com/acme/latest.json)。仍保留本常量是因为
+// (如 https://release.zeokeel.com/acme/latest.json)。仍保留本常量是因为
 // 官方目录是唯一需要被硬编码引用的那一个(历史版本与文档都在用它)。
-const DefaultEndpoint = "https://release.picoaide.com/official/latest.json"
+const DefaultEndpoint = "https://release.zeokeel.com/official/latest.json"
 
 // EndpointEnv 是覆盖更新清单地址的环境变量名。
-const EndpointEnv = "PICOAI_UPDATE_ENDPOINT"
+const EndpointEnv = "ZEOKEEL_UPDATE_ENDPOINT"
 
 // ChannelEnv 是本服务端所属渠道的环境变量名(beta / official / 品牌 id)。
 // 未设置时按端点 URL 推导(路径首段),推导不出则回落官方渠道。
-const ChannelEnv = "PICOAI_CHANNEL"
+const ChannelEnv = "ZEOKEEL_CHANNEL"
 
 // maxResponseBody caps the manifest JSON payload accepted from the service.
 const maxResponseBody = 256 * 1024
@@ -119,10 +119,10 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// resolveEndpointOverride 读取 PICOAI_UPDATE_ENDPOINT 的**显式**取值。
+// resolveEndpointOverride 读取 ZEOKEEL_UPDATE_ENDPOINT 的**显式**取值。
 //
 // 语义(2026-09-10 修正):**空串 = 未设置**,不是"关闭"。
-// 仓库自带的 docker-compose.yml 用 `${PICOAI_UPDATE_ENDPOINT:-}` 传值,
+// 仓库自带的 docker-compose.yml 用 `${ZEOKEEL_UPDATE_ENDPOINT:-}` 传值,
 // 未配置时容器里就是空串;旧语义把空串当"关闭更新检查",于是默认部署永远
 // 不检查更新(fail-silent)。要关闭请显式写 off / none / - / disabled。
 // @returns 显式端点(可能为空)与是否被显式关闭。
@@ -144,11 +144,11 @@ func resolveEndpointOverride() (endpoint string, disabled bool) {
 
 // DefaultEndpointFor 返回某渠道在更新服务器上的清单地址。
 //
-// 渠道目录就是渠道 id:`release.picoaide.com/<channel>/latest.json`。
+// 渠道目录就是渠道 id:`release.zeokeel.com/<channel>/latest.json`。
 // @param channel - 已确定的渠道 id。
 // @returns 该渠道的默认清单地址。
 func DefaultEndpointFor(channel string) string {
-	return fmt.Sprintf("https://release.picoaide.com/%s/latest.json", channel)
+	return fmt.Sprintf("https://release.zeokeel.com/%s/latest.json", channel)
 }
 
 // ResolveEndpoint 返回生效的更新清单地址。
@@ -168,13 +168,13 @@ func ResolveEndpoint(channel string) string {
 
 // ChannelFile 镜像内渠道标记文件的路径。
 //
-// 由 Dockerfile 写入(`ARG CHANNEL` → `RUN echo "$CHANNEL" > /opt/picoaide/CHANNEL`),
+// 由 Dockerfile 写入(`ARG CHANNEL` → `RUN echo "$CHANNEL" > /opt/zeokeel/CHANNEL`),
 // 是**镜像自带的**渠道声明:随镜像一起构建、不依赖部署时的 .env。它此前只被
 // 写、从未被读,于是部署侧一个字符的笔误就能让渠道部署变成官方部署。
-const ChannelFileEnv = "PICOAI_CHANNEL_FILE"
+const ChannelFileEnv = "ZEOKEEL_CHANNEL_FILE"
 
 // defaultChannelFile 渠道标记文件默认位置(与 Dockerfile 一致)。
-const defaultChannelFile = "/opt/picoaide/CHANNEL"
+const defaultChannelFile = "/opt/zeokeel/CHANNEL"
 
 // ChannelFile 返回渠道标记文件路径(测试可改)。
 var ChannelFile = func() string {
@@ -187,9 +187,9 @@ var ChannelFile = func() string {
 // ResolveChannel 返回本部署所属渠道,以及"渠道是否可确定"。
 //
 // 优先级(高 → 低):
-//  1. `PICOAI_CHANNEL` —— 部署侧的显式声明;
-//  2. 镜像内标记文件 `/opt/picoaide/CHANNEL` —— 渠道化镜像自带,不依赖 .env;
-//  3. 从 `PICOAI_UPDATE_ENDPOINT` 的路径首段推导 —— 只服务本地开发;
+//  1. `ZEOKEEL_CHANNEL` —— 部署侧的显式声明;
+//  2. 镜像内标记文件 `/opt/zeokeel/CHANNEL` —— 渠道化镜像自带,不依赖 .env;
+//  3. 从 `ZEOKEEL_UPDATE_ENDPOINT` 的路径首段推导 —— 只服务本地开发;
 //  4. 都没有 → 官方渠道(本地开发)。
 //
 // **第二返回值为 false 表示"显式配置了渠道但无法确定"**,调用方必须 fail-loud

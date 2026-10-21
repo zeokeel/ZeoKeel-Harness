@@ -11,7 +11,7 @@ import type { Session } from './server-connector/config.ts'
 export const name = 'bootstrap'
 
 /** Services consumed: settings writes and the session being synced. */
-export const inject = ['settings', 'picoSession']
+export const inject = ['settings', 'zeokeelSession']
 
 const GATEWAY_LLM_NS = GATEWAY_LLM_ROW_ID as SettingsNamespace
 const AGENT_DEFAULT_MODEL_NS = 'agent-default-model' as SettingsNamespace
@@ -64,7 +64,7 @@ export function apply(ctx: Context): void {
   //
   // `sync` 的第一次 await 是 `getBootstrap`（fetchJSON 缺省 15s 超时）。期间用户可能
   // 已经登出、甚至登录到**另一台**服务端 —— 迟到的响应会把上一台的模型目录/默认模型/
-  // 搜索地址写进当前会话，而 `PICOAI_GATEWAY_TOKEN` 已经是新服务端的令牌
+  // 搜索地址写进当前会话，而 `ZEOKEEL_GATEWAY_TOKEN` 已经是新服务端的令牌
   // （`gateway-model.ts` 先落地）⇒ 一次 web 搜索就把新会话的 bearer 发到旧服务端的
   // `/v1/messages`。所以每个 await 之后都要重新问一次"我还是最新那一代吗"。
   const epochs = createSessionEpoch()
@@ -142,10 +142,10 @@ export function apply(ctx: Context): void {
       // 会话是否就是发起这次请求的那一个"。两者都要过：代际挡住"同令牌重登"，
       // 令牌挡住"代际看不出的一次换人"。代际的唯一实现见 session-epoch.ts。
       if (cause instanceof AuthError && cause.kind === 'auth_expired') {
-        ctx.picoSession.clearIfCurrent(session.token)
+        ctx.zeokeelSession.clearIfCurrent(session.token)
         return
       }
-      ctx.logger.error('pico bootstrap sync failed')
+      ctx.logger.error('zeokeel bootstrap sync failed')
       ctx.logger.error(cause)
     }
   }

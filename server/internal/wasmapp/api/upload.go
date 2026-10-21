@@ -11,9 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/upload"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/upload"
 )
 
 // 本文件是 §4.2 的**分片上传面**（5 个端点，全部挂 `/api/client/v2/apps/wasm/uploads`）：

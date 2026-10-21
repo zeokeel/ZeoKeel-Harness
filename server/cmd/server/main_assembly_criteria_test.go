@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestStartupCallsRemainingAssemblyLines 是 C-02 那 7 行的源码级判据（AST 可达性）。

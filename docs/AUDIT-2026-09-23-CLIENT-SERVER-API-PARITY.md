@@ -62,7 +62,7 @@
    —— 企业插件持员工 bearer 调 `/api/client/v2/*`；`llm-deepseek` 适配器按
    `baseURL = <server>/v1` 调网关。
 2. **桌面客户端 UI 侧**：`packages/host/enterprise/src/client/*`、`packages/client/*`
-   —— 只打**本机** `/api/pico/*`（由 host 注册的 loopback 路由），再由 host 代理到服务端。
+   —— 只打**本机** `/api/zeokeel/*`（由 host 注册的 loopback 路由），再由 host 代理到服务端。
    本审计只关心其中"代理到服务端"的那一跳，并已逐条核对。
 3. **webadmin**：`server/webadmin/src` —— 打 `/api/server/admin/*` 与公开的
    `/api/client/v2/channel`。
@@ -72,7 +72,7 @@
 - `server/webadmin/src/lib/capability-endpoints.ts`（技能/智能体 × 市场/组织 × 11~12 个动作）
   → 求值得 **36 条**有效端点（其余 7 条按设计为 `null`：组织库没有 新建/改元数据/传新版/规范化）。
 - `server/webadmin/src/pages/app-center/opens-contract.ts` → 3 条。
-- `packages/host/enterprise/src/wasm-apps.ts` 的本机代理白名单（`/api/pico/apps/wasm/*`
+- `packages/host/enterprise/src/wasm-apps.ts` 的本机代理白名单（`/api/zeokeel/apps/wasm/*`
   → 服务端 `/api/client/v2/apps/wasm/*`）→ 17 条。
 - 行内 `base_path` / `preview_path` / `grants_base`（服务端下发，见 `internal/capabilities`）
   → 审批页的 approve / reject / quality / 删除 / 授权 / 预览。
@@ -164,6 +164,6 @@
 
 - **合同运行时行为**（状态码、幂等、错误码语义）不在本次范围：本次只做"存在性 + 方法 + 字段名"层面的对应。
 - `packages/vendor/memory-evolve`、`packages/host/browser|cron` 的**本机**路由（`/api/memory/*`、
-  `/api/pico/browser/*`、`/api/cron/*`）属客户端进程内 API，不参与"客户端 ↔ 服务端"对拍。
+  `/api/zeokeel/browser/*`、`/api/cron/*`）属客户端进程内 API，不参与"客户端 ↔ 服务端"对拍。
 - Electron 内嵌的 `deepseek-harness` 子模块只扫了 `llm-deepseek` 的网关路径构造，
   其余上游出站调用未纳入。

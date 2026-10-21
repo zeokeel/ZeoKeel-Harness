@@ -32,7 +32,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 const r13gh3ShadowSchema = "r13gh3_shadow"

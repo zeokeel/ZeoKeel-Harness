@@ -5,7 +5,7 @@
  *
  * ```
  * 应用页 / 应用详情页
- *   fetch('/__picoaide/ai/chat', {method:'POST', body:{messages, stream:true}})
+ *   fetch('/__zeokeel/ai/chat', {method:'POST', body:{messages, stream:true}})
  *         │  保留路径：本机协议 handler **本地**处理，绝不转发平台
  *         ▼
  *   ① 首次授权闸门（用户×服务端×应用；未授权 ⇒ 一次性说明卡；拒绝 ⇒ 403 app_ai_denied）
@@ -26,14 +26,14 @@
  *    响应/帧形状不符）用来避免"网络错"与"服务端说不行"混成一件事；
  *  - **首次授权**（§21.1 第 9 条，按 **用户×服务端×应用** 记；与宿主闸门逐段同源）；
  *    撤销入口只有应用详情页的
- *    AI 面板（`AppAiPanel` 的「撤销授权」按钮，宿主写路由 = `/api/pico/wasm-apps/ai/consent`）；
+ *    AI 面板（`AppAiPanel` 的「撤销授权」按钮，宿主写路由 = `/api/zeokeel/wasm-apps/ai/consent`）；
  *  - **取消**（§21.1 第 15 条：仅前台，页面关闭即取消）：调用方用 `AbortSignal`
  *    取消，本模块把它报成 `ai_cancelled`（不是错误弹窗，是"你停了"）。
  *
- * 不做（明确留给别的层）：隐藏会话的创建与元数据、`X-Pico-App-Id` 归因头、工具集为空、
+ * 不做（明确留给别的层）：隐藏会话的创建与元数据、`X-ZeoKeel-App-Id` 归因头、工具集为空、
  * 平台网关的计量 —— 那些在宿主的协议 handler 与服务端（§21.2/§21.4）。
  *
- * @module @picoaide/dsh-wasm-apps/client/app-ai
+ * @module @zeokeel/dsh-wasm-apps/client/app-ai
  */
 
 import { fetchWithHostProof } from './host-proof.ts'
@@ -43,7 +43,7 @@ import { fetchWithHostProof } from './host-proof.ts'
  *
  * 这条路径**不是**平台 URL：它只在本机被消费（所以这里既不带服务端地址，也不带 token）。
  */
-export const APP_AI_CHAT_PATH = '/__picoaide/ai/chat'
+export const APP_AI_CHAT_PATH = '/__zeokeel/ai/chat'
 
 /** `messages` 条数上限（§21.2 冻结）。 */
 export const APP_AI_MESSAGES_MAX = 64
@@ -398,7 +398,7 @@ function isAbort(cause: unknown): boolean {
  * 形状变了就换前缀：老键**永远不可能**被新键命中 —— 与宿主"v1 记录一律判未授权"同向，
  * 绝不把一段没有服务端维度的 UI 记忆读成"已经问过"。
  */
-export const APP_AI_CONSENT_PREFIX = 'picoaide.wasm-apps.ai-consent.v2'
+export const APP_AI_CONSENT_PREFIX = 'zeokeel.wasm-apps.ai-consent.v2'
 
 /**
  * 本机登录态路由（既有的客户端路由；只读，用来拿授权作用域的两个身份段）。
@@ -410,13 +410,13 @@ export const APP_AI_CONSENT_PREFIX = 'picoaide.wasm-apps.ai-consent.v2'
  * `readAppSession` 也读 `getSession()`）。取不到就返回 `null` ⇒ 授权不被记住
  * （每次都问一次），绝不退化成"所有人都已授权"。
  */
-export const APP_AI_IDENTITY_PATH = '/api/pico/auth/state'
+export const APP_AI_IDENTITY_PATH = '/api/zeokeel/auth/state'
 
 /**
  * 授权作用域：**用户 × 服务端**（应用是第三个维度，由调用点单独传）。
  *
  * 这两段与宿主闸门的 `AiChatScope` 逐段同源：`userId` = 会话 `username`，
- * `serverURL` = 会话 `serverURL`（同一份 `/api/pico/auth/state` 快照，宿主那份来自
+ * `serverURL` = 会话 `serverURL`（同一份 `/api/zeokeel/auth/state` 快照，宿主那份来自
  * `getSession()`）。
  */
 export interface AppAiScope {
@@ -596,7 +596,7 @@ export function revokeAppAiConsent(scope: AppAiScope | null | undefined, appId: 
  * `AiChatAuthorization`，`handleAiChat` 先查它再碰模型）。两边不连通就会出现
  * "点了允许、界面上也不再问，但每次调用仍然 403" —— 一条只在真机上才看得见的缝。
  */
-export const APP_AI_CONSENT_PATH = '/api/pico/wasm-apps/ai/consent'
+export const APP_AI_CONSENT_PATH = '/api/zeokeel/wasm-apps/ai/consent'
 
 /** 授权同步的结果（失败时 `message` 是给维护者看的诊断细节）。 */
 export type AppAiConsentSync = { ok: true } | { ok: false, message: string }

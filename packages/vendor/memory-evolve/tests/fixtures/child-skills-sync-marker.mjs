@@ -1,9 +1,9 @@
 /**
  * Child process for the F2 (marker gate) regression：造一份"已装插件版"的同名技能，
- * 把安装器标记（`.picoaide/release.json`）换成各种**不是小普通文件**的形态，跑一次
+ * 把安装器标记（`.zeokeel/release.json`）换成各种**不是小普通文件**的形态，跑一次
  * `syncBuiltinSkills`，打印落点事实一行 JSON。
  *
- * 为什么要在子进程里跑：修复前 `.picoaide/release.json` 是 **FIFO** 时，
+ * 为什么要在子进程里跑：修复前 `.zeokeel/release.json` 是 **FIFO** 时，
  * `readFileSync` 的 `open(O_RDONLY)` 会**永久阻塞**（复审 r3 实测 12s 未返回）。
  * 若在测试进程里直接跑那种形态，整个套件会挂住 —— 所以父用例用
  * `spawnSync(..., { timeout })` 把它变成"**有界**的失败"，而不是无界挂起。
@@ -27,7 +27,7 @@ const dir = mkdtempSync(join(tmpdir(), `skills-sync-marker-${mode}-`))
 const pluginSkills = join(dir, 'plugin-skills')
 const userSkills = join(dir, 'skills')
 const dest = join(userSkills, NAME)
-const marker = join(dest, '.picoaide', 'release.json')
+const marker = join(dest, '.zeokeel', 'release.json')
 
 // 随包技能（x-version 2 ⇒ 比已装的 1 新，若放行就会整树换入）。
 mkdirSync(join(pluginSkills, NAME, 'scripts'), { recursive: true })
@@ -35,7 +35,7 @@ writeFileSync(join(pluginSkills, NAME, 'SKILL.md'), `---\nname: ${NAME}\ndescrip
 writeFileSync(join(pluginSkills, NAME, 'scripts', 'helper.mjs'), '// HELPER\n')
 
 // 已装副本（x-version 1，正文里留下可核对的标记）。
-mkdirSync(join(dest, '.picoaide'), { recursive: true })
+mkdirSync(join(dest, '.zeokeel'), { recursive: true })
 writeFileSync(join(dest, 'SKILL.md'), `---\nname: ${NAME}\ndescription: installed\nx-version: 1\n---\n# INSTALLED-OLD\n`)
 
 const validProvenance = `${JSON.stringify({ appId: NAME, version: '1', channel: 'plugin', installedAt: '2026-09-01T00:00:00.000Z' }, null, 2)}\n`

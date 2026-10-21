@@ -70,7 +70,7 @@ export function makeCronRoutes(service: HostCronService, options: CronRouteOptio
   }
   const proofDeps: WriteProofDeps = {
     fence: options.fence ?? ((): undefined => undefined),
-    label: 'pico-cron',
+    label: 'zeokeel-cron',
     ...(options.warn === undefined ? {} : { warn: options.warn }),
   }
   const state: WebRoute = {

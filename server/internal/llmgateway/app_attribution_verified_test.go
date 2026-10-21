@@ -26,7 +26,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // seedAttributionApp 播一个真实的 wasm 应用（存在性校验的唯一合法目标）。

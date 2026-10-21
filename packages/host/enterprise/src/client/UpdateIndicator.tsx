@@ -229,7 +229,7 @@ export function updateStatusText(state: UpdateState | null): string {
       return t('update.invalidArtifact')
     case 'server-unavailable':
       // 服务端连得上、清单也拿到了,只是它推不出安全的对外地址:
-      // 这是部署配置问题(需管理员配 PICOAI_PUBLIC_BASE_URL 或反代的
+      // 这是部署配置问题(需管理员配 ZEOKEEL_PUBLIC_BASE_URL 或反代的
       // X-Forwarded-Proto),不能显示成"已是最新"把故障藏起来。
       return t('update.serverUnavailable')
     case 'unsupported':

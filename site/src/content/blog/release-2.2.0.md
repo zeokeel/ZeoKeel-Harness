@@ -1,9 +1,9 @@
 ---
-title: PicoAide Harness 2.2.0 发布
+title: ZeoKeel Harness 2.2.0 发布
 description: 新增 PostgreSQL 存储支持与共享技能/Agent 预设库，能力中心聚合展示，企业版功能增强。
 pubDate: 2026-08-25
 version: 2.2.0
-author: PicoAide Team
+author: ZeoKeel Team
 tags:
   - 发布
   - 产品
@@ -11,7 +11,7 @@ tags:
 
 > 注：本发布说明为历史快照，SQLite 双后端与迁移工具已于 2026-08 随 PG-only 迁移下线。
 
-PicoAide Harness 2.2.0 正式发布。本版本带来以下变化：
+ZeoKeel Harness 2.2.0 正式发布。本版本带来以下变化：
 
 ## PostgreSQL 存储支持
 
@@ -50,4 +50,4 @@ PicoAide Harness 2.2.0 正式发布。本版本带来以下变化：
 - 全新官网/博客/Wiki 一体站（Astro + Starlight，Cloudflare Pages 直连部署）
 - CI 修复：macOS 临时目录误拒、Windows 打包构建顺序、cache:yarn 顺序问题
 
-完整变更请查看 [GitHub Releases](https://github.com/picoaide/picoaide-harness/releases)。
+完整变更请查看 [GitHub Releases](https://github.com/zeokeel/ZeoKeel-Harness/releases)。

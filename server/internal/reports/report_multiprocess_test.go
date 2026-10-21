@@ -47,23 +47,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 const (
 	// mpRoleEnv 非空 = 本进程是**被拉起的 worker**（不是驱动用例）。
-	mpRoleEnv = "PICOAI_TEST_R20MP_ROLE"
+	mpRoleEnv = "ZEOKEEL_TEST_R20MP_ROLE"
 	// mpDSNEnv 是驱动进程传给 worker 的**具体库** DSN（不是模板 DSN）：
 	// 两个进程必须落在同一个库上，用 serverstore.NewTestDB 各建一个库就测不到跨实例。
-	mpDSNEnv = "PICOAI_TEST_R20MP_DSN"
+	mpDSNEnv = "ZEOKEEL_TEST_R20MP_DSN"
 	// mpHookEnv 是驱动进程的 webhook 接收器地址（两个 worker 投到同一处）。
-	mpHookEnv = "PICOAI_TEST_R20MP_HOOK"
+	mpHookEnv = "ZEOKEEL_TEST_R20MP_HOOK"
 	// mpStartEnv 是"什么时候调用 DispatchAll"的绝对时刻（Unix 毫秒）——
 	// 用绝对时刻而不是 sleep 错开：两个真进程的启动开销（动态库加载、连接建立）
 	// 不确定，用信号 + sleep 会把 δ 搅成随机量。
-	mpStartEnv = "PICOAI_TEST_R20MP_START_MS"
+	mpStartEnv = "ZEOKEEL_TEST_R20MP_START_MS"
 	// mpMonthEnv 是 DispatchAll 的 month 参数（RFC3339，北京时区）。
-	mpMonthEnv = "PICOAI_TEST_R20MP_MONTH"
+	mpMonthEnv = "ZEOKEEL_TEST_R20MP_MONTH"
 	// mpResultPrefix 是 worker 打到 stdout 的结果行（驱动的机器可读出口）。
 	mpResultPrefix = "R20MP_RESULT "
 )

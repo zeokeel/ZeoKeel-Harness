@@ -5,8 +5,8 @@ package api
 //
 // 缺陷形态（修前）：`requireReady()` 把 `h.opt.Compiler == nil` 与 DB/DataRoot 绑在
 // 一条判据里，33 个调用点全过它。编译子系统缺席时（compose 缺省
-// `PICOAI_COMPILE_ISOLATION=auto` 下 bwrap 不可用；或镜像里少一个
-// `picoaide-app-compile` 二进制）：
+// `ZEOKEEL_COMPILE_ISOLATION=auto` 下 bwrap 不可用；或镜像里少一个
+// `zeokeel-app-compile` 二进制）：
 //
 //	GET  catalog / availability / schema / diagnostics / releases / export  -> 500
 //	GET  管理端列表 / releases / rows / diagnostics / runtime                -> 500

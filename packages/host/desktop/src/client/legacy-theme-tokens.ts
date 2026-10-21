@@ -41,7 +41,7 @@ export interface LegacyTokenModes {
 }
 
 /** 覆盖层标识（一个 source 一层；重复调用会替换该层）。 */
-export const LEGACY_THEME_TOKEN_SOURCE = 'picoaide-vendored-legacy-tokens'
+export const LEGACY_THEME_TOKEN_SOURCE = 'zeokeel-vendored-legacy-tokens'
 
 /** 两套取值都指向同一个真实 token（该 token 自己会翻转）。 */
 function alias(token: string): LegacyTokenModes {

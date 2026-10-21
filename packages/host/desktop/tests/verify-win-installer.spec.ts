@@ -27,8 +27,8 @@ function fixture(version = '2.0.0'): {
   const dist = join(root, 'dist')
   const unpacked = join(dist, 'win-unpacked')
   mkdirSync(unpacked, { recursive: true })
-  const installer = join(dist, `PicoAide-Harness-${version}-x64-Setup.exe`)
-  const application = join(unpacked, 'PicoAide Harness.exe')
+  const installer = join(dist, `ZeoKeel-Harness-${version}-x64-Setup.exe`)
+  const application = join(unpacked, 'ZeoKeel Harness.exe')
   writeFileSync(installer, portableExecutable())
   writeFileSync(application, portableExecutable())
   return { root, installer, application }
@@ -48,8 +48,8 @@ function OFFICIAL_OPTIONS(desktopRoot: string): WindowsInstallerVerificationOpti
   return {
     desktopRoot,
     version: '2.0.0',
-    installerName: 'PicoAide-Harness-2.0.0-x64-Setup.exe',
-    applicationName: 'PicoAide Harness.exe',
+    installerName: 'ZeoKeel-Harness-2.0.0-x64-Setup.exe',
+    applicationName: 'ZeoKeel Harness.exe',
   }
 }
 
@@ -67,7 +67,7 @@ describe('Windows installer artifact verification', () => {
     const value = fixture('1.9.0')
 
     expect(() => verifyWindowsInstaller(OFFICIAL_OPTIONS(value.root)))
-      .toThrow('PicoAide-Harness-2.0.0-x64-Setup.exe')
+      .toThrow('ZeoKeel-Harness-2.0.0-x64-Setup.exe')
   })
 
   it('rejects an artifact without a Windows PE header', () => {

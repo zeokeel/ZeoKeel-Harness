@@ -198,7 +198,7 @@ const security = [
 
 const faqs = [
   {
-    q: 'PicoAide Harness 与 DeepSeek Harness 的关系？',
+    q: 'ZeoKeel Harness 与 DeepSeek Harness 的关系？',
     a: '上游 DeepSeek Harness 提供核心智能体、插件系统与 Web UI；本项目提供桌面封装、本地服务启动与企业服务端，基于固定版本构建，不魔改上游源码。桌面壳自身就是一个合法的 DSH 插件。',
   },
   {
@@ -233,8 +233,8 @@ const faqs = [
 ---
 
 <Layout
-  title="PicoAide Harness — 企业级 AI 一体化平台"
-  description="PicoAide Harness：桌面客户端、本地智能体引擎与企业服务端三层一体。一个容器镜像完成私有化部署，客户端随服务端发布，员工机器不访问任何外网。"
+  title="ZeoKeel Harness — 企业级 AI 一体化平台"
+  description="ZeoKeel Harness：桌面客户端、本地智能体引擎与企业服务端三层一体。一个容器镜像完成私有化部署，客户端随服务端发布，员工机器不访问任何外网。"
 >
   <Header />
 
@@ -244,9 +244,9 @@ const faqs = [
       <div class="hero__brand">
         <picture>
           <source srcset={logoDark.src} media="(prefers-color-scheme: dark)" />
-          <img src={logo.src} alt="PicoAide Harness" width="52" height="52" class="hero__logo" />
+          <img src={logo.src} alt="ZeoKeel Harness" width="52" height="52" class="hero__logo" />
         </picture>
-        <span class="hero__brandname">PicoAide Harness</span>
+        <span class="hero__brandname">ZeoKeel Harness</span>
       </div>
 
       <h1 class="hero__title">把 AI 从个人技巧<br />变成<em>组织能力</em></h1>
@@ -286,7 +286,7 @@ const faqs = [
         </div>
       </div>
 
-      <Image class="hero__shot" src={mainShot} alt="PicoAide Harness 桌面客户端主界面" width={1120} height={711} format="webp" quality={82} />
+      <Image class="hero__shot" src={mainShot} alt="ZeoKeel Harness 桌面客户端主界面" width={1120} height={711} format="webp" quality={82} />
     </div>
   </section>
 
@@ -492,15 +492,15 @@ const faqs = [
           <span>部署机上执行 · 详细步骤见 <a href="/deployment/compose/">容器化部署</a></span>
         </div>
         <pre><code>{`# 1) 校验并导入镜像（<版本> 从本渠道 latest.json 的 server.version 取，不带 v）
-curl -fL -O https://release.picoaide.com/official/releases/<版本>/picoaide-server-<版本>-amd64.zip
-unzip -p picoaide-server-<版本>-amd64.zip image.tar | docker load
+curl -fL -O https://release.zeokeel.com/official/releases/<版本>/zeokeel-server-<版本>-amd64.zip
+unzip -p zeokeel-server-<版本>-amd64.zip image.tar | docker load
 
 # 2) 把部署文件导出到部署目录（镜像自带 compose / Caddyfile / 客户端安装包）
-docker run --rm -v /opt/picoaide:/out -e PICOAI_UNPACK_STACK=/out \\
-  picoaide-harness-server:<版本>
+docker run --rm -v /opt/zeokeel:/out -e ZEOKEEL_UNPACK_STACK=/out \\
+  zeokeel-harness-server:<版本>
 
 # 3) 写 .env 后启动，并确认健康检查通过
-cd /opt/picoaide && docker compose up -d
+cd /opt/zeokeel && docker compose up -d
 curl -k https://<你的域名>/healthz`}</code></pre>
       </div>
 
@@ -508,7 +508,7 @@ curl -k https://<你的域名>/healthz`}</code></pre>
         <div class="note note--accent">
           <h3>数据只在 bind mount 目录里</h3>
           <p>
-            <code>picoaide-data/</code>（含 <code>master.key</code>）与 <code>pg-data/</code>
+            <code>zeokeel-data/</code>（含 <code>master.key</code>）与 <code>pg-data/</code>
             挂在部署目录下，升级只换镜像、不动数据，回滚只需切回旧镜像。
           </p>
         </div>
@@ -714,7 +714,7 @@ curl -k https://<你的域名>/healthz`}</code></pre>
         <a href="/blog/">查看全部更新</a>
         <span class="updates__sep">·</span>
         历史版本与镜像归档
-        <a href="https://github.com/picoaide/picoaide-harness/releases" target="_blank" rel="noopener">GitHub Releases</a>
+        <a href="https://github.com/zeokeel/ZeoKeel-Harness/releases" target="_blank" rel="noopener">GitHub Releases</a>
       </p>
     </div>
   </section>
@@ -791,7 +791,7 @@ curl -k https://<你的域名>/healthz`}</code></pre>
       <p>取一个镜像，按同一份说明完成部署、升级与回滚；员工机器不需要访问任何外网。</p>
       <div class="actions actions--center">
         <a class="btn btn--light" href="/deployment/">阅读部署指南<span class="btn__arrow">→</span></a>
-        <a class="btn btn--ghost-light" href="https://github.com/picoaide/picoaide-harness" target="_blank" rel="noopener">在 GitHub 上查看</a>
+        <a class="btn btn--ghost-light" href="https://github.com/zeokeel/ZeoKeel-Harness" target="_blank" rel="noopener">在 GitHub 上查看</a>
       </div>
     </div>
   </section>

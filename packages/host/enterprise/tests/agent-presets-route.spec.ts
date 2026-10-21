@@ -1,5 +1,5 @@
 /**
- * `/api/pico/agent-presets` 写面路由（独立复审 2026-09-23 **N2** + **A12**）。
+ * `/api/zeokeel/agent-presets` 写面路由（独立复审 2026-09-23 **N2** + **A12**）。
  *
  * 现场：
  *  - **N2（P2）**：这条路由**不读任何 query**，而 `installPresetArchive` 对已存在
@@ -88,7 +88,7 @@ function harness(): { call: (url: string, method?: string) => Promise<{ code: nu
       ? { requestRejection: (request: { headers: Record<string, unknown> }) => (request.headers['cookie'] === undefined ? (401 as const) : undefined) }
       : undefined),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => true,
       getSession: () => SESSION,
@@ -101,7 +101,7 @@ function harness(): { call: (url: string, method?: string) => Promise<{ code: nu
     },
   }
   apply(ctx as never, {} as Config)
-  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/pico/agent-presets')?.handler
+  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/zeokeel/agent-presets')?.handler
   if (handler === undefined) throw new Error('agent-presets route not registered')
   return {
     call: async (url: string, method = 'GET') => {
@@ -114,7 +114,7 @@ function harness(): { call: (url: string, method?: string) => Promise<{ code: nu
 
 /** 把一组文件打成与 Go 侧同口径的 tar.gz（客户端安装链路的夹具）。 */
 async function presetArchive(files: Record<string, string>): Promise<Buffer> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-preset-src-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-preset-src-'))
   try {
     const names: string[] = []
     for (const [path, content] of Object.entries(files)) {
@@ -164,7 +164,7 @@ async function makeLocalPreset(dir: string, name: string): Promise<string> {
 let home: string
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-agent-presets-route-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-agent-presets-route-'))
   vi.stubEnv('DSH_HOME', home)
   // DSH_HOME 指向系统关键目录的守卫在 dsh-home 里，这里只需一个普通临时目录。
 })
@@ -175,7 +175,7 @@ afterEach(async () => {
   await rm(home, { recursive: true, force: true })
 })
 
-describe('/api/pico/agent-presets 的覆盖确认（N2：两端都真读 ?overwrite=1）', () => {
+describe('/api/zeokeel/agent-presets 的覆盖确认（N2：两端都真读 ?overwrite=1）', () => {
   it('本机自制同名预设：无 query ⇒ 409 LOCAL_CONTENT 且磁盘一字未动', async () => {
     const presetsDir = resolvePresetsDir()
     expect(presetsDir).toBe(join(home, '.agent-presets'))
@@ -183,7 +183,7 @@ describe('/api/pico/agent-presets 的覆盖确认（N2：两端都真读 ?overwr
     stubGateway(await presetArchive({ 'agent.cordis.yml': COMPOSITION, 'preset.yml': 'name: store\n' }))
 
     const h = harness()
-    const refused = await h.call('/api/pico/agent-presets/dup/install', 'POST')
+    const refused = await h.call('/api/zeokeel/agent-presets/dup/install', 'POST')
     expect(refused.code).toBe(409)
     expect(refused.body.code).toBe('LOCAL_CONTENT')
     expect(await readFile(join(mine, 'notes.md'), 'utf8')).toBe('my own notes\n')
@@ -197,7 +197,7 @@ describe('/api/pico/agent-presets 的覆盖确认（N2：两端都真读 ?overwr
     stubGateway(await presetArchive({ 'agent.cordis.yml': COMPOSITION, 'preset.yml': 'name: store\n' }))
 
     const h = harness()
-    const ok = await h.call('/api/pico/agent-presets/dup/install?overwrite=1', 'POST')
+    const ok = await h.call('/api/zeokeel/agent-presets/dup/install?overwrite=1', 'POST')
     expect(ok.code, JSON.stringify(ok.body)).toBe(200)
     await expect(readFile(join(mine, 'notes.md'), 'utf8')).rejects.toThrow()
     expect(await readFile(join(mine, 'preset.yml'), 'utf8')).toBe('name: store\n')
@@ -208,11 +208,11 @@ describe('/api/pico/agent-presets 的覆盖确认（N2：两端都真读 ?overwr
     stubGateway(await presetArchive({ 'agent.cordis.yml': COMPOSITION, 'preset.yml': 'name: v1\n' }))
 
     const h = harness()
-    const first = await h.call('/api/pico/agent-presets/dup/install', 'POST')
+    const first = await h.call('/api/zeokeel/agent-presets/dup/install', 'POST')
     expect(first.code, JSON.stringify(first.body)).toBe(200)
 
     stubGateway(await presetArchive({ 'agent.cordis.yml': COMPOSITION, 'preset.yml': 'name: v2\n' }))
-    const second = await h.call('/api/pico/agent-presets/dup/install', 'POST')
+    const second = await h.call('/api/zeokeel/agent-presets/dup/install', 'POST')
     expect(second.code, JSON.stringify(second.body)).toBe(200)
     expect(await readFile(join(presetsDir, 'dup', 'preset.yml'), 'utf8')).toBe('name: v2\n')
     // 更新成功不留 staging / backup 残渣。
@@ -225,18 +225,18 @@ describe('/api/pico/agent-presets 的覆盖确认（N2：两端都真读 ?overwr
     stubGateway(await presetArchive({ 'agent.cordis.yml': COMPOSITION }))
     const h = harness()
 
-    const refused = await h.call('/api/pico/agent-presets/mine/uninstall', 'POST')
+    const refused = await h.call('/api/zeokeel/agent-presets/mine/uninstall', 'POST')
     expect(refused.code).toBe(409)
     expect(refused.body.code).toBe('LOCAL_CONTENT')
     expect(await readFile(join(presetsDir, 'mine', 'agent.cordis.yml'), 'utf8')).toBe(COMPOSITION)
 
-    const ok = await h.call('/api/pico/agent-presets/mine/uninstall?overwrite=1', 'POST')
+    const ok = await h.call('/api/zeokeel/agent-presets/mine/uninstall?overwrite=1', 'POST')
     expect(ok.code, JSON.stringify(ok.body)).toBe(200)
     expect(await readdir(presetsDir)).toEqual([])
   })
 })
 
-describe('/api/pico/agent-presets 的失败文案（A12：唯一实现 + 脱敏）', () => {
+describe('/api/zeokeel/agent-presets 的失败文案（A12：唯一实现 + 脱敏）', () => {
   it('系统级失败不回显本机绝对路径（errno + 人话，路径被剥掉）', async () => {
     const presetsDir = resolvePresetsDir()
     // 安装根位置放一个**普通文件** ⇒ 安装器的 mkdir 抛系统级 errno（真实失败路径）。
@@ -244,7 +244,7 @@ describe('/api/pico/agent-presets 的失败文案（A12：唯一实现 + 脱敏�
     stubGateway(await presetArchive({ 'agent.cordis.yml': COMPOSITION }))
 
     const h = harness()
-    const res = await h.call('/api/pico/agent-presets/dup/install', 'POST')
+    const res = await h.call('/api/zeokeel/agent-presets/dup/install', 'POST')
     expect(res.code).not.toBe(200)
     const message = String(res.body.error)
     expect(message).not.toContain(home)
@@ -257,7 +257,7 @@ describe('/api/pico/agent-presets 的失败文案（A12：唯一实现 + 脱敏�
   it('未安装的预设 ⇒ 404 NOT_INSTALLED（不是 500，也不是原文透传）', async () => {
     stubGateway(await presetArchive({ 'agent.cordis.yml': COMPOSITION }))
     const h = harness()
-    const res = await h.call('/api/pico/agent-presets/ghost/uninstall', 'POST')
+    const res = await h.call('/api/zeokeel/agent-presets/ghost/uninstall', 'POST')
     expect(res.code).toBe(404)
     expect(res.body.code).toBe('NOT_INSTALLED')
     expect(String(res.body.error)).not.toContain(home)
@@ -266,7 +266,7 @@ describe('/api/pico/agent-presets 的失败文案（A12：唯一实现 + 脱敏�
   it('归档不合规（缺 composition）⇒ 422 且文案可读（拒绝类不被当上游 502）', async () => {
     stubGateway(await presetArchive({ 'README.md': 'hi' }))
     const h = harness()
-    const res = await h.call('/api/pico/agent-presets/nocomp/install', 'POST')
+    const res = await h.call('/api/zeokeel/agent-presets/nocomp/install', 'POST')
     expect(res.code).toBe(422)
     expect(String(res.body.error)).toContain('agent.cordis.yml')
     expect(String(res.body.error)).not.toContain(home)

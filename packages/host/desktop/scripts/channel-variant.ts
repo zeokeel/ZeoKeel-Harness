@@ -52,7 +52,7 @@ import { FEATURE_MODULES } from './channel-constants.ts'
 export const CHANNEL_VARIANT_MANIFEST_FILENAME = 'channel-variant.json'
 
 /** 清单 schema 标识（形状变了下游必须当场拒，而不是按缺省值猜）。 */
-export const CHANNEL_VARIANT_SCHEMA = 'picoaide.channel-variant.v1'
+export const CHANNEL_VARIANT_SCHEMA = 'zeokeel.channel-variant.v1'
 
 /**
  * 构建期需要的渠道上下文的**结构最小面**。

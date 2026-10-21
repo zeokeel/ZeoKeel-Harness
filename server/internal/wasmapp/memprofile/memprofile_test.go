@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // TestDefaultMatchesLimitsConstants：默认档必须与 limits 的编译期常量**逐值一致** ——

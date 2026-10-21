@@ -64,10 +64,10 @@ const attempts: Array<{ server: string; path: string; token?: string }> = []
 let fetchShouldFail = false
 /** 非 null 时挂起请求(S07-02 的在飞去重用例需要一次"尚未返回"的上报)。 */
 let fetchGate: Promise<void> | null = null
-// 2026-10-13（P0-b）：`fetchJSON` 的实现搬到叶子包 `@picoaide/dsh-gateway-client`
+// 2026-10-13（P0-b）：`fetchJSON` 的实现搬到叶子包 `@zeokeel/dsh-gateway-client`
 // （enterprise 保留同名 re-export）。mock 必须打在**实现模块**的 id 上 —— 打在
 // re-export 上会拦不到（被测插件 import 的是叶子包），Sentry 摄取账本会恒空。
-vi.mock('@picoaide/dsh-gateway-client/auth', () => ({
+vi.mock('@zeokeel/dsh-gateway-client/auth', () => ({
   fetchJSON: vi.fn(async (serverURL: string, path: string, opts: { body?: unknown; token?: string }) => {
     // token 决定服务端把那行状态 upsert 到**哪个用户**(S07-02 复核 2026-09-17):
     // 每个用例只读 server/path,但"两个用户 = 两行"要靠它区分。
@@ -123,7 +123,7 @@ vi.mock('../src/session-service.ts', () => ({
     sessionListener = listener
     return () => { sessionListener = null }
   },
-  SESSION_CHANGED_EVENT: 'pico/session-changed',
+  SESSION_CHANGED_EVENT: 'zeokeel/session-changed',
 }))
 
 const SESSION: Session = { serverURL: 'https://gateway.example', username: 'tester', token: 'tok-1' }
@@ -391,7 +391,7 @@ describe('sync() 状态映射(P0-3)', () => {
     const status = getErrorReportingStatus()
     expect(
       infos.some((m) =>
-        m.startsWith(`error-reporting: 已启用(dsn=${status.dsnHost}, release=picoaide-desktop@`)
+        m.startsWith(`error-reporting: 已启用(dsn=${status.dsnHost}, release=zeokeel-desktop@`)
         && m.endsWith(', level=warning)')),
     ).toBe(true)
     // 绝不打印完整 DSN / public key。
@@ -502,7 +502,7 @@ describe('状态上报(P1-3/D7)', () => {
     const first = reported.filter((r) => r.path === '/api/client/v2/telemetry/error-reporting')
     expect(first.length).toBe(1)
     expect(first[0]!.body).toMatchObject({ state: 'ready', dsn_host: 'glitchtip.example.com' })
-    expect(first[0]!.body.release).toContain('picoaide-desktop@')
+    expect(first[0]!.body.release).toContain('zeokeel-desktop@')
     // 同一状态再报一次被去重(每次登录都刷 = 噪音)。
     sessionListener!(SESSION)
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -697,8 +697,8 @@ describe('渲染进程采集(P0-6/D8)', () => {
     const [error, hint] = sentryMock.captureException.mock.calls[0]! as [Error, { tags: Record<string, string>; extra: Record<string, unknown> }]
     expect(error.message).toBe('Uncaught TypeError: x is not a function')
     expect(error.stack).toContain('at App')
-    expect(hint.tags['picoaide.process']).toBe('renderer')
-    expect(hint.tags['picoaide.kind']).toBe('error')
+    expect(hint.tags['zeokeel.process']).toBe('renderer')
+    expect(hint.tags['zeokeel.kind']).toBe('error')
     expect(hint.extra.lineno).toBe(1)
   })
 
@@ -706,7 +706,7 @@ describe('渲染进程采集(P0-6/D8)', () => {
     await initSentry(GOOD_DSN, 'r1')
     captureRendererError({ type: 'unhandledrejection', message: 'boom' })
     const [, hint] = sentryMock.captureException.mock.calls[0]! as [Error, { tags: Record<string, string> }]
-    expect(hint.tags['picoaide.kind']).toBe('unhandledrejection')
+    expect(hint.tags['zeokeel.kind']).toBe('unhandledrejection')
   })
 
   it('captures a renderer crash with reason/exitCode tags (F-10)', async () => {
@@ -714,17 +714,17 @@ describe('渲染进程采集(P0-6/D8)', () => {
     const ok = captureRendererGone({ reason: 'oom', exitCode: 5 })
     expect(ok).toBe(true)
     // 修复轮 1(F-10):崩溃事件必须带 tag(此前走 captureMessage(msg, 'error') —
-    // 第二参是 level,tags 丢失 ⇒ 后台无法用 picoaide.process 统一筛渲染进程问题)。
+    // 第二参是 level,tags 丢失 ⇒ 后台无法用 zeokeel.process 统一筛渲染进程问题)。
     const [message, context] = sentryMock.captureMessage.mock.calls[0]! as [
       string,
       { level: string; tags: Record<string, string>; extra: Record<string, unknown> },
     ]
     expect(message).toBe('渲染进程崩溃 (reason: oom, exitCode: 5)')
     expect(context.level).toBe('error')
-    expect(context.tags['picoaide.process']).toBe('renderer')
-    expect(context.tags['picoaide.kind']).toBe('render-process-gone')
-    expect(context.tags['picoaide.reason']).toBe('oom')
-    expect(context.tags['picoaide.exit_code']).toBe('5')
+    expect(context.tags['zeokeel.process']).toBe('renderer')
+    expect(context.tags['zeokeel.kind']).toBe('render-process-gone')
+    expect(context.tags['zeokeel.reason']).toBe('oom')
+    expect(context.tags['zeokeel.exit_code']).toBe('5')
     expect(context.extra).toMatchObject({ reason: 'oom', exitCode: 5 })
   })
 

@@ -148,7 +148,7 @@ node server/scripts/check-go-build-tags.mjs --self-test     # 只自证判据引
    并**同时**打开 `--expect-cut` —— 那时它才从"报账"变成"拦门禁"。
 3. **没有服务端侧的用户面开关**：本包只回答"编译期开了什么"，不参与路由/接口/装配决策；
    被裁掉的模块该不该注册路由、接口该返回什么，是第二片的接口面决定（P0 §5 的消费契约表）。
-4. **没有哨兵串判据**：`picoaide.feature.<module>.v1` 那一族是**端到端副证**（P0 §6），
+4. **没有哨兵串判据**：`zeokeel.feature.<module>.v1` 那一族是**端到端副证**（P0 §6），
    承重的依赖图判据是本文 §4 的 ③；产物级双侧判据要等裁剪落地才有"关闭变体"可比。
 5. **CI 只覆盖发布态组合**：`go vet` / `go test` 两步都带 `-tags=skills,apps,connectors`（全开），
    其余组合的 build + vet 只在 `make check-tags` 里跑（尚未进 CI）。
@@ -194,7 +194,7 @@ make -C server check-tags TAGS_ARGS=         # 只报账形态（显式传空才
   （`ServerReadTimeout`）直接依赖它。它落在 apps 树里时，"关掉 apps ⇒ wasmapp 树消失"
   与"基础面照常工作"**结构上不可能同时成立**。
 - `internal/skillseed`（平台内置技能下发面，原 `internal/wasmapp/skillseed`）：它服务的是
-  `skills`（`/opt/picoaide/skills` 的唯一消费方就是它）。留在 apps 树里会两边都不成立：
+  `skills`（`/opt/zeokeel/skills` 的唯一消费方就是它）。留在 apps 树里会两边都不成立：
   关 apps ⇒ 整棵 wasmapp 消失 ⇒ 技能面拿不到内置技能；关 skills ⇒ 内置技能照样随包。
   两个包都按"**谁真的用它**"归位，而不是按它历史上住在哪。
 
@@ -278,7 +278,7 @@ make -C server check-tags TAGS_ARGS=         # 只报账形态（显式传空才
    与变体无关的判据 —— `cmd/server/routes_source_test.go` 的登记级命名空间反向断言（每个
    变体都跑、覆盖全部 method）与 `internal/router/optional_*_off_registration_test.go` 的
    位置级断言（关闭态的注册函数实跑后必须零新增路由）。两层都做过变异验证，见各自注释。）
-3. **没有产物级哨兵判据**：P0 §2.2 的 `picoaide.feature.<module>.v1` 哨兵串仍未接入；
+3. **没有产物级哨兵判据**：P0 §2.2 的 `zeokeel.feature.<module>.v1` 哨兵串仍未接入；
    承重判据是依赖图（§7 的包树断言），哨兵是端到端副证，需要真实二进制与 `strings` 双侧比对。
 4. **没有变体 schema 对拍**：见 §9 末尾的"建议判据"。
 5. **客户端与 webadmin 侧不在本片**：本片只动服务端（`server/`）。

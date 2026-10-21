@@ -152,13 +152,13 @@ describe('R18B-04 ②：路由面（真 auth-gate）——清理记录走 ctx.lo
     await rm(home, { recursive: true, force: true })
   })
 
-  it('POST /api/pico/skills/:name/install 触发陈旧 staging 清扫 ⇒ ctx.logger.warn 收到那条记录', async () => {
+  it('POST /api/zeokeel/skills/:name/install 触发陈旧 staging 清扫 ⇒ ctx.logger.warn 收到那条记录', async () => {
     await seedStaleStaging(join(home, 'skills'))
     const h = harness(SESSION)
     stubGateway(h, await skillArchive('alpha'))
 
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/alpha/install'), res)
+    await h.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/alpha/install'), res)
     console.log('[②] HTTP =', read().code, '｜ logger.warn =', JSON.stringify(h.loggerWarn.mock.calls.map(c => c[0])))
 
     expect(read().code, '清扫是 best-effort，不影响安装本身').toBe(200)

@@ -66,7 +66,7 @@ async function awaitAuthorizeUrl(h: ReturnType<typeof createHarness>, id: string
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline && url === undefined) {
-    const res = await callRoute(h, `/api/pico/connectors/${id}/state`, 'GET')
+    const res = await callRoute(h, `/api/zeokeel/connectors/${id}/state`, 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request?.authorizeUrl
     if (url === undefined) await new Promise(r => setTimeout(r, 25))
   }
@@ -77,11 +77,11 @@ async function awaitAuthorizeUrl(h: ReturnType<typeof createHarness>, id: string
 /** Complete one interactive authorization so a credential (with a refresh token) is on disk. */
 async function authorizeOnce(dir: string, server: RealMcpServer): Promise<void> {
   const first = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
-  await callRoute(first, '/api/pico/connectors/example-mcp/connect', 'POST')
+  await callRoute(first, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline && url === undefined) {
-    const res = await callRoute(first, '/api/pico/connectors/example-mcp/state', 'GET')
+    const res = await callRoute(first, '/api/zeokeel/connectors/example-mcp/state', 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request?.authorizeUrl
     if (url === undefined) await new Promise(r => setTimeout(r, 25))
   }
@@ -106,7 +106,7 @@ describe('a live transport must adopt a refresh token we rotated out of band', (
 
     // An out-of-band refresh — the panel button's route, same engine the
     // background sweep and the restore path use. The server rotates RT1 → RT2.
-    const refreshed = await callRoute(h, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const refreshed = await callRoute(h, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(refreshed.status).toBe(200)
 
     const stored = await new ConnectorStore({ baseDir: dir }).readCredential('example-mcp')
@@ -129,7 +129,7 @@ describe('a live transport must adopt a refresh token we rotated out of band', (
     // day 2: reopen, refresh out of band, then use the transport.
     const day2 = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
     await waitFor(() => day2.configs.length === 1, 15_000)
-    await callRoute(day2, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    await callRoute(day2, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     day2.dispose()
 
     // day 3: reopen with the rotated credential; the server must never see a
@@ -158,7 +158,7 @@ describe('a live transport must adopt a refresh token we rotated out of band', (
     const before = await Promise.all(h.configs.map(async (config) => (await (config as unknown as LiveConfig).authProvider?.tokens())?.refresh_token))
     expect(before.every((token) => typeof token === 'string' && token !== ''), 'both servers should carry a token').toBe(true)
 
-    const refreshed = await callRoute(h, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const refreshed = await callRoute(h, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(refreshed.status).toBe(200)
     const stored = await new ConnectorStore({ baseDir: dir }).readCredential('example-mcp')
     expect(stored?.refreshToken).not.toBe(before[0])
@@ -181,7 +181,7 @@ describe('a live transport must adopt a refresh token we rotated out of band', (
     await waitFor(() => h.configs.length === 1, 15_000)
 
     // Our refresher rotated RT1→RT2 and adopted it into the live provider.
-    const refreshed = await callRoute(h, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const refreshed = await callRoute(h, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(refreshed.status).toBe(200)
     const afterSweep = await new ConnectorStore({ baseDir: dir }).readCredential('example-mcp')
 
@@ -217,7 +217,7 @@ describe('a live transport must adopt a refresh token we rotated out of band', (
     // plugin instance knows about. The config count deliberately stays 1: an
     // http transport reads the credential per request, so a refresh does not —
     // and must not — re-register it (see audit-r8b-credential-change.spec.ts).
-    const refreshed = await callRoute(h, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const refreshed = await callRoute(h, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(refreshed.status).toBe(200)
     const store = new ConnectorStore({ baseDir: dir })
     const background = await store.readCredential('example-mcp')
@@ -229,7 +229,7 @@ describe('a live transport must adopt a refresh token we rotated out of band', (
     // adopt it back over the credential the flow just wrote; the store write
     // order (`updatedAt`) is the only sound ordering.
     server.setTokenLifetime(5 * 60 * 1000)
-    await callRoute(h, '/api/pico/connectors/example-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'example-mcp'))
     await waitFor(() => h.configs.length === 2, 15_000)
 

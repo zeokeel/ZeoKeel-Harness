@@ -25,8 +25,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
 )
 
 // approveCount / rejectCount 统计某应用的审核审计条数（重试不得再写一条）。

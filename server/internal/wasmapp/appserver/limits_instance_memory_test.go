@@ -3,9 +3,9 @@ package appserver
 import (
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/queue"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 )
 
 // ===========================================================================

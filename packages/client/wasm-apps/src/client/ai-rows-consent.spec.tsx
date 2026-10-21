@@ -125,7 +125,7 @@ async function click(selector: string): Promise<void> {
 
 /** 展开数据面板（授权卡就在展开区里）。 */
 async function open(): Promise<void> {
-  await click('.pico-app-data-toggle')
+  await click('.zeokeel-app-data-toggle')
 }
 
 const consentCalls = (): Call[] => calls.filter(call => call.url.includes('/ai-rows-consent'))
@@ -151,13 +151,13 @@ describe('授权卡只给发布者本人（默认关的能力不允许挂在"忘
     const card = container.querySelector('[data-role="ai-rows-consent"]')
     expect(card).not.toBeNull()
     expect(card?.getAttribute('data-enabled')).toBe('false')
-    const allow = container.querySelector('.pico-app-data-ai-allow')
+    const allow = container.querySelector('.zeokeel-app-data-ai-allow')
     expect(allow).not.toBeNull()
     // **逐字**要求：允许 = 同意"仅脱敏列 + 每次调用写审计"这一组后果。
     expect(allow?.textContent).toBe('允许 AI 读取此应用的数据（仅脱敏列，每次调用写审计）')
     expect(allow?.textContent).toBe(zh['appCenter.aiRowsAllow'])
     // 撤销按钮在未授权状态下不该出现（没有可撤销的东西）。
-    expect(container.querySelector('.pico-app-data-ai-revoke')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-ai-revoke')).toBeNull()
   })
 })
 
@@ -170,9 +170,9 @@ describe('授权状态以**宿主**为准（面板不持真相）', () => {
     expect(card?.getAttribute('data-enabled')).toBe('true')
     expect(container.querySelector('[data-role="ai-rows-consent-copy"]')?.textContent)
       .toBe(zh['appCenter.aiRowsEnabled'])
-    expect(container.querySelector('.pico-app-data-ai-revoke')).not.toBeNull()
-    expect(container.querySelector('.pico-app-data-ai-allow')).toBeNull()
-    expect(consentCalls()[0]?.url).toBe(`/api/pico/apps/wasm/roster/${AI_ROWS_CONSENT_SUFFIX}`)
+    expect(container.querySelector('.zeokeel-app-data-ai-revoke')).not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-ai-allow')).toBeNull()
+    expect(consentCalls()[0]?.url).toBe(`/api/zeokeel/apps/wasm/roster/${AI_ROWS_CONSENT_SUFFIX}`)
     expect(consentCalls()[0]?.method).toBe('GET')
   })
 
@@ -182,7 +182,7 @@ describe('授权状态以**宿主**为准（面板不持真相）', () => {
       : jsonResponse(200, { app_id: 'roster', enabled: false }))
     await mount()
     await open()
-    await click('.pico-app-data-ai-allow')
+    await click('.zeokeel-app-data-ai-allow')
     const post = consentCalls().find(call => call.method === 'POST')
     expect(post?.url).toBe(aiRowsConsentPath('roster'))
     expect(JSON.parse(post!.body)).toEqual({ enabled: true })
@@ -200,11 +200,11 @@ describe('授权状态以**宿主**为准（面板不持真相）', () => {
     await mount()
     await open()
     expect(container.querySelector('[data-role="ai-rows-consent"]')?.getAttribute('data-enabled')).toBe('true')
-    await click('.pico-app-data-ai-revoke')
+    await click('.zeokeel-app-data-ai-revoke')
     const post = consentCalls().find(call => call.method === 'POST')
     expect(JSON.parse(post!.body)).toEqual({ enabled: false })
     expect(container.querySelector('[data-role="ai-rows-consent"]')?.getAttribute('data-enabled')).toBe('false')
-    expect(container.querySelector('.pico-app-data-ai-allow')).not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-ai-allow')).not.toBeNull()
   })
 
   it('写失败 ⇒ **不许**假装已允许：状态停在未授权，并如实说明"没有保存成功"', async () => {
@@ -213,14 +213,14 @@ describe('授权状态以**宿主**为准（面板不持真相）', () => {
       : jsonResponse(200, { app_id: 'roster', enabled: false }))
     await mount()
     await open()
-    await click('.pico-app-data-ai-allow')
+    await click('.zeokeel-app-data-ai-allow')
     expect(container.querySelector('[data-role="ai-rows-consent"]')?.getAttribute('data-enabled')).toBe('false')
     const error = container.querySelector('[data-role="ai-rows-consent-save-error"]')
     expect(error).not.toBeNull()
     expect(error?.textContent).toContain('AI_ROWS_CONSENT_NOT_PERSISTED')
     // 允许按钮还在（用户可以重试），撤销按钮**不**出现（什么都没被允许）。
-    expect(container.querySelector('.pico-app-data-ai-allow')).not.toBeNull()
-    expect(container.querySelector('.pico-app-data-ai-revoke')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-ai-allow')).not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-ai-revoke')).toBeNull()
   })
 
   it('读状态失败 ⇒ 不把"不知道"画成"未授权"：给出错误块与重试，且不声称任何状态', async () => {
@@ -231,9 +231,9 @@ describe('授权状态以**宿主**为准（面板不持真相）', () => {
     expect(container.querySelector('[data-role="ai-rows-consent-error"]')?.textContent).toContain('PROOF_REQUIRED')
     // 读不到状态时**没有任何**状态声明：既不说"已允许"，也不发一条盲写。
     expect(container.querySelector('[data-role="ai-rows-consent"]')?.getAttribute('data-enabled')).toBe('false')
-    expect(container.querySelector('.pico-app-data-ai-revoke')).toBeNull()
-    expect(container.querySelector('.pico-app-data-ai-allow')).toBeNull()
-    expect(container.querySelector('.pico-app-data-ai-retry')).not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-ai-revoke')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-ai-allow')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-ai-retry')).not.toBeNull()
     expect(consentCalls().filter(call => call.method === 'POST')).toHaveLength(0)
   })
 })

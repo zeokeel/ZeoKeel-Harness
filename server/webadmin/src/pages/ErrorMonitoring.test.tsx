@@ -19,7 +19,7 @@ const GATEWAY = {
   error_reporting_level: 'warning',
   error_reporting_heartbeat: false,
   glitchtip_base_url: 'https://glitchtip.example.com',
-  glitchtip_organization: 'picoaide',
+  glitchtip_organization: 'zeokeel',
   default_thinking_level: 'max',
 }
 
@@ -32,8 +32,8 @@ const CLIENTS = {
   total: 5,
   last_report_at: '2026-09-16T12:00:00Z',
   items: [
-    { username: 'u1', state: 'ready', reason: '', dsn_host: 'glitchtip.example.com', level: 'warning', release: 'picoaide-desktop@2.7.5', updated_at: '2026-09-16T12:00:00Z' },
-    { username: 'u2', state: 'failed', reason: 'Sentry init 失败:invalid dsn', dsn_host: '', level: 'error', release: 'picoaide-desktop@2.7.5', updated_at: '2026-09-16T11:30:00Z' },
+    { username: 'u1', state: 'ready', reason: '', dsn_host: 'glitchtip.example.com', level: 'warning', release: 'zeokeel-desktop@2.7.5', updated_at: '2026-09-16T12:00:00Z' },
+    { username: 'u2', state: 'failed', reason: 'Sentry init 失败:invalid dsn', dsn_host: '', level: 'error', release: 'zeokeel-desktop@2.7.5', updated_at: '2026-09-16T11:30:00Z' },
   ],
 }
 
@@ -102,7 +102,7 @@ describe('ErrorMonitoring 错误监控页', () => {
             // P1-2:心跳开关随保存提交(默认 false = 与今天行为一致)。
             error_reporting_heartbeat: false,
             glitchtip_base_url: GATEWAY.glitchtip_base_url,
-            glitchtip_organization: 'picoaide',
+            glitchtip_organization: 'zeokeel',
           }),
         }),
       )

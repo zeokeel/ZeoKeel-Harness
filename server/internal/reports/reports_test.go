@@ -15,8 +15,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // bjAt 返回"北京 Y-M-D hour:00"对应的绝对瞬时:报表月口径夹具不依赖进程 TZ
@@ -162,7 +162,7 @@ func reqJSON(t *testing.T, r http.Handler, method, path, body, session, csrf str
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if session != "" {
-		req.AddCookie(&http.Cookie{Name: "picoaide_session", Value: session})
+		req.AddCookie(&http.Cookie{Name: "zeokeel_session", Value: session})
 	}
 	if method != "GET" && csrf != "" {
 		req.Header.Set("X-CSRF-Token", csrf)
@@ -176,7 +176,7 @@ func TestSubscriptionAPI(t *testing.T) {
 	allowLocalWebhooks(t)
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef")
 
 	uid, _ := serverstore.CreateUser(db, &serverstore.User{Username: "boss", Source: "local", Status: 1, Role: serverstore.RoleSuperAdmin})
 	sess, csrf, err := serverauth.CreateAdminSession(db, uid)
@@ -401,7 +401,7 @@ func TestPushWebhookDoesNotFollowRedirect(t *testing.T) {
 func TestCreateRejectsPrivateHookURL(t *testing.T) {
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef")
 	uid, _ := serverstore.CreateUser(db, &serverstore.User{Username: "boss2", Source: "local", Status: 1, Role: serverstore.RoleSuperAdmin})
 	sess, csrf, err := serverauth.CreateAdminSession(db, uid)
 	if err != nil {

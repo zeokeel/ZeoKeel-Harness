@@ -20,9 +20,9 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/picoaide/picoaide/internal/archiveutil"
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/archiveutil"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // 稳定错误码:直接进 serverauth.WriteError 的 envelope,客户端按码分流、
@@ -291,10 +291,10 @@ func checkFrontmatterMergeKey(raw, field, what string) error {
 }
 
 // ProvenanceKey 是安装器写入的溯源块键名;包内自带即视为伪造归属。
-const ProvenanceKey = "picoaide"
+const ProvenanceKey = "zeokeel"
 
 // ProvenanceDir 是安装器写入的溯源目录(归档内出现即拒)。
-const ProvenanceDir = ".picoaide/"
+const ProvenanceDir = ".zeokeel/"
 
 // appIDRe 是 app_id / 技能名 / 智能体名共用的**形态**规则。
 //

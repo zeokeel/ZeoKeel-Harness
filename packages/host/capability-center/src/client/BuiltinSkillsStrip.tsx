@@ -37,7 +37,7 @@ export type BuiltinAction = 'install' | 'update' | 'installed'
 /**
  * 由「清单版本 / 已装版本 / 是否已在本机」推出按钮语义。
  *
- * 已装版本的来源是能力中心聚合面（`.picoaide/release.json` 的 provenance，
+ * 已装版本的来源是能力中心聚合面（`.zeokeel/release.json` 的 provenance，
  * 比 SKILL.md 的 frontmatter 更权威：它记的就是安装时那个版本）。读不到版本
  * 时保守判「已安装」而不谎报可更新（宁可不提示，不可误报 —— 与
  * `hasUpdateFor` 同口径）。
@@ -116,7 +116,7 @@ export function builtinRowProgress(
  * @param overwrite - 用户已确认覆盖本机同名内容。
  */
 export function builtinInstallEndpoint(name: string, overwrite = false): string {
-  const base = `/api/pico/skills/builtin/${encodeURIComponent(name)}/install`
+  const base = `/api/zeokeel/skills/builtin/${encodeURIComponent(name)}/install`
   return overwrite ? `${base}?overwrite=1` : base
 }
 
@@ -144,7 +144,7 @@ export function builtinSkillsInstallOutcome(status: number, ok: boolean): 'ok' |
  * `builtinSkillsLoadOutcome(500, false) === 'failed'` 可以被单测直接打坏，而
  * "hook 真的用了它"由源码接线断言钉住（`tests/builtin-skills.spec.ts`）。
  *
- * 三态的理由：宿主（`auth-gate.ts` 的 `/api/pico/skills/builtin`）**刻意**按状态码
+ * 三态的理由：宿主（`auth-gate.ts` 的 `/api/zeokeel/skills/builtin`）**刻意**按状态码
  * 分流 —— 旧版服务端没有这条路由时回 404（面板把内置技能区整块隐藏），其余失败
  * 原样透传（500/502…）。hook 此前 `if (!res.ok) return` 把两者与网络失败一起当成
  * "没有内置技能"：服务端 500 时用户与运维都看不到任何痕迹（`skillseed.ListBuiltin`
@@ -193,7 +193,7 @@ export function useBuiltinSkills(onInstalled?: () => void) {
     let alive = true
     void (async () => {
       try {
-        const res = await fetch('/api/pico/skills/builtin')
+        const res = await fetch('/api/zeokeel/skills/builtin')
         const outcome = builtinSkillsLoadOutcome(res.status, res.ok)
         if (outcome !== 'ok') {
           if (!alive) return
@@ -212,7 +212,7 @@ export function useBuiltinSkills(onInstalled?: () => void) {
         setInstalled(data.installed ?? [])
         setError(null)
         // 已装版本取自能力中心聚合面（与「我的」列表同一个事实源）。
-        const local = await fetch('/api/pico/capabilities?source=local')
+        const local = await fetch('/api/zeokeel/capabilities?source=local')
         if (!local.ok || !alive) return
         const payload = await local.json() as { items?: Array<{ name?: string, version?: string, source?: string }> }
         const map: Record<string, string | undefined> = {}
@@ -343,7 +343,7 @@ export interface BuiltinCard {
 export function planBuiltinCards(options: {
   rows: readonly BuiltinSkill[]
   installedNames: ReadonlySet<string>
-  /** 本机已装版本（`/api/pico/capabilities?source=local` 的 provenance 版本）；缺省 = 读不到。 */
+  /** 本机已装版本（`/api/zeokeel/capabilities?source=local` 的 provenance 版本）；缺省 = 读不到。 */
   installedVersions?: Readonly<Record<string, string | undefined>> | undefined
   query: string
   kindFilter: 'all' | 'skill' | 'agent'

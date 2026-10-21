@@ -2,20 +2,20 @@
  * 「能力中心」整页面板的装载点。
  *
  * 面板的切换语义（中列整页接管、与连接器/应用中心/定时任务互斥、点侧边栏行让位、
- * Esc 返回）全部由 `@picoaide/dsh-panel-surface` 提供；本文件只负责接上装载器，
+ * Esc 返回）全部由 `@zeokeel/dsh-panel-surface` 提供；本文件只负责接上装载器，
  * 并给触发按钮一个 `openCapabilityCenter()`。
  *
  * 历史：这里原来是 `position:fixed` 的模态浮层（`OVERLAY`/`MASK`/`PANEL` +
  * Esc 关闭 + Tab 焦点陷阱）。2026-09-20 与连接器、应用中心一起改成中列整页 ——
  * 模态的焦点陷阱与"面板住在侧边栏槽位树里"这两件事都不再需要。
- * 2026-10-13 随能力中心的客户端面一起从 `@picoaide/dsh-enterprise` 搬到本包
+ * 2026-10-13 随能力中心的客户端面一起从 `@zeokeel/dsh-enterprise` 搬到本包
  * （逐字搬迁，面板 id 与装载语义未变）。
  *
- * @module @picoaide/dsh-capability-center/client/capability-surface
+ * @module @zeokeel/dsh-capability-center/client/capability-surface
  */
 
 import { createElement } from 'react'
-import { mountPanelSurface, type PanelSurfaceHandle } from '@picoaide/dsh-panel-surface/client'
+import { mountPanelSurface, type PanelSurfaceHandle } from '@zeokeel/dsh-panel-surface/client'
 import { CapabilityCenterPanel } from './CapabilityCenterPanel.tsx'
 
 /** 本面板在共享协议里的 id（激活态属性取值 / 容器标记取值）。 */

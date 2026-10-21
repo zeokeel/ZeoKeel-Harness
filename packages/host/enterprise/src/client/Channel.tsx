@@ -14,7 +14,7 @@ import { UpdateIndicator, useUpdateState } from './UpdateIndicator.tsx'
 
 // build-time 版本注入(tsdown define 替换为字符串字面量);浏览器编译面无
 // node types(tsconfig.client.json types:[]),声明最小面的 process 占位。
-declare const process: { env: { PICOAI_PRODUCT_VERSION?: string } }
+declare const process: { env: { ZEOKEEL_PRODUCT_VERSION?: string } }
 
 /**
  * Brace mark tile matching the app/tray icon: a rounded square carrying the
@@ -198,13 +198,13 @@ export const BRAND_NAME_TEXT_STYLE = {
  *
  * 两条约束，缺一个就出事（2026-09-11 现场）：
  *  1. **用短名**（`client.short_name`）—— 服务端不下发这一项，它是随包品牌独有的
- *     字段（`/api/pico/channel` 出口会把它叠回来）；拿不到就会回落到显示名
- *     "PicoAide Harness"，在 184px 的行里折成两行。
+ *     字段（`/api/zeokeel/channel` 出口会把它叠回来）；拿不到就会回落到显示名
+ *     "ZeoKeel Harness"，在 184px 的行里折成两行。
  *  2. **不折行**：见上面两个样式常量。
  */
 export function BrandName() {
   const channel = useChannel()
-  const version = process.env.PICOAI_PRODUCT_VERSION as string | undefined
+  const version = process.env.ZEOKEEL_PRODUCT_VERSION as string | undefined
   const updateState = useUpdateState()
   const name = resolveClientShortName(channel)
   return createElement(
@@ -268,7 +268,7 @@ function resolveClientName(channel: ChannelConfig | null | undefined): string {
  * Resolve the sidebar/短名 from a channel config.
  *
  * 侧边栏空间窄，用的是短名（`identity.short_name`，官方渠道即官方短名）；
- * 服务端不下发这一项，所以它来自随包品牌（`/api/pico/channel` 出口叠加），
+ * 服务端不下发这一项，所以它来自随包品牌（`/api/zeokeel/channel` 出口叠加），
  * 缺省回落到显示名 —— 宁可显示长名字（截断），也不显示别人家的短名。
  * 导出供测试（`tests/channel-brand-name.spec.ts`）。
  */

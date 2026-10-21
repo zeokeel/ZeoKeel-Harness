@@ -17,7 +17,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Stable Cordis plugin name for the account card client half. */
-export const name = 'picoaide-account-card-client'
+export const name = 'zeokeel-account-card-client'
 
 /** Locale namespace owning the account card copy. */
 const LOCALE_NS = 'account-card'
@@ -29,7 +29,7 @@ export const inject = ['slots', 'locale']
  * Register the bottom sidebar account row: it mounts through the
  * `sidebar.footer.action` slot (last, below the sibling foot actions) and
  * portals itself below the Settings seat; the username/balance data all come
- * from the local `/api/pico/*` routes owned by the host half, and the row
+ * from the local `/api/zeokeel/*` routes owned by the host half, and the row
  * expands the account card popover on click.
  * @param ctx - browser Cordis context.
  */
@@ -67,8 +67,8 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     const style = document.createElement('style')
     style.textContent = [
-      '.pico-account-row { background: transparent; }',
-      '.pico-account-row:hover { background: var(--dsw-alias-interactive-bg-hover); }',
+      '.zeokeel-account-row { background: transparent; }',
+      '.zeokeel-account-row:hover { background: var(--dsw-alias-interactive-bg-hover); }',
     ].join('\n')
     document.head.appendChild(style)
     return () => { style.remove() }

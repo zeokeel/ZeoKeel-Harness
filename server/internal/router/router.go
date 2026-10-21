@@ -1,4 +1,4 @@
-// Package router 集中声明 PicoAide 服务端全部 API 路由分组(工程化重构,
+// Package router 集中声明 ZeoKeel 服务端全部 API 路由分组(工程化重构,
 // 审计 2026-09): 命名空间统一为两个根 ——
 //
 //	/api/server    → 服务端管理面(webadmin/运维: 用户/部门/网关/品牌/审计…)
@@ -16,15 +16,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/bootstrap"
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/portal"
-	"github.com/picoaide/picoaide/internal/reports"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/telemetry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
+	"github.com/zeokeel/zeokeel-harness/server/internal/reports"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/telemetry"
 	// ⚠️ 可选模块（skills / apps / connectors）的 handler 包**不在**本文件的 import 里：
 	// 它们的类型由 build-tag 文件（optional_*_on.go）以别名提供，关闭时是空类型 ⇒
 	// 整棵包树从 `go list -deps ./cmd/server` 里消失。见
@@ -77,7 +77,7 @@ type Deps struct {
 	// （`GET|POST /login`、`POST /logout`、`GET|POST /app-ticket`）已随 W4 删除：
 	// 员工浏览器会话的唯一用途是"给应用子域换票"，而应用不再有对外主机名，
 	// 身份一律由桌面客户端持员工 bearer 注入（总纲 §8.4）。
-	// SkillSeed 内置技能下发面（随服务端镜像发布：/opt/picoaide/skills）。
+	// SkillSeed 内置技能下发面（随服务端镜像发布：/opt/zeokeel/skills）。
 	// 见 internal/skillseed —— 与 ClientRelease 同一范式，只是下发的是
 	// 技能包而不是安装包；客户端按需安装，不自动装。
 	// 可选模块（skills）：技能面关闭时它是空类型（与 Market 同一条 build-tag 纪律）。

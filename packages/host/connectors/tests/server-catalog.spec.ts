@@ -20,7 +20,7 @@ const GLITCHTIP_DEF = JSON.stringify({
   tokenFields: [
     { key: 'GLITCHTIP_BASE_URL', label: '服务地址(必填,如自部署地址或 app.glitchtip.com)', type: 'text', required: true },
     { key: 'GLITCHTIP_TOKEN', label: 'API Token(Auth Tokens 页创建,需 org:read / project:read / event:read)', type: 'password', required: true },
-    { key: 'GLITCHTIP_ORGANIZATION', label: '组织 slug(如 picoaide)', type: 'text', required: true },
+    { key: 'GLITCHTIP_ORGANIZATION', label: '组织 slug(如 zeokeel)', type: 'text', required: true },
   ],
   examples: ['查询当前未解决的错误 issue', '查看最近一次异常的堆栈详情', '列出错误追踪中的高优先级问题'],
   mcp: [{ serverName: 'glitchtip', transport: 'stdio', command: 'npx', args: ['-y', 'glitchtip-mcp'], env: {} }],

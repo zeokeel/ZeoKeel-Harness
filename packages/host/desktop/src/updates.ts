@@ -1,4 +1,4 @@
-/** Cordis Host plugin for scheduled and interactive PicoAide Harness updates. */
+/** Cordis Host plugin for scheduled and interactive ZeoKeel Harness updates. */
 
 import { open } from 'node:fs/promises'
 import { resolve as resolvePath } from 'node:path'
@@ -6,11 +6,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import z from '@deepseek-ai/schemastery'
 // AA3-01（2026-09-27）：会话代际守卫。**唯一实现在零依赖叶子包**
-// `@picoaide/dsh-host-locale/session-events` —— 本包不可能 import enterprise 的
+// `@zeokeel/dsh-host-locale/session-events` —— 本包不可能 import enterprise 的
 // `session-epoch.ts`（enterprise 依赖 desktop，反向 import 会成环，见
 // docs/decisions/2026-09-20-host-leaf-packages-build-graph.md）。叶子包里的那份
 // 就是 enterprise 一直在用的同一份语义（那边现在改为 re-export）。
-import { createSessionEpoch } from '@picoaide/dsh-host-locale/session-events'
+import { createSessionEpoch } from '@zeokeel/dsh-host-locale/session-events'
 import type { DesktopUpdateSource, UpdateDownloadProgressSnapshot } from './runtime.ts'
 import { desktopTrayLabel } from './tray-locale.ts'
 import {
@@ -40,7 +40,7 @@ import {
 } from './update-download.ts'
 
 /**
- * 会话变化事件（由 `@picoaide/dsh-enterprise` 的 session-service 发出）。
+ * 会话变化事件（由 `@zeokeel/dsh-enterprise` 的 session-service 发出）。
  *
  * 这里自行声明而不是 import enterprise 的类型:本包的 tsconfig 只包含
  * `src/*.ts`，不引入 enterprise 的类型，因此同名增强不会冲突；运行时契约
@@ -48,7 +48,7 @@ import {
  */
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'pico/session-changed'(session: { serverURL?: string } | null): void
+    'zeokeel/session-changed'(session: { serverURL?: string } | null): void
   }
 }
 
@@ -582,9 +582,9 @@ export function apply(ctx: Context, config: Config): void {
     }
 
     // 更新源随会话变化:登录后才有服务端可问,登出/切换服务端必须让缓存失效。
-    // `picoSession` 由 enterprise 的 session-service 提供;这里防御式读取 ——
+    // `zeokeelSession` 由 enterprise 的 session-service 提供;这里防御式读取 ——
     // 没有会话服务的组装(纯桌面冒烟)等同于"未登录",而不是崩溃。
-    const sessionService = ctx.get('picoSession') as
+    const sessionService = ctx.get('zeokeelSession') as
       | { getSession?: () => unknown }
       | undefined
     try {
@@ -592,7 +592,7 @@ export function apply(ctx: Context, config: Config): void {
     } catch {
       onSessionChanged(null)
     }
-    ctx.on('pico/session-changed', onSessionChanged)
+    ctx.on('zeokeel/session-changed', onSessionChanged)
 
     /** 记住"这一版已经提示过用户"（自动下载路径只提示一次）。 */
     const rememberPrompt = async (version: string, stillCurrent: StillCurrent): Promise<void> => {

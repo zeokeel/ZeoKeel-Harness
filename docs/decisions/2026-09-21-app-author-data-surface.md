@@ -78,7 +78,7 @@ unmask**、审计账号放行、未登录零出站。
 | # | 问题 | 落定值 | 与规划推荐 |
 | --- | --- | --- | --- |
 | 1 | 对**作者本人**开放？ | **开放，只读** | 一致 |
-| 2 | 对 **AI** 开放？ | **默认关 + 显式授权卡（2026-09-21 用户拍板落地）**：`wasm_app_rows` **注册但拒绝** —— 未授权时返回结构化 `AI_ROWS_NOT_AUTHORIZED`（含操作指引、**零出站**），不静默给空。授权由**发布者本人**在客户端「应用中心 → 详情 → 数据」的授权卡上开启（可撤销、持久化在 `$DSH_HOME/wasm-apps-ai-rows-consent.json`，0600 原子写），宿主本机路由 `GET/POST /api/pico/apps/wasm/:app_id/ai-rows-consent`（**两种方法都要求持有性证明**）读写该状态。**授权作用域 = 用户 ⊕ 服务端地址 ⊕ 应用**（R19B-03，2026-09-25 收紧：此前只按 `app_id` ⇒ 同机换账号 / 换服务端会继承上一个人的授权；落盘升 `version: 2`，旧记录一律按未授权处理；拿不到用户名或服务端地址时写面 401 拒绝、一个字不落盘）。工具面**仍然没有** `unmask` 参数：授权只决定"能不能看脱敏后的行"，原值永远只能由人在面板里显式查看。 | ✅ 已采纳推荐（作用域口径见 R19B-03） |
+| 2 | 对 **AI** 开放？ | **默认关 + 显式授权卡（2026-09-21 用户拍板落地）**：`wasm_app_rows` **注册但拒绝** —— 未授权时返回结构化 `AI_ROWS_NOT_AUTHORIZED`（含操作指引、**零出站**），不静默给空。授权由**发布者本人**在客户端「应用中心 → 详情 → 数据」的授权卡上开启（可撤销、持久化在 `$DSH_HOME/wasm-apps-ai-rows-consent.json`，0600 原子写），宿主本机路由 `GET/POST /api/zeokeel/apps/wasm/:app_id/ai-rows-consent`（**两种方法都要求持有性证明**）读写该状态。**授权作用域 = 用户 ⊕ 服务端地址 ⊕ 应用**（R19B-03，2026-09-25 收紧：此前只按 `app_id` ⇒ 同机换账号 / 换服务端会继承上一个人的授权；落盘升 `version: 2`，旧记录一律按未授权处理；拿不到用户名或服务端地址时写面 401 拒绝、一个字不落盘）。工具面**仍然没有** `unmask` 参数：授权只决定"能不能看脱敏后的行"，原值永远只能由人在面板里显式查看。 | ✅ 已采纳推荐（作用域口径见 R19B-03） |
 | 3 | 对**管理员**开放？ | **开放**，`capability:read`，动作 `wasm_app_rows_view`（unmask 另记一条） | 一致 |
 | 4 | 允许**写**？ | **不允许**（首版） | 一致 |
 | 5 | 自由 SQL vs 结构化？ | **结构化**（`?table=&limit=&offset=`），语句闸门与 `appdb` 同一份 | 一致 |
@@ -135,7 +135,7 @@ unmask**、审计账号放行、未登录零出站。
 
 ### 事实（三个使能条件都实测过）
 
-1. 宿主本机路由 `GET /api/pico/apps/wasm/:app_id/rows` 现在要求**持有性证明**
+1. 宿主本机路由 `GET /api/zeokeel/apps/wasm/:app_id/rows` 现在要求**持有性证明**
    （`dsh-auth-*` cookie，见 §2/§7 的判据）—— 这一步是有效的：本机伪造 Origin 的 `curl`
    拿不到 cookie，403。
 2. 但**内置浏览器的分区故意镜像了这把 cookie**：`packages/host/browser/src/index.ts:475-505`
@@ -146,7 +146,7 @@ unmask**、审计账号放行、未登录零出站。
    `ALLOWED_SCHEMES` 对浏览器标签放行一切 `http(s)`，`classifyNavigation`（同文件 `:109-128`）
    只对**应用窗口**（`kind:'app'`）做来源限制。
 
-⇒ 模型用 `browser_navigate('http://127.0.0.1:<port>/api/pico/apps/wasm/<app>/rows?table=…&unmask=1')`
+⇒ 模型用 `browser_navigate('http://127.0.0.1:<port>/api/zeokeel/apps/wasm/<app>/rows?table=…&unmask=1')`
 再用 `browser_get_text` 读回，就能拿到**未脱敏**的行数据。宿主侧的持有性证明**无法区分**
 "真页面的人"与"模型驱动的标签页"—— 因为那个标签页**就是**一个持有 cookie 的真页面。
 
@@ -165,7 +165,7 @@ unmask**、审计账号放行、未登录零出站。
 
 **第二道闸：`will-navigate` / `will-redirect`**（同批追加，同一族）——
 `browser_navigate` 那条闸只罩"模型显式调用的导航"，而以下两种导航**不经过**它：
-① 模型先导航到一个**它控制的**外站，再让那个站 302 到 `http://127.0.0.1:<port>/api/pico/...`
+① 模型先导航到一个**它控制的**外站，再让那个站 302 到 `http://127.0.0.1:<port>/api/zeokeel/...`
 （Electron 对重定向**不触发** `will-navigate`）；② 页面自己发起的导航
 （`location.href=…`、链接点击、表单提交、meta refresh）。两者都发生在**持有被镜像 cookie
 的标签里**，因此同样绕过所有依赖持有性证明的本机守卫。现在建 tab 时装上
@@ -198,7 +198,7 @@ unmask**、审计账号放行、未登录零出站。
 - **P0（子框架无人管辖）**：Electron 的 `will-navigate` / `will-redirect` **只报主框架**，
   而浏览器包从未注册 `will-frame-navigate`。攻击序列：模型导航到一个**自己控制的本机页面**
   （`127.0.0.1:<其它端口>`，正是本文件上一版"反向对照"明确放行的"合法 dev server"）→
-  该页里 `<iframe src="http://127.0.0.1:<shell端口>/api/pico/.../rows?unmask=1">` →
+  该页里 `<iframe src="http://127.0.0.1:<shell端口>/api/zeokeel/.../rows?unmask=1">` →
   `browser_eval({frame:1})` 读子框架正文 ⇒ 拿回 `UNMASKED-13800000000`。
 - **P1（cookie 不看端口）**：镜像过去的 `dsh-auth-*` 是 **host-only** cookie，而 **cookie
   不区分端口** ⇒ 它会被送到 `127.0.0.1` 的**任意端口**。真机实测：模型在自己端口上起的

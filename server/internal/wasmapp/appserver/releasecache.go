@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
 )
 
 // ===== (app_id, release_id) 级缓存（R1-rt-2 / R1-rt-3）=====
@@ -215,7 +215,7 @@ func (c *releaseCache) config(k releaseKey) (appcfg.Config, *apperr.Error, bool)
 
 // putConfig 写入解析结果。**只缓存成功**。
 //
-// 失败不是常量：现在失败只剩"资源集里没有 `picoaide.app.json`"这一种（发布链路写入
+// 失败不是常量：现在失败只剩"资源集里没有 `zeokeel.app.json`"这一种（发布链路写入
 // 的 `config_json` 为空/该版本没有配置）——它仍然可以随着**新版本**或资源集重建而改变，
 // 所以失败的记录不该进缓存（进了就再也没有请求会去重读它）。与 `Asset()` 对失败的
 // 处理对称：不缓存失败。

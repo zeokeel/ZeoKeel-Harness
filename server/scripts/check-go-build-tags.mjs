@@ -120,7 +120,7 @@ const MODULE_TREES = {
     // 时它必须消失。P1 第二片因此把它从 `internal/wasmapp/skillseed` 挪到
     // `internal/skillseed` —— 留在 wasmapp 树下会让上面两条**同时**不可能成立
     // （apps 关 ⇒ 整棵 wasmapp 消失 ⇒ 技能面拿不到内置技能）。
-    // 归位依据（P0 规划 §5 第 4 条）：`/opt/picoaide/skills` 的唯一消费方就是它。
+    // 归位依据（P0 规划 §5 第 4 条）：`/opt/zeokeel/skills` 的唯一消费方就是它。
     'internal/skillseed',
   ],
   apps: ['internal/wasmapp'],
@@ -179,7 +179,7 @@ const COMBOS = (() => {
 })()
 
 /** 模块前缀（`go.mod` 的 module 行）——`go list` 输出的是完整 import path。 */
-const MODULE_PATH = 'github.com/picoaide/picoaide'
+const MODULE_PATH = 'github.com/zeokeel/zeokeel-harness/server'
 
 class UsageError extends Error {}
 

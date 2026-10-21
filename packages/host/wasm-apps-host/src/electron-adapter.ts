@@ -1,5 +1,5 @@
 /**
- * Electron seam for the `picoaide-app://` origin — the ONLY module in this
+ * Electron seam for the `zeokeel-app://` origin — the ONLY module in this
  * package that touches Electron.
  *
  * `electron` 走 **peerDependencies**（照 `packages/host/browser` 的做法）：插件
@@ -16,14 +16,14 @@
  *     都要注册，缺一个的表现是该分区里的应用页面直接
  *     `ERR_UNKNOWN_URL_SCHEME`（空白页）。
  *
- * @module @picoaide/dsh-wasm-apps-host/electron-adapter
+ * @module @zeokeel/dsh-wasm-apps-host/electron-adapter
  */
 
 import { BrowserWindow, net, protocol, safeStorage, screen, session } from 'electron'
 import type { ClientRequest, Session as ElectronSession } from 'electron'
 // 权限守卫与请求闸门**只有一份实现**（在 browser 包里，§16.1 要求浏览器与应用窗口
 // 共用）；本包通过 workspace 依赖使用它，不再自己写第二份。
-import { ensureSessionGuard, installAppSchemeRequestGate, type NativeSession as NativeGuardSession, type NativeWebRequestSession } from '@picoaide/dsh-browser/guard'
+import { ensureSessionGuard, installAppSchemeRequestGate, type NativeSession as NativeGuardSession, type NativeWebRequestSession } from '@zeokeel/dsh-browser/guard'
 import { DEFAULT_APP_SCHEME, isValidAppScheme } from './app-protocol.ts'
 import { appWindowFailureCopy } from './app-window-copy.ts'
 import { createAppWindowRecovery, type AppWindowRecovery } from './app-window-recovery.ts'
@@ -177,7 +177,7 @@ export const PLATFORM_FETCH_MAX_REDIRECTS = 5
  * ## 重定向：**只跟同源**（2026-09-20 审计 P2-2）
  *
  * 这条出站通道每次都带 `Authorization: Bearer <员工令牌>` 与
- * `X-Pico-App-Proof`，而平台 API **没有**任何合法的跨源重定向用途。此前用
+ * `X-ZeoKeel-App-Proof`，而平台 API **没有**任何合法的跨源重定向用途。此前用
  * `redirect: 'follow'`：一次 302 到别的 host 就把这两件凭据原样送过去（审计实测
  * `net.request` 与 `session.fetch` **两代都这样** ⇒ 不是本实现引入的回归，但本实现
  * 有能力关掉它）。现在改成 `redirect: 'manual'` + 在 `redirect` 事件里**同步**判源：
@@ -560,7 +560,7 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
   /** 统一的加载失败出口（被顶掉的不记）。 */
   const reportLoadFailure = (url: string, cause: unknown): void => {
     if (supersededLoad(cause)) return
-    warn(`pico-wasm-apps-host: loading ${url} in the application window failed (${cause instanceof Error ? cause.message : String(cause)})`)
+    warn(`zeokeel-wasm-apps-host: loading ${url} in the application window failed (${cause instanceof Error ? cause.message : String(cause)})`)
   }
 
   const windowOf = (handle: AppWindowHandle): BrowserWindow | undefined =>
@@ -651,7 +651,7 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
     // 不是故障 —— 把它们也当崩溃会让"关闭窗口时进程正常退出"弹出一张失败页。
     win.webContents.on('render-process-gone', (_event, details) => {
       const reason = typeof details?.reason === 'string' ? details.reason : 'unknown'
-      warn(`pico-wasm-apps-host: the renderer process of an application window is gone (app=${appId}, reason=${reason}, exitCode=${String(details?.exitCode ?? '')})`)
+      warn(`zeokeel-wasm-apps-host: the renderer process of an application window is gone (app=${appId}, reason=${reason}, exitCode=${String(details?.exitCode ?? '')})`)
       if (reason === 'clean-exit' || reason === 'killed') return
       // 崩溃前发出的那次加载即使"成功"也不能算窗口好了（见 `loadSeq`）。
       book.loadSeq += 1
@@ -670,11 +670,11 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
     win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       const target = typeof validatedURL === 'string' ? validatedURL : ''
       if (isMainFrame !== true) {
-        warn(`pico-wasm-apps-host: a subframe failed to load in an application window (${String(errorCode)}: ${String(errorDescription)}) ${target}`)
+        warn(`zeokeel-wasm-apps-host: a subframe failed to load in an application window (${String(errorCode)}: ${String(errorDescription)}) ${target}`)
         return
       }
       if (errorCode === -3) return
-      warn(`pico-wasm-apps-host: the main frame of an application window failed to load (${String(errorCode)}: ${String(errorDescription)}) ${target}`)
+      warn(`zeokeel-wasm-apps-host: the main frame of an application window failed to load (${String(errorCode)}: ${String(errorDescription)}) ${target}`)
       // 同上：这次失败作废所有在飞的加载结果（否则"导航失败但上一次加载成功"
       // 的结算顺序会把状态抹回健康）。
       book.loadSeq += 1
@@ -798,7 +798,7 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
         const verdict = classifyAppWindowNavigation(url, appId, appScheme, isMainFrame)
         if (verdict.verdict === 'allow') return
         event.preventDefault()
-        warn(`pico-wasm-apps-host: refused a ${verdict.reason} navigation in an application window (app=${appId})`)
+        warn(`zeokeel-wasm-apps-host: refused a ${verdict.reason} navigation in an application window (app=${appId})`)
       }
       contents.on('will-navigate', (details) => { refuse(details, details.url, details.isMainFrame !== false) })
       contents.on('will-frame-navigate', (details) => {
@@ -813,7 +813,7 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
       contents.on('will-redirect', (details) => { refuse(details, details.url, details.isMainFrame !== false) })
       contents.setWindowOpenHandler(() => {
         // §20.2：应用窗口不得弹窗（外链改走内置浏览器新标签 + 提示条，§19 Q9）。
-        warn(`pico-wasm-apps-host: refused a window.open from an application window (app=${appId})`)
+        warn(`zeokeel-wasm-apps-host: refused a window.open from an application window (app=${appId})`)
         return { action: 'deny' }
       })
     },

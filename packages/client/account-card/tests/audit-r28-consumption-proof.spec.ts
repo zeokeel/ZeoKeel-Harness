@@ -4,9 +4,9 @@
  *
  * ## 缺陷原形态（第二十八轮 AB1 审计，P2）
  *
- * `src/index.ts` 的 exact 路由 `GET /api/pico/account/usage?refresh=1` 是**消费型
+ * `src/index.ts` 的 exact 路由 `GET /api/zeokeel/account/usage?refresh=1` 是**消费型
  * GET**（立刻往返网关），而它的全部防护只有 `browserSameOriginMarker &&
- * isLoopbackRequest` —— `@picoaide/dsh-enterprise/loopback` 自己逐字写着
+ * isLoopbackRequest` —— `@zeokeel/dsh-enterprise/loopback` 自己逐字写着
  * "a curl with a forged Origin passes this too"。AB1 真跑（真 apply + 真路由）：
  *
  * ```
@@ -37,7 +37,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { acceptWriteProof, type WriteProofDeps } from '@picoaide/dsh-enterprise/loopback'
+import { acceptWriteProof, type WriteProofDeps } from '@zeokeel/dsh-enterprise/loopback'
 import { apply } from '../src/index.ts'
 
 /** 本机路由的 authority（真 socket：`127.0.0.1:<随机端口>`）。 */
@@ -124,10 +124,10 @@ async function harness(options: { fence?: false } = {}): Promise<Harness> {
     on: () => () => {},
     effect: (fn: () => unknown) => fn(),
     get: (name: string) => (name === 'connection' && options.fence !== false ? { requestRejection: upstreamShapedJudge } : undefined),
-    picoSession: { getSession: () => session, clear: () => {}, clearIfCurrent: () => false },
+    zeokeelSession: { getSession: () => session, clear: () => {}, clearIfCurrent: () => false },
     webServer: {
       register: (route: { path: string, handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void }) => {
-        if (route.path === '/api/pico/account/usage') handler = route.handler
+        if (route.path === '/api/zeokeel/account/usage') handler = route.handler
         return () => { handler = null }
       },
     },
@@ -156,7 +156,7 @@ describe('FIX-42②：account-card 的消费型 GET（?refresh=1）必须持持�
   it('A. 伪造 Origin 的裸 GET（无 cookie）⇒ 403 且零网关往返；连发 5 次仍是 5×0', async () => {
     const h = await harness()
     const headers = { accept: 'application/json', Origin: h.base } // 伪造同源标记，无 cookie
-    const first = await hit(h.base, '/api/pico/account/usage?refresh=1', headers)
+    const first = await hit(h.base, '/api/zeokeel/account/usage?refresh=1', headers)
     expect(first.status, '修前实测 status=200').toBe(403)
     expect(JSON.parse(first.body)).toEqual({
       error: 'browser session proof required',
@@ -164,13 +164,13 @@ describe('FIX-42②：account-card 的消费型 GET（?refresh=1）必须持持�
     })
     expect(h.gatewayCalls(), '被拒的请求一次网关往返都不能发生').toBe(0)
 
-    for (let i = 0; i < 4; i += 1) await hit(h.base, '/api/pico/account/usage?refresh=1', headers)
+    for (let i = 0; i < 4; i += 1) await hit(h.base, '/api/zeokeel/account/usage?refresh=1', headers)
     expect(h.gatewayCalls(), '修前实测"连发 5 次 = 5 次网关往返"（single-flight 只挡并发不挡速率）').toBe(0)
   }, 30_000)
 
   it('B. 对照腿：同一发持证明 ⇒ 200 + 恰好 1 次往返；无头裸 GET 仍 403（守卫不是恒真）', async () => {
     const h = await harness()
-    const forced = await hit(h.base, '/api/pico/account/usage?refresh=1', {
+    const forced = await hit(h.base, '/api/zeokeel/account/usage?refresh=1', {
       accept: 'application/json', Origin: h.base, cookie: proofCookie(),
     })
     expect(forced.status).toBe(200)
@@ -178,14 +178,14 @@ describe('FIX-42②：account-card 的消费型 GET（?refresh=1）必须持持�
 
     // 对照腿：把 Origin 去掉、cookie 也去掉 —— 回环 socket + 回环 Host 仍成立，
     // 但既没有同源标记也没有证明 ⇒ 必须拒。
-    const bare = await hit(h.base, '/api/pico/account/usage?refresh=1')
+    const bare = await hit(h.base, '/api/zeokeel/account/usage?refresh=1')
     expect(bare.status, '对照组：守卫不是恒真').toBe(403)
     expect(h.gatewayCalls()).toBe(1)
   }, 30_000)
 
   it('C. 纯读不硬挂：不带 ?refresh 的普通 GET 不要求证明（GET 读面豁免）', async () => {
     const h = await harness()
-    const read = await hit(h.base, '/api/pico/account/usage', { accept: 'application/json', Origin: h.base })
+    const read = await hit(h.base, '/api/zeokeel/account/usage', { accept: 'application/json', Origin: h.base })
     expect(read.status, '纯读的缓存快照交付不硬挂证明').toBe(200)
     const body = JSON.parse(read.body) as { state: string, data: unknown }
     expect(body.state).toBe('idle')
@@ -208,7 +208,7 @@ describe('FIX-42②：account-card 的消费型 GET（?refresh=1）必须持持�
     ]
     for (const row of rows) {
       // 消费闸：走真路由（方法是 GET，闸门内部用非 GET 视图）。
-      const route = await hit(h.base, '/api/pico/account/usage?refresh=1', { ...row.headers, accept: 'application/json' })
+      const route = await hit(h.base, '/api/zeokeel/account/usage?refresh=1', { ...row.headers, accept: 'application/json' })
       // 共享闸：走它自己的真实非 GET 路径，把响应写进桩里。
       let status = 0
       let body = ''
@@ -226,12 +226,12 @@ describe('FIX-42②：account-card 的消费型 GET（?refresh=1）必须持持�
 
     // 更早的那一道闸不混进这条等价腿：非回环 Host / 跨站标记在 `guard()` 就被拒
     // （`{"error":"forbidden"}`），与证明闸的响应体**不同** —— 这里如实钉住这个次序。
-    const foreign = await hit(h.base, '/api/pico/account/usage?refresh=1', {
+    const foreign = await hit(h.base, '/api/zeokeel/account/usage?refresh=1', {
       host: 'evil.example', accept: 'application/json',
     })
     expect(foreign.status).toBe(403)
     expect(JSON.parse(foreign.body)).toEqual({ error: 'forbidden' })
-    const crossed = await hit(h.base, '/api/pico/account/usage?refresh=1', {
+    const crossed = await hit(h.base, '/api/zeokeel/account/usage?refresh=1', {
       host: authority, origin: `http://${authority}`, 'sec-fetch-site': 'cross-site', accept: 'application/json',
     })
     expect(crossed.status).toBe(403)
@@ -240,7 +240,7 @@ describe('FIX-42②：account-card 的消费型 GET（?refresh=1）必须持持�
     // 持证明：两个闸门都放行（消费闸继续走 200，写面闸不写响应）。
     // 这一发的形状就是真渲染层：同源 GET 带 `sec-fetch-site: same-origin`、**不带
     // Origin**（Chromium 同源请求没有 Origin），并自动带上 `dsh-auth-*` cookie。
-    const allowed = await hit(h.base, '/api/pico/account/usage?refresh=1', {
+    const allowed = await hit(h.base, '/api/zeokeel/account/usage?refresh=1', {
       host: authority,
       cookie: proofCookie(),
       'sec-fetch-site': 'same-origin',
@@ -258,7 +258,7 @@ describe('FIX-42②：account-card 的消费型 GET（?refresh=1）必须持持�
 
   it('E. fence 缺席 ⇒ fail-closed 503（不退回同源标记）', async () => {
     const h = await harness({ fence: false })
-    const answer = await hit(h.base, '/api/pico/account/usage?refresh=1', {
+    const answer = await hit(h.base, '/api/zeokeel/account/usage?refresh=1', {
       accept: 'application/json', Origin: h.base, cookie: proofCookie(),
     })
     expect(answer.status).toBe(503)

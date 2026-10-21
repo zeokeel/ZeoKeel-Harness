@@ -58,9 +58,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/features"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/features"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // reservedPermissions 登记"在 AllPermissions 里、但**不接任何管理面路由**"的权限点。
@@ -214,7 +214,7 @@ func TestAuditR13GEDeadPermIsUnreachableForSuperAdmin(t *testing.T) {
 
 	call := func(path string) (int, string) {
 		req := httptest.NewRequest("GET", path, nil)
-		req.Header.Set("Cookie", "picoaide_session="+sess.ID)
+		req.Header.Set("Cookie", "zeokeel_session="+sess.ID)
 		req.Header.Set("X-CSRF-Token", csrf)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)

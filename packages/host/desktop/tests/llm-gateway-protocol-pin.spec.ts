@@ -11,7 +11,7 @@
  *    remove it and use a Messages-compatible baseURL`）。适配器只剩 Messages 一条路径，
  *    鉴权改由**注册 provider 的插件**决定（`registerDeepSeekProvider(..., {resolveAuth})`）。
  *    上游的 `x-api-key` 实现 `@deepseek-ai/dsh-llm-deepseek-api-key` 没有换头的接缝 ⇒
- *    组装期禁用那一行，改插自研的 `@picoaide/dsh-enterprise/gateway-llm`（Bearer）。
+ *    组装期禁用那一行，改插自研的 `@zeokeel/dsh-enterprise/gateway-llm`（Bearer）。
  *
  * 为什么判据必须落在**组合结果**上：patch 对不存在的行 id 只 warn、`config` 又是整键
  * 替换，任何一层顺手加回 `protocol`（旧文档、旧 settings 段、运维补丁）都会静默复活
@@ -29,7 +29,7 @@ import { Config as WebSearchConfig } from '@deepseek-ai/dsh-web-search-deepseek'
 import { prepareDesktopProfile } from '../src/profile.ts'
 
 /** 组装期注册网关 provider 的那一行的包名（`cordis.patch.yml` 的 `name`）。 */
-const GATEWAY_LLM_ROW_PACKAGE = '@picoaide/dsh-enterprise/gateway-llm'
+const GATEWAY_LLM_ROW_PACKAGE = '@zeokeel/dsh-enterprise/gateway-llm'
 
 /** 0.1.7 从 `llm-deepseek` 删掉的键（配了整行激活即抛错）。 */
 const REMOVED_PROTOCOL_KEY = 'protocol'
@@ -37,7 +37,7 @@ const REMOVED_PROTOCOL_KEY = 'protocol'
 /**
  * 企业插件的组装补丁（本组合的一层）**原文**。
  *
- * 这里刻意**不** import `@picoaide/dsh-enterprise/gateway-llm` 取常量：CI 的 gate job 里
+ * 这里刻意**不** import `@zeokeel/dsh-enterprise/gateway-llm` 取常量：CI 的 gate job 里
  * desktop 的 check 排在 enterprise 之前、那一刻 enterprise 的 `lib/` 还不存在
  * （`scripts/check-workspaces.mjs:269` 的调度注释），而这条判据要的只是"组合里那一行的 id"。
  * 读这一层补丁的**原文**（真 YAML 解析）反而更硬：它同时钉住"补丁真写了这个 id"与
@@ -162,13 +162,13 @@ describe('desktop composition vs the removed llm-deepseek protocol selector', ()
     const row = rows.get('web-search-deepseek')
     expect(row, 'the assembled profile must contain the web-search row').toBeDefined()
     expect(warnings.filter(message => message.includes('web-search-deepseek'))).toEqual([])
-    expect(row?.config).toMatchObject({ apiKeyEnv: 'PICOAI_GATEWAY_TOKEN' })
+    expect(row?.config).toMatchObject({ apiKeyEnv: 'ZEOKEEL_GATEWAY_TOKEN' })
     // 真 schema：这份 config 必须被 web-search 行自己的 Config 接受，且它不认识 `protocol`。
     const resolved = WebSearchConfig(row?.config ?? {}) as unknown as {
       apiKeyEnv: { get: () => string }
       protocol?: unknown
     }
-    expect(resolved.apiKeyEnv.get()).toBe('PICOAI_GATEWAY_TOKEN')
+    expect(resolved.apiKeyEnv.get()).toBe('ZEOKEEL_GATEWAY_TOKEN')
     expect(Object.hasOwn(resolved, REMOVED_PROTOCOL_KEY)).toBe(false)
   })
 })

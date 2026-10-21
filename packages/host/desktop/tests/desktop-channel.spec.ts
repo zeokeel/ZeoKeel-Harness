@@ -29,12 +29,12 @@ describe('desktop channel profile', () => {
       defaultServerURL: 'https://ai.acme.example.com',
       productName: 'Acme AI',
       windowTitle: 'Acme AI',
-      // 没配 desktop.home_dir / slug → 兜底到 `.picoaide-harness-<渠道 id>`：
+      // 没配 desktop.home_dir / slug → 兜底到 `.zeokeel-harness-<渠道 id>`：
       // 兜底**不回落官方目录**（那会与官方客户端共用 token/settings/会话）。
-      homeDir: '.picoaide-harness-acme',
+      homeDir: '.zeokeel-harness-acme',
       appId: undefined,
       // 未配置深链 scheme → 回落官方值(行为不变)
-      deepLinkScheme: 'picoaide',
+      deepLinkScheme: 'zeokeel',
       appOriginScheme: 'acme-app',
       deepLinkName: 'Acme AI',
       // 功能模块开关缺省=全开（渠道没写 features；2026-10-13 P2）。这三个键全在，
@@ -86,9 +86,9 @@ describe('desktop channel profile', () => {
       defaultServerURL: 'https://ai.acme.example.com',
       productName: 'Acme Assistant',
       windowTitle: 'Acme 助手',
-      homeDir: '.picoaide-harness-acme',
+      homeDir: '.zeokeel-harness-acme',
       appId: undefined,
-      deepLinkScheme: 'picoaide',
+      deepLinkScheme: 'zeokeel',
       appOriginScheme: 'acme-app',
       deepLinkName: 'Acme Assistant',
       features: { skills: true, apps: true, connectors: true },
@@ -141,7 +141,7 @@ describe('desktop channel profile', () => {
     const profile = parseDesktopChannelProfile(channelValue({ identity: {} }))
     expect(profile?.brand.login.displayName).toBe('Harness')
     expect(profile?.brand.client.displayName).toBe('Harness')
-    expect(JSON.stringify(profile?.brand)).not.toContain('PicoAide')
+    expect(JSON.stringify(profile?.brand)).not.toContain('ZeoKeel')
   })
 
   it('ignores a wrong-typed copy block instead of throwing', () => {
@@ -187,14 +187,14 @@ describe('desktop channel profile', () => {
     // 畸形 home_dir 不生效,但**绝不回落官方目录**:换 slug 派生,再退到渠道 id
     for (const bad of ['../escape', '/abs', '.', '.UPPER', 'plain', '', 42]) {
       const profile = parseDesktopChannelProfile(channelValue({ desktop: { home_dir: bad } }))
-      expect(profile?.homeDir).toBe('.picoaide-harness-acme')
+      expect(profile?.homeDir).toBe('.zeokeel-harness-acme')
     }
 
     // slug 恰好等于官方 slug = "声明我和官方是同一个应用" → 不采纳,退到渠道 id
     const vendorSlug = parseDesktopChannelProfile(channelValue({
-      desktop: { slug: 'PicoAide-Harness' },
+      desktop: { slug: 'ZeoKeel-Harness' },
     }))
-    expect(vendorSlug?.homeDir).toBe('.picoaide-harness-acme')
+    expect(vendorSlug?.homeDir).toBe('.zeokeel-harness-acme')
   })
 
   it('reads the channel app id used as the Windows AppUserModelId', () => {
@@ -243,7 +243,7 @@ describe('desktop channel profile', () => {
   })
 
   it('accepts product names that are safe path segments', () => {
-    for (const name of ['Acme Harness', 'Acme AI — 智能助手', 'PicoAide Harness', 'A1']) {
+    for (const name of ['Acme Harness', 'Acme AI — 智能助手', 'ZeoKeel Harness', 'A1']) {
       expect(parseDesktopChannelProfile(channelValue({ desktop: { product_name: name } }))?.productName).toBe(name)
     }
   })
@@ -256,7 +256,7 @@ describe('desktop channel profile', () => {
     ['too long', `a${'b'.repeat(40)}`],
   ])('falls back to the official scheme for a malformed one (%s)', (_case, scheme) => {
     const profile = parseDesktopChannelProfile(channelValue({ desktop: { deep_link_scheme: scheme } }))
-    expect(profile?.deepLinkScheme).toBe('picoaide')
+    expect(profile?.deepLinkScheme).toBe('zeokeel')
   })
 
   it('leaves the server URL unset when the channel config omits it', () => {
@@ -279,7 +279,7 @@ describe('desktop channel profile', () => {
     ['https://ai.acme.example.com', 'https://ai.acme.example.com'],
     ['https://ai.acme.example.com/', 'https://ai.acme.example.com'],
     ['https://ai.acme.example.com///', 'https://ai.acme.example.com'],
-    ['https://ai.acme.example.com/picoaide', 'https://ai.acme.example.com/picoaide'],
+    ['https://ai.acme.example.com/zeokeel', 'https://ai.acme.example.com/zeokeel'],
     // 回环允许 http(本机调试/自签内网)
     ['http://127.0.0.1:8080', 'http://127.0.0.1:8080'],
     ['http://localhost:8080', 'http://localhost:8080'],

@@ -1,6 +1,6 @@
 ---
 title: Air-gapped deployment
-description: 'Deploying and upgrading PicoAide Harness when the server or employee machines cannot reach the internet: bypass fetching, verification, internal mirrors and the semantics of the update check switch.'
+description: 'Deploying and upgrading ZeoKeel Harness when the server or employee machines cannot reach the internet: bypass fetching, verification, internal mirrors and the semantics of the update check switch.'
 ---
 
 The product's main form is enterprise intranet deployment, so "does it work offline" breaks down into
@@ -29,7 +29,7 @@ trust → criteria → failure behaviour.
 | Who | Needs internet? | Notes |
 |---|---|---|
 | **Employee machines** | **Not at all** | Client installers and update packages are delivered by the enterprise server (see [Client delivery & updates](/en/deployment/client-delivery/)) |
-| **The enterprise server** | Only for "checking for updates + downloading images" | Reaching `release.picoaide.com` is enough; in a fully isolated environment use the bypass on this page |
+| **The enterprise server** | Only for "checking for updates + downloading images" | Reaching `release.zeokeel.com` is enough; in a fully isolated environment use the bypass on this page |
 | The deployed runtime | No | The server depends on no external service; upstream models are configured by administrators on the gateway page |
 
 ## Design trade-offs
@@ -39,7 +39,7 @@ is one zip plus one `SHA256SUMS`, hosted over HTTPS in per-channel directories. 
 isolated** machine room needs **one out-of-band transfer** (USB stick / jump host) per deployment or
 upgrade, instead of opening a registry port on that machine or configuring an image proxy.
 
-**Why "empty ≠ off" for the update check.** An empty `PICOAI_UPDATE_ENDPOINT` means "use this channel's
+**Why "empty ≠ off" for the update check.** An empty `ZEOKEEL_UPDATE_ENDPOINT` means "use this channel's
 default directory"; only an explicit `off` / `none` / `-` / `disabled` disables it. Reading "empty" as
 "off" would silently remove upgrade notifications from **every** default deployment; reading "off" as
 "empty" would make a pure intranet machine send outbound requests. Both misreadings have real costs, so
@@ -49,7 +49,7 @@ the semantics have to be explicit.
 the previous one) on the update server: image archives are large (GB-range, since they contain the
 installers for all three platforms) and the update server's free tier is 10 GB — the retained count times
 the channel count *is* the footprint. One previous version is enough for a rollback; older versions
-come from the [GitHub Releases](https://github.com/picoaide/picoaide-harness/releases) page (the public
+come from the [GitHub Releases](https://github.com/zeokeel/ZeoKeel-Harness/releases) page (the public
 channels' complete archive).
 
 ## Procedure
@@ -58,13 +58,13 @@ channels' complete archive).
 
 ```bash
 # 1) Read the version (authoritative fields: server.version / server.image_tag)
-curl -fsS https://release.picoaide.com/<channel>/latest.json
+curl -fsS https://release.zeokeel.com/<channel>/latest.json
 
 # 2) Download the image archive and the checksum file
 VER=<version>         # ← use server.version from the manifest (without v)
-curl -fL -o picoaide-server-${VER}-amd64.zip \
-  "https://release.picoaide.com/<channel>/releases/${VER}/picoaide-server-${VER}-amd64.zip"
-curl -fL -O "https://release.picoaide.com/<channel>/releases/${VER}/SHA256SUMS"
+curl -fL -o zeokeel-server-${VER}-amd64.zip \
+  "https://release.zeokeel.com/<channel>/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
+curl -fL -O "https://release.zeokeel.com/<channel>/releases/${VER}/SHA256SUMS"
 
 # 3) Verify (once here, and again after carrying it inside)
 sha256sum -c SHA256SUMS
@@ -83,19 +83,19 @@ download succeeded".
 
 ```bash
 # Copy to the target host (scp shown; a USB stick or jump host works the same way)
-scp picoaide-server-${VER}-amd64.zip SHA256SUMS <user>@<target host>:/tmp/
+scp zeokeel-server-${VER}-amd64.zip SHA256SUMS <user>@<target host>:/tmp/
 
 # On the target host: verify first, then import
 ssh <user>@<target host>
 cd /tmp && sha256sum -c SHA256SUMS
-unzip -p picoaide-server-${VER}-amd64.zip image.tar | docker load
+unzip -p zeokeel-server-${VER}-amd64.zip image.tar | docker load
 ```
 
 If the host has no `unzip`, the Python standard library replaces it:
 
 ```bash
 python3 -c 'import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extract("image.tar")' \
-  picoaide-server-${VER}-amd64.zip
+  zeokeel-server-${VER}-amd64.zip
 docker load -i image.tar
 ```
 
@@ -104,20 +104,20 @@ After import the deployment steps are identical to the online case: see
 [Upgrade, backup & rollback](/en/deployment/upgrade/); the only difference is that step 4's image comes
 from the archive carried in.
 
-**Criterion**: `docker run --rm --entrypoint /app/picoaide-server picoaide-harness-server:<version> --version`
+**Criterion**: `docker run --rm --entrypoint /app/zeokeel-server zeokeel-harness-server:<version> --version`
 prints `<version>`. Do not judge the version from `docker images`.
 
 ### 3. Disable or rework the update check
 
 ```bash
 # Disable update checks (for a pure intranet that must not make outbound requests)
-PICOAI_UPDATE_ENDPOINT=off
+ZEOKEEL_UPDATE_ENDPOINT=off
 ```
 
 - **Empty does not mean off**: empty = this channel's default directory; disabling requires an explicit
   `off` / `none` / `-` / `disabled`;
 - If the intranet runs its own static file service, the image archives and `latest.json` can be mirrored
-  inside and `PICOAI_UPDATE_ENDPOINT` pointed at the internal address — that `latest.json`'s
+  inside and `ZEOKEEL_UPDATE_ENDPOINT` pointed at the internal address — that `latest.json`'s
   `channel_id` must match this deployment's channel, otherwise the check is reported as unavailable
   (deliberate: rather say "unavailable" than silently upgrade across channels);
 - Once disabled, the admin console's server info page no longer shows new-version hints, and operations
@@ -133,8 +133,8 @@ A fully isolated deployment has no "new version available" hint, so version anch
 two places by hand:
 
 ```bash
-cat /opt/picoaide/VERSION                                     # currently deployed version
-docker exec picoaide-server /app/picoaide-server --version    # running version
+cat /opt/zeokeel/VERSION                                     # currently deployed version
+docker exec zeokeel-server /app/zeokeel-server --version    # running version
 ```
 
 Both should equal the target version written during the last upgrade. If they differ, the last upgrade
@@ -162,7 +162,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 ```
 
 The second must show `client.assets` with absolute https URLs — a reverse proxy or certificate setup
-without `PICOAI_PUBLIC_BASE_URL` is the most common miss here, and its symptom is employees seeing
+without `ZEOKEEL_PUBLIC_BASE_URL` is the most common miss here, and its symptom is employees seeing
 "always up to date". Note that this is a different thing from the update check: **clients fetch packages
 from this server** (this criterion) while **the server checks the update server for new versions**
 (step 3).
@@ -185,7 +185,7 @@ from this server** (this criterion) while **the server checks the update server 
 | The target version is past the retention window (404) | the download returns 404 | Each channel **keeps only the 2 most recent versions** (latest + previous): take it from GitHub Releases (public channels only), or roll back to an old image tag kept on this host |
 | Re-publishing the same version still serves the old bytes | the downloaded sha256 does not match the new `SHA256SUMS` | The zip and `SHA256SUMS` under `<channel>/releases/<version>/` are **immutable long-cache** objects: after overwriting the same version, the edge may still serve the old bytes. Either publish under a new version number, or add a cache-busting parameter and verify again |
 | The internal mirror's manifest is reported as "update check unavailable" | the log shows `manifest channel "…" != this server's channel "…"` | The internal `latest.json`'s `channel_id` must match this deployment's channel — this check exists to prevent cross-channel upgrades; do not bypass it |
-| A pure intranet machine still makes outbound requests | packet capture / firewall logs | `PICOAI_UPDATE_ENDPOINT` was left empty instead of `off`: empty means the default public directory |
+| A pure intranet machine still makes outbound requests | packet capture / firewall logs | `ZEOKEEL_UPDATE_ENDPOINT` was left empty instead of `off`: empty means the default public directory |
 | The first client connection reports an untrusted certificate | `internal` mode only | Expected: distribute Caddy's local CA to employee machines, or switch to `manual` with a corporate certificate |
 | The container exits right after importing the image | the log says "channel mismatch" or "invalid channel configuration" | Wrong channel package: fetch this channel's package instead (see [Channels & white-label](/en/deployment/channels/)) |
 | A rollback is needed but no old image can be found | `docker image ls` shows no old version tag | Retention only covers the update server: isolated deployments must **keep old image tags on the host**, or carry the old package in beforehand |

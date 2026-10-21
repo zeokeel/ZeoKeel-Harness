@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 	"github.com/tetratelabs/wazero"
 )
 

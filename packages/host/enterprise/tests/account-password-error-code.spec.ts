@@ -8,7 +8,7 @@
  * "原密码不正确"（错误归因）。
  *
  * 修法（两端各一半）：
- *   - 宿主 `POST /api/pico/auth/password` 回**稳定错误码**（扁平 `{error, code}`，
+ *   - 宿主 `POST /api/zeokeel/auth/password` 回**稳定错误码**（扁平 `{error, code}`，
  *     与同文件其余写面同形状）：`AUTH_FAILED`（401，服务端拒绝本次凭据 = 原密码错）
  *     / `NETWORK`（502）/ `ApiError.code`（如 `HTTP_400`）/ `INTERNAL`；
  *   - 面板按 `payload.code === 'AUTH_FAILED'` 判定（`isWrongOldPassword`），
@@ -45,7 +45,7 @@ function fakeRequest(body: unknown): IncomingMessage {
   const chunks = [Buffer.from(JSON.stringify(body))]
   return {
     method: 'POST',
-    url: '/api/pico/auth/password',
+    url: '/api/zeokeel/auth/password',
     headers: {
       origin: 'http://127.0.0.1:3080',
       host: '127.0.0.1:3080',
@@ -77,7 +77,7 @@ function callPassword(upstream: { status: number, error: { code: string, message
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? { requestRejection: () => undefined } : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => true,
       getSession: () => SESSION,
@@ -90,8 +90,8 @@ function callPassword(upstream: { status: number, error: { code: string, message
     },
   }
   apply(ctx as never, {} as Config)
-  const handler = routes.find(r => r.kind === 'exact' && r.path === '/api/pico/auth/password')?.handler
-  if (handler === undefined) throw new Error('没有注册 /api/pico/auth/password')
+  const handler = routes.find(r => r.kind === 'exact' && r.path === '/api/zeokeel/auth/password')?.handler
+  if (handler === undefined) throw new Error('没有注册 /api/zeokeel/auth/password')
   vi.stubGlobal('fetch', vi.fn(async () => {
     if (upstream === 'network') throw new Error('socket hang up')
     return new Response(JSON.stringify({ error: upstream.error }), {

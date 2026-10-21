@@ -19,11 +19,11 @@
  *
  * 存储键带 `v1`：形态变了就换键，读到旧形态视为不存在（不做迁移 —— 它只是一个待办）。
  *
- * @module @picoaide/dsh-wasm-apps/client/open-intent
+ * @module @zeokeel/dsh-wasm-apps/client/open-intent
  */
 
 /** 存储键（值 = `JSON.stringify(OpenIntent)`）。 */
-export const OPEN_INTENT_STORAGE_KEY = 'picoaide.wasm-apps.open-intent.v1'
+export const OPEN_INTENT_STORAGE_KEY = 'zeokeel.wasm-apps.open-intent.v1'
 
 /** 意图存活上限（与 §7.6 深链队列同口径：5 分钟）。 */
 export const OPEN_INTENT_TTL_MS = 5 * 60 * 1000

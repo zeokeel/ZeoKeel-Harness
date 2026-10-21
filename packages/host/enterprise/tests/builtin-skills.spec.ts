@@ -5,8 +5,8 @@
  * `server/internal/skillseed` 提供（清单 + tar.gz 包，带 sha256 头）；
  * 本用例钉住客户端这一半：
  *
- *  1. `GET /api/pico/skills/builtin` → 服务端清单 + 本机已装列表；
- *  2. `POST /api/pico/skills/builtin/:name/install` → **复用既有安装链路**
+ *  1. `GET /api/zeokeel/skills/builtin` → 服务端清单 + 本机已装列表；
+ *  2. `POST /api/zeokeel/skills/builtin/:name/install` → **复用既有安装链路**
  *     （`installSkillArchive`）把整棵树落到 `<dshHome>/skills`，文件逐字节一致；
  *  3. 完整性头缺失 / 对不上 ⇒ 拒绝（内置技能是我们自己的服务端下发的，缺
  *     checksum 没有任何理由放行 —— 而 skill-install 在"没有头"时会静默跳过校验）；
@@ -106,7 +106,7 @@ function harness(session: Session | null): { call: (url: string, method?: string
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? browserFence() : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -119,7 +119,7 @@ function harness(session: Session | null): { call: (url: string, method?: string
     },
   }
   apply(ctx as never, {} as Config)
-  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/pico/skills')?.handler
+  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/zeokeel/skills')?.handler
   if (handler === undefined) throw new Error('skills route not registered')
   return {
     call: async (url: string, method = 'GET') => {
@@ -215,7 +215,7 @@ function stubServer(archive: Buffer, opts: { checksum?: string | null, version?:
 let home: string
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-builtin-skills-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-builtin-skills-'))
   vi.stubEnv('DSH_HOME', home)
 })
 
@@ -236,11 +236,11 @@ async function listFiles(dir: string, prefix = ''): Promise<string[]> {
 }
 
 describe('内置技能：清单与按需安装（服务端下发 → 本机技能库）', () => {
-  it('GET /api/pico/skills/builtin 透传服务端清单并附上本机已装列表', async () => {
+  it('GET /api/zeokeel/skills/builtin 透传服务端清单并附上本机已装列表', async () => {
     const archive = await packSkillTarGz(SOURCE_SKILL_DIR)
     stubServer(archive)
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/builtin')
+    const res = await h.call('/api/zeokeel/skills/builtin')
     expect(res.code).toBe(200)
     expect(res.body.skills?.[0]?.name).toBe('app-builder')
     expect(res.body.installed).toEqual([])
@@ -250,7 +250,7 @@ describe('内置技能：清单与按需安装（服务端下发 → 本机技�
     const archive = await packSkillTarGz(SOURCE_SKILL_DIR)
     stubServer(archive)
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/builtin/app-builder/install', 'POST')
+    const res = await h.call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
     expect(res.code, JSON.stringify(res.body)).toBe(200)
     expect(res.body).toMatchObject({ ok: true, name: 'app-builder', version: '1.0.0' })
 
@@ -283,7 +283,7 @@ describe('内置技能：清单与按需安装（服务端下发 → 本机技�
     const archive = await packSkillTarGz(SOURCE_SKILL_DIR)
     stubServer(archive, { checksum: 'deadbeef'.repeat(8) })
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/builtin/app-builder/install', 'POST')
+    const res = await h.call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
     expect(res.code).toBe(422)
     expect(String(res.body.error)).toMatch(/checksum/u)
     // 拒绝时必须什么都没落下（不能留半安装状态）。
@@ -294,13 +294,13 @@ describe('内置技能：清单与按需安装（服务端下发 → 本机技�
     const archive = await packSkillTarGz(SOURCE_SKILL_DIR)
     stubServer(archive, { checksum: null })
     const h = harness(SESSION)
-    const missingChecksum = await h.call('/api/pico/skills/builtin/app-builder/install', 'POST')
+    const missingChecksum = await h.call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
     expect(missingChecksum.code).toBe(502)
     expect(String(missingChecksum.body.error)).toMatch(/integrity headers/u)
 
     stubServer(archive, { version: null })
     const h2 = harness(SESSION)
-    const missingVersion = await h2.call('/api/pico/skills/builtin/app-builder/install', 'POST')
+    const missingVersion = await h2.call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
     expect(missingVersion.code).toBe(502)
     await expect(stat(join(resolveSkillsDir(), 'app-builder'))).rejects.toThrow()
   })
@@ -314,7 +314,7 @@ describe('内置技能：清单与按需安装（服务端下发 → 本机技�
 
     stubServer(traversing)
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/builtin/app-builder/install', 'POST')
+    const res = await h.call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
     expect(res.code).toBe(422)
     expect(String(res.body.error)).toMatch(/traversal|unsafe|absolute/u)
     await expect(stat(join(resolveSkillsDir(), 'app-builder'))).rejects.toThrow()
@@ -324,12 +324,12 @@ describe('内置技能：清单与按需安装（服务端下发 → 本机技�
     const archive = await packSkillTarGz(SOURCE_SKILL_DIR)
     stubServer(archive)
     const anon = harness(null)
-    const anonList = await anon.call('/api/pico/skills/builtin')
+    const anonList = await anon.call('/api/zeokeel/skills/builtin')
     expect(anonList.code).toBe(401)
 
     stubServer(archive)
     const auditor = harness({ ...SESSION, role: 'auditor' })
-    const denied = await auditor.call('/api/pico/skills/builtin/app-builder/install', 'POST')
+    const denied = await auditor.call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
     expect(denied.code).toBe(403)
     await expect(stat(join(resolveSkillsDir(), 'app-builder'))).rejects.toThrow()
   })
@@ -338,7 +338,7 @@ describe('内置技能：清单与按需安装（服务端下发 → 本机技�
     const archive = await packSkillTarGz(SOURCE_SKILL_DIR)
     stubServer(archive, { status: 404 })
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/builtin')
+    const res = await h.call('/api/zeokeel/skills/builtin')
     expect(res.code).toBe(404)
   })
 
@@ -347,7 +347,7 @@ describe('内置技能：清单与按需安装（服务端下发 → 本机技�
     stubServer(archive)
     const h = harness(SESSION)
     // 单段路径仍是市场安装（会去 marketplace 端点，假服务端给 404）。
-    const marketplace = await h.call('/api/pico/skills/codeql/install', 'POST')
+    const marketplace = await h.call('/api/zeokeel/skills/codeql/install', 'POST')
     expect(marketplace.code).toBe(404)
   })
 })
@@ -393,16 +393,16 @@ describe('A6 内置技能能装也能卸（新增卸载路由）+ A2/A3 来源�
     const archive = await packSkillTarGz(SOURCE_SKILL_DIR)
     stubServer(archive)
     const h = harness(SESSION)
-    const installed = await h.call('/api/pico/skills/builtin/app-builder/install', 'POST')
+    const installed = await h.call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
     expect(installed.code, JSON.stringify(installed.body)).toBe(200)
     expect(await isBuiltinSkillInstalled()).toBe(true)
 
-    const removed = await h.call('/api/pico/skills/builtin/app-builder/uninstall', 'POST')
+    const removed = await h.call('/api/zeokeel/skills/builtin/app-builder/uninstall', 'POST')
     expect(removed.code, JSON.stringify(removed.body)).toBe(200)
     expect(removed.body).toMatchObject({ ok: true, name: 'app-builder' })
     await expect(stat(join(resolveSkillsDir(), 'app-builder'))).rejects.toThrow()
 
-    const list = await h.call('/api/pico/skills/builtin')
+    const list = await h.call('/api/zeokeel/skills/builtin')
     expect(list.code).toBe(200)
     expect(list.body.installed).toEqual([])
     // 技能库根上不留安装器私有目录（`.skill-locks` 是 per-name 锁的落点，允许存在但必须空）。
@@ -414,12 +414,12 @@ describe('A6 内置技能能装也能卸（新增卸载路由）+ A2/A3 来源�
     await makeLocalSkill('app-builder')
     stubServer(await packSkillTarGz(SOURCE_SKILL_DIR))
     const h = harness(SESSION)
-    const refused = await h.call('/api/pico/skills/builtin/app-builder/uninstall', 'POST')
+    const refused = await h.call('/api/zeokeel/skills/builtin/app-builder/uninstall', 'POST')
     expect(refused.code).toBe(409)
     expect(refused.body.code).toBe('LOCAL_CONTENT')
     expect(await readFile(join(resolveSkillsDir(), 'app-builder', 'notes.md'), 'utf8')).toBe('my own notes\n')
 
-    const confirmed = await h.call('/api/pico/skills/builtin/app-builder/uninstall?overwrite=1', 'POST')
+    const confirmed = await h.call('/api/zeokeel/skills/builtin/app-builder/uninstall?overwrite=1', 'POST')
     expect(confirmed.code, JSON.stringify(confirmed.body)).toBe(200)
     await expect(stat(join(resolveSkillsDir(), 'app-builder'))).rejects.toThrow()
   })
@@ -428,12 +428,12 @@ describe('A6 内置技能能装也能卸（新增卸载路由）+ A2/A3 来源�
     await makeLocalSkill('app-builder')
     stubServer(await packSkillTarGz(SOURCE_SKILL_DIR))
     const h = harness(SESSION)
-    const refused = await h.call('/api/pico/skills/builtin/app-builder/install', 'POST')
+    const refused = await h.call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
     expect(refused.code).toBe(409)
     expect(refused.body.code).toBe('LOCAL_CONTENT')
     expect(await readFile(join(resolveSkillsDir(), 'app-builder', 'notes.md'), 'utf8')).toBe('my own notes\n')
 
-    const confirmed = await h.call('/api/pico/skills/builtin/app-builder/install?overwrite=1', 'POST')
+    const confirmed = await h.call('/api/zeokeel/skills/builtin/app-builder/install?overwrite=1', 'POST')
     expect(confirmed.code, JSON.stringify(confirmed.body)).toBe(200)
     await expect(readFile(join(resolveSkillsDir(), 'app-builder', 'notes.md'), 'utf8')).rejects.toThrow()
     expect((await readProvenance(join(resolveSkillsDir(), 'app-builder')))?.channel).toBe('builtin')
@@ -442,7 +442,7 @@ describe('A6 内置技能能装也能卸（新增卸载路由）+ A2/A3 来源�
   it('卸载未安装的技能 ⇒ 404 NOT_INSTALLED（不是 500）', async () => {
     stubServer(await packSkillTarGz(SOURCE_SKILL_DIR))
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/builtin/app-builder/uninstall', 'POST')
+    const res = await h.call('/api/zeokeel/skills/builtin/app-builder/uninstall', 'POST')
     expect(res.code).toBe(404)
     expect(res.body.code).toBe('NOT_INSTALLED')
   })
@@ -451,12 +451,12 @@ describe('A6 内置技能能装也能卸（新增卸载路由）+ A2/A3 来源�
     await makeLocalSkill('codeql')
     stubMarketServer(marketArchive('codeql', '2.0.0'))
     const h = harness(SESSION)
-    const refused = await h.call('/api/pico/skills/codeql/install', 'POST')
+    const refused = await h.call('/api/zeokeel/skills/codeql/install', 'POST')
     expect(refused.code).toBe(409)
     expect(refused.body.code).toBe('LOCAL_CONTENT')
     expect(await readFile(join(resolveSkillsDir(), 'codeql', 'notes.md'), 'utf8')).toBe('my own notes\n')
 
-    const confirmed = await h.call('/api/pico/skills/codeql/install?overwrite=1', 'POST')
+    const confirmed = await h.call('/api/zeokeel/skills/codeql/install?overwrite=1', 'POST')
     expect(confirmed.code, JSON.stringify(confirmed.body)).toBe(200)
     expect((await readProvenance(join(resolveSkillsDir(), 'codeql')))?.channel).toBe('market')
     // 用户自己的文件按"用户点过确认"的语义被替换掉了。
@@ -466,7 +466,7 @@ describe('A6 内置技能能装也能卸（新增卸载路由）+ A2/A3 来源�
   it('A11：回传的是归档的真实版本（x-skill-version），不是请求里那一个', async () => {
     stubMarketServer(marketArchive('codeql', '2.0.0'), { version: '2.0.0' })
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/codeql/install', 'POST')
+    const res = await h.call('/api/zeokeel/skills/codeql/install', 'POST')
     expect(res.code, JSON.stringify(res.body)).toBe(200)
     expect(res.body.version).toBe('2.0.0')
     expect((await readProvenance(join(resolveSkillsDir(), 'codeql')))?.version).toBe('2.0.0')
@@ -479,7 +479,7 @@ describe('A6 内置技能能装也能卸（新增卸载路由）+ A2/A3 来源�
     ])
     stubMarketServer(traversing)
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/codeql/install', 'POST')
+    const res = await h.call('/api/zeokeel/skills/codeql/install', 'POST')
     expect(res.code).toBe(422)
     const message = String(res.body.error)
     expect(message).not.toContain(home)
@@ -495,7 +495,7 @@ describe('A6 内置技能能装也能卸（新增卸载路由）+ A2/A3 来源�
     ])
     stubMarketServer(forged, { version: null })
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/skills/codeql/install', 'POST')
+    const res = await h.call('/api/zeokeel/skills/codeql/install', 'POST')
     expect(res.code, JSON.stringify(res.body)).toBe(200)
     const dir = join(resolveSkillsDir(), 'codeql')
     await expect(readFile(join(dir, '.install-version'), 'utf8')).rejects.toThrow()
@@ -542,13 +542,13 @@ describe('内置技能区：按钮语义与端点（纯函数）', () => {
   })
 
   it('安装端点固定走宿主代理（不直连服务端），且**不带 query 参数**（R2-SK-5）', () => {
-    expect(builtinInstallEndpoint(skill.name)).toBe('/api/pico/skills/builtin/app-builder/install')
+    expect(builtinInstallEndpoint(skill.name)).toBe('/api/zeokeel/skills/builtin/app-builder/install')
     // 宿主按 pathname 分发、从不读 ?force=1（auth-gate）—— 端点带 query 就是假接口。
     expect(builtinInstallEndpoint(skill.name)).not.toContain('?')
     // 名字里的路径字符必须被转义（不给服务端拼路径的机会）。
-    expect(builtinInstallEndpoint('../evil')).toBe('/api/pico/skills/builtin/..%2Fevil/install')
+    expect(builtinInstallEndpoint('../evil')).toBe('/api/zeokeel/skills/builtin/..%2Fevil/install')
     // 用户确认覆盖本机同名自制内容后，才带上宿主真的会读的 ?overwrite=1（审计 A2/A3）。
-    expect(builtinInstallEndpoint('app-builder', true)).toBe('/api/pico/skills/builtin/app-builder/install?overwrite=1')
+    expect(builtinInstallEndpoint('app-builder', true)).toBe('/api/zeokeel/skills/builtin/app-builder/install?overwrite=1')
     expect(builtinInstallEndpoint('app-builder', false)).not.toContain('?')
   })
 })
@@ -667,7 +667,7 @@ describe('R1-pm-8：已装且更旧 ⇒ 出「更新」卡，端点与安装同�
     // 关键：这一行必须是**可点**的 action 态，不能落回「已安装」胶囊（那正是死代码形态）。
     expect(cards[0]?.state).toBe('action')
     expect(cards[0]?.installed).toBe(true)
-    expect(cards[0]?.endpoint).toBe('/api/pico/skills/builtin/app-builder/install')
+    expect(cards[0]?.endpoint).toBe('/api/zeokeel/skills/builtin/app-builder/install')
   })
 
   it('已装且与清单同版本 ⇒ 不出卡（本机技能库那张普通卡片就是它，不重复）', () => {
@@ -684,7 +684,7 @@ describe('R1-pm-8：已装且更旧 ⇒ 出「更新」卡，端点与安装同�
   it('未装 ⇒ 仍是「安装」卡，端点不带 query（宿主不读 force，R2-SK-5）', () => {
     const cards = planBuiltinCards({ rows: [row('1.1.0')], installedNames: new Set(), installedVersions: {}, query: '', kindFilter: 'all' })
     expect(cards.map(c => [c.action, c.state, c.endpoint])).toEqual([
-      ['install', 'action', '/api/pico/skills/builtin/app-builder/install'],
+      ['install', 'action', '/api/zeokeel/skills/builtin/app-builder/install'],
     ])
   })
 
@@ -693,7 +693,7 @@ describe('R1-pm-8：已装且更旧 ⇒ 出「更新」卡，端点与安装同�
     expect(planBuiltinCards({ rows: [row('1.1.0')], ...local })).toEqual([])
     const bumped = planBuiltinCards({ rows: [row('2.0.0')], ...local })
     expect(bumped.map(c => [c.action, c.endpoint])).toEqual([
-      ['update', '/api/pico/skills/builtin/app-builder/install'],
+      ['update', '/api/zeokeel/skills/builtin/app-builder/install'],
     ])
   })
 
@@ -734,7 +734,7 @@ describe('R1-pm-8 端到端：更新卡 → 同一安装端点 → 本机整树�
     const installedDir = join(resolveSkillsDir(), 'app-builder')
 
     // 1) 先用"旧内容"装一次：真源目录 + 把 SKILL.md 的 version 改回 1.0.0。
-    const oldDir = await mkdtemp(join(tmpdir(), 'pico-builtin-old-'))
+    const oldDir = await mkdtemp(join(tmpdir(), 'zeokeel-builtin-old-'))
     try {
       await cp(SOURCE_SKILL_DIR, oldDir, { recursive: true })
       const sourceRaw = await readFile(join(SOURCE_SKILL_DIR, 'SKILL.md'), 'utf8')
@@ -745,7 +745,7 @@ describe('R1-pm-8 端到端：更新卡 → 同一安装端点 → 本机整树�
       expect(oldRaw).not.toBe(sourceRaw)
       await writeFile(join(oldDir, 'SKILL.md'), oldRaw)
       stubServer(await packSkillTarGz(oldDir), { version: '1.0.0', manifestVersion: '1.0.0' })
-      const first = await harness(SESSION).call('/api/pico/skills/builtin/app-builder/install', 'POST')
+      const first = await harness(SESSION).call('/api/zeokeel/skills/builtin/app-builder/install', 'POST')
       expect(first.code, JSON.stringify(first.body)).toBe(200)
     } finally {
       await rm(oldDir, { recursive: true, force: true })
@@ -757,7 +757,7 @@ describe('R1-pm-8 端到端：更新卡 → 同一安装端点 → 本机整树�
 
     // 3) 面板那一步：服务端清单 + 磁盘上的本机状态 → 出一张更新卡。
     const h = harness(SESSION)
-    const listed = await h.call('/api/pico/skills/builtin')
+    const listed = await h.call('/api/zeokeel/skills/builtin')
     expect(listed.code).toBe(200)
     const local = await readProvenance(installedDir)
     const cards = planBuiltinCards({
@@ -768,7 +768,7 @@ describe('R1-pm-8 端到端：更新卡 → 同一安装端点 → 本机整树�
       kindFilter: 'all',
     })
     expect(cards.map(c => [c.skill.name, c.action, c.state, c.endpoint])).toEqual([
-      ['app-builder', 'update', 'action', '/api/pico/skills/builtin/app-builder/install'],
+      ['app-builder', 'update', 'action', '/api/zeokeel/skills/builtin/app-builder/install'],
     ])
 
     // 4) 点那一张卡：走既有安装链路（宿主整树替换；端点不带 force）⇒ 整树换成新版。
@@ -779,7 +779,7 @@ describe('R1-pm-8 端到端：更新卡 → 同一安装端点 → 本机整树�
     expect((await readProvenance(installedDir))?.version).toBe('1.1.0')
 
     // 5) 再取清单：同版本 ⇒ 不再出卡（不会无限提示"有更新"）。
-    const after = await h.call('/api/pico/skills/builtin')
+    const after = await h.call('/api/zeokeel/skills/builtin')
     expect(planBuiltinCards({
       rows: after.body.skills as BuiltinSkill[],
       installedNames: new Set<string>(after.body.installed as string[]),

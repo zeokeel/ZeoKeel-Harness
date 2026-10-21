@@ -1,6 +1,6 @@
 import { loadElectronModule } from './electron.ts'
 import type { Session } from './config.ts'
-import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@picoaide/dsh-host-locale'
+import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 
 export type AuthErrorKind = 'invalid_credentials' | 'auth_expired' | 'network' | 'server_error'
 
@@ -14,7 +14,7 @@ export type AuthErrorKind = 'invalid_credentials' | 'auth_expired' | 'network' |
  *    （登录面由 `login()` 单独分流给"请用管理后台"的文案）。
  *
  * 为什么必须按码分流：`AuthError('auth_expired')` 在 auth-gate 的 13 处调用点会
- * `ctx.picoSession.clearIfCurrent(该次请求用的令牌)`（R22-V1-N3：只在"当前会话仍是
+ * `ctx.zeokeelSession.clearIfCurrent(该次请求用的令牌)`（R22-V1-N3：只在"当前会话仍是
  * 发起这次请求时那一个"时才清），而 `clear()` 会**删掉磁盘上的 `$DSH_HOME/session.json`**
  * —— 把"账号/动作被禁"或"服务端读不了认证存储（500）"误判成"令牌无效"，等于一次存储
  * 抖动、或一次不该发生的 401，就把全体在线员工登出并抹掉本机令牌（LDAP/OIDC 还要重走

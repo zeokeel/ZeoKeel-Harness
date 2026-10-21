@@ -12,7 +12,7 @@ export { TOKEN_ENV }
 export const name = 'gateway-model'
 
 /** Services consumed: settings writes and the credential store the adapter resolves against. */
-export const inject = ['settings', 'credentials', 'picoSession']
+export const inject = ['settings', 'credentials', 'zeokeelSession']
 
 const GATEWAY_LLM_NS = GATEWAY_LLM_ROW_ID as SettingsNamespace
 
@@ -65,8 +65,8 @@ export function apply(ctx: Context): void {
   const sampleRestoredSession = (): void => {
     try {
       const service = (ctx as unknown as {
-        picoSession?: { isRestored?: () => boolean, getSession?: () => Session | null }
-      }).picoSession
+        zeokeelSession?: { isRestored?: () => boolean, getSession?: () => Session | null }
+      }).zeokeelSession
       if (service?.isRestored?.() !== true) return
       void sync(service.getSession?.() ?? null).catch((cause) => ctx.logger.error(cause))
     } catch (cause) {

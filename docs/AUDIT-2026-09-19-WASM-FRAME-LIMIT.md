@@ -18,8 +18,8 @@
 ## 1. 现象
 
 ```bash
-cd server && GOCACHE=/data/picoaide-harness/temp/go-build GOMODCACHE=/data/picoaide-harness/temp/gomodcache \
-  GOPATH=/data/picoaide-harness/temp/gopath \
+cd server && GOCACHE=/data/zeokeel-harness/temp/go-build GOMODCACHE=/data/zeokeel-harness/temp/gomodcache \
+  GOPATH=/data/zeokeel-harness/temp/gopath \
   go test ./internal/wasmapp/runtime -run 'TestServe_ResponseFrameTooLarge' -count=1 -v
 ```
 
@@ -173,8 +173,8 @@ PASS  ok  … 18.021s
 --- PASS: TestServe_ResponseFrameTooLarge (12.59s)
 
 # 4) 整包（探针文件删除前后各跑一次，均绿）
-ok  github.com/picoaide/picoaide/internal/wasmapp/runtime  133.118s   # 含临时探针时
-ok  github.com/picoaide/picoaide/internal/wasmapp/runtime   72.903s   # 探针删除后的最终态
+ok  github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime  133.118s   # 含临时探针时
+ok  github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime   72.903s   # 探针删除后的最终态
 
 # 4b) 最终态（探针已删）目标用例 ×3
 --- PASS: TestServe_ResponseFrameTooLarge (8.52s)   # 首跑含模块懒编译
@@ -269,7 +269,7 @@ TestServe_ResponseFrameTooLarge          0.20s / 3s      PASS
 TestServe_NanosleepDoesNotBurnCPU        CPU 11ms / 上限 107ms  PASS
 
 # 整包（8 spinner 负载下）
-ok  github.com/picoaide/picoaide/internal/wasmapp/runtime  139.150s
+ok  github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime  139.150s
 ```
 
 **余量结论（用户要求的"额外判据"）**：负载下最紧的一条是
@@ -286,8 +286,8 @@ Rust 的时间断言同样要与"一次性开销"解耦。
 ## 9. 复现与回归命令（供后续复核）
 
 ```bash
-cd server && export GOCACHE=/data/picoaide-harness/temp/go-build \
-  GOMODCACHE=/data/picoaide-harness/temp/gomodcache GOPATH=/data/picoaide-harness/temp/gopath
+cd server && export GOCACHE=/data/zeokeel-harness/temp/go-build \
+  GOMODCACHE=/data/zeokeel-harness/temp/gomodcache GOPATH=/data/zeokeel-harness/temp/gopath
 
 # 判据必须命中（负载下同样稳定）
 go test ./internal/wasmapp/runtime -run 'TestServe_ResponseFrameTooLarge' -count=3 -v

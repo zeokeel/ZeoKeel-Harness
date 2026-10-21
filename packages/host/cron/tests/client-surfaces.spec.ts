@@ -54,7 +54,7 @@ interface Harness {
   effects: Array<string | undefined>
   /** Effect callbacks by label — the outer ones are NOT run by the harness. */
   effectRuns: Array<{ label: string | undefined, run: () => unknown }>
-  /** Entries currently registered in the stub `picoFootMenu` registry. */
+  /** Entries currently registered in the stub `zeokeelFootMenu` registry. */
   footEntries: RegisteredFootEntry[]
   provided: string[]
   tabs: RegisteredTab[]
@@ -146,7 +146,7 @@ function harness(options: { pluginsPage?: boolean } = {}): Harness {
         return () => {}
       },
     },
-    picoFootMenu: {
+    zeokeelFootMenu: {
       add: (entry: RegisteredFootEntry) => {
         footEntries.push(entry)
         return () => {
@@ -184,7 +184,7 @@ describe('cron client surfaces', () => {
     // The exact required set: adding `sidebarRightTabs` back leaves this fiber
     // pending whenever `ui-sidebar-right` is absent, which silently drops the
     // foot-lane entry, the job center, and the settings card along with the tab.
-    // `picoFootMenu` is the same hazard (its row can be disabled by a channel
+    // `zeokeelFootMenu` is the same hazard (its row can be disabled by a channel
     // overlay / the machine-wide patch): it is waited on from a CHILD scope, so
     // its absence costs only the popover entry.
     expect(inject).toEqual(['slots', 'configForms', 'locale', 'workspaces', 'connection', 'sessions'])
@@ -194,11 +194,11 @@ describe('cron client surfaces', () => {
     const h = harness()
     apply(h.ctx)
 
-    expect(h.provided).toEqual(['picoCronService'])
+    expect(h.provided).toEqual(['zeokeelCronService'])
     // The service wait is what makes the entry survive a late/absent row; the
     // center and the settings card are registered WITHOUT it (that ordering is
     // the point of the child scope).
-    expect(h.serviceWaits.map(wait => wait.deps)).toEqual([['picoFootMenu'], ['sidebarRightTabs']])
+    expect(h.serviceWaits.map(wait => wait.deps)).toEqual([['zeokeelFootMenu'], ['sidebarRightTabs']])
     h.serviceWaits[0]?.run(h.child())
     // The entry: id == the panel-surface PanelId, order keeps the job center
     // first in the popover, title is the live dictionary lookup, and activate
@@ -221,7 +221,7 @@ describe('cron client surfaces', () => {
   })
 
   it('foot row disabled ⇒ every other surface still applies (only the entry waits)', () => {
-    // `picoFootMenu` never arrives (its row was disabled by an overlay): the child
+    // `zeokeelFootMenu` never arrives (its row was disabled by an overlay): the child
     // scope stays pending, and NOTHING else may be held back by that — otherwise
     // disabling one row silently strips the job center, the settings card, and
     // the right-Sidebar tab too (the P1-7 failure mode).
@@ -231,10 +231,10 @@ describe('cron client surfaces', () => {
     expect(h.footEntries).toEqual([])
     expect(h.effects).toContain('dsh-cron: main-area center')
     expect(h.probes).toEqual([{ key: 'plugins.item', declared: false }])
-    expect(h.serviceWaits.map(wait => wait.deps)).toEqual([['picoFootMenu'], ['sidebarRightTabs']])
+    expect(h.serviceWaits.map(wait => wait.deps)).toEqual([['zeokeelFootMenu'], ['sidebarRightTabs']])
     // The tab body still registers once its own service arrives.
     h.serviceWaits.find(wait => wait.deps.includes('sidebarRightTabs'))?.run(h.child())
-    expect(h.tabs).toEqual([expect.objectContaining({ id: 'pico:cron', kind: 'pico-cron' })])
+    expect(h.tabs).toEqual([expect.objectContaining({ id: 'zeokeel:cron', kind: 'zeokeel-cron' })])
   })
 
   it('no longer registers anything into the sidebar foot slot (that row is owned by dsh-foot-menu)', () => {
@@ -274,9 +274,9 @@ describe('cron client surfaces', () => {
     apply(h.ctx)
     h.serviceWaits.find(wait => wait.deps.includes('sidebarRightTabs'))?.run(h.child())
 
-    expect(h.tabs).toEqual([expect.objectContaining({ id: 'pico:cron', kind: 'pico-cron' })])
+    expect(h.tabs).toEqual([expect.objectContaining({ id: 'zeokeel:cron', kind: 'zeokeel-cron' })])
     const body = register(h, 'sidebar.right.pane.tab')[0]
-    expect(body).toMatchObject({ name: 'sidebar.right.pane.tab', key: 'pico:cron', locale: 'cron' })
+    expect(body).toMatchObject({ name: 'sidebar.right.pane.tab', key: 'zeokeel:cron', locale: 'cron' })
     // The tab body shares the one controller with the other two surfaces.
     expect(body?.inject?.()).toMatchObject({ controller: expect.anything() })
   })

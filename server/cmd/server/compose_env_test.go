@@ -3,8 +3,8 @@ package main
 // R16C-06（审计 2026-09-25，P2）的**静态判据**：文档点名"可调"的旋钮在 compose 部署里
 // 必须真的够得到。
 //
-// 缺陷形态：`PICOAI_GATEWAY_MAX_INFLIGHT_PER_USER`（`docs/deploy/AI-DEPLOY.md` §网关、
-// `server/docs/04-auth.md` 都写"可调"）与 `PICOAI_LDAP_ALLOW_PLAINTEXT`（v2.7.3 发布
+// 缺陷形态：`ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER`（`docs/deploy/AI-DEPLOY.md` §网关、
+// `server/docs/04-auth.md` 都写"可调"）与 `ZEOKEEL_LDAP_ALLOW_PLAINTEXT`（v2.7.3 发布
 // 说明与安全审计文档写"需要时设 =1"）**都不在 `server/docker-compose.yml` 的
 // `server.environment` 映射里**，compose 也没有 `env_file` ⇒ 运维按文档把键写进 `.env`
 // 后重启，**静默不生效、零回显**（实测 `docker compose config` 解析结果里没有它们）。
@@ -12,9 +12,9 @@ package main
 // 两个方向的判据：
 //  1. 具名（TestComposeWiresNamedGatewayKnobs）：那两个键必须出现在解析出的
 //     server.environment 里 —— 这是本次审计点名的修复对象；
-//  2. 通用（TestEveryServerPICOAIEnvNameIsWiredOrExempt）：服务端源码里出现的**每个**
-//     `PICOAI_*` 名字都必须"已接线"或"在豁免清单里且写明理由"。没有这一条，下一个
-//     `PICOAI_*` 旋钮会以完全相同的方式再漏一次（本轮就是四个同族键一起漏的）。
+//  2. 通用（TestEveryServerZEOKEELEnvNameIsWiredOrExempt）：服务端源码里出现的**每个**
+//     `ZEOKEEL_*` 名字都必须"已接线"或"在豁免清单里且写明理由"。没有这一条，下一个
+//     `ZEOKEEL_*` 旋钮会以完全相同的方式再漏一次（本轮就是四个同族键一起漏的）。
 //
 // 判据读的是**文件本身**（compose 的 environment 映射），不跑 docker：CI 的 Go job
 // 里没有 docker compose，而"映射里有没有这个键"是纯文本事实。`docker compose config`
@@ -86,8 +86,8 @@ func TestComposeWiresNamedGatewayKnobs(t *testing.T) {
 	env := composeServerEnvironment(t)
 	// 两个键就是审计点名的对象：它们的文档口径是"可调"，而修前写进 .env 完全无效。
 	want := []string{
-		"PICOAI_GATEWAY_MAX_INFLIGHT_PER_USER",
-		"PICOAI_LDAP_ALLOW_PLAINTEXT",
+		"ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER",
+		"ZEOKEEL_LDAP_ALLOW_PLAINTEXT",
 	}
 	for _, k := range want {
 		if _, ok := env[k]; !ok {
@@ -104,33 +104,33 @@ func TestComposeWiresNamedGatewayKnobs(t *testing.T) {
 	}
 }
 
-// picoaiEnvExemptions 是**故意不接进 compose** 的 PICOAI_* 名字，每条必须写明理由。
+// zeokeelEnvExemptions 是**故意不接进 compose** 的 ZEOKEEL_* 名字，每条必须写明理由。
 //
-// 判据的取向是"服务端源码提到的每个 PICOAI_* 名字都要有归宿"：接线（compose 里能看见）
+// 判据的取向是"服务端源码提到的每个 ZEOKEEL_* 名字都要有归宿"：接线（compose 里能看见）
 // 或豁免（这里能看见理由）。两边都没有 = 又一个"文档/代码里有、部署里够不到"的旋钮。
-var picoaiEnvExemptions = map[string]string{
+var zeokeelEnvExemptions = map[string]string{
 	// 镜像内路径：由 Dockerfile 的 ENV 提供（不是运维旋钮）。
-	"PICOAI_CHANNEL_DIR":        "镜像内渠道内容目录（Dockerfile ENV PICOAI_CHANNEL_DIR）",
-	"PICOAI_CLIENT_RELEASE_DIR": "镜像内客户端安装包目录（Dockerfile ENV PICOAI_CLIENT_RELEASE_DIR）",
-	"PICOAI_CHANNEL_FILE":       "镜像内渠道声明文件路径（Dockerfile 落盘，见 updatecheck）",
-	"PICOAI_DEMO_APPS_DIR":      "镜像内内置演示应用目录（Dockerfile 打进 /opt/picoaide/demo-apps）",
+	"ZEOKEEL_CHANNEL_DIR":        "镜像内渠道内容目录（Dockerfile ENV ZEOKEEL_CHANNEL_DIR）",
+	"ZEOKEEL_CLIENT_RELEASE_DIR": "镜像内客户端安装包目录（Dockerfile ENV ZEOKEEL_CLIENT_RELEASE_DIR）",
+	"ZEOKEEL_CHANNEL_FILE":       "镜像内渠道声明文件路径（Dockerfile 落盘，见 updatecheck）",
+	"ZEOKEEL_DEMO_APPS_DIR":      "镜像内内置演示应用目录（Dockerfile 打进 /opt/zeokeel/demo-apps）",
 	// 编译子进程内部参数：由 verify/compile 的实参传递，父进程环境里的同名值**不被读取**
 	// （见 internal/wasmapp/compile/env.go 的注释），所以它不是部署旋钮。
-	"PICOAI_COMPILE_MEMORY_PAGES": "编译子进程的内存上限（由父进程以实参注入，父环境同名值不生效）",
+	"ZEOKEEL_COMPILE_MEMORY_PAGES": "编译子进程的内存上限（由父进程以实参注入，父环境同名值不生效）",
 	// 已废除：写进 .env 会被启动自检大声告警并给出清理命令（cmd/server/legacy_config.go）。
 	// 故意不接线 —— 接线等于给废除开关续命。
-	"PICOAI_APPS_BASE_DOMAIN":         "已废除（legacy_config.go 告警 + 清理命令）",
-	"PICOAI_TRUSTED_PROXIES_EXPLICIT": "已废除（legacy_config.go 告警 + 清理命令）",
+	"ZEOKEEL_APPS_BASE_DOMAIN":         "已废除（legacy_config.go 告警 + 清理命令）",
+	"ZEOKEEL_TRUSTED_PROXIES_EXPLICIT": "已废除（legacy_config.go 告警 + 清理命令）",
 }
 
-// picoaiEnvLiteral 匹配 Go 源码里的 PICOAI_* 名字字面量（含 const 声明 ——
+// zeokeelEnvLiteral 匹配 Go 源码里的 ZEOKEEL_* 名字字面量（含 const 声明 ——
 // 经由常量的读取同样是一句"这个键存在"，判据不该因为写法不同而漏掉）。
-var picoaiEnvLiteral = regexp.MustCompile(`"PICOAI_[A-Z0-9_]+"`)
+var zeokeelEnvLiteral = regexp.MustCompile(`"ZEOKEEL_[A-Z0-9_]+"`)
 
-// TestEveryServerPICOAIEnvNameIsWiredOrExempt 是 R16C-06 的通用判据：
-// 服务端源码里提到的每个 PICOAI_* 名字，要么在 compose 的 server.environment 里，
+// TestEveryServerZEOKEELEnvNameIsWiredOrExempt 是 R16C-06 的通用判据：
+// 服务端源码里提到的每个 ZEOKEEL_* 名字，要么在 compose 的 server.environment 里，
 // 要么在豁免清单里（带理由）。
-func TestEveryServerPICOAIEnvNameIsWiredOrExempt(t *testing.T) {
+func TestEveryServerZEOKEELEnvNameIsWiredOrExempt(t *testing.T) {
 	env := composeServerEnvironment(t)
 
 	roots := []string{filepath.Join("..", "..", "internal"), filepath.Join("..", "..", "cmd")}
@@ -154,7 +154,7 @@ func TestEveryServerPICOAIEnvNameIsWiredOrExempt(t *testing.T) {
 			if rerr != nil {
 				return rerr
 			}
-			for _, m := range picoaiEnvLiteral.FindAllString(string(raw), -1) {
+			for _, m := range zeokeelEnvLiteral.FindAllString(string(raw), -1) {
 				name := strings.Trim(m, `"`)
 				if _, ok := seen[name]; !ok {
 					seen[name] = path
@@ -167,7 +167,7 @@ func TestEveryServerPICOAIEnvNameIsWiredOrExempt(t *testing.T) {
 		}
 	}
 	if len(seen) < 10 {
-		t.Fatalf("只扫到 %d 个 PICOAI_* 名字（判据锚点漂移：源码扫描没生效）", len(seen))
+		t.Fatalf("只扫到 %d 个 ZEOKEEL_* 名字（判据锚点漂移：源码扫描没生效）", len(seen))
 	}
 
 	var unwired []string
@@ -175,26 +175,26 @@ func TestEveryServerPICOAIEnvNameIsWiredOrExempt(t *testing.T) {
 		if _, ok := env[name]; ok {
 			continue
 		}
-		if _, ok := picoaiEnvExemptions[name]; ok {
+		if _, ok := zeokeelEnvExemptions[name]; ok {
 			continue
 		}
 		unwired = append(unwired, name+" ("+where+")")
 	}
 	sort.Strings(unwired)
 	if len(unwired) > 0 {
-		t.Errorf("这些 PICOAI_* 名字既不在 %s 的 server.environment 里、也没有豁免理由："+
-			"写进 .env 会静默不生效（接线写成 `PICOAI_X: ${PICOAI_X:-}`，或在 picoaiEnvExemptions 里写明为什么它不是部署旋钮）:\n  %s",
+		t.Errorf("这些 ZEOKEEL_* 名字既不在 %s 的 server.environment 里、也没有豁免理由："+
+			"写进 .env 会静默不生效（接线写成 `ZEOKEEL_X: ${ZEOKEEL_X:-}`，或在 zeokeelEnvExemptions 里写明为什么它不是部署旋钮）:\n  %s",
 			composePath, strings.Join(unwired, "\n  "))
 	}
 
 	// 反向守卫：豁免清单不得**陈旧**（一个已经接线的键留在豁免里 = 下一次漏接线的温床）。
-	for name := range picoaiEnvExemptions {
+	for name := range zeokeelEnvExemptions {
 		if _, wired := env[name]; wired {
-			t.Errorf("%s 已经接线，但仍留在豁免清单里 —— 请从 picoaiEnvExemptions 删掉", name)
+			t.Errorf("%s 已经接线，但仍留在豁免清单里 —— 请从 zeokeelEnvExemptions 删掉", name)
 		}
 	}
 	// 豁免清单里的名字也必须真的还在源码里出现（否则是死条目）。
-	for name := range picoaiEnvExemptions {
+	for name := range zeokeelEnvExemptions {
 		if _, ok := seen[name]; !ok {
 			t.Errorf("豁免清单里的 %s 在服务端源码里已经不存在 —— 请删掉这条死豁免", name)
 		}

@@ -28,7 +28,7 @@ describe('validateBootstrap', () => {
 
 describe('tls fingerprint store', () => {
   it('pins and checks a host fingerprint', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-tls-'))
+    const dir = mkdtempSync(join(tmpdir(), 'zeokeel-tls-'))
     const store = join(dir, 'fingerprints.json')
     const fp = sha256Fingerprint(Buffer.from('hello'))
     expect(checkFingerprint(store, 'host:443', fp)).toBe('unknown')

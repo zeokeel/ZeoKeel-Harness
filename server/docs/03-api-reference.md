@@ -26,7 +26,7 @@
 | 方式 | 说明 |
 |------|------|
 | **Bearer token** | `Authorization: Bearer <api_token>`;`POST /api/client/v2/auth/login` 签发,90 天过期,哈希存储 |
-| **管理端 session** | Cookie `picoaide_session`(HttpOnly, SameSite=Lax;12h 硬上限 + 60min 空闲滑动到期);写操作需 header `X-CSRF-Token`(登录响应返回) |
+| **管理端 session** | Cookie `zeokeel_session`(HttpOnly, SameSite=Lax;12h 硬上限 + 60min 空闲滑动到期);写操作需 header `X-CSRF-Token`(登录响应返回) |
 
 ## 3. 认证
 
@@ -271,12 +271,12 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 ## 8d. 内置技能(客户端用,Bearer,随服务端镜像发布)
 
 > 「技能内置到服务端、客户端按需安装」：技能内容放在**镜像层**的
-> `/opt/picoaide/skills/<name>/`(Dockerfile 逐技能 COPY **服务端仓库内的 `server/skills/<name>/`**，
-> 可用 `PICOAI_SKILL_SEED_DIR` 覆盖；2026-09-19 起源码就在这里，不再从客户端 vendored 包取)，
+> `/opt/zeokeel/skills/<name>/`(Dockerfile 逐技能 COPY **服务端仓库内的 `server/skills/<name>/`**，
+> 可用 `ZEOKEEL_SKILL_SEED_DIR` 覆盖；2026-09-19 起源码就在这里，不再从客户端 vendored 包取)，
 > 服务端直接把它打包下发 —— 内容随镜像升级而更新，客户端**不自动安装**，
 > 员工在能力中心的「平台内置技能」区点一次安装(复用市场那条安装链路:
 > 下载 → sha256 对照 → 整树解包 → `<dshHome>/skills`)。实现见 `internal/skillseed`。
-> 当前内置一个技能:`app-builder`(WASM 应用平台作者手册；2026-09-19 由 `picoaide-app-builder` 改名)。
+> 当前内置一个技能:`app-builder`(WASM 应用平台作者手册；2026-09-19 由 `zeokeel-app-builder` 改名)。
 > 与 §6/§8b 的差别只有一处:**没有授权门**(平台自带、对全部登录员工可见)，
 > 认证口径与它们完全一致(BearerAuth)。
 
@@ -304,8 +304,8 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/pico/skills/builtin` | 透传服务端清单并附本机 `installed` 目录名列表 |
-| POST | `/api/pico/skills/builtin/:name/install` | 下载 + 校验 + 装到 `<dshHome>/skills/<name>`;**宿主只按 pathname 分发、不读 query**(`?force=1` 已于 2026-09-19 移除:重装/更新靠安装器的整树替换语义,同名覆盖确认是纯客户端交互);**缺 `x-skill-checksum`/`x-skill-version` 一律拒绝**(502) |
+| GET | `/api/zeokeel/skills/builtin` | 透传服务端清单并附本机 `installed` 目录名列表 |
+| POST | `/api/zeokeel/skills/builtin/:name/install` | 下载 + 校验 + 装到 `<dshHome>/skills/<name>`;**宿主只按 pathname 分发、不读 query**(`?force=1` 已于 2026-09-19 移除:重装/更新靠安装器的整树替换语义,同名覆盖确认是纯客户端交互);**缺 `x-skill-checksum`/`x-skill-version` 一律拒绝**(502) |
 
 ## 9. Bootstrap
 
@@ -341,7 +341,7 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/client/v2/channel` | 渠道内容(公开:登录页在未登录时就要拿到名称/标语/欢迎语/主题色/logo 相对地址)。唯一真源是镜像内 `/opt/picoaide/channel/`(构建期由私有渠道仓注入),**没有在线编辑接口** —— 改内容 = 改渠道配置并重新构建镜像,这样内容可审计 |
+| GET | `/api/client/v2/channel` | 渠道内容(公开:登录页在未登录时就要拿到名称/标语/欢迎语/主题色/logo 相对地址)。唯一真源是镜像内 `/opt/zeokeel/channel/`(构建期由私有渠道仓注入),**没有在线编辑接口** —— 改内容 = 改渠道配置并重新构建镜像,这样内容可审计 |
 | GET/HEAD | `/api/client/v2/channel/logo`、`/api/client/v2/channel/logo-dark`、`/api/client/v2/channel/favicon` | 渠道素材(**二进制** `image/*`;未配置时 404 JSON 信封)。三张图是**各自独立**的端点:曾把三张图都指向 `/channel/logo` 且恒发浅色版,导致 favicon 与暗色 logo 的字节永远下发不了(客户端深色主题因此只能显示浅色标) |
 
 管理端点:`GET/PUT /api/server/admin/portal`(门户公开开关/下载地址覆盖/说明文字)。
@@ -352,22 +352,22 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 
 ## 11b. WASM 应用(客户端专属,自定义协议面)
 
-员工应用**只在桌面客户端内**以 `<渠道 app 源 scheme>://<app_id>/` 打开(渠道包 `desktop.app_origin_scheme`,官方/预发渠道取值 `picoaide-app`),由客户端协议 handler 转发到下列**唯一入口**;服务端**不存在**应用子域、换票、应用侧 Cookie 或 `entry_url`(2026-09-19「客户端专属」改造,设计总纲 `../../docs/planning/2026-09-19-wasm-client-only-design.md`)。
+员工应用**只在桌面客户端内**以 `<渠道 app 源 scheme>://<app_id>/` 打开(渠道包 `desktop.app_origin_scheme`,官方/预发渠道取值 `zeokeel-app`),由客户端协议 handler 转发到下列**唯一入口**;服务端**不存在**应用子域、换票、应用侧 Cookie 或 `entry_url`(2026-09-19「客户端专属」改造,设计总纲 `../../docs/planning/2026-09-19-wasm-client-only-design.md`)。
 
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
-| POST | `/api/client/v2/apps/wasm/:app_id/request` | Bearer + `X-Pico-App-Proof` | **唯一应用请求入口**。信封 `{method,path,query,host,headers,body}`,其中 `host` 只接受 `<app-scheme>://<app_id>` 或裸 `app_id`;`headers` 白名单 = `origin`/`content-type`/`accept`/`accept-language`/`if-none-match`/`if-modified-since`/`user-agent`/`x-requested-with`(≤24 条、单值 ≤8 KiB;客户端必须转发**同一份**,跨端真源 `internal/wasmapp/api/wasm-app-headers.json`)。非幂等请求按 `Origin == <app-scheme>://<app_id>` 校验跨源写;响应 `{status,headers,body,truncated}`,`Set-Cookie` 整条丢弃、成功响应带 `X-PicoAide-App-Version` |
+| POST | `/api/client/v2/apps/wasm/:app_id/request` | Bearer + `X-ZeoKeel-App-Proof` | **唯一应用请求入口**。信封 `{method,path,query,host,headers,body}`,其中 `host` 只接受 `<app-scheme>://<app_id>` 或裸 `app_id`;`headers` 白名单 = `origin`/`content-type`/`accept`/`accept-language`/`if-none-match`/`if-modified-since`/`user-agent`/`x-requested-with`(≤24 条、单值 ≤8 KiB;客户端必须转发**同一份**,跨端真源 `internal/wasmapp/api/wasm-app-headers.json`)。非幂等请求按 `Origin == <app-scheme>://<app_id>` 校验跨源写;响应 `{status,headers,body,truncated}`,`Set-Cookie` 整条丢弃、成功响应带 `X-ZeoKeel-App-Version` |
 | GET | `/api/client/v2/apps/wasm/catalog` | Bearer | 应用中心目录：全部**未删除、有生效版本、未冻结**的应用（名称/一句话/负责人/访问级别 `access`/是否下架 `enabled`/当前版本/窗口规格）。**不按可见性过滤**（R34/R38 变更），也不含任何额度/用量字段（R36） |
 | GET | `/api/client/v2/apps/wasm/:app_id/diagnostics` | Bearer（发布者本人或超管） | 运行诊断：`{diagnostics:{summary{total,ok,error,killed,failed,reasons[],hints[],max_*},failures[{created_at,outcome,reason_code,guest_exit_code,stderr_tail,evidence,cpu_ms,peak_memory_bytes,db_rows,db_bytes}],hints[]}}`。缺省 50 条、最多 200 条；窗口缺省 24 h、上限 = 调用事件保留期（7 天） |
 | GET | `/api/client/v2/apps/wasm/:app_id/schema` | Bearer（发布者本人或超管） | 表结构自省：表名/列（名/类型/not_null/pk）/每表行数/库体积与页数/上限/使用率。**写审计** `wasm_app_schema_view` |
 | GET | `/api/client/v2/apps/wasm/:app_id/rows?table=&limit=&offset=&unmask=` | Bearer（发布者本人或超管） | **作者数据面**：某张表的一页行（`limit` 缺省 50、上限 200；`offset` 上限 100 万）。默认按列名启发式**脱敏**敏感列（值替换为 `***`），`unmask=1` 才给原值。响应 `{rows:{app_id,table,columns[{name,type,sensitive}],rows[][],limit,offset,returned,total_rows,has_more,truncated,truncated_values,unmasked,masked_columns,value_max_bytes}}`。**写审计**：`wasm_app_rows_view`（`unmask=1` 时是 `wasm_app_rows_view_unmasked`），审计只记表名与分页、不记行内容。库文件不存在 ⇒ 404（**不会**为了读一次把库建出来） |
 | GET | `/api/client/v2/apps/wasm/:app_id/export` | Bearer（发布者本人或超管） | 控制面快照 JSON（应用 + 全部版本元数据 + 保留期说明）。**`database.included=false`**：不含任何使用者数据 |
-| POST | `/api/client/v2/apps/wasm/:app_id/open` | Bearer + `X-Pico-App-Proof` | **每次「打开」动作**调一次:校验当前生效版本并**记一次打开**(PV 式,不去重;UV 由按 user 去重的聚合承担)。请求 `{current_version}`;响应 `{version,release_id,title,changed,opens:{today:{pv,uv}}}`(`changed=true` ⇒ 客户端清该应用当前 session-scope 下的全部版本缓存;**计数 best-effort ⇒ 计数失败时 `opens` 缺省,客户端不得显示 0**) |
+| POST | `/api/client/v2/apps/wasm/:app_id/open` | Bearer + `X-ZeoKeel-App-Proof` | **每次「打开」动作**调一次:校验当前生效版本并**记一次打开**(PV 式,不去重;UV 由按 user 去重的聚合承担)。请求 `{current_version}`;响应 `{version,release_id,title,changed,opens:{today:{pv,uv}}}`(`changed=true` ⇒ 客户端清该应用当前 session-scope 下的全部版本缓存;**计数 best-effort ⇒ 计数失败时 `opens` 缺省,客户端不得显示 0**) |
 | POST | `/api/client/v2/apps/wasm/proof` | Bearer + **安装签名** | 签发持有性证明。proof 绑 `(user_id, bearer hash, install_id, serverURL, app_id, exp, jti)`,默认 15 min;非幂等请求做 jti 去重。安装公钥注册是 **TOFU**(任何持有效 bearer 者可为**尚未注册**的 install_id 注册自己的公钥,注册需一次性 nonce 签名)⇒ 该机制使 proof **不可跨应用/跨用户搬运、不可重放**,但**不**把"bearer 泄露"变成"不可用"(认账见设计总纲 §17)。**签名消息是 `appproof-install-v1` 五段换行串**(`install_id`/`nonce`/`ts`(秒)/`serverURL`),公钥必须是**原始 32 字节** Ed25519(不是 SPKI/DER),请求体**只允许** `install_id`/`public_key`/`nonce`/`ts`/`signature`/`app_id` 六个键。签发失败的 `401` 带 `details.reason`,取值:`decode_failed`(JSON 解码失败或含未知字段)/ `invalid_public_key`(公钥不是 base64 或不是**原始 32 字节** Ed25519)/ `signature_malformed`(签名为空/纯空白/不是 base64/长度不符)/ `invalid_timestamp`(`ts` 缺失或 `<= 0`)/ `nonce_replayed` / `timestamp_skew`(超时间窗)/ `install_key_mismatch`(该 install_id 已注册过**别的**公钥)/ `signature_invalid`。**认账**:`install_id`/`nonce` 的**形状**失败目前仍落在 `signature_invalid`,所以该码应读作"最后兜底档",**不能**读成"验签一定不过"——排障时先看前面几档 |
-| **错误码分层** | — | — | 对接方按**外层优先**分流。**传输层（外层 HTTP）**：`401 AUTH_REQUIRED` / `401 AUTH_FAILED` / **`401 PROOF_REQUIRED`**（缺证明）/ **`401 PROOF_EXPIRED`**（证明过期）/ **`401 PROOF_MISMATCH`**（绑定或结构/签名不符）/ **`401 PROOF_REPLAYED`**（非幂等请求的 jti 重放）/ `403`（审计账号或权限）/ `400 VALIDATION`（信封或 host 形态）/ `413 BODY_TOO_LARGE` / `429 RATE_LIMITED` / `503`（关停中）。**应用管线（内层信封 `status`）**：`404 NOT_FOUND`（不存在/未登记/软删/**冻结**，冻结时带 `reason=app_frozen`）/ `410`（已下架，`code` 复用 `NOT_FOUND`）/ `403 FORBIDDEN`（跨源写）/ `502`/`504`（运行时无响应或超时）/ `500 RUNTIME_OUTPUT_OVERRUN`。**`X-Pico-App-Proof` 的 401 一律用 `proof_*` 前缀**（客户端据此只在该前缀上自动重签一次） |
+| **错误码分层** | — | — | 对接方按**外层优先**分流。**传输层（外层 HTTP）**：`401 AUTH_REQUIRED` / `401 AUTH_FAILED` / **`401 PROOF_REQUIRED`**（缺证明）/ **`401 PROOF_EXPIRED`**（证明过期）/ **`401 PROOF_MISMATCH`**（绑定或结构/签名不符）/ **`401 PROOF_REPLAYED`**（非幂等请求的 jti 重放）/ `403`（审计账号或权限）/ `400 VALIDATION`（信封或 host 形态）/ `413 BODY_TOO_LARGE` / `429 RATE_LIMITED` / `503`（关停中）。**应用管线（内层信封 `status`）**：`404 NOT_FOUND`（不存在/未登记/软删/**冻结**，冻结时带 `reason=app_frozen`）/ `410`（已下架，`code` 复用 `NOT_FOUND`）/ `403 FORBIDDEN`（跨源写）/ `502`/`504`（运行时无响应或超时）/ `500 RUNTIME_OUTPUT_OVERRUN`。**`X-ZeoKeel-App-Proof` 的 401 一律用 `proof_*` 前缀**（客户端据此只在该前缀上自动重签一次） |
 | GET | `/api/server/admin/wasm-apps/:app_id/opens?from=&to=&granularity=day\|dept` | 管理会话 + `capability:read` | 打开计数运营视图(PV/UV 日趋势、按部门聚合;明细保留 90 天、日汇总长期)。缺少该端点时管理端显示"接口尚不可用"而**不是 0** |
 | GET | `/api/server/admin/wasm-apps/opens/summary?days=` | 管理会话 + `capability:read` | 运营看板总览:`today`/`totals`/`trend[]`/`apps[]`/`top_apps[]`/`capped`/`detail_retention_days`。**读源口径 = 同一天同源**(AUD-1,2026-09-20):`apps[]`/`today`/`totals` 读**明细** `wasm_app_opens`;`trend[]` 亦以明细为准 —— 某一天的 PV 与 UV 出自**同一次** `GROUP BY 日` 聚合(`count(*)` / `count(DISTINCT user_id)`),只有**明细已不在的天**(早于 90 天保留期)PV 才回落**日汇总** `wasm_app_opens_daily`(长期保留,曲线不断档)且 UV 如实为 0。**禁止**退回"`trend[].pv` 读日汇总、`trend[].uv` 读明细"的混用形态:日汇总每 5 分钟才 tick 一次,混用会让同一份响应出现 `uv > pv`(去重人数大于打开次数,活体实测过)。**UV 一律 `count(DISTINCT user_id)`**:禁止把各应用或各日的 `uv` 相加。窗口长于 90 天明细保留期时 `capped=true` |
-| GET | `/api/server/admin/wasm-apps/:app_id/ai-usage?days=` | 管理会话 + `capability:read` | 应用维度 AI 用量:`days[]`/`total`/`attribution_available`。`attribution_available=false` 表示**该窗口内没有可归因调用**(与"端点不支持"区分)。归因链路(2026-09-24 起**已接线**):隐藏会话 id 的前缀 `app:<app_id>`(带账号作用域 `#<账号>@<服务端哈希>`)由上游出站头 `x-deepseek-harness-session-id` 带上,网关按前缀派生 `usage.app_id`(读方 `internal/llmgateway/app_session_id.go`,形状契约 `app-session-id.json`);§21.4 初版设计的自报头 `X-Pico-App-Id` **发不出来**(上游无 header 通道)且**不再被采信**(网关只识别并记一条 warn) ⇒ 该字段的 `false` 只表示"该窗口内还没有走过应用 AI",**不是**"老客户端没上报";管理端文案不得把成因推给客户端版本或客户环境 |
+| GET | `/api/server/admin/wasm-apps/:app_id/ai-usage?days=` | 管理会话 + `capability:read` | 应用维度 AI 用量:`days[]`/`total`/`attribution_available`。`attribution_available=false` 表示**该窗口内没有可归因调用**(与"端点不支持"区分)。归因链路(2026-09-24 起**已接线**):隐藏会话 id 的前缀 `app:<app_id>`(带账号作用域 `#<账号>@<服务端哈希>`)由上游出站头 `x-deepseek-harness-session-id` 带上,网关按前缀派生 `usage.app_id`(读方 `internal/llmgateway/app_session_id.go`,形状契约 `app-session-id.json`);§21.4 初版设计的自报头 `X-ZeoKeel-App-Id` **发不出来**(上游无 header 通道)且**不再被采信**(网关只识别并记一条 warn) ⇒ 该字段的 `false` 只表示"该窗口内还没有走过应用 AI",**不是**"老客户端没上报";管理端文案不得把成因推给客户端版本或客户环境 |
 | GET | `/api/server/admin/wasm-apps/:app_id/schema` | 管理会话 + `capability:read` | 管理面的表结构自省（与员工面同 payload、同实现；差别只有鉴权与操作者账号进审计） |
 | GET | `/api/server/admin/wasm-apps/:app_id/rows` | 管理会话 + `capability:read` | 管理面的行浏览（与员工面同形；管理员排障与合规用，同样默认脱敏并写审计） |
 | GET | `/api/server/admin/wasm-apps/limits` | 管理会话 + `capability:read` | 应用平台限制项(11 个字段)+ 生效来源(`source`:部署档位/控制台保存)+ 四笔账预览(`budget`)+ 需重启字段(`restart_pending`) |
@@ -375,9 +375,9 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 | POST | `/api/server/admin/wasm-apps/:app_id/releases/:version/reject` | 管理会话 + `capability:write` | 拒绝该版本。`reason` **必填**(归一后为空/纯空白即 `400 VALIDATION`,`field=reason`);理由会写进审计与**作者客户端**(作者据此改后再发)。闸门**先于**版本状态检查。**已通过审核的版本不可拒绝** ⇒ `409 APPROVED_NOT_REJECTABLE`(三面同码,语义见 §1) |
 | GET/POST | `/api/server/admin/wasm-apps?status=&access=&q=`、`…/:app_id/{publish,unpublish,freeze,owner}` | 管理会话 | 应用中心管理面(`status` 支持 `all/pending/published/unpublished/frozen/deleted`;`access` 支持 `all/login/whitelist`,**`login` 会连同历史 `public` 行一起返回**)。上下架/冻结/归属转移均写审计(含哈希链字段) |
 
-**发布链路的跨端预算头 `X-Pico-Client-Budget-Ms`(可选,2026-10-04 审计 FW-2)**:三条发布入口(`POST /api/client/v2/apps/wasm/validate`、`POST /api/client/v2/apps/wasm/:app_id/releases`、`POST /api/client/v2/apps/wasm/uploads/:upload_id/complete`)接受这个请求头,语义是"客户端在**这一跳**还会等多少毫秒"(十进制整数毫秒)。平台把该跳的总预算钳成 `min(publish_total_budget, max(0, 该值 − 传输余量))`:**缺省 / 空 / 非法 / ≤0 / 大于 `client_upload_timeout` 一律回落 `publish_total_budget`,只许缩小、永不放大**。分片链的 `complete` 必须带它(客户端的 90 s 是**整条链**共用的,上传阶段用掉的部分会让这一跳的剩余额度小于平台默认总预算 ⇒ 平台结论会落在客户端放弃之后);单发 `publish`/`validate` 不必带。该值不足传输余量时平台在**入口**就给结构化结论(`504 RUNTIME_TIMEOUT` + `details.phase="publish_budget"`,不占编译槽/上传额度),hints 指引"带同一个 `upload_id` 重发"(续传只补缺失片,新的一次调用有完整预算)。**`uploads/:upload_id/complete` 的预算结论(入口拒绝与阶段内到点两种)在 `details` 里带 `upload_id`** = 真实会话 id(2026-10-04 审计 V-P2P7 的 F-A:该跳唯一的调用方是 AI 分片链,模型只能从 `error.details.upload_id` 取续传把手,只写在 hints 文案里等于没给;状态码/文案/fail-closed 语义不变,**非预算结论不加**该字段)。
+**发布链路的跨端预算头 `X-ZeoKeel-Client-Budget-Ms`(可选,2026-10-04 审计 FW-2)**:三条发布入口(`POST /api/client/v2/apps/wasm/validate`、`POST /api/client/v2/apps/wasm/:app_id/releases`、`POST /api/client/v2/apps/wasm/uploads/:upload_id/complete`)接受这个请求头,语义是"客户端在**这一跳**还会等多少毫秒"(十进制整数毫秒)。平台把该跳的总预算钳成 `min(publish_total_budget, max(0, 该值 − 传输余量))`:**缺省 / 空 / 非法 / ≤0 / 大于 `client_upload_timeout` 一律回落 `publish_total_budget`,只许缩小、永不放大**。分片链的 `complete` 必须带它(客户端的 90 s 是**整条链**共用的,上传阶段用掉的部分会让这一跳的剩余额度小于平台默认总预算 ⇒ 平台结论会落在客户端放弃之后);单发 `publish`/`validate` 不必带。该值不足传输余量时平台在**入口**就给结构化结论(`504 RUNTIME_TIMEOUT` + `details.phase="publish_budget"`,不占编译槽/上传额度),hints 指引"带同一个 `upload_id` 重发"(续传只补缺失片,新的一次调用有完整预算)。**`uploads/:upload_id/complete` 的预算结论(入口拒绝与阶段内到点两种)在 `details` 里带 `upload_id`** = 真实会话 id(2026-10-04 审计 V-P2P7 的 F-A:该跳唯一的调用方是 AI 分片链,模型只能从 `error.details.upload_id` 取续传把手,只写在 hints 文案里等于没给;状态码/文案/fail-closed 语义不变,**非预算结论不加**该字段)。
 
-**应用能力边界**:应用内**无 cookie**(自定义协议下 `document.cookie` 恒空)、`localStorage`/`IndexedDB` 可用但**`Cache Storage` 不可用**(`cache.put` 抛 `TypeError: Request scheme … is unsupported`);**服务端 `ai.chat` 宿主能力已删除** —— 需要 AI 的应用改为**前端调客户端 AI loop**(保留路径 `POST /__picoaide/ai/chat`,由客户端协议 handler 本地处理)再把结果回传 wasm 落库。
+**应用能力边界**:应用内**无 cookie**(自定义协议下 `document.cookie` 恒空)、`localStorage`/`IndexedDB` 可用但**`Cache Storage` 不可用**(`cache.put` 抛 `TypeError: Request scheme … is unsupported`);**服务端 `ai.chat` 宿主能力已删除** —— 需要 AI 的应用改为**前端调客户端 AI loop**(保留路径 `POST /__zeokeel/ai/chat`,由客户端协议 handler 本地处理)再把结果回传 wasm 落库。
 
 > 已删除(2026-09-19,照旧文档对接会拿到 404 JSON 信封):应用子域的 `/login`、`/logout`、`/app-ticket`、`/domain` 与应用子域路由树;目录/发布/上下架响应里的 `entry_url`;`access` 取值 `public`(写侧拒绝,存量由迁移 0074 改写为 `login`)。
 
@@ -392,4 +392,4 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 | PUT | `/api/server/admin/connectors/:id/enabled` | 下架/上架 |
 | DELETE | `/api/server/admin/connectors/:id` | 删除连接器 |
 
-员工面不直接调连接器端点:目录经 bootstrap `connectors[]` 下发;OAuth/设备/令牌授权由客户端本地代理(`/api/pico/connectors/...`,loopback guard)与服务端 `serverauth` 会话协同。
+员工面不直接调连接器端点:目录经 bootstrap `connectors[]` 下发;OAuth/设备/令牌授权由客户端本地代理(`/api/zeokeel/connectors/...`,loopback guard)与服务端 `serverauth` 会话协同。

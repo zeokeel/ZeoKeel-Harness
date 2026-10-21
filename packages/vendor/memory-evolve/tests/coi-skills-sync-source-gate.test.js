@@ -23,7 +23,7 @@
  * 并在日志里点名技能与落点；**绝不静默删用户内容**。
  *
  * §兼容路径（P1-1 追加，同轮）：写溯源的 A9 不在任何已发布版本里 ⇒ 现场存在"旧版
- * 插件同步落下、没有 `.picoaide`"的目录。它们只有在**内容同一性**成立时被采纳
+ * 插件同步落下、没有 `.zeokeel`"的目录。它们只有在**内容同一性**成立时被采纳
  * （`isIdenticalTree`：条目集合逐项相同 + 每个文件字节相同 + 无符号链接/读取异常）。
  * 判据是"可验证的同一性"而不是启发式：多一个文件、少一个文件、任何字节差异、
  * 符号链接、读失败 ⇒ 一律照旧 `refused`。
@@ -71,13 +71,13 @@ function seedUserSkill(userSkills, { xVersion } = {}) {
 
 /** 造一份带安装器溯源的已装副本（channel 可变）。 */
 function seedStoreSkill(userSkills, channel, { xVersion = 1 } = {}) {
-  mkdirSync(join(userSkills, NAME, '.picoaide'), { recursive: true })
+  mkdirSync(join(userSkills, NAME, '.zeokeel'), { recursive: true })
   writeFileSync(join(userSkills, NAME, 'SKILL.md'), `---\nname: ${NAME}\ndescription: ${channel}\nx-version: ${xVersion}\n---\n# ${channel.toUpperCase()}-INSTALLED\n`)
   writeFileSync(
-    join(userSkills, NAME, '.picoaide', 'release.json'),
+    join(userSkills, NAME, '.zeokeel', 'release.json'),
     `${JSON.stringify({ appId: NAME, version: '3.0.0', channel, installedAt: '2026-09-01T00:00:00.000Z' }, null, 2)}\n`,
   )
-  return readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8')
+  return readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8')
 }
 
 /** 本轮同步里该技能的条目。 */
@@ -105,7 +105,7 @@ test('P1-1 用户手写同名技能：refused + 内容（含用户自己的文�
     assert.deepEqual(readdirSync(join(userSkills, NAME)).sort(), before, '用户目录内容必须逐字不动（含 MY-NOTES.md）')
     assert.match(readFileSync(join(userSkills, NAME, 'SKILL.md'), 'utf8'), /我自己的正文/u, '用户正文不得被插件正文替换')
     assert.equal(existsSync(join(userSkills, NAME, 'MY-NOTES.md')), true, '用户自己的文件不得被静默删除')
-    assert.equal(existsSync(join(userSkills, NAME, '.picoaide')), false, '不得把用户内容标成"商店来源"（channel: plugin）')
+    assert.equal(existsSync(join(userSkills, NAME, '.zeokeel')), false, '不得把用户内容标成"商店来源"（channel: plugin）')
     // 其余内置技能不受影响：单个落点被拒不阻塞整轮同步（本夹具的源目录只放了一个
     // 技能，所以其余成员如实报 missing —— 关键是**只有这一个**被拒）。
     assert.deepEqual(results.filter((r) => r.action === 'refused').map((r) => r.name), [NAME])
@@ -150,7 +150,7 @@ for (const channel of ['market', 'org', 'builtin']) {
       assert.match(String(entry.message), new RegExp(channel, 'u'), '拒绝信息必须点名冲突的渠道')
       assert.equal(readFileSync(join(userSkills, NAME, 'SKILL.md'), 'utf8'), bodyBefore, '内容必须原样保留')
       assert.equal(
-        readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8'),
+        readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8'),
         provenanceBefore,
         'provenance 必须原样保留（内容与归属都不许被改）',
       )
@@ -169,7 +169,7 @@ test('P1-1 appId 对不上（目录被改名/被占用）：按用户内容处�
     seedStoreSkill(userSkills, 'plugin')
     // 溯源里写的是别人的 appId ⇒ 与安装器同口径：不算"这份是我们装的"。
     writeFileSync(
-      join(userSkills, NAME, '.picoaide', 'release.json'),
+      join(userSkills, NAME, '.zeokeel', 'release.json'),
       `${JSON.stringify({ appId: 'someone-else', version: '1', channel: 'plugin', installedAt: '' }, null, 2)}\n`,
     )
 
@@ -199,7 +199,7 @@ test('P1-1 渠道就是 plugin：按 x-version 正常更新，且安装器标记
     // A9：标记不丢（文件还在、归属不变）。R4-B-1（第四轮）：**version 必须跟到新的
     // x-version**（源是 2；旧 provenance 记 1、旧 .install-version 是 3.0.0）——
     // 停在旧值会被能力中心当"已装版本"显示、被技能调用遥测直接上报。
-    const provAfter = JSON.parse(readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8'))
+    const provAfter = JSON.parse(readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8'))
     assert.equal(provAfter.channel, 'plugin', 'A9：安装器标记不丢')
     assert.equal(provAfter.appId, NAME, 'A9：归属不变')
     assert.equal(provAfter.version, '2', 'R4-B-1：随包升版后 provenance.version 必须等于新的 x-version')
@@ -265,7 +265,7 @@ test('P1-1 首次安装（目录不存在）：照常装上并写 channel: plugi
 
     const entry = entryFor(syncBuiltinSkills(pluginSkills, userSkills))
     assert.equal(entry.action, 'synced')
-    const info = JSON.parse(readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8'))
+    const info = JSON.parse(readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8'))
     assert.equal(info.channel, 'plugin')
     assert.equal(info.appId, NAME)
   } finally {
@@ -277,7 +277,7 @@ test('P1-1 首次安装（目录不存在）：照常装上并写 channel: plugi
  * §兼容路径（P1-1 追加，同轮）：内容同一性成立的"无溯源历史副本"被采纳。
  *
  * 现场形态：A9（写溯源）不在任何已发布版本里 ⇒ 旧版插件同步落下的目录里没有
- * `.picoaide`。它们被来源闸门按用户内容拒收（今天磁盘状态与旧行为一致），但
+ * `.zeokeel`。它们被来源闸门按用户内容拒收（今天磁盘状态与旧行为一致），但
  * **将来**插件升 x-version 时不会更新。判据＝内容同一性（逐项 + 逐字节），
  * 成立即补写 `channel: 'plugin'` 溯源（报 `adopted`），此后走正常更新路径。
  * ========================================================================== */
@@ -294,14 +294,14 @@ test('兼容路径 完全同一（逐项 + 逐字节）：adopted + 补写 chann
     const userSkills = join(dir, 'skills')
     seedPluginSkill(pluginSkills)
     seedUnownedCopy(pluginSkills, userSkills)
-    assert.equal(existsSync(join(userSkills, NAME, '.picoaide')), false, '前置条件：这一份没有溯源')
+    assert.equal(existsSync(join(userSkills, NAME, '.zeokeel')), false, '前置条件：这一份没有溯源')
 
     const entry = entryFor(syncBuiltinSkills(pluginSkills, userSkills))
     assert.equal(entry.action, 'adopted', `内容逐字相同的无溯源副本必须被采纳：${JSON.stringify(entry)}`)
     assert.equal(entry.code, undefined, '采纳不是失败，不带 code')
     // 采纳只写来源标记：正文一字未动、`.install-version` 按 x-version 补上。
     assert.match(readFileSync(join(userSkills, NAME, 'SKILL.md'), 'utf8'), /# BUNDLED/u)
-    const info = JSON.parse(readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8'))
+    const info = JSON.parse(readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8'))
     assert.equal(info.channel, 'plugin')
     assert.equal(info.appId, NAME)
     assert.equal(info.version, '2', 'version 取随包 SKILL.md 的 x-version')
@@ -317,7 +317,7 @@ test('兼容路径 完全同一（逐项 + 逐字节）：adopted + 补写 chann
     assert.match(readFileSync(join(userSkills, NAME, 'SKILL.md'), 'utf8'), /BUNDLED-V3/u)
     assert.match(readFileSync(join(userSkills, NAME, 'scripts', 'helper.mjs'), 'utf8'), /HELPER-V3/u)
     assert.equal(
-      JSON.parse(readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8')).channel,
+      JSON.parse(readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8')).channel,
       'plugin',
       'A9：采纳写下的溯源在换入后仍在',
     )
@@ -356,7 +356,7 @@ for (const extra of ['MY-NOTES.md', 'zz-user-notes.md']) {
       assert.equal(entry.action, 'refused', `多一个文件就不算"逐字副本"：${JSON.stringify(entry)}`)
       assert.equal(entry.code, 'SKILL_LOCAL_CONTENT')
       assert.equal(readFileSync(join(userSkills, NAME, extra), 'utf8'), '我自己的笔记\n')
-      assert.equal(existsSync(join(userSkills, NAME, '.picoaide')), false, '拒收不得补写溯源')
+      assert.equal(existsSync(join(userSkills, NAME, '.zeokeel')), false, '拒收不得补写溯源')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -377,7 +377,7 @@ test('兼容路径 一个字节不同 ⇒ refused（正文一字不改）', () =
     assert.equal(entry.action, 'refused', `任何字节差异都不算同一性：${JSON.stringify(entry)}`)
     assert.equal(entry.code, 'SKILL_LOCAL_CONTENT')
     assert.match(readFileSync(join(userSkills, NAME, 'SKILL.md'), 'utf8'), /我加了一行/u, '用户改过的正文不许被换掉')
-    assert.equal(existsSync(join(userSkills, NAME, '.picoaide')), false)
+    assert.equal(existsSync(join(userSkills, NAME, '.zeokeel')), false)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -395,7 +395,7 @@ test('兼容路径 缺一个文件 ⇒ refused', () => {
     const entry = entryFor(syncBuiltinSkills(pluginSkills, userSkills))
     assert.equal(entry.action, 'refused', `少一个文件就不算同一性：${JSON.stringify(entry)}`)
     assert.equal(entry.code, 'SKILL_LOCAL_CONTENT')
-    assert.equal(existsSync(join(userSkills, NAME, '.picoaide')), false)
+    assert.equal(existsSync(join(userSkills, NAME, '.zeokeel')), false)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -416,7 +416,7 @@ test('兼容路径 目标内有符号链接条目 ⇒ refused（同一性无法�
     assert.equal(entry.action, 'refused', `符号链接条目必须判"不同"：${JSON.stringify(entry)}`)
     assert.equal(entry.code, 'SKILL_LOCAL_CONTENT')
     assert.equal(readFileSync(victim, 'utf8'), 'ORIGINAL\n', '库外 victim 不得被写穿')
-    assert.equal(existsSync(join(userSkills, NAME, '.picoaide')), false)
+    assert.equal(existsSync(join(userSkills, NAME, '.zeokeel')), false)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -434,14 +434,14 @@ test('兼容路径 有 release.json 但读不出可用渠道（appId 不符 / �
       const userSkills = join(dir, 'skills')
       seedPluginSkill(pluginSkills)
       seedUnownedCopy(pluginSkills, userSkills)
-      mkdirSync(join(userSkills, NAME, '.picoaide'), { recursive: true })
-      writeFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), body)
+      mkdirSync(join(userSkills, NAME, '.zeokeel'), { recursive: true })
+      writeFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), body)
 
       const entry = entryFor(syncBuiltinSkills(pluginSkills, userSkills))
       assert.equal(entry.action, 'refused', `${label}：看不懂的标记不得被采纳/覆盖：${JSON.stringify(entry)}`)
       assert.equal(entry.code, 'SKILL_LOCAL_CONTENT')
       assert.equal(
-        readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8'),
+        readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8'),
         body,
         `${label}：原有标记必须逐字保留`,
       )

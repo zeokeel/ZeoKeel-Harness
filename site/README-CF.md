@@ -4,18 +4,18 @@
 
 ## 一、前置条件
 
-- 已安装 Cloudflare 账号，且 `picoaide.com` 域名的 DNS 已托管在 Cloudflare（当前已是，NS 指向 amy.ns.cloudflare.com / stanley.ns.cloudflare.com）
+- 已安装 Cloudflare 账号，且 `zeokeel.com` 域名的 DNS 已托管在 Cloudflare（当前已是，NS 指向 amy.ns.cloudflare.com / stanley.ns.cloudflare.com）
 - 已登录 Cloudflare Dashboard
 
 ## 二、创建 Pages 项目
 
 1. 打开 https://dash.cloudflare.com → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-2. 授权 Cloudflare 访问 GitHub，选择仓库 `picoaide/picoaide-harness`
+2. 授权 Cloudflare 访问 GitHub，选择仓库 `zeokeel/ZeoKeel-Harness`
 3. 配置构建参数：
 
 | 配置项 | 值 |
 | --- | --- |
-| Project name | `picoaide`（或你喜欢的名字，如 `picoaide-harness-site`） |
+| Project name | `zeokeel`（或你喜欢的名字，如 `zeokeel-harness-site`） |
 | Production branch | `master` |
 | **Root directory** | **`site`** |
 | **Build command** | `yarn build` |
@@ -31,11 +31,11 @@
 ## 三、绑定自定义域名
 
 1. 进入 Pages 项目 → **Custom domains** → **Set up a custom domain**
-2. 输入 `www.picoaide.com`
-3. 按提示添加 CNAME 记录（Cloudflare 会自动生成 DNS 记录，指向 `picoaide.pages.dev`）
+2. 输入 `www.zeokeel.com`
+3. 按提示添加 CNAME 记录（Cloudflare 会自动生成 DNS 记录，指向 `zeokeel.pages.dev`）
 4. 等待证书签发（通常几分钟），HTTPS 会自动启用
 
-如果你想把裸域 `picoaide.com` 也指向站，请在 CF DNS 添加 A 记录或设置 `www` 重定向。
+如果你想把裸域 `zeokeel.com` 也指向站，请在 CF DNS 添加 A 记录或设置 `www` 重定向。
 
 ## 四、构建环境注意
 
@@ -48,12 +48,12 @@
 ## 五、发布/预览流程
 
 - 每次推送到 `master` → CF Pages 自动构建并发布到生产域名
-- 每次推送其他分支（如 `dev`）→ 自动构建到 `<branch>.picoaide.pages.dev` 预览地址
+- 每次推送其他分支（如 `dev`）→ 自动构建到 `<branch>.zeokeel.pages.dev` 预览地址
 - 无需 GitHub Actions、无需手动上传
 
 ## 六、验证
 
-部署后在 https://www.picoaide.com 检查：
+部署后在 https://www.zeokeel.com 检查：
 
 - 首页 Hero 与截图墙正常加载
 - `/blog/` 博客列表与文章页可访问

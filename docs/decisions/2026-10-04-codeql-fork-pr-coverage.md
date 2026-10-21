@@ -25,10 +25,10 @@ fork PR 的 `GITHUB_TOKEN` 只有只读权限，拿不到 `security-events: writ
 
 | 采样（2026-10-04，两次） | 结果 |
 |---|---|
-| `gh api repos/picoaide/picoaide-harness/branches/master/protection --jq '.required_status_checks.contexts'` | `["Gate (tests + workspace build)","Go server","Desktop (Linux)","Desktop (Windows installer)","Desktop (macOS)"]` —— **5 条，不含任何 `Analyze (…)`** |
-| `gh api repos/picoaide/picoaide-harness/rulesets` | `[]` |
-| `gh api repos/picoaide/picoaide-harness/rules/branches/master` | `[]` |
-| `gh api "repos/picoaide/picoaide-harness/commits/master/check-runs?per_page=100" --jq '.check_runs[].name'` | 4 个 `Analyze (...)` 会出现在 check-runs 里，但**不在**上面的必需集里 |
+| `gh api repos/zeokeel/ZeoKeel-Harness/branches/master/protection --jq '.required_status_checks.contexts'` | `["Gate (tests + workspace build)","Go server","Desktop (Linux)","Desktop (Windows installer)","Desktop (macOS)"]` —— **5 条，不含任何 `Analyze (…)`** |
+| `gh api repos/zeokeel/ZeoKeel-Harness/rulesets` | `[]` |
+| `gh api repos/zeokeel/ZeoKeel-Harness/rules/branches/master` | `[]` |
+| `gh api "repos/zeokeel/ZeoKeel-Harness/commits/master/check-runs?per_page=100" --jq '.check_runs[].name'` | 4 个 `Analyze (...)` 会出现在 check-runs 里，但**不在**上面的必需集里 |
 
 仓内反证：`docs/planning/2026-09-19-wasm-client-only-findings-ledger.md` 逐字写着
 「CodeQL（非必需检查，不阻塞合并）」。
@@ -93,10 +93,10 @@ grep -n "head.repo.fork" .github/workflows/codeql.yml
 node scripts/check-workflows.mjs          # REGISTERED_JOBS 对 analyze 的 if: 逐字登记
 # 2) 合入门槛里到底有没有 Analyze（2026-10-04 采样：5 条，不含 Analyze；数字会变，重新采）
 export XDG_CACHE_HOME=$PWD/temp/gh-cache
-gh api repos/picoaide/picoaide-harness/branches/master/protection --jq '.required_status_checks.contexts'
-gh api repos/picoaide/picoaide-harness/rulesets
+gh api repos/zeokeel/ZeoKeel-Harness/branches/master/protection --jq '.required_status_checks.contexts'
+gh api repos/zeokeel/ZeoKeel-Harness/rulesets
 # 3) fork 流量（决定上面那条"成本取舍"是否仍然成立）
-gh api repos/picoaide/picoaide-harness/forks --jq 'length'
+gh api repos/zeokeel/ZeoKeel-Harness/forks --jq 'length'
 ```
 
 **改这份文件或 `codeql.yml` 注释时的动作**：三处（`codeql.yml` 文件头、`codeql.yml` 的

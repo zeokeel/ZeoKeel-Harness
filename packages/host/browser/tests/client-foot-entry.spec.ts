@@ -1,14 +1,14 @@
 /**
- * 浏览器客户端半边的装配契约：条目登记进 `picoFootMenu`，控制权提示仍然是
+ * 浏览器客户端半边的装配契约：条目登记进 `zeokeelFootMenu`，控制权提示仍然是
  * 条目的 attention + 文案（并道之后底部唯一的一行「更多」由
- * `@picoaide/dsh-foot-menu` 拥有）。
+ * `@zeokeel/dsh-foot-menu` 拥有）。
  *
  * 2026-10-04（P1）：提示判据从"只有被拒过"改成"控制权在谁手里"（三档，见
  * `control-hint.ts`）—— AI 交权后停下等人的那条路径此前零提示。下面三条用例分别钉
  * holding / waiting / none 三档，且 holding 的文案不得谎报"AI 在等你"。
  *
  * ---- 变异验证 ----
- *   - 把 `ctx.picoFootMenu.add(…)` 删掉 ⇒「登记条目」红（界面上浏览器入口消失）；
+ *   - 把 `ctx.zeokeelFootMenu.add(…)` 删掉 ⇒「登记条目」红（界面上浏览器入口消失）；
  *   - `id` 改成 panel-surface 的某个 PanelId（例如把浏览器写成 'browser' 之外的 id）
  *     ⇒「id 不是 PanelId」红（否则「更多」行会谎称浏览器面板是当前面板）；
  *   - 去掉 `attention` 或让它恒 false ⇒「等待时 attention 为真」红（2026-09-16 用户闸
@@ -43,7 +43,7 @@ interface Fixture {
 /**
  * 记录型上下文替身；effect 立刻执行（该插件没有挂 React 树的 effect）。
  * @param active - 语言服务报告的当前语言。
- * @param options - `footRowEnabled: false` 模拟"提供 picoFootMenu 的那一行被禁用"。
+ * @param options - `footRowEnabled: false` 模拟"提供 zeokeelFootMenu 的那一行被禁用"。
  * @returns 记录面。
  */
 function fixture(active = 'zh', options: { footRowEnabled?: boolean } = {}): Fixture {
@@ -59,7 +59,7 @@ function fixture(active = 'zh', options: { footRowEnabled?: boolean } = {}): Fix
       if (typeof dispose === 'function' && label !== undefined) disposers.set(label, dispose as () => void)
       return () => {}
     },
-    // 服务等待：`picoFootMenu` 到位时子 fiber 立刻跑；禁用时不跑（条目消失，
+    // 服务等待：`zeokeelFootMenu` 到位时子 fiber 立刻跑；禁用时不跑（条目消失，
     // "唤起浏览器窗口"与"AI 在等你"提示是它的消费者，所以那两个面本来就依附于条目）。
     inject: (deps: string[], run: (scope: ClientContext) => void) => {
       serviceWaits.push(deps)
@@ -71,7 +71,7 @@ function fixture(active = 'zh', options: { footRowEnabled?: boolean } = {}): Fix
       getLocale: () => ({ active }),
       subscribe: () => () => {},
     },
-    picoFootMenu: {
+    zeokeelFootMenu: {
       add: (entry: RegisteredFootEntry) => {
         footEntries.push(entry)
         return () => {
@@ -106,18 +106,18 @@ afterEach(() => {
 })
 
 describe('浏览器客户端半边：foot menu 条目', () => {
-  it('不从硬 inject 等 picoFootMenu（它由可被禁用的一行提供），而是在子 fiber 里等', async () => {
+  it('不从硬 inject 等 zeokeelFootMenu（它由可被禁用的一行提供），而是在子 fiber 里等', async () => {
     const { inject } = await freshPlugin()
     // 硬 inject 的后果：那一行被渠道覆盖层 / `$DSH_HOME/cordis.patch.yml` 禁用时，
     // 整条 fiber 永久 pending（无报错），控制权轮询也一起不启动（P1-7 教训）。
-    expect(inject).not.toContain('picoFootMenu')
+    expect(inject).not.toContain('zeokeelFootMenu')
     expect(inject).toContain('locale')
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })))
     const f = fixture()
     const { apply } = await freshPlugin()
     apply(f.ctx)
     await settle()
-    expect(f.serviceWaits).toEqual([['picoFootMenu']])
+    expect(f.serviceWaits).toEqual([['zeokeelFootMenu']])
   })
 
   it('foot 行被禁用 ⇒ 控制权轮询照常跑（只有条目等不到）', async () => {
@@ -130,7 +130,7 @@ describe('浏览器客户端半边：foot menu 条目', () => {
     expect(f.footEntries).toEqual([])
     // 轮询在**外层** effect 里，与条目是否登记无关。
     expect(f.effects).toContain('browser: control hint store')
-    expect(fetchMock).toHaveBeenCalledWith('/api/pico/browser/state')
+    expect(fetchMock).toHaveBeenCalledWith('/api/zeokeel/browser/state')
     f.disposers.get('browser: control hint store')?.()
   })
 
@@ -228,7 +228,7 @@ describe('浏览器客户端半边：foot menu 条目', () => {
     expect(f.disposers.has('browser: control hint store')).toBe(true)
   })
 
-  it('activate 打写面路由（POST /api/pico/browser/show）', async () => {
+  it('activate 打写面路由（POST /api/zeokeel/browser/show）', async () => {
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     const f = fixture()
@@ -237,12 +237,12 @@ describe('浏览器客户端半边：foot menu 条目', () => {
     await settle()
     f.footEntries[0]!.activate()
     await settle()
-    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/pico/browser/show' && (init as RequestInit | undefined)?.method === 'POST')).toBe(true)
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/zeokeel/browser/show' && (init as RequestInit | undefined)?.method === 'POST')).toBe(true)
   })
 
   it('写面被拒时留痕（控制台 warn），不静默吞掉', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => (String(input) === '/api/pico/browser/show'
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => (String(input) === '/api/zeokeel/browser/show'
       ? new Response('no', { status: 403 })
       : new Response('{}', { status: 200 })))
     vi.stubGlobal('fetch', fetchMock)
@@ -252,7 +252,7 @@ describe('浏览器客户端半边：foot menu 条目', () => {
     await settle()
     f.footEntries[0]!.activate()
     await settle()
-    expect(warn).toHaveBeenCalledWith('[pico-browser] show rejected', 403)
+    expect(warn).toHaveBeenCalledWith('[zeokeel-browser] show rejected', 403)
     warn.mockRestore()
   })
 

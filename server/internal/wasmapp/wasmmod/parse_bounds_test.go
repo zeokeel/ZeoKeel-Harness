@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 本文件是 WASM-1（P1，2026-09-23 独立审计）的回归门禁：

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 )
 
 // 本文件是本机（Linux 原生）对参考实现的**真跑**测试：一个假宿主按 §7.2 驱动它走完整轮次。

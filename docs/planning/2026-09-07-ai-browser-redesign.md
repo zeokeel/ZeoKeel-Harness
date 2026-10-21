@@ -2,7 +2,7 @@
 
 - 日期：2026-09-07
 - 状态：规划（仅设计，未实施）
-- 范围：`packages/host/browser`（@picoaide/dsh-browser）产品形态、交互、工具能力面、会话分组权限隔离、UI/UX 设计规格；不涉及上游 deepseek-harness
+- 范围：`packages/host/browser`（@zeokeel/dsh-browser）产品形态、交互、工具能力面、会话分组权限隔离、UI/UX 设计规格；不涉及上游 deepseek-harness
 - 演进记录：v1 = 视觉/布局重构；v2 = 「面向 AI 的浏览器」工具能力面 + 健壮性；v3 = 会话分组 + 权限隔离（并行制等 7 决策）；**v4 = 全量 UI/UX 审计重建（简洁大气：内容优先、状态克制、AI 状态单点凸显），架构与工具面结论全部保留**。v4 为当前唯一权威设计。
 
 ---
@@ -258,7 +258,7 @@ Group
 
 ## 7. 工具面 v4（权威清单：现状 20 工具 → 18 保留 + 14 新增/升级 = 32）
 
-> 事实修正（2026-09-07 审计）：现状 @picoaide/dsh-browser 实际注册 **20 个工具**（open/new_tab/navigate/reload/go_back/go_forward/click/type/press/select/scroll/screenshot/get_snapshot/get_text/list_tabs/switch_tab/close_tab/close/eval/fill_credentials）；`takeover/release/clear_data` 是 **shell HTTP 动作**（非工具），`download` 由下载守卫自动处理（非工具）。本设计把这 4 个升级/新增为 AI 工具，其余按减法审计。此前文档「现状 24 个」为误计。
+> 事实修正（2026-09-07 审计）：现状 @zeokeel/dsh-browser 实际注册 **20 个工具**（open/new_tab/navigate/reload/go_back/go_forward/click/type/press/select/scroll/screenshot/get_snapshot/get_text/list_tabs/switch_tab/close_tab/close/eval/fill_credentials）；`takeover/release/clear_data` 是 **shell HTTP 动作**（非工具），`download` 由下载守卫自动处理（非工具）。本设计把这 4 个升级/新增为 AI 工具，其余按减法审计。此前文档「现状 24 个」为误计。
 
 ### 7.1 工具全集（最终 32 个，按 6 组）
 
@@ -310,7 +310,7 @@ Group
    - 审计：expression 全文入 op log（代码非机密）；结果只存摘要 + 脱敏值。
    - ~~企业策略：`evalEnabled` 可整体禁用（错误码 `policy`）~~ **承诺已撤回（2026-09-26，R21 F-02）**：
      `evalEnabled` 与 `toolGroups` 两个键**至今没有任何生产者** —— 桌面装配面
-     （`packages/host/desktop/src/profile.ts` 的 `pico-browser` 行）只注入 `appOriginScheme`，
+     （`packages/host/desktop/src/profile.ts` 的 `zeokeel-browser` 行）只注入 `appOriginScheme`，
      而 patch 的 `config` 是整键替换 ⇒ 其余键一律走插件缺省，两个"策略"在任何发行形态下
      都不可达。当前口径是**宿主配置**（想关只能手改装配后的 profile），缺省方向 = `evalEnabled`
      全开、`toolGroups` 七组全开；`[]` 表示"全关"（见 `tools.ts` 的 `parseToolGroups`）。

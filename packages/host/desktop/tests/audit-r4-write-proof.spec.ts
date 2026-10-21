@@ -3,7 +3,7 @@
  *
  * 缺陷面（`packages/host/desktop/src/desktop-update-route.ts:35-45` 的
  * `acceptRendererPost`）只在 `origin !== undefined && origin !== expectedOrigin`
- * 时拒绝 —— **不带 Origin 直接过**。`/api/pico/desktop/update/install` 与
+ * 时拒绝 —— **不带 Origin 直接过**。`/api/zeokeel/desktop/update/install` 与
  * `/update/check` 因此可被本机任意进程（伪造 Host/Origin/Sec-Fetch-Site，无任何
  * cookie）驱动：拉起已下载的安装包 / 触发一次联网检查；`/_dsh/desktop/renderer-boot`
  * 与 `pick-directory` 同族。
@@ -126,7 +126,7 @@ function harness(withFence = true, platform: 'darwin' | 'win32' = 'darwin'): Har
   const runtime = {
     platform,
     locale: 'en',
-    productName: 'PicoAide Harness',
+    productName: 'ZeoKeel Harness',
     updates: {
       isPackaged: true,
       canDownload: true,

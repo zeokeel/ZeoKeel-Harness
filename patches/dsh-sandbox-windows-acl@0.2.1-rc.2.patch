@@ -5,7 +5,7 @@ diff --git a/lib/types-Cl_DXjhk.js b/lib/types-Cl_DXjhk.js
  	return hasExactEntry(labelAcl, 17, 3, 1, lowLabelSidPtr);
  }
  /**
-+* Desktop patch (PicoAide Harness, 2026-09-17): ERROR_ACCESS_DENIED (Win32 5)
++* Desktop patch (ZeoKeel Harness, 2026-09-17): ERROR_ACCESS_DENIED (Win32 5)
 +* from SetNamedSecurityInfoW is a WORKSPACE property, not a transient API
 +* failure, and the bare "SetNamedSecurityInfoW failed (Win32 5)" line leaves the
 +* operator with nothing to act on (real-device report: every command in that

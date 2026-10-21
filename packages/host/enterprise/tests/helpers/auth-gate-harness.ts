@@ -92,7 +92,7 @@ export function harness(
       return undefined
     },
     logger: { info: vi.fn(), warn: loggerWarn, error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,

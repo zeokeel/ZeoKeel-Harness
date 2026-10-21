@@ -203,13 +203,13 @@ describe('FIX-31 / store: a READ failure is not "no credential"', () => {
     const file = join(scopeDir(USER, SERVER), 'example-mcp.json')
     const before = await sha256(file)
     failNextReadOf('example-mcp.json', 'EACCES', 99)
-    const res = await callRoute(harness, '/api/pico/connectors/example-mcp/auth-submit', 'POST', { fields: { API_KEY: 'KEY-2' } })
+    const res = await callRoute(harness, '/api/zeokeel/connectors/example-mcp/auth-submit', 'POST', { fields: { API_KEY: 'KEY-2' } })
     // 路由是 fire-and-forget（OAuth 流程可长达数分钟），成败落在行上。
     expect(res.status).toBe(200)
     const list = await (async () => {
       const deadline = Date.now() + 10_000
       while (Date.now() < deadline) {
-        const body = JSON.parse((await callRoute(harness, '/api/pico/connectors', 'GET')).body) as {
+        const body = JSON.parse((await callRoute(harness, '/api/zeokeel/connectors', 'GET')).body) as {
           connectors: Array<{ status: string; error?: string }>
         }
         if (body.connectors[0]?.status === 'error') return body
@@ -224,9 +224,9 @@ describe('FIX-31 / store: a READ failure is not "no credential"', () => {
     // 恢复路径（用户侧，不需要重启）：断开只 unlink、不读凭据 ⇒ 一定成功；之后重新
     // 授权从"没有凭据"（ENOENT）重新写一份。fail-closed 的前提是**有出路**。
     vi.restoreAllMocks()
-    expect((await callRoute(harness, '/api/pico/connectors/example-mcp/disconnect', 'POST')).status).toBe(200)
+    expect((await callRoute(harness, '/api/zeokeel/connectors/example-mcp/disconnect', 'POST')).status).toBe(200)
     expect(existsSync(file), 'disconnect 清掉了读不出来的那份凭据').toBe(false)
-    expect((await callRoute(harness, '/api/pico/connectors/example-mcp/auth-submit', 'POST', { fields: { API_KEY: 'KEY-3' } })).status).toBe(200)
+    expect((await callRoute(harness, '/api/zeokeel/connectors/example-mcp/auth-submit', 'POST', { fields: { API_KEY: 'KEY-3' } })).status).toBe(200)
     await waitFor(() => existsSync(file))
     expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ fields: { API_KEY: 'KEY-3' } })
   })

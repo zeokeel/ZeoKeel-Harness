@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // R4-D-1（2026-09-23 第四轮审计，P1）的跨端语料判据 —— 本包是那"五处 Go 调用点"之一。
@@ -90,8 +90,8 @@ func loadSkillmanifestSemverCorpus(t *testing.T) []skillmanifestSemverCase {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("共享语料不是合法 JSON：%v", err)
 	}
-	if doc.Schema != "picoaide-semver-corpus/1" {
-		t.Fatalf("共享语料 schema=%q，want picoaide-semver-corpus/1", doc.Schema)
+	if doc.Schema != "zeokeel-semver-corpus/1" {
+		t.Fatalf("共享语料 schema=%q，want zeokeel-semver-corpus/1", doc.Schema)
 	}
 	if len(doc.Cases) == 0 {
 		t.Fatal("共享语料没有任何用例")

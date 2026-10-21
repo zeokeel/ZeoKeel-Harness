@@ -2,7 +2,7 @@
  * Browser client UI copy: zh is the key source, en mirrors the full key set.
  *
  * 2026-09-21（底部并道改造 + 对抗审计）：警示态的**可操作文案**由本字典提供，
- * 经条目的 `attentionTitle()` 交给 `@picoaide/dsh-foot-menu`（它只认这个函数出口，
+ * 经条目的 `attentionTitle()` 交给 `@zeokeel/dsh-foot-menu`（它只认这个函数出口，
  * 不认识浏览器插件）。通用那句（`footMenu.attention`＝"AI 正在等待你的操作"）是
  * 兜底：只说"在等"，不告诉用户下一步点哪里 —— 这正是审计要求补回来的信息。
  *

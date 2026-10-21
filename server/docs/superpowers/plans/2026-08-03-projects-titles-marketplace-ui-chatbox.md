@@ -6,7 +6,7 @@
 
 **Goal:** 客户端新增项目体系(项目=工作目录+会话分组,引擎工具操作项目目录)、LLM 自动标题、Settings 页入口、ChatBox 增强(/命令、@提及、自动增高、历史找回),并将客户端改为 Portable 模式(data 目录随程序目录)。
 
-**Architecture:** 数据层扩展客户端 SQLite(迁移 0010 新增 projects 表 + conversations.project_id),workspace 由 `<exe 同目录或系统目录>/data/workspaces` 演进为「项目内会话 = <项目目录>/<conv-id>/」;引擎工具注册表按会话 workspace 动态构建;标题生成走服务端网关(后台 fire-and-forget)。Portable 判定(仅 Windows/Linux)= 程序根目录存在 `portable.txt`,data 目录 = exe 同目录/data,不可写时回退系统目录。**macOS 不做 portable**:dmg 拖入 Applications 即用,数据按 macOS 规范存 `~/Library/Application Support/picoaide`,随应用分发的是纯程序;并补 macOS HIG 适配(原生菜单 Cmd+Q/+,N、跟随系统深色模式)。
+**Architecture:** 数据层扩展客户端 SQLite(迁移 0010 新增 projects 表 + conversations.project_id),workspace 由 `<exe 同目录或系统目录>/data/workspaces` 演进为「项目内会话 = <项目目录>/<conv-id>/」;引擎工具注册表按会话 workspace 动态构建;标题生成走服务端网关(后台 fire-and-forget)。Portable 判定(仅 Windows/Linux)= 程序根目录存在 `portable.txt`,data 目录 = exe 同目录/data,不可写时回退系统目录。**macOS 不做 portable**:dmg 拖入 Applications 即用,数据按 macOS 规范存 `~/Library/Application Support/zeokeel`,随应用分发的是纯程序;并补 macOS HIG 适配(原生菜单 Cmd+Q/+,N、跟随系统深色模式)。
 
 **Tech Stack:** better-sqlite3 迁移、Electron IPC、Vercel AI SDK(引擎不动)、zustand(renderer)、Vitest(TDD)。
 
@@ -52,14 +52,14 @@ function setExecPath(p: string): void {
 // macOS 一律走标准数据目录(Application Support),不做 portable
 describe('portable mode', () => {
   it('无 portable.txt 时不启用 portable', () => {
-    setExecPath(join(tmp, 'picoaide', 'picoaide'))
+    setExecPath(join(tmp, 'zeokeel', 'zeokeel'))
     expect(isPortable()).toBe(false)
   })
 
   it('exe 同目录存在 portable.txt 时启用 portable,data 目录 = exe 同目录/data(linux)', () => {
     mkdirSync(join(tmp, 'app'), { recursive: true })
     writeFileSync(join(tmp, 'app', 'portable.txt'), '')
-    setExecPath(join(tmp, 'app', 'picoaide'))
+    setExecPath(join(tmp, 'app', 'zeokeel'))
     expect(isPortable()).toBe(true)
     expect(dataDir()).toBe(join(tmp, 'app', 'data'))
   })
@@ -68,12 +68,12 @@ describe('portable mode', () => {
     const app = join(tmp, 'app.app')
     mkdirSync(join(app, 'Contents', 'MacOS'), { recursive: true })
     writeFileSync(join(app, 'portable.txt'), '')
-    setExecPath(join(app, 'Contents', 'MacOS', 'picoaide'))
+    setExecPath(join(app, 'Contents', 'MacOS', 'zeokeel'))
     vi.stubGlobal('process', { ...process, platform: 'darwin' })
     try {
       expect(isPortable()).toBe(false)
       process.env.HOME = join(tmp, 'home')
-      expect(dataDir()).toBe(join(tmp, 'home', 'Library', 'Application Support', 'picoaide'))
+      expect(dataDir()).toBe(join(tmp, 'home', 'Library', 'Application Support', 'zeokeel'))
     } finally {
       vi.unstubAllGlobals()
     }
@@ -84,15 +84,15 @@ describe('portable mode', () => {
     mkdirSync(join(tmp, 'ro'), { recursive: true })
     writeFileSync(join(tmp, 'ro', 'portable.txt'), '')
     writeFileSync(join(tmp, 'ro', 'data'), 'blocked')
-    setExecPath(join(tmp, 'ro', 'picoaide'))
+    setExecPath(join(tmp, 'ro', 'zeokeel'))
     process.env.HOME = join(tmp, 'home')
-    expect(dataDir()).toBe(join(tmp, 'home', '.local', 'share', 'picoaide'))
+    expect(dataDir()).toBe(join(tmp, 'home', '.local', 'share', 'zeokeel'))
   })
 
   it('dataDirOverride 优先于 portable', () => {
     mkdirSync(join(tmp, 'app'), { recursive: true })
     writeFileSync(join(tmp, 'app', 'portable.txt'), '')
-    setExecPath(join(tmp, 'app', 'picoaide'))
+    setExecPath(join(tmp, 'app', 'zeokeel'))
     setDataDirOverride(join(tmp, 'override'))
     expect(dataDir()).toBe(join(tmp, 'override'))
   })
@@ -131,12 +131,12 @@ export function portableDataDir(): string {
 function defaultDataDir(): string {
   const home = process.env.HOME
   if (process.platform === 'darwin') {
-    return join(home ?? '', 'Library', 'Application Support', 'picoaide')
+    return join(home ?? '', 'Library', 'Application Support', 'zeokeel')
   }
   if (process.platform === 'win32') {
-    return join(process.env.APPDATA ?? home ?? '', 'picoaide')
+    return join(process.env.APPDATA ?? home ?? '', 'zeokeel')
   }
-  return join(home ?? '', '.local', 'share', 'picoaide')
+  return join(home ?? '', '.local', 'share', 'zeokeel')
 }
 
 export function dataDir(): string {
@@ -154,7 +154,7 @@ export function dataDir(): string {
 }
 
 export function dbPath(): string {
-  return join(dataDir(), 'picoaide.db')
+  return join(dataDir(), 'zeokeel.db')
 }
 
 export function workspaceDir(): string {
@@ -200,14 +200,14 @@ npx electron-builder --linux --dir
 # Portable 标记:exe 同目录存在 portable.txt → 客户端数据落在运行目录/data
 touch dist/linux-unpacked/portable.txt
 cd dist
-rm -f picoaide-linux-portable.zip
-zip -qr picoaide-linux-portable.zip linux-unpacked
+rm -f zeokeel-linux-portable.zip
+zip -qr zeokeel-linux-portable.zip linux-unpacked
 
 echo
 echo "== Linux packages =="
-echo "deb:      $(ls picoaide_*_amd64.deb 2>/dev/null || ls *.deb 2>/dev/null || echo 'not found (full build only)')"
+echo "deb:      $(ls zeokeel_*_amd64.deb 2>/dev/null || ls *.deb 2>/dev/null || echo 'not found (full build only)')"
 echo "AppImage: $(ls *.AppImage 2>/dev/null || echo 'not found (full build only)')"
-echo "Portable: $(ls picoaide-linux-portable.zip 2>/dev/null || echo 'not found')"
+echo "Portable: $(ls zeokeel-linux-portable.zip 2>/dev/null || echo 'not found')"
 ```
 
 - [ ] **Step 2: pkg-windows.sh 尾部追加**
@@ -215,9 +215,9 @@ echo "Portable: $(ls picoaide-linux-portable.zip 2>/dev/null || echo 'not found'
 ```bash
 touch dist/win-unpacked/portable.txt
 cd dist
-rm -f picoaide-windows-portable.zip
-zip -qr picoaide-windows-portable.zip win-unpacked
-echo "Portable: $(ls picoaide-windows-portable.zip)"
+rm -f zeokeel-windows-portable.zip
+zip -qr zeokeel-windows-portable.zip win-unpacked
+echo "Portable: $(ls zeokeel-windows-portable.zip)"
 ```
 
 - [ ] **Step 3: pkg-macos.sh 确认 dmg 标准产物(数据走 Application Support,无 portable.txt)**
@@ -225,7 +225,7 @@ echo "Portable: $(ls picoaide-windows-portable.zip)"
 `scripts/pkg-macos.sh` 保持 electron-builder --mac dmg(拖入 Applications 即用);追加说明注释:
 
 ```bash
-# macOS 规范:标准 dmg,拖入 Applications 即用;数据存 ~/Library/Application Support/picoaide(非 portable)
+# macOS 规范:标准 dmg,拖入 Applications 即用;数据存 ~/Library/Application Support/zeokeel(非 portable)
 ```
 
 - [ ] **Step 4: 验证脚本语法**
@@ -337,8 +337,8 @@ function buildMenu(): void {
     const apply = (t: 'dark' | 'light'): void => {
       document.documentElement.classList.toggle('dark', t === 'dark')
     }
-    void window.picoaide.getTheme().then(apply)
-    const off = window.picoaide.onThemeChanged(apply)
+    void window.zeokeel.getTheme().then(apply)
+    const off = window.zeokeel.onThemeChanged(apply)
     return () => off()
   }, [])
 ```
@@ -347,7 +347,7 @@ function buildMenu(): void {
 
 ```tsx
   useEffect(() => {
-    const off = window.picoaide.onMenuCommand((cmd) => {
+    const off = window.zeokeel.onMenuCommand((cmd) => {
       if (cmd === 'settings') setView('settings')
       else if (cmd === 'new-chat') void useChatStore.getState().newConversation()
     })
@@ -404,7 +404,7 @@ function buildMenu(): void {
 Run: `cd desktop && npm test && npm run typecheck`
 Expected: 全绿(typecheck 覆盖 preload/renderer/main 类型)
 
-macOS 手动验证(有 mac 环境时):菜单含 PicoAide/文件/编辑/窗口,Cmd+, 打开设置,Cmd+N 新建会话;切换系统深色模式 UI 跟随;dmg 拖入 Applications 启动正常,数据落在 `~/Library/Application Support/picoaide`。
+macOS 手动验证(有 mac 环境时):菜单含 ZeoKeel/文件/编辑/窗口,Cmd+, 打开设置,Cmd+N 新建会话;切换系统深色模式 UI 跟随;dmg 拖入 Applications 启动正常,数据落在 `~/Library/Application Support/zeokeel`。
 
 - [ ] **Step 7: Commit**
 
@@ -687,7 +687,7 @@ import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const MAX_DEPTH = 3
-const SKIP = new Set(['node_modules', '.git', 'dist', 'out', '.picoaide-data'])
+const SKIP = new Set(['node_modules', '.git', 'dist', 'out', '.zeokeel-data'])
 
 // 递归枚举文件(深度 ≤3,排除噪音目录);roots 需经调用方校验在可访问目录内
 export function listFilesRecursive(roots: string[]): string[] {
@@ -867,7 +867,7 @@ git commit -m "feat: engine tools bind to conversation workspace"
 - [ ] **Step 1: 写失败测试(chat.test.ts 追加,仿现有 fake 模式)**
 
 ```ts
-// FakePicoaide 增加:
+// FakeZeoKeel 增加:
   projectList: ReturnType<typeof vi.fn>
   projectCreate: ReturnType<typeof vi.fn>
   projectDelete: ReturnType<typeof vi.fn>
@@ -960,19 +960,19 @@ export interface ProjectView {
   collapsedProjects: [],
 
 // 实现:
-  loadProjects: async () => set({ projects: await picoaide().projectList() }),
+  loadProjects: async () => set({ projects: await zeokeel().projectList() }),
   createProject: async (input) => {
-    const id = await picoaide().projectCreate(input)
+    const id = await zeokeel().projectCreate(input)
     await get().loadProjects()
     return id
   },
   deleteProject: async (id) => {
-    await picoaide().projectDelete(id)
+    await zeokeel().projectDelete(id)
     set((s) => ({ activeProjectId: s.activeProjectId === id ? null : s.activeProjectId }))
     await get().loadProjects()
   },
   moveConversation: async (conversationId, projectId) => {
-    await picoaide().moveConversation(conversationId, projectId)
+    await zeokeel().moveConversation(conversationId, projectId)
     await Promise.all([get().loadConversations(), get().loadProjects()])
   },
   setActiveProject: (id) => set({ activeProjectId: id }),
@@ -988,14 +988,14 @@ export interface ProjectView {
 
 ```ts
   newConversation: async () => {
-    const id = await picoaide().chatNew({ mode: get().mode, projectId: get().activeProjectId })
-    const [conversations, projects] = await Promise.all([picoaide().chatList(), picoaide().projectList()])
+    const id = await zeokeel().chatNew({ mode: get().mode, projectId: get().activeProjectId })
+    const [conversations, projects] = await Promise.all([zeokeel().chatList(), zeokeel().projectList()])
     set({ conversations, projects, activeId: id, messages: [], artifacts: [], streaming: false, streamingText: '', toolCalls: [], localError: null, hasMoreMessages: false, loadedTotal: 0 })
     return id
   },
 ```
 
-(chat.test.ts 的 FakePicoaide 若按接口实现会缺方法编译报错——fake 是 `ReturnType<typeof vi.fn>` 的对象字面量,不强制实现全接口,现有测试能过。但 `chatNew` 断言 `toHaveBeenCalledWith({ mode: 'ask' })` 的现有用例需改为 `{ mode: 'ask', projectId: null }`,在 Step 3 同步更新。)
+(chat.test.ts 的 FakeZeoKeel 若按接口实现会缺方法编译报错——fake 是 `ReturnType<typeof vi.fn>` 的对象字面量,不强制实现全接口,现有测试能过。但 `chatNew` 断言 `toHaveBeenCalledWith({ mode: 'ask' })` 的现有用例需改为 `{ mode: 'ask', projectId: null }`,在 Step 3 同步更新。)
 
 - [ ] **Step 4: 跑测试确认绿**
 
@@ -1332,12 +1332,12 @@ export default function Main({ onOpenSettings }: { onOpenSettings: () => void })
     void loadConversations()
     void loadProjects()
     void useChatStore.getState().checkInterrupted()
-    const off = window.picoaide.onInterrupted((list) => useChatStore.getState().onInterrupted(list))
+    const off = window.zeokeel.onInterrupted((list) => useChatStore.getState().onInterrupted(list))
     return () => off()
   }, [loadConversations, loadProjects])
 
   const pickProjectDir = async () => {
-    const dirs = await window.picoaide.pickDirectory()
+    const dirs = await window.zeokeel.pickDirectory()
     if (dirs && dirs.length > 0) setProjectPath(dirs[0])
   }
 
@@ -1696,12 +1696,12 @@ export default function ChatInput() {
   // @ 文件候选:活动项目 workspace 文件(懒加载一次)
   useEffect(() => {
     if (activeProjectId === null) return
-    void window.picoaide.workspaceListFiles([]).then(setFiles).catch(() => setFiles([]))
+    void window.zeokeel.workspaceListFiles([]).then(setFiles).catch(() => setFiles([]))
   }, [activeProjectId])
 
   // 已装技能列表(plugin 清单,含 installed 映射)
   useEffect(() => {
-    void window.picoaide.skillsList().then((r) => setInstalledSkills(Object.keys(r.installed))).catch(() => setInstalledSkills([]))
+    void window.zeokeel.skillsList().then((r) => setInstalledSkills(Object.keys(r.installed))).catch(() => setInstalledSkills([]))
   }, [])
 
   const commandItems = (bootstrap?.skills ?? []).map((s) => s.name)
@@ -1843,7 +1843,7 @@ export default function ChatInput() {
 ```
 
 注意:
-- `window.picoaide.skillsList` 与 `workspaceListFiles` 需在 preload 暴露(plugin_ipc 已有 `pluginSkillsList` 于 `pluginApi()`;检查 preload 的 plugin 命名空间——若 plugin 方法挂在 `window.picoaide.pluginSkillsList` 则 ChatInput 直接调用,不需新 IPC;`workspaceListFiles` 走 `roots: []` 时主进程枚举 allowedDirs + 活动项目目录,见 Step 6)。
+- `window.zeokeel.skillsList` 与 `workspaceListFiles` 需在 preload 暴露(plugin_ipc 已有 `pluginSkillsList` 于 `pluginApi()`;检查 preload 的 plugin 命名空间——若 plugin 方法挂在 `window.zeokeel.pluginSkillsList` 则 ChatInput 直接调用,不需新 IPC;`workspaceListFiles` 走 `roots: []` 时主进程枚举 allowedDirs + 活动项目目录,见 Step 6)。
 - onApprove 保留现有实现。
 
 - [ ] **Step 6: workspace:listFiles 空 roots 语义 + preload plugin 暴露**
@@ -1865,10 +1865,10 @@ export default function ChatInput() {
       listAllowedDirs: () => resolveAllowedDirs(workspaceDir(), getAllowedDirsFromSettings((k) => getSetting(db, k))),
 ```
 
-`AgentIpcDeps` 加 `activeWorkspace?: () => string | null`(ChatInput 传 activeProjectId 对应 project path 更精确,但为最小改动:renderer 侧 `window.picoaide.workspaceListFiles([])` 即枚举所有可访问目录,涵盖项目目录——项目路径在可访问目录内吗?项目目录是用户选的任意目录,不在 allowedDirs 内!所以空 roots 枚举可访问目录**不含项目目录**。修正:ChatInput 需要项目 path → renderer 的 chat store 已有 `projects`(含 path),取 `projects.find(p => p.id === activeProjectId)?.path` 传入 roots:
+`AgentIpcDeps` 加 `activeWorkspace?: () => string | null`(ChatInput 传 activeProjectId 对应 project path 更精确,但为最小改动:renderer 侧 `window.zeokeel.workspaceListFiles([])` 即枚举所有可访问目录,涵盖项目目录——项目路径在可访问目录内吗?项目目录是用户选的任意目录,不在 allowedDirs 内!所以空 roots 枚举可访问目录**不含项目目录**。修正:ChatInput 需要项目 path → renderer 的 chat store 已有 `projects`(含 path),取 `projects.find(p => p.id === activeProjectId)?.path` 传入 roots:
 
 ```ts
-    void window.picoaide
+    void window.zeokeel
       .workspaceListFiles(activeProject ? [activeProject.path] : [])
       .then(setFiles)
       .catch(() => setFiles([]))
@@ -1911,7 +1911,7 @@ export default function ChatInput() {
   workspaceListFiles: (): Promise<string[]> => ipcRenderer.invoke('workspace:listFiles'),
 ```
 
-ChatInput 调用 `window.picoaide.workspaceListFiles()`(无参)。
+ChatInput 调用 `window.zeokeel.workspaceListFiles()`(无参)。
 
 `skillsList`:检查 preload 是否已暴露 plugin 方法。若无,preload 加:
 
@@ -1920,7 +1920,7 @@ ChatInput 调用 `window.picoaide.workspaceListFiles()`(无参)。
     ipcRenderer.invoke('plugin:skills:list'),
 ```
 
-(检查 plugin_ipc.ts 的实际 channel 名,保持一致;若 `pluginApi()` 在 preload 的 plugin 命名空间,则 `window.picoaide.pluginSkillsList()` 直接用。)
+(检查 plugin_ipc.ts 的实际 channel 名,保持一致;若 `pluginApi()` 在 preload 的 plugin 命名空间,则 `window.zeokeel.pluginSkillsList()` 直接用。)
 
 - [ ] **Step 7: 验证 + Commit**
 
@@ -1940,7 +1940,7 @@ git commit -m "feat: chatbox slash commands, mentions, autoresize, history"
 
 **Files:**
 - Modify: `AGENTS.md`(§7 契约:客户端 5 表、新增 IPC、Portable 模式说明)
-- Modify: `docs/superpowers/specs/2026-08-01-picoaide-next-architecture-design.md`(§DB 模型补 projects 表,Portable 数据目录)
+- Modify: `docs/superpowers/specs/2026-08-01-zeokeel-next-architecture-design.md`(§DB 模型补 projects 表,Portable 数据目录)
 
 - [ ] **Step 1: AGENTS.md §7 更新**
 
@@ -1953,7 +1953,7 @@ projects 表 DDL 与 project_id 列;数据目录章节补 Portable 分支。
 - [ ] **Step 3: Commit**
 
 ```bash
-git add AGENTS.md docs/superpowers/specs/2026-08-01-picoaide-next-architecture-design.md
+git add AGENTS.md docs/superpowers/specs/2026-08-01-zeokeel-next-architecture-design.md
 git commit -m "docs: projects/portable/autotitle contracts"
 ```
 
@@ -1984,8 +1984,8 @@ Run: `cd desktop && npm run dev`
 4. 会话 hover → 移动到其他项目/未分类
 5. 设置入口可达,技能/MCP 清单展示与安装
 6. ChatInput:`/` 弹出技能列表、`@` 弹出文件/技能、textarea 自动增高、↑ 找回历史
-7. Portable(Windows/Linux):解压打包产物,exe 同目录生成 data 文件夹(首次运行),picoaide.db 与 workspaces 在其中
-8. macOS(有环境时):dmg 拖入 Applications 启动正常,数据落 `~/Library/Application Support/picoaide`;Cmd+,/Cmd+N 生效;深色模式跟随系统
+7. Portable(Windows/Linux):解压打包产物,exe 同目录生成 data 文件夹(首次运行),zeokeel.db 与 workspaces 在其中
+8. macOS(有环境时):dmg 拖入 Applications 启动正常,数据落 `~/Library/Application Support/zeokeel`;Cmd+,/Cmd+N 生效;深色模式跟随系统
 
 - [ ] **Step 5: Commit(若有冒烟修复)**
 

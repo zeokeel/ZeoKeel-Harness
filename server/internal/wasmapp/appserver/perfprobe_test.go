@@ -6,7 +6,7 @@ package appserver
 //
 // 复跑：
 //
-//	cd server && PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/picoaide_test?sslmode=disable \
+//	cd server && PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test?sslmode=disable \
 //	  bash ../temp/wasm-heavy.sh 900 go test -tags perfprobe ./internal/wasmapp/appserver/ \
 //	  -run TestPerfProbe_StaticFixedCost -count=1 -v
 //
@@ -30,10 +30,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
 )
 
 // moduleSetForTest 取模块缓存里该版本的内存资源集（探针用；取不到即 Fatal）。

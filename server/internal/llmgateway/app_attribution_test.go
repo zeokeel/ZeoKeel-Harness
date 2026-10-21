@@ -19,8 +19,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // TestSanitizeUsageAppIDIsNarrowerThanRegistry 是"收窄副本"的对拍（唯一真源在 registry）。
@@ -107,7 +107,7 @@ func TestBindUsageAppIDSkipsInvalidAndEmpty(t *testing.T) {
 }
 
 // TestBindUsageAppIDIgnoresSelfDeclaredHeader 是 §21.4 后半的判据：
-// **没有会话链路的自报头**（`X-Pico-App-Id`）一律忽略 —— 它没有可校验的来源。
+// **没有会话链路的自报头**（`X-ZeoKeel-App-Id`）一律忽略 —— 它没有可校验的来源。
 //
 // 变异：把 `appIDFromRequest` 改回"读自报头" ⇒ 本用例红（伪造头就能写标签）。
 func TestBindUsageAppIDIgnoresSelfDeclaredHeader(t *testing.T) {

@@ -29,7 +29,7 @@ function bootWebFace(options: BootOptions = {}): { index: (html: string) => stri
     effect: (fn: () => unknown) => { fn() },
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? (services[name])),
-    picoSession: { isRestored: () => true, isLoggedIn: () => false, getSession: () => null },
+    zeokeelSession: { isRestored: () => true, isLoggedIn: () => false, getSession: () => null },
     webServer: {
       tapIndex: (callback: (html: string) => string) => { index = callback; return () => {} },
       register: (route: { path: string, handler: (req: IncomingMessage, res: ServerResponse) => unknown }) => {

@@ -102,7 +102,7 @@
       {
         "file": "server/cmd/server/legacy_config.go",
         "capability": "legacy-app-origin-env",
-        "reason": "R15C-R-03（审计 2026-09-25，P2）的『已废除配置启动期提示』登记表。该文件逐字保留 `PICOAI_APPS_BASE_DOMAIN`（env）与 `wasm.apps_base_domain`（settings）这两个**已废除**的键名，唯一用途是启动期 `os.LookupEnv`/`GetSetting` 检测残留、并打印可直接执行的清理命令 —— 键名在这里出现是**判据本身的要求**（键名写成拼接/运行时合成会让检测失效，正是门禁禁止的规避手法）。它不实现任何旧模型能力：没有按 Host 反查 app_id、没有子域门控、没有换票 Cookie、没有入口路由；对外应用子域与匿名面已随 W4 删除。与 `server/internal/wasmapp/appcfg` 的历史取值兼容读同性质（旧名必须存在才有意义）。"
+        "reason": "R15C-R-03（审计 2026-09-25，P2）的『已废除配置启动期提示』登记表。该文件逐字保留 `ZEOKEEL_APPS_BASE_DOMAIN`（env）与 `wasm.apps_base_domain`（settings）这两个**已废除**的键名，唯一用途是启动期 `os.LookupEnv`/`GetSetting` 检测残留、并打印可直接执行的清理命令 —— 键名在这里出现是**判据本身的要求**（键名写成拼接/运行时合成会让检测失效，正是门禁禁止的规避手法）。它不实现任何旧模型能力：没有按 Host 反查 app_id、没有子域门控、没有换票 Cookie、没有入口路由；对外应用子域与匿名面已随 W4 删除。与 `server/internal/wasmapp/appcfg` 的历史取值兼容读同性质（旧名必须存在才有意义）。"
       }
     ]
   },

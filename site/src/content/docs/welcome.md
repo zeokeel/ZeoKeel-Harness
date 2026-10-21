@@ -1,9 +1,9 @@
 ---
 title: 欢迎
-description: PicoAide Harness 是什么、由哪三层组成、不同角色按什么顺序读文档，以及当前支持与不支持的边界。
+description: ZeoKeel Harness 是什么、由哪三层组成、不同角色按什么顺序读文档，以及当前支持与不支持的边界。
 ---
 
-PicoAide Harness 是**企业级 DeepSeek Harness 一体化平台**：桌面客户端 + 本地 Harness 服务 + 企业服务端三层，会话与文件留在员工机器、账号与管控留在客户自己的服务器，整个产品一切皆插件。
+ZeoKeel Harness 是**企业级 DeepSeek Harness 一体化平台**：桌面客户端 + 本地 Harness 服务 + 企业服务端三层，会话与文件留在员工机器、账号与管控留在客户自己的服务器，整个产品一切皆插件。
 
 这一页是全站入口：先看清三层各负责什么、自己该按什么顺序读，再看边界清单确认你要的能力在不在。
 

@@ -4,7 +4,7 @@
 // 为什么必须是 `go build` 出来的 main 二进制：`version.GetWazeroVersion()`（wazero 内部实现）
 // 靠 `debug.ReadBuildInfo().Deps` 找自己的版本，而**只有 `go test` 二进制的 Deps 里没有
 // wazero**（实测 Main.Version=(devel)）⇒ 分代才会回落到 limits.CompileCacheRevision。
-// 生产进程（服务端 / cmd/picoaide-app-compile）都是 main 二进制 ⇒ 拿得到真版本
+// 生产进程（服务端 / cmd/zeokeel-app-compile）都是 main 二进制 ⇒ 拿得到真版本
 // ⇒ 升级 wazero 后旧代目录本来就不会被命中，不需要任何人记得改常量。
 //
 // 用法（由 runtime 包的 TestCompileCacheNamespaceInProductionBinary 调用）：
@@ -23,8 +23,8 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	wasmruntime "github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	wasmruntime "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 )
 
 func main() {

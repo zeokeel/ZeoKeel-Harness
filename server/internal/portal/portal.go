@@ -92,7 +92,7 @@ type Platform struct {
 
 // View 门户页渲染数据。
 type View struct {
-	// Name 站点名(品牌显示名;缺省 PicoAide)
+	// Name 站点名(品牌显示名;缺省 ZeoKeel)
 	Name string
 	// Tagline 一句话标语
 	Tagline string

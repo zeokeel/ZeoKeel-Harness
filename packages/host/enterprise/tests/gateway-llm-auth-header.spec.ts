@@ -19,7 +19,7 @@
  * 会把伪造网关判红（真网关的 401 由 `temp/r4/gateway-bearer-probe.mjs` 对真 Go 服务端跑）。
  *
  * 2026-09-28 追加：**端点硬边界**（`endpointMismatch`）—— 令牌只允许发给**当前会话的
- * `<serverURL>/v1`**。因此本文件的组合必须提供 `picoSession`（生产里由 `picoaide-session`
+ * `<serverURL>/v1`**。因此本文件的组合必须提供 `zeokeelSession`（生产里由 `zeokeel-session`
  * 行提供）；"会话与端点不一致"的用例见文件末尾的 `describe`。
  */
 import { createServer, type IncomingMessage, type Server } from 'node:http'
@@ -102,7 +102,7 @@ async function boot(
   ctx.provide('settings', { configure: () => () => {} } as never)
   ctx.provide('credentials', { resolve: async () => (credential === undefined ? undefined : { value: credential, source: 'stub' }) } as never)
   // 端点硬边界的信任锚：当前会话的 serverURL（`gateway-model.ts` 就是用它推出行 baseURL 的）。
-  ctx.provide('picoSession', {
+  ctx.provide('zeokeelSession', {
     getSession: () => (sessionServerURL === null
       ? null
       : { serverURL: sessionServerURL, username: 'smoke', token: TOKEN }),
@@ -159,7 +159,7 @@ describe('gateway-llm: 网关令牌真的以 Authorization: Bearer 上了模型�
     let served = 0
     const resolve = vi.fn(async () => ({ value: `gw-token-${served += 1}`, source: 'stub' }))
     ctx.provide('credentials', { resolve } as never)
-    ctx.provide('picoSession', {
+    ctx.provide('zeokeelSession', {
       getSession: () => ({ serverURL: upstream.origin, username: 'smoke', token: TOKEN }),
     } as never)
     await ctx.plugin({ name: GATEWAY_LLM_ROW_ID, inject: ['llm', 'credentials'], apply: gatewayLlm.apply } as never, { baseURL: `${upstream.origin}/v1` } as never)
@@ -198,7 +198,7 @@ describe('gateway-llm: 网关令牌真的以 Authorization: Bearer 上了模型�
     await ctx.plugin(LlmRuntime)
     ctx.provide('settings', { configure: () => () => {} } as never)
     ctx.provide('credentials', { resolve: async () => undefined } as never)
-    ctx.provide('picoSession', { getSession: () => null } as never)
+    ctx.provide('zeokeelSession', { getSession: () => null } as never)
     const failure = await captureFailure(() => ctx.plugin(
       { name: GATEWAY_LLM_ROW_ID, inject: ['llm', 'credentials'], apply: gatewayLlm.apply } as never,
       { baseURL: 'https://harness.example.com/v1', protocol: 'chat-completions' } as never,
@@ -225,8 +225,8 @@ async function captureFailure(load: () => unknown): Promise<string | undefined> 
 /** 组装契约的字符串面（`TOKEN_ENV` 是公开契约，两个模块必须用同一个）。 */
 describe('gateway-llm: 共享契约', () => {
   it('凭据引用名保持稳定（web-search 行的 apiKeyEnv 也指向它）', () => {
-    expect(TOKEN_ENV).toBe('PICOAI_GATEWAY_TOKEN')
-    expect(GATEWAY_LLM_ROW_ID).toBe('picoaide-gateway-llm')
+    expect(TOKEN_ENV).toBe('ZEOKEEL_GATEWAY_TOKEN')
+    expect(GATEWAY_LLM_ROW_ID).toBe('zeokeel-gateway-llm')
   })
 
   it('行导出 Schemastery 的 `Config`（否则这一行不是可配置条目、设置命名空间写不进去）', () => {

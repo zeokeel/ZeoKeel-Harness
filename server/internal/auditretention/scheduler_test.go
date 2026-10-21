@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // seedAuditRows 直接写审计行（**不**走 AuditLog：这里要精确控制 created_at，

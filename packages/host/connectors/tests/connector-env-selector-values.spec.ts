@@ -206,7 +206,7 @@ describe('N-3 — pager/editor values are graded: one plain program name, nothin
   })
 
   it('really hands a safe value to the child and really keeps a shell template out (real spawn)', async () => {
-    const base = await tempDir('pico-conn-n3-')
+    const base = await tempDir('zeokeel-conn-n3-')
     const good: ConnectorDef = {
       id: 'editor-cli',
       name: 'Editor CLI',

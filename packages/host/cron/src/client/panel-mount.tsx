@@ -2,7 +2,7 @@
  * 「定时任务」中心面板的装载点。
  *
  * 面板本身的切换语义（中列整页接管、四个面板互斥、侧边栏点行让位、Esc 返回）
- * 全部由 `@picoaide/dsh-panel-surface` 提供 —— 本文件只剩两件事：把装载器接上，
+ * 全部由 `@zeokeel/dsh-panel-surface` 提供 —— 本文件只剩两件事：把装载器接上，
  * 以及给触发按钮一个 `openCronPanel()`（它自己不读写 html 属性）。
  * 关闭由装载器负责（Esc / 面板返回按钮），故没有对称的 `closeCronPanel()`。
  *
@@ -10,12 +10,12 @@
  * 等中列出现 + `data-dsh-cron-active`）。2026-09-20 收敛到共享装载器，因为
  * 能力中心/连接器/应用中心当时各自是模态浮层，同一个产品里出现了两种切换语义。
  *
- * @module @picoaide/dsh-cron/client/panel-mount
+ * @module @zeokeel/dsh-cron/client/panel-mount
  */
 import { createElement } from 'react'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type { IWorkspaces } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import { mountPanelSurface, type PanelSurfaceHandle } from '@picoaide/dsh-panel-surface/client'
+import { mountPanelSurface, type PanelSurfaceHandle } from '@zeokeel/dsh-panel-surface/client'
 import type { CronController } from './controller.ts'
 import { CronJobTab } from './CronJobTab.tsx'
 

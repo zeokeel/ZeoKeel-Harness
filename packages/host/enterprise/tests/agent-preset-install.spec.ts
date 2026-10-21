@@ -70,7 +70,7 @@ async function packDir(dir: string): Promise<Buffer> {
 
 /** Build a gzipped tar from the given files ({ path -> content }). */
 async function makeArchive(files: Record<string, string>): Promise<Buffer> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-preset-archive-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-preset-archive-'))
   try {
     for (const [path, content] of Object.entries(files)) {
       const full = join(dir, path)
@@ -84,7 +84,7 @@ async function makeArchive(files: Record<string, string>): Promise<Buffer> {
 }
 
 async function newPresetsDir(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), 'pico-presets-'))
+  return await mkdtemp(join(tmpdir(), 'zeokeel-presets-'))
 }
 
 describe('validatePresetId', () => {
@@ -147,16 +147,16 @@ describe('packPreset', () => {
       try {
         await installPresetArchive({ name: 'ppt-gen', archive: result.archive, presetsDir: scratch })
         const installed = await readdir(join(scratch, 'ppt-gen'))
-        // .picoaide 是安装器写入的溯源标记(与技能同构),不属于包内容。
-        expect(installed.sort()).toEqual(['.picoaide', 'agent.cordis.yml', 'assets', 'preset.yml', 'skills'])
-        const prov = JSON.parse(await readFile(join(scratch, 'ppt-gen', '.picoaide', 'release.json'), 'utf8')) as { appId: string, channel: string }
+        // .zeokeel 是安装器写入的溯源标记(与技能同构),不属于包内容。
+        expect(installed.sort()).toEqual(['.zeokeel', 'agent.cordis.yml', 'assets', 'preset.yml', 'skills'])
+        const prov = JSON.parse(await readFile(join(scratch, 'ppt-gen', '.zeokeel', 'release.json'), 'utf8')) as { appId: string, channel: string }
         expect(prov.appId).toBe('ppt-gen')
         expect(prov.channel).toBe('org')
         // 重新打包时溯源目录必须被排除,否则再次上传会被判为伪造归属。
         const repacked = await packPreset(scratch, 'ppt-gen')
         const AdmZipCtor = (await import('adm-zip')).default
         const names = new AdmZipCtor(repacked.archive).getEntries().map((e) => e.entryName)
-        expect(names.some((n) => n.startsWith('.picoaide'))).toBe(false)
+        expect(names.some((n) => n.startsWith('.zeokeel'))).toBe(false)
         expect((await readFile(join(scratch, 'ppt-gen', 'skills', 'demo', 'SKILL.md'), 'utf8')).trim()).toBe('# demo')
         expect(await readFile(join(scratch, 'ppt-gen', 'assets', 'note.txt'), 'utf8')).toBe('hello')
       } finally {
@@ -278,7 +278,7 @@ describe('installPresetArchive', () => {
    * 审计 2026-09-23 **N2**：面板的「更新智能体」此前**必然失败** —— 安装器对已存在
    * 目录一律拒收（`preset "x" already exists locally`），而宿主又不读 `?overwrite=1`。
    * 现在与技能侧同口径（来源判定复用 `isStoreProvenance`）：
-   *  - 能力中心装的那一份（磁盘上有 `.picoaide/release.json` 且渠道 ∈ 商店来源、
+   *  - 能力中心装的那一份（磁盘上有 `.zeokeel/release.json` 且渠道 ∈ 商店来源、
    *    appId == 目录名）⇒ 直接更新；
    *  - 本机自制 / 来源不明 ⇒ 没有 `overwrite: true` 一律拒收 `LOCAL_CONTENT`，
    *    且**磁盘一字未动**；显式确认后才整树替换。
@@ -354,7 +354,7 @@ describe('installPresetArchive', () => {
     // Pack a file from OUTSIDE the cwd: tar.c records the entry path as the
     // archive's relative path — a `../escape` entry is what the installer's
     // pass-1 scan must refuse.
-    const outside = await mkdtemp(join(tmpdir(), 'pico-preset-outside-'))
+    const outside = await mkdtemp(join(tmpdir(), 'zeokeel-preset-outside-'))
     await writeFile(join(outside, 'escape.txt'), 'x')
     const archive: Buffer = await new Promise((resolveP, rejectP) => {
       const chunks: Buffer[] = []

@@ -18,10 +18,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appseed"
-	"github.com/picoaide/picoaide/internal/wasmapp/appserver"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appserver"
 )
 
 // 本文件是**"随包资源内存直出"的端到端判据**（2026-09-20 定案）。
@@ -147,7 +147,7 @@ func TestAssetsAreServedFromMemoryWithoutAnyExtraction(t *testing.T) {
 	}
 	// 只有应用自己用 assets.read 读得到的保留资源：宿主永不直出。
 	if rec := get("/" + limits.AppConfigFileName); rec.Code == 200 && strings.Contains(rec.Body.String(), "whitelist") {
-		t.Fatal("保留资源 picoaide.app.json 不得被宿主直出")
+		t.Fatal("保留资源 zeokeel.app.json 不得被宿主直出")
 	}
 
 	// 服务过程**不得**产生任何新的资源目录（历史那个是我们自己造的，只等清理）。
@@ -184,7 +184,7 @@ func packedShowcaseModule(t *testing.T) []byte {
 			return
 		}
 		root := strings.TrimSpace(string(rootOut))
-		out, err := os.MkdirTemp("", "picoaide-cmdserver-showcase-")
+		out, err := os.MkdirTemp("", "zeokeel-cmdserver-showcase-")
 		if err != nil {
 			packedShowcaseErr = err
 			return

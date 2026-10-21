@@ -402,7 +402,7 @@ describe('R18A-SK-03 ⑥：面板投影（真 auth-gate 路由）——老标记
     const h = harness(SESSION)
     stubGateway(h, Buffer.from(''))
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/capabilities')(fakeReq('GET', '/api/pico/capabilities?source=local'), res)
+    await h.handler('/api/zeokeel/capabilities')(fakeReq('GET', '/api/zeokeel/capabilities?source=local'), res)
     const rows = (read().body.items ?? []) as Array<Record<string, unknown>>
     const local = rows.find(row => row.source === 'local' && row.name === 'victim')
     console.log('[SK-03⑥] 面板行 =', JSON.stringify(local))
@@ -422,7 +422,7 @@ describe('R18A-SK-03 ⑥：面板投影（真 auth-gate 路由）——老标记
     const h = harness(SESSION)
     stubGateway(h, Buffer.from(''))
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/capabilities')(fakeReq('GET', '/api/pico/capabilities?source=local'), res)
+    await h.handler('/api/zeokeel/capabilities')(fakeReq('GET', '/api/zeokeel/capabilities?source=local'), res)
     const rows = (read().body.items ?? []) as Array<Record<string, unknown>>
     const local = rows.find(row => row.source === 'local' && row.name === 'victim')
     console.log('[SK-03⑥/反向] 面板行 =', JSON.stringify(local))

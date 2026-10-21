@@ -10,7 +10,7 @@
  *
  * **不要**在这个文件里 import 任何 `node:*`、cordis、schemastery。
  *
- * @module @picoaide/dsh-enterprise/channel-content
+ * @module @zeokeel/dsh-enterprise/channel-content
  */
 
 /**
@@ -40,7 +40,7 @@ export interface ChannelConfig {
  *
  * 服务端下发的 `logo_url` / `favicon_url` 是相对路径（如
  * `/api/client/v2/channel/logo`，命名空间真源在 `internal/router`）。谁消费谁负责
- * 拼服务端地址，而客户端本地端点 `/api/pico/channel` 的返回值**会被直接存进
+ * 拼服务端地址，而客户端本地端点 `/api/zeokeel/channel` 的返回值**会被直接存进
  * store 交给 `<img>` 渲染** —— 相对路径在 Electron 渲染层会打到本地 webServer 而
  * 404，页面上就是一个裂图（2026-09-10 实测：服务端开始下发 `client.logo_url`
  * 之后暴露出来）。因此该端点在出口处统一绝对化。
@@ -135,13 +135,13 @@ export interface BrandConfig {
  * 刻意保留官方值而不是中性占位 —— 本地开发（`yarn dev`）与官方构建走的就是这一份。
  */
 /** 官方渠道名字：内置兜底的唯一字面量来源。 */
-const OFFICIAL_NAME = 'PicoAide'
+const OFFICIAL_NAME = 'ZeoKeel'
 /** 官方渠道标语。 */
 const OFFICIAL_TAGLINE = 'Enterprise AI Gateway'
 /** 未配置品牌时的中性名。 */
 const NEUTRAL_NAME = 'Harness'
 /** 官方渠道界面全名。 */
-const OFFICIAL_PRODUCT_NAME = 'PicoAide Harness'
+const OFFICIAL_PRODUCT_NAME = 'ZeoKeel Harness'
 
 export const DEFAULT_CHANNEL: ChannelConfig = {
   login: { display_name: OFFICIAL_NAME, tagline: OFFICIAL_TAGLINE, welcome: '' },
@@ -184,7 +184,7 @@ export function nonEmpty(value: string | undefined): string | undefined {
 export function brandChannel(brand: BrandConfig | undefined): ChannelConfig {
   // 没有渠道包 = 官方构建（本地开发/官方渠道），逐个字段就是官方内容 ——
   // 直接返回，不走下面的推导（推导会把 client 名收敛成 login 名，官方渠道
-  // 界面名是 "PicoAide Harness" 而登录页是 "PicoAide"，两者本就不同）。
+  // 界面名是 "ZeoKeel Harness" 而登录页是 "ZeoKeel"，两者本就不同）。
   if (brand === undefined) return DEFAULT_CHANNEL
   // "是渠道品牌吗"的判据 = **至少有一个非空名字**。
   //
@@ -234,7 +234,7 @@ export function brandChannel(brand: BrandConfig | undefined): ChannelConfig {
  *
  * 为什么需要:客户端在渠道构建下**已经带着**一份随包品牌,而服务端下发是
  * 另一个来源。若服务端那份缺字段(旧服务端、渠道配置没打进镜像、字段被清空),
- * 消费方就会回落到内置的**厂商**文案 —— 渠道客户于是看到 PicoAide。
+ * 消费方就会回落到内置的**厂商**文案 —— 渠道客户于是看到 ZeoKeel。
  * 叠一层之后,缺口由随包品牌补上:两边本来就是同一个渠道包构建的,内容一致。
  *
  * 语义:
@@ -295,10 +295,10 @@ export function channelTitle(channel: ChannelConfig | null | undefined): string 
 /**
  * 判断一份载荷是否**长得像**渠道内容。
  *
- * 为什么需要:客户端把 `/api/pico/channel` 的响应直接当渠道内容用,而服务端
+ * 为什么需要:客户端把 `/api/zeokeel/channel` 的响应直接当渠道内容用,而服务端
  * 可能回一个结构完全不同的 body(旧服务端没有这个路由时的兜底对象、网关错误
  * 体、代理的 `{ok:true}`…)。一旦这种载荷进了 store,消费方每个字段都取不到值,
- * 于是回落到内置的**厂商**文案 —— 渠道客户看到 PicoAide,链路零报错。
+ * 于是回落到内置的**厂商**文案 —— 渠道客户看到 ZeoKeel,链路零报错。
  *
  * 判据刻意宽松(至少要有一个非空的品牌字符串字段),只拦"根本不是渠道内容"的
  * 载荷;真正的合并语义由 `mergeChannel` 负责(缺字段用随包品牌补)。

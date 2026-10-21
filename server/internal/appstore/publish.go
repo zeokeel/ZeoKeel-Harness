@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // 冲突类错误码(包内校验类错误码定义在 skillmanifest)。
@@ -406,7 +406,7 @@ func beginPublishTx(ctx context.Context, lockBudget time.Duration, db *sql.DB, k
 // 同键),无关的发布会被互相串行(叠加 F2-N2 时还会拉高死锁概率)。整键交给
 // 64 位的 hashtextextended,碰撞概率降到可忽略。
 func publishLockKey(kind, appID string) string {
-	return "picoaide:publish:" + kind + "/" + appID
+	return "zeokeel:publish:" + kind + "/" + appID
 }
 
 // channelLabel 把分发渠道渲染成人类可读的名字（用于"名称已被 X 占用"这类提示）。

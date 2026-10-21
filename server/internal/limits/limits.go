@@ -86,7 +86,7 @@ const (
 	PublishTotalBudget = ClientUploadTimeout - PublishTransferReserve
 	// SectionTotalMaxBytes 是 wasm 自定义段总量上限（§4.2）：4 MiB。
 	SectionTotalMaxBytes = 4 << 20
-	// AppConfigMaxBytes 是 picoaide.app.json 上限（§4.2）：64 KiB（不计入 wasm 上限）。
+	// AppConfigMaxBytes 是 zeokeel.app.json 上限（§4.2）：64 KiB（不计入 wasm 上限）。
 	AppConfigMaxBytes = 64 << 10
 	// AppConfigWhitelistMax 是白名单条目上限（§4.2）：2 000 条。
 	AppConfigWhitelistMax = 2000
@@ -160,7 +160,7 @@ const WasmImportModule = "wasi_snapshot_preview1"
 var RequiredExports = []string{"_start", "memory"}
 
 // AppConfigFileName 是随包提交的应用配置文件名（§4.2）。
-const AppConfigFileName = "picoaide.app.json"
+const AppConfigFileName = "zeokeel.app.json"
 
 // ===== §4.3 WASM 运行时 =====
 
@@ -587,7 +587,7 @@ const (
 	//
 	// ⚠️ 事实更正（审计 P1-3，2026-09-18）：**"依赖方拿到的 wazero 版本是 dev" 只对
 	// `go test` 二进制成立**。`go build` 出来的 main 二进制（服务端进程与
-	// cmd/picoaide-app-compile 子进程都是这种形态）里 `debug.ReadBuildInfo().Deps` **有**
+	// cmd/zeokeel-app-compile 子进程都是这种形态）里 `debug.ReadBuildInfo().Deps` **有**
 	// wazero，`version.GetWazeroVersion()` 返回真实版本（实测 v1.12.0）⇒ wazero 自己就会按
 	// `wazero-v1.12.0-<os>-<arch>` 分片，升级 wazero 后旧条目本来就不会被命中。
 	//

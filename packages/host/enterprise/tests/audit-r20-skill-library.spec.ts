@@ -7,7 +7,7 @@
  * 本文件是它的**仓内可复跑**形态：不依赖 `temp/` 下的任何夹具，也不要求 CAP_SYS_ADMIN
  * ——唯一需要特权的那条（K-08 的跨设备 bind mount）**登记在案**并走同一条闸门
  * （`tests/helpers/env-gated-criteria.ts`：缺能力时如实自跳 + 打覆盖声明，
- * `PICOAI_MOUNT_TESTS=required` 时缺能力是硬红）。2026-10-13 独立审计 P1 前，这条判据
+ * `ZEOKEEL_MOUNT_TESTS=required` 时缺能力是硬红）。2026-10-13 独立审计 P1 前，这条判据
  * 既不登记也不读那个环境变量，整块删掉门禁照样绿。
  *
  * 三条判据的共同点：**"派生自锚定路径的字符串"不等于"用之前还是那个目录"**。
@@ -449,7 +449,7 @@ describe('R20A-K-02：Linux 上读不到挂载表 ⇒ 破坏性方向 fail-close
     await mkdir(join(skills, '.skill-tmp'), { recursive: true })
     const mountAttempt = bindMount(shm, join(skills, '.skill-tmp'))
     // 与 G1/G2 同一条收尾（2026-10-13 审计 P1：这条此前**既没登记、也不读
-    // `PICOAI_MOUNT_TESTS`**，只 console.log 一句就 return —— 同包第三条真 mount 判据
+    // `ZEOKEEL_MOUNT_TESTS`**，只 console.log 一句就 return —— 同包第三条真 mount 判据
     // 因此完全在对账面的外面，整块删掉也照样绿）。现在：登记在案 + 声明"必须提供"时
     // 缺能力**抛错硬红** + 缺省时打一行含真实原因与跑法的 `[env-gated:mount/SKIP]`。
     const gate = consumeMountGate(judgeMountGate(mountAttempt), mountAttempt, 'R20A-K08 跨设备')

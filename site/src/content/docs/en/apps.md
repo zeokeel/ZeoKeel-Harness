@@ -1,6 +1,6 @@
 ---
 title: App centre
-description: The execution path, picoaide.app.json contract, publishing lifecycle and runtime boundaries of employee-built WASM apps.
+description: The execution path, zeokeel.app.json contract, publishing lifecycle and runtime boundaries of employee-built WASM apps.
 ---
 
 The app centre is where employees build **their own small tools**: an employee describes what they need in a conversation, the AI writes a WASI application with the built-in app-builder skill and compiles it to `.wasm` locally, and the employee fills in a form to publish it; colleagues open it in a **dedicated window of the desktop client**.
@@ -44,7 +44,7 @@ The rest of this page reuses these terms:
 1. The employee opens an app in the app centre; the client calls its **local** open route (the panel itself holds no employee token);
 2. The host verifies once against `POST /api/client/v2/apps/wasm/:app_id/open`, which also records the day's open count;
 3. On success the client opens a **dedicated window** loading `<app source scheme>://<app_id>/<path>`. If a window already exists, it is focused instead;
-4. The app version in the response (`X-PicoAide-App-Version`) is the only source of the client's content cache key; when the version changes, every cached entry for that app under the current session scope is dropped.
+4. The app version in the response (`X-ZeoKeel-App-Version`) is the only source of the client's content cache key; when the version changes, every cached entry for that app under the current session scope is dropped.
 
 **Every request inside the window** (the page's own `fetch`, link clicks, form submits):
 
@@ -54,7 +54,7 @@ app page fetch('/notes?page=2')
         ▼
 the protocol handler builds a request envelope (method / path / query / host / allow-listed headers / base64 body)
         │  POST /api/client/v2/apps/wasm/<app_id>/request
-        │  headers: Authorization: Bearer <employee token> + X-Pico-App-Proof: <proof of possession>
+        │  headers: Authorization: Bearer <employee token> + X-ZeoKeel-App-Proof: <proof of possession>
         ▼
 server: authentication → admission → static asset or wazero execution → response envelope
         │  {"status":200,"headers":{…},"body":"<base64>","truncated":false}
@@ -68,15 +68,15 @@ Three invariants (breaking any of them is a security defect):
 - request body ≤ 1 MiB, envelope ≤ `1 MiB × 4/3 + 64 KiB`;
 - `Set-Cookie` is dropped entirely (a custom protocol has no cookie semantics); hop-by-hop headers and `Content-Length` are removed.
 
-**Reserved surface**: `/__picoaide` and everything under it belongs to the host. Today only the app AI bridge `POST /__picoaide/ai/chat` exists, and it is handled **locally by the protocol handler, never forwarded to the platform**; every other `/__picoaide/*` path returns 404 and is never treated as an app route.
+**Reserved surface**: `/__zeokeel` and everything under it belongs to the host. Today only the app AI bridge `POST /__zeokeel/ai/chat` exists, and it is handled **locally by the protocol handler, never forwarded to the platform**; every other `/__zeokeel/*` path returns 404 and is never treated as an app route.
 
 **The server and the client must be upgraded together**: the app address is injected at assembly time from the channel package (`desktop.app_origin_scheme`, required, must differ from the deep-link scheme, must not be a reserved scheme such as `http`), and the envelope and protocol headers are a shared contract between the two ends. An old client hitting a new server (or the reverse) **fails to open and says the client and the server must be upgraded to the same version** rather than degrading silently. The price is "upgrade both ends together"; the benefit is that the protocol has exactly one shape.
 
 **Three failure reasons stay distinguishable** (the platform does not collapse them into "open failed"): app missing → 404; taken offline → 410 Gone (data and links survive); frozen → 404 carrying `platform_reason=app_frozen` (the copy says "disabled by an administrator", word-for-word different from "does not exist").
 
-## The `picoaide.app.json` contract
+## The `zeokeel.app.json` contract
 
-The configuration file is always called `picoaide.app.json` (published as an object in the `config` field). **The single source of truth is the server** — `server/internal/wasmapp/appcfg/appcfg.json` (schema `picoaide-app-config/1`); the client mirrors the same field specification and is checked against it. The in-frame protocol version is `picoaide-app/1`.
+The configuration file is always called `zeokeel.app.json` (published as an object in the `config` field). **The single source of truth is the server** — `server/internal/wasmapp/appcfg/appcfg.json` (schema `zeokeel-app-config/1`); the client mirrors the same field specification and is checked against it. The in-frame protocol version is `zeokeel-app/1`.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -106,7 +106,7 @@ Rules that are easy to get wrong:
 - **The platform does not build anything**: the artefact is compiled on the author's machine before upload (the import surface accepts `wasi_snapshot_preview1` only, and component-model output is refused outright);
 - **The AI tool surface is the author's entry point**: `wasm_app_list` (check whether an id is taken and what the current version is), `wasm_app_validate` (pre-check: static validation + a real compile + a dry run; **occupies no version number and writes no audit entry**, so it can be called repeatedly), `wasm_app_publish` (publish), and the read-back surface `wasm_app_schema` / `wasm_app_diagnostics` / `wasm_app_rows`;
 - **Two upload sizes**: `.wasm` ≤ 32 MiB (request body after base64 ≤ 48 MiB). Above the per-chunk cap (8 MiB) it automatically becomes **chunked with resume**: open a session → PUT chunk by chunk → query which chunks arrived → complete (`POST /uploads`, `PUT /uploads/:id/chunks/:index`, `GET /uploads/:id`, `POST /uploads/:id/complete`, `DELETE /uploads/:id`); 64 KiB–8 MiB per chunk, at most 1024 chunks, a 30-minute session, four concurrent sessions and a 48 MiB in-flight disk quota per user, and 30 uploads per hour (pre-check plus publish combined);
-- **Budget hand-off**: the whole upload chain on the client shares a 90-second budget, and on the "complete" hop it tells the platform **how long that hop will really wait** through the `X-Pico-Client-Budget-Ms` request header; the platform narrows its own budget accordingly (**it may only shrink it, never widen it**) — so the platform's structured error always arrives before the client gives up, instead of the employee seeing nothing but "network error".
+- **Budget hand-off**: the whole upload chain on the client shares a 90-second budget, and on the "complete" hop it tells the platform **how long that hop will really wait** through the `X-ZeoKeel-Client-Budget-Ms` request header; the platform narrows its own budget accordingly (**it may only shrink it, never widen it**) — so the platform's structured error always arrives before the client gives up, instead of the employee seeing nothing but "network error".
 
 ### The publishing pipeline
 
@@ -170,7 +170,7 @@ Two semantics that are easy to misread:
 
 Two authorization boundaries around data:
 
-- **The in-app AI is conversation only**: `/__picoaide/ai/chat` is handled locally by the host and sends this conversation's content only; it has no tools, cannot read or write files, and cannot use connectors or memory. Authorization is recorded per "account × server × app" and can be revoked at any time.
+- **The in-app AI is conversation only**: `/__zeokeel/ai/chat` is handled locally by the host and sends this conversation's content only; it has no tools, cannot read or write files, and cannot use connectors or memory. Authorization is recorded per "account × server × app" and can be revoked at any time.
 - **AI reading the app database is off by default**: the data tools can read that app's data only after the author explicitly grants it in the app centre (masked columns only, and every call writes an audit entry); revoking it restores the default immediately (further calls are refused).
 
 ## Runtime boundaries
@@ -194,7 +194,7 @@ An app may call exactly eight host methods; anything else is refused (`HOST_METH
 | Logging | `log` |
 | Read bundled assets | `assets.read` (the parameter is an **in-package logical path**, not a host path) |
 
-> The server **no longer offers** an AI capability such as `ai.chat`. To use a model, an app goes "front-end JS calls `/__picoaide/ai/chat` → the result is posted back into wasm and stored"; an old app is refused at **publish validation** (`IMPORT_NOT_ALLOWED` plus a migration hint) rather than failing silently.
+> The server **no longer offers** an AI capability such as `ai.chat`. To use a model, an app goes "front-end JS calls `/__zeokeel/ai/chat` → the result is posted back into wasm and stored"; an old app is refused at **publish validation** (`IMPORT_NOT_ALLOWED` plus a migration hint) rather than failing silently.
 
 ### Budgets (compile-time defaults)
 

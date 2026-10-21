@@ -169,7 +169,7 @@ try {
   assertActive('launcher-owned desktop plugin', desktopEntry)
   assertActive('profile-local third-party plugin', thirdPartyEntry)
   // 组合树里**任何**已启用行都不该是 FAILED。这条覆盖面比上面两条大得多：
-  // 我方 18 个 `desktop-*`/`picoaide-*`/`pico-*` 行不在上游的
+  // 我方 18 个 `desktop-*`/`zeokeel-*`/`zeokeel-*` 行不在上游的
   // requiredStartupEntryIds 里（上游只 warn、启动照常成功），而这套冒烟里
   // 没有该表，所以此前"某行 apply 抛异常"是完全不可见的。
   const failed = [...ctx.loader.entries()]

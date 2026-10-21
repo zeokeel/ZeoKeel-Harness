@@ -3,7 +3,7 @@ package runtime
 // 本文件是**执行侧自持的缓存运维组件**（`CacheOps`，审计 R5-A-1）的判据。
 //
 // 要防的东西：回收与水位可见性**整体挂在编译子系统上** —— 编译子系统缺席（默认档下
-// 缺 `picoaide-app-compile` 就只 log 后置 nil）时，周期回收不启动、`/readyz` 的
+// 缺 `zeokeel-app-compile` 就只 log 后置 nil）时，周期回收不启动、`/readyz` 的
 // compile_cache_bytes 恒为 0，而执行侧照写那棵树（cache_mode_test.go 的
 // `wantDiskWrites: true`）⇒ 缓存只涨不降且不可见。
 //

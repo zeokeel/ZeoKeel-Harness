@@ -64,7 +64,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	wasmregistry "github.com/picoaide/picoaide/internal/wasmapp/registry"
+	wasmregistry "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // WasmClientRouteBase 是 WASM 客户端（员工面）操作面的路由前缀。

@@ -10,14 +10,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func setup(t *testing.T) (*gin.Engine, *sql.DB, map[string]string) {
 	t.Helper()
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "1000")
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "1000")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
 	if _, err := serverstore.CreateUserWithPassword(db, "boss", "pw123456"); err != nil {
@@ -42,11 +42,11 @@ func setup(t *testing.T) (*gin.Engine, *sql.DB, map[string]string) {
 	csrf, _ := out["csrf_token"].(string)
 	sess := ""
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "picoaide_session" {
+		if ck.Name == "zeokeel_session" {
 			sess = ck.Value
 		}
 	}
-	adminHdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	adminHdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 	return r, db, adminHdr
 }
 

@@ -266,18 +266,18 @@ SELECT s.name AS app_id, 'skill' AS kind, count(*) AS org_rows
 
 | env | 作用 | 什么时候调 |
 |-----|------|-----------|
-| `PICOAI_MIGRATION_LOCK_TIMEOUT_MS` | 每条迁移**自己的 DDL** 的等锁预算(`SET LOCAL lock_timeout`,施加在真正执行 DDL 的那条会话上) | 启动日志报等锁超时、且确认是 pg_dump / 长查询 / `idle in transaction` 这类**运维侧**长事务暂时占着表 ⇒ 可临时放宽 |
-| `PICOAI_MIGRATION_ADVISORY_TIMEOUT_MS` | 迁移互斥锁(`pg_advisory_lock`)的等待预算 —— 滚动升级时另一个实例可能正在迁移 | 同上;超时说明"另一个实例卡住了",继续等通常不如 fail-loud |
-| `PICOAI_MIGRATION_SLOW_MS` | "慢迁移"告警阈值:超过它单独打一条可检索的 `migrate: SLOW migration` WARN(含被 `ACCESS EXCLUSIVE` 锁住的表与时长) | 想让"这次升级锁了多久"更早暴露 ⇒ 调小 |
+| `ZEOKEEL_MIGRATION_LOCK_TIMEOUT_MS` | 每条迁移**自己的 DDL** 的等锁预算(`SET LOCAL lock_timeout`,施加在真正执行 DDL 的那条会话上) | 启动日志报等锁超时、且确认是 pg_dump / 长查询 / `idle in transaction` 这类**运维侧**长事务暂时占着表 ⇒ 可临时放宽 |
+| `ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS` | 迁移互斥锁(`pg_advisory_lock`)的等待预算 —— 滚动升级时另一个实例可能正在迁移 | 同上;超时说明"另一个实例卡住了",继续等通常不如 fail-loud |
+| `ZEOKEEL_MIGRATION_SLOW_MS` | "慢迁移"告警阈值:超过它单独打一条可检索的 `migrate: SLOW migration` WARN(含被 `ACCESS EXCLUSIVE` 锁住的表与时长) | 想让"这次升级锁了多久"更早暴露 ⇒ 调小 |
 
-- **单位是毫秒**(与 `PICOAI_AUDIT_CHAIN_INTERVAL` 那种 Go duration 不是同一种写法)。
+- **单位是毫秒**(与 `ZEOKEEL_AUDIT_CHAIN_INTERVAL` 那种 Go duration 不是同一种写法)。
 - **非法/非正值一律回落缺省并告警** —— 不许用一条 env(写 `0` 或写错)把预算变成"无预算",
   那正是这条修复要消灭的形态。
 - **预算打满 = fail-loud**,不是无限等待:迁移受得了失败、受不了挂住。
 - 部署侧接线(`.env` 里写这三个键真的会进容器)在 `server/docker-compose.yml` 的
   `server.environment` 与 `server/.env.example`;接线漏一个会被
-  `server/cmd/server/compose_env_test.go` 的 `TestEveryServerPICOAIEnvNameIsWiredOrExempt`
-  当场打红(服务端源码里出现的每个 `PICOAI_*` 名字都必须"已接线"或"在豁免清单里且写明理由")。
+  `server/cmd/server/compose_env_test.go` 的 `TestEveryServerZEOKEELEnvNameIsWiredOrExempt`
+  当场打红(服务端源码里出现的每个 `ZEOKEEL_*` 名字都必须"已接线"或"在豁免清单里且写明理由")。
 
 #### 未来触发条件
 
@@ -369,7 +369,7 @@ idx_usage_user_cost`。写路径 `RecordUsage*` 先 ensure 当月分区。
 - `apps(kind, app_id, title, description, owner, channel, enabled, official, created_at, updated_at,
   purpose, data_sensitivity, config_json, current_release_id, frozen_at, deleted_at)`，
   `PRIMARY KEY (kind, app_id)`；`kind ∈ {skill, agent, wasm_app}`、`channel ∈ {market, org, wasm}`
-  （0069 放开 CHECK 并给 WASM 应用平台复用本表：`config_json` 存 `picoaide.app.json`、
+  （0069 放开 CHECK 并给 WASM 应用平台复用本表：`config_json` 存 `zeokeel.app.json`、
   `frozen_at`/`deleted_at` 承载冻结与软删；0071 删掉 `visible` 列 —— 访问模式只存
   `config_json.access`）。`owner` = **首个成功发布者**（0053 的 `COALESCE(NULLIF(owner,''),…)`
   语义：一经写入不被后续发布改写）；0059 起官方内容 `official=1` 且 `owner=''`。

@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // providerPutState 是"操作前后必须逐字一致"的观测面。

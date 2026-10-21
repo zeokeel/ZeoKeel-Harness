@@ -27,14 +27,14 @@
  * ## 有权限的环境怎么跑
  *
  * 见 {@link EnvGatedCriterion.privilegedCommand}。把 `requiredEnv` 置成 `required`
- * （如 `PICOAI_MOUNT_TESTS=required`）时，缺能力**不再自跳而是硬红** —— 防"以为在测、
+ * （如 `ZEOKEEL_MOUNT_TESTS=required`）时，缺能力**不再自跳而是硬红** —— 防"以为在测、
  * 其实一直在跳过"。缺省（不设该变量）保持"如实自跳"，因为无特权 runner 上硬红等于
  * 让整条门禁红在没有权限的机器上。
  *
  * ### 覆盖状态的**诚实台账**（2026-10-13 独立审计 P2-3）
  *
  * 本登记表**没有**为特权路径接上自动化执行者：`.github/workflows/` 里没有任何 job 设
- * `PICOAI_MOUNT_TESTS`，所以 GitHub 托管 runner（非 root）上 G1/G2/K-08 **一次都不执行**。
+ * `ZEOKEEL_MOUNT_TESTS`，所以 GitHub 托管 runner（非 root）上 G1/G2/K-08 **一次都不执行**。
  * 这不是"忘了接"——是被显式认账的未覆盖项，理由与处置写在
  * `docs/decisions/2026-10-13-env-gated-mount-criteria.md`：托管 runner 上"能不能拿到
  * `CAP_SYS_ADMIN`"在本机无法实测，而把一个未经验证的 `sudo`/`setpriv` 步骤直接放进
@@ -49,7 +49,7 @@
 export const MOUNT_SKIP_MARKER = '[env-gated:mount/SKIP]'
 
 /** 声明"本环境必须提供 `mount --bind`"的环境变量；取值见 {@link MOUNT_REQUIRED_VALUE}。 */
-export const MOUNT_REQUIRED_ENV = 'PICOAI_MOUNT_TESTS'
+export const MOUNT_REQUIRED_ENV = 'ZEOKEEL_MOUNT_TESTS'
 
 /** {@link MOUNT_REQUIRED_ENV} 的"必须提供"取值（其余取值/未设 = 允许如实自跳）。 */
 export const MOUNT_REQUIRED_VALUE = 'required'
@@ -122,12 +122,12 @@ export const ENV_GATED_CRITERIA: EnvGatedCriterion[] = [
     why: '挂载点在 `lstat` 下就是**真实目录**、`realpath` 也原样返回 ⇒ 只有挂载表与 `st_dev` 认得出来。'
       + '换成夹具（伪造挂载表 / mock `lstat`）等于把判据换成它自己要验的那份假设：'
       + '这两条要证的正是"真实 mount 会被拒绝、库外唯一副本不被删"，只能靠真实 `mount --bind`。',
-    privilegedCommand: 'cd packages/host/enterprise && PICOAI_MOUNT_TESTS=required '
+    privilegedCommand: 'cd packages/host/enterprise && ZEOKEEL_MOUNT_TESTS=required '
       + './node_modules/.bin/vitest run tests/skill-library-anchor-escape.spec.ts',
   },
   {
     // 2026-10-13 独立审计 P1：同包还有**第三条**真 mount 判据，此前既没登记、也不读
-    // `PICOAI_MOUNT_TESTS` —— 只扫"登记项指名的那个 spec"的对账面看不见它，整块删掉
+    // `ZEOKEEL_MOUNT_TESTS` —— 只扫"登记项指名的那个 spec"的对账面看不见它，整块删掉
     // 也照样绿（变异 M6 实测 3 passed EXIT=0）。现在它在面内。
     id: 'audit-r20-skill-library/cross-device',
     spec: 'audit-r20-skill-library.spec.ts',
@@ -141,7 +141,7 @@ export const ENV_GATED_CRITERIA: EnvGatedCriterion[] = [
       + '天然不同设备，而只有真 bind mount 才能让 `.skill-tmp` 变成"库内路径、库外设备"。'
       + '伪造 `st_dev`/mock `lstat` 等于把判据换成它要验的那份假设 —— 这里要证的正是'
       + '"真实跨设备挂载被点名（不是被笼统读成符号链接）"。',
-    privilegedCommand: 'cd packages/host/enterprise && PICOAI_MOUNT_TESTS=required '
+    privilegedCommand: 'cd packages/host/enterprise && ZEOKEEL_MOUNT_TESTS=required '
       + './node_modules/.bin/vitest run tests/audit-r20-skill-library.spec.ts',
   },
 ]

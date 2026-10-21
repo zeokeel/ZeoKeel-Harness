@@ -1,4 +1,4 @@
-module github.com/picoaide/picoaide
+module github.com/zeokeel/zeokeel-harness/server
 
 go 1.26.6
 

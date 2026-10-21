@@ -1,10 +1,10 @@
-// Package appcfg 解析并校验**应用配置文件** `picoaide.app.json`（设计基线 §4.2 /
+// Package appcfg 解析并校验**应用配置文件** `zeokeel.app.json`（设计基线 §4.2 /
 // R25 / R26 / R38 / §10.5 第 56b–56f 项）。
 //
 // 文件随 publish 一起提交、**不计入 32 MiB wasm 上限**、上限 64 KiB
 // （limits.AppConfigMaxBytes）；发布期与静态资源一起抽到
 // `<data_root>/apps/<app_id>/assets/<release_id>/`，应用用
-// `assets.read("picoaide.app.json")` 读自己的配置（§4.2）。
+// `assets.read("zeokeel.app.json")` 读自己的配置（§4.2）。
 //
 // 三条容易搞错的语义：
 //   - `access` 缺省 **`login`**（R25，2026-09-18 收敛为三模式；2026-09-19 契约 §4.4
@@ -18,7 +18,7 @@
 //     平台归属在 `apps.owner`，取自登录态、不可伪造（§7.1 身份契约 / R27 的
 //     `is_publisher` 也来自登录态而非本文件）。两者同名不同物，不要互相推导。
 //
-// 兼容 shim（必须保留）：已发布版本里的 `config_json` 与随包 `picoaide.app.json`
+// 兼容 shim（必须保留）：已发布版本里的 `config_json` 与随包 `zeokeel.app.json`
 // 还是旧 schema（`login_required` / `visible`）。Parse 接受旧形态并在内存里映射成
 // `access`，**不报 unknown field**；映射成功即可，写出去（重新发布）的就是新 schema。
 // 迁移 0071 会把库里的旧 JSON 就地改写；旧字段因此只是"读得到"的历史形态。
@@ -33,9 +33,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 顶层字段名（§4.2 新 schema 的字段集合是**封闭**的：多一个即拒，见 Parse 的未知字段检查）。
@@ -78,7 +78,7 @@ const (
 	legacyFieldVisible       = "visible"
 )
 
-// KnownFields 是 `picoaide.app.json` 允许出现的全部顶层字段（顺序即报错提示顺序；
+// KnownFields 是 `zeokeel.app.json` 允许出现的全部顶层字段（顺序即报错提示顺序；
 // 与 appcfgspec.go 的 ConfigFields() 逐项一致，由门禁用例守）。
 var KnownFields = []string{
 	FieldAccess,
@@ -355,7 +355,7 @@ func AccessOfConfigJSON(raw string) Access {
 // 首次发布特有的声明字段要求由调用方另行调用 Validate(true)。
 //
 // 读取侧与写入侧的差别只有一条（2026-09-19 契约 §4.4）：**历史 `public` 在这里被
-// 接受**（存量已发布版本的 `picoaide.app.json` 就写着它，拒绝会让应用每请求 500），
+// 接受**（存量已发布版本的 `zeokeel.app.json` 就写着它，拒绝会让应用每请求 500），
 // 但它的语义已经是 login（RequiresLogin/AuthMode）。写入侧走 parseSubmitted，
 // 那里 public 被明确拒绝。
 //
@@ -938,7 +938,7 @@ func SensitiveColumnsOfConfigJSON(raw string) []string {
 // **兼容 shim** 字段（legacyFieldLoginRequired / legacyFieldVisible）。
 //
 // 旧字段必须在这里放行，否则"已发布版本里的旧 config_json"会被当成拼写错误拒掉
-// （迁移 0071 之后库里的行已改写，但随包 picoaide.app.json 是发布期资产、
+// （迁移 0071 之后库里的行已改写，但随包 zeokeel.app.json 是发布期资产、
 // 老版本永远存在）。
 func knownField(name string) bool {
 	if name == legacyFieldLoginRequired || name == legacyFieldVisible {

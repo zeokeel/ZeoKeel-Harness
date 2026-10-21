@@ -3,7 +3,7 @@ title: 插件生态
 description: 上游生态与本项目的关系、随包分发的插件清单、四条扩展路径的对比与选择，以及插件解决不了什么。
 ---
 
-PicoAide Harness 的插件生态不是一个市场，而是**一套组合约定 + 一份随包分发的清单**：上游提供框架与模块表，本项目把产品能力作为插件组合进去，第三方作者走同一条路径。这一页回答三个问题：现在到底装了哪些插件、要加一个能力该走四条路径里的哪条、哪些事插件做不到。
+ZeoKeel Harness 的插件生态不是一个市场，而是**一套组合约定 + 一份随包分发的清单**：上游提供框架与模块表，本项目把产品能力作为插件组合进去，第三方作者走同一条路径。这一页回答三个问题：现在到底装了哪些插件、要加一个能力该走四条路径里的哪条、哪些事插件做不到。
 
 ## 官方上游与本项目的关系
 
@@ -38,19 +38,19 @@ PicoAide Harness 的插件生态不是一个市场，而是**一套组合约定 
 | 包 | 提供什么能力 | 面 | 主要挂载行 |
 |---|---|---|---|
 | `dsh-plugin-desktop` | 桌面壳：窗口与导航策略、托盘、更新检查与安装交接、诊断导出、完成/提问/审批通知、asar 文件系统与读取提示、高级呈现的 layout 与主题投影 | 两面 | `desktop-shell`、`desktop-diagnostics`、`desktop-updates`、`desktop-loop-notify`、`desktop-asar-fs` |
-| `@picoaide/dsh-enterprise` | 企业登录门（预认证登录页、服务端地址、登录方式）、会话与令牌、网关模型目录接入、启动引导、错误上报、技能遥测、渠道内容同步、能力中心入口 | 两面 | `picoaide-auth-gate`、`picoaide-session`、`picoaide-gateway-llm`、`picoaide-bootstrap`、`picoaide-channel-sync` |
-| `@picoaide/dsh-connectors` | 连接器框架（MCP 注册、认证、凭据存储与续期）+ 连接器中心面板 + 每个已连接连接器的斜杠命令 | 两面 | `pico-connectors` |
+| `@zeokeel/dsh-enterprise` | 企业登录门（预认证登录页、服务端地址、登录方式）、会话与令牌、网关模型目录接入、启动引导、错误上报、技能遥测、渠道内容同步、能力中心入口 | 两面 | `zeokeel-auth-gate`、`zeokeel-session`、`zeokeel-gateway-llm`、`zeokeel-bootstrap`、`zeokeel-channel-sync` |
+| `@zeokeel/dsh-connectors` | 连接器框架（MCP 注册、认证、凭据存储与续期）+ 连接器中心面板 + 每个已连接连接器的斜杠命令 | 两面 | `zeokeel-connectors` |
 | `@deepseek-ai/dsh-schedule`（上游，0.2.1 启用） | 自动化任务：任务目录、投递与 4 个模型工具（`schedule_create` / `schedule_list` / `schedule_update` / `schedule_delete`），由桌面组合默认启用并按账号过滤 | 宿主 + 客户端 | `schedule` / `ui-schedule` |
-| `@picoaide/dsh-browser` | 内置浏览器：独立窗口（`WebContentsView` + CDP）、控制权模型、op log、`browser_*` 工具组、侧栏入口与状态提示 | 两面 | `pico-browser` |
-| `@picoaide/dsh-wasm-apps-host` | 应用窗口的宿主侧：自定义协议处理器、请求转发到平台、窗口生命周期与分区 | 宿主面 | `pico-wasm-apps-host` |
-| `@picoaide/dsh-wasm-apps` | 应用中心面板：目录、打开应用、发布入口 | 客户端面 | `picoaide-wasm-apps` |
-| `@picoaide/dsh-foot-menu` | 侧栏底部「⋯ 更多」行与上弹面板宿主（五个功能面板入口的承载行） | 客户端面 | `picoaide-foot-menu` |
-| `@picoaide/dsh-account-card` | 侧栏底部账户卡：用户名、登出、网关用量余额 | 客户端面 | `picoaide-account-card` |
+| `@zeokeel/dsh-browser` | 内置浏览器：独立窗口（`WebContentsView` + CDP）、控制权模型、op log、`browser_*` 工具组、侧栏入口与状态提示 | 两面 | `zeokeel-browser` |
+| `@zeokeel/dsh-wasm-apps-host` | 应用窗口的宿主侧：自定义协议处理器、请求转发到平台、窗口生命周期与分区 | 宿主面 | `zeokeel-wasm-apps-host` |
+| `@zeokeel/dsh-wasm-apps` | 应用中心面板：目录、打开应用、发布入口 | 客户端面 | `zeokeel-wasm-apps` |
+| `@zeokeel/dsh-foot-menu` | 侧栏底部「⋯ 更多」行与上弹面板宿主（五个功能面板入口的承载行） | 客户端面 | `zeokeel-foot-menu` |
+| `@zeokeel/dsh-account-card` | 侧栏底部账户卡：用户名、登出、网关用量余额 | 客户端面 | `zeokeel-account-card` |
 | `dsh-memory-evolve` | 五轨记忆（用户档案 / 全局事实 / 项目关键记忆 / 项目日志 / 每日日志）+ 四轨待办 + 技能自进化；**vendored 社区插件**，按三方合并方式升级 | 两面 | `dsh-memory-evolve` |
 | `@deepseek-ai/dsh-experimental-voice-input-bundle` | 语音输入：SenseVoiceSmall + Silero VAD 跑在本机子进程，音频不出机器；上游可选 bundle，本项目默认装配 | 两面 | 上游 bundle 插入的四行 |
-| `@picoaide/dsh-host-locale`、`@picoaide/dsh-host-home` | 宿主侧语言解析与数据根派生；**零依赖叶子包**（只 import Node 内置模块），库而不是行 | 宿主面 | 无（被别的包 import） |
-| `@picoaide/dsh-panel-surface` | 中列整页面板的容器与共享视觉语言（两个插件用它挂面板） | 客户端面 | 无（被别的包 import） |
-| `@picoaide/dsh-branding` | 品牌 mark、favicon、主题注入；**只在 Web 组装里，桌面组合不装**（桌面由 enterprise 的客户端面负责 favicon） | 客户端面 | 无（不在桌面 profile） |
+| `@zeokeel/dsh-host-locale`、`@zeokeel/dsh-host-home` | 宿主侧语言解析与数据根派生；**零依赖叶子包**（只 import Node 内置模块），库而不是行 | 宿主面 | 无（被别的包 import） |
+| `@zeokeel/dsh-panel-surface` | 中列整页面板的容器与共享视觉语言（两个插件用它挂面板） | 客户端面 | 无（被别的包 import） |
+| `@zeokeel/dsh-branding` | 品牌 mark、favicon、主题注入；**只在 Web 组装里，桌面组合不装**（桌面由 enterprise 的客户端面负责 favicon） | 客户端面 | 无（不在桌面 profile） |
 
 清单里没有的东西同样重要：**没有插件市场**（没有市场页、没有安装器、没有审核目录）；**没有把上游 UI 插件管理页装进来**（那一行被显式关闭，它占用的面板席位与自研四面板的 DOM 接管不互通）。
 
@@ -60,7 +60,7 @@ PicoAide Harness 的插件生态不是一个市场，而是**一套组合约定 
 
 | | 插件 | 连接器（MCP） | 技能（SKILL.md） | 应用（WASM） |
 |---|---|---|---|---|
-| **你要写什么** | 一个 npm 包：`dsh.bundle.patch` + 可选的 `dsh.client` 浏览器 bundle | 一条标准 MCP 配置（`type` + `url`，或 `command`/`args`/`env`）+ 标题说明，不写代码 | 一个目录 + 带 frontmatter 的 `SKILL.md` | 一份静态前端 + 一个 `wasm32-wasip1` 模块 + `picoaide.app.json` |
+| **你要写什么** | 一个 npm 包：`dsh.bundle.patch` + 可选的 `dsh.client` 浏览器 bundle | 一条标准 MCP 配置（`type` + `url`，或 `command`/`args`/`env`）+ 标题说明，不写代码 | 一个目录 + 带 frontmatter 的 `SKILL.md` | 一份静态前端 + 一个 `wasm32-wasip1` 模块 + `zeokeel.app.json` |
 | **运行在哪** | 员工机器：Electron main 里的 DSH Host + 沙箱渲染进程 | MCP 服务自己那台机器；客户端作为 MCP 客户端连接 | 不运行；模型读文件后按它调用**已有**工具 | 服务端 wazero 沙箱执行；员工在客户端独立窗口打开 |
 | **能做到什么** | 注册模型工具与系统提示词、加同源 HTTP 路由、加界面面板与槽位、接本地能力（子进程 / 文件 / 托盘）、提供 Cordis 服务供别的插件复用 | 把外部系统的能力以工具形式交给模型；认证自动判定（有 tokenFields → 静态 token，streamable-http → OAuth + 动态注册，否则免凭据），令牌自动续期 | 把流程、口径、话术、检查清单固化成可复用的指引；项目级与用户级多个技能根都会被扫描；可经能力中心上传、审核、按部门授权 | 给业务同事一个自建小工具：一个应用库、一份随包静态资源、宿主调用（读资源 / 日志 / SQL），外加客户端 AI loop |
 | **做不到什么** | 跨包客户端值 import；给自己扩权；绕过服务端鉴权与计费；把未登记的原生依赖带进包 | 只能提供 MCP 服务已实现的能力；客户端对它的出站与凭据有硬策略（拒绝的环境变量键、地址段管控） | 技能本身不新增任何能力：不加工具、不改权限、不装依赖 | 不能主动发起网络请求、不能读写文件、不能开线程或定时器；同一应用内数据对所有用户共享；名单改动 = 发新版 |
@@ -89,4 +89,4 @@ PicoAide Harness 的插件生态不是一个市场，而是**一套组合约定 
 - [插件开发](/plugin-development/) — 从零写一个插件、本地调试、打进客户端或装到服务端
 - [系统架构](/architecture/) — 三层拓扑与启动顺序
 - [桌面客户端](/desktop/) — 用户侧的插件管理、随包运行时与出站策略
-- [Community Fabric (RFC 草案，仓库)](https://github.com/picoaide/picoaide-harness/tree/master/community/fabric) — 插件 Manifest、Capability、Host Descriptor 与事件草案
+- [Community Fabric (RFC 草案，仓库)](https://github.com/zeokeel/ZeoKeel-Harness/tree/master/community/fabric) — 插件 Manifest、Capability、Host Descriptor 与事件草案

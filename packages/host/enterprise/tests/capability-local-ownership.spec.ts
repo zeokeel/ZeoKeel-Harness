@@ -26,7 +26,7 @@
  * 本文件与 `capability-catalog-proxy.spec.ts` 同一套夹具：**真** auth-gate 路由
  * （真扫盘 + 真服务端载荷解析 + 真 provenance 解析）→ **真**面板纯函数
  * （`mergeItems` / `isDelistedItem` / `planCardAction`）。任何一段单独绿都不算数。
- * 真挂载（DOM）那一条在 `@picoaide/dsh-account-card` 的
+ * 真挂载（DOM）那一条在 `@zeokeel/dsh-account-card` 的
  * `tests/capability-delisted-badge.spec.tsx`（本包没有 jsdom）。
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -107,7 +107,7 @@ function harness(session: Session | null): { call: (url: string) => Promise<{ co
       ? { requestRejection: () => undefined }
       : undefined),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -120,7 +120,7 @@ function harness(session: Session | null): { call: (url: string) => Promise<{ co
     },
   }
   apply(ctx as never, {} as Config)
-  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/pico/capabilities')?.handler
+  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/zeokeel/capabilities')?.handler
   if (handler === undefined) throw new Error('capabilities route not registered')
   return {
     call: async (url: string) => {
@@ -168,7 +168,7 @@ async function seedStoreSkill(extraFile?: string): Promise<void> {
 /** 本机行 → 面板看到的卡片（真归并 + 真判定 + 真页脚动作）。 */
 async function localCard(): Promise<{ local: CapabilityItem, item: CapabilityItem }> {
   const h = harness(SESSION)
-  const res = await h.call('/api/pico/capabilities?source=local')
+  const res = await h.call('/api/zeokeel/capabilities?source=local')
   expect(res.code).toBe(200)
   const local = (res.body.items as Array<Record<string, unknown>>)
     .find(i => i.source === 'local' && i.name === SKILL)
@@ -178,7 +178,7 @@ async function localCard(): Promise<{ local: CapabilityItem, item: CapabilityIte
 }
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-r6b-owner-home-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-r6b-owner-home-'))
   vi.stubEnv('DSH_HOME', home)
 })
 
@@ -234,7 +234,7 @@ describe('R6-B-1 跨账号：同机另一账号装的商店内容，当前账号
     stubServer({})
 
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     const local = (res.body.items as Array<Record<string, unknown>>)
       .find(i => i.source === 'local' && i.name === 'ppt-gen') as unknown as CapabilityItem
     expect(local).toBeDefined()
@@ -256,7 +256,7 @@ describe('R6-B-1 对照：真下架的判据没有被改弱', () => {
     expect(isDelistedItem(item)).toBe(true)
     expect(planCardAction(item)).toMatchObject({
       kind: 'uninstall',
-      endpoint: `/api/pico/shared-skills/${SKILL}/1.0.0/uninstall`,
+      endpoint: `/api/zeokeel/shared-skills/${SKILL}/1.0.0/uninstall`,
     })
   })
 
@@ -267,8 +267,8 @@ describe('R6-B-1 对照：真下架的判据没有被改弱', () => {
       marketRows: [{ kind: 'skill', name: SKILL, version: '1.0.0', status: 'approved', source: 'market', enabled: false, versions: [] }],
     })
     const h = harness(SESSION)
-    const market = await h.call('/api/pico/capabilities?source=market')
-    const local = await h.call('/api/pico/capabilities?source=local')
+    const market = await h.call('/api/zeokeel/capabilities?source=market')
+    const local = await h.call('/api/zeokeel/capabilities?source=local')
     const rows = [
       ...(market.body.items as CapabilityItem[]),
       ...(local.body.items as CapabilityItem[]).filter(i => i.source === 'local'),
@@ -289,7 +289,7 @@ describe('R6-B-1 对照：真下架的判据没有被改弱', () => {
     expect(isDelistedItem(item)).toBe(true)
     expect(planCardAction(item)).toMatchObject({
       kind: 'uninstall',
-      endpoint: `/api/pico/shared-skills/${SKILL}/1.0.0/uninstall`,
+      endpoint: `/api/zeokeel/shared-skills/${SKILL}/1.0.0/uninstall`,
     })
   })
 
@@ -387,7 +387,7 @@ describe('R6-B-1 归并：归属判据只认本机行那一份', () => {
     expect(isDelistedItem(delisted), '权威判据不依赖归属维度').toBe(true)
     expect(planCardAction(delisted)).toMatchObject({
       kind: 'uninstall',
-      endpoint: `/api/pico/shared-skills/x/1.0.0/uninstall`,
+      endpoint: `/api/zeokeel/shared-skills/x/1.0.0/uninstall`,
     })
 
     // ② 目录面权威字段：下架行带 `enabled:false`（本机这一份仍在本机行上）。

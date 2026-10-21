@@ -218,7 +218,7 @@ function bootHarness(config: Config = {}): Harness {
     effect: (fn: () => unknown) => { fn() },
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'desktopRuntime' ? runtime : undefined))),
-    picoSession: { isRestored: () => true, isLoggedIn: () => false, getSession: () => null },
+    zeokeelSession: { isRestored: () => true, isLoggedIn: () => false, getSession: () => null },
     webServer: {
       tapIndex: (cb: (html: string) => string) => { index = cb; return () => {} },
       register: (route: { path: string, handler: (req: IncomingMessage, res: ServerResponse) => unknown }) => {
@@ -306,7 +306,7 @@ describe('语言按请求 / 按渲染解析（不许冻结）', () => {
       effect: (fn: () => unknown) => { fn() },
       provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
       get: (name: string) => (name === 'desktopRuntime' ? runtime : undefined),
-      picoSession: { isRestored: () => false, isLoggedIn: () => false, getSession: () => null },
+      zeokeelSession: { isRestored: () => false, isLoggedIn: () => false, getSession: () => null },
       webServer: {
         tapIndex: (cb: (html: string) => string) => { index = cb; return () => {} },
         register: (route: { path: string, handler: (req: IncomingMessage, res: ServerResponse) => unknown }) => {

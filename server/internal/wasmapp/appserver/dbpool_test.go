@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/appdb"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/queue"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appdb"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 )
 
 // ===== §4.5 句柄池：同应用复用 / 跨应用不共享 / 淘汰策略 =====

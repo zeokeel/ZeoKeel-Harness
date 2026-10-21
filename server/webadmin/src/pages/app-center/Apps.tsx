@@ -51,7 +51,7 @@ import { AppAiUsageSection } from './AppAiUsageSection'
  * 要求「应用平台并入应用中心」)。
  *
  * 同页顶部的「应用域名」卡片曾在 2026-09-19 上半日搬进「设置」子页,随后随 WASM
- * 「客户端专属」改造**整页删除**(应用只在桌面客户端内以 `picoaide-app://<app_id>/`
+ * 「客户端专属」改造**整页删除**(应用只在桌面客户端内以 `zeokeel-app://<app_id>/`
  * 打开,服务端不再有应用基域配置面;契约 §4.4/§4.5)。本页因此也**不渲染任何入口
  * 链接** —— `entry_url` 已从服务端响应与两端 UI 全部取消,唯一可分享形态是深链
  * `<渠道 scheme>://app/<app_id>`(由客户端应用中心给出,管理端不代拼)。**服务端
@@ -354,7 +354,7 @@ function writeAccessFilterToUrl(value: string) {
 }
 
 /**
- * 应用中心 · 应用页的**变体哨兵串**（P3；命名 = `picoaide.feature.<模块>.v1`，模块名 `apps`
+ * 应用中心 · 应用页的**变体哨兵串**（P3；命名 = `zeokeel.feature.<模块>.v1`，模块名 `apps`
  * 与 Go 侧 `-tags`、渠道配置 `features` 逐字一致）。
  *
  * **每个模块页各自带哨兵**（不是只在分区布局 `AppCenterLayout.tsx` 上写一份）：产物判据的
@@ -363,7 +363,7 @@ function writeAccessFilterToUrl(value: string) {
  * 会渲染**的那条路径（这里作为根元素的 data 属性渲染出去）；双侧判据与两条纪律见
  * `pages/CapabilityCenter.tsx` 的同名常量，产物级断言在 `scripts/check-feature-chunks.mjs`。
  */
-export const FEATURE_SENTINEL = 'picoaide.feature.apps.v1'
+export const FEATURE_SENTINEL = 'zeokeel.feature.apps.v1'
 
 export default function Apps() {
   const [apps, setApps] = useState<WasmApp[]>([])

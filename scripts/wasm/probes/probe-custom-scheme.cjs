@@ -1,16 +1,16 @@
 /**
- * W0-C 探针：自定义协议 `picoaide-app://<app_id>/` 能不能作为 WASM 应用的
+ * W0-C 探针：自定义协议 `zeokeel-app://<app_id>/` 能不能作为 WASM 应用的
  * 客户端内部 origin（用户 2026-09-19 拍板的载体）。
  *
  * 逐条判定（每条都必须可判真假，不做"看起来能用"的推断）：
- *   1. `protocol.handle('picoaide-app', …)` 能否服务内容（Electron 43.4.0）
+ *   1. `protocol.handle('zeokeel-app', …)` 能否服务内容（Electron 43.4.0）
  *   2. 页面 origin / secure context / 相对路径解析
  *   3. 同源 `fetch` 是否可达 handler，handler 收到的 Origin 头是什么
  *   4. **原生表单 POST**（CSP/form-action 语义的真正考验）是否可达 handler，方法/体是否完整
- *   5. 跨应用（`picoaide-app://other/`）是否被隔离（corsEnabled:false）
+ *   5. 跨应用（`zeokeel-app://other/`）是否被隔离（corsEnabled:false）
  *   6. Cookie 语义（自定义协议下 document.cookie / Set-Cookie 行为）
  *   7. 重定向（302）与状态码能否透传；`<img>` 等子资源是否走 handler
- *   8. 主进程 `loadURL('picoaide-app://…')`（内置浏览器视图的加载方式）能否成功
+ *   8. 主进程 `loadURL('zeokeel-app://…')`（内置浏览器视图的加载方式）能否成功
  *
  * 运行：
  *   xvfb-run -a env HOME=/tmp/... electron --no-sandbox scripts/wasm/probes/probe-custom-scheme.cjs
@@ -18,7 +18,7 @@
 const { app, BrowserWindow, protocol, net } = require('electron')
 const { attest } = require('./probe-attest.cjs')
 
-const SCHEME = 'picoaide-app'
+const SCHEME = 'zeokeel-app'
 
 // 与上游 dsh-app:// 同一组 privileges（见 deepseek-harness/apps/desktop/src/main.ts:30-40）。
 protocol.registerSchemesAsPrivileged([{

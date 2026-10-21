@@ -1,10 +1,10 @@
 /**
  * Child process for the P1-1 兼容路径 regression (adoption 的 fail-loud 面)：
- * 造一份"内容与随包技能逐字相同、但没有 `.picoaide` 溯源"的历史副本，跑一次
+ * 造一份"内容与随包技能逐字相同、但没有 `.zeokeel` 溯源"的历史副本，跑一次
  * `syncBuiltinSkills`，把结果打印成一行 JSON。
  *
  * 用法：`node --import tests/fixtures/register-write-fault.mjs <this>`
- *   - 无故障（对照组）⇒ `entry.action === 'adopted'`，`.picoaide` 被补上；
+ *   - 无故障（对照组）⇒ `entry.action === 'adopted'`，`.zeokeel` 被补上；
  *   - `FAULT_ON=1 FAULT_CODE=ENOSPC` ⇒ 补写溯源这一步的 fd 写失败 ⇒ 必须
  *     `refused` + `code: 'SKILL_ADOPT_FAILED'`，且**内容一字未动、没有半个标记**
  *     （绝不允许"内容按 plugin 更新了、溯源没写"）。
@@ -43,7 +43,7 @@ console.log(JSON.stringify({
   entry: results.find((r) => r.name === NAME),
   skill: readIf(join(dest, 'SKILL.md')),
   helper: readIf(join(dest, 'scripts', 'helper.mjs')),
-  provenance: readIf(join(dest, '.picoaide', 'release.json')),
+  provenance: readIf(join(dest, '.zeokeel', 'release.json')),
   installVersion: readIf(join(dest, '.install-version')),
   destEntries: existsSync(dest) ? readdirSync(dest).sort() : [],
 }))

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 本文件覆盖 P1-7（列表静默截断 200 条）、P1-9/P2-4（管理面诊断与运行时水位出口）

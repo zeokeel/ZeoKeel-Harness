@@ -57,7 +57,7 @@ function loadCorpus(): CorpusCase[] {
   // 真源缺席 ⇒ 直接失败（不是 skip）：语料不在，"两端语义一致"这件事完全静默。
   const raw = readFileSync(CORPUS_URL, 'utf8')
   const doc = JSON.parse(raw) as { schema?: unknown; cases?: unknown }
-  expect(doc.schema, '共享语料 schema 必须是 picoaide-semver-corpus/1').toBe('picoaide-semver-corpus/1')
+  expect(doc.schema, '共享语料 schema 必须是 zeokeel-semver-corpus/1').toBe('zeokeel-semver-corpus/1')
   expect(Array.isArray(doc.cases), '共享语料必须有 cases 数组').toBe(true)
   const cases = doc.cases as CorpusCase[]
   for (const c of cases) {

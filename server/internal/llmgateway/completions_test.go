@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestFIMRecordsUsage 验证 FIM completion(/v1/completions)计费闭环:

@@ -3,12 +3,12 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 //#region src/index.ts
 /**
-* Product home resolution for PicoAide Harness.
+* Product home resolution for ZeoKeel Harness.
 *
 * The product owns its data directory: the default Harness home under the
-* OS home is `~/.picoaide-harness` instead of the upstream `~/.dsh`.
+* OS home is `~/.zeokeel-harness` instead of the upstream `~/.dsh`.
 *
-* 该目录**随渠道**（2026-09-11）：官方渠道仍是 `~/.picoaide-harness`（逐字节
+* 该目录**随渠道**（2026-09-11）：官方渠道仍是 `~/.zeokeel-harness`（逐字节
 * 不变），渠道客户端用自己的目录（`channelDshHomeDir()` 是唯一派生点）。此前
 * 所有渠道共用一个数据根，于是同一台机器上的两个渠道会共享登录 token、
 * settings 与会话（跨租户），并互相顶掉单实例锁。
@@ -29,7 +29,7 @@ import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 /** Environment variable that overrides the product home. */
 const DSH_HOME_ENV = "DSH_HOME";
 /** Directory name of the product default Harness home under the OS home. */
-const PRODUCT_DSH_HOME_DIR = ".picoaide-harness";
+const PRODUCT_DSH_HOME_DIR = ".zeokeel-harness";
 /** Stable user-facing display form for the default product home. */
 const DEFAULT_DSH_HOME_DISPLAY = `~/${PRODUCT_DSH_HOME_DIR}`;
 /** 官方渠道 id（渠道化构建之外的默认渠道）。 */
@@ -73,7 +73,7 @@ function channelDshHomeDir(channelId, options = {}) {
 	if (isSafeDshHomeDirName(options.homeDir)) return options.homeDir;
 	if (typeof options.slug === "string") {
 		const derived = `.${options.slug.toLowerCase()}`;
-		if (isSafeDshHomeDirName(derived) && derived !== ".picoaide-harness") return derived;
+		if (isSafeDshHomeDirName(derived) && derived !== ".zeokeel-harness") return derived;
 	}
 	return `${PRODUCT_DSH_HOME_DIR}-${channelId}`;
 }
@@ -87,7 +87,7 @@ function expandHomePath(path, home = homedir()) {
 * Resolve the single-root product Harness home.
 *
 * Precedence, highest first: an explicit configured path, `$DSH_HOME`, then
-* `~/.picoaide-harness`. The product keeps all user data under one root. An
+* `~/.zeokeel-harness`. The product keeps all user data under one root. An
 * empty or whitespace-only `$DSH_HOME` is treated as unset.
 *
 * 审计 2026-08-25 P2-3:DSH_HOME 是完全可注入的环境变量(同机进程可设置后
@@ -336,7 +336,7 @@ function dshHomePath(...segments) {
 *
 * 第三个理由更根本：`<数据根>/skills` 本来就是**基础**组合里
 * `@deepseek-ai/dsh-skill-filesystem` 行的扫描根（桌面 profile 的
-* `pico-skill-filesystem` 行，见 `enterprise/cordis.patch.yml` 的
+* `zeokeel-skill-filesystem` 行，见 `enterprise/cordis.patch.yml` 的
 * "Local skill discovery" 段）—— 它是数据根布局的一部分，不是某个可选模块的
 * 私有知识。
 * @param env - environment used to resolve the data root (test seam).

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // FIX-08(审计 2026-09-12,CC-P1-2):余额「设为」在 amount 缺失/null 时被当成清零。

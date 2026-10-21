@@ -137,7 +137,7 @@ function harness(
       : undefined),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     tools: { register: (definition: ToolDef) => { tools.push(definition); return () => {} } },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -210,7 +210,7 @@ const ROWS_ARGS = { appId: 'shared-notes', table: 'notes' }
 let home: string
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-ai-rows-home-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-ai-rows-home-'))
   vi.stubEnv('DSH_HOME', home)
 })
 

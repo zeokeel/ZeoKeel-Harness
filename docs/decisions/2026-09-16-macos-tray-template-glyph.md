@@ -15,7 +15,7 @@ Mac 客户端菜单栏右侧**只有一个方块**（用户机器是暗色菜单
 | `src/tray-icons.ts:27-31` | darwin 分支加载 `build/tray-iconTemplate.png` 并 `setTemplateImage(true)` |
 | `scripts/generate-tray-icons.mjs`（改造前） | 6 个变体都是"把品牌 SVG 直接缩放"：**方块 + mark 铺满整张画布**，方块不透明 |
 | 随包产物像素（16px） | 全透明像素 **0**、不透明 236、半透明 20 → alpha 遮罩就是一块实心圆角方块 |
-| 真实产物核对 | beta 渠道 `2.7.5-beta.1` 的 mac DMG（`PicoAide-Harness-2.7.5-beta.1-mac.dmg`，sha256 与 manifest 一致）里 `app.asar` 的该文件与仓库产物**逐字节相同**；DMG 内 app 带 staple 票据、`Info.plist` 无 `LSUIElement` → **不是**打包/签名/权限问题 |
+| 真实产物核对 | beta 渠道 `2.7.5-beta.1` 的 mac DMG（`ZeoKeel-Harness-2.7.5-beta.1-mac.dmg`，sha256 与 manifest 一致）里 `app.asar` 的该文件与仓库产物**逐字节相同**；DMG 内 app 带 staple 票据、`Info.plist` 无 `LSUIElement` → **不是**打包/签名/权限问题 |
 | Electron 文档 | 模板图由 **black + clear** 组成；系统只用 **alpha 通道**当遮罩、RGB 忽略，再按当前外观填成黑/白 |
 
 结论：模板图这种用法**要求**"mark 不透明 + 背景透明"，而我们喂给它的是"整块不透明

@@ -157,7 +157,7 @@ function openPage(html: string, handler: Handler = () => undefined): PageHandle 
       window.confirm = () => true
       window.EventSource = FakeEventSource
       window.fetch = (input: unknown, init: any = {}) => {
-        const path = String(input).replace(/^\/api\/pico\/browser\//u, '')
+        const path = String(input).replace(/^\/api\/zeokeel\/browser\//u, '')
         const method = String(init?.method ?? 'GET').toUpperCase()
         const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
         const call: Call = { path, method, body, index: calls.length }
@@ -686,7 +686,7 @@ describe('浏览器本地页面：失败必须可见、状态必须真实（2026
                 { id: 5, visible: false, url: 'https://e.example/', title: 'EMPTY', favicon: '' },
                 // 2026-09-19 订正（R2-P0-2）：浏览器标签不得导航到应用 scheme ⇒ 它不会
                 // 出现在标签列表里；即便出现了，favicon 也不写进 <img src>。
-                { id: 6, visible: false, url: 'picoaide-app://demo/', title: 'APP', favicon: 'picoaide-app://demo/icon.png' },
+                { id: 6, visible: false, url: 'zeokeel-app://demo/', title: 'APP', favicon: 'zeokeel-app://demo/icon.png' },
               ],
             }),
           }

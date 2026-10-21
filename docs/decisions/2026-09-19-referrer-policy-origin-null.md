@@ -156,7 +156,7 @@ cd server
 go build ./... && go vet ./internal/wasmapp/...
 # ⚠️ 已失效（W4 已删除 `internal/wasmapp/session`）：此命令**现在必然失败**，仅作历史复现记录。
 gofmt -l internal/wasmapp cmd/server          # 必须为空
-PG_DSN_TEST='postgres://postgres:postgres@127.0.0.1:5432/picoaide_test' \
+PG_DSN_TEST='postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test' \
   go test ./internal/wasmapp/session/... ./internal/wasmapp/edge/... \
           ./internal/wasmapp/appserver/... ./cmd/server/... -count=1
 ```
@@ -192,7 +192,7 @@ PG_DSN_TEST='postgres://postgres:postgres@127.0.0.1:5432/picoaide_test' \
 
 ```bash
 # ⚠️ 已失效（W4 已删除 `internal/wasmapp/session`）：此命令**现在必然失败**，仅作历史复现记录。
-PICOAI_PROBE_DIR=temp/wasm-probe/pages-dump \
+ZEOKEEL_PROBE_DIR=temp/wasm-probe/pages-dump \
   go test ./internal/wasmapp/session/ -run ZZDump -count=1
 node temp/wasm-probe/verify-same-origin.mjs temp/wasm-probe/pages-dump
 ```

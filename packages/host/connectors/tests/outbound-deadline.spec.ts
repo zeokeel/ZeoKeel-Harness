@@ -151,7 +151,7 @@ describe('conn-1: OAuth discovery honors the flow abort signal', () => {
 
 describe('conn-1: logout teardown runs once the hung restore hits its deadline', () => {
   it('disposes the previous registration far earlier than 300 s', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn1-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn1-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const { url } = await blackHole()
 

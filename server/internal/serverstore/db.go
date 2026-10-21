@@ -177,7 +177,7 @@ const (
 )
 
 // pgPoolMax 返回应用连接池上限:min(400, 服务端可授予量, 显式覆盖)。
-// PICOAI_DB_MAX_OPEN_CONNS 可显式指定(多实例部署/托管 PG 时按实际配额下调)。
+// ZEOKEEL_DB_MAX_OPEN_CONNS 可显式指定(多实例部署/托管 PG 时按实际配额下调)。
 func pgPoolMax(db *sql.DB) int {
 	max := pgPoolMaxCeiling
 	if usable, err := pgUsableConnections(db); err != nil {
@@ -186,13 +186,13 @@ func pgPoolMax(db *sql.DB) int {
 	} else if usable < max {
 		max = usable
 	}
-	if v := strings.TrimSpace(os.Getenv("PICOAI_DB_MAX_OPEN_CONNS")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("ZEOKEEL_DB_MAX_OPEN_CONNS")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			if n < max {
 				max = n
 			}
 		} else {
-			log.Printf("serverstore: ignoring invalid PICOAI_DB_MAX_OPEN_CONNS=%q", v)
+			log.Printf("serverstore: ignoring invalid ZEOKEEL_DB_MAX_OPEN_CONNS=%q", v)
 		}
 	}
 	if max < 2 { // 发布路径的最小可用池:同一时刻 1 条连接即可,但 2 是安全地板

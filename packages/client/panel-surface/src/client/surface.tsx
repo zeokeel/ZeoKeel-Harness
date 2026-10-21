@@ -29,7 +29,7 @@
  * 会聚焦自己的容器）。**触发方不得在 `activate()` 之后再 `focus()` 锚点** —— 那会把
  * 焦点从刚打开的面板里抢走（2026-09-25 审计 FIX-29 P2 的现场）。
  *
- * @module @picoaide/dsh-panel-surface/client/surface
+ * @module @zeokeel/dsh-panel-surface/client/surface
  */
 
 import { createElement, type ReactNode } from 'react'
@@ -48,7 +48,7 @@ import { PANEL_STYLE_ATTR, panelStylesheet } from './stylesheet.ts'
  * 文档里是否存在**内层模态**（确认框/表单）—— 存在时 Esc 归那一层，装载器让位。
  *
  * 本判据只有**这一个实现**：装载器的 Esc 守卫与底部「更多」浮层
- * （`@picoaide/dsh-foot-menu` 的 `FootMenuRow`）都调它。此前两边各写各的，
+ * （`@zeokeel/dsh-foot-menu` 的 `FootMenuRow`）都调它。此前两边各写各的，
  * 于是同一次按键在两个包里得到不同答案 —— 那正是这条缺陷的成因。
  *
  * **两个角色都要认**：`[role="dialog"]` 是**精确值**属性选择器，`alertdialog`
@@ -188,7 +188,7 @@ export function mountPanelSurface(options: PanelSurfaceOptions): PanelSurfaceHan
    *   · **触发方不得在 `activate()` 之后自己 `focus()` 锚点** —— 那会把焦点从刚打开的
    *     面板里抢走。2026-09-25 审计 FIX-29 P2 的现场正是这条：底部「更多」浮层的条目
    *     `activate()` 之后 `closeMenu(true)` 把焦点抢回侧边栏行，键盘用户按 Tab 进不去
-   *     面板（浮层侧的修法见 `@picoaide/dsh-foot-menu` 的 `FootMenuRow`：先把焦点交还
+   *     面板（浮层侧的修法见 `@zeokeel/dsh-foot-menu` 的 `FootMenuRow`：先把焦点交还
    *     锚点、再激活 ⇒ 这里记下的归还目标就是「更多」行本身，条目随浮层关闭消失，
    *     不能当归还目标）；
    *   · 另一个面板接管（`dsh-panel-activate` 广播）时**不归还** —— 否则会把焦点丢给

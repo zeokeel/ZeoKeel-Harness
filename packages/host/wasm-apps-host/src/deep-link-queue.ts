@@ -17,7 +17,7 @@
  * 本模块是**纯状态机**（注入时钟），不碰 Electron / 网络：宿主只在"会话变为已登录"
  * 与"宿主就绪"两个时刻调用 `drain()`。
  *
- * @module @picoaide/dsh-wasm-apps-host/deep-link-queue
+ * @module @zeokeel/dsh-wasm-apps-host/deep-link-queue
  */
 
 /** 队列上限（§7.6 冻结：8 条）。 */
@@ -102,7 +102,7 @@ export function createDeepLinkQueue(options: DeepLinkQueueOptions = {}): DeepLin
     const kept: PendingDeepLink[] = []
     for (const item of items) {
       if (instant - item.enqueuedAt >= ttlMs) {
-        warn(`pico-wasm-apps-host: dropping an expired pending app link (${item.appId})`)
+        warn(`zeokeel-wasm-apps-host: dropping an expired pending app link (${item.appId})`)
         continue
       }
       kept.push(item)
@@ -126,7 +126,7 @@ export function createDeepLinkQueue(options: DeepLinkQueueOptions = {}): DeepLin
       while (items.length > max) {
         const dropped = items.shift()
         if (dropped === undefined) break
-        warn(`pico-wasm-apps-host: the pending app link queue is full (${String(max)}); dropping ${dropped.appId}`)
+        warn(`zeokeel-wasm-apps-host: the pending app link queue is full (${String(max)}); dropping ${dropped.appId}`)
       }
       return { ok: true, replaced: false }
     },

@@ -13,15 +13,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // 本文件是 §8 的**管理面**（R23"最小运维面"）：应用列表 / 下架 / 转移归属 / 冻结

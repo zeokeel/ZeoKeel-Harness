@@ -17,7 +17,7 @@ description: 按主题回答真正会被问到的问题：部署与数据、客�
 
 分两半，边界很清楚：
 
-- **在员工机器上的**：会话与消息日志、工作区文件、工具执行、沙箱状态、语音音频、连接器凭据。数据根由一份权威定义给出（`~/.picoaide-harness`，`DSH_HOME` 优先，渠道不同则目录不同）；凭据目录 `0700`、文件 `0600`、原子写入。
+- **在员工机器上的**：会话与消息日志、工作区文件、工具执行、沙箱状态、语音音频、连接器凭据。数据根由一份权威定义给出（`~/.zeokeel-harness`，`DSH_HOME` 优先，渠道不同则目录不同）；凭据目录 `0700`、文件 `0600`、原子写入。
 - **在客户自己服务器上的**：账号、模型用量与费用、余额账本、内容与授权、审计事件。服务端**不接触**员工本机文件与会话日志。
 
 厂商既不自建托管服务、也不中转数据。**数据离开机器的路径全部由你自己配置**：模型请求从员工机器发到你的服务端，再由服务端转发给你选择的上游 provider；连接器只连你在管理后台登记的那些 MCP 端点。用云端模型时内容会到那家 provider，用内网模型则不出内网。
@@ -28,7 +28,7 @@ description: 按主题回答真正会被问到的问题：部署与数据、客�
 
 ### 升级会不会丢数据？怎么回滚？
 
-升级只换镜像；数据全部落在部署目录下的 bind mount（`picoaide-data/`、`pg-data/`、`caddy-data/`、`certs/`）。回滚是切回旧镜像再 `docker compose up -d server`，**但数据库迁移不可逆**：回滚镜像不能把库降回旧结构，所以升级前必须备份并确认备份非空（`master.key` 丢了，库里加密的上游密钥就永久解不开）。
+升级只换镜像；数据全部落在部署目录下的 bind mount（`zeokeel-data/`、`pg-data/`、`caddy-data/`、`certs/`）。回滚是切回旧镜像再 `docker compose up -d server`，**但数据库迁移不可逆**：回滚镜像不能把库降回旧结构，所以升级前必须备份并确认备份非空（`master.key` 丢了，库里加密的上游密钥就永久解不开）。
 
 四条铁律：绝不 `docker compose down -v` / `volume prune`；绝不用 `latest` 标签；升级前必须备份；不得用 `.env` 覆盖已有部署目录。完整流程见[升级、备份与回滚](/deployment/upgrade/)。
 
@@ -64,11 +64,11 @@ Windows 安装程序与 Linux AppImage 未签名（macOS 正式版已签名 + �
 
 ### 客户端能用系统代理吗？
 
-默认**不能**：系统代理设置、代理环境变量、PAC 与 `--proxy-server` 全部被忽略。只有「必须经代理才能出公网」的部署才打开退路——渠道字段 `desktop.allow_system_proxy`，或**真实进程环境变量** `PICOAI_ALLOW_SYSTEM_PROXY=1`（写在 `.env` 分层里不生效）；打开后启动日志会打印 `proxy system/<来源>`，默认直连时打印 `proxy direct`。
+默认**不能**：系统代理设置、代理环境变量、PAC 与 `--proxy-server` 全部被忽略。只有「必须经代理才能出公网」的部署才打开退路——渠道字段 `desktop.allow_system_proxy`，或**真实进程环境变量** `ZEOKEEL_ALLOW_SYSTEM_PROXY=1`（写在 `.env` 分层里不生效）；打开后启动日志会打印 `proxy system/<来源>`，默认直连时打印 `proxy direct`。
 
 ### 能在客户端装第三方 DSH 插件吗？
 
-能，走 profile 的**用户补丁层**：编辑 `~/.picoaide-harness/cordis.patch.yml`（渠道不同则数据根不同），按 Loader patch 语法追加一行，**重启应用**后生效。
+能，走 profile 的**用户补丁层**：编辑 `~/.zeokeel-harness/cordis.patch.yml`（渠道不同则数据根不同），按 Loader patch 语法追加一行，**重启应用**后生效。
 
 **不能**用 `dsh plugin --profile desktop …`：`desktop` profile 由桌面应用独占，CLI 会直接拒绝（`profile "desktop" is managed exclusively by the Electron application`），应用也没有终端或 profile 切换入口。
 
@@ -134,17 +134,17 @@ Windows 安装程序与 Linux AppImage 未签名（macOS 正式版已签名 + �
 
 ### 应用中心的应用需要公网入口或证书吗？
 
-不需要。员工自建的 WASM 应用只在**客户端独立窗口**里打开（自定义协议），服务端唯一入口是 `POST /api/client/v2/apps/wasm/:app_id/request`（带员工令牌转发执行）。所以部署时**不需要**为应用准备子域、通配证书或额外端口。应用配置 `picoaide.app.json` 的 `access` 取 `public` / `login` / `whitelist`（缺省 `login`），`whitelist` 由**应用自己**读取并判定；「允许 AI 读取此应用的数据」这类授权按（用户 + 服务端 + 应用）作用域记录。
+不需要。员工自建的 WASM 应用只在**客户端独立窗口**里打开（自定义协议），服务端唯一入口是 `POST /api/client/v2/apps/wasm/:app_id/request`（带员工令牌转发执行）。所以部署时**不需要**为应用准备子域、通配证书或额外端口。应用配置 `zeokeel.app.json` 的 `access` 取 `public` / `login` / `whitelist`（缺省 `login`），`whitelist` 由**应用自己**读取并判定；「允许 AI 读取此应用的数据」这类授权按（用户 + 服务端 + 应用）作用域记录。
 
 ## 开源与许可
 
-### PicoAide Harness 与 DeepSeek Harness 是什么关系？
+### ZeoKeel Harness 与 DeepSeek Harness 是什么关系？
 
 基于固定版本的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（当前 pin `dsh-v0.2.1-rc.2`，真源为仓库根 `upstream.json`）构建。上游提供核心智能体、插件系统与 Web UI；本项目提供桌面封装、本地服务管理与企业级管控面。**上游源码原样运行，不魔改**——只保留少量带判据的补丁，升级只跟随上游版本号。
 
 ### 这是 DeepSeek 官方产品吗？
 
-不是。PicoAide Harness 是独立的开源社区项目（MIT License），与 DeepSeek 官方没有隶属关系，也未获得其背书。DeepSeek 是 DeepSeek AI 的商标。
+不是。ZeoKeel Harness 是独立的开源社区项目（MIT License），与 DeepSeek 官方没有隶属关系，也未获得其背书。DeepSeek 是 DeepSeek AI 的商标。
 
 ### 开源许可是什么？可以商用/二次开发吗？
 
@@ -152,7 +152,7 @@ MIT License，可以自由使用、修改与分发（保留许可证与版权声
 
 ### 遇到问题在哪反馈？
 
-先看[桌面客户端](/desktop/)的排查一节与[运维与排障](/deployment/operations/)，仍无法解决再提交 [GitHub Issue](https://github.com/picoaide/picoaide-harness/issues)，并附上操作系统、应用版本、复现步骤与错误信息。应用持续闪退时，用 `--export-diagnostics` 或托盘「导出诊断信息…」生成诊断包（分享前请自行检查内容）。
+先看[桌面客户端](/desktop/)的排查一节与[运维与排障](/deployment/operations/)，仍无法解决再提交 [GitHub Issue](https://github.com/zeokeel/ZeoKeel-Harness/issues)，并附上操作系统、应用版本、复现步骤与错误信息。应用持续闪退时，用 `--export-diagnostics` 或托盘「导出诊断信息…」生成诊断包（分享前请自行检查内容）。
 
 ## 相关
 

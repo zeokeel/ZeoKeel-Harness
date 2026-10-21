@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 const errorReportingClientsPath = "/api/server/admin/gateway/error-reporting/clients"
@@ -63,7 +63,7 @@ func TestErrorReportingClientsAggregate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := serverstore.UpsertErrorReportingStatus(db, uid, s.state, s.reason, s.host, s.level, "picoaide-desktop@2.4.0"); err != nil {
+		if err := serverstore.UpsertErrorReportingStatus(db, uid, s.state, s.reason, s.host, s.level, "zeokeel-desktop@2.4.0"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -90,7 +90,7 @@ func TestErrorReportingClientsAggregate(t *testing.T) {
 		t.Fatalf("item[0] = %v, want dave/failed (items=%v)", first, items)
 	}
 	if first["reason"] != "Sentry init 失败: DSN 非法" || first["dsn_host"] != "localhost:8000" ||
-		first["level"] != "error" || first["release"] != "picoaide-desktop@2.4.0" {
+		first["level"] != "error" || first["release"] != "zeokeel-desktop@2.4.0" {
 		t.Fatalf("item[0] field contract mismatch: %v", first)
 	}
 	updatedAt, _ := first["updated_at"].(string)

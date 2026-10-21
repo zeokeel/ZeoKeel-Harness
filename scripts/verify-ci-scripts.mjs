@@ -706,6 +706,19 @@ function channelFloor() {
   return match === null ? 0 : Number(match[1])
 }
 
+/**
+ * 夹具用渠道 id：数量**正好等于当前棘轮下限**（`official` 固定首位，其余为合成 id）。
+ *
+ * 2026-10-21 fork 改名时下限从上游的 4 显式下调到 2（新渠道仓只有 official+beta），
+ * 于是所有"目录数正好等于下限"的夹具（`expected.length === channelFloor()`、
+ * 克隆路径的 `length === channelFloor()`、以及"删一个渠道 ⇒ 跌破下限必须红"）都必须
+ * 跟着按 `channelFloor()` 生成 —— 写死 4 会让这些前置断言红，而不是真正测到判据。
+ */
+function fixtureChannelIds(extra = 0) {
+  const pool = ['official', 'example-brand', 'example-ops', 'zeta', 'example-new', 'example-two']
+  return pool.slice(0, channelFloor() + extra)
+}
+
 /** 渠道仓里**符合 id 形状**的目录名（与脚本的枚举口径一致：不合规目录不计入）。 */
 function channelIdsOf(root) {
   const dir = join(root, 'channels')
@@ -822,7 +835,7 @@ function fakeChannelRepo(ids, options = {}) {
     // desktop.app_origin_scheme(2026-09-19 §10)**全部渠道必填**(含 official/beta):
     // 夹具必须与之一体 —— 不给公共渠道写这个字段,加了必填校验后下面整组 tag→渠道集
     // 用例会一起变红(2026-09-12 home_dir 那次踩过同一个坑)。取值:公共渠道共用
-    // `picoaide-app`(§16 W3:official/beta 是一个命名空间,跨渠道唯一性扫描对它们
+    // `zeokeel-app`(§16 W3:official/beta 是一个命名空间,跨渠道唯一性扫描对它们
     // 豁免),品牌渠道用 `<id 去连字符>-app`(合法形状、彼此不同、也不撞公共值)。
     const publicChannel = id === 'official' || id === 'beta'
     writeFileSync(join(dir, 'channels', id, 'channel.json'), JSON.stringify({
@@ -841,8 +854,8 @@ function fakeChannelRepo(ids, options = {}) {
           // 预发版是正式版的前置验证，登录态/设置/会话要与正式版延续；写成自己的
           // 目录会让预发版用户升级后看不到既有会话（当天实测的"对话全没了"事故）。
           (id === 'beta'
-            ? { desktop: { home_dir: '.picoaide-harness', app_origin_scheme: 'picoaide-app' } }
-            : { desktop: { app_origin_scheme: 'picoaide-app' } })
+            ? { desktop: { home_dir: '.zeokeel-harness', app_origin_scheme: 'zeokeel-app' } }
+            : { desktop: { app_origin_scheme: 'zeokeel-app' } })
         : {
             desktop: {
               product_name: `${id} AI`,
@@ -1507,7 +1520,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
       // pin/克隆面这组用例就测不到它声称的东西了。
       ...(publicChannel ? {} : { assets: { logo: 'logo.svg' } }),
       desktop: publicChannel
-        ? { app_origin_scheme: 'picoaide-app', ...(id === 'beta' ? { home_dir: '.picoaide-harness' } : {}) }
+        ? { app_origin_scheme: 'zeokeel-app', ...(id === 'beta' ? { home_dir: '.zeokeel-harness' } : {}) }
         : {
             product_name: `${id} AI`,
             slug: `${id}-AI`,
@@ -2274,11 +2287,13 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 //      **双向**对拍：登记了却没有目录 = 红（会少发）；有目录却没登记 = 红（未评审的新渠道）。
 // 另有 `--list` 的内容对拍：下游四个 job 只按它构建/搬运/发布，少一行就是少一个交付物。
 {
-  // 棘轮：下限可以上调，**下调必须是一次显式评审**。这里把"不得低于 4"钉进判据
+  // 棘轮：下限可以上调，**下调必须是一次显式评审**。这里把"不得低于 2"钉进判据
   // （改这条断言 = 一次可见的 diff），否则把它调到 1 就等于把闸门关掉。
+  // 2026-10-21 fork 改名（ZeoKeel）时从上游的 4 显式下调到 2：新私有渠道仓
+  // zeokeel/channels 当前只有 official + beta 两个渠道目录。
   check(
-    channelFloor() >= 4,
-    `MIN_EXPECTED_CHANNELS 是渠道目录数的棘轮下限，不得低于 4（真实渠道仓的目录数下限）；实际 ${channelFloor()}`,
+    channelFloor() >= 2,
+    `MIN_EXPECTED_CHANNELS 是渠道目录数的棘轮下限，不得低于 2（本仓私有渠道仓 official+beta 的目录数下限）；实际 ${channelFloor()}`,
   )
 
   const stableTag = { refName: 'v9.9.9', ref: 'refs/tags/v9.9.9' }
@@ -2287,7 +2302,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   // ① 正式 tag + 目录数正好等于下限 ⇒ 通过，且 `--list` 必须**逐行等于**目录全集
   //    （少一行 = 下游少构建/少交付一个渠道；这条同时是"选择集被截断"的判据）。
   {
-    const source = fakeChannelRepo(['official', 'beta', 'example-brand', 'example-ops'])
+    const source = fakeChannelRepo(fixtureChannelIds())
     const expected = orderedChannelIds(source)
     check(expected.length === channelFloor(), `夹具前置：目录数应正好等于下限，实际 ${expected.length}`)
     const run = runChannels({ source, ...stableTag, dest: 'channels', list: 'c7-full.list' })
@@ -2309,11 +2324,12 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 
   // ② **夹具/本地检出路径**（`CI_CHANNELS_SOURCE`）不得被下限提前中止
   //    （2026-09-24 集成回归）：本仓两个守卫（`scripts/verify-wasm-channels.mjs` 的组 7 与
-  //    本文件）都用这个模式跑合成夹具，夹具目录数（3 个）天然小于真实渠道仓下限（4 个）。
+  //    本文件）都用这个模式跑合成夹具；本 fork 的夹具目录数（删掉一个后 1 个）小于
+  //    当前下限（2 个）。
   //    若在这里判红，**逐渠道字段校验就永远看不到自己的错误** —— 实测组 7 七条断言全红。
   //    豁免只给这个模式；生产（clone/pin）那一半由 ⑪ 用真 git 仓库验。
   {
-    const source = fakeChannelRepo(['official', 'beta', 'example-brand', 'example-ops'])
+    const source = fakeChannelRepo(fixtureChannelIds())
     rmSync(join(source, 'channels', 'example-brand'), { recursive: true, force: true })
     const run = runChannels({ source, ...stableTag, dest: 'channels', list: 'c7-source-shrunk.list' })
     check(
@@ -2328,7 +2344,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 
     // ②b 同一份"目录数不足"的夹具 + 某渠道字段非法 ⇒ 报错必须**点名那个字段**
     //     （组 7 的最小复刻：这正是被下限吞掉的那类断言）
-    const broken = fakeChannelRepo(['official', 'beta', 'example-brand', 'example-ops'])
+    const broken = fakeChannelRepo(fixtureChannelIds())
     rmSync(join(broken, 'channels', 'example-brand'), { recursive: true, force: true })
     writeFileSync(join(broken, 'channels', 'official', 'channel.json'), JSON.stringify({
       schema: 1,
@@ -2352,14 +2368,14 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   //    同时判"失败时不得写出 --list"（下游拿到列表就会继续构建）。
   {
     const repo = fixtureRepo()
-    for (const id of ['official', 'example-brand', 'example-ops', 'zeta']) {
+    for (const id of fixtureChannelIds()) {
       mkdirSync(join(repo, 'channels', id), { recursive: true })
       writeFileSync(join(repo, 'channels', id, 'channel.json'), JSON.stringify({
         schema: 1,
         channel_id: id,
         identity: { display_name: `${id} AI`, short_name: id },
         desktop: id === 'official'
-          ? { app_origin_scheme: 'picoaide-app' }
+          ? { app_origin_scheme: 'zeokeel-app' }
           : {
               product_name: `${id} AI`,
               slug: `${id}-AI`,
@@ -2412,7 +2428,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
         channel_id: id,
         identity: { display_name: `${id} AI`, short_name: id },
         desktop: id === 'official'
-          ? { app_origin_scheme: 'picoaide-app' }
+          ? { app_origin_scheme: 'zeokeel-app' }
           : {
               product_name: `${id} AI`,
               slug: `${id}-AI`,
@@ -2451,7 +2467,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 
   // ⑤ 权威清单：与目录集一致 ⇒ 通过。
   {
-    const source = fakeChannelRepo(['official', 'beta', 'example-brand', 'example-ops'])
+    const source = fakeChannelRepo(fixtureChannelIds())
     writeFileSync(join(source, 'channels.manifest.json'),
       `${JSON.stringify({ schema: 1, channels: orderedChannelIds(source) })}\n`)
     const run = runChannels({ source, ...stableTag, dest: 'channels', list: 'c7-manifest-ok.list' })
@@ -2466,7 +2482,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   //    id 先登记掩码再打印、且两条都走 stderr（跨流的先后顺序没有保证，先打未掩码的 id
   //    就是一次公开日志泄露）。
   {
-    const source = fakeChannelRepo(['official', 'beta', 'example-brand', 'example-ops'])
+    const source = fakeChannelRepo(fixtureChannelIds())
     const ghost = 'ghost-channel'
     writeFileSync(join(source, 'channels.manifest.json'),
       `${JSON.stringify({ schema: 1, channels: [...orderedChannelIds(source), ghost] })}\n`)
@@ -2485,20 +2501,20 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 
   // ⑦ 反向：仓库里有目录但**没登记**进清单 ⇒ 红（未评审的新渠道 —— 它将来被删掉无人发现）。
   {
-    const source = fakeChannelRepo(['official', 'beta', 'example-brand', 'example-ops'])
-    const registered = orderedChannelIds(source).filter(id => id !== 'example-ops')
+    const source = fakeChannelRepo(fixtureChannelIds())
+    const registered = orderedChannelIds(source).filter(id => id !== 'example-brand')
     writeFileSync(join(source, 'channels.manifest.json'),
       `${JSON.stringify({ schema: 1, channels: registered })}\n`)
     const run = runChannels({ source, ...stableTag, dest: 'channels', list: 'c7-manifest-extra.list' })
     const err = `${run.stderr ?? ''}`
     check(run.status !== 0, '有渠道目录未登记进清单时必须 fail-loud（否则它消失时没有任何判据）')
-    check(err.includes('未登记') && err.includes('example-ops'), `失败信息必须点名未登记的渠道，实际：${err}`)
+    check(err.includes('未登记') && err.includes('example-brand'), `失败信息必须点名未登记的渠道，实际：${err}`)
   }
 
   // ⑧ 清单坏了（非法 JSON / 空数组）⇒ 红：**绝不静默退回**"只有下限兜底"
   //    （否则把清单改坏就是关掉闸门的最短路径）。
   for (const [content, why] of [['{ not json', '非法 JSON'], ['{"schema":1,"channels":[]}', '空数组']]) {
-    const source = fakeChannelRepo(['official', 'beta', 'example-brand', 'example-ops'])
+    const source = fakeChannelRepo(fixtureChannelIds())
     writeFileSync(join(source, 'channels.manifest.json'), `${content}\n`)
     const run = runChannels({ source, ...stableTag, dest: 'channels', list: 'c7-manifest-bad.list' })
     check(run.status !== 0, `清单${why}时必须 fail-loud（不得静默降级成只查下限）`)
@@ -2511,7 +2527,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   // ⑨ 权威清单是**仓库级**配置：非 tag 的 PR/分支构建上不一致同样要红
   //    （那是仓库状态自相矛盾，与本次构建的渠道集无关）。
   {
-    const source = fakeChannelRepo(['official', 'beta', 'example-brand', 'example-ops'])
+    const source = fakeChannelRepo(fixtureChannelIds())
     writeFileSync(join(source, 'channels.manifest.json'),
       `${JSON.stringify({ schema: 1, channels: [...orderedChannelIds(source), 'ghost-channel'] })}\n`)
     const run = runChannels({ source, ...branchRef, dest: 'channels', list: 'c7-manifest-branch.list' })
@@ -2534,7 +2550,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   //    只用 source 模式测会漏掉"判据挂在 `CHECKOUT_ROOT` 上，而克隆路径下那个变量指错"这类缺口。
   {
     const repo = fixtureRepo()
-    const ids = ['official', 'example-brand', 'example-ops', 'zeta']
+    const ids = fixtureChannelIds()
     for (const id of ids) {
       mkdirSync(join(repo, 'channels', id), { recursive: true })
       const publicChannel = id === 'official'
@@ -2543,7 +2559,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
         channel_id: id,
         identity: { display_name: `${id} AI`, short_name: id },
         desktop: publicChannel
-          ? { app_origin_scheme: 'picoaide-app' }
+          ? { app_origin_scheme: 'zeokeel-app' }
           : {
               product_name: `${id} AI`,
               slug: `${id}-AI`,
@@ -2649,15 +2665,15 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     if (scope !== undefined && required.length > 0) {
       const scopeArgs = ['--scope', scope]
       const requireArgs = ['--require', required.join(',')]
-      const cases = required.map(name => ({ Action: 'pass', Package: 'picoaide/server/internal/wasmapp/appserver', Test: name }))
+      const cases = required.map(name => ({ Action: 'pass', Package: 'zeokeel/server/internal/wasmapp/appserver', Test: name }))
       const cleanReport = [
         ...cases.map(entry => JSON.stringify(entry)),
-        JSON.stringify({ Action: 'pass', Package: 'picoaide/server/internal/wasmapp/appserver' }),
+        JSON.stringify({ Action: 'pass', Package: 'zeokeel/server/internal/wasmapp/appserver' }),
       ].join('\n')
       // 范围外(serverstore)的用例级 skip:在 --scope 下必须**不影响**结论。
-      const outsideSkip = `${cleanReport}\n${JSON.stringify({ Action: 'skip', Package: 'picoaide/server/internal/serverstore', Test: 'TestSummarizeWasmAppOpensTrendUVAcrossDSTDay' })}`
+      const outsideSkip = `${cleanReport}\n${JSON.stringify({ Action: 'skip', Package: 'zeokeel/server/internal/serverstore', Test: 'TestSummarizeWasmAppOpensTrendUVAcrossDSTDay' })}`
       // 范围内(appserver)的用例级 skip:必须判红。
-      const insideSkip = `${cleanReport}\n${JSON.stringify({ Action: 'skip', Package: 'picoaide/server/internal/wasmapp/appserver', Test: 'TestSomethingSkipped' })}`
+      const insideSkip = `${cleanReport}\n${JSON.stringify({ Action: 'skip', Package: 'zeokeel/server/internal/wasmapp/appserver', Test: 'TestSomethingSkipped' })}`
 
       const dir = tempDir('wasm-case-gate-')
       const write = (name, content) => {
@@ -2684,7 +2700,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
       const dropped = required[required.length - 1]
       const missingCase = runChecker(write('missing-case.json', [
         ...cases.filter(entry => entry.Test !== dropped).map(entry => JSON.stringify(entry)),
-        JSON.stringify({ Action: 'pass', Package: 'picoaide/server/internal/wasmapp/appserver' }),
+        JSON.stringify({ Action: 'pass', Package: 'zeokeel/server/internal/wasmapp/appserver' }),
       ].join('\n')))
       check(missingCase.status === 1, `少一条关键用例(${dropped})必须判红,实际退出 ${String(missingCase.status)}`)
     }
@@ -2997,7 +3013,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const missingConfig = tempDir('ci-channels-missing-')
   mkdirSync(join(missingConfig, 'channels', 'official'), { recursive: true })
   writeFileSync(join(missingConfig, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   mkdirSync(join(missingConfig, 'channels', 'beta'), { recursive: true }) // 无 channel.json
   padChannelRepo(missingConfig) // 下限补位：让这条用例只测「缺 channel.json」，不被渠道目录数下限先拦住
   const missing = runChannels({ source: missingConfig, refName: 'v2.7.0', dest: 'channels', list: 'g.list' })
@@ -3008,7 +3024,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const branded = tempDir('ci-channels-brand-')
   mkdirSync(join(branded, 'channels', 'official'), { recursive: true })
   writeFileSync(join(branded, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   mkdirSync(join(branded, 'channels', 'example-brand'), { recursive: true })
   writeFileSync(join(branded, 'channels', 'example-brand', 'channel.json'), '{"schema":1,"channel_id":"example-brand"}')
   padChannelRepo(branded) // 下限补位（同上）
@@ -3022,19 +3038,19 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const halfBranded = tempDir('ci-channels-brand-half-')
   mkdirSync(join(halfBranded, 'channels', 'official'), { recursive: true })
   writeFileSync(join(halfBranded, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   padChannelRepo(halfBranded) // 下限补位（同上）
   const half = runChannels({ source: halfBranded, refName: 'v2.7.0', dest: 'channels', list: 'i.list' })
   check(half.status !== 0, '只配 display_name 也必须失败')
   check(half.stderr.includes('identity.short_name'), '失败信息应点明缺 short_name')
 
   // 品牌渠道缺**编译期**字段 → 必须中止:缺 desktop.slug 时安装包名回落
-  // `PicoAide-Harness-…`(交付物上的厂商品牌),缺 app_id 时 bundle id 回落厂商值
+  // `ZeoKeel-Harness-…`(交付物上的厂商品牌),缺 app_id 时 bundle id 回落厂商值
   // (两个渠道的客户端在系统里变成同一个 app)。
   const noCompile = tempDir('ci-channels-compile-')
   mkdirSync(join(noCompile, 'channels', 'official'), { recursive: true })
   writeFileSync(join(noCompile, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   mkdirSync(join(noCompile, 'channels', 'example-brand'), { recursive: true })
   writeFileSync(join(noCompile, 'channels', 'example-brand', 'channel.json'),
     '{"schema":1,"channel_id":"example-brand","identity":{"display_name":"Example","short_name":"Example"}}')
@@ -3049,7 +3065,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const badShape = tempDir('ci-channels-shape-')
   mkdirSync(join(badShape, 'channels', 'official'), { recursive: true })
   writeFileSync(join(badShape, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   mkdirSync(join(badShape, 'channels', 'example-brand'), { recursive: true })
   writeFileSync(join(badShape, 'channels', 'example-brand', 'channel.json'), JSON.stringify({
     schema: 1,
@@ -3068,7 +3084,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const badIcon = tempDir('ci-channels-icon-')
   mkdirSync(join(badIcon, 'channels', 'official'), { recursive: true })
   writeFileSync(join(badIcon, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   mkdirSync(join(badIcon, 'channels', 'example-brand'), { recursive: true })
   writeFileSync(join(badIcon, 'channels', 'example-brand', 'channel.json'), JSON.stringify({
     schema: 1,
@@ -3089,7 +3105,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     schema: 1,
     channel_id: 'official',
     identity: { display_name: 'Official', short_name: 'Official' },
-    desktop: { app_origin_scheme: 'picoaide-app' },
+    desktop: { app_origin_scheme: 'zeokeel-app' },
     assets: { _note: '注解', logoo: 'logo.svg' },
   }))
   padChannelRepo(unknownAsset) // 下限补位（同上）
@@ -3124,7 +3140,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
       schema: 1,
       channel_id: 'official',
       identity: { display_name: 'Official', short_name: 'Official' },
-      desktop: { app_origin_scheme: 'picoaide-app' },
+      desktop: { app_origin_scheme: 'zeokeel-app' },
       assets,
     }))
     for (const [fileName, content] of Object.entries(files)) {
@@ -3229,7 +3245,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const leaky = tempDir('ci-channels-leak-')
   mkdirSync(join(leaky, 'channels', 'official'), { recursive: true })
   writeFileSync(join(leaky, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   mkdirSync(join(leaky, 'channels', 'example-brand'), { recursive: true })
   writeFileSync(join(leaky, 'channels', 'example-brand', 'channel.json'), JSON.stringify({
     schema: 1,
@@ -3252,7 +3268,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const missingAsset = tempDir('ci-channels-asset-')
   mkdirSync(join(missingAsset, 'channels', 'official'), { recursive: true })
   writeFileSync(join(missingAsset, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   mkdirSync(join(missingAsset, 'channels', 'example-brand'), { recursive: true })
   writeFileSync(join(missingAsset, 'channels', 'example-brand', 'channel.json'), JSON.stringify({
     schema: 1,
@@ -3270,7 +3286,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const blank = tempDir('ci-channels-brand-blank-')
   mkdirSync(join(blank, 'channels', 'official'), { recursive: true })
   writeFileSync(join(blank, 'channels', 'official', 'channel.json'),
-    '{"schema":1,"channel_id":"official","identity":{"display_name":"   ","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+    '{"schema":1,"channel_id":"official","identity":{"display_name":"   ","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
   padChannelRepo(blank) // 下限补位（同上）
   const blankRun = runChannels({ source: blank, refName: 'v2.7.0', dest: 'channels', list: 'j.list' })
   check(blankRun.status !== 0, '空白品牌名必须视为缺失')
@@ -3282,7 +3298,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     const root = tempDir('ci-channels-home-')
     mkdirSync(join(root, 'channels', 'official'), { recursive: true })
     writeFileSync(join(root, 'channels', 'official', 'channel.json'),
-      '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+      '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
     mkdirSync(join(root, 'channels', 'example-brand'), { recursive: true })
     writeFileSync(join(root, 'channels', 'example-brand', 'channel.json'), JSON.stringify({
       schema: 1,
@@ -3308,7 +3324,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   check(noHome.status !== 0, '品牌渠道缺 desktop.home_dir 时必须失败')
   check(noHome.stderr.includes('desktop.home_dir'), '失败信息应点明缺 desktop.home_dir')
 
-  const sharedHome = brandOnly('.picoaide-harness')
+  const sharedHome = brandOnly('.zeokeel-harness')
   check(sharedHome.status !== 0, '渠道数据目录写成官方目录时必须失败(那是共用数据根)')
   check(sharedHome.stderr.includes('desktop.home_dir'), '失败信息应点明是 desktop.home_dir 的问题')
 
@@ -3332,7 +3348,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     const root = tempDir('ci-channels-product-')
     mkdirSync(join(root, 'channels', 'official'), { recursive: true })
     writeFileSync(join(root, 'channels', 'official', 'channel.json'),
-      '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"picoaide-app"}}')
+      '{"schema":1,"channel_id":"official","identity":{"display_name":"Official","short_name":"Official"},"desktop":{"app_origin_scheme":"zeokeel-app"}}')
     mkdirSync(join(root, 'channels', 'example-brand'), { recursive: true })
     writeFileSync(join(root, 'channels', 'example-brand', 'channel.json'), JSON.stringify({
       schema: 1,
@@ -3379,7 +3395,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 
   // beta(2026-09-12 用户定案):预发版是正式版的前置验证,数据根**必须**与官方
   // 正式版一致 —— 否则装预发版的用户升级后看不到既有会话与登录态(当天早些时候
-  // 改成独立目录 `.picoaide-harness-beta` 就是这么炸的:用户报"所有对话都没了",
+  // 改成独立目录 `.zeokeel-harness-beta` 就是这么炸的:用户报"所有对话都没了",
   // 旧数据留在官方目录、新客户端读的是新目录)。因此这里三条用例:写官方目录必须
   // **通过**、写自己的目录必须**失败**、缺字段必须失败 —— 规则显式且唯一,防止
   // 再次静默漂移。
@@ -3388,21 +3404,21 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const betaChannel = (homeDir) => JSON.stringify({
     schema: 1,
     channel_id: 'beta',
-    identity: { display_name: 'PicoAide Harness', short_name: 'PicoAide' },
+    identity: { display_name: 'ZeoKeel Harness', short_name: 'ZeoKeel' },
     // desktop.app_origin_scheme 是**全部渠道**必填(含 beta,2026-09-19 §10);公共
-    // 渠道共用 `picoaide-app` 命名空间。三条用例都带上它,这样它们只测 home_dir 一条规则
+    // 渠道共用 `zeokeel-app` 命名空间。三条用例都带上它,这样它们只测 home_dir 一条规则
     // (否则"缺 app_origin_scheme"会先于 home_dir 报错,把用例测成别的东西)。
     desktop: {
-      app_origin_scheme: 'picoaide-app',
+      app_origin_scheme: 'zeokeel-app',
       ...(homeDir === undefined ? {} : { home_dir: homeDir }),
     },
   })
   padChannelRepo(betaShared) // 下限补位：让目录集形状与真实渠道仓一致（预发线上下限只告警，但形状要一致）
-  writeFileSync(join(betaShared, 'channels', 'beta', 'channel.json'), betaChannel('.picoaide-harness'))
+  writeFileSync(join(betaShared, 'channels', 'beta', 'channel.json'), betaChannel('.zeokeel-harness'))
   const betaSharedRun = runChannels({ source: betaShared, refName: 'v2.7.0-beta.3', dest: 'channels', list: 'q.list' })
   check(betaSharedRun.status === 0, 'beta 与官方正式版共用数据目录必须通过（预发版要延续既有会话与登录态）')
 
-  writeFileSync(join(betaShared, 'channels', 'beta', 'channel.json'), betaChannel('.picoaide-harness-beta'))
+  writeFileSync(join(betaShared, 'channels', 'beta', 'channel.json'), betaChannel('.zeokeel-harness-beta'))
   const betaOwnRun = runChannels({ source: betaShared, refName: 'v2.7.0-beta.3', dest: 'channels', list: 'q.list' })
   check(betaOwnRun.status !== 0, 'beta 写自己的数据目录必须失败（会让预发版用户升级后看不到既有会话）')
   check(betaOwnRun.stderr.includes('desktop.home_dir'), 'beta 数据目录不一致的失败信息应点名 desktop.home_dir')
@@ -3430,7 +3446,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
       schema: 1,
       channel_id: 'official',
       identity: { display_name: 'Official', short_name: 'Official' },
-      desktop: { app_origin_scheme: 'picoaide-app' },
+      desktop: { app_origin_scheme: 'zeokeel-app' },
     }))
     const dir = join(repoRoot, 'channels', 'example-brand')
     mkdirSync(dir, { recursive: true })
@@ -3491,7 +3507,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
         schema: 1,
         channel_id: id,
         identity: { display_name: `${id} AI`, short_name: id },
-        desktop: { app_origin_scheme: 'picoaide-app', ...(id === 'beta' ? { home_dir: '.picoaide-harness' } : {}) },
+        desktop: { app_origin_scheme: 'zeokeel-app', ...(id === 'beta' ? { home_dir: '.zeokeel-harness' } : {}) },
       }))
     }
     padChannelRepo(root)
@@ -3512,7 +3528,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 // 跨租户)。所以:必填/形状/保留字归逐渠道校验,跨渠道唯一归循环之后的独立扫描 ——
 // 两条路径都必须有用例。报错纪律同 slug/app_id:**只报字段名,绝不回显取值**。
 {
-  // 夹具:official/beta 是**两个公共渠道**(共用 `picoaide-app` 命名空间,§16 W3),
+  // 夹具:official/beta 是**两个公共渠道**(共用 `zeokeel-app` 命名空间,§16 W3),
   // 品牌渠道用 `<id 去连字符>-app`。`desktopByChannel` 逐渠道覆盖 desktop,传 `{}`
   // = 显式不写 app_origin_scheme(造"缺字段"负例);品牌渠道其余编译期字段照主夹具
   // 给全,确保每条负例只在被测的那条规则上失败。
@@ -3522,7 +3538,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
       mkdirSync(join(dir, 'channels', id), { recursive: true })
       const publicChannel = id === 'official' || id === 'beta'
       const base = publicChannel
-        ? (id === 'beta' ? { home_dir: '.picoaide-harness' } : {})
+        ? (id === 'beta' ? { home_dir: '.zeokeel-harness' } : {})
         : {
             slug: `${id}-AI`,
             app_id: `com.example.${id.replaceAll('-', '')}`,
@@ -3546,10 +3562,10 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   const runOrigin = desktopByChannel => runChannels({
     source: originRepo(desktopByChannel), refName: 'v2.7.0', dest: 'channels', list: 'or.list',
   })
-  const PUBLIC_ORIGIN = { app_origin_scheme: 'picoaide-app' }
+  const PUBLIC_ORIGIN = { app_origin_scheme: 'zeokeel-app' }
   const BRAND_ORIGIN = { app_origin_scheme: 'examplebrand-app' }
 
-  // 正例:公共渠道 official/beta 共用 `picoaide-app`(设计如此,**不是**重复),品牌渠道
+  // 正例:公共渠道 official/beta 共用 `zeokeel-app`(设计如此,**不是**重复),品牌渠道
   // 各用不同的值 ⇒ 必须通过。它同时钉住"公共渠道也被要求显式写字段"这半步。
   const goodOrigin = runOrigin({
     official: PUBLIC_ORIGIN,
@@ -3559,7 +3575,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   })
   check(
     goodOrigin.status === 0,
-    `合法 app_origin_scheme 的渠道集必须通过(公共渠道共用 picoaide-app 属设计),实际 exit=${goodOrigin.status}: ${goodOrigin.stderr.trim()}`,
+    `合法 app_origin_scheme 的渠道集必须通过(公共渠道共用 zeokeel-app 属设计),实际 exit=${goodOrigin.status}: ${goodOrigin.stderr.trim()}`,
   )
 
   // 负例 1:official 缺字段。**公共渠道不豁免必填** —— 缺字段时服务端拒绝启动、客户端
@@ -3723,7 +3739,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
       schema: 1,
       channel_id: 'official',
       identity: { display_name: 'Official', short_name: 'Official' },
-      desktop: { app_origin_scheme: 'picoaide-app' },
+      desktop: { app_origin_scheme: 'zeokeel-app' },
     }))
     mkdirSync(join(dir, 'channels', 'example-brand'), { recursive: true })
     writeFileSync(join(dir, 'channels', 'example-brand', 'channel.json'), JSON.stringify({
@@ -3836,9 +3852,9 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     'desktop.product_name': 'Official',
     'desktop.slug': 'Official',
     'desktop.app_id': 'com.example.official',
-    'desktop.home_dir': '.picoaide-harness',
-    'desktop.deep_link_scheme': 'picoaide',
-    'desktop.app_origin_scheme': 'picoaide-app',
+    'desktop.home_dir': '.zeokeel-harness',
+    'desktop.deep_link_scheme': 'zeokeel',
+    'desktop.app_origin_scheme': 'zeokeel-app',
     'desktop.platforms': ['win', 'mac', 'linux'],
   }
   for (const module of MODULES) TEMPLATE_VALUES[`features.${module}`] = true
@@ -4153,7 +4169,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   // 本身**必须是常驻的红灯来源 —— 否则下一轮谁把实现退回 `includes()`，本节其它样本不会有
   // 任何反应："判据被判据钉住"的那一半缺了，这一节就只是看起来在判。
   const PROBE_SENTINEL_IDENTIFIER = 'PROBE_FEATURE_SENTINEL'
-  const probeSentinelSource = body => `export const ${PROBE_SENTINEL_IDENTIFIER} = 'picoaide.feature.probe.v1'\n${body}\n`
+  const probeSentinelSource = body => `export const ${PROBE_SENTINEL_IDENTIFIER} = 'zeokeel.feature.probe.v1'\n${body}\n`
   /** 合成正例：这些都是"真的读了那个常量"，判据必须接受（判红正确写法 = 判据本身是坏的）。 */
   const SENTINEL_PROBE_ACCEPT = [
     ['模板插值（三个落点当前的形态）',
@@ -4515,12 +4531,12 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
   // 发布脚本会先做本地产物自洽检查(空/写错包名的清单在客户侧表现为"校验永远不过")。
   const bundleSums = (channel, content) => {
     const digest = createHash('sha256').update(content).digest('hex')
-    writeFileSync(join(bundle, channel, 'SHA256SUMS'), `${digest}  picoaide-server-2.7.0-amd64.zip\n`)
+    writeFileSync(join(bundle, channel, 'SHA256SUMS'), `${digest}  zeokeel-server-2.7.0-amd64.zip\n`)
   }
   for (const channel of ['official', 'beta', 'example-brand']) {
     mkdirSync(join(bundle, channel), { recursive: true })
     const content = `zip-${channel}`
-    writeFileSync(join(bundle, channel, 'picoaide-server-2.7.0-amd64.zip'), content)
+    writeFileSync(join(bundle, channel, 'zeokeel-server-2.7.0-amd64.zip'), content)
     bundleSums(channel, content)
   }
   // 早于保留窗口的旧版本(应被清掉)与较新版本(应保留)。
@@ -4548,7 +4564,7 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
   // 每个渠道一套独立目录 + 版本化资产 + 清单。
   for (const channel of ['official', 'beta', 'example-brand']) {
     const dir = join(store, channel)
-    check(existsSync(join(dir, 'releases', '2.7.0', 'picoaide-server-2.7.0-amd64.zip')), `${channel}: 应上传 zip`)
+    check(existsSync(join(dir, 'releases', '2.7.0', 'zeokeel-server-2.7.0-amd64.zip')), `${channel}: 应上传 zip`)
     check(existsSync(join(dir, 'releases', '2.7.0', 'SHA256SUMS')), `${channel}: 应上传 SHA256SUMS`)
     const manifestPath = join(dir, 'latest.json')
     check(existsSync(manifestPath), `${channel}: 应写 latest.json`)
@@ -4557,7 +4573,7 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
     check(manifest.channel_id === channel, `${channel}: 清单 channel_id 必须指向自己(渠道独立)`)
     check(manifest.server.version === '2.7.0' && manifest.server.image_tag === 'v2.7.0', `${channel}: 清单版本应为 2.7.0`)
     check(
-      manifest.server.image_asset === `https://release.picoaide.com/${channel}/releases/2.7.0/picoaide-server-2.7.0-amd64.zip`,
+      manifest.server.image_asset === `https://release.zeokeel.com/${channel}/releases/2.7.0/zeokeel-server-2.7.0-amd64.zip`,
       `${channel}: 清单里的下载地址必须指向**本渠道**目录,实际 ${manifest.server.image_asset}`,
     )
     check(typeof manifest.published_at === 'string' && manifest.published_at.endsWith('Z'), `${channel}: 清单需要 UTC 发布时间`)
@@ -4592,7 +4608,7 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
     '每个 put-object 都必须显式给 --cache-control(漏写会让 CDN 用默认 TTL,新版本不生效)')
   for (const channel of ['official', 'beta', 'example-brand']) {
     for (const [label, key] of [
-      ['版本资产(zip)', `${channel}/releases/2.7.0/picoaide-server-2.7.0-amd64.zip`],
+      ['版本资产(zip)', `${channel}/releases/2.7.0/zeokeel-server-2.7.0-amd64.zip`],
       ['校验和文件(SHA256SUMS)', `${channel}/releases/2.7.0/SHA256SUMS`],
     ]) {
       check(cacheOf(key) === 'public, max-age=31536000, immutable',
@@ -4701,7 +4717,7 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
   writeFileSync(log, '')
   writeFileSync(list, 'official\n')
 
-  const zipName = 'picoaide-server-9.9.9-amd64.zip'
+  const zipName = 'zeokeel-server-9.9.9-amd64.zip'
   const content = 'zip-official-integrity-probe'
   mkdirSync(join(bundle, 'official'), { recursive: true })
   writeFileSync(join(bundle, 'official', zipName), content)
@@ -4785,7 +4801,7 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
 
   // 本地产物不自洽(SHA256SUMS 里没有该包的 sha256)→ 必须当场失败,不浪费一次上传。
   resetStore()
-  writeFileSync(join(bundle, 'official', 'SHA256SUMS'), 'deadbeef  picoaide-server-9.9.9-amd64.zip\n')
+  writeFileSync(join(bundle, 'official', 'SHA256SUMS'), 'deadbeef  zeokeel-server-9.9.9-amd64.zip\n')
   const badSums = runPublish({})
   check(badSums.status !== 0, '本地产物不自洽(SHA256SUMS 不含该包哈希)时必须失败')
   check(!existsSync(manifestPath), '本地产物不自洽时不得写 latest.json')
@@ -5274,7 +5290,7 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
   writeFileSync(fakeAws, fakeAwsScript({ store, log }))
   execFileSync('chmod', ['+x', fakeAws])
   writeFileSync(join(work, 'channels.list'), 'official\n')
-  const archive = 'picoaide-server-3.3.3-amd64.zip'
+  const archive = 'zeokeel-server-3.3.3-amd64.zip'
   const content = 'zip-official-relative-probe'
   mkdirSync(join(work, 'release-bundle', 'official'), { recursive: true })
   writeFileSync(join(work, 'release-bundle', 'official', archive), content)
@@ -5354,7 +5370,7 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
   writeFileSync(fakeAws, fakeAwsScript({ store, log }))
   execFileSync('chmod', ['+x', fakeAws])
   writeFileSync(join(work, 'channels.list'), 'official\n')
-  const archive = 'picoaide-server-5.5.5-amd64.zip'
+  const archive = 'zeokeel-server-5.5.5-amd64.zip'
   const content = 'zip-official-probe-lifecycle'
   mkdirSync(join(work, 'release-bundle', 'official'), { recursive: true })
   writeFileSync(join(work, 'release-bundle', 'official', archive), content)
@@ -5608,9 +5624,9 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
     rmSync(bundle, { recursive: true, force: true })
     mkdirSync(join(bundle, 'official'), { recursive: true })
     const content = `zip-official-${version}`
-    writeFileSync(join(bundle, 'official', `picoaide-server-${version}-amd64.zip`), content)
+    writeFileSync(join(bundle, 'official', `zeokeel-server-${version}-amd64.zip`), content)
     const digest = createHash('sha256').update(content).digest('hex')
-    writeFileSync(join(bundle, 'official', 'SHA256SUMS'), `${digest}  picoaide-server-${version}-amd64.zip\n`)
+    writeFileSync(join(bundle, 'official', 'SHA256SUMS'), `${digest}  zeokeel-server-${version}-amd64.zip\n`)
   }
   const publish = version => spawnSync('bash', [publishScript, '--list', list, '--bundle', bundle], {
     cwd: work,
@@ -5645,7 +5661,7 @@ console.log('VERIFY-OK ' + process.env.DSH_BUILD_CHANNEL)
   check(olderOutput.includes('::warning::') && olderOutput.includes('2.8.2') && olderOutput.includes('2.8.1'),
     '拒绝写指针时必须给出可检索的 ::warning:: 并点名两个版本号（静默跳过 = 下一次没人知道为什么没更新）')
   // ③ 被拒的只是指针:本次的版本化资产照发(它是 immutable 的,且 GitHub Release 也引它)。
-  check(existsSync(join(store, 'official', 'releases', '2.8.1', 'picoaide-server-2.8.1-amd64.zip')),
+  check(existsSync(join(store, 'official', 'releases', '2.8.1', 'zeokeel-server-2.8.1-amd64.zip')),
     '版本倒退时本次的版本目录仍必须照发（拒绝的只有指针）')
   check(existsSync(join(store, 'official', 'releases', '2.8.1', 'SHA256SUMS')),
     '版本倒退时本次的 SHA256SUMS 仍必须照发')
@@ -5730,9 +5746,9 @@ exec "${concFakeAws}" "$@"
       rmSync(dir, { recursive: true, force: true })
       mkdirSync(join(dir, 'official'), { recursive: true })
       const content = `zip-official-${version}`
-      writeFileSync(join(dir, 'official', `picoaide-server-${version}-amd64.zip`), content)
+      writeFileSync(join(dir, 'official', `zeokeel-server-${version}-amd64.zip`), content)
       const digest = createHash('sha256').update(content).digest('hex')
-      writeFileSync(join(dir, 'official', 'SHA256SUMS'), `${digest}  picoaide-server-${version}-amd64.zip\n`)
+      writeFileSync(join(dir, 'official', 'SHA256SUMS'), `${digest}  zeokeel-server-${version}-amd64.zip\n`)
     }
     const spawnPublish = (version, role) => spawn('bash', [publishScript, '--list', concList, '--bundle', join(conc, `bundle-${version}`)], {
       cwd: concWork,
@@ -5799,7 +5815,7 @@ exec "${concFakeAws}" "$@"
     const concAwsLog = readFileSync(concLog, 'utf8')
     check(concAwsLog.includes('precondition-failed if-match official/latest.json'),
       '并发用例必须真的走到"条件写被 412 拒绝"那一跳（否则本用例可能是空转的假绿）')
-    check(existsSync(join(concStore, 'official', 'releases', '2.8.1', 'picoaide-server-2.8.1-amd64.zip')),
+    check(existsSync(join(concStore, 'official', 'releases', '2.8.1', 'zeokeel-server-2.8.1-amd64.zip')),
       '被拒的只是指针：旧版本本次的版本化资产仍必须照发')
   }
 
@@ -6754,11 +6770,11 @@ exit 0
 
   const dockerLog = readFileSync(log, 'utf8')
   check(
-    dockerLog.includes('tag picoaide-harness-server:v9.9.9 picoaide-harness-server:9.9.9'),
+    dockerLog.includes('tag zeokeel-harness-server:v9.9.9 zeokeel-harness-server:9.9.9'),
     '镜像必须同时带 vX.Y.Z 与 X.Y.Z 两个 tag(部署文档与 latest.json 用的形式不同)',
   )
   check(
-    /save .*picoaide-harness-server:v9\.9\.9 .*picoaide-harness-server:9\.9\.9/u.test(dockerLog),
+    /save .*zeokeel-harness-server:v9\.9\.9 .*zeokeel-harness-server:9\.9\.9/u.test(dockerLog),
     'docker save 必须带上两个 tag(否则 docker load 后少一个)',
   )
   // 渠道专属 tag(2026-09-23 审计 K-02):同一台宿主机上多个渠道栈时,归档内部的
@@ -6768,15 +6784,15 @@ exit 0
   // 额外带一个 `<channel>-<ver>` tag,部署侧才能把两栈彻底隔开。
   for (const channel of ['official', 'beta']) {
     check(
-      dockerLog.includes(`tag picoaide-harness-server:v9.9.9 picoaide-harness-server:${channel}-9.9.9`),
+      dockerLog.includes(`tag zeokeel-harness-server:v9.9.9 zeokeel-harness-server:${channel}-9.9.9`),
       `镜像必须额外打渠道专属 tag ${channel}-<ver>(同机多栈时防止互相覆盖)`,
     )
     check(
-      new RegExp(`save .*picoaide-harness-server:${channel}-9\\.9\\.9`, 'u').test(dockerLog),
+      new RegExp(`save .*zeokeel-harness-server:${channel}-9\\.9\\.9`, 'u').test(dockerLog),
       `docker save 必须带上渠道专属 tag ${channel}-<ver>(否则 docker load 后没有它)`,
     )
   }
-  check(existsSync(join(out, 'official', 'picoaide-server-9.9.9-amd64.zip')), '产物名应中性(不含渠道 id)')
+  check(existsSync(join(out, 'official', 'zeokeel-server-9.9.9-amd64.zip')), '产物名应中性(不含渠道 id)')
 
   // ---- 9a. 逐平台必需:少一个平台的产物必须 fail-loud 并点名（2026-09-26 审计 Z3-2）----
   //
@@ -6885,7 +6901,7 @@ exit 0
   const publish = (channel, ver) => {
     mkdirSync(join(bundle, channel), { recursive: true })
     const content = `zip-${channel}-${ver}`
-    const archive = `picoaide-server-${ver}-amd64.zip`
+    const archive = `zeokeel-server-${ver}-amd64.zip`
     writeFileSync(join(bundle, channel, archive), content)
     // SHA256SUMS 必须真的含该包哈希:发布脚本会先做本地产物自洽检查。
     writeFileSync(
@@ -6907,7 +6923,7 @@ exit 0
     return result
   }
   const releasesDir = join(store, 'beta', 'releases')
-  const published = ver => existsSync(join(releasesDir, ver, `picoaide-server-${ver}-amd64.zip`))
+  const published = ver => existsSync(join(releasesDir, ver, `zeokeel-server-${ver}-amd64.zip`))
 
   // 场景 A(真实发布序列):beta 渠道目录里累积了预发布版,本次出**正式版** 2.7.2。
   // `sort -rV` 把 `2.7.2-beta.6` 排在 `2.7.2` 之前 ⇒ 旧实现里刚上传的 2.7.2
@@ -6922,7 +6938,7 @@ exit 0
   check(afterA.includes('2.7.2'), `保留窗口必须含本次版本,实际 ${afterA.join(', ')}`)
   // latest.json 的下载地址必须指向**真实存在**的资产(旧实现指向刚被删掉的目录)。
   const manifestA = JSON.parse(readFileSync(join(store, 'beta', 'latest.json'), 'utf8'))
-  const prefixA = 'https://release.picoaide.com/beta/releases/'
+  const prefixA = 'https://release.zeokeel.com/beta/releases/'
   check(manifestA.server.version === '2.7.2', `latest.json 应声明本次版本,实际 ${String(manifestA.server.version)}`)
   check(manifestA.server.image_asset.startsWith(prefixA), `latest.json 的地址应在本渠道目录下,实际 ${manifestA.server.image_asset}`)
   const relativeA = manifestA.server.image_asset.slice(prefixA.length)
@@ -7264,7 +7280,7 @@ exit 0
     return posted
   }
 
-  const ARTIFACTS = ['desktop-Linux', 'desktop-Windows-installer', 'desktop-macOS', 'picoaide-server-linux-amd64']
+  const ARTIFACTS = ['desktop-Linux', 'desktop-Windows-installer', 'desktop-macOS', 'zeokeel-server-linux-amd64']
   const GREEN = {
     gate: 'success',
     server: 'success',
@@ -7292,7 +7308,7 @@ exit 0
   check(/`desktop-windows`\s*—\s*`skipped`/u.test(redGate), '被跳过的 job 同样必须如实列出（skip 不是 success）')
   check(!redGate.includes('desktop-Windows-installer'),
     '未成功 job 的 artifact 不得出现在正文里（它根本不存在 —— 这正是"列出不存在的产物"）')
-  check(redGate.includes('desktop-Linux') && redGate.includes('picoaide-server-linux-amd64'),
+  check(redGate.includes('desktop-Linux') && redGate.includes('zeokeel-server-linux-amd64'),
     '成功的 job 仍应列出它的 artifact（失败信息要完整：既说清什么没成，也说清什么能下载）')
 
   // ③ 单个 job 被跳过（不是失败）也必须算作"未全绿"。
@@ -7337,10 +7353,10 @@ exit 0
 // `ci-channel-transfer.sh` / `ci-build-channel-images.sh` 都用
 // `import(file://…<模块>.ts)` 读 `CHANNEL_ASSET_FILES` / `CLIENT_PLATFORM_ASSETS`。
 // 这些常量当时写在 `channel-build.ts` 里,而它顶端 import `../src/desktop-home.ts`
-// （`export * from '@picoaide/dsh-host-home'`）⇒ 解析需要一个**装了依赖且已构建**的工作区。
+// （`export * from '@zeokeel/dsh-host-home'`）⇒ 解析需要一个**装了依赖且已构建**的工作区。
 // Gate 与三个打包 job 都是那种环境,所以分支/PR CI 全绿;而 **release job 只 checkout**
 // （不 install、不 build）⇒ tag 流水线红在 "Fetch channel packages":
-// `Cannot find package '@picoaide/dsh-host-home' imported from …/src/desktop-home.ts`。
+// `Cannot find package '@zeokeel/dsh-host-home' imported from …/src/desktop-home.ts`。
 // **tag 之前没有任何 CI 能看到这一格** —— 判据必须自己造出"裸检出"这个条件。
 //
 // 判据形态是**真跑**:从每个探针里抽出它自己那段 `node -e` 代码与目标路径,在
@@ -7412,7 +7428,7 @@ exit 0
 //      文件别处（§6.6 升级后验证）也有一句 `--version`，全文件词面判据会在多栈段被掏空时假绿；
 //   ④ 必须：保留"运行中容器"的**正当用途** —— 把旧镜像固化成**旧版本**渠道 tag（回滚锚点），
 //      不是简单删掉这一步；回滚段写 `SERVER_IMAGE=` 时**不得**用裸 `${OLD}`（E-03-R1：同机多栈时
-//      它可能已被别渠道的 load 覆盖，而 compose 的 `PICOAI_CHANNEL` 缺省为空 ⇒ 会以别渠道品牌静默起来）；
+//      它可能已被别渠道的 load 覆盖，而 compose 的 `ZEOKEEL_CHANNEL` 缺省为空 ⇒ 会以别渠道品牌静默起来）；
 //   ⑤ E-08 同族：回滚段落必须区分**同代/跨代**，且"跨代会被拒绝启动"必须与代码真源
 //      （`serverstore/migrate.go` 的双向对账 + 启动期 fail-loud）对拍；**说跨代的那一段必须自己
 //      给出可执行顺序**（停服 → 恢复 `pg_dump` → 回退镜像）—— 只留"跨代 + SchemaMismatchError"
@@ -7640,7 +7656,7 @@ exit 0
             + '这是"升级静默不生效"唯一能暴露的地方（tag 与 .env 都会被写对）',
         })
       }
-      if (!scopeLines.some(line => /picoaide-server\s+--version/u.test(line))) {
+      if (!scopeLines.some(line => /zeokeel-server\s+--version/u.test(line))) {
         problems.push({
           code: 'deploy/missing-version-in-multistack',
           message: '多栈部署段必须有 `--version` 核对（看二进制自报，不看 tag）——'
@@ -7676,7 +7692,7 @@ exit 0
     }
 
     // ④b 回滚段的 `SERVER_IMAGE=` 必须带渠道标记（E-03-R1）：裸 `${OLD}` 在同机多栈时可能已被
-    //     别渠道的 `docker load` 覆盖，而 compose 的 `PICOAI_CHANNEL` 缺省为空 ⇒ 会以别渠道品牌
+    //     别渠道的 `docker load` 覆盖，而 compose 的 `ZEOKEEL_CHANNEL` 缺省为空 ⇒ 会以别渠道品牌
     //     静默起来（本节此前的判据只管升级方向，回滚方向没有出口）。
     for (const line of lines) {
       if (!/SERVER_IMAGE=/u.test(line) || !OLD_MARK.test(line)) continue
@@ -7685,7 +7701,7 @@ exit 0
         code: 'deploy/rollback-bare-tag',
         message: `回滚段把 \`SERVER_IMAGE\` 指到了**裸 tag**：${line.trim()}\n`
           + '      ⇒ 同机多栈时那个裸 tag 可能已被别的渠道 `docker load` 覆盖，而 compose 的'
-          + ' `PICOAI_CHANNEL` 缺省为空 ⇒ 这一栈会以**别渠道**的品牌静默起来。\n'
+          + ' `ZEOKEEL_CHANNEL` 缺省为空 ⇒ 这一栈会以**别渠道**的品牌静默起来。\n'
           + '      回滚锚点必须写成渠道 tag：`${IMAGE}:${CHANNEL}-${OLD}`。',
       })
     }
@@ -7777,30 +7793,30 @@ exit 0
     '## 5. 切换版本并重启',
     '',
     '```bash',
-    'cd /opt/picoaide',
+    'cd /opt/zeokeel',
     'VER=<本次版本,不带 v>',
     'OLD=<升级前版本,不带 v>',
-    'IMAGE=picoaide-harness-server',
+    'IMAGE=zeokeel-harness-server',
     'CHANNEL=<本栈渠道 id>',
-    'STACK=/opt/picoaide',
-    'CT=picoaide-server',
+    'STACK=/opt/zeokeel',
+    'CT=zeokeel-server',
     'ROLLBACK_IMAGE_ID="$(docker inspect "$CT" --format \'{{.Image}}\')"',
     'docker tag "$ROLLBACK_IMAGE_ID" "${IMAGE}:${CHANNEL}-${OLD}"',
     'unzip -p /tmp/pa.zip image.tar | docker load',
     'NEW_IMAGE_ID="$(docker image inspect --format \'{{.Id}}\' "${IMAGE}:${CHANNEL}-${VER}")"',
     'test -n "$NEW_IMAGE_ID"',
     'test "$NEW_IMAGE_ID" != "$ROLLBACK_IMAGE_ID"',
-    'docker run --rm --entrypoint cat "${IMAGE}:${CHANNEL}-${VER}" /opt/picoaide/CHANNEL',
+    'docker run --rm --entrypoint cat "${IMAGE}:${CHANNEL}-${VER}" /opt/zeokeel/CHANNEL',
     'sed -i "s|^SERVER_IMAGE=.*|SERVER_IMAGE=${IMAGE}:${CHANNEL}-${VER}|" .env',
     'docker compose up -d server',
     'ENV_TAG="$(sed -n \'s/^SERVER_IMAGE=//p\' .env)"',
     'test "$(docker image inspect --format \'{{.Id}}\' "$ENV_TAG")" = "$NEW_IMAGE_ID"',
     'docker inspect "$CT" --format \'{{.Image}}\'          # == $NEW_IMAGE_ID',
-    'docker exec "$CT" /app/picoaide-server --version',
-    'docker exec "$CT" cat /opt/picoaide/CHANNEL',
+    'docker exec "$CT" /app/zeokeel-server --version',
+    'docker exec "$CT" cat /opt/zeokeel/CHANNEL',
     '```',
     '',
-    '归档从 `v2.8.2-beta.1`（2026-09-24）起带渠道专属 tag `picoaide-harness-server:<channel-id>-<VER>`。',
+    '归档从 `v2.8.2-beta.1`（2026-09-24）起带渠道专属 tag `zeokeel-harness-server:<channel-id>-<VER>`。',
     '',
     '- **跨代回滚（库比二进制新）**：启动期拒绝启动（`SchemaMismatchError`），'
       + '正确顺序 = **停服 → 恢复升级前的 `pg_dump` → 回退镜像**。',
@@ -7814,7 +7830,7 @@ exit 0
     '',
   ].join('\n')
   const SAMPLE_BOUNDARY = 'v2.8.2-beta.1'
-  const SAMPLE_VERSION_LINE = 'docker exec "$CT" /app/picoaide-server --version'
+  const SAMPLE_VERSION_LINE = 'docker exec "$CT" /app/zeokeel-server --version'
   const SAMPLE_POST_DEPLOY_LINE = 'docker inspect "$CT" --format \'{{.Image}}\'          # == $NEW_IMAGE_ID'
   const SAMPLE_ANCHOR_LINE = 'docker tag "$ROLLBACK_IMAGE_ID" "${IMAGE}:${CHANNEL}-${OLD}"'
   const SAMPLE_ROLLBACK_LINE = 'sed -i "s|^SERVER_IMAGE=.*|SERVER_IMAGE=${IMAGE}:${CHANNEL}-${OLD}|" .env'
@@ -7848,7 +7864,7 @@ exit 0
       id: 'm-version-outside-multistack',
       mutate: source => source.replace(`${SAMPLE_VERSION_LINE}\n`, '')
         .replace('\n## 7. 回滚\n',
-          '\n## 6. 升级后验证\n\n```bash\ndocker exec picoaide-server /app/picoaide-server --version\n```\n\n## 7. 回滚\n'),
+          '\n## 6. 升级后验证\n\n```bash\ndocker exec zeokeel-server /app/zeokeel-server --version\n```\n\n## 7. 回滚\n'),
       expect: 'deploy/missing-version-in-multistack',
     },
     {
@@ -8257,8 +8273,8 @@ exit 0
   const webadminRoot = join(root, 'server', 'webadmin')
   const checkerPath = join('scripts', 'check-feature-chunks.mjs')
   const featuresTestPath = join('src', 'lib', 'features.test.ts')
-  /** 哨兵串字面量（`picoaide.feature.<module>.v1`）。 */
-  const SENTINEL_LITERAL_RE = /picoaide\.feature\.[a-z0-9_]+\.v1/gu
+  /** 哨兵串字面量（`zeokeel.feature.<module>.v1`）。 */
+  const SENTINEL_LITERAL_RE = /zeokeel\.feature\.[a-z0-9_]+\.v1/gu
   /**
    * 文本里的哨兵字面量集合。
    * @param text - 文件内容。

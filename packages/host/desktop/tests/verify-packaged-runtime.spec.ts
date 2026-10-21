@@ -83,7 +83,7 @@ function context(
     appOutDir,
     electronPlatformName,
     ...(arch === undefined ? {} : { arch }),
-    packager: { appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() } },
+    packager: { appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() } },
   }
 }
 
@@ -95,7 +95,7 @@ function context(
  * `yarn check` 本来就要跑图形门禁，二进制是既有前置条件。
  */
 /**
- * 六个功能模块包的目录（`node_modules/@picoaide/...`）。
+ * 六个功能模块包的目录（`node_modules/@zeokeel/...`）。
  *
  * 物理布局的"完整树"夹具必须带上它们：`assertFeatureModuleDirs()` 在物理分支上判
  * "没被任何变体关闭的模块都必须随包"（量具自检）。少了它们，夹具就不再是"完整的
@@ -132,37 +132,37 @@ const REQUIRED_ASAR_EXPORT_PATHS = [
   'lib/renderer-error-contract.js',
   'node_modules/@deepseek-ai/dsh-base/package.json',
   'node_modules/@deepseek-ai/dsh-web-app/package.json',
-  'node_modules/@picoaide/dsh-enterprise/lib/session-service.js',
-  'node_modules/@picoaide/dsh-enterprise/lib/auth-gate.js',
-  'node_modules/@picoaide/dsh-enterprise/lib/gateway-model.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/session-service.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/auth-gate.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/gateway-model.js',
   // DSH 0.1.7：网关 provider 由自研行注册（上游 llm-deepseek-api-key 只发 x-api-key，
-  // 对只认 Bearer 的网关必然 401）。掉出 asar ⇒ `picoaide-gateway-llm` 行加载失败、
+  // 对只认 Bearer 的网关必然 401）。掉出 asar ⇒ `zeokeel-gateway-llm` 行加载失败、
   // `deepseek-official` 没有适配器、模型面全灭。
-  'node_modules/@picoaide/dsh-enterprise/lib/gateway-llm.js',
-  'node_modules/@picoaide/dsh-enterprise/lib/bootstrap.js',
-  'node_modules/@picoaide/dsh-enterprise/lib/client.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/gateway-llm.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/bootstrap.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/client.js',
   // P1-1(2026-09-16):error-reporting 静态 import @sentry/node,掉出 asar 时整个插件
   // 模块加载失败且零日志;同批补漏的 channel-sync / invariant。
-  'node_modules/@picoaide/dsh-enterprise/lib/error-reporting.js',
-  'node_modules/@picoaide/dsh-enterprise/lib/channel-sync.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/error-reporting.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/channel-sync.js',
   // 2026-09-23（第三轮审计反向 oracle）：这 7 条此前不在任何一张表里，而产物里
   // 真实存在且被真实 specifier 引用 ⇒ 删掉它们没有任何判据会红。
-  'node_modules/@picoaide/dsh-enterprise/lib/index.js',
-  'node_modules/@picoaide/dsh-enterprise/lib/loopback.js',
-  'node_modules/@picoaide/dsh-enterprise/lib/server-connector/auth.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/index.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/loopback.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/server-connector/auth.js',
   // R16B-01：account-card 的余额快照要盖会话身份章（身份口径唯一实现在 enterprise）。
-  'node_modules/@picoaide/dsh-enterprise/lib/session-identity.js',
-  'node_modules/@picoaide/dsh-enterprise/package.json',
-  'node_modules/@picoaide/dsh-connectors/lib/index.js',
-  'node_modules/@picoaide/dsh-connectors/lib/store.js',
-  'node_modules/@picoaide/dsh-connectors/lib/user-scope.js',
+  'node_modules/@zeokeel/dsh-enterprise/lib/session-identity.js',
+  'node_modules/@zeokeel/dsh-enterprise/package.json',
+  'node_modules/@zeokeel/dsh-connectors/lib/index.js',
+  'node_modules/@zeokeel/dsh-connectors/lib/store.js',
+  'node_modules/@zeokeel/dsh-connectors/lib/user-scope.js',
   // ⚠️ 下面这张表是 `completeArchiveEntries()` 搭夹具用的**本地拷贝**，真源是脚本里的
   // `REQUIRED_ASAR_EXPORTS`（已导出）。2026-09-19 之前两份没有一致性守卫，而且这里多出过一条
   // 早就删掉的 `dsh-connectors/lib/sales-easy.js`（磁盘上不存在、connectors 也没这个导出）——
   // 于是"往本地拷贝补假条目"就能让覆盖性用例假绿。现在由
   // 'keeps the local export-path mirror identical to the production table' 逐字守住。
-  'node_modules/@picoaide/dsh-connectors/lib/client.js',
-  'node_modules/@picoaide/dsh-connectors/package.json',
+  'node_modules/@zeokeel/dsh-connectors/lib/client.js',
+  'node_modules/@zeokeel/dsh-connectors/package.json',
 ]
 
 function completeArchiveEntries(separator = '/'): string[] {
@@ -232,7 +232,7 @@ describe('平台无关的产物身份判据（B-6）', () => {
       const runtimeContext: PackagedRuntimeContext = {
         appOutDir: '/build',
         electronPlatformName,
-        packager: { appInfo: { productFilename: 'PicoAide Harness', id: 'com.example-vendor.harness' } },
+        packager: { appInfo: { productFilename: 'ZeoKeel Harness', id: 'com.example-vendor.harness' } },
       }
       expect(
         () => verifyPackagedRuntime(runtimeContext, () => [], () => false, () => BRAND_SVG),
@@ -373,22 +373,22 @@ describe('workspace 子路径 import 必须都在打包必需清单里（2026-09
   // `lib/main.js` 值导入 `…/app-proof` ⇒ 打包版启动即 ERR_MODULE_NOT_FOUND（Linux e2e
   // 的 "app did not expose CDP within 30s"），而 afterPack 断言因为**清单本身不完整**
   // 照样通过。这条判据把"清单"与"产物真实 import 的每个子路径"钉在一起。
-  it('REQUIRED_PACKAGED_RUNTIME_ENTRIES 覆盖 desktop lib 里每个 @picoaide/* 子路径', () => {
+  it('REQUIRED_PACKAGED_RUNTIME_ENTRIES 覆盖 desktop lib 里每个 @zeokeel/* 子路径', () => {
     const libDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'lib')
     const specs = new Set<string>()
     for (const file of readdirSync(libDir).filter(f => f.endsWith('.js'))) {
       const text = readFileSync(join(libDir, file), 'utf8')
-      for (const m of text.matchAll(/from\s*"(@picoaide\/[^"]+)"/g)) {
+      for (const m of text.matchAll(/from\s*"(@zeokeel\/[^"]+)"/g)) {
         const spec = m[1]
         if (spec !== undefined) specs.add(spec)
       }
     }
     // 前置断言：判据不能空转（桌面产物确实 import 了 workspace 包）。
-    expect(specs.size, '没有从 desktop 产物里扫到任何 @picoaide/* import，判据会空转').toBeGreaterThan(0)
+    expect(specs.size, '没有从 desktop 产物里扫到任何 @zeokeel/* import，判据会空转').toBeGreaterThan(0)
 
     const missing: string[] = []
     for (const spec of specs) {
-      const [, name, sub = ''] = /^(@picoaide\/[^/]+)(?:\/(.*))?$/.exec(spec) ?? []
+      const [, name, sub = ''] = /^(@zeokeel\/[^/]+)(?:\/(.*))?$/.exec(spec) ?? []
       if (name === undefined) continue
       const pkgJsonPath = join(libDir, '..', 'node_modules', name, 'package.json')
       if (!existsSync(pkgJsonPath)) continue
@@ -557,7 +557,7 @@ describe('打包必需清单的可枚举目录 oracle（G-2，2026-09-23 补）'
   //
   // 这里的 oracle **不看清单**：从仓库里真实应当随包的东西（构建产物目录 + 打包
   // 排除规则）推导应有集合，再断言清单覆盖它；反向断言清单里没有死条目。
-  // 与既有的三条 oracle（@picoaide 子路径 / 补丁目标 import / memory-evolve skills）
+  // 与既有的三条 oracle（@zeokeel 子路径 / 补丁目标 import / memory-evolve skills）
   // 同一形态，只把覆盖面推广到可枚举的产物目录。
   const desktopRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
   const manifest = new Set<string>(REQUIRED_PACKAGED_RUNTIME_ENTRIES)
@@ -737,25 +737,25 @@ describe('打包必需清单的 build/* 条目必须在 build.files 正向清单
 
 describe('反向 oracle：清单必须覆盖产物（第三轮审计 P-1，2026-09-23 补）', () => {
   // 审计实测（P-1）：`REQUIRED_PACKAGED_RUNTIME_ENTRIES` 是"必需项"判据的**唯一来源**，
-  // 从清单里删掉一条 = 同时删掉那条断言 —— 16 次单条 `@picoaide/*` 删除里 9 次让
+  // 从清单里删掉一条 = 同时删掉那条断言 —— 16 次单条 `@zeokeel/*` 删除里 9 次让
   // 这个 spec 78/78 全绿，其中 8 条没有任何别的表覆盖。
   //
   // 既有的三条 oracle 为什么没拦住：
   //   * `spec:206`（desktop `lib/*.js` 的子路径 import）只看**桌面自身**的产物，
   //     看不见插件包之间的 import（`wasm-apps-host → dsh-browser/surface`）；
   //   * G-9 那张只看上游补丁目标的子路径 import；
-  //   * G-2 的目录 oracle 只能枚举"名字稳定的目录"，而 `node_modules/@picoaide/<pkg>/lib`
+  //   * G-2 的目录 oracle 只能枚举"名字稳定的目录"，而 `node_modules/@zeokeel/<pkg>/lib`
   //     里有内容哈希命名的 chunk ⇒ 结构上不能要求"目录里每个文件都在清单里"；
   //   * 2026-09-16 的 vendored 技能 oracle 只枚举 `dsh-memory-evolve/skills/**` 一个源目录。
   // 所以这里换判据：不问目录里有什么，问**产物真实需要什么**（包自己声明的入口面 +
-  // 产物里真实的 `@picoaide/*` specifier），再与清单对拍，最后叠加每包计数棘轮。
+  // 产物里真实的 `@zeokeel/*` specifier），再与清单对拍，最后叠加每包计数棘轮。
   const desktopRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
   it('真产物：派生面非空、且当前清单完整覆盖它（基线绿）', () => {
     const census = assertRequiredEntriesCoverWorkspaceSurface()
     // 前置断言：判据不能空转（产物没构建时这里会是 0，而"跳过"不是本仓的选项）。
     expect(census.packages.length, '没有扫到任何自有 workspace 包，判据会空转').toBeGreaterThanOrEqual(6)
-    expect(census.resolvedSpecifiers, '没有从产物里解析出任何 @picoaide/* specifier').toBeGreaterThan(0)
+    expect(census.resolvedSpecifiers, '没有从产物里解析出任何 @zeokeel/* specifier').toBeGreaterThan(0)
     expect(census.required.length).toBeGreaterThanOrEqual(census.packages.length)
     // 每包都必须有棘轮登记（新增自有插件包不登记 ⇒ 上面那条 throw）。
     expect([...census.perPackage.keys()].sort()).toEqual(
@@ -764,17 +764,17 @@ describe('反向 oracle：清单必须覆盖产物（第三轮审计 P-1，2026-
   })
 
   it.each([
-    ['包自己声明的 `exports["."]`/`main` 入口', 'node_modules/@picoaide/dsh-foot-menu/lib/index.js'],
-    ['`dsh.client` ⇒ `exports["./client"]`（客户端 bundle）', 'node_modules/@picoaide/dsh-foot-menu/lib/client.js'],
-    ['`dsh.bundle.patch`（profile 组装期读取）', 'node_modules/@picoaide/dsh-foot-menu/cordis.patch.yml'],
-    ['包 manifest（`createRequire().resolve` 落点）', 'node_modules/@picoaide/dsh-foot-menu/package.json'],
-    ['产物里真实的跨包 specifier', 'node_modules/@picoaide/dsh-browser/lib/surface.js'],
-    ['产物里真实的跨包 specifier', 'node_modules/@picoaide/dsh-browser/lib/guard.js'],
-    ['产物里真实的跨包 specifier', 'node_modules/@picoaide/dsh-host-locale/lib/loopback.js'],
-    ['产物里真实的跨包 specifier', 'node_modules/@picoaide/dsh-connectors/lib/store.js'],
-    ['产物里真实的跨包 specifier', 'node_modules/@picoaide/dsh-connectors/lib/user-scope.js'],
-    ['产物里真实的跨包 specifier', 'node_modules/@picoaide/dsh-enterprise/lib/loopback.js'],
-    ['产物里真实的跨包 specifier', 'node_modules/@picoaide/dsh-enterprise/lib/server-connector/auth.js'],
+    ['包自己声明的 `exports["."]`/`main` 入口', 'node_modules/@zeokeel/dsh-foot-menu/lib/index.js'],
+    ['`dsh.client` ⇒ `exports["./client"]`（客户端 bundle）', 'node_modules/@zeokeel/dsh-foot-menu/lib/client.js'],
+    ['`dsh.bundle.patch`（profile 组装期读取）', 'node_modules/@zeokeel/dsh-foot-menu/cordis.patch.yml'],
+    ['包 manifest（`createRequire().resolve` 落点）', 'node_modules/@zeokeel/dsh-foot-menu/package.json'],
+    ['产物里真实的跨包 specifier', 'node_modules/@zeokeel/dsh-browser/lib/surface.js'],
+    ['产物里真实的跨包 specifier', 'node_modules/@zeokeel/dsh-browser/lib/guard.js'],
+    ['产物里真实的跨包 specifier', 'node_modules/@zeokeel/dsh-host-locale/lib/loopback.js'],
+    ['产物里真实的跨包 specifier', 'node_modules/@zeokeel/dsh-connectors/lib/store.js'],
+    ['产物里真实的跨包 specifier', 'node_modules/@zeokeel/dsh-connectors/lib/user-scope.js'],
+    ['产物里真实的跨包 specifier', 'node_modules/@zeokeel/dsh-enterprise/lib/loopback.js'],
+    ['产物里真实的跨包 specifier', 'node_modules/@zeokeel/dsh-enterprise/lib/server-connector/auth.js'],
   ])('%s：删掉 %s 后每包棘轮必须红', (_reason, entry) => {
     const without = effectivePackagedRuntimeEntries().filter(candidate => candidate !== entry)
     expect(without, `${entry} 本来就不在生效清单里，这条用例失去意义`).not.toContain(entry)
@@ -784,7 +784,7 @@ describe('反向 oracle：清单必须覆盖产物（第三轮审计 P-1，2026-
     ).toThrow(/覆盖计数低于棘轮下限/u)
   })
 
-  // 预算理由（现象）：本条要在**真实产物**上遍历 `node_modules/@picoaide/**` 后逐条反推，
+  // 预算理由（现象）：本条要在**真实产物**上遍历 `node_modules/@zeokeel/**` 后逐条反推，
   // 空闲机实测 911ms，三路套件并发时实测撞穿 vitest 缺省的 5s `testTimeout`
   // （`Test timed out in 5000ms`）⇒ 显式给产物派生档，不吃缺省。
   it('产物反推出的每一条：从生效清单里删掉都必须红（随树状态自适应，不写死清单）', { timeout: TEST_BUDGETS.ARTIFACT_DERIVATION_MS }, () => {
@@ -806,11 +806,11 @@ describe('反向 oracle：清单必须覆盖产物（第三轮审计 P-1，2026-
     // `browser|account-card|foot-menu` 的 `lib/client.js`、`account-card|cron` 的
     // `lib/invariant.js`）—— 这一轮它们被真实需要面反推出来了。
     const audited = [
-      'node_modules/@picoaide/dsh-browser/lib/surface.js',
-      'node_modules/@picoaide/dsh-host-locale/lib/loopback.js',
-      'node_modules/@picoaide/dsh-browser/lib/client.js',
-      'node_modules/@picoaide/dsh-account-card/lib/client.js',
-      'node_modules/@picoaide/dsh-foot-menu/lib/client.js',
+      'node_modules/@zeokeel/dsh-browser/lib/surface.js',
+      'node_modules/@zeokeel/dsh-host-locale/lib/loopback.js',
+      'node_modules/@zeokeel/dsh-browser/lib/client.js',
+      'node_modules/@zeokeel/dsh-account-card/lib/client.js',
+      'node_modules/@zeokeel/dsh-foot-menu/lib/client.js',
     ]
     const effective = new Set(effectivePackagedRuntimeEntries())
     for (const entry of audited) expect(effective, `${entry} 不在生效清单里`).toContain(entry)
@@ -823,7 +823,7 @@ describe('反向 oracle：清单必须覆盖产物（第三轮审计 P-1，2026-
     expect(() => assertWorkspacePackageCoverage(effective)).not.toThrow()
     const flat = new Set<string>(REQUIRED_PACKAGED_RUNTIME_ENTRIES)
     for (const floor of REQUIRED_WORKSPACE_PACKAGE_COVERAGE) {
-      const prefix = `node_modules/@picoaide/${floor.package}/`
+      const prefix = `node_modules/@zeokeel/${floor.package}/`
       const owned = effective.filter(entry => entry.startsWith(prefix))
       expect(owned.filter(entry => flat.has(entry)).length, `${floor.package} 扁平计数没有贴住下限`)
         .toBe(floor.flattened)
@@ -853,13 +853,13 @@ describe('反向 oracle：清单必须覆盖产物（第三轮审计 P-1，2026-
 
   it('合成产物夹具：声明面 + specifier 闭包 + 未登记包 + 计数棘轮四个方向都独立可判', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-surface-'))
-    const scope = join(root, 'node_modules', '@picoaide')
+    const scope = join(root, 'node_modules', '@zeokeel')
     const write = (relative: string, body: string): void => {
       mkdirSync(dirname(join(root, relative)), { recursive: true })
       writeFileSync(join(root, relative), body)
     }
-    write('node_modules/@picoaide/dsh-probe/package.json', JSON.stringify({
-      name: '@picoaide/dsh-probe',
+    write('node_modules/@zeokeel/dsh-probe/package.json', JSON.stringify({
+      name: '@zeokeel/dsh-probe',
       main: 'lib/index.js',
       exports: {
         '.': { default: './lib/index.js' },
@@ -870,20 +870,20 @@ describe('反向 oracle：清单必须覆盖产物（第三轮审计 P-1，2026-
       dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } },
     }))
     for (const rel of ['lib/index.js', 'lib/client.js', 'lib/invariant.js', 'lib/extra.js']) {
-      write(`node_modules/@picoaide/dsh-probe/${rel}`, 'export {}\n')
+      write(`node_modules/@zeokeel/dsh-probe/${rel}`, 'export {}\n')
     }
-    write('node_modules/@picoaide/dsh-probe/cordis.patch.yml', '- insert: []\n')
-    write('lib/main.js', 'import "@picoaide/dsh-probe/extra"\n')
+    write('node_modules/@zeokeel/dsh-probe/cordis.patch.yml', '- insert: []\n')
+    write('lib/main.js', 'import "@zeokeel/dsh-probe/extra"\n')
     expect(existsSync(scope)).toBe(true)
 
     const floors = [{ package: 'dsh-probe', flattened: 0, effective: 6, library: 4 }]
     const complete = [
-      'node_modules/@picoaide/dsh-probe/package.json',
-      'node_modules/@picoaide/dsh-probe/lib/index.js',
-      'node_modules/@picoaide/dsh-probe/lib/client.js',
-      'node_modules/@picoaide/dsh-probe/lib/invariant.js',
-      'node_modules/@picoaide/dsh-probe/cordis.patch.yml',
-      'node_modules/@picoaide/dsh-probe/lib/extra.js',
+      'node_modules/@zeokeel/dsh-probe/package.json',
+      'node_modules/@zeokeel/dsh-probe/lib/index.js',
+      'node_modules/@zeokeel/dsh-probe/lib/client.js',
+      'node_modules/@zeokeel/dsh-probe/lib/invariant.js',
+      'node_modules/@zeokeel/dsh-probe/cordis.patch.yml',
+      'node_modules/@zeokeel/dsh-probe/lib/extra.js',
     ]
     const census = assertRequiredEntriesCoverWorkspaceSurface(complete, root, floors, 1)
     expect(census.required.map(item => item.entry).sort()).toEqual([...complete].sort())
@@ -914,7 +914,7 @@ describe('反向 oracle：清单必须覆盖产物（第三轮审计 P-1，2026-
     const root = mkdtempSync(join(tmpdir(), 'dsh-surface-empty-'))
     expect(() => assertRequiredEntriesCoverWorkspaceSurface([], root))
       .toThrow(/workspace 依赖未安装或未构建/u)
-    mkdirSync(join(root, 'node_modules', '@picoaide'), { recursive: true })
+    mkdirSync(join(root, 'node_modules', '@zeokeel'), { recursive: true })
     expect(() => assertRequiredEntriesCoverWorkspaceSurface([], root))
       .toThrow(/没有任何自带 package.json 的包/u)
   })
@@ -1184,7 +1184,7 @@ describe('packaged desktop runtime verification', () => {
   it.each([
     [
       'darwin',
-      join('/build', 'PicoAide Harness.app', 'Contents', 'Resources', 'app.asar'),
+      join('/build', 'ZeoKeel Harness.app', 'Contents', 'Resources', 'app.asar'),
     ],
     [
       'win32',
@@ -1268,7 +1268,7 @@ describe('packaged desktop runtime verification', () => {
       // darwin 分支会走包内一致性判据（图标键/asar 布局/ElectronAsarIntegrity），
       // 真实目录形态的夹具必须给出一份自洽的 .app，否则那一条会先打红。
       if (electronPlatformName === 'darwin') {
-        writeValidMacBundle(join(appOutDir, 'PicoAide Harness.app'), 'PicoAide Harness')
+        writeValidMacBundle(join(appOutDir, 'ZeoKeel Harness.app'), 'ZeoKeel Harness')
       }
       // 至少一条必需原生条目存在,否则会先被"no native unpacked entries"拦下。
       // G-1（2026-09-23）：还要**除被测家族外全都齐** —— 家族适用性断言上线后，
@@ -1332,7 +1332,7 @@ describe('packaged desktop runtime verification', () => {
       const runtimeContext = fixture('darwin', 3, [
         'node_modules/@deepseek-ai/node-addon-system-darwin-arm64/bin/system.node',
       ])
-      rmSync(join(runtimeContext.appOutDir, 'PicoAide Harness.app', 'Contents', 'Resources', 'icon.icns'))
+      rmSync(join(runtimeContext.appOutDir, 'ZeoKeel Harness.app', 'Contents', 'Resources', 'icon.icns'))
       expect(() => verifyWithBrandStub(runtimeContext, () => completeArchiveEntries()))
         .toThrow(/CFBundleIconFile=icon\.icns/u)
     })
@@ -1341,7 +1341,7 @@ describe('packaged desktop runtime verification', () => {
       const runtimeContext = fixture('darwin', 3, [
         'node_modules/@deepseek-ai/node-addon-system-darwin-arm64/bin/system.node',
       ])
-      const infoPlist = join(runtimeContext.appOutDir, 'PicoAide Harness.app', 'Contents', 'Info.plist')
+      const infoPlist = join(runtimeContext.appOutDir, 'ZeoKeel Harness.app', 'Contents', 'Info.plist')
       writeFileSync(infoPlist, readFileSync(infoPlist, 'utf8').replace(/(<key>hash<\/key>\n\t+<string>)([0-9a-f]{64})/u, (_m, head: string, hash: string) => `${head}${hash.startsWith('0') ? '1' : '0'}${hash.slice(1)}`))
       expect(() => verifyWithBrandStub(runtimeContext, () => completeArchiveEntries()))
         .toThrow(/does not match .*ElectronAsarIntegrity/u)
@@ -1586,7 +1586,7 @@ describe('packaged desktop runtime verification', () => {
     // enterprise session-service —— 必须用**完整夹具**：只喂必需条目的旧写法
     // 会让 profile 锚点判据先失败，把这条用例想验的导出判据挤掉。
     const entries = completeArchiveEntries()
-      .filter(entry => entry !== '/node_modules/@picoaide/dsh-enterprise/lib/session-service.js')
+      .filter(entry => entry !== '/node_modules/@zeokeel/dsh-enterprise/lib/session-service.js')
     expect(() => verifyWithBrandStub(
       runtimeContext,
       () => entries,
@@ -1602,7 +1602,7 @@ describe('packaged desktop runtime verification', () => {
   it('requires the enterprise error-reporting export in app.asar', () => {
     // P1-1:error-reporting 是静态 import @sentry/node 的插件模块。它掉出 app.asar
     // 时 Cordis 加载整个模块失败且零日志 —— 静态清单必须在打包时先拦住。
-    const asarPath = '/node_modules/@picoaide/dsh-enterprise/lib/error-reporting.js'
+    const asarPath = '/node_modules/@zeokeel/dsh-enterprise/lib/error-reporting.js'
     const entries = completeArchiveEntries().filter(entry => entry !== asarPath)
     expect(entries).not.toContain(asarPath)
     expect(() => verifyWithBrandStub(context('/build', 'win32'), () => entries, () => true))
@@ -1842,7 +1842,7 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
   describe('self-owned plugin runtime coverage (P2)', () => {
     // P2(2026-09-19):`verify:closure` 只走 `@deepseek-ai/*`
     // (scripts/runtime-closure.mjs:3 的 FIRST_PARTY_PREFIX),而桌面包 dependencies 里有 6 个
-    // `@picoaide` 包 —— 此前只有 connectors / enterprise 在 REQUIRED_ASAR_EXPORTS 里被点名,
+    // `@zeokeel` 包 —— 此前只有 connectors / enterprise 在 REQUIRED_ASAR_EXPORTS 里被点名,
     // 另外 4 个(account-card / browser / cron / wasm-apps)**没有任何门禁**保证它们进了 app.asar。
     // 同族事故已发生过:dsh-memory-evolve 的 skills/ 被 files 排除规则静默丢出包。
     // 这里用**依赖表**当期望来源:新增一个自有插件依赖而不补清单即红(而不是靠人记得补)。
@@ -1862,12 +1862,12 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
       }
     }
 
-    function picoaideDependencies(): string[] {
+    function zeokeelDependencies(): string[] {
       const manifest = desktopManifest()
       return [...new Set([
         ...Object.keys(manifest.dependencies ?? {}),
         ...Object.keys(manifest.optionalDependencies ?? {}),
-      ])].filter(name => name.startsWith('@picoaide/'))
+      ])].filter(name => name.startsWith('@zeokeel/'))
     }
 
     /** 该包自己声明的入口(相对包根):main + exports 的每个目标 + 固定的两份。 */
@@ -1892,8 +1892,8 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
       return declared
     }
 
-    it('asserts every @picoaide dependency owns required runtime entries', () => {
-      const deps = picoaideDependencies()
+    it('asserts every @zeokeel dependency owns required runtime entries', () => {
+      const deps = zeokeelDependencies()
       // 防"依赖表读空/读错"的假绿:桌面包当前有 6 个自有插件依赖。
       expect(deps.length).toBeGreaterThanOrEqual(6)
       // 有效清单是**两张生产表**的并集:connectors / enterprise 走 specifier+archivePath 的
@@ -1928,12 +1928,12 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
       )
     })
 
-    it('does not let a @picoaide plugin hide in optionalDependencies', () => {
+    it('does not let a @zeokeel plugin hide in optionalDependencies', () => {
       // optionalDependencies 同样会被 electron-builder 打进包;自有插件若只写在这里,
       // 安装失败不会让构建红 —— 所以它必须既被断言、也不能只出现在 optional 里。
       const manifest = desktopManifest()
       const optional = Object.keys(manifest.optionalDependencies ?? {})
-        .filter(name => name.startsWith('@picoaide/'))
+        .filter(name => name.startsWith('@zeokeel/'))
       for (const dep of optional) {
         expect(Object.keys(manifest.dependencies ?? {})).toContain(dep)
       }
@@ -1944,25 +1944,25 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
       // cordis.patch.yml 是桌面 profile 组装期要读的那一份(src/profile.ts 的
       // WASM_APPS_PATCH_PATH),缺了它那一行插件整块不装配。
       for (const entry of [
-        'node_modules/@picoaide/dsh-wasm-apps/lib/client.js',
-        'node_modules/@picoaide/dsh-wasm-apps/lib/index.js',
-        'node_modules/@picoaide/dsh-wasm-apps/package.json',
-        'node_modules/@picoaide/dsh-wasm-apps/cordis.patch.yml',
+        'node_modules/@zeokeel/dsh-wasm-apps/lib/client.js',
+        'node_modules/@zeokeel/dsh-wasm-apps/lib/index.js',
+        'node_modules/@zeokeel/dsh-wasm-apps/package.json',
+        'node_modules/@zeokeel/dsh-wasm-apps/cordis.patch.yml',
       ]) {
         expect(REQUIRED_PACKAGED_RUNTIME_ENTRIES).toContain(entry)
       }
     })
 
     it('names the client-only wasm app origin adapter and its profile patch explicitly', () => {
-      // 2026-09-19 契约 §2:客户端专属 WASM 应用 origin(`picoaide-app://`)。
+      // 2026-09-19 契约 §2:客户端专属 WASM 应用 origin(`zeokeel-app://`)。
       // `lib/electron-adapter.js` 尤其关键 —— 它被 desktop `lib/main.js` 静态
       // import(协议特权注册 + 适配器实例),掉出产物 = **启动期**
       // ERR_MODULE_NOT_FOUND(整个应用起不来),而不是"某一行插件不装配"。
       for (const entry of [
-        'node_modules/@picoaide/dsh-wasm-apps-host/lib/index.js',
-        'node_modules/@picoaide/dsh-wasm-apps-host/lib/electron-adapter.js',
-        'node_modules/@picoaide/dsh-wasm-apps-host/package.json',
-        'node_modules/@picoaide/dsh-wasm-apps-host/cordis.patch.yml',
+        'node_modules/@zeokeel/dsh-wasm-apps-host/lib/index.js',
+        'node_modules/@zeokeel/dsh-wasm-apps-host/lib/electron-adapter.js',
+        'node_modules/@zeokeel/dsh-wasm-apps-host/package.json',
+        'node_modules/@zeokeel/dsh-wasm-apps-host/cordis.patch.yml',
       ]) {
         expect(REQUIRED_PACKAGED_RUNTIME_ENTRIES).toContain(entry)
       }
@@ -1982,7 +1982,7 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
         electronPlatformName,
         arch: 1,
         packager: {
-          appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() },
+          appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() },
           executableName: 'dsh-plugin-desktop',
         },
       }
@@ -2001,31 +2001,31 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
       expect(resolvePackagedLauncherCandidates({
         appOutDir: '/build',
         electronPlatformName: 'linux',
-        packager: { appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() }, executableName: 'dsh-plugin-desktop' },
-      })).toEqual([join('/build', 'dsh-plugin-desktop'), join('/build', 'PicoAide Harness')])
+        packager: { appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() }, executableName: 'dsh-plugin-desktop' },
+      })).toEqual([join('/build', 'dsh-plugin-desktop'), join('/build', 'ZeoKeel Harness')])
       expect(resolvePackagedLauncherCandidates({
         appOutDir: '/build',
         electronPlatformName: 'darwin',
-        packager: { appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() }, executableName: 'dsh-plugin-desktop' },
-      })).toEqual([join('/build', 'PicoAide Harness.app', 'Contents', 'MacOS', 'PicoAide Harness')])
+        packager: { appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() }, executableName: 'dsh-plugin-desktop' },
+      })).toEqual([join('/build', 'ZeoKeel Harness.app', 'Contents', 'MacOS', 'ZeoKeel Harness')])
       expect(resolvePackagedLauncherCandidates({
         appOutDir: '/build',
         electronPlatformName: 'win32',
-        packager: { appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() } },
-      })).toEqual([join('/build', 'PicoAide Harness.exe')])
+        packager: { appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() } },
+      })).toEqual([join('/build', 'ZeoKeel Harness.exe')])
     })
 
     it('falls back to scanning the bundle when the launcher name changed', () => {
       // 渠道构建会改 productName(品牌渠道的 bundle 里可执行文件名随之变化),
       // 扫描兜底避免"名字对不上"把门禁变成误报。
       const appOutDir = mkdtempSync(join(tmpdir(), 'dsh-launcher-'))
-      const macosDir = join(appOutDir, 'PicoAide Harness.app', 'Contents', 'MacOS')
+      const macosDir = join(appOutDir, 'ZeoKeel Harness.app', 'Contents', 'MacOS')
       mkdirSync(macosDir, { recursive: true })
       writeFileSync(join(macosDir, 'White Label Harness'), '#!/bin/sh\n')
       const candidates = resolvePackagedLauncherCandidates({
         appOutDir,
         electronPlatformName: 'darwin',
-        packager: { appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() } },
+        packager: { appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() } },
       })
       expect(candidates).toContain(join(macosDir, 'White Label Harness'))
 
@@ -2036,7 +2036,7 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
       expect(resolvePackagedLauncherCandidates({
         appOutDir: linuxDir,
         electronPlatformName: 'linux',
-        packager: { appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() } },
+        packager: { appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() } },
       })).toContain(join(linuxDir, 'renamed-launcher'))
     })
 
@@ -2174,7 +2174,7 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
         electronPlatformName,
         arch: 1,
         packager: {
-          appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() },
+          appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() },
           executableName: 'dsh-plugin-desktop',
         },
       }
@@ -2237,7 +2237,7 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
         // (而不是"打印 OK 就退出")。
         const script = readFileSync(args[0] as string, 'utf8')
         expect(script).toContain('@sentry/node')
-        expect(script).toContain('@picoaide/dsh-enterprise/error-reporting')
+        expect(script).toContain('@zeokeel/dsh-enterprise/error-reporting')
         expect(script).toContain('SENTRY-SMOKE-OK')
         // P-5:这个冒烟三平台都跑 ⇒ 它是 Electron 版本断言的全平台落点。
         expect(script).toContain(`${PACKAGED_ELECTRON_VERSION_MARKER}' + String(process.versions.electron)`)
@@ -2295,7 +2295,7 @@ describe('packaged ASAR bigint semantics smoke (issue #130)', () => {
       electronPlatformName,
       arch: 1,
       packager: {
-        appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() },
+        appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() },
         executableName: 'dsh-plugin-desktop',
       },
     }
@@ -2531,7 +2531,7 @@ describe('packaged ASAR bigint semantics smoke (issue #130)', () => {
     // 判据来源（2026-09-28 改口径）：十一个自有组装补丁层**不再**由 `src/profile.ts` 逐个
     // `resolve('<pkg>/package.json')` 手工解析 —— 它们现在是 profile 的 **bundle 层**
     // （`REQUIRED_BUNDLES` 列出十个自有包，各自 `dsh.bundle.patch` 指向自己的
-    // `cordis.patch.yml`；桌面自己那一层由 `@picoaide/dsh-enterprise` 用相对路径携带）。
+    // `cordis.patch.yml`；桌面自己那一层由 `@zeokeel/dsh-enterprise` 用相对路径携带）。
     // 所以"哪些包目录必须在产物里"这条推导改为**读真实的 bundle 清单与各自的 patch 列表**：
     // 每个自有 bundle 的 `package.json` 与它声明的每个补丁文件都必须在锚点表里
     // （打包排除规则一旦把它们剔掉，客户端启动时整片行消失）。
@@ -2542,7 +2542,7 @@ describe('packaged ASAR bigint semantics smoke (issue #130)', () => {
         dsh: { profile: { bundles: string[] } }
       }
       const ours = manifest.dsh.profile.bundles
-        .filter(name => name.startsWith('@picoaide/') || name === 'dsh-memory-evolve')
+        .filter(name => name.startsWith('@zeokeel/') || name === 'dsh-memory-evolve')
       // 前置断言：判据不能空转。
       expect(ours.length).toBeGreaterThan(5)
 
@@ -2550,7 +2550,7 @@ describe('packaged ASAR bigint semantics smoke (issue #130)', () => {
       for (const name of ours) {
         // 解析必须**镜像 `resolveBundleDir`**：它用 `resolve.paths()` + 字符串 `join`
         // 得到的是 **node_modules 下的符号链接路径**（不 realpath）。dev 树里
-        // `node_modules/@picoaide/dsh-enterprise` 是指向 `packages/host/enterprise` 的
+        // `node_modules/@zeokeel/dsh-enterprise` 是指向 `packages/host/enterprise` 的
         // 符号链接，而企业包的 `dsh.bundle.patch` 用 `../../../cordis.patch.yml` 指桌面层 ——
         // 只有保留符号链接路径时它才落在 `packages/host/desktop/`（打包后两者同一形状）。
         const searchPaths = createRequire(import.meta.url).resolve.paths(name) ?? []
@@ -2613,7 +2613,7 @@ describe('packaged ASAR bigint semantics smoke (issue #130)', () => {
 describe('发布包不得夹带自有源码 / sourcemap / 开发期产物（2026-09-22 泄漏修复）', () => {
   // 背景（实测）：`build.files` 里曾写「仅根级 TypeScript」的单星号排除（`*` 不跨 `/`），
   // 加上 `lib/**` 把 lib 内容平铺到 asar 根 ⇒ 11 个已发布的正式/预发包都带着
-  // 桌面包自身的 src/tests/scripts、各 `@picoaide/dsh-*` 的 src（工作区依赖是
+  // 桌面包自身的 src/tests/scripts、各 `@zeokeel/dsh-*` 的 src（工作区依赖是
   // symlink，electron-builder 忽略子包 `files` 整体收编）、以及 33 个内嵌
   // `sourcesContent` 的 sourcemap；而 DevTools 从没被覆写（默认可用）。
   // 这张表是 afterPack 的**证据侧**判据：排除规则写错时坏包产不出来。
@@ -2624,9 +2624,9 @@ describe('发布包不得夹带自有源码 / sourcemap / 开发期产物（2026
       ['desktop tests', 'tests/package.spec.ts'],
       ['desktop scripts', 'scripts/notarize-mac.ts'],
       ['desktop root tsconfig', 'tsdown.config.ts'],
-      ['workspace src', 'node_modules/@picoaide/dsh-browser/src/runtime.ts'],
-      ['workspace spec', 'node_modules/@picoaide/dsh-account-card/src/client/AccountCard.spec.tsx'],
-      ['workspace tests dir', 'node_modules/@picoaide/dsh-cron/tests/jobs.spec.ts'],
+      ['workspace src', 'node_modules/@zeokeel/dsh-browser/src/runtime.ts'],
+      ['workspace spec', 'node_modules/@zeokeel/dsh-account-card/src/client/AccountCard.spec.tsx'],
+      ['workspace tests dir', 'node_modules/@zeokeel/dsh-cron/tests/jobs.spec.ts'],
       ['sourcemap at archive root', 'main.js.map'],
       ['sourcemap in a subdirectory', 'lib/preload/renderer-error.cjs.map'],
       ['e2e artifacts', '.e2e-terminal/Default/Cache/x'],
@@ -2659,10 +2659,10 @@ describe('发布包不得夹带自有源码 / sourcemap / 开发期产物（2026
       'node_modules/@deepseek-ai/dsh/lib/bin.js',
       // 上游包自带的 .d.ts / README 是公开发行物，不在「自有源码」范围里。
       'node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.d.ts',
-      'node_modules/@picoaide/dsh-browser/lib/index.js',
-      'node_modules/@picoaide/dsh-browser/lib/types/index.d.ts',
+      'node_modules/@zeokeel/dsh-browser/lib/index.js',
+      'node_modules/@zeokeel/dsh-browser/lib/types/index.d.ts',
       // 第三方包把运行期代码放在 src/ 下（bowser / debug / fontkit 实测如此）——
-      // 所以排除规则只能点名 @picoaide，不能是 `**/src/**`。
+      // 所以排除规则只能点名 @zeokeel，不能是 `**/src/**`。
       'node_modules/bowser/src/bowser.js',
       'node_modules/debug/src/index.js',
       // 含 skills 的运行期内容必须留着（曾经被一条过宽的 *.md 排除误删）。
@@ -2673,7 +2673,7 @@ describe('发布包不得夹带自有源码 / sourcemap / 开发期产物（2026
   })
 
   it('不把 `**/src/**` 当成通用规则（第三方 src 是运行期代码）', () => {
-    // 判据反向自证：若有人把规则从 `@picoaide` 放宽成任意 src，这条会红。
+    // 判据反向自证：若有人把规则从 `@zeokeel` 放宽成任意 src，这条会红。
     const thirdPartySources = [
       'node_modules/bowser/src/bowser.js',
       'node_modules/debug/src/index.js',
@@ -2682,7 +2682,7 @@ describe('发布包不得夹带自有源码 / sourcemap / 开发期产物（2026
     expect(() => assertNoPackagedSourceLeaks(thirdPartySources, '/x/app.asar')).not.toThrow()
     // 同名前缀自有包则必须命中。
     expect(() => assertNoPackagedSourceLeaks(
-      ['node_modules/@picoaide/dsh-browser/src/runtime.ts'],
+      ['node_modules/@zeokeel/dsh-browser/src/runtime.ts'],
       '/x/app.asar',
     )).toThrow(/workspace package sources/u)
   })
@@ -2753,7 +2753,7 @@ describe('发布包不得夹带自有源码 / sourcemap / 开发期产物（2026
     expect(files).toContain('!temp/**')
     expect(files).toContain('!dist/**')
     // 自有包源码点名排除，且**不能**放宽成任意 src。
-    expect(files).toContain('!**/node_modules/@picoaide/*/src/**')
+    expect(files).toContain('!**/node_modules/@zeokeel/*/src/**')
     expect(files.some(pattern => pattern === '!**/src/**')).toBe(false)
   })
 })

@@ -4,7 +4,7 @@
  * 被修的形态（原 `KNOWN_UNGUARDED_ENTRIES`、第二十九轮 FIX-44 ② 已迁到 `ENTRY_EXEMPTIONS`
  * 的那条"await 之后才读会话"）：两个观察点都是
  *
- *     void installedVersion(name).then(() => reportSkillCall(ctx.picoSession.getSession(), …))
+ *     void installedVersion(name).then(() => reportSkillCall(ctx.zeokeelSession.getSession(), …))
  *
  * —— 会话是在 `installedVersion` 的 **await 续体里**才读的。于是"读版本文件期间用户换了
  * 账号/服务端"这条普通时序会把**上一账号**的技能调用记到**新账号**名下（`reportScope`
@@ -87,7 +87,7 @@ function drivenContext(read: () => Session | null): {
 } {
   const handlers = new Map<string, (...args: never[]) => void>()
   const ctx = {
-    picoSession: { getSession: read },
+    zeokeelSession: { getSession: read },
     on: (event: string, fn: (...args: never[]) => void) => { handlers.set(event, fn) },
   } as unknown as Context
   return { handlers, ctx }

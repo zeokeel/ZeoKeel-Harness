@@ -15,28 +15,28 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	wasmapi "github.com/picoaide/picoaide/internal/wasmapp/api"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/appproof"
-	"github.com/picoaide/picoaide/internal/wasmapp/appserver"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	"github.com/picoaide/picoaide/internal/wasmapp/events"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/opens"
-	"github.com/picoaide/picoaide/internal/wasmapp/queue"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
-	"github.com/picoaide/picoaide/internal/wasmapp/upload"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	wasmapi "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/api"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appproof"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appserver"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/events"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/opens"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/upload"
 )
 
 // 环境变量（部署面）。
 const (
 	// EnvAppsExtraReserved 是部署期注入的**企业既有主机名 / 标识**（逗号分隔，§4.1）：
 	// 应用标识曾等于域名标签，因此这些名字（如 intranet、oa）不得被应用占用。
-	EnvAppsExtraReserved = "PICOAI_APPS_EXTRA_RESERVED"
+	EnvAppsExtraReserved = "ZEOKEEL_APPS_EXTRA_RESERVED"
 )
 
 // wasmPlatform 汇聚 WASM 应用平台的全部运行期组件。
@@ -159,7 +159,7 @@ func newWasmAppEvictor(srv wasmAppEvictor) func(string) {
 // **失败策略：装配期一律 log.Fatalf，绝不静默降级。** 设计里明确的 fail-closed
 // 都在这里做：
 //   - §4.3 内存四笔账自检（理论峰值 > 可用内存 70% ⇒ 拒绝启动）；
-//   - `PICOAI_COMPILE_ISOLATION=require` 且隔离不可用 ⇒ 拒绝启动（R31 的严格档）；
+//   - `ZEOKEEL_COMPILE_ISOLATION=require` 且隔离不可用 ⇒ 拒绝启动（R31 的严格档）；
 //   - §15.1 第 9 条 / R20 单实例自检（advisory lock）；
 //   - 渠道 `app_origin_scheme` 缺失/非法 ⇒ 拒绝启动（§8.3/§10，由调用方校验）。
 //
@@ -262,7 +262,7 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 	eventCleanup := events.NewCleanupScheduler(eventSink, events.CleanupSchedulerOptions{Logger: log.Printf})
 	eventCleanup.Start(ctx)
 
-	// 编译子系统缺一个可选的辅助二进制（picoaide-app-compile）不该让**整个**
+	// 编译子系统缺一个可选的辅助二进制（zeokeel-app-compile）不该让**整个**
 	// 服务端起不来 —— 登录/网关/审计/客户端面都与它无关。因此这里**不 Fatalf**：
 	// 失败时把 compiler 留 nil，发布链路会以可读的错误 fail-closed
 	// （api.requireCompiler 对 nil Compiler 返回明确信封 + AllowPublish 还会因
@@ -270,7 +270,7 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 	// ⚠️ 部署面必须构建该二进制并与 server 放在同一目录（见 Dockerfile/Makefile）：
 	// 不修交付链 = 发布功能静默不可用（会在日志里"大声"记录 + /readyz 上可见）。
 	//
-	// 例外：**显式要求隔离的档位**（PICOAI_COMPILE_ISOLATION=require）必须 fail-closed ——
+	// 例外：**显式要求隔离的档位**（ZEOKEEL_COMPILE_ISOLATION=require）必须 fail-closed ——
 	// 该档位的唯一语义就是"隔离不可用就拒绝启动"（compile.IsolationRequire 的注释、
 	// docker-compose.yml、.env.example 三处一致）。从前这里只打一行日志就继续跑，
 	// 等于把运维的加固开关变成装饰（审计 P2-1）。
@@ -290,11 +290,11 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 			// require 档的语义是"编译链路必须 fail-closed"：连编译器都构造不出来时
 			// 隔离更无从谈起 ⇒ 直接拒绝启动（含"编译子进程缺失"这类非隔离原因，
 			// 因为把"发布被静默禁用"当成 hardened 部署的结果同样是误导）。
-			log.Fatalf("wasm: PICOAI_COMPILE_ISOLATION=require 要求编译链路 fail-closed，"+
+			log.Fatalf("wasm: ZEOKEEL_COMPILE_ISOLATION=require 要求编译链路 fail-closed，"+
 				"但编译子系统不可用（隔离无从谈起），拒绝启动：%v", cerr)
 		}
 		log.Printf("wasm: ⚠️ 编译子系统不可用，发布链路将被禁用（其余功能正常）：%v", cerr)
-		log.Printf("wasm: ⚠️ 修复方式：构建 cmd/picoaide-app-compile 并与 picoaide-server 放在同一目录；" +
+		log.Printf("wasm: ⚠️ 修复方式：构建 cmd/zeokeel-app-compile 并与 zeokeel-server 放在同一目录；" +
 			"生产镜像还需安装 bubblewrap（见 server/Dockerfile）")
 		compiler = nil
 	} else {
@@ -302,7 +302,7 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 		//（未来若新增"计划可用但实际降级"的后端，这里仍然守住 fail-closed）。
 		mode, usable, detail := compiler.IsolationStatus()
 		if mustRefuseStartupForIsolation(mode, usable) {
-			log.Fatalf("wasm: PICOAI_COMPILE_ISOLATION=require 但隔离未生效，拒绝启动：%s", detail)
+			log.Fatalf("wasm: ZEOKEEL_COMPILE_ISOLATION=require 但隔离未生效，拒绝启动：%s", detail)
 		}
 		log.Printf("wasm: compile isolation = %s", compiler.IsolationPlan())
 	}

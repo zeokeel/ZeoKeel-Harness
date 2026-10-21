@@ -24,7 +24,7 @@
  *   - `close()` 不归还焦点 / 不判"焦点是否还在面板里" ⇒ 对应两条红。
  *
  * 组合判据（真浮层 + 真装载器，含"打开面板后焦点进面板、Esc 后回到触发元素"的闭环）
- * 在 `@picoaide/dsh-foot-menu` 的 `tests/panel-focus-handoff.spec.tsx` —— 单包用例
+ * 在 `@zeokeel/dsh-foot-menu` 的 `tests/panel-focus-handoff.spec.tsx` —— 单包用例
  * 证明不了跨包交接。
  */
 import { act } from 'react'
@@ -79,7 +79,7 @@ describe('中列整页装载器', () => {
    *
    * jsdom 没有排版引擎，量不出"能不能滚"——这里只能钉住"共享样式表必须下发这条
    * 规则"（防删除/防改选择器）。**真能力判据在 `scripts/e2e-client.mjs`**：真机注入
-   * 超高内容后断言 `.pico-scroll` 真的溢出且 `scrollTop` 生效（改回 auto 链即红）。
+   * 超高内容后断言 `.zeokeel-scroll` 真的溢出且 `scrollTop` 生效（改回 auto 链即红）。
    */
   it('共享样式表把容器高度透传给面板根包装层（滚动区有界的前提）', () => {
     mount('capability', '能力中心')
@@ -362,7 +362,7 @@ describe('共享视觉语言', () => {
       root.render(<PanelButton variant="primary">发布</PanelButton>)
     })
     const button = host.querySelector('button')
-    expect(button?.className).toContain('pico-btn--primary')
+    expect(button?.className).toContain('zeokeel-btn--primary')
     expect(button?.style.background).toBe('')
     root.unmount()
   })

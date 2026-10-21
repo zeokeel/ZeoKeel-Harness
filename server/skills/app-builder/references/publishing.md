@@ -140,19 +140,19 @@ node scripts/pack-assets.mjs --in shared-notes.wasm --out dist/shared-notes-pack
 
 - `SRC=DEST`：`SRC` 是磁盘上的文件，`DEST` 是**包内逻辑路径**（也就是段名），可重复。
 - `--out` **必填且不得与 `--in` 同路径**（原产物要留着继续编译/重打包）。
-- `picoaide.app.json` 与工具链元数据段名（`name` / `producers` / …）会被直接拒 ——
+- `zeokeel.app.json` 与工具链元数据段名（`name` / `producers` / …）会被直接拒 ——
   保留资源由平台在发布期写入，名单放 `config` 的 `whitelist`。
 - 路径不超过 256 字节、单段不超过 255 字节；自定义段总量不超过 4 MiB。
 - 打包器与演示应用用的是**同一份实现**：唯一源在平台仓库的
   `server/demoapps/scripts/pack-assets.mjs`，镜像构建期注入到技能目录的 `scripts/`
   —— 在已安装的技能目录里路径就是上面的 `scripts/pack-assets.mjs`。
-- **`__picoaide/` 前缀不能占用**（宿主保留命名空间，发布期 `ASSET_DENIED` +
+- **`__zeokeel/` 前缀不能占用**（宿主保留命名空间，发布期 `ASSET_DENIED` +
   `details.reason = "reserved_path_prefix"`）。
 
-## 3. 应用配置文件 `picoaide.app.json`
+## 3. 应用配置文件 `zeokeel.app.json`
 
 随发布一起提交（**不计入 wasm 体积上限**），发布期由平台连同随包资源一起收进该版本的
-资源集（运行期常驻内存，不落盘），应用用 `assets.read("picoaide.app.json")` 读它。
+资源集（运行期常驻内存，不落盘），应用用 `assets.read("zeokeel.app.json")` 读它。
 
 **字段规格（字段名 / 类型 / 必填 / 取值 / 上限）只在生成物里维护**：
 `references/app-config.md`（由平台的 `appcfgspec.go` 生成，含应用配置字段与发布载荷字段）。
@@ -215,10 +215,10 @@ node scripts/pack-assets.mjs --in shared-notes.wasm --out dist/shared-notes-pack
 
 - 应用**只在桌面客户端内打开**：客户端「应用中心」点开，或点开别人给的**深链**
   `<渠道 scheme>://app/<app_id>`。scheme 由该客户端的渠道配置决定
-  （不同渠道的客户端 scheme 可能不同），**不要写死 `picoaide://` 之类**。
+  （不同渠道的客户端 scheme 可能不同），**不要写死 `zeokeel://` 之类**。
 - **没有浏览器地址**：不存在 `<app_id>.<域名>` 形式的 URL，平台也不签发应用域名/证书；
   把 `app_id` 说清楚就够了，不要给用户编造链接。
-- 应用在客户端里的 origin 是 `<渠道 app 源 scheme>://<app_id>`（渠道参数化：official/beta 取值 `picoaide-app`；每个应用一个 origin）；
+- 应用在客户端里的 origin 是 `<渠道 app 源 scheme>://<app_id>`（渠道参数化：official/beta 取值 `zeokeel-app`；每个应用一个 origin）；
   自定义协议下 cookie 不可用（`document.cookie` 恒为空、`Set-Cookie` 不落盘），
   所以**应用状态只能放应用库**（`db.*`），不要设计任何依赖 cookie 的功能。
 

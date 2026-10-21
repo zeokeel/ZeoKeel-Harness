@@ -35,7 +35,7 @@ export interface WindowsInstallerVerificationOptions {
   /** Product version embedded in the expected artifact name. */
   readonly version: string
   /**
-   * 期望的安装包文件名（渠道化：名字来自渠道包，不再是固定的 PicoAide 模板）。
+   * 期望的安装包文件名（渠道化：名字来自渠道包，不再是固定的 ZeoKeel 模板）。
    * 缺省按 `DSH_BUILD_CHANNEL` 推导。
    */
   readonly installerName: string

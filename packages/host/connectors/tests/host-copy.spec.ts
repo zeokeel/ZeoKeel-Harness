@@ -78,7 +78,7 @@ vi.mock('node:dns/promises', async (importOriginal) => {
 let dir: string
 let harness: Harness | null = null
 
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'pico-i18n-')) })
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'zeokeel-i18n-')) })
 
 afterEach(() => {
   harness?.dispose()
@@ -110,7 +110,7 @@ function deviceDef(): ConnectorDef {
 }
 
 async function rows(h: Harness): Promise<Array<Record<string, unknown>>> {
-  const response = await callRoute(h, '/api/pico/connectors', 'GET')
+  const response = await callRoute(h, '/api/zeokeel/connectors', 'GET')
   const body = JSON.parse(response.body) as { connectors?: Array<Record<string, unknown>> }
   return body.connectors ?? []
 }
@@ -144,7 +144,7 @@ describe('Host 文案按调用解析（模块级冻结即红）', () => {
     expect(harness.locale()).toBe('zh')
 
     // 第一次：中文（默认）
-    await callRoute(harness, '/api/pico/connectors/blocked/connect')
+    await callRoute(harness, '/api/zeokeel/connectors/blocked/connect')
     const chinese = await waitForRow(harness, 'blocked', current => current.error !== undefined)
     expect(chinese.status).toBe('error')
     expect(chinese.error).toBe('blocked-srv: url 不在允许的出站范围内: http://169.254.169.254/mcp')
@@ -152,7 +152,7 @@ describe('Host 文案按调用解析（模块级冻结即红）', () => {
     // 第二次：把运行时语言切成 en（真机语义 = 用户在设置里改语言，进程不重启）。
     // 冻结在模块级/apply 期的实现会在这里继续吐中文。
     harness.setLocale('en')
-    await callRoute(harness, '/api/pico/connectors/blocked/connect')
+    await callRoute(harness, '/api/zeokeel/connectors/blocked/connect')
     const english = await waitForRow(
       harness,
       'blocked',
@@ -163,11 +163,11 @@ describe('Host 文案按调用解析（模块级冻结即红）', () => {
 
   it('生命周期/交互文案同样按调用解析（deny 路由的行错误）', async () => {
     harness = createHarness([blockedDef()], dir)
-    await callRoute(harness, '/api/pico/connectors/blocked/deny')
+    await callRoute(harness, '/api/zeokeel/connectors/blocked/deny')
     expect((await row(harness, 'blocked')).error).toBe('本地执行确认被拒绝，未启动本地命令')
 
     harness.setLocale('en')
-    await callRoute(harness, '/api/pico/connectors/blocked/deny')
+    await callRoute(harness, '/api/zeokeel/connectors/blocked/deny')
     expect((await row(harness, 'blocked')).error)
       .toBe('The local execution confirmation was refused; no local command was started')
   }, 20_000)
@@ -301,7 +301,7 @@ describe('耦合修复：Host 的稳定 code 一路传到面板，friendly 映�
   it('授权类失败带 auth-required，英文界面下仍走「原样透出」而不是通用兜底', async () => {
     harness = createHarness([deviceDef()], dir)
     harness.setLocale('en')
-    await callRoute(harness, '/api/pico/connectors/dev/connect')
+    await callRoute(harness, '/api/zeokeel/connectors/dev/connect')
     const current = await waitForRow(harness, 'dev', entry => entry.errorCode !== undefined)
     expect(current.status).toBe('unauthorized')
     expect(current.errorCode).toBe('auth-required')
@@ -318,7 +318,7 @@ describe('耦合修复：Host 的稳定 code 一路传到面板，friendly 映�
 
   it('中文侧的 status/文案/code 同样保持（默认语言不回归）', async () => {
     harness = createHarness([deviceDef()], dir)
-    await callRoute(harness, '/api/pico/connectors/dev/connect')
+    await callRoute(harness, '/api/zeokeel/connectors/dev/connect')
     const current = await waitForRow(harness, 'dev', entry => entry.errorCode !== undefined)
     expect(current.status).toBe('unauthorized')
     expect(current.errorCode).toBe('auth-required')

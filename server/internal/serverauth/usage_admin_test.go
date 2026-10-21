@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // adminSession 登录 boss 并返回带 CSRF/Cookie 的请求头。
@@ -23,7 +23,7 @@ func adminSession(t *testing.T, r http.Handler) map[string]string {
 			sess = ck.Value
 		}
 	}
-	return map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": out["csrf_token"].(string)}
+	return map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": out["csrf_token"].(string)}
 }
 
 // TestAdminUsageDept: group=dept 聚合 + dept 过滤(2026-09 用量中心)。

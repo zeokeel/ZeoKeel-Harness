@@ -32,7 +32,7 @@ node pack-assets.mjs --in shared-notes.wasm --out dist/shared-notes-packed.wasm 
 
 ## 不能这样加的
 
-- **`picoaide.app.json` 是平台保留资源**：它由平台在发布期写入（内容 = 你随包提交的
+- **`zeokeel.app.json` 是平台保留资源**：它由平台在发布期写入（内容 = 你随包提交的
   `config`），模块里的同名段会被平台忽略。脚本直接拒 —— 要放名单就写进 `config` 的
   `whitelist`，**不要**放进这种会被直出的非保留资源。
 - **工具链元数据段名**（`name` / `producers` / `go:buildid` …）：平台按元数据分流，

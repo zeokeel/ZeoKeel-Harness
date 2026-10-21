@@ -17,7 +17,7 @@
  *    触发 `agent.cancel({kind:'user'})`。
  *  - **无孤儿循环**：一轮结束（成功/失败/取消）即 `dispose()` 该 agent —— 会话退出
  *    活体、循环收敛；下一次调用按持久化会话恢复（多轮上下文来自隐藏会话自身）。
- *  - **换账号即释放**（R13-GB）：`pico/session-changed` ⇒ `releaseAll()`：在飞的那一轮
+ *  - **换账号即释放**（R13-GB）：`zeokeel/session-changed` ⇒ `releaseAll()`：在飞的那一轮
  *    被取消、全部活体会话 `dispose()`、排队中的轮次被拒。**磁盘上的会话不删**（它是
  *    那个账号自己的历史，同账号重登仍然续用；而换账号后新 id 已经指向另一个会话）。
  *    订阅走叶子包的 `subscribeSessionChanges`（唯一实现：先订阅 + 补发恢复型启动那一次）
@@ -52,13 +52,13 @@ import type { Agent, AgentHandle, AgentOptions, CreateAgentOptions } from '@deep
 import type { ModelSelection } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { SessionId, type SessionId as SessionIdType } from '@deepseek-ai/dsh-session'
-import { subscribeSessionChanges } from '@picoaide/dsh-host-locale/session-events'
+import { subscribeSessionChanges } from '@zeokeel/dsh-host-locale/session-events'
 import type {
   AiChatMessage,
   AiChatTurnResult,
   AiChatTurnRunner,
-} from '@picoaide/dsh-wasm-apps-host/ai-chat'
-import { WASM_APPS_AI_RUNNER_SERVICE } from '@picoaide/dsh-wasm-apps-host'
+} from '@zeokeel/dsh-wasm-apps-host/ai-chat'
+import { WASM_APPS_AI_RUNNER_SERVICE } from '@zeokeel/dsh-wasm-apps-host'
 
 /**
  * 应用 AI 的系统提示（§21.1 第 14 条：应用**不得**声明提示，平台统一给）。
@@ -75,7 +75,7 @@ export const APP_AI_SYSTEM_PROMPT = [
 ].join('\n')
 
 /** 平台系统提示的分段名（装配瀑布按它收敛 sections）。 */
-export const APP_AI_PROMPT_SECTION = 'pico-app-ai'
+export const APP_AI_PROMPT_SECTION = 'zeokeel-app-ai'
 
 /**
  * 「上一个活体的收尾还没落地」的**显式错误码**（R14 VB-N3）。
@@ -105,7 +105,7 @@ export const APP_AI_RELEASE_BUDGET_MS = 15_000
  * `releaseAll()` 自己等收尾落地的预算（毫秒；R14 VB-N3）。
  *
  * 与 {@link APP_AI_RELEASE_BUDGET_MS} 是**两件事**：这一条管"换账号/登出的清理路径不能在
- * 订阅回调里永久挂住"（它是 `pico/session-changed` 的 fire-and-forget 路径），那一条管
+ * 订阅回调里永久挂住"（它是 `zeokeel/session-changed` 的 fire-and-forget 路径），那一条管
  * "新一轮能不能开工"。两者都不放宽栅栏：`releasing` 条目照样留着，`openAgent` 照样拒绝
  * 在收尾落地前开第二个写句柄。
  */
@@ -185,7 +185,7 @@ export interface AppAiRunnerState {
   /** 会话代次：每次释放 +1（0 = 从未释放）。 */
   generation(): number
   /**
-   * 释放全部活体会话与队列（`pico/session-changed` 的生产路径）。
+   * 释放全部活体会话与队列（`zeokeel/session-changed` 的生产路径）。
    *
    * 语义：在飞的那一轮被取消、每个活体 agent `dispose()`、排队中的轮次在起跑前被拒
    * （`AbortError` ⇒ 应用侧看到 `ai_cancelled`）。**磁盘会话不删**：它是那个账号自己的
@@ -541,7 +541,7 @@ export function createAppAiRunner(ctx: Context, options: AppAiRunnerOptions): Ap
     (ctx.get('agents') as { get?: (id: SessionIdType) => Agent | undefined } | undefined)?.get?.(SessionId(sessionId))
 
   /**
-   * 释放全部活体会话与队列（`pico/session-changed` 的生产路径；见 {@link AppAiRunnerState}）。
+   * 释放全部活体会话与队列（`zeokeel/session-changed` 的生产路径；见 {@link AppAiRunnerState}）。
    *
    * 三步，顺序不能反：① 换代次（让排队中的轮次起跑即拒）→ ② 取消在飞的那一轮
    * （`agent.cancel({kind:'user'})`：循环立刻收尾，**不留写一半的会话**）→ ③ `dispose()`
@@ -555,7 +555,7 @@ export function createAppAiRunner(ctx: Context, options: AppAiRunnerOptions): Ap
    * 放弃那一轮的模型流收尾。窗口里到达的**同一个隐藏会话 id** 的新一轮会在 `openAgent`
    * 里等本次收尾落地（{@link trackReleasing}），而不是撞上还没释放的写句柄。
    *
-   * **本函数自己有界返回**（R14 VB-N3）：它是 `pico/session-changed` 的订阅回调路径，不能
+   * **本函数自己有界返回**（R14 VB-N3）：它是 `zeokeel/session-changed` 的订阅回调路径，不能
    * 因为某条上游读永不结束就永久挂住。超 `releaseReturnBudgetMs` 就返回并记一条带
    * {@link APP_AI_SESSION_RELEASE_PENDING} 的 warn；**闸门不放宽** —— 那些会话在收尾真的
    * 落地之前仍然拒绝开第二个写句柄（`openAgent` 超预算抛
@@ -589,7 +589,7 @@ export function createAppAiRunner(ctx: Context, options: AppAiRunnerOptions): Ap
       if (disposal !== undefined) trackReleasing(sessionId, disposal)
     })
     // 收尾**有界放弃**（R14 VB-N3）：上游读永不结束时 `dispose()` 永不结算，而本函数是
-    // `pico/session-changed` 订阅里的清理路径 —— 不能把订阅者永久挂住。超预算就返回，
+    // `zeokeel/session-changed` 订阅里的清理路径 —— 不能把订阅者永久挂住。超预算就返回，
     // 但**不放宽栅栏**：`releasing` 条目照旧留着，`openAgent` 仍拒绝在收尾落地前开第二个
     // 写句柄（超预算抛 `AppAiSessionReleasePendingError`）。
     if (!await settlesWithin(Promise.all(disposals), releaseReturnBudgetMs)) {

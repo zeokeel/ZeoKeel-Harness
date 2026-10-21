@@ -1,7 +1,7 @@
 // Package skillseed 下发**随服务端镜像一起发布**的内置技能。
 //
 // 定位与 internal/clientrelease 完全同构：镜像层里放一份资产目录（Dockerfile
-// 的 ENV 固定为 /opt/picoaide/skills，可用 PICOAI_SKILL_SEED_DIR 覆盖），服务端
+// 的 ENV 固定为 /opt/zeokeel/skills，可用 ZEOKEEL_SKILL_SEED_DIR 覆盖），服务端
 // 把那个目录直接对外提供 —— 目录里的文件随镜像升级而更新，正是「技能内置到
 // 服务端」要的语义。
 //
@@ -44,18 +44,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/archiveutil"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/archiveutil"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
-// 内置技能资产的镜像内目录，由 Dockerfile 的 ENV 固定（/opt/picoaide/skills）。
+// 内置技能资产的镜像内目录，由 Dockerfile 的 ENV 固定（/opt/zeokeel/skills）。
 // 服务端直接读它 —— 镜像层里的文件随镜像升级而更新，与 clientrelease.Dir 同一范式。
 var Dir = func() string {
-	if v := os.Getenv("PICOAI_SKILL_SEED_DIR"); v != "" {
+	if v := os.Getenv("ZEOKEEL_SKILL_SEED_DIR"); v != "" {
 		return v
 	}
-	return "/opt/picoaide/skills"
+	return "/opt/zeokeel/skills"
 }()
 
 const (
@@ -66,7 +66,7 @@ const (
 	manifestPreviewBytes = 128 << 10
 	// provenanceDir 安装器专用溯源目录：包内自带即可伪造归属，因此内置技能
 	// 目录里出现它就拒绝（与 skillmanifest.checkProvenance 同一口径）。
-	provenanceDir = ".picoaide"
+	provenanceDir = ".zeokeel"
 )
 
 // limits 是打包与校验用的边界。**默认值直接取 archiveutil 的既有常量**
@@ -84,7 +84,7 @@ var limits = archiveutil.DefaultLimits(SkillFile)
 //   - `.` / 空段折叠掉。
 //
 // 返回 skip=true 表示这是包根自身（`./`），不产出条目。
-// 另外拒绝 .picoaide/（安装器专用的溯源目录）。
+// 另外拒绝 .zeokeel/（安装器专用的溯源目录）。
 func packEntryName(rel string) (name string, skip bool, err error) {
 	clean, nerr := archiveutil.NormalizePath(filepath.ToSlash(rel))
 	if nerr != nil {
@@ -175,7 +175,7 @@ func (p Problem) String() string { return p.Name + ": " + p.Reason }
 // （那些属于市场与组织内容）。管理端看它只有两个目的：确认这个部署到底带了哪些
 // 技能、以及**为什么某条技能没上来**。
 type Diagnostics struct {
-	// Dir 实际扫描的资产目录（镜像内缺省 /opt/picoaide/skills）。
+	// Dir 实际扫描的资产目录（镜像内缺省 /opt/zeokeel/skills）。
 	Dir string `json:"dir"`
 	// DirExists 目录是否存在。false 且 Problems 为空 = 这个部署没有内置技能
 	// （本地直接跑二进制就是这种形态），不是故障。
@@ -265,7 +265,7 @@ func (c *Catalog) Archive(name string) (Entry, []byte, bool) {
 // Load 扫描目录并打包全部内置技能。幂等：已加载则直接返回。
 //
 // 目录不存在时返回 nil（不是错误）：本地 `make build-server` 的二进制旁边没有
-// `/opt/picoaide/skills`，此时内置清单为空是正确的，服务端照常启动。
+// `/opt/zeokeel/skills`，此时内置清单为空是正确的，服务端照常启动。
 func (c *Catalog) Load() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -152,8 +152,8 @@ function publicChannel(channelId: string): Record<string, unknown> {
   return {
     schema: 1,
     channel_id: channelId,
-    identity: { display_name: 'PicoAide Harness', short_name: 'PicoAide' },
-    desktop: { home_dir: '.picoaide-harness', app_origin_scheme: 'picoaide-app' },
+    identity: { display_name: 'ZeoKeel Harness', short_name: 'ZeoKeel' },
+    desktop: { home_dir: '.zeokeel-harness', app_origin_scheme: 'zeokeel-app' },
   }
 }
 

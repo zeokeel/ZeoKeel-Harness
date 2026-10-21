@@ -173,7 +173,7 @@ describe('R4-B-4 卸载随包技能是持久终态（墓碑 + 同步侧跳过）
     const res = syncBuiltinSkills(pluginSkills, skillsDir)
     expect(res.find((r: { name: string }) => r.name === BUNDLED).action).toBe('synced')
     expect((await readProvenance(join(skillsDir, BUNDLED)))?.channel).toBe('plugin')
-    // 面板对 plugin 行的「卸载」= POST /api/pico/skills/:name/uninstall → uninstallSkill。
+    // 面板对 plugin 行的「卸载」= POST /api/zeokeel/skills/:name/uninstall → uninstallSkill。
     await uninstallSkill(skillsDir, BUNDLED)
     return join(skillsDir, SKILL_REMOVED_DIR, `${BUNDLED}.json`)
   }

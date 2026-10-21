@@ -71,7 +71,7 @@ function makeRepo(spec: {
   gitMarker?: boolean
   files?: Record<string, string>
 }): string {
-  const root = mkdtempSync(join(tmpdir(), 'picoaide-anchor-'))
+  const root = mkdtempSync(join(tmpdir(), 'zeokeel-anchor-'))
   roots.push(root)
   if (spec.submodule === 'checked-out' || spec.submodule === 'empty-dir') {
     mkdirSync(join(root, 'deepseek-harness'), { recursive: true })
@@ -219,7 +219,7 @@ describe('上游锚点②判定器 · submodule 缺席（Go server job 的形态
   it('兜底**自身有牙**：冻结件与契约常量（出站头名）不一致 ⇒ 红', () => {
     const root = makeRepo({ submodule: 'empty-dir' })
     // 变异：冻结件被改成另一个头名（拿契约常量判它，而不是拿它判它自己）。
-    const drifted = UPSTREAM_SESSION_HEADER_LINE.replace(HEADER, 'x-pico-app-id')
+    const drifted = UPSTREAM_SESSION_HEADER_LINE.replace(HEADER, 'x-zeokeel-app-id')
     expect(drifted, '变异必须真的落地（否则这条用例是恒真的）').not.toBe(UPSTREAM_SESSION_HEADER_LINE)
     const result = probe(root, { line: drifted })
     expect(result.missing.join('；')).toContain('冻结件与契约常量不一致')

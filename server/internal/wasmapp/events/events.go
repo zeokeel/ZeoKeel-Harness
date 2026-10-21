@@ -28,8 +28,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/capapi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
 )
 
 // Options 是 Sink 的可调项(零值 = 全部取 limits 里的平台固定值)。

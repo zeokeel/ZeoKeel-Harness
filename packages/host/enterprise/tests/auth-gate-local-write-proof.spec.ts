@@ -19,12 +19,12 @@ beforeEach(isolateRuntimeSkillRoots)
 /**
  * r7c-6(P2)回归:本地**写**路由只过 `guard()`,没有持有性证明。
  *
- * 缺陷(`auth-gate.ts` 的四条 prefix 路由 —— `/api/pico/skills`、
- * `/api/pico/agent-presets`、`/api/pico/shared-skills`、`/api/pico/capabilities`):
+ * 缺陷(`auth-gate.ts` 的四条 prefix 路由 —— `/api/zeokeel/skills`、
+ * `/api/zeokeel/agent-presets`、`/api/zeokeel/shared-skills`、`/api/zeokeel/capabilities`):
  * `guard()` 自述的边界是"回环 socket + 回环 Host + 同源标记",**本机任意进程**
  * 伪造一个 `Origin` 就能通过。同一份伪造头(回环 socket + 回环 Host + 伪造
- * Origin、无 BrowserAuth cookie)打 `POST /api/pico/auth/login` 得到 403
- * "browser session proof required",打 `POST /api/pico/skills/<id>/install`
+ * Origin、无 BrowserAuth cookie)打 `POST /api/zeokeel/auth/login` 得到 403
+ * "browser session proof required",打 `POST /api/zeokeel/skills/<id>/install`
  * 却穿过围栏、以**用户令牌**出站到网关(也能把技能/预设落到本地技能根、
  * 把本地产物上传到组织共享库)。
  *
@@ -114,7 +114,7 @@ category: security
 
 /** 与安装器期望一致的最小 tar.gz(SKILL.md 在归档根)。 */
 async function skillArchive(name = 'codeql'): Promise<Buffer> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-write-proof-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-write-proof-'))
   try {
     await writeFile(join(dir, 'SKILL.md'), SKILL_MD.replace('name: codeql', `name: ${name}`), 'utf8')
     const chunks: Buffer[] = []
@@ -147,7 +147,7 @@ function harness(session: Session | null, fence?: ReturnType<typeof browserFence
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? fence : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -197,7 +197,7 @@ let home: string
 let skillsDir: string
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-write-proof-home-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-write-proof-home-'))
   skillsDir = join(home, 'skills')
   await mkdir(join(skillsDir, 'codeql'), { recursive: true })
   await writeFile(join(skillsDir, 'codeql', 'SKILL.md'), SKILL_MD, 'utf8')
@@ -222,15 +222,15 @@ afterEach(async () => {
 
 /** 四条 prefix 路由上的写请求(与 r7c-6 的缺陷面一一对应)。 */
 const WRITE_REQUESTS: Array<{ path: string, url: string, body?: string }> = [
-  { path: '/api/pico/skills', url: '/api/pico/skills/evil-skill/install' },
-  { path: '/api/pico/skills', url: '/api/pico/skills/codeql/uninstall' },
-  { path: '/api/pico/shared-skills', url: '/api/pico/shared-skills/evil-skill/1.0.0/install' },
-  { path: '/api/pico/shared-skills', url: '/api/pico/shared-skills/codeql/1.0.0/uninstall' },
-  { path: '/api/pico/shared-skills', url: '/api/pico/shared-skills/upload', body: '{"name":"codeql"}' },
-  { path: '/api/pico/agent-presets', url: '/api/pico/agent-presets/evil-preset/install' },
-  { path: '/api/pico/agent-presets', url: '/api/pico/agent-presets/evil-preset/uninstall' },
-  { path: '/api/pico/agent-presets', url: '/api/pico/agent-presets/upload', body: '{"name":"preset-a"}' },
-  { path: '/api/pico/capabilities', url: '/api/pico/capabilities' },
+  { path: '/api/zeokeel/skills', url: '/api/zeokeel/skills/evil-skill/install' },
+  { path: '/api/zeokeel/skills', url: '/api/zeokeel/skills/codeql/uninstall' },
+  { path: '/api/zeokeel/shared-skills', url: '/api/zeokeel/shared-skills/evil-skill/1.0.0/install' },
+  { path: '/api/zeokeel/shared-skills', url: '/api/zeokeel/shared-skills/codeql/1.0.0/uninstall' },
+  { path: '/api/zeokeel/shared-skills', url: '/api/zeokeel/shared-skills/upload', body: '{"name":"codeql"}' },
+  { path: '/api/zeokeel/agent-presets', url: '/api/zeokeel/agent-presets/evil-preset/install' },
+  { path: '/api/zeokeel/agent-presets', url: '/api/zeokeel/agent-presets/evil-preset/uninstall' },
+  { path: '/api/zeokeel/agent-presets', url: '/api/zeokeel/agent-presets/upload', body: '{"name":"preset-a"}' },
+  { path: '/api/zeokeel/capabilities', url: '/api/zeokeel/capabilities' },
 ]
 
 describe('本地写路由的持有性证明(r7c-6)', () => {
@@ -240,8 +240,8 @@ describe('本地写路由的持有性证明(r7c-6)', () => {
 
     // 差分基线:同一份伪造头打 login 是 403(既有行为)。
     const login = fakeRes()
-    await h.handler('/api/pico/auth/login')(
-      fakeReq('POST', '/api/pico/auth/login', '{"server":"https://harness.example","username":"x","password":"y"}'),
+    await h.handler('/api/zeokeel/auth/login')(
+      fakeReq('POST', '/api/zeokeel/auth/login', '{"server":"https://harness.example","username":"x","password":"y"}'),
       login.res,
     )
     expect(login.read().code).toBe(403)
@@ -272,26 +272,26 @@ describe('本地写路由的持有性证明(r7c-6)', () => {
     }
 
     // ① 纯本地写(卸载):带 proof 就必须真的删盘。
-    const uninstall = await post('/api/pico/skills', '/api/pico/skills/codeql/uninstall')
+    const uninstall = await post('/api/zeokeel/skills', '/api/zeokeel/skills/codeql/uninstall')
     expect(uninstall.code).toBe(200)
     await expect(stat(join(skillsDir, 'codeql'))).rejects.toThrow()
 
     // ② 出站下载 + 落盘(安装):带 proof 就必须真的装回来。
-    const install = await post('/api/pico/skills', '/api/pico/skills/codeql/install')
+    const install = await post('/api/zeokeel/skills', '/api/zeokeel/skills/codeql/install')
     expect(install.code).toBe(200)
     await expect(stat(join(skillsDir, 'codeql', 'SKILL.md'))).resolves.toBeTruthy()
     expect(h.gateway).toContain('https://harness.example/api/client/v2/marketplace/skills/codeql/archive')
     expect(h.auth).toContain('Bearer USER-TOKEN-abc')
 
     // ③ 打包 + 以用户令牌上传到组织共享库。
-    const upload = await post('/api/pico/shared-skills', '/api/pico/shared-skills/upload', '{"name":"codeql"}')
+    const upload = await post('/api/zeokeel/shared-skills', '/api/zeokeel/shared-skills/upload', '{"name":"codeql"}')
     expect(upload.code).toBe(200)
     expect(h.gateway).toContain('https://harness.example/api/client/v2/shared-skills')
 
     // ④ 读面(GET 目录)不受影响,照常服务。
     const catalog = fakeRes()
-    await h.handler('/api/pico/capabilities')(
-      fakeReq('GET', '/api/pico/capabilities?source=market', undefined, true), catalog.res)
+    await h.handler('/api/zeokeel/capabilities')(
+      fakeReq('GET', '/api/zeokeel/capabilities?source=market', undefined, true), catalog.res)
     expect(catalog.read().code).toBe(200)
   })
 
@@ -300,8 +300,8 @@ describe('本地写路由的持有性证明(r7c-6)', () => {
     await stubGateway(h)
 
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/skills')(
-      fakeReq('POST', '/api/pico/skills/evil-skill/install'), res)
+    await h.handler('/api/zeokeel/skills')(
+      fakeReq('POST', '/api/zeokeel/skills/evil-skill/install'), res)
     expect(read().code).toBe(503)
     expect(read().body.error).toBe('browser session proof unavailable')
     expect(h.gateway).toEqual([])

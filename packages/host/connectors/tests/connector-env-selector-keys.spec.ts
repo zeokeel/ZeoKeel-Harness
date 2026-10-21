@@ -75,7 +75,7 @@ const HOOK_KEYS = [
 
 /** Denied by a NAMESPACE prefix rather than by an exact key. */
 const PREFIX_HOOK_KEYS = [
-  'DSH_HOME', 'ELECTRON_RUN_AS_NODE', 'PICOAIDE_CONNECTOR_ACCESS_TOKEN',
+  'DSH_HOME', 'ELECTRON_RUN_AS_NODE', 'ZEOKEEL_CONNECTOR_ACCESS_TOKEN',
   'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0',
 ] as const
 
@@ -137,7 +137,7 @@ describe('F-6 — selector env keys are disclosed to the user, not denied', () =
   })
 
   it('shows the selector value in the local confirmation and really hands it to the child (real spawn)', async () => {
-    const base = await tempDir('pico-conn-f6-')
+    const base = await tempDir('zeokeel-conn-f6-')
     const def: ConnectorDef = {
       id: 'pager-cli',
       name: 'Pager CLI',

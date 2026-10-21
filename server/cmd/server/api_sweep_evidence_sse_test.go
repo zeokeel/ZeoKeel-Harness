@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
 )
 
 // 本文件是从 api_sweep_test.go 原样搬来的 SSE 举证（P1 第二片，2026-10-14）。

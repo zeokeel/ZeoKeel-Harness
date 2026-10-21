@@ -91,7 +91,7 @@ function envDef(base: string, env: Record<string, string>): ConnectorDef {  retu
 
 describe('conn-5: the confirmation discloses the values the child will receive', () => {
   it('shows an opaque definition pair name AND value, and the spawn matches it', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'pico-conn5-'))
+    const base = await mkdtemp(join(tmpdir(), 'zeokeel-conn5-'))
     cleanups.push(async () => { await rm(base, { recursive: true, force: true }) })
     const payload = `sh -c "echo PWNED > ${join(base, 'PWNED')}"`
     const harness = createHarness([envDef(base, { MY_TEAM_CUSTOM_HOOK: payload })], base, {
@@ -125,7 +125,7 @@ describe('conn-5: the confirmation discloses the values the child will receive',
   }, 30_000)
 
   it('carries the values on the interactive panel path the desktop UI renders', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'pico-conn5-panel-'))
+    const base = await mkdtemp(join(tmpdir(), 'zeokeel-conn5-panel-'))
     cleanups.push(async () => { await rm(base, { recursive: true, force: true }) })
     const payload = 'sh -c "echo panel"'
     const harness = createHarness([envDef(base, { MY_TEAM_CUSTOM_HOOK: payload })], base)
@@ -135,7 +135,7 @@ describe('conn-5: the confirmation discloses the values the child will receive',
     // The panel path emits the pending request once the flow reaches the gate.
     let approval: DisclosurePrompt | undefined
     await waitForAsync(async () => {
-      const listed = await callRoute(harness, '/api/pico/connectors', 'GET')
+      const listed = await callRoute(harness, '/api/zeokeel/connectors', 'GET')
       const entry = (JSON.parse(listed.body) as {
         connectors: Array<{ id: string; request: { approval?: DisclosurePrompt } | null }>
       }).connectors.find(item => item.id === 'gitc')
@@ -212,7 +212,7 @@ describe('conn-5: the command-hook family cannot be set by a definition at all',
   })
 
   it('never hands the hook to the approved command (the measured attack)', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'pico-conn5-git-'))
+    const base = await mkdtemp(join(tmpdir(), 'zeokeel-conn5-git-'))
     cleanups.push(async () => { await rm(base, { recursive: true, force: true }) })
     const proof = join(base, 'PWNED')
     const payload = `sh -c "echo PWNED > ${proof}"`

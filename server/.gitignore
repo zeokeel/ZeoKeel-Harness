@@ -11,8 +11,8 @@ webadmin/node_modules/
 webadmin/dist/
 *.log
 .DS_Store
-picoaide-data/
-.picoaide-data/
+zeokeel-data/
+.zeokeel-data/
 .worktrees/
 dev-data
 # 点开头变体(2026-09-12):`dev-data` 不匹配 `.dev-data-prod`,而该目录含
@@ -27,7 +27,7 @@ certs/
 deploy-backup/
 caddy-data/
 caddy-config/
-picoaide-data/
+zeokeel-data/
 pg-data/
 *.tar.gz
 # Go 编译产物(误放进 server/ 根时排除)

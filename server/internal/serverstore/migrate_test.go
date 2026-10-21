@@ -191,7 +191,7 @@ func newFreshDB(t *testing.T) *sql.DB {
 		admin.Close()
 		t.Fatalf("parse test dsn: %v", err)
 	}
-	dbName := "picoaide_test_fresh_" + randomSuffix(6)
+	dbName := "zeokeel_test_fresh_" + randomSuffix(6)
 	adminURL := *u
 	adminURL.Path = "/postgres"
 	if _, err := admin.Exec("CREATE DATABASE " + dbName); err != nil {

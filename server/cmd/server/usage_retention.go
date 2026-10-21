@@ -22,8 +22,8 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/usageretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/usageretention"
 )
 
 // newUsageRetentionScheduler 是调度器的装配接缝：生产恒为

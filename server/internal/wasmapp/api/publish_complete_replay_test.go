@@ -15,10 +15,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // 本文件是审计 FW-D §5 与 FW-E §6.2 登记的**两块地面**的判据（2026-10-04，修复代理 P2，服务端 WASM 发布链）：

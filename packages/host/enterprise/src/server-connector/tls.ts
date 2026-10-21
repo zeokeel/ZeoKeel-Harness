@@ -55,13 +55,13 @@ export function defaultTlsStorePath(env: NodeJS.ProcessEnv = process.env): strin
 }
 
 /**
- * 从 PICOAI_TLS_PINS 环境变量导入预置指纹(F13):
- *   PICOAI_TLS_PINS="host:443=hex,other.example=hex"
+ * 从 ZEOKEEL_TLS_PINS 环境变量导入预置指纹(F13):
+ *   ZEOKEEL_TLS_PINS="host:443=hex,other.example=hex"
  * 适用于自签名/私有 CA 的内网服务端:在 Electron 无法走系统信任时,
  * 管理员用带外渠道分发指纹,启动时固定。
  */
 export function applyPinnedFingerprintsFromEnv(storePath: string, env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.PICOAI_TLS_PINS?.trim()
+  const raw = env.ZEOKEEL_TLS_PINS?.trim()
   if (!raw) return 0
   let applied = 0
   for (const entry of raw.split(',')) {

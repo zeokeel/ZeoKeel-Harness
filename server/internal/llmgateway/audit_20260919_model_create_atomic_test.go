@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // mcAtomicCatalog 是渠道同步目录(与 adminTestSetup 的缺省 fetchFn 一致:

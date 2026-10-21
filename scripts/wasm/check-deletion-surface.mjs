@@ -205,8 +205,8 @@ const CAPABILITIES = [
   {
     key: 'legacy-app-origin-env',
     label: '应用 origin / 基域型环境变量名',
-    why: '§8.4 的配置面：PICOAI_*ORIGIN*/BASE_DOMAIN/APPS_DOMAIN 这类"应用对外主机名"开关（PICOAI_TRUSTED_HOSTS 是 OIDC 部署面，不属此列）',
-    test: source => /PICOAI_[A-Z0-9_]*(?:ORIGIN|BASE_DOMAIN|APPS?_DOMAIN)[A-Z0-9_]*/u.test(source),
+    why: '§8.4 的配置面：ZEOKEEL_*ORIGIN*/BASE_DOMAIN/APPS_DOMAIN 这类"应用对外主机名"开关（ZEOKEEL_TRUSTED_HOSTS 是 OIDC 部署面，不属此列）',
+    test: source => /ZEOKEEL_[A-Z0-9_]*(?:ORIGIN|BASE_DOMAIN|APPS?_DOMAIN)[A-Z0-9_]*/u.test(source),
   },
 ]
 // R1：从**入站请求**读 Host；R2：把 Host 当**域名后缀**来切（第二个操作数带 suffix/domain/origin）。

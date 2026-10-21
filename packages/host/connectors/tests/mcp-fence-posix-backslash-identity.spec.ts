@@ -57,7 +57,7 @@ afterEach(() => {
 
 describe('conn-3: POSIX backslash folding no longer merges two different files', () => {
   it('keeps a POSIX filename containing backslashes distinct from the SDK path', () => {
-    const root = mkdtempSync(join(tmpdir(), 'pico-fence-bslash-'))
+    const root = mkdtempSync(join(tmpdir(), 'zeokeel-fence-bslash-'))
     const realDir = join(root, 'a')
     mkdirSync(join(realDir, 'node_modules/@modelcontextprotocol/client/dist'), { recursive: true })
     const realFile = join(realDir, SDK_TAIL)
@@ -93,7 +93,7 @@ describe('conn-3: POSIX backslash folding no longer merges two different files',
   })
 
   it('no longer answers plain "ok" when the backslash-named file is this package side', () => {
-    const root = mkdtempSync(join(tmpdir(), 'pico-fence-bslash-ours-'))
+    const root = mkdtempSync(join(tmpdir(), 'zeokeel-fence-bslash-ours-'))
     const realDir = join(root, 'a')
     mkdirSync(join(realDir, 'node_modules/@modelcontextprotocol/client/dist'), { recursive: true })
     const realFile = join(realDir, SDK_TAIL)
@@ -122,7 +122,7 @@ describe('conn-3: the Windows spellings from the R5 field report still compare e
   })
 
   it('accepts one unreadable app.asar file spelled with an extended-length prefix', () => {
-    const plain = 'C:\\Program Files\\PicoAide Harness\\resources\\app.asar\\node_modules\\@modelcontextprotocol\\client\\dist\\index.mjs'
+    const plain = 'C:\\Program Files\\ZeoKeel Harness\\resources\\app.asar\\node_modules\\@modelcontextprotocol\\client\\dist\\index.mjs'
     // Identical spellings: same file, byte for byte.
     expect(decideMcpTargets(unreadable(plain, true), unreadable(plain, true), true).kind).toBe('ok')
     // One spelling carries the extended-length prefix the packaged app adds.

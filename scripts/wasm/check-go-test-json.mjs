@@ -692,16 +692,16 @@ function syntheticReport(events) {
 
 /** 自检共用的包名。 */
 const ST_PKG = {
-  compile: 'picoaide/server/internal/wasmapp/compile',
+  compile: 'zeokeel/server/internal/wasmapp/compile',
   // 只差一个后缀的**兄弟包**：`includes('…/compile')` 会把它当成 compile（R8-C-11 / A2）。
-  compileHelpers: 'picoaide/server/internal/wasmapp/compilehelpers',
-  skillseed: 'picoaide/server/internal/skillseed',
-  router: 'picoaide/server/internal/router',
+  compileHelpers: 'zeokeel/server/internal/wasmapp/compilehelpers',
+  skillseed: 'zeokeel/server/internal/skillseed',
+  router: 'zeokeel/server/internal/router',
   // 同上：`includes('internal/router')` 会把它当成 router（R8-C-11 / A3）。
-  routerSpoof: 'picoaide/server/thirdparty/internal/routerx',
+  routerSpoof: 'zeokeel/server/thirdparty/internal/routerx',
   // 段内前缀的**范围**形态：`includes('internal/wasmapp')` 会把它算进 --scope（假红）。
-  wasmappLegacy: 'picoaide/server/internal/wasmapp_legacy',
-  appserver: 'picoaide/server/internal/wasmapp/appserver',
+  wasmappLegacy: 'zeokeel/server/internal/wasmapp_legacy',
+  appserver: 'zeokeel/server/internal/wasmapp/appserver',
 }
 /** 自检共用的 `--require` 名单（与合成报告里的 pass 事件对应）。 */
 const ST_REQUIRED = ['TestAlpha', 'TestBeta']
@@ -856,7 +856,7 @@ function selfTest() {
 
   // ⑧ 报告被截断 / 拼接（R8-D-25 / GATE-5b）：旧实现只打"无法解析 1 行"仍 exit 0。
   expectRed('s13-malformed-line-fails',
-    `${healthyReport()}{"Action":"fail","Package":"picoaide/server/internal/`,
+    `${healthyReport()}{"Action":"fail","Package":"zeokeel/server/internal/`,
     '不是合法 JSON')
   //    `skip`/`fail` 缺 `Package` 不是"范围外"，是报告损坏（R8-C-12 / A4）。
   expectRed('s14-skip-without-package-fails',
@@ -903,7 +903,7 @@ function selfTest() {
       ]))
       const truncatedPath = write('truncated.json',
         `${syntheticReport([{ Action: 'pass', Package: ST_PKG.appserver, Test: REQUIRED_CASES[0].test }])}`
-        + '{"Action":"fail","Package":"picoaide/server/internal/')
+        + '{"Action":"fail","Package":"zeokeel/server/internal/')
       const decoyPath = write('decoy.json', syntheticReport([
         ...REQUIRED_CASES.map(rule => ({ Action: 'pass', Package: ST_PKG.router, Test: rule.test })),
         { Action: 'pass', Package: ST_PKG.appserver, Test: 'TestUnrelated' },

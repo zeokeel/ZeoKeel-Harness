@@ -8,7 +8,7 @@
 
 上游 0.2.1 把 `schedule` / `ui-schedule` 从可选 bundle 改为**每个 Web profile 默认装配**，
 `standard`/`cordis`/`ptc` preset 声明四个 `schedule_*` 工具；本仓自研的
-`@picoaide/dsh-cron`（Host 定时器 + 任务面板 + `cron_*` 工具）与它**能力有损地重叠**：
+`@zeokeel/dsh-cron`（Host 定时器 + 任务面板 + `cron_*` 工具）与它**能力有损地重叠**：
 官方是“提醒投递回原会话”，不提供自研 cron 的工作区/预设/权限钉住、独立执行结果与启停；
 但两者 UI 上会出现两个「自动化任务」入口，产品决定替换（损失见
 `docs/planning/2026-09-29-...:111`）。
@@ -16,13 +16,13 @@
 ## 定案
 
 1. **退役自研 cron**：从桌面 profile 的 `REQUIRED_BUNDLES`、`dependencies` 与启动行清单中
-   移除 `@picoaide/dsh-cron` / `pico-cron`。Host 定时器、HTTP 路由、`cron_*` 工具、设置卡、
+   移除 `@zeokeel/dsh-cron` / `zeokeel-cron`。Host 定时器、HTTP 路由、`cron_*` 工具、设置卡、
    右栏任务详情与任务面板不再加载。`packages/host/cron` 源码暂留一个版本（`RETIRED.md`），
    便于对照回滚，不得重新加入组合。
 2. **采用官方 Schedule**：调度、任务存储、`schedule_*` 工具与任务页全部由
    `@deepseek-ai/dsh-schedule` / `dsh-client-ui-schedule` / `dsh-tool-schedule` 提供。
-3. **入口不动位置**：自研 cron 原来在侧栏「更多」浮层的第一位（`picoFootMenu` order `-10`，
-   文案「定时任务」）。现在由 `@picoaide/dsh-foot-menu` 内置一条同 order 的
+3. **入口不动位置**：自研 cron 原来在侧栏「更多」浮层的第一位（`zeokeelFootMenu` order `-10`，
+   文案「定时任务」）。现在由 `@zeokeel/dsh-foot-menu` 内置一条同 order 的
    「自动化任务」条目（`id: schedules`），点击打开官方 `schedules` 面板；浮层里其他四项
    顺序不变。
 4. **避免双入口**：官方在 `sidebar.panellist` 还会渲染一行「自动化任务」。foot-menu 用一个
@@ -77,7 +77,7 @@ foot-menu 的同一个 DOM effect 还负责另外两处官方 chrome：
 
 - skill 的 description / 正文不再出现 “powered by dsh”、DeepSeek 鲸鱼 logo 或上游项目链接；
 - 运行时**惰性**从 `ctx.get('desktopRuntime').productName` 取当前产品/OEM 名（窗口调度后才发布，
-  回退 `PICOAI_PRODUCT_NAME` 环境变量，最后回退 `PicoAide Harness`），生成
+  回退 `ZEOKEEL_PRODUCT_NAME` 环境变量，最后回退 `ZeoKeel Harness`），生成
   `Powered by <OEM>` 的 shields.io 徽章（无 logo、无外链）；
 - 不再引导使用上游 `dsh-badge.png`（该 PNG 含上游鲸鱼标志，本产品不使用），并在
   electron-builder 的 `build.files` 里排除该 PNG，避免它随包分发；`assets/dsh-badge.md`

@@ -52,10 +52,10 @@ function seedPluginSkill(pluginSkills) {
 
 /** 造"已装的插件版"（channel: plugin，x-version 1）。 */
 function seedInstalledPluginSkill(userSkills) {
-  mkdirSync(join(userSkills, NAME, '.picoaide'), { recursive: true })
+  mkdirSync(join(userSkills, NAME, '.zeokeel'), { recursive: true })
   writeFileSync(join(userSkills, NAME, 'SKILL.md'), `---\nname: ${NAME}\ndescription: installed\nx-version: 1\n---\n# INSTALLED-OLD\n`)
   writeFileSync(
-    join(userSkills, NAME, '.picoaide', 'release.json'),
+    join(userSkills, NAME, '.zeokeel', 'release.json'),
     `${JSON.stringify({ appId: NAME, version: '1', channel: 'plugin', installedAt: '2026-09-01T00:00:00.000Z' }, null, 2)}\n`,
   )
 }

@@ -32,7 +32,7 @@ import { join } from 'node:path'
 import { vi } from 'vitest'
 
 /** 进程内共享的空根（内容为空是判据的一部分：跨根残留必须为空）。 */
-const ISOLATED_ROOT = join(tmpdir(), 'pico-test-runtime-skill-roots')
+const ISOLATED_ROOT = join(tmpdir(), 'zeokeel-test-runtime-skill-roots')
 
 /**
  * 把两个**非托管**运行时技能根（agent / bundled）指到确定的空目录。

@@ -3,15 +3,15 @@
  *
  * 本文件的前身是 `client-foot-entry.spec.ts` —— 那时它跑真 `apply` 断言的是
  * **能力中心的底部条目**（id/order/title/activate）与面板装载。能力中心的客户端面
- * 整块搬进 `@picoaide/dsh-capability-center` 之后，那几条断言**逐条搬到了**
+ * 整块搬进 `@zeokeel/dsh-capability-center` 之后，那几条断言**逐条搬到了**
  * `packages/host/capability-center/tests/client-plugin.spec.ts`（一条不少），
  * 本文件改成断言企业包**留下的**那一半，并补上搬迁的**反向不变量**：
  *
  *   - 企业包仍然登记它自己的全部面（字典 / 品牌槽位 / 账号设置页 / favicon /
  *     文档标题 / 品牌样式表）；
  *   - 它**不再**登记能力中心的底部条目、**不再**挂载能力中心面板、**不再**等待
- *     `picoFootMenu`（那条服务只有面板入口需要）；
- *   - 它注入的品牌样式表里**不再**有 `.pico-skill-card`（技能卡样式随面板一起搬走，
+ *     `zeokeelFootMenu`（那条服务只有面板入口需要）；
+ *   - 它注入的品牌样式表里**不再**有 `.zeokeel-skill-card`（技能卡样式随面板一起搬走，
  *     正反两条断言分别在本文件与新包 —— 任一侧多注入/漏注入都会红）。
  *
  * 为什么跑**真 apply** 而不是只读源码：槽位/服务/字典都是在 apply 里内联注册的，
@@ -21,8 +21,8 @@
  * ---- 变异验证 ----
  *   - 把能力中心的条目登记加回本包 ⇒「不登记底部条目」红；
  *   - 删掉账号设置页 / favicon / 品牌槽位任一条 effect ⇒ 对应那条红；
- *   - 把 `.pico-skill-card` 规则抄回品牌样式表 ⇒「品牌样式表里没有技能卡规则」红；
- *   - 把 `picoFootMenu` 写回硬 `inject` ⇒「不再等待 picoFootMenu」红。
+ *   - 把 `.zeokeel-skill-card` 规则抄回品牌样式表 ⇒「品牌样式表里没有技能卡规则」红；
+ *   - 把 `zeokeelFootMenu` 写回硬 `inject` ⇒「不再等待 zeokeelFootMenu」红。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -84,7 +84,7 @@ function harness(): Harness {
       inject: (slot: string, run: () => unknown) => { slots.push(slot); run(); return () => {} },
       register: () => () => {},
     },
-    picoFootMenu: {
+    zeokeelFootMenu: {
       add: (entry: RegisteredFootEntry) => {
         footEntries.push(entry)
         return () => {}
@@ -103,7 +103,7 @@ function harness(): Harness {
  * ⚠️ `head.appendChild` 必须**留存节点引用**而不是当场读 `node.textContent`：
  * `paintBrandStyle()` 的顺序是 `createElement('style')` → `appendChild` → **之后**才写
  * `textContent = brandCss(...)`。当场读值会把空串记下来，样式表判据就变成"对空串断言"
- * —— `not.toContain('pico-skill-card')` 这种否定断言会**假绿**（本文件那两条
+ * —— `not.toContain('zeokeel-skill-card')` 这种否定断言会**假绿**（本文件那两条
  * `toContain('class$="_footerActions"')` 正向锚点正是为了钉死这一点）。
  */
 function stubDom(h: Harness): void {
@@ -167,9 +167,9 @@ describe('企业客户端半边：留下来的那一半接线', () => {
     expect(h.effects.some(label => label.includes('skill card'))).toBe(false)
   })
 
-  it('不再等 picoFootMenu（那条服务只有面板入口需要）', async () => {
+  it('不再等 zeokeelFootMenu（那条服务只有面板入口需要）', async () => {
     const { h, inject } = await run()
-    expect(inject).not.toContain('picoFootMenu')
+    expect(inject).not.toContain('zeokeelFootMenu')
     expect(h.serviceWaits).toEqual([])
   })
 
@@ -184,12 +184,12 @@ describe('企业客户端半边：留下来的那一半接线', () => {
     expect(entry.keys).toContain('hero.tagline')
   })
 
-  it('品牌样式表里没有技能卡规则（`.pico-skill-card` 随面板注入）', async () => {
+  it('品牌样式表里没有技能卡规则（`.zeokeel-skill-card` 随面板注入）', async () => {
     const { h } = await run()
     const css = h.styles.join('\n')
     expect(css).toContain('class$="_footerActions"')
     expect(css).toContain('class$="_previewBadge"')
-    expect(css).not.toContain('pico-skill-card')
+    expect(css).not.toContain('zeokeel-skill-card')
   })
 
   it('企业自己的面仍然全部登记（搬迁不许把它们带走）', async () => {

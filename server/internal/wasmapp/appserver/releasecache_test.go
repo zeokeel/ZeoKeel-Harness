@@ -76,11 +76,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
-	"github.com/picoaide/picoaide/internal/wasmapp/queue"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 )
 
 // getWithETag 发一个带 If-None-Match 的客户端 GET（默认注入身份）。
@@ -530,7 +530,7 @@ func TestReleaseCache_ConfigIsCachedPerRelease(t *testing.T) {
 // 口径变化（2026-09-20）：配置不再来自宿主盘上可被删掉/改坏的文件，而是随版本不可变的
 // 库内 `config_json`（随资源集注入）—— 所以"暖缓存下被外部改坏"这条路径消失了，
 // 对应的 TTL 复验与用例一起删除。但"不缓存失败"仍然有意义：一个版本可能**根本没有配置**
-// （`config_json` 为空 ⇒ 资源集里没有 `picoaide.app.json`），它随新版本/资源集重建可以改变；
+// （`config_json` 为空 ⇒ 资源集里没有 `zeokeel.app.json`），它随新版本/资源集重建可以改变；
 // 把失败记进缓存会让这次故障被固化（之后每个请求都命中那份失败记录）。
 //
 // 判据：两次请求都必须 500（fail-loud，绝不按匿名放行），且 CfgMisses 每次都 +1。
@@ -670,7 +670,7 @@ func TestStatic_NotModifiedHeadersMatch200Exactly(t *testing.T) {
 // 判据（行为级，guest 真的发起宿主调用 —— echoapp 的 `/asset-probe` 分支）：
 //   - 静态面 `GET /static/app.css` 拿到资源字节；
 //   - 应用面 `GET /asset-probe?path=static/app.css` 拿到同一份字节与 content-type/大小；
-//   - `/asset-probe?path=picoaide.app.json` 拿到配置原文（保留资源永不直出，但应用读得到）；
+//   - `/asset-probe?path=zeokeel.app.json` 拿到配置原文（保留资源永不直出，但应用读得到）；
 //   - 不存在的路径必须原样回 `NOT_FOUND`（不是 500、也不是"空成功"）。
 func TestStatic_AssetsReadUsesMemorySet(t *testing.T) {
 	e := newEnv(t)
@@ -717,14 +717,14 @@ func TestStatic_AssetsReadUsesMemorySet(t *testing.T) {
 		t.Fatalf("size 应为 %d，得到 %v", len(css), got)
 	}
 
-	// 保留资源：`picoaide.app.json` 宿主**永不直出**（见 static.go 的 isReservedAsset）
+	// 保留资源：`zeokeel.app.json` 宿主**永不直出**（见 static.go 的 isReservedAsset）
 	// —— 请求会交给 wasm，因此判据是"响应体里没有配置内容"（而不是状态码：
 	// 应用自己可以对这个路径回任何东西）。但应用用 assets.read 读得到，
 	// 且读到的就是宿主判准入用的那份库内 config_json。
-	if rec := e.get(appID, "/picoaide.app.json"); strings.Contains(rec.Body.String(), "data_sensitivity") {
+	if rec := e.get(appID, "/zeokeel.app.json"); strings.Contains(rec.Body.String(), "data_sensitivity") {
 		t.Fatalf("保留资源不得由宿主直出（响应体里出现了配置内容）：%d %q", rec.Code, rec.Body.String())
 	}
-	_, body = readAsset("picoaide.app.json")
+	_, body = readAsset("zeokeel.app.json")
 	res = assertResult(t, body)
 	if got := res["text"]; got != cfg {
 		t.Fatalf("应用读到的配置必须与宿主判准入用的同一份（库内 config_json）：%v", got)

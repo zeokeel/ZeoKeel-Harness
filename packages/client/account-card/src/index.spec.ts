@@ -25,7 +25,7 @@ function request(partial: {
   if (partial.cookie !== undefined) headers.cookie = partial.cookie
   return {
     method: partial.method ?? 'GET',
-    url: partial.url ?? '/api/pico/account/usage',
+    url: partial.url ?? '/api/zeokeel/account/usage',
     headers,
     socket: { remoteAddress: partial.remoteAddress ?? '127.0.0.1' },
   } as unknown as IncomingMessage
@@ -86,7 +86,7 @@ function ctxFixture(
   const fence = browserFence()
   return {
     ctx: {
-      picoSession: { getSession: () => session, clear, clearIfCurrent },
+      zeokeelSession: { getSession: () => session, clear, clearIfCurrent },
       // FIX-42②：持有性证明的 fence 来源。`{ fence: false }` = 服务缺席
       // （fail-closed 503 的那条腿）。
       get: (name: string) => (name === 'connection' && options.fence !== false ? fence : undefined),
@@ -161,10 +161,10 @@ describe('account-card host apply', () => {
     // First a session login — the service is created inside apply; the
     // refresh path is debounced (300ms default), so we only assert the
     // clear-on-logout behavior observable through the snapshot shape.
-    emit('pico/session-changed', null)
+    emit('zeokeel/session-changed', null)
     emit('agent/status', { status: 'idle' })
     // No throw is the contract here; detailed coalescing lives in usage-service.test.ts.
-    expect(ctx.on).toHaveBeenCalledWith('pico/session-changed', expect.any(Function))
+    expect(ctx.on).toHaveBeenCalledWith('zeokeel/session-changed', expect.any(Function))
     expect(ctx.on).toHaveBeenCalledWith('agent/status', expect.any(Function))
   })
 
@@ -182,7 +182,7 @@ describe('account-card host apply', () => {
       const res = response()
       await getRoute().handler(
         request({
-          url: '/api/pico/account/usage?refresh=1',
+          url: '/api/zeokeel/account/usage?refresh=1',
           host: AUTHORITY,
           origin: `http://${AUTHORITY}`,
           cookie: proofCookie(),
@@ -214,7 +214,7 @@ describe('account-card host apply', () => {
       const res = response()
       // 伪造 Origin（同源标记满足）+ 无 cookie —— 修前实测 status=200 / gatewayCalls=1。
       await getRoute().handler(
-        request({ url: '/api/pico/account/usage?refresh=1', host: AUTHORITY, origin: `http://${AUTHORITY}` }),
+        request({ url: '/api/zeokeel/account/usage?refresh=1', host: AUTHORITY, origin: `http://${AUTHORITY}` }),
         res,
       )
       expect(res.statusCode, '缺证明的消费型 GET 必须被拒').toBe(403)
@@ -244,7 +244,7 @@ describe('account-card host apply', () => {
       const res = response()
       await getRoute().handler(
         request({
-          url: '/api/pico/account/usage?refresh=1',
+          url: '/api/zeokeel/account/usage?refresh=1',
           host: AUTHORITY,
           origin: `http://${AUTHORITY}`,
           cookie: proofCookie(),
@@ -285,7 +285,7 @@ describe('account-card host apply', () => {
       const res = response()
       await getRoute().handler(
         request({
-          url: '/api/pico/account/usage?refresh=1',
+          url: '/api/zeokeel/account/usage?refresh=1',
           host: AUTHORITY,
           origin: `http://${AUTHORITY}`,
           cookie: proofCookie(),

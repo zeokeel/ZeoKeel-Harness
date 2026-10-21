@@ -27,7 +27,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { PANEL_ACTIVE_ATTR, PANEL_SURFACE_ATTR, mountPanelSurface, type PanelSurfaceHandle } from '@picoaide/dsh-panel-surface/client'
+import { PANEL_ACTIVE_ATTR, PANEL_SURFACE_ATTR, mountPanelSurface, type PanelSurfaceHandle } from '@zeokeel/dsh-panel-surface/client'
 import { createFootMenuService, installFootMenu, type FootMenuService } from '../src/client/contract.ts'
 import { FootMenuRow } from '../src/client/FootMenuRow.tsx'
 import { setActiveLocale } from '../src/client/locales.ts'
@@ -39,7 +39,7 @@ let column: HTMLDivElement
 let root: Root
 let surface: PanelSurfaceHandle
 
-const row = (): HTMLButtonElement => document.querySelector<HTMLButtonElement>('.pico-foot-menu-trigger')!
+const row = (): HTMLButtonElement => document.querySelector<HTMLButtonElement>('.zeokeel-foot-menu-trigger')!
 const menu = (): HTMLDivElement => document.querySelector<HTMLDivElement>('[role="menu"]')!
 const items = (): HTMLButtonElement[] => [...menu().querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
 const panelContainer = (): HTMLDivElement => column.querySelector<HTMLDivElement>(`[${PANEL_SURFACE_ATTR}="cron"]`)!

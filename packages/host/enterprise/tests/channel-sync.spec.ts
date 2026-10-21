@@ -83,12 +83,12 @@ describe('channel-sync built-in brand (未登录/服务端不可达时的显示�
         return () => { sessionListeners.delete(listener) }
       },
       emit: (event: string, payload: unknown) => {
-        expect(event).toBe('pico/channel-changed')
+        expect(event).toBe('zeokeel/channel-changed')
         emitted.push(payload)
       },
       // subscribeSession 会用 isRestored() 判断"启动时那次事件是否已经错过"。
       // 不传 restored = 恢复还在进行（事件随后必到，补发不该发生）。
-      picoSession: { isRestored: () => restored !== undefined, getSession: () => restored ?? null },
+      zeokeelSession: { isRestored: () => restored !== undefined, getSession: () => restored ?? null },
     } as unknown as Context
     return {
       ctx,
@@ -111,7 +111,7 @@ describe('channel-sync built-in brand (未登录/服务端不可达时的显示�
     emitSession(null)
     await Promise.resolve()
     expect(emitted).toEqual([brandChannel(BRAND)])
-    expect(JSON.stringify(emitted)).not.toContain('PicoAide')
+    expect(JSON.stringify(emitted)).not.toContain('ZeoKeel')
   })
 
   it('keeps the official built-in content when no channel brand is injected', async () => {
@@ -228,10 +228,10 @@ describe('会话代际守卫（Z2-01）：迟到的渠道内容不得改写当�
         return () => { listeners.delete(listener) }
       },
       emit: (event: string, payload: unknown) => {
-        expect(event).toBe('pico/channel-changed')
+        expect(event).toBe('zeokeel/channel-changed')
         emitted.push(payload)
       },
-      picoSession: { isRestored: () => false, getSession: () => null },
+      zeokeelSession: { isRestored: () => false, getSession: () => null },
     } as unknown as Context
     return { ctx, emitted, emitSession: (s) => { for (const l of [...listeners]) l(s) } }
   }

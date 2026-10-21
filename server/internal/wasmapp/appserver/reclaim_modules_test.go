@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 本文件是"更快释放"三条路径的回归：①空闲 TTL 淘汰（sweep）

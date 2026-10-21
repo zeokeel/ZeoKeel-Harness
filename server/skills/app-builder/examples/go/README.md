@@ -15,7 +15,7 @@
 | `web/index.html` | 页面结构（只放结构，脚本外链 `/static/app.js`） |
 | `web/app.css` | 样式（包内，外部 CDN 加载不到） |
 | `web/app.js` | 取数与渲染、三态切换、客户端 AI loop 调用 |
-| `picoaide.app.json` | 随包配置（`access` / `whitelist` / `purpose` / `data_sensitivity` / `owner`；字段规格见 `references/app-config.md`） |
+| `zeokeel.app.json` | 随包配置（`access` / `whitelist` / `purpose` / `data_sensitivity` / `owner`；字段规格见 `references/app-config.md`） |
 | `go.mod` | 独立模块（示例不依赖平台内部包，作者拿到的就是这一份） |
 | `preview.mjs` | 本地假宿主：用 Node 自带的 `node:wasi` + `node:sqlite` 把应用跑起来（零外部依赖；数据落本地库，`--dump-tables` 可看） |
 
@@ -56,11 +56,11 @@ node preview.mjs --selftest                                                # 自
 - **前后端分离**：`web/` 是页面，`main.go` 只回 JSON；入口 `/` 由 wasm 答（它要先判名单），
   `/static/*` 由宿主直出（不执行 wasm）。
 - **每个请求都重新读身份**：实例每请求新建，全局变量存不住东西。
-- **入口先读配置再判名单**：`assets.read("picoaide.app.json")` + `whitelist` 比对；
+- **入口先读配置再判名单**：`assets.read("zeokeel.app.json")` + `whitelist` 比对；
   无权限页**显示本人账号**，这是作者发现名单拼错的唯一途径。
 - **建表只用 `db.define`**（幂等）；SQL 只有 `SELECT` / `INSERT` / `UPDATE` / `DELETE`，
   一次一条、值全部参数化；**不碰平台保留列 `_row_id` 及其别名 `rowid`/`_rowid_`/`oid`**。
-- **AI 不在 wasm 里**：页面经 `POST /__picoaide/ai/chat` 调客户端 AI loop（流式），
+- **AI 不在 wasm 里**：页面经 `POST /__zeokeel/ai/chat` 调客户端 AI loop（流式），
   结果再回传 `/api/summaries` 落库；本示例的 wasm 侧不含 AI。提示词由 wasm 拼好并截断
   （`/api/ai-prompt`），因为桥对单条消息有 16 KiB 上限。
 - **失败一律 JSON 信封**：`{"error":{"code","message"}}`，页面把 `message` 显示给人、
@@ -74,7 +74,7 @@ node preview.mjs --selftest                                                # 自
 
 ## 改成你自己的应用
 
-1. 改 `picoaide.app.json`：`access`（写侧只有 `login` 登录后全员 / `whitelist` 只给名单里的人；
+1. 改 `zeokeel.app.json`：`access`（写侧只有 `login` 登录后全员 / `whitelist` 只给名单里的人；
    历史 `public` 读取侧按 `login` 处理、新版本不要再写）、
    `purpose`（标题）/ `whitelist`（账号名单）/ `owner`。
 2. 改表结构：`defineSchema` 里的列（最多 16 列；一个应用最多 16 张表）。

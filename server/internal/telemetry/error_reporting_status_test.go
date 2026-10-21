@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 const errorReportingPath = "/api/client/v2/telemetry/error-reporting"
@@ -38,7 +38,7 @@ func TestReportErrorReportingStatus(t *testing.T) {
 	r, db, token := newTestEnv(t)
 
 	w := post(r, token, errorReportingPath,
-		`{"state":"ready","dsn_host":"glitchtip.example.com","level":"error","release":"picoaide-desktop@2.4.0"}`)
+		`{"state":"ready","dsn_host":"glitchtip.example.com","level":"error","release":"zeokeel-desktop@2.4.0"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("ready report = %d %s", w.Code, w.Body.String())
 	}
@@ -52,13 +52,13 @@ func TestReportErrorReportingStatus(t *testing.T) {
 	}
 	got := rows[0]
 	if got.Username != "alice" || got.State != serverstore.ErrorReportingStateReady ||
-		got.DSNHost != "glitchtip.example.com" || got.Level != "error" || got.Release != "picoaide-desktop@2.4.0" {
+		got.DSNHost != "glitchtip.example.com" || got.Level != "error" || got.Release != "zeokeel-desktop@2.4.0" {
 		t.Fatalf("persisted row mismatch: %+v", got)
 	}
 
 	// 状态变化 = 覆盖同一行(客户端失败后重报 failed)。
 	w = post(r, token, errorReportingPath,
-		`{"state":"failed","reason":"init failed: invalid DSN","dsn_host":"glitchtip.example.com:8000","level":"error","release":"picoaide-desktop@2.4.0"}`)
+		`{"state":"failed","reason":"init failed: invalid DSN","dsn_host":"glitchtip.example.com:8000","level":"error","release":"zeokeel-desktop@2.4.0"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("failed report = %d %s", w.Code, w.Body.String())
 	}

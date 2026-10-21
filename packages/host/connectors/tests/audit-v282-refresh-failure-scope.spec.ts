@@ -166,7 +166,7 @@ interface Row {
 
 /** The connector row as the panel sees it (the plugin's own list route = 2 s poll source). */
 async function rowOf(h: Harness): Promise<Row> {
-  const body = JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as { connectors: Row[] }
+  const body = JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as { connectors: Row[] }
   return body.connectors.find(entry => entry.id === ID) as Row
 }
 
@@ -227,7 +227,7 @@ async function refreshInFlightAcrossSwitch(
   expect((await rowOf(h)).status, '前置：A 的行是 connected').toBe('connected')
 
   // A forced refresh leaves for the IdP and is parked there.
-  const failure = callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+  const failure = callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
   await waitFor(() => idp.hits() === 1, 15_000)
 
   // The session moves to B while that refresh is still unanswered (the panel
@@ -270,7 +270,7 @@ describe('C3-04 残余：刷新失败判决的行投影必须带账号作用域'
     await waitFor(() => h.configs.length === 1, 15_000)
     expect((await rowOf(h)).status, '前置：行是 connected').toBe('connected')
 
-    const failure = callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+    const failure = callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
     await waitFor(() => idp.hits() === 1, 15_000)
     idp.release()
     const res = await failure

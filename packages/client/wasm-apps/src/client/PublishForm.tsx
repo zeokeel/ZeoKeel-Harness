@@ -31,7 +31,7 @@ import {
  * 持有 `dsh-auth-*` 持有性证明，不需要任何新的信任机制）。
  *
  * 三条纪律：
- *  - **不复制编排**：只 `POST /api/pico/apps/wasm/publish`；`base64 > 8 MiB` 的分片与
+ *  - **不复制编排**：只 `POST /api/zeokeel/apps/wasm/publish`；`base64 > 8 MiB` 的分片与
  *    续传由宿主那一份实现负责（面板不自己切、也不加"小文件直传"的第二条路）；
  *  - **不显示额度/用量**（R36）：这一页只有产物与版本信息；
  *  - **失败必须可见**：服务端 `code`/`message`/`details`/`hints` 原样显示 —— 只显示
@@ -40,7 +40,7 @@ import {
  * 状态：没有假进度条（服务端 publish 是**同步**的），只有"读取中 → 上传/编译中 →
  * 成功/失败"四个真实状态；进行中可取消（AbortController）。
  *
- * @module @picoaide/dsh-wasm-apps/client/PublishForm
+ * @module @zeokeel/dsh-wasm-apps/client/PublishForm
  */
 
 const FIELD: React.CSSProperties = {
@@ -529,7 +529,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
   }, [busy, onClose])
 
   return (
-    <div className="pico-app-center-publish-form" data-view="publish">
+    <div className="zeokeel-app-center-publish-form" data-view="publish">
       <p style={{ ...LABEL, marginTop: 0 }}>{t('appCenter.publishHint')}</p>
 
       {/*
@@ -549,11 +549,11 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
       )}
 
       <div style={FIELD}>
-        <label style={LABEL} htmlFor="pico-publish-file">{t('appCenter.file')}</label>
+        <label style={LABEL} htmlFor="zeokeel-publish-file">{t('appCenter.file')}</label>
         <div style={ROW}>
           <input
-            id="pico-publish-file"
-            className="pico-app-center-file"
+            id="zeokeel-publish-file"
+            className="zeokeel-app-center-file"
             data-field="wasm_file"
             type="file"
             accept=".wasm,application/wasm"
@@ -575,10 +575,10 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
       </div>
 
       <div style={FIELD}>
-        <label style={LABEL} htmlFor="pico-publish-app-id">{t('appCenter.appId')}</label>
+        <label style={LABEL} htmlFor="zeokeel-publish-app-id">{t('appCenter.appId')}</label>
         <input
-          id="pico-publish-app-id"
-          className="pico-app-center-app-id"
+          id="zeokeel-publish-app-id"
+          className="zeokeel-app-center-app-id"
           data-field="app_id"
           style={INPUT}
           value={appId}
@@ -602,10 +602,10 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
       </div>
 
       <div style={FIELD}>
-        <label style={LABEL} htmlFor="pico-publish-version">{t('appCenter.version')}</label>
+        <label style={LABEL} htmlFor="zeokeel-publish-version">{t('appCenter.version')}</label>
         <input
-          id="pico-publish-version"
-          className="pico-app-center-version"
+          id="zeokeel-publish-version"
+          className="zeokeel-app-center-version"
           data-field="version"
           style={INPUT}
           value={version}
@@ -616,13 +616,13 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
       </div>
 
       <div style={FIELD}>
-        <label style={LABEL} htmlFor="pico-publish-title">
+        <label style={LABEL} htmlFor="zeokeel-publish-title">
           {t('appCenter.titleField')}
           <span style={REQUIRED_MARK}>{t('appCenter.requiredTitle')}</span>
         </label>
         <input
-          id="pico-publish-title"
-          className="pico-app-center-title"
+          id="zeokeel-publish-title"
+          className="zeokeel-app-center-title"
           data-field="title"
           style={INPUT}
           value={title}
@@ -633,10 +633,10 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
       </div>
 
       <div style={FIELD}>
-        <label style={LABEL} htmlFor="pico-publish-changelog">{t('appCenter.changelog')}</label>
+        <label style={LABEL} htmlFor="zeokeel-publish-changelog">{t('appCenter.changelog')}</label>
         <textarea
-          id="pico-publish-changelog"
-          className="pico-app-center-changelog"
+          id="zeokeel-publish-changelog"
+          className="zeokeel-app-center-changelog"
           data-field="changelog"
           style={TEXTAREA}
           value={changelog}
@@ -658,12 +658,12 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
             <div key={mode} style={ACCESS_OPTION}>
               <div style={{ ...ROW, marginBottom: 0 }}>
                 <input
-                  id={`pico-publish-access-${mode}`}
-                  className={`pico-app-center-access-${mode}`}
+                  id={`zeokeel-publish-access-${mode}`}
+                  className={`zeokeel-app-center-access-${mode}`}
                   data-field="access"
                   data-access={mode}
                   type="radio"
-                  name="pico-publish-access"
+                  name="zeokeel-publish-access"
                   value={mode}
                   checked={access === mode}
                   disabled={busy}
@@ -671,7 +671,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
                   // 用户确认的是那一对**具体取值**，不是"随便改点什么"。
                   onChange={() => { setAccess(mode); setAccessConfirmed(false) }}
                 />
-                <label style={LABEL} htmlFor={`pico-publish-access-${mode}`}>{t(ACCESS_LABEL_KEYS[mode])}</label>
+                <label style={LABEL} htmlFor={`zeokeel-publish-access-${mode}`}>{t(ACCESS_LABEL_KEYS[mode])}</label>
               </div>
               <p style={ACCESS_HINT} data-role={`access-hint-${mode}`}>{t(ACCESS_HINT_KEYS[mode])}</p>
             </div>
@@ -690,7 +690,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
             </div>
             <label style={{ ...LABEL, display: 'flex', alignItems: 'center', gap: 6 }}>
               <input
-                className="pico-app-center-access-confirm"
+                className="zeokeel-app-center-access-confirm"
                 data-role="access-change-confirm"
                 type="checkbox"
                 checked={accessConfirmed}
@@ -708,13 +708,13 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
         */}
         {access === 'whitelist' && (
           <div style={{ ...FIELD, marginTop: 10, marginBottom: 0 }}>
-            <label style={LABEL} htmlFor="pico-publish-whitelist">
+            <label style={LABEL} htmlFor="zeokeel-publish-whitelist">
               {t('appCenter.whitelist')}
               <span style={REQUIRED_MARK}>{t('appCenter.whitelistRequired')}</span>
             </label>
             <input
-              id="pico-publish-whitelist"
-              className="pico-app-center-whitelist"
+              id="zeokeel-publish-whitelist"
+              className="zeokeel-app-center-whitelist"
               data-field="whitelist"
               style={INPUT}
               value={whitelistText}
@@ -730,7 +730,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
 
         <div style={{ ...ROW, marginTop: 10 }}>
           <input
-            className="pico-app-center-purpose"
+            className="zeokeel-app-center-purpose"
             data-field="purpose"
             style={INPUT}
             value={purpose}
@@ -740,7 +740,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
             onChange={event => { setPurpose(event.target.value) }}
           />
           <input
-            className="pico-app-center-data-sensitivity"
+            className="zeokeel-app-center-data-sensitivity"
             data-field="data_sensitivity"
             style={INPUT}
             value={dataSensitivity}
@@ -750,7 +750,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
             onChange={event => { setDataSensitivity(event.target.value) }}
           />
           <input
-            className="pico-app-center-owner"
+            className="zeokeel-app-center-owner"
             data-field="owner"
             style={INPUT}
             value={owner}
@@ -776,7 +776,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
         */}
         <div style={{ ...ROW, marginTop: 10 }}>
           <input
-            className="pico-app-center-window-ratio"
+            className="zeokeel-app-center-window-ratio"
             data-field="window.ratio"
             style={INPUT}
             value={windowRatioText}
@@ -786,7 +786,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
             onChange={event => { setWindowRatioText(event.target.value) }}
           />
           <input
-            className="pico-app-center-window-width"
+            className="zeokeel-app-center-window-width"
             data-field="window.width"
             style={INPUT}
             value={windowWidthText}
@@ -796,7 +796,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
             onChange={event => { setWindowWidthText(event.target.value) }}
           />
           <input
-            className="pico-app-center-window-height"
+            className="zeokeel-app-center-window-height"
             data-field="window.height"
             style={INPUT}
             value={windowHeightText}
@@ -831,7 +831,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
       <div style={{ ...ROW, marginTop: 12, marginBottom: 0 }}>
         <button
           type="button"
-          className="pico-app-center-submit"
+          className="zeokeel-app-center-submit"
           data-action="publish-submit"
           style={{ ...PRIMARY, ...(busy ? { opacity: 0.6 } : {}) }}
           disabled={busy}
@@ -841,7 +841,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
         </button>
         <button
           type="button"
-          className="pico-app-center-cancel"
+          className="zeokeel-app-center-cancel"
           data-action="publish-cancel"
           style={BUTTON}
           onClick={cancel}
@@ -851,7 +851,7 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
         {state.kind === 'done' && (
           <button
             type="button"
-            className="pico-app-center-back-to-list"
+            className="zeokeel-app-center-back-to-list"
             data-action="back-to-list"
             style={BUTTON}
             onClick={onClose}

@@ -88,7 +88,7 @@ interface SysInfo {
       at: string
     } | null
   }
-  // 2026-09-10: 实时版本检查(服务端代理我方更新服务器 release.picoaide.com;
+  // 2026-09-10: 实时版本检查(服务端代理我方更新服务器 release.zeokeel.com;
   // 失败为 null 静默降级)。更新源已从 GitHub Releases 迁到 R2 静态 manifest。
   update_check?: {
     current: string

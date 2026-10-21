@@ -67,15 +67,15 @@ const MODULE_PAGE_IMPORTS: Readonly<Record<FeatureModule, readonly string[]>> = 
 }
 
 /**
- * **期望**：每个模块的哨兵串（§P0 §6 的 `picoaide.feature.<module>.v1`）。
+ * **期望**：每个模块的哨兵串（§P0 §6 的 `zeokeel.feature.<module>.v1`）。
  *
  * 同样手写：哨兵串是跨面契约（Go `-tags` / 渠道 `features` / webadmin 三处同一个串），
  * 从模块名拼出来就等于把"命名规则变了"这件事变成判据自己跟着变 —— 串必须有人写下来。
  */
 const MODULE_SENTINELS: Readonly<Record<FeatureModule, string>> = {
-  skills: 'picoaide.feature.skills.v1',
-  apps: 'picoaide.feature.apps.v1',
-  connectors: 'picoaide.feature.connectors.v1',
+  skills: 'zeokeel.feature.skills.v1',
+  apps: 'zeokeel.feature.apps.v1',
+  connectors: 'zeokeel.feature.connectors.v1',
 }
 
 /** webadmin 包根（`src/App.tsx` 的上一级）。图判据与页表都用它做基准。 */

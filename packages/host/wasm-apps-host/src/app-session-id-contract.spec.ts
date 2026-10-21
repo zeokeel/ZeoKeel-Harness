@@ -78,7 +78,7 @@ interface AppSessionIDContract {
 /** 读契约（**必须存在**：缺失即失败，不是跳过 —— 静默跳过等于把这条判据关掉）。 */
 function contract(): AppSessionIDContract {
   const parsed = JSON.parse(readFileSync(CONTRACT, 'utf8')) as AppSessionIDContract
-  expect(parsed.schema, `契约版本换了就必须有人来对齐两端（${CONTRACT}）`).toBe('picoaide-app-session-id/1')
+  expect(parsed.schema, `契约版本换了就必须有人来对齐两端（${CONTRACT}）`).toBe('zeokeel-app-session-id/1')
   return parsed
 }
 

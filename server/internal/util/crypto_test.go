@@ -102,7 +102,7 @@ func TestEnsureMasterKeyFile(t *testing.T) {
 
 func TestEnsureMasterKeyEnv(t *testing.T) {
 	envKey := "0123456789abcdef0123456789abcdef" // 32 bytes
-	t.Setenv("PICOAI_MASTER_KEY", envKey)
+	t.Setenv("ZEOKEEL_MASTER_KEY", envKey)
 	dir := t.TempDir()
 	key, err := EnsureMasterKey(dir)
 	if err != nil || string(key) != envKey {
@@ -116,7 +116,7 @@ func TestEnsureMasterKeyEnv(t *testing.T) {
 		t.Fatalf("GetMasterKey env = %q, %v", got, err)
 	}
 
-	t.Setenv("PICOAI_MASTER_KEY", "short")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "short")
 	if _, err := EnsureMasterKey(t.TempDir()); err == nil {
 		t.Fatal("invalid env key length accepted")
 	}

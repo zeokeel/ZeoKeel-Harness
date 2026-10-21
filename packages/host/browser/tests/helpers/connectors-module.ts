@@ -1,5 +1,5 @@
 /**
- * 连接器包（`@picoaide/dsh-connectors`）在测试里的**唯一**取用点（2026-10-13）。
+ * 连接器包（`@zeokeel/dsh-connectors`）在测试里的**唯一**取用点（2026-10-13）。
  *
  * ## 为什么需要一个 helper
  *
@@ -41,11 +41,11 @@ export const connectorsPackagePresent: boolean = existsSync(
  * `null` 时调用点**不得**真的去用它：`import()` 被跳过了，所以这里也不会抛；
  * 调用点都写在 `describe.skipIf(!connectorsPackagePresent)` 里。
  */
-export const connectorStoreModule: typeof import('@picoaide/dsh-connectors/store') | null =
-  connectorsPackagePresent ? await import('@picoaide/dsh-connectors/store') : null
+export const connectorStoreModule: typeof import('@zeokeel/dsh-connectors/store') | null =
+  connectorsPackagePresent ? await import('@zeokeel/dsh-connectors/store') : null
 
 /**
  * 真 user-scope 模块（作用域布局的唯一真源），或 `null`（包不在检出里）。
  */
-export const connectorUserScopeModule: typeof import('@picoaide/dsh-connectors/user-scope') | null =
-  connectorsPackagePresent ? await import('@picoaide/dsh-connectors/user-scope') : null
+export const connectorUserScopeModule: typeof import('@zeokeel/dsh-connectors/user-scope') | null =
+  connectorsPackagePresent ? await import('@zeokeel/dsh-connectors/user-scope') : null

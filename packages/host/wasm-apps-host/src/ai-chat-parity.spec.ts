@@ -10,7 +10,7 @@
  * 判据（与 `header-spec-parity.spec.ts` 同一写法）：**读对方源码**，逐字比较常量值，
  * 而不是各用各的夹具。
  *
- * 变异验证：把 `ai-chat.ts` 的 `AI_CHAT_PATH` 改成单下划线 `/_picoaide/ai/chat`（§22.1
+ * 变异验证：把 `ai-chat.ts` 的 `AI_CHAT_PATH` 改成单下划线 `/_zeokeel/ai/chat`（§22.1
  * 曾写错的那个形态）⇒ 本用例必红；把客户端常量改成别的路径 ⇒ 必红。
  */
 import { readFileSync } from 'node:fs'
@@ -49,8 +49,8 @@ describe('AI 桥保留路径：客户端真源逐字对拍（L7 §五② / J6）
   })
 
   it('保留路径是双下划线形态（§21.2 冻结；单下划线是文档里已被订正过的错写）', () => {
-    expect(AI_CHAT_PATH).toBe('/__picoaide/ai/chat')
-    expect(AI_CHAT_PATH.startsWith('/__picoaide/')).toBe(true)
+    expect(AI_CHAT_PATH).toBe('/__zeokeel/ai/chat')
+    expect(AI_CHAT_PATH.startsWith('/__zeokeel/')).toBe(true)
   })
 
   it('上下限两端一致（条数 64 / 单条 16 KiB）', () => {
@@ -61,7 +61,7 @@ describe('AI 桥保留路径：客户端真源逐字对拍（L7 §五② / J6）
 
   it('隐藏会话前缀两端一致（客户端注释/文档都按同一前缀描述）', () => {
     // 客户端半边不构造会话 id（那是宿主的事），但它把形状写进了契约注释；这里钉住
-    // 宿主值本身，防止"文档写 app:、实现写 pico-app:"这类漂移。形状的**权威**对拍在
+    // 宿主值本身，防止"文档写 app:、实现写 zeokeel-app:"这类漂移。形状的**权威**对拍在
     // `app-session-id-contract.spec.ts`（与服务端 app-session-id.json 同一份语料）。
     expect(AI_HIDDEN_SESSION_PREFIX).toBe('app:')
     expect(clientSource()).toContain('app:<app_id>')

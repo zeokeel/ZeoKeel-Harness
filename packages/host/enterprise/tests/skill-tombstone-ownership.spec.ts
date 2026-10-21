@@ -67,7 +67,7 @@ beforeEach(async () => {
   // 非托管运行时根（agent/bundled）指到确定的空目录：本文件的判据只谈"随包同步装不装
   // 回来"，不该变成"这台机器上装了哪些技能"的函数。
   isolateRuntimeSkillRoots()
-  root = await mkdtemp(join(tmpdir(), 'pico-c21-'))
+  root = await mkdtemp(join(tmpdir(), 'zeokeel-c21-'))
   skillsDir = join(root, 'skills')
   pluginSkills = join(root, 'plugin-skills')
   await mkdir(skillsDir, { recursive: true })
@@ -154,7 +154,7 @@ function harness(): { call: (method: string, url: string) => Promise<{ code: num
       ? { requestRejection: (r: { headers: Record<string, unknown> }) => (r.headers['cookie'] === undefined ? (401 as const) : undefined) }
       : undefined),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => true,
       getSession: () => SESSION,
@@ -186,7 +186,7 @@ function harness(): { call: (method: string, url: string) => Promise<{ code: num
 async function installViaSync(): Promise<void> {
   await seedPluginSkill(1)
   expect(syncEntry().action, '前置事实：随包同步必须真的把技能装下来').toBe('synced')
-  const prov = JSON.parse(await readFile(join(skillsDir, NAME, '.picoaide', 'release.json'), 'utf8')) as { channel?: string }
+  const prov = JSON.parse(await readFile(join(skillsDir, NAME, '.zeokeel', 'release.json'), 'utf8')) as { channel?: string }
   expect(prov.channel, '前置事实：落点溯源必须是 plugin（墓碑只对这一档存在）').toBe('plugin')
 }
 
@@ -194,7 +194,7 @@ describe('C2-1：归属证明不了时不得写机器级墓碑（随包技能）
   it('① `?ownership=unknown`：删除生效、墓碑不写、下一轮同步装回来（安全失败模式）', async () => {
     await installViaSync()
     const gate = harness()
-    const res = await gate.call('POST', `/api/pico/skills/${NAME}/uninstall?overwrite=1&ownership=unknown`)
+    const res = await gate.call('POST', `/api/zeokeel/skills/${NAME}/uninstall?overwrite=1&ownership=unknown`)
     expect(res.code, JSON.stringify(res.body)).toBe(200)
     expect(existsSync(join(skillsDir, NAME)), '删除本身必须照常生效（UI 承诺不变）').toBe(false)
     expect(existsSync(tombstonePath()), '证明不了归属 ⇒ 不得替所有账号下永久判词').toBe(false)
@@ -207,7 +207,7 @@ describe('C2-1：归属证明不了时不得写机器级墓碑（随包技能）
   it('② 反向对照：不带 `ownership` ⇒ 墓碑照写、下一轮同步 skipped（老行为不变）', async () => {
     await installViaSync()
     const gate = harness()
-    const res = await gate.call('POST', `/api/pico/skills/${NAME}/uninstall?overwrite=1`)
+    const res = await gate.call('POST', `/api/zeokeel/skills/${NAME}/uninstall?overwrite=1`)
     expect(res.code, JSON.stringify(res.body)).toBe(200)
     expect(existsSync(tombstonePath()), '老路径必须仍然写墓碑（否则这条判据对 ① 没有判别力）').toBe(true)
     const tombstone = JSON.parse(await readFile(tombstonePath(), 'utf8')) as { appId?: string, channel?: string }
@@ -220,7 +220,7 @@ describe('C2-1：归属证明不了时不得写机器级墓碑（随包技能）
   it('③ 只认字面值 `unknown`：`?ownership=mine` 与不带参数同效', async () => {
     await installViaSync()
     const gate = harness()
-    const res = await gate.call('POST', `/api/pico/skills/${NAME}/uninstall?overwrite=1&ownership=mine`)
+    const res = await gate.call('POST', `/api/zeokeel/skills/${NAME}/uninstall?overwrite=1&ownership=mine`)
     expect(res.code, JSON.stringify(res.body)).toBe(200)
     expect(existsSync(tombstonePath()), '`mine` 不是"证明不了" ⇒ 按老行为写墓碑').toBe(true)
   })
@@ -240,12 +240,12 @@ describe('C2-1 面板接线：归属证明不了时把 `ownership=unknown` 拼�
 
   it('`unknown` ⇒ 拼上；`mine` ⇒ 与老行为逐字相同（只多一个参数是危险的）', () => {
     expect(uninstallRequestUrl(pluginRow({ localOwnership: 'unknown' }), { overwrite: true }))
-      .toBe('/api/pico/skills/bundled-x/uninstall?overwrite=1&ownership=unknown')
+      .toBe('/api/zeokeel/skills/bundled-x/uninstall?overwrite=1&ownership=unknown')
     expect(uninstallRequestUrl(pluginRow({ localOwnership: 'mine' }), { overwrite: true }))
-      .toBe('/api/pico/skills/bundled-x/uninstall?overwrite=1')
+      .toBe('/api/zeokeel/skills/bundled-x/uninstall?overwrite=1')
     // 未确认（不带 overwrite）时同样只多这一个参数。
     expect(uninstallRequestUrl(pluginRow({ localOwnership: 'unknown' })))
-      .toBe('/api/pico/skills/bundled-x/uninstall?ownership=unknown')
+      .toBe('/api/zeokeel/skills/bundled-x/uninstall?ownership=unknown')
   })
 
   it('本机行缺 `localOwnership`（旧宿主/字段被裁剪）按保守方向处理', () => {
@@ -258,10 +258,10 @@ describe('C2-1 面板接线：归属证明不了时把 `ownership=unknown` 拼�
     const row = pluginRow({ localOwnership: 'unknown' })
     expect(planCardAction(row)).toEqual({
       kind: 'uninstall',
-      endpoint: '/api/pico/skills/bundled-x/uninstall',
+      endpoint: '/api/zeokeel/skills/bundled-x/uninstall',
       localContent: false,
     })
-    expect(localRemoveEndpoint(row)).toBe('/api/pico/skills/bundled-x/uninstall')
+    expect(localRemoveEndpoint(row)).toBe('/api/zeokeel/skills/bundled-x/uninstall')
   })
 })
 

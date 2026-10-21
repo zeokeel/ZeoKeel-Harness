@@ -1,6 +1,6 @@
 /**
  * Shared vocabulary of the embedded agent-driven browser.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 /** One tab of the embedded browser. */
@@ -135,7 +135,7 @@ export interface BrowserToolOptions {
   screenshotMaxWidth?: number
   /** Screenshot JPEG quality 0-100 (default 70). */
   screenshotQuality?: number
-  /** Directory for programmatic downloads (default '.picoaide-downloads'). */
+  /** Directory for programmatic downloads (default '.zeokeel-downloads'). */
   downloadDir?: string
   /**
    * Upper bound (ms) on the ORIGIN-scoped credential-activity window created by

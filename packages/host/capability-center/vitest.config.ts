@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config'
 /**
  * 显式测试预算（与 enterprise / foot-menu 同宽）。
  *
- * **这里只加预算，不动发现面**（与 `@picoaide/dsh-enterprise` 的 vitest 配置同一
+ * **这里只加预算，不动发现面**（与 `@zeokeel/dsh-enterprise` 的 vitest 配置同一
  * 口径）：本文件**不声明** `include` / `exclude` / `environment`，缺省即发现面 ——
  * 「配置有没有偷偷把某个文件排除掉」由 `packages/host/desktop/tests/wait-budget-contract.spec.ts`
  * 的**测试发现面契约**守住（`vitest list --filesOnly` 的实际发现集合 vs 文件系统上按

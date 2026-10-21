@@ -2,9 +2,9 @@
 
 > ⚠️ **部分内容已被后续变更取代（2026-09-10）**：服务端镜像**不再使用任何镜像仓库**
 > （GHCR 已下线，`docker.yml` 与 `ghcr-cleanup.yml` 已删除）。现在 tag 时由
-> `ci.yml` 的 `release` job 构建镜像 → 导出 `picoaide-server-<v>-amd64.zip` →
+> `ci.yml` 的 `release` job 构建镜像 → 导出 `zeokeel-server-<v>-amd64.zip` →
 > 挂 GitHub Release（只对 beta/official）→ `publish-update-server` job 上传 R2
-> `release.picoaide.com/<channel>/`。下文涉及 `docker.yml`/GHCR 的描述仅作历史记录。
+> `release.zeokeel.com/<channel>/`。下文涉及 `docker.yml`/GHCR 的描述仅作历史记录。
 
 > 维护者视角。设计决策溯源：[CI 流程重设计](decisions/2026-09-06-ci-pipeline-redesign.md)；问题清单：[审计报告](planning/2026-09-06-ci-pipeline-audit.md)。
 > 一句话总结：**主分支常绿、功能走分支 + PR、每次提交都有可下载产物、构建只做一次（gate）、平台只负责打包、发布独立于日常门禁。**
@@ -71,7 +71,7 @@ master（唯一常绿主干，合并即发布候选）
 ┌─ server (ubuntu, 与 gate 并行) ─────────────────────────────┐
 │ PG18 容器(500 连接) → gofmt → go vet → go test ./... -p1    │
 │ → webadmin npm test(全量) → make build-server(含 webadmin)   │
-│ → 部署脚本语法检查 → 上传 picoaide-server-linux-amd64        │
+│ → 部署脚本语法检查 → 上传 zeokeel-server-linux-amd64        │
 └─────────────────────────────────────────────────────────────┘
         needs: gate（构建产物已就绪，平台只管打包）
 ┌─ desktop-linux   ├─ desktop-windows   └─ desktop-macos ─────┐
@@ -115,7 +115,7 @@ master（唯一常绿主干，合并即发布候选）
 | `desktop-Linux` | AppImage + deb | 团队下载安装 / release |
 | `desktop-Windows-installer` | NSIS Setup.exe | 团队 / release |
 | `desktop-macOS` | DMG（正式 tag=签名+公证版） | 团队 / release |
-| `picoaide-server-linux-amd64` | Go 服务端二进制 | 团队部署 |
+| `zeokeel-server-linux-amd64` | Go 服务端二进制 | 团队部署 |
 | `workspace-build` | 8 包 lib/ + 桌面构建产物 | 三平台 job（内部复用） |
 | `e2e-report` | 客户端 E2E 报告 + 截图 | 失败排查（`if: always()` 留存） |
 
@@ -132,10 +132,10 @@ master（唯一常绿主干，合并即发布候选）
 
 - **客户端发布（正式与预发同一链路）**：`master` 上 bump 版本（root + desktop 两处 `package.json`，`scripts/version.mjs` 一键同步）+ 写发布说明 `docs/releases/<tag>.md` → 推 tag → CI 全量构建三平台 → `release` job 校验 tag==版本、生成 `SHA256SUMS.txt`（裸文件名，客户端升级源严格匹配）、创建 GitHub Release（**名 = tag 本身**，正文用 `docs/releases/<tag>.md`）。**Release job 幂等**：同 tag 重跑/重推时已存在 release → edit（标题/说明/Pre-release 标记）+ `--clobber` 刷新资产，不会 422；
 - **发布说明是硬性要求（2026-09-11 定案）**：正式 tag 缺 `docs/releases/<tag>.md` → `gate` 第一步失败（release job 再拦一道），**不静默回退自动生成的 PR 列表**——Releases 页是公开面，v2.7.0 就是因为缺文件把版本页变成了 CI 日志。预发 tag 允许缺失（回退自动变更日志 + warning）。模板与写作口径见 `docs/releases/TEMPLATE.md`；
-- **Release 名 = tag（2026-09-11 定案）**：此前用 `PicoAide Harness <tag>`，而 Releases 页左侧列表宽度固定，`PicoAide Harness v2.6.9-beta.5` 被截断成 `PicoAide Harness v2.6…`——一页十几个版本号全都看不见。产品名由仓库与页面标题承载，Release 名只回答"是哪个版本"；两条都由 `scripts/check-workflows.mjs` 静态门禁守着；
+- **Release 名 = tag（2026-09-11 定案）**：此前用 `ZeoKeel Harness <tag>`，而 Releases 页左侧列表宽度固定，`ZeoKeel Harness v2.6.9-beta.5` 被截断成 `ZeoKeel Harness v2.6…`——一页十几个版本号全都看不见。产品名由仓库与页面标题承载，Release 名只回答"是哪个版本"；两条都由 `scripts/check-workflows.mjs` 静态门禁守着；
 - **正式版 `vX.Y.Z`**：GitHub Release（Latest 语义，推送给全部客户端）+ mac 签名与公证（pack/notarize 可重试、公证 submission 状态续等）+ 镜像 `latest + vX.Y.Z + vX.Y`；
 - **预发 `vX.Y.Z-rc.N` / `-beta.N`**：**同样打 tag、同样出 GitHub Release 页面（Pre-release 徽章，资产可下载）**，只是：客户端升级源（`releases/latest`）与正式用户不收推；镜像只打 `vX.Y.Z-…` 具体 tag，不打 `latest`/宽版本 tag；
-- **服务端镜像**：`docker.yml` 独立 workflow（同 tag 触发 + 手动 dispatch）：`ghcr.io/picoaide/picoaide-harness-server`，构建后真实启动验 `/healthz`（PG 容器）与 `--version` 注入、manifest 单 amd64 断言。镜像版本与 `version.mjs` 同源校验；
+- **服务端镜像**：`docker.yml` 独立 workflow（同 tag 触发 + 手动 dispatch）：`ghcr.io/zeokeel/zeokeel-harness-server`，构建后真实启动验 `/healthz`（PG 容器）与 `--version` 注入、manifest 单 amd64 断言。镜像版本与 `version.mjs` 同源校验；
 - **mac 预发签名（2026-09-06 已实施）**：预发 tag（beta/rc）走 **Developer ID 签名但不公证**（`--sign-only` → preflight 免公证元组，产物经 `dist:mac:dmg` 出 DMG + `verify-mac-release --unnotarized` 验证，跳过 spctl/stapler 两步）——Releases 页面可见、真机可装（首次打开右键绕过 Gatekeeper），免去每次 1-5 小时公证排队。正式 tag 维持完整签名+公证；非 tag 分支维持未签名冒烟。mac job 三态：**正式=签名+公证，预发=签名（不公证），PR/分支=未签名冒烟**。
 - **品牌渠道客户端同样签名+公证（2026-09-11 修复）**：正式 tag（纯 `vX.Y.Z`）上渠道 DMG 与官方走同一条 `dist:mac:pack` + `dist:mac:notarize`（含 staple）链，逐渠道 3 次重试；预发 tag 的渠道列表只有 `beta`，维持只签名不公证。此前渠道借用预发那条 sign-only 路径，客户 Mac 上首次打开被 Gatekeeper 拦成「Apple 无法验证」——交付物不该要求客户手动放行。渠道公证与官方共享同一个 mac job 预算（`timeout-minutes: 360`，GitHub 托管上限），渠道数增长后需按序号矩阵拆 job。
 

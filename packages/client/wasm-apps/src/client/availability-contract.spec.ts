@@ -78,7 +78,7 @@
  *     ⇒ 第 1、2 组红（且 tsc 也会红）；
  *   - 未知判词走成"可用"（把 `isAvailabilityReason` 改成恒真）⇒ 第 4 组红。
  *
- * @module @picoaide/dsh-wasm-apps/client/availability-contract.spec
+ * @module @zeokeel/dsh-wasm-apps/client/availability-contract.spec
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

@@ -2,7 +2,7 @@
  * 能力中心聚合代理的契约测试（2026-09-15，技能链路补齐）。
  *
  * 覆盖的是"员工上传 → 管理员审批 → 员工在面板上看到结果/安装"这条链路上**客户端侧**
- * 最容易静默出错的一段：`/api/pico/capabilities?source=local` 必须
+ * 最容易静默出错的一段：`/api/zeokeel/capabilities?source=local` 必须
  *   1. 向服务端请求 `?source=own`（不是 org —— org 只含 approved，本地行的状态徽章
  *      与拒因会恒空，2026-09-01 已修过一次）；
  *   2. 把服务端 own 行的 `status`/`reason` 按 (kind,name) 匹配到本地创作行
@@ -95,7 +95,7 @@ function harness(session: Session | null): { gateway: string[], call: (url: stri
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? browserFence() : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -108,7 +108,7 @@ function harness(session: Session | null): { gateway: string[], call: (url: stri
     },
   }
   apply(ctx as never, {} as Config)
-  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/pico/capabilities')?.handler
+  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/zeokeel/capabilities')?.handler
   if (handler === undefined) throw new Error('capabilities route not registered')
   return {
     gateway,
@@ -123,7 +123,7 @@ function harness(session: Session | null): { gateway: string[], call: (url: stri
 let home: string
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-cap-proxy-home-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-cap-proxy-home-'))
   const skillsDir = join(home, 'skills')
   await mkdir(join(skillsDir, 'codeql'), { recursive: true })
   await writeFile(join(skillsDir, 'codeql', 'SKILL.md'), SKILL_MD, 'utf8')
@@ -164,7 +164,7 @@ describe('能力中心聚合代理：本地上传行的状态匹配（技能链�
   it('?source=local 请求服务端 ?source=own，并把 approved 匹配到本地创作行', async () => {
     const h = harness(SESSION)
     stubCatalog(h)
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     expect(res.code).toBe(200)
     expect(h.gateway.some(u => u.includes('/api/client/v2/capabilities?source=own'))).toBe(true)
 
@@ -181,7 +181,7 @@ describe('能力中心聚合代理：本地上传行的状态匹配（技能链�
       h.gateway.push(String(url))
       return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'content-type': 'application/json' } })
     }))
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     const local = (res.body.items as Array<Record<string, unknown>>).find(i => i.source === 'local' && i.name === 'codeql')
     expect(local).toBeDefined()
     expect(local?.uploadStatus).toBeUndefined()
@@ -190,7 +190,7 @@ describe('能力中心聚合代理：本地上传行的状态匹配（技能链�
   it('?source=market 原样透传服务端载荷（org 行与市场行都在，source 徽章保留）', async () => {
     const h = harness(SESSION)
     stubCatalog(h)
-    const res = await h.call('/api/pico/capabilities?source=market')
+    const res = await h.call('/api/zeokeel/capabilities?source=market')
     expect(res.code).toBe(200)
     expect(h.gateway.some(u => u.includes('/api/client/v2/capabilities?source=market'))).toBe(true)
     const items = res.body.items as Array<Record<string, unknown>>
@@ -220,7 +220,7 @@ describe('能力中心聚合代理：本地上传行的状态匹配（技能链�
         status: 500, headers: { 'content-type': 'application/json' },
       })
     }))
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     console.log('[R21-A2-04/500] HTTP =', res.code, JSON.stringify(res.body))
     expect(res.code, '读失败必须如实报错（旧实现：200 + 少了全部已装商店行）').toBe(502)
     expect(String(res.body.error)).toContain('gateway error')
@@ -238,7 +238,7 @@ describe('能力中心聚合代理：本地上传行的状态匹配（技能链�
         status: 404, headers: { 'content-type': 'application/json' },
       })
     }))
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     expect(res.code, '确定不存在（404）才允许按空集处理').toBe(200)
     expect((res.body.items as Array<Record<string, unknown>>).some(i => i.source === 'local' && i.name === 'codeql')).toBe(true)
   })
@@ -246,10 +246,10 @@ describe('能力中心聚合代理：本地上传行的状态匹配（技能链�
   it('非法 source 与未登录都会明确失败（不静默返回空目录）', async () => {
     const h = harness(SESSION)
     stubCatalog(h)
-    expect((await h.call('/api/pico/capabilities?source=bogus')).code).toBe(400)
+    expect((await h.call('/api/zeokeel/capabilities?source=bogus')).code).toBe(400)
     const anon = harness(null)
     stubCatalog(anon)
-    expect((await anon.call('/api/pico/capabilities?source=market')).code).toBe(401)
+    expect((await anon.call('/api/zeokeel/capabilities?source=market')).code).toBe(401)
   })
 })
 
@@ -261,7 +261,7 @@ describe('能力中心聚合代理：本地上传行的状态匹配（技能链�
  * 面板就只能把这一行当成"从未上传过" ⇒ 作者看到「上传」，下架这个管控动作在作者面
  * 永远没有反馈（这正是 R5-B-1 的现场）。
  *
- * 这一组把两段接起来跑：**真** auth-gate 路由（`/api/pico/capabilities?source=local`，真 disk 扫描、
+ * 这一组把两段接起来跑：**真** auth-gate 路由（`/api/zeokeel/capabilities?source=local`，真 disk 扫描、
  * 真服务端载荷解析）→ **真**面板纯函数（`mergeItems` / `planCardAction`）。任何一段单独绿都不算数。
  */
 describe('R5-B-1：作者行的下架标记透传（宿主 → 面板）', () => {
@@ -294,7 +294,7 @@ describe('R5-B-1：作者行的下架标记透传（宿主 → 面板）', () =>
   it('own 行带 delisted ⇒ 透传到本机行，面板判「已下架」而不是「上传」', async () => {
     const h = harness(SESSION)
     stubOwnWithDelisted(h, true)
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     expect(res.code).toBe(200)
     const local = (res.body.items as Array<Record<string, unknown>>).find(i => i.source === 'local' && i.name === 'codeql')
     // ① 宿主这一层的判据（透传本身）。
@@ -326,19 +326,19 @@ describe('R5-B-1：作者行的下架标记透传（宿主 → 面板）', () =>
         : { items: [] }
       return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } })
     }))
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     const local = (res.body.items as Array<Record<string, unknown>>).find(i => i.source === 'local' && i.name === 'ppt-gen')
     expect(local?.delisted).toBe(true)
     const item = mergeItems([local as unknown as CapabilityItem])[0]!
     expect(isDelistedItem(item)).toBe(true)
     // 智能体本机行 ⇒ 卸载动作指向 agent 端点（R5-B-3 的同一条分支）。
-    expect(planCardAction(item)).toMatchObject({ kind: 'uninstall', endpoint: '/api/pico/agent-presets/ppt-gen/uninstall' })
+    expect(planCardAction(item)).toMatchObject({ kind: 'uninstall', endpoint: '/api/zeokeel/agent-presets/ppt-gen/uninstall' })
   })
 
   it('服务端没下发该字段 ⇒ 本机行不带 delisted，本机自制行照旧出「上传」（不退化、不误报）', async () => {
     const h = harness(SESSION)
     stubOwnWithDelisted(h, undefined)
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     const local = (res.body.items as Array<Record<string, unknown>>).find(i => i.source === 'local' && i.name === 'codeql')
     expect(local).toBeDefined()
     // 键不能出现（未知 ≠ 未下架；`undefined` 会被 JSON 丢掉，面板读到的是"服务端没说"）。
@@ -350,14 +350,14 @@ describe('R5-B-1：作者行的下架标记透传（宿主 → 面板）', () =>
       noMatch.gateway.push(String(url))
       return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'content-type': 'application/json' } })
     }))
-    const res2 = await noMatch.call('/api/pico/capabilities?source=local')
+    const res2 = await noMatch.call('/api/zeokeel/capabilities?source=local')
     expect(panelPlan(res2.body.items as Array<Record<string, unknown>>)).toEqual({ kind: 'upload' })
   })
 
   it('`delisted:false`（明确未下架）不产生任何下架态（不得把 false 读成 true）', async () => {
     const h = harness(SESSION)
     stubOwnWithDelisted(h, false)
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     expect(panelPlan(res.body.items as Array<Record<string, unknown>>)).toMatchObject({ kind: 'review', status: 'approved' })
   })
 })

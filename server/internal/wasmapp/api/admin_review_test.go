@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // ctx / auditDetails 是本文件用到的两个薄封装（其余夹具在 helpers_test.go）。

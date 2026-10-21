@@ -388,7 +388,7 @@ export default function ErrorMonitoring() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="glitchtip-organization">GlitchTip 组织 slug(连接器预填)</Label>
-              <Input id="glitchtip-organization" type="text" placeholder="如 picoaide 或空=不预填"
+              <Input id="glitchtip-organization" type="text" placeholder="如 zeokeel 或空=不预填"
                 value={cfg.glitchtip_organization}
                 onChange={(e) => setCfg({ ...cfg, glitchtip_organization: e.target.value })} />
             </div>

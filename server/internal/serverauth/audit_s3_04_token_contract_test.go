@@ -28,7 +28,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func TestMirrorAdminTreeServesPagedTokenContract(t *testing.T) {

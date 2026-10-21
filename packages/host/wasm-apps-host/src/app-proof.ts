@@ -33,7 +33,7 @@
  *  4. `public_key` 发的是 SPKI DER（44 字节）而不是**原始 32 字节** Ed25519 ⇒ 同样
  *     落到 `signature_invalid`（服务端 `decodePublicKey` 只收 32 字节）。
  *
- * 后果不是"少一个功能"：签发永远失败 ⇒ 请求上没有 `X-Pico-App-Proof` ⇒ 平台对
+ * 后果不是"少一个功能"：签发永远失败 ⇒ 请求上没有 `X-ZeoKeel-App-Proof` ⇒ 平台对
  * `open`/`request` 回 401 `proof_required`。判据见 `app-proof.spec.ts` 的跨端对拍
  * （直接读 Go 源码的 `InstallMessage` 拼装）与 `installMessageBytes()` 的逐字节断言。
  *
@@ -48,7 +48,7 @@
  *  3. **切换必清**（§23.1）：切账号/切渠道/切服务端 ⇒ 清内存 proof 并重新签发；
  *     安装密钥与账号无关，不随切换销毁。
  *
- * @module @picoaide/dsh-wasm-apps-host/app-proof
+ * @module @zeokeel/dsh-wasm-apps-host/app-proof
  */
 
 import { createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign as edSign } from 'node:crypto'
@@ -62,7 +62,7 @@ import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 export const APP_PROOF_PATH = '/api/client/v2/apps/wasm/proof'
 
 /** 携带 proof 的请求头（§20.1/§23.1 冻结；`open` 与 `request` 都带）。 */
-export const APP_PROOF_HEADER = 'X-Pico-App-Proof'
+export const APP_PROOF_HEADER = 'X-ZeoKeel-App-Proof'
 
 /** 安装密钥文件的默认文件名（落在 userData 下，**不是** proof）。 */
 export const INSTALL_KEY_FILE = 'wasm-apps-install-key.json'
@@ -267,7 +267,7 @@ export function createInstallKeyStore(options: InstallKeyStoreOptions): InstallK
       try {
         parsed = JSON.parse(raw)
       } catch {
-        warn('pico-wasm-apps-host: the install key file is not valid JSON; a new key will be generated')
+        warn('zeokeel-wasm-apps-host: the install key file is not valid JSON; a new key will be generated')
         return null
       }
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
@@ -283,13 +283,13 @@ export function createInstallKeyStore(options: InstallKeyStoreOptions): InstallK
       if (storage === undefined || !storage.isEncryptionAvailable()) {
         // 加密过、但本机现在没有钥匙串（换机器/换用户配置目录）：无法解密，
         // 只能重新生成一对并让服务端重新注册 —— 明确记一条，不静默降级成明文。
-        warn('pico-wasm-apps-host: the stored install key is encrypted but no keyring is available; a new key will be generated')
+        warn('zeokeel-wasm-apps-host: the stored install key is encrypted but no keyring is available; a new key will be generated')
         return null
       }
       try {
         return { installId, privateKeyPem: storage.decryptString(Buffer.from(privateKey, 'base64')), publicKey, encrypted: true }
       } catch {
-        warn('pico-wasm-apps-host: decrypting the install key failed; a new key will be generated')
+        warn('zeokeel-wasm-apps-host: decrypting the install key failed; a new key will be generated')
         return null
       }
     },
@@ -297,7 +297,7 @@ export function createInstallKeyStore(options: InstallKeyStoreOptions): InstallK
       const storage = options.safeStorage
       const encrypt = storage !== undefined && storage.isEncryptionAvailable()
       if (!encrypt) {
-        warn('pico-wasm-apps-host: no OS keyring is available; the application install key is stored as a 0600 file (see the design ledger §17)')
+        warn('zeokeel-wasm-apps-host: no OS keyring is available; the application install key is stored as a 0600 file (see the design ledger §17)')
       }
       const body = JSON.stringify({
         version: INSTALL_KEY_VERSION,
@@ -431,7 +431,7 @@ export function createAppProofProvider(deps: AppProofProviderDeps): AppProofProv
       cachedKey = existing
       return existing
     }
-    if (existing !== null) warn('pico-wasm-apps-host: the stored install key does not match its public key; generating a new one')
+    if (existing !== null) warn('zeokeel-wasm-apps-host: the stored install key does not match its public key; generating a new one')
     const generated = generateInstallKey()
     const created: StoredInstallKey = { ...generated, encrypted: false }
     await deps.store.save(created)
@@ -451,7 +451,7 @@ export function createAppProofProvider(deps: AppProofProviderDeps): AppProofProv
     // 绑定值必须与**服务端算出来的那个字符串**逐字相同（见 proofServerURL）。
     const serverURL = proofServerURL(session.serverURL)
     if (serverURL === '') {
-      warn('pico-wasm-apps-host: the configured server address is not a usable http(s) origin; no app proof can be issued')
+      warn('zeokeel-wasm-apps-host: the configured server address is not a usable http(s) origin; no app proof can be issued')
       return null
     }
     const instant = now()
@@ -497,19 +497,19 @@ export function createAppProofProvider(deps: AppProofProviderDeps): AppProofProv
         body: JSON.stringify(request),
       })
     } catch (cause) {
-      warn(`pico-wasm-apps-host: requesting an app proof failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: requesting an app proof failed (${cause instanceof Error ? cause.message : String(cause)})`)
       return null
     }
     if (!response.ok) {
       // 只记状态码：响应体可能带服务端诊断，但这里**不记录**任何 token/proof。
       // 400 是最常见的一种（body 形状与 `appProofIssue` 的解码结构体不一致）——
       // 这条 warn 是那次漂移唯一的现场，别把它降级成 debug。
-      warn(`pico-wasm-apps-host: the platform refused to issue an app proof (${String(response.status)})`)
+      warn(`zeokeel-wasm-apps-host: the platform refused to issue an app proof (${String(response.status)})`)
       return null
     }
     const parsed = parseProofResponse(await response.json().catch(() => undefined), instant)
     if (parsed === null) {
-      warn('pico-wasm-apps-host: the app proof response was malformed')
+      warn('zeokeel-wasm-apps-host: the app proof response was malformed')
       return null
     }
     // 界内 LRU：先删后写让"刚用过的那格"排到队尾（Map 的 set 对已存在的键**不**改插入序），

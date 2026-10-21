@@ -4,7 +4,7 @@
  * Extraction runs through CDP `Runtime.evaluate` with a fixed, self-contained
  * probe script; results are data-only (never executed), and every output is
  * bounded so a hostile page cannot flood the model context.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import type { BrowserSnapshotElement } from './types.ts'

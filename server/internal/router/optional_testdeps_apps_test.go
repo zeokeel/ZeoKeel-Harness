@@ -7,7 +7,7 @@ package router
 import (
 	"testing"
 
-	wasmapi "github.com/picoaide/picoaide/internal/wasmapp/api"
+	wasmapi "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/api"
 )
 
 // fillAppsTestDeps 填 WASM 应用平台 handler（`apps` 关闭时整片注册代码不存在）。

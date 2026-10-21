@@ -10,10 +10,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/appproof"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appproof"
 )
 
 // 客户端持有性证明的传输层（契约 §20.1 / §23.1）。
@@ -35,7 +35,7 @@ import (
 // 与 envelope 头白名单无关：它是**平台与协议 handler 之间**的头（不进应用信封），
 // 因此不在 `clientRequestHeaders` 那张表里 —— 两张表的消费者不同，合并会让
 // "应用能看到什么"与"平台看到什么"重新缠在一起（见 clientreq.go 的注释）。
-const proofHeader = "X-Pico-App-Proof"
+const proofHeader = "X-ZeoKeel-App-Proof"
 
 // appProofIsIdempotent 判定**应用请求**是否幂等（只有非幂等才做 jti 去重，契约 §23.1）。
 //
@@ -204,7 +204,7 @@ func proofIssueError(err error) *apperr.Error {
 	}
 }
 
-// requireProof 校验 `X-Pico-App-Proof` 并（非幂等请求时）消费 jti。
+// requireProof 校验 `X-ZeoKeel-App-Proof` 并（非幂等请求时）消费 jti。
 //
 // 返回 false 表示已经写好错误响应，调用方必须立刻 return。
 //

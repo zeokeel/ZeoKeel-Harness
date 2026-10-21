@@ -28,7 +28,7 @@ func TestPGNoticesReachTheSink(t *testing.T) {
 	t.Cleanup(func() { pgNoticeSink = prev })
 
 	// RAISE WARNING 是迁移里实际用的那种诊断（NOTICE 同一条通路）。
-	if _, err := db.Exec(`DO $probe$ BEGIN RAISE WARNING 'picoaide notice probe %', 42; END $probe$;`); err != nil {
+	if _, err := db.Exec(`DO $probe$ BEGIN RAISE WARNING 'zeokeel notice probe %', 42; END $probe$;`); err != nil {
 		t.Fatalf("执行 RAISE WARNING: %v", err)
 	}
 
@@ -38,7 +38,7 @@ func TestPGNoticesReachTheSink(t *testing.T) {
 		t.Fatal("PG 的 WARNING 没有到达 sink —— 迁移里的诊断信息会完全静默")
 	}
 	joined := strings.Join(captured, "\n")
-	if !strings.Contains(joined, "picoaide notice probe 42") {
+	if !strings.Contains(joined, "zeokeel notice probe 42") {
 		t.Fatalf("sink 收到的内容不含预期消息：%q", joined)
 	}
 	if !strings.Contains(joined, "WARNING") {

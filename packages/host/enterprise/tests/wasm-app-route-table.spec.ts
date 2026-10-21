@@ -25,7 +25,7 @@ const SOURCE = readFileSync(fileURLToPath(new URL('../../wasm-apps-host/src/wasm
 
 /** 路由表所在的那段 JSDoc（找不到即抛：文档搬家时必须同步改本用例的锚）。 */
 function routeTableDoc(): string {
-  const start = SOURCE.indexOf('构造 `/api/pico/apps/wasm` 的本地路由')
+  const start = SOURCE.indexOf('构造 `/api/zeokeel/apps/wasm` 的本地路由')
   const end = SOURCE.indexOf('export function createWasmAppsRoute(')
   if (start < 0 || end < 0 || end < start) throw new Error('找不到 createWasmAppsRoute 的路由表 JSDoc')
   return SOURCE.slice(start, end)

@@ -339,7 +339,7 @@ export default function Auth() {
                   <Field abbr="oidc" label="Issuer" value={form.oidc.issuer ?? ''} ph="https://idp.example.com" k="issuer" set={(v) => setForm({ ...form, oidc: { ...form.oidc, issuer: v } })} />
                   <Field abbr="oidc" label="Client ID" value={form.oidc.client_id ?? ''} k="client_id" set={(v) => setForm({ ...form, oidc: { ...form.oidc, client_id: v } })} />
                   <SecretField label="Client Secret(已设置=保持现值)" preset={secrets.oidc_secret} value={form.oidc.client_secret ?? ''} onChange={(v) => setForm({ ...form, oidc: { ...form.oidc, client_secret: v } })} onClear={() => { setForm({ ...form, oidc: { ...form.oidc, client_secret: '' } }); setClearedSecrets({ ...clearedSecrets, oidc_secret: true }) }} />
-                  <Field abbr="oidc" label="Redirect URL" value={form.oidc.redirect_url ?? ''} ph="https://picoaide.example.com/api/client/v2/auth/oidc/callback" k="redirect_url" set={(v) => setForm({ ...form, oidc: { ...form.oidc, redirect_url: v } })} />
+                  <Field abbr="oidc" label="Redirect URL" value={form.oidc.redirect_url ?? ''} ph="https://zeokeel.example.com/api/client/v2/auth/oidc/callback" k="redirect_url" set={(v) => setForm({ ...form, oidc: { ...form.oidc, redirect_url: v } })} />
                 </div>
               </div>
             </TabsContent>
@@ -351,7 +351,7 @@ export default function Auth() {
                   <Field abbr="openid" label="Issuer" value={form.openid.issuer ?? ''} ph="https://openid.example.com" k="issuer" set={(v) => setForm({ ...form, openid: { ...form.openid, issuer: v } })} />
                   <Field abbr="openid" label="Client ID" value={form.openid.client_id ?? ''} k="client_id" set={(v) => setForm({ ...form, openid: { ...form.openid, client_id: v } })} />
                   <SecretField label="Client Secret(已设置=保持现值)" preset={secrets.openid_secret} value={form.openid.client_secret ?? ''} onChange={(v) => setForm({ ...form, openid: { ...form.openid, client_secret: v } })} onClear={() => { setForm({ ...form, openid: { ...form.openid, client_secret: '' } }); setClearedSecrets({ ...clearedSecrets, openid_secret: true }) }} />
-                  <Field abbr="openid" label="Redirect URL" value={form.openid.redirect_url ?? ''} ph="https://picoaide.example.com/api/client/v2/auth/openid/callback" k="redirect_url" set={(v) => setForm({ ...form, openid: { ...form.openid, redirect_url: v } })} />
+                  <Field abbr="openid" label="Redirect URL" value={form.openid.redirect_url ?? ''} ph="https://zeokeel.example.com/api/client/v2/auth/openid/callback" k="redirect_url" set={(v) => setForm({ ...form, openid: { ...form.openid, redirect_url: v } })} />
                 </div>
               </div>
             </TabsContent>

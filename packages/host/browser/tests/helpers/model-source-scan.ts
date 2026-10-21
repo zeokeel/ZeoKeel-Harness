@@ -36,7 +36,7 @@
  * `String.fromCharCode` 拼出来）不在本量具的判据面内 —— 能改这个文件的人本来就可以
  * 直接删掉守卫，见仓库既有的"判据能力边界"口径。
  *
- * @module @picoaide/dsh-browser/tests/helpers/model-source-scan
+ * @module @zeokeel/dsh-browser/tests/helpers/model-source-scan
  */
 
 /** 命中位置（1 基行列 + 一截可读上下文）。 */

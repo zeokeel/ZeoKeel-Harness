@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // waitFor 轮询直到条件成立（避免用固定 sleep 写 flaky 用例）。

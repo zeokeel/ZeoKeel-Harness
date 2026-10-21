@@ -3,7 +3,7 @@
  *
  * The shell used to forward any argv/open-url string that merely STARTED with
  * the scheme — `<scheme>://anything?...` reached every Host consumer of the
- * `pico/deep-link` event (the enterprise auth callback included). Parsing is
+ * `zeokeel/deep-link` event (the enterprise auth callback included). Parsing is
  * now strict: the URL must parse, use the **expected scheme**, and name an
  * allow-listed action. Unknown or malformed links are dropped with a log line.
  *
@@ -19,7 +19,7 @@ import { DEFAULT_DEEP_LINK_SCHEME } from './desktop-channel.ts'
  *
  * `auth` = 浏览器 OIDC 登录回调（enterprise 消费）。`app` = 应用分享链接
  * `<scheme>://app/<app_id>`（2026-09-19 契约 §4.5 的唯一可分享形态，
- * `@picoaide/dsh-wasm-apps-host` 消费）。两者都必须在这里登记：闸门是**先于**
+ * `@zeokeel/dsh-wasm-apps-host` 消费）。两者都必须在这里登记：闸门是**先于**
  * 任何 Host 消费者执行的，未登记的 action 会被静默丢掉（不回落）。
  */
 const DESKTOP_DEEP_LINK_ACTIONS = ['auth', 'app'] as const

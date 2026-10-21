@@ -5,7 +5,7 @@
  *
  * `SessionService.clear()` 此前是**无条件**清：只看"当前是否持有会话"，不看"这次清
  * 是不是属于当前这一位"。而 auth-gate 里有 13 处"某次请求收到 401 `auth_expired`
- * ⇒ `ctx.picoSession.clear()`"。于是一个**迟到的 401**（旧令牌的在途请求在用户重新
+ * ⇒ `ctx.zeokeelSession.clear()`"。于是一个**迟到的 401**（旧令牌的在途请求在用户重新
  * 登录之后才失败）会：
  *
  *   内存会话 = null | 磁盘上**刚写下的新令牌**被删
@@ -16,7 +16,7 @@
  *
  *  1. **迟到 401 不得清**：真 `SessionService` + 真 auth-gate 路由，先让用旧令牌的
  *     请求挂住，期间完成新登录（新令牌真的落盘），再放行那个属于旧令牌的 401 ⇒
- *     内存里仍是新会话、盘上新令牌仍在，而且**没有**发出 `pico/session-changed(null)`
+ *     内存里仍是新会话、盘上新令牌仍在，而且**没有**发出 `zeokeel/session-changed(null)`
  *     （发了会让渲染层 tripwire 误判已登出而刷回登录页 —— 那是"不该登出却登出"）；
  *  2. **真失效必须清**：当前令牌收到同一个 401 ⇒ 会话被清、令牌文件被删、事件发出。
  *     这是"401 弹回登录页"那条链，修迟到方向时**绝不能**把它一起关掉；
@@ -153,9 +153,9 @@ async function harness(prefix: string): Promise<{
     webServer: { tapIndex: () => () => {}, register: (route: Route) => { routes.push(route); return () => {} } },
   } as unknown as Context
   const service = new SessionService(ctx, { tokenFile })
-  ;(ctx as unknown as { picoSession: SessionService }).picoSession = service
+  ;(ctx as unknown as { zeokeelSession: SessionService }).zeokeelSession = service
   apply(ctx as never, {} as Config)
-  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/pico/capabilities')?.handler
+  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/zeokeel/capabilities')?.handler
   if (handler === undefined) throw new Error('capabilities route not registered')
   return { service, tokenFile, handler, emit }
 }
@@ -180,7 +180,7 @@ describe('R22-V1-N3 迟到 401：旧令牌的响应晚于"新登录"', () => {
         { status: 401, headers: { 'content-type': 'application/json' } })
     }))
     const { res, read } = fakeRes()
-    const inFlight = Promise.resolve(handler(fakeReq('/api/pico/capabilities?source=market'), res))
+    const inFlight = Promise.resolve(handler(fakeReq('/api/zeokeel/capabilities?source=market'), res))
 
     // ③ 在途期间完成**新登录**（新令牌落盘）。
     await vi.waitFor(() => { expect(seenTokens.length).toBeGreaterThan(0) }, { timeout: 10_000 })
@@ -222,7 +222,7 @@ describe('R22-V1-N3 迟到 401：旧令牌的响应晚于"新登录"', () => {
         { status: 401, headers: { 'content-type': 'application/json' } })
     }))
     const { res, read } = fakeRes()
-    await handler(fakeReq('/api/pico/capabilities?source=market'), res)
+    await handler(fakeReq('/api/zeokeel/capabilities?source=market'), res)
     vi.unstubAllGlobals()
 
     expect(seenTokens[0], '前置：这次请求带的是当前令牌').toContain('NEW-TOKEN')
@@ -253,7 +253,7 @@ describe('R22-V1-N3 分流是结构性的：auth_expired 走 clearIfCurrent，�
 
     const gateLines = readFileSync(AUTH_GATE_SRC, 'utf8').split('\n')
     const clearAll = gateLines.map((line, index) => ({ line, index }))
-      .filter(({ line }) => line.includes('ctx.picoSession.clear()'))
+      .filter(({ line }) => line.includes('ctx.zeokeelSession.clear()'))
     expect(clearAll.length, '无条件 clear 只允许"语义上就是登出"的那两处').toBe(2)
     for (const site of clearAll) {
       const window = gateLines.slice(Math.max(0, site.index - 40), site.index + 1).join('\n')
@@ -264,15 +264,15 @@ describe('R22-V1-N3 分流是结构性的：auth_expired 走 clearIfCurrent，�
     }
     // 围栏本身仍由 auth-gate 提供、且**转发**给模块行（唯一实现，不是副本）。
     const gate = readFileSync(AUTH_GATE_SRC, 'utf8')
-    expect(gate, 'auth-gate 必须把带令牌的会话清理经 picoLocalRoutes 交出去')
-      .toContain('clearSessionIfCurrent: (token: string): void => { ctx.picoSession.clearIfCurrent(token) }')
+    expect(gate, 'auth-gate 必须把带令牌的会话清理经 zeokeelLocalRoutes 交出去')
+      .toContain('clearSessionIfCurrent: (token: string): void => { ctx.zeokeelSession.clearIfCurrent(token) }')
   })
 
   it('全仓再没有"因 401 而清"的无条件 clear（同族收口：auth-gate 之外的调用面也钉住）', () => {
     // 只改 auth-gate 那 13 处是不够的：同一个签名还出现在 wasm-apps 的每一条出站
     // 路径（`forwardAuthAware` + 分片上传）与 bootstrap 的设置同步上 —— 它们的请求
     // 也带一份**可能已经过期**的会话，也会在用户重登之后才拿到 401。判据因此扫**整个
-    // `src/`**：无条件 `picoSession.clear()` 只允许出现在 auth-gate 的登出/改密两处。
+    // `src/`**：无条件 `zeokeelSession.clear()` 只允许出现在 auth-gate 的登出/改密两处。
     //
     // R23-W2-03：扫描面**同时覆盖客户端插件包**（`packages/client/<pkg>/src`）——
     // 第五处（account-card 的 `?refresh=1` 迟到 401）就藏在 enterprise 之外，
@@ -282,7 +282,7 @@ describe('R22-V1-N3 分流是结构性的：auth_expired 走 clearIfCurrent，�
       const text = readFileSync(file, 'utf8')
       text.split('\n').forEach((line, index) => {
         // 只认**代码行**（注释里提到这个符号不算）。
-        if (!line.includes('picoSession.clear()')) return
+        if (!line.includes('zeokeelSession.clear()')) return
         if (line.trimStart().startsWith('*') || line.trimStart().startsWith('//')) return
         offenders.push(`${label}:${index + 1}`)
       })
@@ -298,12 +298,12 @@ describe('R22-V1-N3 分流是结构性的：auth_expired 走 clearIfCurrent，�
 
     // 正面：三处同族调用面都真的换成了带令牌的判据。
     const wasmApps = readFileSync(join(SRC, '..', '..', 'wasm-apps-host', 'src', 'wasm-apps.ts'), 'utf8')
-    expect(wasmApps, 'wasm 出站路径必须带令牌判定').toContain('picoSessionOf(ctx)?.clearIfCurrent?.(session.token)')
+    expect(wasmApps, 'wasm 出站路径必须带令牌判定').toContain('zeokeelSessionOf(ctx)?.clearIfCurrent?.(session.token)')
     const bootstrap = readFileSync(join(SRC, 'bootstrap.ts'), 'utf8')
-    expect(bootstrap, 'bootstrap 的会话同步必须带令牌判定').toContain('ctx.picoSession.clearIfCurrent(session.token)')
+    expect(bootstrap, 'bootstrap 的会话同步必须带令牌判定').toContain('ctx.zeokeelSession.clearIfCurrent(session.token)')
     // R23-W2-03：客户端插件里的同族调用面（account-card 的余额路由）同样必须带令牌。
     const accountCard = readFileSync(join(clientRoot, 'account-card', 'src', 'index.ts'), 'utf8')
     expect(accountCard, 'account-card 的迟到 401 必须带令牌判定（否则清掉刚重登的新会话）')
-      .toContain('ctx.picoSession.clearIfCurrent(s.token)')
+      .toContain('ctx.zeokeelSession.clearIfCurrent(s.token)')
   })
 })

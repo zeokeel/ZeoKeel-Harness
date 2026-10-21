@@ -21,7 +21,7 @@
  * 登记的事实：写这个标记需要技能库内的写权限（同权者本来就能直删），而**随包之外
  * 的写入路径都到不了这里** —— 归档自带的溯源标记在解包后被安装器独占面清掉
  * （审计 A13 的 `rmInstallerOwnedMarkers`），下面第 2 条用例把这个前提钉住：
- * 一旦哪天归档能伪造 `.picoaide/release.json`，这一档就从 P3 升级为可利用的越权。
+ * 一旦哪天归档能伪造 `.zeokeel/release.json`，这一档就从 P3 升级为可利用的越权。
  */
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -105,7 +105,7 @@ describe('R19A-S2-04：会话缺 `serverURL` 不再是 fail-open（真路由 A/B
     // A 面：正常会话 ⇒ 409 LOCAL_CONTENT（既有行为，作为对照）。
     const good = harness(SESSION)
     const goodRes = fakeRes()
-    await good.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/builtin/alpha/uninstall'), goodRes.res)
+    await good.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/builtin/alpha/uninstall'), goodRes.res)
     console.log('[S2-04/正常会话] =', goodRes.read().code, JSON.stringify(goodRes.read().body).slice(0, 140))
     expect(goodRes.read().code).toBe(409)
     expect(existsSync(target)).toBe(true)
@@ -113,7 +113,7 @@ describe('R19A-S2-04：会话缺 `serverURL` 不再是 fail-open（真路由 A/B
     // B 面：畸形会话（`session.json` 缺 `serverURL`）⇒ 修前是 200 + 落点被删。
     const bad = harness(MALFORMED_SESSION)
     const badRes = fakeRes()
-    await bad.handler('/api/pico/skills')(fakeReq('POST', '/api/pico/skills/builtin/alpha/uninstall'), badRes.res)
+    await bad.handler('/api/zeokeel/skills')(fakeReq('POST', '/api/zeokeel/skills/builtin/alpha/uninstall'), badRes.res)
     console.log('[S2-04/畸形会话] =', badRes.read().code, JSON.stringify(badRes.read().body).slice(0, 200))
     expect(badRes.read().code, '缺字段必须走保守分支').toBe(409)
     expect(badRes.read().body.code).toBe('LOCAL_CONTENT')
@@ -174,7 +174,7 @@ describe('R19A-S2-08：`channel: plugin` 只能由库内写者落下（归档伪
     const archive = await skillArchive({
       'SKILL.md': skillMd('forged', 'FROM-ARCHIVE'),
       // 归档试图自带一份"随包"溯源：若能落地，卸载就可以零确认（A13 的形态）。
-      '.picoaide/release.json': JSON.stringify({ appId: 'forged', version: '9.9.9', channel: 'plugin', installedAt: '' }),
+      '.zeokeel/release.json': JSON.stringify({ appId: 'forged', version: '9.9.9', channel: 'plugin', installedAt: '' }),
       '.install-version': '9.9.9',
     })
     // 故意**不给** version：安装器就不会覆写 `.install-version`，归档那份是否还在盘上

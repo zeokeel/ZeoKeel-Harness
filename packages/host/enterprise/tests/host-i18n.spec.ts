@@ -73,7 +73,7 @@ describe('manifest-precheck 预检文案（能力中心面板可见）', () => {
       [precheckSkillPackage(skillMd({ name: 'other-skill' }), 'demo-skill', [], 'en'), PrecheckCode.IdentityMismatch],
       [precheckSkillPackage(skillMd({ version: '"1.0"' }), 'demo-skill', [], 'en'), PrecheckCode.InvalidVersion],
       [precheckSkillPackage(skillMd({ title: 'x'.repeat(101) }), 'demo-skill', [], 'en'), PrecheckCode.FieldTooLong],
-      [precheckSkillPackage(skillMd(), 'demo-skill', ['.picoaide/release.json'], 'en'), PrecheckCode.ProvenanceForbidden],
+      [precheckSkillPackage(skillMd(), 'demo-skill', ['.zeokeel/release.json'], 'en'), PrecheckCode.ProvenanceForbidden],
     ]
     for (const [issues, code] of cases) {
       const hit = issues.find((i) => i.code === code)
@@ -101,7 +101,7 @@ describe('skill-install 的用户可见消息', () => {
   const noVersionMd = '---\nname: demo-skill\ntitle: demo\ndescription: 用于单测的技能包描述,需满足最短长度。\nauthor: tester\ncategory: 测试\n---\n\n本技能用于单元测试:正文需要足够长才能通过空壳校验,因此这里补充两句完整的说明文字,确保长度稳稳超过五十字的下限要求。\n'
 
   it('缺 version：zh 逐字保留 / en 全英文', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-pack-i18n-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-pack-i18n-'))
     try {
       await mkdir(join(root, 'demo-skill'), { recursive: true })
       await writeFile(join(root, 'demo-skill', 'SKILL.md'), noVersionMd)
@@ -115,7 +115,7 @@ describe('skill-install 的用户可见消息', () => {
   })
 
   it('多条问题时：「（另有 N 项问题）」有英文对照', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-pack-i18n-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-pack-i18n-'))
     try {
       await mkdir(join(root, 'demo-skill'), { recursive: true })
       // 缺 title + 缺 author + 缺 category → 至少 3 项问题。

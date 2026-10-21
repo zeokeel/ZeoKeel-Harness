@@ -1,10 +1,10 @@
 # Contributing
 
-Thank you for wanting to contribute to PicoAide Harness. This is a community project — whether you are a regular user, a plugin author, or a developer, there is a way to contribute that fits you.
+Thank you for wanting to contribute to ZeoKeel Harness. This is a community project — whether you are a regular user, a plugin author, or a developer, there is a way to contribute that fits you.
 
 ## Regular users: use, report, and spread the word
 
-- Report problems or odd behavior in an [issue](https://github.com/picoaide/picoaide-harness/issues): include your operating system (macOS / Windows), application version, and reproduction steps.
+- Report problems or odd behavior in an [issue](https://github.com/zeokeel/ZeoKeel-Harness/issues): include your operating system (macOS / Windows), application version, and reproduction steps.
 - Feature ideas and improvement suggestions are welcome as issues too.
 - Join the [community channels](README.en.md#community) and help other users.
 - Write tutorials or experience posts, or help improve and translate the documentation.
@@ -46,7 +46,7 @@ corepack yarn dev     # launch the application when a graphical session is avail
 
 ## Join the technical team
 
-If you would like to join our technical team, reach us through [GitHub Discussions](https://github.com/orgs/picoaide/discussions) or an [Issue](https://github.com/picoaide/picoaide-harness/issues).
+If you would like to join our technical team, reach us through [GitHub Discussions](https://github.com/orgs/zeokeel/discussions) or an [Issue](https://github.com/zeokeel/ZeoKeel-Harness/issues).
 
 ## Code of conduct
 

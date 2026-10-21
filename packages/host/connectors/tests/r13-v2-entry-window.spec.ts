@@ -133,7 +133,7 @@ function createProbeHarness(defs: ConnectorDef[], dir: string, options: ProbeOpt
 
   const ctx = {
     get: (name: string) => {
-      if (name === 'picoSession') return { getSession: () => ({ username: 'user-a' }) }
+      if (name === 'zeokeelSession') return { getSession: () => ({ username: 'user-a' }) }
       if (name === 'connection') return fence
       if (name === 'desktopRuntime') return { locale: 'zh' }
       return undefined
@@ -235,7 +235,7 @@ function createProbeHarness(defs: ConnectorDef[], dir: string, options: ProbeOpt
 async function awaitAuthorizeUrl(routes: ProbeHarness['routes'], deadlineMs = 8_000): Promise<string> {
   const deadline = Date.now() + deadlineMs
   for (;;) {
-    const res = await callRoute({ routes } as never, '/api/pico/connectors/example-mcp/state', 'GET')
+    const res = await callRoute({ routes } as never, '/api/zeokeel/connectors/example-mcp/state', 'GET')
     const url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request?.authorizeUrl
     if (url !== undefined) return url
     if (Date.now() > deadline) throw new Error('no authorize URL')
@@ -271,7 +271,7 @@ function credentialless(server: RealMcpServer, from: number): number {
 /** One full OAuth connect through the plugin's own routes (day 1 of both cases). */
 async function connectDay1(server: RealMcpServer, dir: string, declared: boolean): Promise<string> {
   const day1 = createProbeHarness([def(server.origin, declared)], dir)
-  await callRoute({ routes: day1.routes } as never, '/api/pico/connectors/example-mcp/connect', 'POST')
+  await callRoute({ routes: day1.routes } as never, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
   await completeAuthorization(await awaitAuthorizeUrl(day1.routes))
   await waitFor(() => day1.connects.length === 1 && day1.connects[0]?.ok === true, 15_000)
   expect(day1.connects[0]?.error, 'day 1 必须连上').toBeUndefined()
@@ -332,7 +332,7 @@ describe('R13-V2-7: 注册期活头追赶的两段窗口', () => {
       dir,
       {
         requestApproval: async () => {
-          const res = await callRoute({ routes: (holder as ProbeHarness).routes } as never, '/api/pico/connectors/example-mcp/refresh', 'POST')
+          const res = await callRoute({ routes: (holder as ProbeHarness).routes } as never, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
           hookStatus = res.status
           tokenAtHook = String((await new ConnectorStore({ baseDir: dir }).readCredential('example-mcp'))?.accessToken ?? '')
           return true
@@ -345,7 +345,7 @@ describe('R13-V2-7: 注册期活头追赶的两段窗口', () => {
     const http = day2.connects.find(outcome => outcome.config.transport === 'streamable-http')
     const store = new ConnectorStore({ baseDir: dir })
     const stored = await store.readCredential('example-mcp')
-    const row = JSON.parse((await callRoute({ routes: day2.routes } as never, '/api/pico/connectors/example-mcp/state', 'GET')).body) as { status?: string }
+    const row = JSON.parse((await callRoute({ routes: day2.routes } as never, '/api/zeokeel/connectors/example-mcp/state', 'GET')).body) as { status?: string }
     const wire = server.stats.mcpBearerTokens.slice(baselineWire)
     const { frames, discovery } = classify(server, baselineHeaders)
     const grants = server.stats.grants.filter(grant => grant === 'refresh_token').length
@@ -405,7 +405,7 @@ describe('R13-V2-7: 注册期活头追赶的两段窗口', () => {
     let hookStatus = 0
     const day2 = createProbeHarness([def(server.origin, false)], dir, {
       raceRefresh: async () => {
-        const res = await callRoute({ routes: (holder as ProbeHarness).routes } as never, '/api/pico/connectors/example-mcp/refresh', 'POST')
+        const res = await callRoute({ routes: (holder as ProbeHarness).routes } as never, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
         hookStatus = res.status
       },
     })

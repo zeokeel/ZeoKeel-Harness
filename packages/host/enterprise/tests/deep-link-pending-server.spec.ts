@@ -1,7 +1,7 @@
 /**
  * srvcore-1(P0,审计 2026-09-13)客户端一半的回归:
  *
- * 深链是任何人都能触发的本机事件(`picoaide://auth?token=…&server=…`)。服务端
+ * 深链是任何人都能触发的本机事件(`zeokeel://auth?token=…&server=…`)。服务端
  * 同源校验(server/internal/serverauth/oidc.go)是主防线,但客户端必须同时做到
  * ——**只接受本机登录页正在等待的那台服务端**,否则一个本地进程(或网页里的
  * 自定义 scheme 跳转)就能让客户端把后续会话指向攻击者服务端。
@@ -13,15 +13,15 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '../src/server-connector/config.ts'
 
-const SCHEME = 'picoaide'
+const SCHEME = 'zeokeel'
 
-/** Minimal Cordis-context stub capturing the 'pico/deep-link' listener. */
+/** Minimal Cordis-context stub capturing the 'zeokeel/deep-link' listener. */
 function stubCtx() {
   const warns: string[] = []
   let listener: ((url: unknown) => void) | null = null
   const ctx = {
     on: (event: string, cb: (url: unknown) => void) => {
-      if (event === 'pico/deep-link') listener = cb
+      if (event === 'zeokeel/deep-link') listener = cb
       return () => {}
     },
     logger: {

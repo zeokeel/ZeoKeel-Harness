@@ -41,8 +41,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/queue"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 )
 
 // reasonsSourceDir 是源码判据解析的**包目录**（与测试同目录；R5-D-27 起是整包而不是单文件）。

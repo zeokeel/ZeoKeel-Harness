@@ -77,13 +77,13 @@ func assertNotFoundNoLeak(t *testing.T, w *httptest.ResponseRecorder, what strin
 
 // ① 正向不退化：资产目录里的**普通文件**照样 200，且字节逐字相同。
 func TestDownloadServesRegularAssetByteForByte(t *testing.T) {
-	body := strings.Repeat("PicoAide-2.7.0\x00\x01", 128)
+	body := strings.Repeat("ZeoKeel-2.7.0\x00\x01", 128)
 	withReleaseDir(t, testInfo(t, "2.7.0", map[string]any{
-		"linux-x64": map[string]any{"file": "PicoAide-2.7.0.AppImage", "sha256": testSHA, "size": len(body)},
-	}), map[string]string{"PicoAide-2.7.0.AppImage": body})
+		"linux-x64": map[string]any{"file": "ZeoKeel-2.7.0.AppImage", "sha256": testSHA, "size": len(body)},
+	}), map[string]string{"ZeoKeel-2.7.0.AppImage": body})
 	r := newRouter("2.7.0")
 
-	w := getDownload(t, r, "/updates/client/PicoAide-2.7.0.AppImage")
+	w := getDownload(t, r, "/updates/client/ZeoKeel-2.7.0.AppImage")
 	if w.Code != http.StatusOK {
 		t.Fatalf("GET 普通安装包 = %d（body=%q），want 200", w.Code, w.Body.String())
 	}
@@ -130,8 +130,8 @@ func TestDownloadRejectsSymlinksOutsideAssetDir(t *testing.T) {
 // 清单仍然宣告它（sha256/size 都在），只有下载面能拦住。
 func TestDownloadRejectsRegisteredAssetSwappedToSymlink(t *testing.T) {
 	withReleaseDir(t, testInfo(t, "2.7.0", map[string]any{
-		"mac-universal": map[string]any{"file": "PicoAide-2.7.0.dmg", "sha256": testSHA, "size": 13},
-	}), map[string]string{"PicoAide-2.7.0.dmg": "REAL-DMG-BODY"})
+		"mac-universal": map[string]any{"file": "ZeoKeel-2.7.0.dmg", "sha256": testSHA, "size": 13},
+	}), map[string]string{"ZeoKeel-2.7.0.dmg": "REAL-DMG-BODY"})
 	outside := t.TempDir()
 	secret := filepath.Join(outside, "secret.txt")
 	if err := os.WriteFile(secret, []byte(assetSecretMarker), 0o644); err != nil {
@@ -139,16 +139,16 @@ func TestDownloadRejectsRegisteredAssetSwappedToSymlink(t *testing.T) {
 	}
 	r := newRouter("2.7.0")
 	// 先确认修前形态的"正常路径"没坏：换成链接**之前**是 200。
-	if w := getDownload(t, r, "/updates/client/PicoAide-2.7.0.dmg"); w.Code != http.StatusOK {
+	if w := getDownload(t, r, "/updates/client/ZeoKeel-2.7.0.dmg"); w.Code != http.StatusOK {
 		t.Fatalf("换链接之前 GET = %d，want 200", w.Code)
 	}
 	// 运行期替换：普通文件 → 指向目录外的符号链接。
-	if err := os.Remove(filepath.Join(Dir, "PicoAide-2.7.0.dmg")); err != nil {
+	if err := os.Remove(filepath.Join(Dir, "ZeoKeel-2.7.0.dmg")); err != nil {
 		t.Fatal(err)
 	}
-	linkAsset(t, Dir, "PicoAide-2.7.0.dmg", secret)
+	linkAsset(t, Dir, "ZeoKeel-2.7.0.dmg", secret)
 
-	assertNotFoundNoLeak(t, getDownload(t, r, "/updates/client/PicoAide-2.7.0.dmg"),
+	assertNotFoundNoLeak(t, getDownload(t, r, "/updates/client/ZeoKeel-2.7.0.dmg"),
 		"GET 登记过的资产在运行期被换成链接")
 }
 
@@ -198,8 +198,8 @@ func TestOpenRegularAssetRejectsDeviceFile(t *testing.T) {
 // （fd 会被返回，端点就会下发目录外的内容）。
 func TestDownloadRejectsSwapBetweenLstatAndOpen(t *testing.T) {
 	withReleaseDir(t, testInfo(t, "2.7.0", map[string]any{
-		"linux-x64": map[string]any{"file": "PicoAide-2.7.0.AppImage", "sha256": testSHA, "size": 19},
-	}), map[string]string{"PicoAide-2.7.0.AppImage": "REAL-ASSET-CONTENT"})
+		"linux-x64": map[string]any{"file": "ZeoKeel-2.7.0.AppImage", "sha256": testSHA, "size": 19},
+	}), map[string]string{"ZeoKeel-2.7.0.AppImage": "REAL-ASSET-CONTENT"})
 	outside := t.TempDir()
 	secret := filepath.Join(outside, "secret.txt")
 	if err := os.WriteFile(secret, []byte(assetSecretMarker), 0o644); err != nil {
@@ -208,7 +208,7 @@ func TestDownloadRejectsSwapBetweenLstatAndOpen(t *testing.T) {
 
 	prev := assetOpen
 	t.Cleanup(func() { assetOpen = prev })
-	assetPath := filepath.Join(Dir, "PicoAide-2.7.0.AppImage")
+	assetPath := filepath.Join(Dir, "ZeoKeel-2.7.0.AppImage")
 	swapped := false
 	assetOpen = func(name string) (*os.File, error) {
 		assetOpen = prev // 只换一次：后续请求（若有）按正常形态跑
@@ -225,7 +225,7 @@ func TestDownloadRejectsSwapBetweenLstatAndOpen(t *testing.T) {
 	}
 
 	r := newRouter("2.7.0")
-	assertNotFoundNoLeak(t, getDownload(t, r, "/updates/client/PicoAide-2.7.0.AppImage"),
+	assertNotFoundNoLeak(t, getDownload(t, r, "/updates/client/ZeoKeel-2.7.0.AppImage"),
 		"GET 校验与打开之间被换掉的资产")
 	if !swapped {
 		t.Fatal("注入点没有被触发：用例的触发条件构造失败（判据会假绿）")

@@ -35,8 +35,8 @@ import { setActiveLocale } from './locales.ts'
 // React 18.3 在非测试构建下要求这个全局标记才认 `act()`。
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const APP_SCHEME = 'picoaide-app'
-const CHANNEL: AppChannel = { appOriginScheme: APP_SCHEME, deepLinkScheme: 'picoaide', productName: 'PicoAide' }
+const APP_SCHEME = 'zeokeel-app'
+const CHANNEL: AppChannel = { appOriginScheme: APP_SCHEME, deepLinkScheme: 'zeokeel', productName: 'ZeoKeel' }
 const appURL = (appId: string, path = '/'): string => `${APP_SCHEME}://${appId}${path}`
 
 /** 额度/用量词表（R36：这一页一个都不许有，详情视图与 AI 面板一起查）。 */
@@ -85,7 +85,7 @@ let closing: number
  * 一个只答目录的本机 fetch（渠道/身份由面板注入的 loader 提供）。
  *
  * **持有性证明的引导端点默认答掉**（§22.2 R2）：`open` 与 `channel` 都要带
- * `X-Pico-Host-Proof`，没有令牌时客户端**不发业务请求**。用例仍可用 `reply` 覆盖它。
+ * `X-ZeoKeel-Host-Proof`，没有令牌时客户端**不发业务请求**。用例仍可用 `reply` 覆盖它。
  */
 function stubCatalog(reply: (url: string, init: RequestInit) => Response | Promise<Response>): void {
   vi.stubGlobal('fetch', vi.fn(async (input: unknown, init?: RequestInit) => {
@@ -210,7 +210,7 @@ async function settle(rounds = 3): Promise<void> {
 
 /** 点「允许」并等宿主确认（§21.1 Q9：授权是宿主侧的，不是渲染层的一次性开关）。 */
 async function allowAi(): Promise<void> {
-  await click('.pico-app-ai-allow')
+  await click('.zeokeel-app-ai-allow')
   await settle()
 }
 
@@ -280,21 +280,21 @@ describe('可发现性：搜索与「我发布的」（§19 Q1）', () => {
   it('搜索按名称/一句话/负责人过滤目录，并保持命中顺序', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(3)
-    await type('.pico-app-center-search', 'OCR')
-    const remaining = [...container.querySelectorAll('.pico-app-center-card')]
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(3)
+    await type('.zeokeel-app-center-search', 'OCR')
+    const remaining = [...container.querySelectorAll('.zeokeel-app-center-card')]
     expect(remaining).toHaveLength(1)
     expect(remaining[0]!.textContent).toContain('发票助手')
-    await type('.pico-app-center-search', '值班')
-    expect([...container.querySelectorAll('.pico-app-center-card')].map(card => card.textContent)).toHaveLength(2)
+    await type('.zeokeel-app-center-search', '值班')
+    expect([...container.querySelectorAll('.zeokeel-app-center-card')].map(card => card.textContent)).toHaveLength(2)
     void closing
   })
 
   it('「我发布的」只留 is_owner=true 的行', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    await click('.pico-app-center-owned-only')
-    const cards = [...container.querySelectorAll('.pico-app-center-card')]
+    await click('.zeokeel-app-center-owned-only')
+    const cards = [...container.querySelectorAll('.zeokeel-app-center-card')]
     expect(cards).toHaveLength(1)
     expect(cards[0]!.textContent).toContain('值班便签')
   })
@@ -303,10 +303,10 @@ describe('可发现性：搜索与「我发布的」（§19 Q1）', () => {
     const many = { apps: Array.from({ length: 25 }, (_unused, index) => ({ app_id: `app-${String(index)}`, title: `应用 ${String(index)}`, access: 'login', enabled: true })) }
     stubCatalog(() => jsonResponse(200, many))
     await mount()
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(20)
-    await click('.pico-app-center-show-more')
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(25)
-    expect(container.querySelector('.pico-app-center-show-more')).toBeNull()
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(20)
+    await click('.zeokeel-app-center-show-more')
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(25)
+    expect(container.querySelector('.zeokeel-app-center-show-more')).toBeNull()
   })
 })
 
@@ -314,15 +314,15 @@ describe('三种空态各自可辨（§19 Q2/Q4）', () => {
   it('无结果：有应用但筛选没命中 ⇒ 专属文案 + 清空筛选出口', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    await type('.pico-app-center-search', '没有这个应用')
+    await type('.zeokeel-app-center-search', '没有这个应用')
     const block = container.querySelector('[data-role="catalog-no-results"]')
     expect(block).not.toBeNull()
     expect(block!.textContent).toContain('没有匹配的应用')
     // **不得**退化成"没有应用"。
     expect(container.textContent).not.toContain('还没有可用的应用')
     // 清空筛选后目录回来。
-    await click('.pico-app-center-clear-filters')
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(3)
+    await click('.zeokeel-app-center-clear-filters')
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(3)
   })
 
   it('无应用：服务端空目录 ⇒ 引导让 AI 做一个', async () => {
@@ -369,7 +369,7 @@ describe('空态 ③「全部下架」（§19 Q2 第二档，R1-L3-1）', () => 
     expect(container.querySelector('[data-role="catalog-no-results"]')).toBeNull()
     expect(container.textContent).not.toContain('还没有可用的应用')
     // 行本身照常展示（下架 ≠ 不存在）。
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(2)
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(2)
   })
 
   it('有 1 条在架 + 3 条下架 ⇒ **不**显示"全部下架"', async () => {
@@ -383,7 +383,7 @@ describe('空态 ③「全部下架」（§19 Q2 第二档，R1-L3-1）', () => 
     }))
     await mount()
     expect(container.querySelector('[data-role="catalog-all-disabled"]')).toBeNull()
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(4)
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(4)
   })
 })
 
@@ -391,12 +391,12 @@ describe('未登录时记住这次打开，登录后自动继续（§19 Q4 / §7
   const ONE = { apps: [{ app_id: 'roster', title: '值班表', access: 'login', enabled: true }] }
 
   it('未登录点开 ⇒ 记下意图 + 给可见说明，且**不重复发请求**（开窗由宿主闸门负责）', async () => {
-    stubCatalog(url => (url === '/api/pico/wasm-apps/open'
+    stubCatalog(url => (url === '/api/zeokeel/wasm-apps/open'
       ? jsonResponse(401, { error: { code: 'AUTH_REQUIRED' } })
       : jsonResponse(200, ONE)))
     const intent = memoryIntent()
     await mount({ intent, loginState: async () => false, loginPollMs: 1000 })
-    await click('.pico-app-center-open')
+    await click('.zeokeel-app-center-open')
     // 意图落盘（登录页重载后还能读到 —— 这是"自动继续"的前提）。
     const stored = JSON.parse(String(intent.values.get(OPEN_INTENT_STORAGE_KEY)))
     expect(stored.appId).toBe('roster')
@@ -406,16 +406,16 @@ describe('未登录时记住这次打开，登录后自动继续（§19 Q4 / §7
     expect(hint).not.toBeNull()
     expect(hint!.textContent).toContain('已记住这次打开')
     // 只发了一次打开请求（没有重试风暴）。
-    expect(calls.filter(call => call.url === '/api/pico/wasm-apps/open')).toHaveLength(1)
+    expect(calls.filter(call => call.url === '/api/zeokeel/wasm-apps/open')).toHaveLength(1)
   })
 
   it('页面重载回来（有存储意图 + 已登录）⇒ **不点任何东西**就自动继续', async () => {
-    stubCatalog(url => (url === '/api/pico/wasm-apps/open'
+    stubCatalog(url => (url === '/api/zeokeel/wasm-apps/open'
       ? jsonResponse(200, { url: appURL('roster'), window: 'opened' })
       : jsonResponse(200, ONE)))
     const intent = memoryIntent({ [OPEN_INTENT_STORAGE_KEY]: JSON.stringify({ appId: 'roster', at: Date.now() }) })
     await mount({ intent, loginState: async () => true, now: () => Date.now() })
-    const opens = calls.filter(call => call.url === '/api/pico/wasm-apps/open')
+    const opens = calls.filter(call => call.url === '/api/zeokeel/wasm-apps/open')
     expect(opens).toHaveLength(1)
     expect(JSON.parse(String(opens[0]!.init.body))).toEqual({ app_id: 'roster' })
     // 继续之后意图被清掉（不留残影，避免下次启动又开一次）。
@@ -423,7 +423,7 @@ describe('未登录时记住这次打开，登录后自动继续（§19 Q4 / §7
   })
 
   it('仍未登录 ⇒ 不发请求；登录态翻转后按轮询自动继续', async () => {
-    stubCatalog(url => (url === '/api/pico/wasm-apps/open'
+    stubCatalog(url => (url === '/api/zeokeel/wasm-apps/open'
       ? jsonResponse(200, { url: appURL('roster'), window: 'focused' })
       : jsonResponse(200, ONE)))
     let loggedIn = false
@@ -431,10 +431,10 @@ describe('未登录时记住这次打开，登录后自动继续（§19 Q4 / §7
     vi.useFakeTimers()
     try {
       await mount({ intent, loginState: async () => loggedIn, loginPollMs: 1000 })
-      expect(calls.filter(call => call.url === '/api/pico/wasm-apps/open')).toHaveLength(0)
+      expect(calls.filter(call => call.url === '/api/zeokeel/wasm-apps/open')).toHaveLength(0)
       loggedIn = true
       await act(async () => { await vi.advanceTimersByTimeAsync(1100) })
-      expect(calls.filter(call => call.url === '/api/pico/wasm-apps/open')).toHaveLength(1)
+      expect(calls.filter(call => call.url === '/api/zeokeel/wasm-apps/open')).toHaveLength(1)
       expect(container.querySelector('[data-role="open-pending-login"]')).toBeNull()
     } finally {
       vi.useRealTimers()
@@ -446,7 +446,7 @@ describe('未登录时记住这次打开，登录后自动继续（§19 Q4 / §7
     const stale = JSON.stringify({ appId: 'roster', at: Date.now() - 6 * 60 * 1000 })
     const intent = memoryIntent({ [OPEN_INTENT_STORAGE_KEY]: stale })
     await mount({ intent, loginState: async () => true })
-    expect(calls.filter(call => call.url === '/api/pico/wasm-apps/open')).toHaveLength(0)
+    expect(calls.filter(call => call.url === '/api/zeokeel/wasm-apps/open')).toHaveLength(0)
     expect(intent.values.has(OPEN_INTENT_STORAGE_KEY)).toBe(false)
   })
 })
@@ -458,12 +458,12 @@ describe('打开反馈：正在打开 / 已打开 / 已聚焦（§5.2 的 window
     let release: (() => void) | null = null
     const pending = new Promise<void>(resolve => { release = resolve })
     stubCatalog(async url => {
-      if (url !== '/api/pico/wasm-apps/open') return jsonResponse(200, ONE)
+      if (url !== '/api/zeokeel/wasm-apps/open') return jsonResponse(200, ONE)
       await pending
       return jsonResponse(200, { url: appURL('roster'), window: 'opened' })
     })
     await mount()
-    const button = container.querySelector<HTMLButtonElement>('.pico-app-center-open')!
+    const button = container.querySelector<HTMLButtonElement>('.zeokeel-app-center-open')!
     await act(async () => { button.click() })
     expect(button.textContent).toBe('正在打开…')
     expect(button.disabled).toBe(true)
@@ -473,11 +473,11 @@ describe('打开反馈：正在打开 / 已打开 / 已聚焦（§5.2 的 window
 
   it('window=opened ⇒ "已打开"；window=focused ⇒ "已聚焦"（各自可辨）', async () => {
     for (const [value, copy] of [['opened', '已打开'], ['focused', '已聚焦']] as const) {
-      stubCatalog(url => (url === '/api/pico/wasm-apps/open'
+      stubCatalog(url => (url === '/api/zeokeel/wasm-apps/open'
         ? jsonResponse(200, { url: appURL('roster'), window: value })
         : jsonResponse(200, ONE)))
       await mount()
-      await click('.pico-app-center-open')
+      await click('.zeokeel-app-center-open')
       const outcome = container.querySelector('[data-role="open-outcome"]')
       expect(outcome, value).not.toBeNull()
       expect(outcome!.getAttribute('data-window')).toBe(value)
@@ -488,11 +488,11 @@ describe('打开反馈：正在打开 / 已打开 / 已聚焦（§5.2 的 window
   })
 
   it('服务端没回传 window ⇒ 不渲染任何打开反馈（不编造"已打开"）', async () => {
-    stubCatalog(url => (url === '/api/pico/wasm-apps/open'
+    stubCatalog(url => (url === '/api/zeokeel/wasm-apps/open'
       ? jsonResponse(200, { url: appURL('roster') })
       : jsonResponse(200, ONE)))
     await mount()
-    await click('.pico-app-center-open')
+    await click('.zeokeel-app-center-open')
     expect(container.querySelector('[data-role="open-outcome"]')).toBeNull()
   })
 })
@@ -503,7 +503,7 @@ describe('窗口声明（F3/§6，R1-L3-9）：目录消费 + 详情展示', () 
       apps: [{ app_id: 'roster', title: '值班表', access: 'login', enabled: true, window: { ratio: 1.7778, width: 1280, height: 720 } }],
     }))
     await mount()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     const block = container.querySelector('[data-role="detail-window"]')
     expect(block).not.toBeNull()
     expect(block!.querySelector('[data-role="window-ratio"]')!.textContent).toContain('1.7778')
@@ -514,7 +514,7 @@ describe('窗口声明（F3/§6，R1-L3-9）：目录消费 + 详情展示', () 
     root = createRoot(container)
     stubCatalog(() => jsonResponse(200, ONE_NO_WINDOW))
     await mount()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     expect(container.querySelector('[data-role="detail-window"]')).toBeNull()
   })
 })
@@ -531,9 +531,9 @@ describe('一次性引导卡（§7.2）', () => {
     expect(points).toContain('点开就用')
     expect(points).toContain('AI 会帮你做出来并发布到这里')
     expect(points).toContain('复制链接')
-    await click('.pico-app-center-onboarding-dismiss')
+    await click('.zeokeel-app-center-onboarding-dismiss')
     expect(container.querySelector('[data-role="catalog-onboarding"]')).toBeNull()
-    expect(store.values.get('picoaide.wasm-apps.onboarding.v1')).toBe('1')
+    expect(store.values.get('zeokeel.wasm-apps.onboarding.v1')).toBe('1')
     // 重新挂载（同一份存储）⇒ 不再出现。
     await act(async () => { root.unmount() })
     root = createRoot(container)
@@ -546,14 +546,14 @@ describe('分享/复制链接（F6 + §19 Q6 的 fail-closed）', () => {
   it('拿到渠道 scheme ⇒ 每行有「复制链接」，点击写入渠道深链并反馈', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    const buttons = container.querySelectorAll('.pico-app-center-copy-link')
+    const buttons = container.querySelectorAll('.zeokeel-app-center-copy-link')
     expect(buttons).toHaveLength(3)
-    await click('.pico-app-center-copy-link')
-    expect(copied).toEqual(['picoaide://app/shift-notes'])
+    await click('.zeokeel-app-center-copy-link')
+    expect(copied).toEqual(['zeokeel://app/shift-notes'])
     const feedback = container.querySelector('[data-role="copy-feedback"]')
     expect(feedback).not.toBeNull()
     expect(feedback!.getAttribute('data-ok')).toBe('true')
-    expect(feedback!.textContent).toContain('picoaide://app/shift-notes')
+    expect(feedback!.textContent).toContain('zeokeel://app/shift-notes')
   })
 
   /**
@@ -590,16 +590,16 @@ describe('分享/复制链接（F6 + §19 Q6 的 fail-closed）', () => {
   it('未拿到渠道参数（只读路由失败）⇒ 分享入口一个都不渲染（不回落官方 scheme）', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount({ channel: null })
-    expect(container.querySelector('.pico-app-center-copy-link')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-center-copy-link')).toBeNull()
     expect(container.querySelector('[data-role="copy-feedback"]')).toBeNull()
     // 目录本身照常渲染（分享拿不到不影响看应用）。
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(3)
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(3)
   })
 
   it('剪贴板不可用 ⇒ 明确说"复制失败：手动复制"，不假装成功', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount({ clipboard: async () => { throw new Error('clipboard blocked') } })
-    await click('.pico-app-center-copy-link')
+    await click('.zeokeel-app-center-copy-link')
     const feedback = container.querySelector('[data-role="copy-feedback"]')
     expect(feedback).not.toBeNull()
     expect(feedback!.getAttribute('data-ok')).toBe('false')
@@ -609,38 +609,38 @@ describe('分享/复制链接（F6 + §19 Q6 的 fail-closed）', () => {
 
 describe('F16 打开次数（消费 open 端点的回传）', () => {
   it('打开成功后展示"今日已被打开 N 次"与隐私说明；列表行也带上计数', async () => {
-    stubCatalog(url => url === '/api/pico/wasm-apps/open'
+    stubCatalog(url => url === '/api/zeokeel/wasm-apps/open'
       ? jsonResponse(200, { url: appURL('shift-notes'), opens: { today: { pv: 5, uv: 3 } } })
       : jsonResponse(200, CATALOG))
     await mount()
-    await click('.pico-app-center-open')
+    await click('.zeokeel-app-center-open')
     const counted = container.querySelector('[data-role="open-count"]')
     expect(counted).not.toBeNull()
     expect(counted!.textContent).toContain('今日已被打开 5 次')
     // 详情页同样显示（同一次打开的回传值）。
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     expect(container.querySelector('[data-role="app-detail"]')).not.toBeNull()
     expect(container.querySelector('[data-role="opens-today"]')!.textContent).toBe('今日已被打开 5 次')
     expect(container.querySelector('[data-role="opens-privacy-note"]')!.textContent).toContain('平台记录打开次数用于运营')
   })
 
   it('服务端没回传计数 ⇒ 一行都不渲染（不编造）', async () => {
-    stubCatalog(url => url === '/api/pico/wasm-apps/open'
+    stubCatalog(url => url === '/api/zeokeel/wasm-apps/open'
       ? jsonResponse(200, { url: appURL('shift-notes') })
       : jsonResponse(200, CATALOG))
     await mount()
-    await click('.pico-app-center-open')
+    await click('.zeokeel-app-center-open')
     expect(container.querySelector('[data-role="open-count"]')).toBeNull()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     expect(container.querySelector('[data-role="detail-open-count"]')).toBeNull()
   })
 
   it('半块计数（只有 pv 没有 uv）⇒ 按"没有"处理', async () => {
-    stubCatalog(url => url === '/api/pico/wasm-apps/open'
+    stubCatalog(url => url === '/api/zeokeel/wasm-apps/open'
       ? jsonResponse(200, { url: appURL('shift-notes'), opens: { today: { pv: 5 } } })
       : jsonResponse(200, CATALOG))
     await mount()
-    await click('.pico-app-center-open')
+    await click('.zeokeel-app-center-open')
     expect(container.querySelector('[data-role="open-count"]')).toBeNull()
   })
 })
@@ -649,33 +649,33 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
   it('点标题进详情，显示访问级别、负责人与版本，并能返回列表', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     const detail = container.querySelector('[data-role="app-detail"]')
     expect(detail).not.toBeNull()
     expect(detail!.getAttribute('data-app-id')).toBe('shift-notes')
     expect(detail!.querySelector('[data-role="detail-title"]')!.textContent).toBe('值班便签')
     expect(detail!.querySelector('[data-role="detail-access"]')!.getAttribute('data-access')).toBe('login')
     expect(detail!.querySelector('[data-role="detail-version"]')!.textContent).toContain('1.2.0')
-    await click('.pico-app-center-back')
+    await click('.zeokeel-app-center-back')
     expect(container.querySelector('[data-role="app-detail"]')).toBeNull()
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(3)
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(3)
   })
 
   it('首次使用弹一次性授权卡：未授权时**没有**输入框；允许后出现（且允许真的写了宿主）', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     const consent = container.querySelector('[data-role="ai-consent"]')
     expect(consent).not.toBeNull()
     expect(consent!.textContent).toContain('只发送本次对话内容')
-    expect(container.querySelector('.pico-app-ai-input')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input')).toBeNull()
     await allowAi()
     // 授权必须落到**宿主**：渲染层 localStorage 只是 UI 记忆（闸门在宿主，
     // `handleAiChat` 先查它再碰模型）。变异：allow 只写 localStorage ⇒ 这条红，
     // 且真机上表现为"允许了但每次仍然 403"。
     expect(consentCalls).toEqual([{ app_id: 'shift-notes', granted: true }])
     expect(container.querySelector('[data-role="ai-consent"]')).toBeNull()
-    expect(container.querySelector('.pico-app-ai-input')).not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input')).not.toBeNull()
   })
 
   it('宿主没记住授权（写失败）⇒ 不放行输入框，并给出可辨文案', async () => {
@@ -683,9 +683,9 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
     await mount()
     // 授权路由答 500：界面**不得**表现成"已允许"（下一次调用会 403）。
     consentReply = () => jsonResponse(500, { error: { code: 'CONSENT_NOT_PERSISTED' } })
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     await allowAi()
-    expect(container.querySelector('.pico-app-ai-input')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input')).toBeNull()
     expect(container.querySelector('[data-role="ai-consent-failed"]')).not.toBeNull()
   })
 
@@ -695,58 +695,58 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
     const serverA: AppAiScope = { userId: 'alice', serverURL: 'https://a.harness.example.com' }
     const serverB: AppAiScope = { userId: 'alice', serverURL: 'https://b.harness.example.com' }
     await mount({ consent, identity: serverA })
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     await allowAi()
     // 同一台服务端上"已经问过"⇒ 直进输入框（这份 UI 记忆的意义就在这里）。
-    expect(container.querySelector('.pico-app-ai-input')).not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input')).not.toBeNull()
     // **同一个用户、同一份 localStorage、同一台机器**，只把服务端换成同机第二栈：
     // 宿主闸门按 (用户, 服务端, 应用) 判授权 ⇒ 面板必须重新问一次。回退到两段键
     // （只有用户×应用）时这里会直进输入框，而用户发出第一条消息才吃 403 —— 静默失败。
     await reload()
     await mount({ consent, identity: serverB })
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     expect(container.querySelector('[data-role="ai-consent"]')).not.toBeNull()
-    expect(container.querySelector('.pico-app-ai-input')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input')).toBeNull()
     // 换回 A：那条授权记忆还在（各段只影响自己那一段，不是"换服务端就清空"）。
     await reload()
     await mount({ consent, identity: serverA })
-    await click('.pico-app-center-detail')
-    expect(container.querySelector('.pico-app-ai-input')).not.toBeNull()
+    await click('.zeokeel-app-center-detail')
+    expect(container.querySelector('.zeokeel-app-ai-input')).not.toBeNull()
   })
 
   it('未登录（拿不到作用域）⇒ 说明卡在、「允许」禁用且不写宿主（fail-closed）', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount({ consent: memoryConsent(), identity: null })
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     expect(container.querySelector('[data-role="ai-consent"]')).not.toBeNull()
     expect(container.querySelector('[data-role="ai-identity-pending"]')).not.toBeNull()
-    expect(container.querySelector<HTMLButtonElement>('.pico-app-ai-allow')!.disabled).toBe(true)
+    expect(container.querySelector<HTMLButtonElement>('.zeokeel-app-ai-allow')!.disabled).toBe(true)
     expect(consentCalls).toEqual([])
   })
 
   it('撤销授权 ⇒ 也写宿主（granted:false），界面回到说明卡', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount({ consent: memoryConsent() })
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     await allowAi()
-    expect(container.querySelector('.pico-app-ai-input')).not.toBeNull()
-    await click('.pico-app-ai-revoke')
+    expect(container.querySelector('.zeokeel-app-ai-input')).not.toBeNull()
+    await click('.zeokeel-app-ai-revoke')
     await settle()
     expect(consentCalls).toEqual([
       { app_id: 'shift-notes', granted: true },
       { app_id: 'shift-notes', granted: false },
     ])
-    expect(container.querySelector('.pico-app-ai-input')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input')).toBeNull()
     expect(container.querySelector('[data-role="ai-revoked"]')).not.toBeNull()
   })
 
   it('拒绝授权 ⇒ 明确说不能使用 AI，且没有输入框', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    await click('.pico-app-center-detail')
-    await click('.pico-app-ai-deny')
+    await click('.zeokeel-app-center-detail')
+    await click('.zeokeel-app-ai-deny')
     expect(container.querySelector('[data-role="ai-denied"]')!.textContent).toContain('不能使用 AI')
-    expect(container.querySelector('.pico-app-ai-input')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input')).toBeNull()
     expect(aiCalls).toEqual([])
   })
 
@@ -754,7 +754,7 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
    * 审计 C-25（P2，安全向）：「不允许」必须**真的关掉宿主闸门**。
    *
    * 此前它只 `setDenied(true)` —— 一句界面标记：用户读到"这个应用不能使用 AI"，而应用
-   * 照样能经 `/__picoaide/ai/chat` 花掉他的额度。修法＝与「允许」走同一条写面路径
+   * 照样能经 `/__zeokeel/ai/chat` 花掉他的额度。修法＝与「允许」走同一条写面路径
    * （`syncAppAiConsent(appId, false)`）并同步清掉渲染层的 UI 记忆。
    *
    * 变异验证：把 `deny` 改回 `setDenied(true)` ⇒ 本条红（`consentCalls` 为空）。
@@ -762,13 +762,13 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
   it('「不允许」真的写宿主（granted:false），不是只置一个界面标记', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount({ consent: memoryConsent() })
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     await allowAi()
     expect(consentCalls).toEqual([{ app_id: 'shift-notes', granted: true }])
     // 重新打开说明卡：撤销后再点「不允许」。
-    await click('.pico-app-ai-revoke')
+    await click('.zeokeel-app-ai-revoke')
     await settle()
-    await click('.pico-app-ai-deny')
+    await click('.zeokeel-app-ai-deny')
     await settle()
     expect(consentCalls).toEqual([
       { app_id: 'shift-notes', granted: true },
@@ -786,8 +786,8 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
     consentReply = () => jsonResponse(500, { error: { code: 'CONSENT_NOT_PERSISTED' } })
-    await click('.pico-app-center-detail')
-    await click('.pico-app-ai-deny')
+    await click('.zeokeel-app-center-detail')
+    await click('.zeokeel-app-ai-deny')
     await settle()
     expect(consentCalls).toEqual([{ app_id: 'shift-notes', granted: false }])
     expect(container.querySelector('[data-role="ai-denied"]'), '不得宣称已拒绝').toBeNull()
@@ -806,11 +806,11 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
   it('撤销写宿主失败 ⇒ 闸门态不变、撤销入口留着、如实报错（不宣称已撤销）', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount({ consent: memoryConsent() })
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     await allowAi()
-    expect(container.querySelector('.pico-app-ai-input')).not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input')).not.toBeNull()
     consentReply = () => jsonResponse(500, { error: { code: 'CONSENT_NOT_PERSISTED' } })
-    await click('.pico-app-ai-revoke')
+    await click('.zeokeel-app-ai-revoke')
     await settle()
     expect(consentCalls).toEqual([
       { app_id: 'shift-notes', granted: true },
@@ -819,8 +819,8 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
     expect(container.querySelector('[data-role="ai-revoked"]'), '不得宣称已撤销').toBeNull()
     expect(container.querySelector('[data-role="ai-consent-failed"]'), '撤销失败不许用"允许"方向的文案').toBeNull()
     expect(container.querySelector('[data-role="ai-revoke-failed"]'), '必须如实报错').not.toBeNull()
-    expect(container.querySelector('.pico-app-ai-revoke'), '撤销入口必须留着（唯一补救动作是重试）').not.toBeNull()
-    expect(container.querySelector('.pico-app-ai-input'), '闸门还开着 ⇒ 交互态不变').not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-revoke'), '撤销入口必须留着（唯一补救动作是重试）').not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-ai-input'), '闸门还开着 ⇒ 交互态不变').not.toBeNull()
   })
 
   it('SSE 流式渲染：增量按序出现，done 收尾后成为一条完整回复', async () => {
@@ -831,10 +831,10 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
       'event: done\ndata: {}\n\n',
     ]))
     await mount()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     await allowAi()
-    await type('.pico-app-ai-input', '帮我看一下')
-    await click('.pico-app-ai-send')
+    await type('.zeokeel-app-ai-input', '帮我看一下')
+    await click('.zeokeel-app-ai-send')
     await settle()
     expect(aiCalls).toHaveLength(1)
     expect(aiCalls[0]!.url).toBe(APP_AI_CHAT_PATH)
@@ -848,10 +848,10 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     stubAi(() => jsonResponse(403, { error: { code: 'ai_balance_insufficient', message: 'no funds' } }))
     await mount()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     await allowAi()
-    await type('.pico-app-ai-input', '你好')
-    await click('.pico-app-ai-send')
+    await type('.zeokeel-app-ai-input', '你好')
+    await click('.zeokeel-app-ai-send')
     await settle()
     const error = container.querySelector('[data-role="ai-error"]')
     expect(error).not.toBeNull()
@@ -875,10 +875,10 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
       })
     }
     await mount()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     await allowAi()
-    await type('.pico-app-ai-input', '长回复')
-    await click('.pico-app-ai-send')
+    await type('.zeokeel-app-ai-input', '长回复')
+    await click('.zeokeel-app-ai-send')
     await settle()
     expect(seen).not.toBeNull()
     expect(seen!.aborted).toBe(false)
@@ -899,7 +899,7 @@ describe('发起者绑定的客户端半边（§20.2 / §22.2 R4 的另一半）
   it('客户端面不产生可导航到应用 scheme 的入口，也不用 window.open/location 驱动导航', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-detail')
     expect(container.querySelectorAll('a[href]')).toHaveLength(0)
     for (const file of ['AppCenterPanel.tsx', 'AppToastHostMount.tsx', 'AppAiPanel.tsx', 'open-app.ts']) {
       // jsdom 环境下 `import.meta.url` 不是 file: URL（拿它拼相对路径会得到 `/src/...`），
@@ -930,10 +930,10 @@ describe('冻结文案与 R36（额度词）守卫', () => {
   it('详情页与三种空态渲染结果里没有额度/用量词（R36）', async () => {
     stubCatalog(() => jsonResponse(200, CATALOG))
     await mount()
-    await type('.pico-app-center-search', 'zzz')
+    await type('.zeokeel-app-center-search', 'zzz')
     expect(container.textContent).not.toMatch(QUOTA_PATTERN)
-    await click('.pico-app-center-clear-filters')
-    await click('.pico-app-center-detail')
+    await click('.zeokeel-app-center-clear-filters')
+    await click('.zeokeel-app-center-detail')
     expect(container.textContent).not.toMatch(QUOTA_PATTERN)
     expect(container.innerHTML).not.toMatch(QUOTA_PATTERN)
   })

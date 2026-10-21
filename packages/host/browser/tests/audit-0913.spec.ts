@@ -245,7 +245,7 @@ describe('R-1 出口统一脱敏', () => {
     const entry = h.store.addDownload({
       url: `https://files.example/dl/report-DLTOKEN999.zip?token=DLTOKEN999`,
       fileName: 'report-DLTOKEN999.zip',
-      path: '.picoaide-downloads/report-DLTOKEN999.zip',
+      path: '.zeokeel-downloads/report-DLTOKEN999.zip',
       size: 3,
       group: '',
       actor: 'ai',
@@ -254,7 +254,7 @@ describe('R-1 出口统一脱敏', () => {
     expect(entry.fileName).toBe('****')
     // path 是 downloads_open / 文件工具要用的真实句柄：故意保持真实（残留已记录）。
     expect(entry.path).toContain('report-DLTOKEN999.zip')
-    const normal = h.store.addDownload({ url: 'https://files.example/plain.zip', fileName: 'plain.zip', path: '.picoaide-downloads/plain.zip', size: 3, group: '', actor: 'ai' })
+    const normal = h.store.addDownload({ url: 'https://files.example/plain.zip', fileName: 'plain.zip', path: '.zeokeel-downloads/plain.zip', size: 3, group: '', actor: 'ai' })
     expect(normal.fileName).toBe('plain.zip')
   })
 
@@ -628,7 +628,7 @@ describe('R-4 下载名：percent-encoded 路径段不再绕过派生判定', ()
     const entry = h.store.addDownload({
       url: `https://files.example/dl/report%2DDLTOKEN999.zip?token=DLTOKEN999`,
       fileName: 'report-DLTOKEN999.zip',
-      path: '.picoaide-downloads/report-DLTOKEN999.zip',
+      path: '.zeokeel-downloads/report-DLTOKEN999.zip',
       size: 3,
       group: '',
       actor: 'ai',
@@ -636,7 +636,7 @@ describe('R-4 下载名：percent-encoded 路径段不再绕过派生判定', ()
     expect(entry.fileName).toBe('****')
     expect(entry.url).toContain('token=****')
     // 与凭据无关的下载名照旧
-    const plain = h.store.addDownload({ url: 'https://files.example/plain.zip', fileName: 'plain.zip', path: '.picoaide-downloads/plain.zip', size: 3, group: '', actor: 'ai' })
+    const plain = h.store.addDownload({ url: 'https://files.example/plain.zip', fileName: 'plain.zip', path: '.zeokeel-downloads/plain.zip', size: 3, group: '', actor: 'ai' })
     expect(plain.fileName).toBe('plain.zip')
   })
 })

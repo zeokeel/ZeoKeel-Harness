@@ -7,14 +7,14 @@
  * 里**唯一**允许出现 `ctx.webServer` / 端口 / `127.0.0.1` / `dsh-auth` 字面量的文件。
  *
  * R2：本机 API 的授权**不得依赖 Cookie / Host / Origin / 端口** —— 零端口下这些
- * 全都不存在。授权 = 请求头 `X-Pico-Host-Proof`（宿主签发的持有性令牌，与 §20 的
+ * 全都不存在。授权 = 请求头 `X-ZeoKeel-Host-Proof`（宿主签发的持有性令牌，与 §20 的
  * app-proof 同族）：
  *
  * ```
  * 渲染层（客户端 UI）                 宿主（本 seam）
  *   GET  <prefix>/host-proof   ──────►  签发一枚短时令牌（今天额外过 connection 围栏：
  *                                       那是**引导**路径，零端口下换成帧管道握手）
- *   POST <prefix>/open         ──────►  X-Pico-Host-Proof: <token> ⇒ 放行
+ *   POST <prefix>/open         ──────►  X-ZeoKeel-Host-Proof: <token> ⇒ 放行
  *                                       缺/错/过期 ⇒ 401 proof_required|proof_expired
  * ```
  *
@@ -25,7 +25,7 @@
  * 传输无关：handler 拿到的是 {@link SurfaceRequest}/{@link SurfaceReply}（不是
  * node 的 IncomingMessage/ServerResponse），所以换传输不需要改 handler。
  *
- * @module @picoaide/dsh-wasm-apps-host/host-request
+ * @module @zeokeel/dsh-wasm-apps-host/host-request
  */
 
 import { randomBytes, timingSafeEqual } from 'node:crypto'
@@ -36,18 +36,18 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 /**
  * 宿主**保留命名空间**的路径前缀（§21.2 规则②③；**唯一实现**）。
  *
- * 用法是"是不是保留面"，不是"是不是某条具体桥"：`/__picoaide`（无尾斜杠）与
- * `/__picoaide/...` 都属于保留面（R2-L2-3）。服务端 `internal/wasmapp` 的
- * `reservedPathPrefix = "__picoaide/"` 是同一口径的另一半 —— 改这里必须同步改那里。
+ * 用法是"是不是保留面"，不是"是不是某条具体桥"：`/__zeokeel`（无尾斜杠）与
+ * `/__zeokeel/...` 都属于保留面（R2-L2-3）。服务端 `internal/wasmapp` 的
+ * `reservedPathPrefix = "__zeokeel/"` 是同一口径的另一半 —— 改这里必须同步改那里。
  */
-export const RESERVED_HOST_PREFIX = '/__picoaide'
+export const RESERVED_HOST_PREFIX = '/__zeokeel'
 
 /**
  * 这个 pathname 是否落在宿主保留命名空间里（**含无尾斜杠的裸前缀**）。
  *
- * 判据写成"等于前缀 或 以前缀 + '/' 开头"，而不是 `startsWith('/__picoaide/')`：
- * 后者会把 `/__picoaide` 漏进普通应用请求分支（转发平台）—— 那是 R2-L2-3 实测的缺口。
- * 也不写成 `startsWith('/__picoaide')`：那会连 `/__picoaidex` 一起吞掉（过度拦截同样
+ * 判据写成"等于前缀 或 以前缀 + '/' 开头"，而不是 `startsWith('/__zeokeel/')`：
+ * 后者会把 `/__zeokeel` 漏进普通应用请求分支（转发平台）—— 那是 R2-L2-3 实测的缺口。
+ * 也不写成 `startsWith('/__zeokeel')`：那会连 `/__zeokeelx` 一起吞掉（过度拦截同样
  * 是缺陷：应用有合法路径叫这个名字时会被莫名 404）。
  * @param path - 已解析的 pathname（含 `/` 前缀）。
  * @returns true = 保留面（除 AI 桥之外一律 404，绝不转发）。
@@ -57,7 +57,7 @@ export function isReservedHostPath(path: string): boolean {
 }
 
 /** 持有性证明请求头（§22.2 R2 冻结）。 */
-export const HOST_PROOF_HEADER = 'x-pico-host-proof'
+export const HOST_PROOF_HEADER = 'x-zeokeel-host-proof'
 
 /** 令牌缺省寿命（毫秒）：短到"页面关掉就基本失效"，长到不必每次调用都重取。 */
 export const HOST_PROOF_TTL_MS = 5 * 60_000
@@ -98,7 +98,7 @@ export interface HostSurfaceRoute {
   /** 完整 pathname（含 seam 前缀）。 */
   readonly path: string
   /**
-   * 是否要求 `X-Pico-Host-Proof`。
+   * 是否要求 `X-ZeoKeel-Host-Proof`。
    * `bootstrap` = 免证明（只允许签发令牌的那一条，且它自己另有过闸）。
    */
   readonly proof: 'required' | 'bootstrap'
@@ -303,18 +303,18 @@ export function createHostRequestSurface(ctx: Context, options: HostRequestSurfa
       try {
         rejection = fence.requestRejection({ headers: req.headers })
       } catch (cause) {
-        warn(`pico-wasm-apps-host: the bootstrap proof check failed (${cause instanceof Error ? cause.message : String(cause)})`)
+        warn(`zeokeel-wasm-apps-host: the bootstrap proof check failed (${cause instanceof Error ? cause.message : String(cause)})`)
         rejection = 403
       }
       if (rejection !== undefined) {
-        warn(`pico-wasm-apps-host: refused to issue a host proof without browser proof (${String(rejection)})`)
+        warn(`zeokeel-wasm-apps-host: refused to issue a host proof without browser proof (${String(rejection)})`)
         jsonReply(reply, 403, { error: 'browser session proof required' })
         return
       }
     } else if (ctx.get('webServer') !== undefined) {
       // 有 loopback 服务器却没有任何围栏服务：不能凭"页面在 loopback 上"发令牌
       // （本机任意进程都能 GET）。fail-closed 是契约，不是保守。
-      warn('pico-wasm-apps-host: the connection fence is unavailable; refusing to issue a host proof (fail-closed)')
+      warn('zeokeel-wasm-apps-host: the connection fence is unavailable; refusing to issue a host proof (fail-closed)')
       jsonReply(reply, 503, { error: 'browser session proof unavailable' })
       return
     }
@@ -353,7 +353,7 @@ export function createHostRequestSurface(ctx: Context, options: HostRequestSurfa
     if (route.proof === 'required') {
       const rejection = authority.verify(request.headers)
       if (rejection !== null) {
-        warn(`pico-wasm-apps-host: refused a local call without a host proof (${rejection.code}) [${request.method} ${request.pathname}]`)
+        warn(`zeokeel-wasm-apps-host: refused a local call without a host proof (${rejection.code}) [${request.method} ${request.pathname}]`)
         jsonReply(reply, rejection.status, { error: rejection.code })
         return { status, headers, body }
       }
@@ -361,7 +361,7 @@ export function createHostRequestSurface(ctx: Context, options: HostRequestSurfa
     try {
       await route.handler(request, reply)
     } catch (cause) {
-      warn(`pico-wasm-apps-host: local route ${request.pathname} failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: local route ${request.pathname} failed (${cause instanceof Error ? cause.message : String(cause)})`)
       headers['content-type'] = 'application/json; charset=utf-8'
       status = 500
       body = Buffer.from(JSON.stringify({ error: 'internal error' }), 'utf8')
@@ -388,7 +388,7 @@ export function createHostRequestSurface(ctx: Context, options: HostRequestSurfa
           res.writeHead(result.status, result.headers)
           res.end(Buffer.from(result.body))
         })().catch((cause: unknown) => {
-          warn(`pico-wasm-apps-host: the local request surface failed (${cause instanceof Error ? cause.message : String(cause)})`)
+          warn(`zeokeel-wasm-apps-host: the local request surface failed (${cause instanceof Error ? cause.message : String(cause)})`)
           if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
           res.end(JSON.stringify({ error: 'internal error' }))
         })
@@ -396,7 +396,7 @@ export function createHostRequestSurface(ctx: Context, options: HostRequestSurfa
     })
   } else {
     // 零端口宿主：暂不监听任何端口，路由表仍可用（`dispatch` 由帧管道调用）。
-    warn('pico-wasm-apps-host: no local web server is available; the host request surface stays dispatch-only')
+    warn('zeokeel-wasm-apps-host: no local web server is available; the host request surface stays dispatch-only')
   }
 
   return {

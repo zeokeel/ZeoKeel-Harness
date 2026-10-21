@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func TestGatewayConfigRejectsEmptyAndInvalidPeakWeekdays(t *testing.T) {

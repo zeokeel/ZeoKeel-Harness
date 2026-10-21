@@ -7,7 +7,7 @@
  * `streamable-http` connector, client 2.7.2-beta.8):
  *
  *   … 传输不可加固: McpTransportFenceUnavailableError: MCP streamable-http
- *   传输加固目标与 mcp-client 不一致（本包 C:\Program Files\PicoAide Harness\
+ *   传输加固目标与 mcp-client 不一致（本包 C:\Program Files\ZeoKeel Harness\
  *   resources\app.asar\node_modules\@modelcontextprotocol\sdk\dist\esm\client\
  *   streamableHttp.js / mcp-client C:\Program Files\…\streamableHttp.js），拒绝注册
  *
@@ -54,9 +54,9 @@ import {
  * product needs: these are one file, so the connector must be allowed to
  * register.
  */
-const FIELD_OURS = 'C:\\Program Files\\PicoAide Harness\\resources\\app.asar\\node_modules\\@modelcontextprotocol\\client\\dist\\index.mjs'
-const FIELD_THEIRS = 'C:\\Program Files\\PicoAide Harness\\resources\\app.asar\\node_modules\\@modelcontextprotocol\\client\\dist\\index.mjs'
-const FIELD_REAL = 'C:\\Program Files\\PicoAide Harness\\resources\\app.asar\\node_modules\\@modelcontextprotocol\\client\\dist\\index.mjs'
+const FIELD_OURS = 'C:\\Program Files\\ZeoKeel Harness\\resources\\app.asar\\node_modules\\@modelcontextprotocol\\client\\dist\\index.mjs'
+const FIELD_THEIRS = 'C:\\Program Files\\ZeoKeel Harness\\resources\\app.asar\\node_modules\\@modelcontextprotocol\\client\\dist\\index.mjs'
+const FIELD_REAL = 'C:\\Program Files\\ZeoKeel Harness\\resources\\app.asar\\node_modules\\@modelcontextprotocol\\client\\dist\\index.mjs'
 
 /** A resolution as the reader would produce it, without touching the disk. */
 function target(path: string, options: { realpath?: string | null; error?: string | null; foldCase?: boolean } = {}): TargetResolution {
@@ -78,7 +78,7 @@ let esm = ''
 let cjs = ''
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'pico-fence-target-'))
+  root = mkdtempSync(join(tmpdir(), 'zeokeel-fence-target-'))
   esm = join(root, SDK_TAIL)
   cjs = join(root, CJS_TAIL)
   for (const file of [esm, cjs]) {

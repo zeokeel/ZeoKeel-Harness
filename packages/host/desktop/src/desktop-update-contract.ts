@@ -18,13 +18,13 @@
 export const MAX_TIMER_DELAY_MS = 2_147_483_647
 
 /** Same-origin endpoint serving the live desktop update badge snapshot. */
-export const DESKTOP_UPDATE_PATH = '/api/pico/desktop/update'
+export const DESKTOP_UPDATE_PATH = '/api/zeokeel/desktop/update'
 
 /** Same-origin endpoint triggering a renderer-initiated manual update check. */
-export const DESKTOP_UPDATE_CHECK_PATH = '/api/pico/desktop/update/check'
+export const DESKTOP_UPDATE_CHECK_PATH = '/api/zeokeel/desktop/update/check'
 
 /** Same-origin endpoint handing one already-downloaded installer to the platform installer. */
-export const DESKTOP_UPDATE_INSTALL_PATH = '/api/pico/desktop/update/install'
+export const DESKTOP_UPDATE_INSTALL_PATH = '/api/zeokeel/desktop/update/install'
 
 /** Update badge state served to the renderer. */
 export interface DesktopUpdateStateResponse {

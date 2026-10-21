@@ -39,9 +39,9 @@
 → 结论：**默认发 `-all`（500MB，最省心），同时提供按平台裁剪的镜像**：
 
 ```bash
-ghcr.io/picoaide/picoaide-harness-server:v2.7.0        # = -all，三平台客户端
-ghcr.io/picoaide/picoaide-harness-server:v2.7.0-win    # ~200MB，只有 Windows 安装包
-ghcr.io/picoaide/picoaide-harness-server:v2.7.0-linux  # ~165MB
+ghcr.io/zeokeel/zeokeel-harness-server:v2.7.0        # = -all，三平台客户端
+ghcr.io/zeokeel/zeokeel-harness-server:v2.7.0-win    # ~200MB，只有 Windows 安装包
+ghcr.io/zeokeel/zeokeel-harness-server:v2.7.0-linux  # ~165MB
 ```
 
 企业客户通常混合平台（Linux 服务端 + Windows/Mac 员工），所以 `-all` 才是主推；裁剪镜像给「明确单一平台」或弱网客户。
@@ -55,7 +55,7 @@ ghcr.io/picoaide/picoaide-harness-server:v2.7.0-linux  # ~165MB
 | 服务端镜像 `docker save` tar | **15 MB**（v2.5.16；v2.4.0=23MB） | 基础镜像极小，加减客户端是唯一变量 |
 | 同 tar 过 gzip -6 / zip-19 | 14.1 MB / 15 MB | 压缩算法在此量级无意义 |
 | linux AppImage（deb 不进镜像） | **150 MB** | 客户端才是体积主体 |
-| `/app` 内容 | `picoaide-server` + `entrypoint.sh` | 镜像结构极简，加目录零成本 |
+| `/app` 内容 | `zeokeel-server` + `entrypoint.sh` | 镜像结构极简，加目录零成本 |
 | 服务端 `CGO_ENABLED=0` 静态二进制 | 42 MB（构建产物） | 可退化为「分发二进制」，但见 §4 判断 |
 | compose 依赖 | caddy:2-alpine + postgres:18-alpine + server | 离线交付需一并覆盖 |
 | 客户端版本协商 | **完全不存在**（grep 核实：服务端不校验客户端版本，客户端不感知服务端版本） | 错配当前只能靠流程纪律 |
@@ -69,7 +69,7 @@ ghcr.io/picoaide/picoaide-harness-server:v2.7.0-linux  # ~165MB
  ┌──────────────┐   检查最新版本   ┌────────────────┐   拉 tar / pull  ┌──────────┐
  │  R2          │ ←────────────── │  客户服务器     │ ───────────────→ │ 升级完成  │
  │ update.      │  latest.json    │ updatecheck.go │                  │ 新镜像跑  │
- │ picoaide.com │                 │ webadmin 提示   │                  │ 起来      │
+ │ zeokeel.com │                 │ webadmin 提示   │                  │ 起来      │
  │ 只有镜像 tar │  ─────────────→ └────────────────┘                  └──────────┘
  └──────────────┘   下发 image.tar
 
@@ -89,7 +89,7 @@ ghcr.io/picoaide/picoaide-harness-server:v2.7.0-linux  # ~165MB
         ↓ artifacts
   bundle job：把客户端资产塞进镜像 → 一个自包含单包
     image = 服务端二进制
-          + /opt/picoaide/client/<平台>/安装包
+          + /opt/zeokeel/client/<平台>/安装包
           + CLIENT-RELEASE.json（资产名 + sha256）
         ↓
   docker save | zip  →  R2（latest.json + image.tar）
@@ -119,8 +119,8 @@ build-contexts: |
 
 ```dockerfile
 # --- Stage 3 追加 ---
-COPY --from=clientassets /client /opt/picoaide/client
-COPY --from=clientassets /CLIENT-RELEASE.json /opt/picoaide/client/CLIENT-RELEASE.json
+COPY --from=clientassets /client /opt/zeokeel/client
+COPY --from=clientassets /CLIENT-RELEASE.json /opt/zeokeel/client/CLIENT-RELEASE.json
 ```
 
 ### 3.2 客户端资产**运行时写盘，不改 embed**
@@ -135,15 +135,15 @@ COPY --from=clientassets /CLIENT-RELEASE.json /opt/picoaide/client/CLIENT-RELEAS
 
 ```sh
 # entrypoint.sh 追加（首次启动把镜像内资产落到持久卷）
-if [ ! -d /data/releases/$(cat /opt/picoaide/VERSION)/client ]; then
-  mkdir -p /data/releases/$(cat /opt/picoaide/VERSION)/client
-  cp -a /opt/picoaide/client/. /data/releases/$(cat /opt/picoaide/VERSION)/client/
+if [ ! -d /data/releases/$(cat /opt/zeokeel/VERSION)/client ]; then
+  mkdir -p /data/releases/$(cat /opt/zeokeel/VERSION)/client
+  cp -a /opt/zeokeel/client/. /data/releases/$(cat /opt/zeokeel/VERSION)/client/
 fi
 ```
 
 - 二进制体积不变（42MB）；
 - 客户端资产在持久卷上，升级后仍可查历史版本；
-- 服务端从 `PICOAI_CLIENT_RELEASE_DIR` 读目录，**明确不通过镜像层读**（overlayfs 上 `os.ReadFile` 大文件行为不保证）。
+- 服务端从 `ZEOKEEL_CLIENT_RELEASE_DIR` 读目录，**明确不通过镜像层读**（overlayfs 上 `os.ReadFile` 大文件行为不保证）。
 
 ### 3.3 服务端新增两个端点
 
@@ -170,7 +170,7 @@ fi
 | 渠道 | 客户端升级源 base | 说明 |
 |---|---|---|
 | 企业渠道 | **它登录的那台服务器**（默认） | 员工机器零公网依赖；企业内网天然可达 |
-| 官方渠道 | `https://release.picoaide.com/official` | 官方客户端没有"自己的服务器"，走 R2 静态面 |
+| 官方渠道 | `https://release.zeokeel.com/official` | 官方客户端没有"自己的服务器"，走 R2 静态面 |
 
 R2 的 `latest.json` 与服务端的 `/api/client/v2/updates/manifest` **用同一份 schema**，所以客户端只需一套解析逻辑，按 `updates.mode` + base 分派即可。
 
@@ -188,7 +188,7 @@ R2 的 `latest.json` 与服务端的 `/api/client/v2/updates/manifest` **用同�
 - **两份文档，不是一份**：
   - `DEPLOY.md` 给人看：前置条件、配置项、升级、回滚、排障；
   - `AGENT-DEPLOY.md` 给 agent 看：结构化步骤 + **判定标准**（什么输出算成功）+ **显式禁止清单**（不许 `down -v` / 不许 `volume prune` / 不许在 healthz 未过的情况下删旧镜像）。
-- 成功判定必须是**机器可判定的证据**：加载后 `docker run --entrypoint /app/picoaide-server <img> --version` 输出等于 manifest 的 `server.version` + `/healthz` 返回 200。别让 agent 靠「看起来成功了」下结论。
+- 成功判定必须是**机器可判定的证据**：加载后 `docker run --entrypoint /app/zeokeel-server <img> --version` 输出等于 manifest 的 `server.version` + `/healthz` 返回 200。别让 agent 靠「看起来成功了」下结论。
   > 注意别用镜像 digest 做校验：`image_tar_sha256` 是 **tar 文件的哈希**，与 registry 的 manifest digest 语义不同，混用会永远校验失败。`--version` 输出才是跨平台可靠的权威锚点。
 
 （这条与仓库既有哲学一致：`install-server.sh` 就是 oh-my-zsh 式一条命令安装器，本方案只是把「一键」从安装扩展到升级。）
@@ -224,10 +224,10 @@ R2 的 `latest.json` 与服务端的 `/api/client/v2/updates/manifest` **用同�
 |---|---|---|---|
 | **P0 打包收敛** | CI 新增 bundle job：三平台 artifacts → 带客户端资产的镜像（`-all`）→ 产出 `docker save` tar + `latest.json` 上传 R2，同时推 GHCR | 一个自包含单包 | 2–3 天 |
 | **P1 服务端自建源** | Dockerfile 加 client 目录；entrypoint 落卷；`/api/client/v2/updates/manifest` + `/updates/client/*`（`http.ServeFile`）；bootstrap 加 `server_version` | 服务端成为客户端分发点 | 2–3 天 |
-| **P1.5 服务端检查更新接 R2** | `updatecheck.go` 支持 R2 响应格式（按 `schema`/`tag_name` 分流）+ `PICOAI_UPDATE_ENDPOINT` env + Result 增加 `image_tag`/`image_url`；webadmin ServerInfo 提示条补升级命令 | 运维在 webadmin 看到「有新版本」；**能力已存在，只换端点** | 1–2 天 |
+| **P1.5 服务端检查更新接 R2** | `updatecheck.go` 支持 R2 响应格式（按 `schema`/`tag_name` 分流）+ `ZEOKEEL_UPDATE_ENDPOINT` env + Result 增加 `image_tag`/`image_url`；webadmin ServerInfo 提示条补升级命令 | 运维在 webadmin 看到「有新版本」；**能力已存在，只换端点** | 1–2 天 |
 | **P2 一键升级** | `upgrade.sh`（`--dry-run`/`--json`/断点续传/校验/`docker pull` 与 `docker load` 双路径/备份/健康检查/自动回滚）+ `DEPLOY.md` + `AGENT-DEPLOY.md` | 客户（或 agent）一条命令 | 3–5 天 |
 | **P3 客户端改源** | `update-checker`/`update-download` 泛化 manifest 模式（官方渠道 base=R2，企业渠道 base=自己服务器）；版本不匹配横幅 | 客户端跟着服务端升 | 3–5 天 |
-| **P4 渠道化** | 接既有渠道管线（镜像 tag / `PICOAI_UPDATE_ENDPOINT` / 产物名参数化） | 多渠道并存 | 视商务 |
+| **P4 渠道化** | 接既有渠道管线（镜像 tag / `ZEOKEEL_UPDATE_ENDPOINT` / 产物名参数化） | 多渠道并存 | 视商务 |
 
 P0–P2 ≈ 1.5 周闭环（客户能自己升），P3 才让客户端自动跟随。P1.5 是最便宜的一环（现有机制只换端点），建议与 P1 并行。
 
@@ -250,7 +250,7 @@ P0–P2 ≈ 1.5 周闭环（客户能自己升），P3 才让客户端自动跟�
 11. **同号即配套的前提**：`client.version == server.version` 必须由 CI 强制断言（`scripts/version.mjs check` 同源），否则「镜像里的客户端」和「镜像的版本」会漂移。
 12. **R2 上不要放客户端包**：客户端包在镜像里；放 R2 会造成同一份包两个来源，并制造"客户端绕过服务端"的路径，破坏版本配套（详见 R2 手册 §0）。
 13. **`image_tar_sha256` ≠ 镜像 digest**：前者是 tar 文件哈希（下载完整性），后者是 registry manifest digest，混用会永远校验失败；加载后的权威校验用 `--version` 输出。
-14. **服务端升级是"换镜像"不是"改文件"**：`/app/picoaide-server` 在镜像层里运行时不可写，所以 `upgrade.sh` 必须同时支持 `docker pull`（在线）和 `docker load`（R2 tar，GHCR 不可达时）。
+14. **服务端升级是"换镜像"不是"改文件"**：`/app/zeokeel-server` 在镜像层里运行时不可写，所以 `upgrade.sh` 必须同时支持 `docker pull`（在线）和 `docker load`（R2 tar，GHCR 不可达时）。
 
 ---
 

@@ -38,7 +38,7 @@
  *
  * Result post-processing (execution side): JSON-serialize with size/depth
  * caps + secret masking. The mask step lives in this module for tests.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import acorn from './vendor/acorn.cjs'
@@ -214,7 +214,7 @@ interface AnyNode {
 /** Marker thrown by the credential-tab egress shim (see {@link wrapEvalExpression}).
  * Recognized by the runtime to turn a page exception into an explicit policy
  * error instead of a generic "page script failed". */
-export const EVAL_EGRESS_BLOCKED_MARKER = 'PICOAI_EVAL_EGRESS_BLOCKED'
+export const EVAL_EGRESS_BLOCKED_MARKER = 'ZEOKEEL_EVAL_EGRESS_BLOCKED'
 
 /** Network-write surfaces that can carry a page value off the machine.
  *

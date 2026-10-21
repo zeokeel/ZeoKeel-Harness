@@ -47,8 +47,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 )
 
 // 路径常量（**只有这一处**：SKILL 换位置时改这里）。
@@ -59,7 +59,7 @@ const (
 	// skillDirRelPath 是内置技能目录（仓库根相对）。源头只有这一个 ——
 	// 技能源就在服务端仓库内的 `server/skills/`（2026-09-19 从客户端 vendored 包
 	// packages/vendor/memory-evolve 搬来）：随服务端镜像分发
-	// （server/Dockerfile 直接 COPY 进 /opt/picoaide/skills），由员工在客户端
+	// （server/Dockerfile 直接 COPY 进 /opt/zeokeel/skills），由员工在客户端
 	// 能力中心按需安装。**不在客户端包里**，也不再由 COI 同步链路落盘。
 	skillDirRelPath     = "server/skills/app-builder"
 	skillLimitsRelPath  = skillDirRelPath + "/references/limits.md"
@@ -74,7 +74,7 @@ const (
 
 // ===== (a) 生成物与源码逐字节一致 =====
 
-// TestGeneratedArtifactsAreByteIdentical 用**真生成器**（cmd/picoaide-limits-gen）
+// TestGeneratedArtifactsAreByteIdentical 用**真生成器**（cmd/zeokeel-limits-gen）
 // 在临时"假仓库"里重新生成一遍，再与提交的产物逐字节比对。
 //
 // 为什么要把生成器编出来跑、而不是在测试里复刻一份渲染逻辑：复刻出来的第二份实现
@@ -90,7 +90,7 @@ func TestGeneratedArtifactsAreByteIdentical(t *testing.T) {
 	// 假仓库：只需要 go.mod（生成器用它确认模块根）与 skill 的 references 目录。
 	fakeRepo := t.TempDir()
 	fakeServer := filepath.Join(fakeRepo, "server")
-	writeFile(t, filepath.Join(fakeServer, "go.mod"), []byte("module github.com/picoaide/picoaide\n\ngo 1.26\n"))
+	writeFile(t, filepath.Join(fakeServer, "go.mod"), []byte("module github.com/zeokeel/zeokeel-harness/server\n\ngo 1.26\n"))
 	fakeSkillRefs := filepath.Join(fakeRepo, filepath.FromSlash(skillDirRelPath), "references")
 	if err := os.MkdirAll(fakeSkillRefs, 0o755); err != nil {
 		t.Fatalf("创建假 skill 目录: %v", err)
@@ -927,7 +927,7 @@ func checkHostnamesArePlaceholders(t *testing.T, rel, text string) {
 		"harness.example.com": true,
 		"notes.example.com":   true,
 		"example.com":         true,
-		"picoaide.app.json":   false, // 文件名，不是主机名（下面按后缀放过）
+		"zeokeel.app.json":   false, // 文件名，不是主机名（下面按后缀放过）
 	}
 	for _, host := range placeholderHostRe.FindAllString(text, -1) {
 		if strings.HasSuffix(host, ".example.com") || host == "example.com" {
@@ -936,7 +936,7 @@ func checkHostnamesArePlaceholders(t *testing.T, rel, text string) {
 		if allowed[host] {
 			continue
 		}
-		// 形如 notes.example.com 之外的都拒；`picoaide.app.json` 这类文件名由
+		// 形如 notes.example.com 之外的都拒；`zeokeel.app.json` 这类文件名由
 		// 调用方在文本里以反引号包裹，正则可能命中 ⇒ 用扩展名白名单放过。
 		if strings.HasSuffix(host, ".json") || strings.HasSuffix(host, ".md") || strings.HasSuffix(host, ".go") {
 			continue
@@ -1150,8 +1150,8 @@ func clip(s string) string {
 // buildGenerator 编译生成器到临时目录（一次编译，多次执行）。
 func buildGenerator(t *testing.T, moduleRoot string) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "picoaide-limits-gen")
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/picoaide-limits-gen")
+	bin := filepath.Join(t.TempDir(), "zeokeel-limits-gen")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/zeokeel-limits-gen")
 	cmd.Dir = moduleRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("编译生成器失败: %v\n%s", err, out)
@@ -1213,4 +1213,4 @@ func writeFile(t *testing.T, path string, data []byte) {
 // goGenerateDirective 供人工核对：`go generate ./internal/limits` 会执行本文件里的
 // //go:generate 指令（go 命令扫描包的测试文件，见 cmd/go/internal/generate 的 InternalGoFiles）。
 //
-//go:generate go run ../../cmd/picoaide-limits-gen
+//go:generate go run ../../cmd/zeokeel-limits-gen

@@ -22,7 +22,7 @@
  * 两档都指向浏览器窗口里同一个「交给 AI」按钮 —— 交还入口只有那一个（2026-09-11
  * 定案 A 方案），客户端这一侧只做提示，不新增任何控制权入口。
  *
- * @module @picoaide/dsh-browser/client
+ * @module @zeokeel/dsh-browser/client
  */
 
 /** 侧边栏轮询控制权状态的间隔（ms）。本机回环 GET，代价可忽略。 */
@@ -48,7 +48,7 @@ export type ControlHintLevel = 'none' | 'holding' | 'waiting'
 export const NO_CONTROL_HINT: ControlHint = { controlled: false, awaiting: false }
 
 /**
- * 把 `/api/pico/browser/state` 的载荷投影成提示状态。
+ * 把 `/api/zeokeel/browser/state` 的载荷投影成提示状态。
  * @param payload - 路由返回值（任意形状；非对象/缺字段按"无提示"处理）。
  * @returns 提示状态。
  */

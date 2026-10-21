@@ -12,7 +12,7 @@
 -- 为什么 wasm 应用在 apps/app_releases 上要新列(设计只写了"CHECK 放开",
 -- 列必须由本迁移落地):
 --   * purpose / data_sensitivity / config_json / visible 是 §4.2 应用配置文件
---     (picoaide.app.json)在 **apps 上的当前生效投影**: 应用中心目录与运维面要能
+--     (zeokeel.app.json)在 **apps 上的当前生效投影**: 应用中心目录与运维面要能
 --     一次查询过滤(§8 R34/R38), 不必逐行解析 JSON; 每版不可变快照仍在
 --     app_releases.config_json(§4.2「改任何一项 = 发新版」)。
 --   * current_release_id 承载 §8「开启审核时: 新版进待审队列, 待审期间线上仍为

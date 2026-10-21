@@ -18,7 +18,7 @@
  * **为什么要问宿主**（2026-09-30 现场）：macOS 的 TCC **被拒之后不再弹窗**，此时
  * `enumerateDevices()` 里同样没有 `audioinput` —— 只靠渲染层无法把"没插麦克风"与
  * "系统没允许"分开，用户会拿着"找不到设备"去查硬件。宿主侧的
- * `GET /api/pico/voice/mic` 给出真实授权状态，于是文案能分开：
+ * `GET /api/zeokeel/voice/mic` 给出真实授权状态，于是文案能分开：
  *   · `denied` / `restricted` ⇒ 告诉用户去「系统设置 → 隐私与安全性 → 麦克风」打开；
  *   · `not-determined` ⇒ **不拦**：让原请求走过去，宿主会触发系统弹窗（用户此刻就该看到它）；
  *   · 其它（含非 macOS）⇒ "未检测到麦克风设备"（真的没有设备）。
@@ -46,7 +46,7 @@ export interface VoiceDeviceTarget {
   readonly mediaDevices?: VoiceMediaDevicesLike | undefined
 }
 
-/** 宿主给出的麦克风授权状态（`GET /api/pico/voice/mic` 的载荷子集）。 */
+/** 宿主给出的麦克风授权状态（`GET /api/zeokeel/voice/mic` 的载荷子集）。 */
 export interface VoiceMicStatusView {
   /** 系统层面的授权状态；非 macOS 是 `not-applicable`。 */
   readonly permission?: string

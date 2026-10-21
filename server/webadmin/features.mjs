@@ -26,7 +26,7 @@
  * 一个空管理端；当成"全开"则与 Go 侧同一行参数的含义相反。两种猜法都会造出
  * "服务端裁了、管理端没裁"（或反过来）的半通状态，所以这里要求写清楚。
  *
- * @module picoaide-webadmin/features
+ * @module zeokeel-webadmin/features
  */
 
 /** 模块清单 —— **顺序是契约的一部分**（与 Go `internal/features`、渠道 `FEATURE_MODULES` 逐字一致）。 */

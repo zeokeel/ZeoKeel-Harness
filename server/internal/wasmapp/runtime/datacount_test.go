@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/compile/testdata/wasmtest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 )
 
 // 本文件是 P0-4 的**运行时侧判据**：DataCount 段必须能过平台自己的 wazero 编译。

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // 本文件是 `edge` 包在 W4 之后**保留下来的全部原语**（总纲 §8.4 的精确保留列）：
@@ -238,7 +238,7 @@ const HostReferrerPolicy = "same-origin"
 //
 // 定义在 edge（而不是 api 或 appserver）的唯一理由：两个包都要写它，而
 // `api → appserver → edge` 是既有依赖方向，常量只能住在被双方共享的最下游包。
-const AppVersionHeader = "X-PicoAide-App-Version"
+const AppVersionHeader = "X-ZeoKeel-App-Version"
 
 // ApplyHostSecurityHeaders 写宿主独占的响应安全头（§4.8）。
 //

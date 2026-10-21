@@ -24,7 +24,7 @@ function serveLoginPage(config: Config, loggedIn = false): string {
   const ctx = {
     effect: (fn: () => unknown) => { fn() },
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => loggedIn,
       getSession: () => null,
@@ -54,16 +54,16 @@ describe('auth-gate login page brand', () => {
       login: { displayName: 'Acme AI', tagline: '企业内部 AI 平台', welcome: '欢迎使用' },
     })
     // 整页不得残留厂商品牌 —— 这是白标的验收口径。
-    expect(html).not.toContain('PicoAide')
+    expect(html).not.toContain('ZeoKeel')
   })
 
   it('keeps the official brand when no channel brand is injected', () => {
-    // 登录页标题用的是**产品名**(与窗口标题同值);品牌区用短名 'PicoAide'。
+    // 登录页标题用的是**产品名**(与窗口标题同值);品牌区用短名 'ZeoKeel'。
     const html = serveLoginPage({})
-    expect(html).toContain('<title>PicoAide Harness 登录</title>')
+    expect(html).toContain('<title>ZeoKeel Harness 登录</title>')
     expect(JSON.parse(brandLiteral(html))).toEqual({
-      title: 'PicoAide Harness',
-      login: { displayName: 'PicoAide', shortName: 'PicoAide', tagline: 'Enterprise AI Gateway', welcome: '' },
+      title: 'ZeoKeel Harness',
+      login: { displayName: 'ZeoKeel', shortName: 'ZeoKeel', tagline: 'Enterprise AI Gateway', welcome: '' },
     })
   })
 
@@ -71,14 +71,14 @@ describe('auth-gate login page brand', () => {
     // schemastery 把未注入的 brand 物化成 `{}`：那不是渠道品牌。判成渠道会让
     // 官方构建显示中性占位（2026-09-10 实测）。
     const html = serveLoginPage({ brand: {} })
-    expect(JSON.parse(brandLiteral(html)).login.displayName).toBe('PicoAide')
+    expect(JSON.parse(brandLiteral(html)).login.displayName).toBe('ZeoKeel')
   })
 
   it('still shows a channel neutral placeholder when the package had no brand', () => {
     // 渠道包里没写品牌 → desktop-channel.ts 注入中性名,登录页显示它而不是厂商名。
     const html = serveLoginPage({ brand: { login: { displayName: 'Harness' }, client: { displayName: 'Harness' } } })
     expect(JSON.parse(brandLiteral(html)).login.displayName).toBe('Harness')
-    expect(html).not.toContain('PicoAide')
+    expect(html).not.toContain('ZeoKeel')
   })
 
   it('cannot be used to break out of the inline script', () => {
@@ -103,6 +103,6 @@ describe('auth-gate login page brand', () => {
     // renderChannel(null) 走的是 BRAND 而不是硬编码名。
     const html = serveLoginPage({ brand: ACME })
     expect(html).toContain("esc(BRAND.login.displayName)")
-    expect(html).not.toContain("'PicoAide'")
+    expect(html).not.toContain("'ZeoKeel'")
   })
 })

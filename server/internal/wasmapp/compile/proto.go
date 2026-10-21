@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 父子协议的操作白名单（fail-closed：子进程只认这两个 op，其余一律拒）。
@@ -19,14 +19,14 @@ const (
 //
 // 独立于 abi.ABIVersion：父子之间用**单行 JSON**（不是应用 ABI 的 RS 帧），
 // 两套协议不得混用——混用的后果是"编译进程的输出被当成应用输出"。
-const ProcVersion = "picoaide-app-compile/1"
+const ProcVersion = "zeokeel-app-compile/1"
 
 // Request 是父 → 子的一行 JSON 请求。
 //
 // 只有两个操作。子进程**只允许**读 ModulePath 指向的文件与写 CacheDir 目录
 // （§4.3.1-d：缓存目录是信任边界，写面只有编译进程）。
 //
-// ⚠️ 这是**跨进程数据契约**（cmd/picoaide-app-compile 与本包两侧各自解析同一份
+// ⚠️ 这是**跨进程数据契约**（cmd/zeokeel-app-compile 与本包两侧各自解析同一份
 // JSON），不是同进程的函数调用：改字段名必须同时改两侧，且旧版父侧兼容性由
 // ProcVersion 负责（版本不等 ⇒ 父侧拒用该二进制）。
 type Request struct {

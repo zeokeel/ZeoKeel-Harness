@@ -32,8 +32,8 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/balance"
-	"github.com/picoaide/picoaide/internal/reports"
+	"github.com/zeokeel/zeokeel-harness/server/internal/balance"
+	"github.com/zeokeel/zeokeel-harness/server/internal/reports"
 )
 
 // 两个调度器的检查间隔（装配层唯一真源：判据断言装配传的就是这两个常量）。

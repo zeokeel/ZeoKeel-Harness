@@ -50,7 +50,7 @@
  *   - **实现放宽**（`isEntryDocument` 追加 `strings.HasSuffix(rel, ".htm")`）⇒ throw（F2）；
  *   - **文档多列**（枚举里加一个 `/foo`）⇒ throw（F3）。
  *
- * @module @picoaide/dsh-wasm-apps/client/entry-document-contract.spec
+ * @module @zeokeel/dsh-wasm-apps/client/entry-document-contract.spec
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

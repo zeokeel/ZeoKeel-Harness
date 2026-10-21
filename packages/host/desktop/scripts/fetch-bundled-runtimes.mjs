@@ -19,7 +19,7 @@
  *                                           [--node-origin <u>] [--python-origin <u>] [--pnpm-origin <u>]
  *     --out     目标目录，缺省 `packages/host/desktop/build/runtimes`
  *     --cache   制品缓存目录，缺省 `packages/host/desktop/build/runtimes-cache`
- *               （环境变量 `PICOAI_RUNTIME_CACHE` 可覆盖；CI 指向 actions/cache 的路径）
+ *               （环境变量 `ZEOKEEL_RUNTIME_CACHE` 可覆盖；CI 指向 actions/cache 的路径）
  *     --target  目标平台，缺省 `<process.platform>-<process.arch>`；必须是 runtimes.json
  *               的 `targets` 之一（未知目标 fail-loud，不猜）
  *     --check   只校验（不联网、不下载）：清单齐、树摘要对、关键可执行文件哈希对
@@ -722,7 +722,7 @@ async function main(argv) {
   let out = DEFAULT_RUNTIME_OUT
   // 制品缓存目录可由环境变量指向别处（CI 把它挂到 actions/cache 的路径上，见
   // .github/workflows/ci.yml 三个 desktop job 的 "Cache bundled agent runtimes"）。
-  let cache = process.env.PICOAI_RUNTIME_CACHE ?? DEFAULT_RUNTIME_CACHE
+  let cache = process.env.ZEOKEEL_RUNTIME_CACHE ?? DEFAULT_RUNTIME_CACHE
   let target
   let check = false
   const origins = {}

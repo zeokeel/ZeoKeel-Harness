@@ -114,7 +114,7 @@
 | 应用诊断面板（失败码/计数/hints） | 已实现 | `AppCenterPanel.tsx:2038-2070`、`app-lifecycle.ts:314` |
 | 今日打开次数 + 隐私说明 | 已实现 | `AppCenterPanel.tsx:1431-1432` |
 | 应用 AI 面板（授权/撤销 + 聊天） | 部分实现 | 授权完整；**聊天链路不可达**（§3 · P1-5） |
-| 应用内 AI（客户端 AI loop，`POST /__picoaide/ai/chat`） | 已实现（应用页内） | `handler.ts:201-242`、`ai-chat.ts` |
+| 应用内 AI（客户端 AI loop，`POST /__zeokeel/ai/chat`） | 已实现（应用页内） | `handler.ts:201-242`、`ai-chat.ts` |
 
 ### 2.2 作者面（AI + 人）
 | 能力 | 状态 | 关键证据 |
@@ -151,7 +151,7 @@
 | 内存档位（default/small/large + 启动自检 + 控制台可配 11 项） | 已实现 | `memprofile`、`applimits`、`docs/decisions/2026-09-19-wasm-platform-operations.md` |
 | 模块缓存/库句柄淘汰（空闲逐出 + 事件逐出 + FreeOSMemory） | 已实现 | `appserver/modules.go`、`dbpool.go` |
 | 调用事件清理调度器、打开计数清理 | 已实现 | `events/scheduler.go`、`opens/scheduler.go` |
-| 编译隔离（`PICOAI_COMPILE_ISOLATION`） | 部分实现 | 代码侧 `require` 已真 fail-closed（`isolate_linux.go:221-223` + `wasmapp.go:241/253`），但**部署默认仍是 `auto`**（`docker-compose.yml:115`）；`/etc` 对编译进程整目录可读（`isolate_linux.go:42-44`） |
+| 编译隔离（`ZEOKEEL_COMPILE_ISOLATION`） | 部分实现 | 代码侧 `require` 已真 fail-closed（`isolate_linux.go:221-223` + `wasmapp.go:241/253`），但**部署默认仍是 `auto`**（`docker-compose.yml:115`）；`/etc` 对编译进程整目录可读（`isolate_linux.go:42-44`） |
 | 冻结保留期快照 / 到期真删 | **未实现** | `api/read.go:739-745` 自述 |
 | 沙箱逃逸面 | 已判定不可逃逸（能力不存在级） | `temp/wasm-audit/WASM-SANDBOX-AUDIT.md` |
 
@@ -196,15 +196,15 @@
 ### P0 · 设计已冻结但接线缺失（改完即兑现，不需要新产品决策）
 
 **P0-1 应用窗口未接入 browser runtime（F7 / 设计 §7.2）**
-- 证据：`packages/host/browser/src/surface.ts:79/129`（`registerApp` 已实现、`kind:'app'` 已建模），但全仓调用点**只有测试**；`wasm-apps-host` 声明依赖 `@picoaide/dsh-browser` 却只 import `./guard`；`tools.ts:406-413` 把 `appSurfaces()` 映射成 `kind:'app'` 行 ⇒ 恒空。
+- 证据：`packages/host/browser/src/surface.ts:79/129`（`registerApp` 已实现、`kind:'app'` 已建模），但全仓调用点**只有测试**；`wasm-apps-host` 声明依赖 `@zeokeel/dsh-browser` 却只 import `./guard`；`tools.ts:406-413` 把 `appSurfaces()` 映射成 `kind:'app'` 行 ⇒ 恒空。
 - 缺：建窗/关窗/关闭全部三处调 `registerApp`/注销；把手柄 `webContents` 交给 browser pool 的 CDP 附着路径；控制权状态投影。
 - 后果：AI 无法操作用户的应用窗口；`browser_list_tabs` 永不出 `kind:'app'`；控制权胶囊（"我来操作/交给 AI"）不存在。
 - 工作量：**M**（接缝已存在）。
 
 **P0-2 作者声明的窗口规格不生效（F3）**
 - 证据：`wasm-apps-host/src/index.ts:460` 调 `windows.open(appId, path)` **缺第三参 ratio**；`windows.ts:480-491/515` 的 `declaredRatio` 因此恒 `undefined`（`remembered.ratio` 只在 `:521` 由它自己写入 ⇒ 环路自锁）；平台 `open` 响应（`api/open.go:191-196`）与宿主解析器（`open-gate.ts:126-137`）都**没有 window 字段**；客户端详情页却渲染"窗口比例：16:9"（`AppCenterPanel.tsx:1409-1420`）。
-- 缺：三选一接线 —— ①`open` 响应加 `window`（服务端改）②客户端把目录行的 window 规格带进 `POST /api/pico/wasm-apps/open` body ③宿主单独拉一次目录。
-- 后果：`picoaide.app.json` 里写的 `window.ratio/width/height` 全部无效（首次一律 1280×720），界面承诺与行为不一致。
+- 缺：三选一接线 —— ①`open` 响应加 `window`（服务端改）②客户端把目录行的 window 规格带进 `POST /api/zeokeel/wasm-apps/open` body ③宿主单独拉一次目录。
+- 后果：`zeokeel.app.json` 里写的 `window.ratio/width/height` 全部无效（首次一律 1280×720），界面承诺与行为不一致。
 - 工作量：**M**。
 
 **P0-3 客户端静态资源缓存零效果（F11）**
@@ -224,7 +224,7 @@
 
 **P0-6 导入白名单缺 `sock_recv`/`sock_send`（三条历史拦路点一个都没修）**
 - 证据：`wasmmod/imports_gen.go:78-79` 只有 `sock_accept`/`sock_shutdown`；`imports_coverage_test.go:125-127` 是**故意收紧**到"三个 refapp 参考程序导入面的并集"，而 `references/imports.md` 却宣称白名单是"Go 运行时可能发出的全部导入的保守超集" ⇒ TinyGo 的 `net/url` 路径会被 `IMPORT_NOT_ALLOWED` 拒。
-- 修法：改 `refapp` 参考程序后重跑 `go run ./cmd/picoaide-wasm-imports-gen`（白名单是生成物），并同步 coverage 测试口径；文档口径同时修正。
+- 修法：改 `refapp` 参考程序后重跑 `go run ./cmd/zeokeel-wasm-imports-gen`（白名单是生成物），并同步 coverage 测试口径；文档口径同时修正。
 - 工作量：**S**。
 - **三条（P0-4/P0-5/P0-6）合起来意味着："官方支持 Go、Rust/Zig 可用但不承诺"这句话今天只在"不用 DataCount + 不带 DWARF + 不碰 net/url"的窄路径上成立。**
 
@@ -237,12 +237,12 @@
 - 工作量：把两个字段接进诊断 = **S**；日志落库 + 端点 + 保留期 = **M**。
 
 **P1-5 客户端 UI 的应用 AI 面板聊天不可达（设计 §21.7⑦）**
-- 证据：`AppAiPanel` 渲染在客户端页面源（`AppCenterPanel.tsx:1482`），打 `/__picoaide/ai/chat`（`app-ai.ts:44/273`），该路径全仓只有协议 handler（`handler.ts:201/210`）；宿主本机 HTTP 面只有 `/api/pico/wasm-apps` 一个前缀。
+- 证据：`AppAiPanel` 渲染在客户端页面源（`AppCenterPanel.tsx:1482`），打 `/__zeokeel/ai/chat`（`app-ai.ts:44/273`），该路径全仓只有协议 handler（`handler.ts:201/210`）；宿主本机 HTTP 面只有 `/api/zeokeel/wasm-apps` 一个前缀。
 - 后果：详情页 AI 面板点"发送"必失败，用户以为"应用 AI 坏了"。
 - 工作量：**S–M**（二选一需拍板：补本机 HTTP 路由 / 面板改做授权与说明）。
 
 **P1-6 应用维度 AI 用量恒不出数（设计 §21.4 / §21.7⑤）**
-- 证据：`app_attribution.go:36/42-47` 只读 `X-Pico-App-Id`；全仓**无任何客户端/宿主发送方**（grep 仅命中注释与 webadmin 文案）；`wasm_app_opens_summary.go:317` 自述"尚未被客户端发送"。
+- 证据：`app_attribution.go:36/42-47` 只读 `X-ZeoKeel-App-Id`；全仓**无任何客户端/宿主发送方**（grep 仅命中注释与 webadmin 文案）；`wasm_app_opens_summary.go:317` 自述"尚未被客户端发送"。
 - 后果：管理端"应用 AI 用量"恒显示"统计尚未上线"，"这个应用吃掉多少 AI 成本"答不出来。替代路径（按隐藏会话 id `app:` 前缀派生）**未实施**。
 - 工作量：**M**（服务端按前缀派生 + 防伪造判据 + 前端去降级）。
 
@@ -310,7 +310,7 @@
 | P2-23 | `catalog` 无服务端分页/搜索 | `api/read.go:440` `ListWasmApps(filter{})` 后逐行投影，无 `limit/offset/q`（管理面同类接口有：`api/admin.go:117-142`） | 大组织下这条响应无界（客户端虽有分页，但整表仍要一次拉回） | S/M |
 | P2-24 | 执行侧无第二道 OS 隔离（与 API server 同进程、数据根 rw） | `appserver/options.go:189`、`serve.go:426`；`runtime/*.go` 无 `os/exec`/bwrap | wazero 逃逸 = server 进程（持 master key/PG DSN/全部应用库）沦陷 | M/L |
 | P2-25 | 编译缓存"只有编译进程写"未强制 | `MkdirAll(0700)` 只在新建生效（`compile/compiler.go:344` 无 Stat+Chmod 兜底，同包 appdb/upload 都有）；`VerifyCacheEntry` 恒 nil 且零调用点；**执行侧 `wazero.NewCompilationCacheWithDir` 事实上是写者**（`runtime/config.go:150-155`） | 编译缓存投毒面 | M |
-| P2-26 | 编译隔离的部署面与 `/etc` 暴露 | `PICOAI_COMPILE_ISOLATION` 默认 `auto`（`docker-compose.yml:115`、`.env.example:68` 是注释掉的 require）；`--ro-bind-try /etc` 让整个 `/etc` 对编译进程可读（`isolate_linux.go:42-44/291-293`） | 生产未强制隔离；改 argv 形状需同步 `isolate_linux_test.go` | S/M |
+| P2-26 | 编译隔离的部署面与 `/etc` 暴露 | `ZEOKEEL_COMPILE_ISOLATION` 默认 `auto`（`docker-compose.yml:115`、`.env.example:68` 是注释掉的 require）；`--ro-bind-try /etc` 让整个 `/etc` 对编译进程可读（`isolate_linux.go:42-44/291-293`） | 生产未强制隔离；改 argv 形状需同步 `isolate_linux_test.go` | S/M |
 | P2-27 | 日志行伪造 / 1xx 放行 / `/readyz` 未认证水位 / **content-type 隐式嗅探** | `logbuf.go:42-63` 与 `hostenv.go:54-60` 均不剥 `\r\n`；`respond.go:52-55` 放行 100–199；`main.go:674` 无条件注册 `/readyz` 且暴露内存/队列/缓存/丢包水位；非白名单 content-type 在 `edge/primitives.go:296-301` 是 **delete**（不是改写）⇒ 由 Go 标准库隐式嗅探接管（`static.go:135-136` 注释自认） | 日志欺骗；协议面小缺陷；运维面暴露（无凭据）；内容类型可被字节内容左右 | S |
 | P2-28 | 内存账与实测 RSS 无对拍判据；`start` 段死循环错误码无夹具 | `readyz.go:225-228` 五项账本 + `reclaim.go` 已有回收，但无"模型 vs 实测"断言；`runtime/errors.go:289-312` 分类依赖 wazero 错误串，测试只有函数体内死循环 | 账本口径已修，缺机器判据；错误码分类需夹具才能定 | S/M |
 
@@ -352,14 +352,14 @@
 
 ### 4.2 作者工具链与文档（D 报告部分并入）
 **文档漂移实测（`D-docs-drift.md`：逐条对拍 94 条断言 = 66 条一致 + P0×1 + P1×9 + P2×12 + 6 条无法验证；另 3 条反向漂移）**
-- 客观校验：`picoaide-limits-gen -check` EXIT=0（97 条目）、`picoaide-wasm-imports-gen -check` EXIT=0（34 条并集）⇒ 生成物类文档 100% 与代码规格表同源；**漂移出在"规格表本身与运行行为不一致"**。
+- 客观校验：`zeokeel-limits-gen -check` EXIT=0（97 条目）、`zeokeel-wasm-imports-gen -check` EXIT=0（34 条并集）⇒ 生成物类文档 100% 与代码规格表同源；**漂移出在"规格表本身与运行行为不一致"**。
 - **P0-1（文档承诺不存在的能力）**：`references/publishing.md:171` 写"冻结 = 只读快照（保留 90 天）→ 可导出 → 真删并审计"，而快照与真删两个后台任务**都不存在**（同 P1-14）⇒ 作者/AI 会把"删除"当合规手段告诉用户，实际制品与应用库无限期保留。
 - **P1 代表项**：①`FORBIDDEN/403` 被写成"不是发布者或已冻结"，实际非发布者是 **404 同形**、冻结是独立码 `APP_FROZEN`（`release.go:64`、`publish.go:736`）；②`DB_LIMIT/507` 被写成"返回超行数"，实际**只置 `truncated` 不报错**（`appdb/stmt.go:70-82`），而同文档 `:140` 又是对的；③`limits.md` 的 `sql_max_rows` 说明源于 `limitsspec.go:109` 的错误文案；④`window.width/height` 在生成物里类型写 `string`，代码只收 JSON 数字（`appcfg.go:614-625`），两份作者文档给出相反类型；⑤`window_fields` 引用不存在的 `max`（真实区间 320–7680 硬编码在 `appcfg.go:102-103`）；⑥`Cache-Control`/`X-Content-Type-Options` 被列为"应用可设置"，实际是宿主独占（`respond.go:20-32`）会静默丢弃；⑦诊断响应结构缺 `{"diagnostics":{summary,failures,hints}}` 骨架；⑧`evidence` 字段（`RUNTIME_MEMORY` 误判排查的唯一依据）未写进文档；⑨`window.ratio` 类型不准确（字符串 `"1.5"` 被拒）。
 - **P2 代表项**：分片阈值实为"base64 长度 > 8 MiB"≈**6 MiB 产物**（`wasm-apps.ts:1002`）；`app_ai_unavailable` 还有 **502**；`NAME_TAKEN` 的"同名不同人是不同应用"方向相反（实际永久占有）；§7.1 补充码表缺 `APP_FROZEN`/`VALIDATE_FAILED`/`SECTION_OVERSIZE`；工具 deadline 是 **120 s**（90 s 是出站预算）；`wasm_app_publish` 把 `title` 设成恒必填（HTTP 契约是仅首版必填）。
 - **TinyGo 支持面（三条拦路点全部仍在，见 P0-4/P0-5/P0-6）**：DataCount 段位置判据与 wazero 互斥、`.debug_*` 被当资源、白名单缺 `sock_recv`/`sock_send`。文档未提示这三点，而 `SKILL.md:40` 把 TinyGo 归类为"官方支持的 Go"。
 - **主干链路实测可用（D 起了真服务端 + 真 PG 跑了一遍）**：脚手架 `cp -a examples/go` → `go build`（18.6s）→ `pack-assets` → `preview` → `validate 200` → `publish 201` → 迭代 `1.0.1 201` → 同号重发 `400 VERSION_NOT_NEWER` → 诊断 200 → 版本历史 200。Zig 产物预检 ACCEPT；Rust 产物静态预检通过（拦路点是 `.debug_*`）。
 - **本地假宿主保真度（`C-preview.md` 46 行差异表）**：`preview.mjs` 是**内存桩**（实测 POST 后另起进程 GET 为空 ⇒ 作者看不到自己写进去的数据）、SQL 只有三个正则形状（无 DELETE/JOIN/聚合/WHERE）、**零限额零鉴权无事务闸门**、**没实现 `/api` 保留前缀**（`:132-138` ↔ `appserver/static.go:260-263`）；"先打包"守卫对 Go 产物失效（`go:buildid` 不在 `:48-51` 的名单里）。
-- **"发出去之后"基本为空**：AI 工具面已接通（旧"0 调用方"判定作废，115 用例绿），但只有 list/validate/publish —— **无诊断、无下架、无删除、无回滚**；诊断不记录请求输入（`events.go:332-335` 的 16 列无 path/query/body）；`export` 明确不含使用者数据。**另一个安全观察（G17）**：本机 `/api/pico/apps/wasm/*` 的 GET 面**不是安全边界** —— `guard` 只查 loopback + 一个"纯标记"头（`auth-gate.ts:1312-1316` 与 `loopback.ts:66-72` 自述"a curl with a forged Origin passes this too"），只有写面才要持有性证明。
+- **"发出去之后"基本为空**：AI 工具面已接通（旧"0 调用方"判定作废，115 用例绿），但只有 list/validate/publish —— **无诊断、无下架、无删除、无回滚**；诊断不记录请求输入（`events.go:332-335` 的 16 列无 path/query/body）；`export` 明确不含使用者数据。**另一个安全观察（G17）**：本机 `/api/zeokeel/apps/wasm/*` 的 GET 面**不是安全边界** —— `guard` 只查 loopback + 一个"纯标记"头（`auth-gate.ts:1312-1316` 与 `loopback.ts:66-72` 自述"a curl with a forged Origin passes this too"），只有写面才要持有性证明。
 - **官网无应用作者文档**（`site/src/content/docs/` 只有 8 篇部署页提到 wasm）—— 对外交付面缺"怎么写应用"这一层。
 
 ### 4.3 已登记未闭环项核验（F 报告：逐条回代码验；**仍开 21 / 部分闭合 8 / 已闭合 40+（含 4 条因 W4 作废）/ 与原判不一致 14 处**）
@@ -383,7 +383,7 @@
 | F-6 | 应用日志可伪造宿主日志行（`logbuf` 入口不剥 `\r\n`、`flushAppLogs` 出口也不剥） | `logbuf/logbuf.go:42-63`、`hostenv.go:54-60`；`grep ReplaceAll/ContainsAny` 零命中 | 日志欺骗/污染 |
 | F-7 | 1xx 状态码放行 | `respond.go:52-55`（`status<100 \|\| >599` ⇒ OK） | 协议面小缺陷，修法 1 行 |
 | F-8 | `/readyz` 无鉴权且暴露内部水位（内存档位/队列深度/缓存字节/事件丢包…） | `cmd/server/main.go:674`；`readyz.go:217-250` | 暴露面（无凭据），是否收敛到运维网段是产品口径 |
-| F-9 | `PICOAI_COMPILE_ISOLATION` 生产默认仍是 `auto` | `docker-compose.yml:115`、`.env.example:68` 是注释掉的 `require`、`AI-DEPLOY.md` 零命中 | 部署面未落地（代码侧 require 已真 fail-closed） |
+| F-9 | `ZEOKEEL_COMPILE_ISOLATION` 生产默认仍是 `auto` | `docker-compose.yml:115`、`.env.example:68` 是注释掉的 `require`、`AI-DEPLOY.md` 零命中 | 部署面未落地（代码侧 require 已真 fail-closed） |
 | F-10 | 内存账与实测 RSS 无对拍判据（账本已扩到 5 项 + 有回收机制） | `readyz.go:225-228`、`appserver/reclaim.go` | **部分闭合**：口径已修，缺机器判据 |
 | F-11 | `start` 段死循环的错误码分类无法静态判定且无夹具 | `runtime/errors.go:289-312`；测试只有函数体内死循环 | 需 start 段夹具 + 期望码断言 |
 | F-12 | 三平台协议/存储探针与 `PROBE-RESULTS.md` 仍缺；`check:wasm-client-only` 仍 advisory | 探针在库但 Win/macOS 未跑；CI 未接 | = H3/H4 |
@@ -523,7 +523,7 @@
 
 ### 7.1 需要拍板的两处口径冲突（F 报告提出）
 1. **分区名是否含服务端哈希**：设计 §23.2 R2S-8 要求 `persist:agent-browser-<user>@<server-hash>`，实现是 `persist:agent-browser-<user>`（`partition.ts:47-50`，与内置浏览器同形且有 spec 钉死）—— **二者只能留一个**。留实现 ⇒ 改设计；留设计 ⇒ 两侧同批改 + 旧分区一次性清理。
-2. **名为"私有仓"的 `picoaide/channels` 实测可匿名克隆**（F 报告 `git ls-remote` 成功）—— 若本意是私有，需要关读权限；否则应在文档里如实称其为公开仓（它现在承载着各渠道的品牌与默认服务器地址）。
+2. **名为"私有仓"的 `zeokeel/channels` 实测可匿名克隆**（F 报告 `git ls-remote` 成功）—— 若本意是私有，需要关读权限；否则应在文档里如实称其为公开仓（它现在承载着各渠道的品牌与默认服务器地址）。
 
 ### 7.2 认账
 - **设计 §21.7 五条追加认账在 HEAD 上全部仍开**（B 报告逐条复核）：⑤ 归因不出数（含"伪造头未拦"，且 webadmin 契约反向声明已有防护）、⑥ 隐藏会话元数据放不下 `app_id`（已改判为"会话 id 前缀可判定"，属既知差异而非缺口）、⑦ 面板聊天不可达、⑧ "客户端按目录对比"触发源未做、⑨ 原子写无 fsync（上游 `.d.ts` 明写该缺口 out of scope）。

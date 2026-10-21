@@ -23,8 +23,8 @@ const SKILL = {
   name: 'app-builder',
   version: '1.0.0',
   title: '应用构建（WASM 应用）',
-  description: '用 Go 写一个 PicoAide 应用平台上的 WASM 应用并发布',
-  author: 'PicoAide',
+  description: '用 Go 写一个 ZeoKeel 应用平台上的 WASM 应用并发布',
+  author: 'ZeoKeel',
   category: '应用开发',
   sha256: '4face91471df1b872a1d64150e3ee684e1645ae80939218e92b3698fb20cf271',
   size: 43282,
@@ -33,7 +33,7 @@ const SKILL = {
 }
 
 const VIEW = {
-  dir: '/opt/picoaide/skills',
+  dir: '/opt/zeokeel/skills',
   dir_exists: true,
   skills: [SKILL],
   problems: [] as Array<{ name: string; name_bytes_hex?: string; reason: string }>,
@@ -51,7 +51,7 @@ describe('BuiltinSkills 平台内置技能（只读诊断面）', () => {
     mockRequest.mockResolvedValueOnce(VIEW as never)
     render(<BuiltinSkills />)
 
-    expect(await screen.findByTestId('builtin-dir')).toHaveTextContent('/opt/picoaide/skills')
+    expect(await screen.findByTestId('builtin-dir')).toHaveTextContent('/opt/zeokeel/skills')
     const row = await screen.findByTestId('builtin-row-app-builder')
     expect(row).toHaveTextContent('app-builder')
     expect(row).toHaveTextContent('1.0.0')
@@ -70,7 +70,7 @@ describe('BuiltinSkills 平台内置技能（只读诊断面）', () => {
       skills: [],
       problems: [{
         name: 'app-builder',
-        reason: 'manifest 校验未通过: IDENTITY_MISMATCH[name]: SKILL.md 的 name("picoaide-app-builder")必须等于应用 ID("app-builder")',
+        reason: 'manifest 校验未通过: IDENTITY_MISMATCH[name]: SKILL.md 的 name("zeokeel-app-builder")必须等于应用 ID("app-builder")',
       }],
       counts: { skills: 0, problems: 1 },
     } as never)
@@ -144,7 +144,7 @@ describe('BuiltinSkills 平台内置技能（只读诊断面）', () => {
     // 服务端在"资产根目录放错层/放空目录"时给出的真实形状：skills 空、problems 空 ——
     // 空态文案此前无条件写"请看上面的「被跳过」原因"，而那个块根本不会渲染。
     mockRequest.mockResolvedValueOnce({
-      dir: '/opt/picoaide/skills',
+      dir: '/opt/zeokeel/skills',
       dir_exists: true,
       skills: [],
       problems: [],
@@ -161,7 +161,7 @@ describe('BuiltinSkills 平台内置技能（只读诊断面）', () => {
 
   it('目录不存在是"没有内置技能"而不是故障（本地直跑二进制就是这个形态）', async () => {
     mockRequest.mockResolvedValueOnce({
-      dir: '/opt/picoaide/skills',
+      dir: '/opt/zeokeel/skills',
       dir_exists: false,
       skills: [],
       problems: [],
@@ -175,11 +175,11 @@ describe('BuiltinSkills 平台内置技能（只读诊断面）', () => {
 
   it('扫描失败时把原因显示出来（而不是只给一句"加载失败"）', async () => {
     mockRequest.mockResolvedValueOnce({
-      dir: '/opt/picoaide/skills',
+      dir: '/opt/zeokeel/skills',
       dir_exists: false,
       skills: [],
       problems: [],
-      load_error: 'skillseed: 读取内置技能目录 /opt/picoaide/skills: permission denied',
+      load_error: 'skillseed: 读取内置技能目录 /opt/zeokeel/skills: permission denied',
     } as never)
     render(<BuiltinSkills />)
 

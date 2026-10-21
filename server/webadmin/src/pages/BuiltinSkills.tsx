@@ -132,7 +132,7 @@ export default function BuiltinSkills() {
             </CardTitle>
             <CardDescription>
               随服务端镜像发布的内置技能（源在仓库的 <code>server/skills/</code>，镜像内
-              <code> /opt/picoaide/skills/</code>）；员工在客户端「能力中心 → 平台内置」按需安装。
+              <code> /opt/zeokeel/skills/</code>）；员工在客户端「能力中心 → 平台内置」按需安装。
               这里是只读视图：改内容 = 改仓库并重新构建镜像。
             </CardDescription>
           </div>

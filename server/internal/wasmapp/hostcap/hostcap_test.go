@@ -21,10 +21,10 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/capapi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
 )
 
 // ===== 假能力实现 =====
@@ -473,13 +473,13 @@ func TestLogCountersArePerCapabilities(t *testing.T) {
 func TestAssetsReadTextAndBase64(t *testing.T) {
 	assets := &fakeAssets{
 		types: map[string]string{
-			"picoaide.app.json": "application/json",
+			"zeokeel.app.json": "application/json",
 			"index.html":        "text/html",
 			"logo.png":          "image/png",
 			"broken.txt":        "text/plain",
 		},
 		files: map[string][]byte{
-			"picoaide.app.json": []byte(`{"login_required":false}`),
+			"zeokeel.app.json": []byte(`{"login_required":false}`),
 			"index.html":        []byte("<h1>hi</h1>"),
 			"logo.png":          {0x89, 'P', 'N', 'G'},
 			"broken.txt":        {0xff, 0xfe}, // 文本类型但不是合法 UTF-8

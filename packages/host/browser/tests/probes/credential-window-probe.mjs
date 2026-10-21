@@ -60,7 +60,7 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Sign in</t
 <p id="kv">password=${SHORT}</p>
 <p id="keyed-bracket">token=[${SHORT}]</p>
 <script>
-  const CAL = 'PICOAI';
+  const CAL = 'ZEOKEEL';
   const bitsOf = (text) => { let bits = ''; for (const ch of text) bits += (ch.charCodeAt(0) & 255).toString(2).padStart(8, '0'); return bits; };
   const drawBits = (ctx, text, oy) => {
     const bits = bitsOf(text);
@@ -213,7 +213,7 @@ runProbe(async () => {
     const calibration = canDecode ? decodeBits(shot.dataUrl, 0, innerWidth, 6) : null
     const fromImage = canDecode ? decodeBits(shot.dataUrl, 220, innerWidth, PASSWORD.length) : null
     rec.record('W.red.screenshot-returns-credential-as-pixels',
-      fromImage !== null && calibration !== null && calibration.text === 'PICOAI' && fromImage.text === PASSWORD,
+      fromImage !== null && calibration !== null && calibration.text === 'ZEOKEEL' && fromImage.text === PASSWORD,
       { ok: shot.ok, code: shot.code, message: shot.message, innerWidth, scale: fromImage?.scale, calibration: calibration?.text, decoded: fromImage?.text, size: fromImage === null ? null : { width: fromImage.width, height: fromImage.height } })
 
     // GREEN: both channels are refused inside the window, with an assertable text.

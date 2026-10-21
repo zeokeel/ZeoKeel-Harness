@@ -1,4 +1,4 @@
-# ABI 参考（应用契约 `picoaide-app/1`）
+# ABI 参考（应用契约 `zeokeel-app/1`）
 
 > 本文件是**帧协议与宿主调用的唯一参考**。协议版本写在 SKILL 的 `x-abi-version`
 > 与请求帧的 `abi` 字段里；平台升级协议时会换版本号，届时预检会直接拒。
@@ -25,7 +25,7 @@ RS(0x1e) + 十进制长度 + '\n' + UTF-8 JSON
 **每个请求都带完整身份**：应用实例每请求新建，身份不是会话状态，必须在每一帧里读。
 
 ```json
-{"abi":"picoaide-app/1","app_id":"shared-notes","version":"1.2.0",
+{"abi":"zeokeel-app/1","app_id":"shared-notes","version":"1.2.0",
  "auth":{"mode":"whitelist","verified":true},
  "user":{"id":10231,"username":"zhangwei","display_name":"张伟",
          "dept":"研发部","is_publisher":false},
@@ -36,10 +36,10 @@ RS(0x1e) + 十进制长度 + '\n' + UTF-8 JSON
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `abi` | string | 协议版本，恒为 `picoaide-app/1` |
-| `app_id` | string | 应用标识（也是应用 origin 的 host 段：`<渠道 app 源 scheme>://<app_id>/`，渠道参数化：official/beta 取值 `picoaide-app`） |
+| `abi` | string | 协议版本，恒为 `zeokeel-app/1` |
+| `app_id` | string | 应用标识（也是应用 origin 的 host 段：`<渠道 app 源 scheme>://<app_id>/`，渠道参数化：official/beta 取值 `zeokeel-app`） |
 | `version` | string | 当前生效版本号 |
-| `auth.mode` | string | `login` / `whitelist`（来自 `picoaide.app.json` 的 `access`；历史配置里的 `public` 由读取侧按 `login` 处理，不会以 `public` 出现在帧里） |
+| `auth.mode` | string | `login` / `whitelist`（来自 `zeokeel.app.json` 的 `access`；历史配置里的 `public` 由读取侧按 `login` 处理，不会以 `public` 出现在帧里） |
 | `auth.verified` | bool | 宿主已验证身份；平台一律要求登录，正常路径恒为 `true` |
 | `user` | object | 当前使用者（**平台没有匿名面，永远是对象、不会是 `null`**；防御式判空仍建议保留） |
 | `user.id` / `user.username` | int / string | **稳定键**：业务名单请用这两个，不要用 `display_name`/`dept` |
@@ -88,7 +88,7 @@ RS(0x1e) + 十进制长度 + '\n' + UTF-8 JSON
 | `tx_commit` | `{"tx_id":7}`（`tx_id` 可省：省了就提交当前事务） | `{"committed":true}` |
 | `tx_rollback` | `{"tx_id":7}` | `{"committed":false}` |
 | `log` | `{"level":"info","message":"便签已保存"}` | `{"accepted":1}` |
-| `assets.read` | `{"path":"picoaide.app.json"}` | **必带判别字段 `encoding`**：`"text"` ⇒ 读 `text`（例：`{"content_type":"application/json","size":312,"encoding":"text","text":"{…}"}`）；`"base64"` ⇒ 读 `base64`；`"empty"` ⇒ 零字节资源（`text`/`base64` 都不出现） |
+| `assets.read` | `{"path":"zeokeel.app.json"}` | **必带判别字段 `encoding`**：`"text"` ⇒ 读 `text`（例：`{"content_type":"application/json","size":312,"encoding":"text","text":"{…}"}`）；`"base64"` ⇒ 读 `base64`；`"empty"` ⇒ 零字节资源（`text`/`base64` 都不出现） |
 
 ### 3.1 `db.define`（唯一的建表方式）
 
@@ -160,7 +160,7 @@ _row_id INTEGER PRIMARY KEY AUTOINCREMENT
 宿主能力清单里**没有 AI**（八个方法就是全部）。应用里的 AI 走**客户端 AI loop**：
 
 ```
-应用前端 JS  —— POST /__picoaide/ai/chat（双下划线保留路径）
+应用前端 JS  —— POST /__zeokeel/ai/chat（双下划线保留路径）
         ▼  宿主协议 handler 本地处理，绝不转发平台
    ① 首次授权闸门（用户 × 应用）→ ② 隐藏会话 app:<app_id>
    → ③ 桌面客户端跑一轮 ctx.agentLoop（工具集为空）
@@ -185,7 +185,7 @@ _row_id INTEGER PRIMARY KEY AUTOINCREMENT
 
 读**随包提交**的资源（= wasm 的**自定义段**，运行期由宿主从制品里解析后常驻内存）：
 
-- 最常见的用法是读应用自己的配置：`assets.read("picoaide.app.json")`。
+- 最常见的用法是读应用自己的配置：`assets.read("zeokeel.app.json")`。
 - 路径是包内相对路径；没有文件系统语义（不能列目录、不能穿越）：路径不超过 256 字节、
   单段不超过 255 字节（平台按逻辑路径校验，不接触宿主文件系统）。
 - 资源清单（自省/诊断接口）最多返回 10000 条。
@@ -196,20 +196,20 @@ _row_id INTEGER PRIMARY KEY AUTOINCREMENT
   - `"empty"` ⇒ **零字节资源**：`text` 与 `base64` 都不会出现，直接按空处理。
 - 不要用 `size == 0` 去推断该读哪个字段 —— `encoding` 就是为消灭这个歧义存在的。
 - 单个随包资源与自定义段总量**同源上限 4 MiB**（超限 `ASSET_OVERSIZE`）。
-- ⚠️ **随包资源不得占用 `__picoaide/` 前缀**：那是宿主保留命名空间，发布期直接拒
+- ⚠️ **随包资源不得占用 `__zeokeel/` 前缀**：那是宿主保留命名空间，发布期直接拒
   （`ASSET_DENIED` + `details.reason = "reserved_path_prefix"`）。
 
 **可见性（往包里放机密之前必读）**：
 
 - `assets.read` 读到的资源**默认不对外公开** —— 它按包内逻辑路径在宿主内存里查，
   没有文件系统语义，外面也列不了目录。
-- **唯一例外是"非保留资源"**：`picoaide.app.json` 之外的一切包内文件
+- **唯一例外是"非保留资源"**：`zeokeel.app.json` 之外的一切包内文件
   （HTML/JS/CSS/图片/字体/数据文件）会被宿主**按路径直出给任何能打开应用的人**
   —— 这正是"静态资源编译进 wasm"的用法（也才有 §4.6 的响应缓存收益）。
   所以**不要把机密、账号名单、内部说明、口令、内网地址放进非保留资源**：
   `GET /data/users.json` 任何能打开这个应用的人都能拿到，**与 `access` 无关**
   （登录只决定**谁**能打开应用；能打开的人在应用内取子资源照样直出）。
-- **名单放 `picoaide.app.json`**：它是平台保留资源，**不会被直出**；只有应用自己
+- **名单放 `zeokeel.app.json`**：它是平台保留资源，**不会被直出**；只有应用自己
   用 `assets.read` 读得到它，访问者拿到的是应用自己写的（404/403）页面。
 
 **静态资源的直出规则（决定了你的路由怎么写）**：
@@ -237,7 +237,7 @@ node scripts/pack-assets.mjs --in app.wasm --out dist/app-packed.wasm \
   web/index.html=index.html web/app.css=static/app.css web/app.js=static/app.js
 ```
 
-⚠️ **保留资源不能这样加**：`picoaide.app.json` 由平台在发布期写入（内容 = 随包提交的
+⚠️ **保留资源不能这样加**：`zeokeel.app.json` 由平台在发布期写入（内容 = 随包提交的
 `config`），模块里的同名段会被平台忽略；脚本会直接拒绝。名单要放就放 `config` 的
 `whitelist`，不要塞进会被直出的非保留资源。
 
@@ -325,7 +325,7 @@ node scripts/pack-assets.mjs --in app.wasm --out dist/app-packed.wasm \
 | `NAME_TAKEN` | 409 | 应用名已被占用（**同名即同一个应用**，不是"不同人各有一个"） | 换名字：标识由**首个成功发布者永久占有**（被拒/软删也不释放）；需要接管时请管理员在管理面转移归属 |
 | `VERSION_INVALID` / `VERSION_NOT_NEWER` | 400 | 版本号不是 `x.y.z` 或不递增 | 改成比线上更大的 `x.y.z` |
 | `MISSING_FIELD` | 422 | 非首版缺少 changelog 等必填项 | 补上再发 |
-| `APP_CONFIG_INVALID` | 422 | `picoaide.app.json` 缺失/非法/字段越界 | 按提示字段修（注意 `access="whitelist"` 必须有非空名单；字段规格见 `references/app-config.md`） |
+| `APP_CONFIG_INVALID` | 422 | `zeokeel.app.json` 缺失/非法/字段越界 | 按提示字段修（注意 `access="whitelist"` 必须有非空名单；字段规格见 `references/app-config.md`） |
 | `WASM_TOO_LARGE` / `BODY_TOO_LARGE` | 413 | wasm 超 32 MiB / 上传体超 48 MiB | 精简资源，或把大资源移出应用 |
 | `RATE_LIMITED` / `COMPILE_BUSY` | 429 | 上传过于频繁 / 编译队列忙 | 等一会儿再试 |
 | `FORBIDDEN` | 403 | 审计账号调用应用平台；或**跨源写请求**被拒（非幂等方法的 `Origin` 必须等于应用自身源 `<渠道 app 源 scheme>://<app_id>`）——**与"发布者/冻结"无关** | 用发布者本人的登录态操作；写请求带同源来源。**不是发布者**时看到的是 404（见下一行），应用被冻结时看到的是 403 `APP_FROZEN`（见 §7.1） |
@@ -334,7 +334,7 @@ node scripts/pack-assets.mjs --in app.wasm --out dist/app-packed.wasm \
 | `INTERNAL` | 500 | 平台内部错误 | 重试一次；持续失败提工单并附诊断 |
 
 > **AI 相关错误码不在本表**：wasm 侧没有 AI 能力。应用里的 AI 由应用前端经保留路径
-> `POST /__picoaide/ai/chat` 调客户端（客户端 AI loop）本地处理，它的六个错误码
+> `POST /__zeokeel/ai/chat` 调客户端（客户端 AI loop）本地处理，它的六个错误码
 > （`app_ai_denied` / `app_ai_unavailable` / `app_ai_invalid` / `ai_balance_insufficient` /
 > `ai_rate_limited` / `ai_cancelled`）是另一套，处置见 SKILL.md 的「应用里的 AI：客户端 AI loop」。
 
@@ -348,7 +348,7 @@ node scripts/pack-assets.mjs --in app.wasm --out dist/app-packed.wasm \
 | --- | --- | --- | --- |
 | `HOST_METHOD_UNKNOWN` | 400 | 调了不存在的宿主函数（方法名拼错，或平台没有这个能力） | 只调上面 §3 表里的八个方法；`details.method` 回显你给的方法名，`hints` 列出可用能力 |
 | （第一层，JSON-RPC 的 `code` 就是 `NOT_FOUND`） | — | 方法名不在封闭清单里时，**运行时**先回一条 JSON-RPC error：`code = "NOT_FOUND"`、`message = "未知的宿主方法: <方法名>"` | **老应用（仍调 `ai.chat`）就是撞在这一层**：它**不会**在发布期被拒（`ai.chat` 从来不是 WASI 导入，平台也不反编译产物），而是运行期第一次调用才失败。迁移见 SKILL.md 的「应用里的 AI」 |
-| `ASSET_DENIED` | 403 | `assets.read` 的包内路径被拒（绝对路径 / `..` / `\` / 控制字符 / 超长）；**发布期的随包资源名占用 `__picoaide/` 前缀也回这个码**（`details.reason = "reserved_path_prefix"`） | 用相对、以 `/` 分隔的包内逻辑路径；看 `details.reason`（如 `parent_segment`、`not_canonical`、`reserved_path_prefix`） |
+| `ASSET_DENIED` | 403 | `assets.read` 的包内路径被拒（绝对路径 / `..` / `\` / 控制字符 / 超长）；**发布期的随包资源名占用 `__zeokeel/` 前缀也回这个码**（`details.reason = "reserved_path_prefix"`） | 用相对、以 `/` 分隔的包内逻辑路径；看 `details.reason`（如 `parent_segment`、`not_canonical`、`reserved_path_prefix`） |
 | `ASSET_OVERSIZE` | 422 | 单个随包资源超过单文件上限（与自定义段总量同源，见 `references/limits.md`） | 精简资源；HTML/JS 先压缩再内嵌 |
 | `ASSET_EXISTS` | 409 | 同一个资源名在自定义段里出现了两次（重名段只认第一个） | 改资源名或删掉重复的那一份；改内容 = 发一个新版本 |
 | `APP_FROZEN` | 403 | 应用已被**冻结**（发布者本人或管理员停用），而你在做发布 / 上下架 / 改配置 | 冻结期间任何写动作都不会成功，也不会自动恢复：**发布者本人在客户端应用中心里解冻**（冻结的应用对他/她自己仍列在目录里，带「已冻结」标记，点「解冻」即可；解冻后还要重新上架），其他成员看不到冻结的应用、需要解冻请找管理员。冻结同时会下架，员工侧打开一律 404 |
@@ -393,7 +393,7 @@ if err := report.Execute(&buf, map[string]string{"User": user}); err != nil { /*
 不要据此调网络参数）、读写宿主文件、起线程/子进程；命令行参数与环境变量**读到的是空的**
 （平台不传 `args` / `env`，别把配置放进去）。
 
-> 判据来源：白名单由参考程序**真编译**生成（`server/cmd/picoaide-wasm-imports-gen`），
+> 判据来源：白名单由参考程序**真编译**生成（`server/cmd/zeokeel-wasm-imports-gen`），
 > **放行的全部符号 + 签名 + 逐条"为什么放行"见 `references/imports.md`**（同一生成器产出，
 > 与真源逐字节对拍），并且有一条独立的覆盖性门禁真编译"`html/template` 渲染 + `ReadAt`"的最小程序
 > 断言它落在白名单内（`server/internal/wasmapp/wasmmod/imports_coverage_test.go`）。

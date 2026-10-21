@@ -3,7 +3,7 @@ package llmgateway
 import (
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 每用户限流缺省 0 = 不限制（2026-09-22 与官方口径一致：官方只限账号级并发、

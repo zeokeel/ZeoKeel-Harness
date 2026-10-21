@@ -44,17 +44,17 @@ interface Route {
 
 /** 本文件里**每一处**解码点对应的端点（`{bad}` = 畸形转义所在的那一格）。 */
 const ENDPOINTS: Array<{ method: string, path: (bad: string) => string, note: string }> = [
-  { method: 'POST', path: bad => `/api/pico/skills/builtin/${bad}/install`, note: '内置技能安装' },
-  { method: 'POST', path: bad => `/api/pico/skills/builtin/${bad}/uninstall`, note: '内置技能卸载' },
-  { method: 'POST', path: bad => `/api/pico/skills/${bad}/install`, note: '市场技能安装' },
-  { method: 'POST', path: bad => `/api/pico/skills/${bad}/uninstall`, note: '市场技能卸载' },
-  { method: 'GET', path: bad => `/api/pico/skills/${bad}/archive`, note: '市场技能归档下载' },
-  { method: 'POST', path: bad => `/api/pico/agent-presets/${bad}/install`, note: '共享 Agent 安装' },
-  { method: 'POST', path: bad => `/api/pico/agent-presets/${bad}/uninstall`, note: '共享 Agent 卸载' },
-  { method: 'GET', path: bad => `/api/pico/agent-presets/${bad}/archive`, note: '共享 Agent 归档下载' },
-  { method: 'POST', path: bad => `/api/pico/shared-skills/${bad}/1.0.0/install`, note: '组织技能安装（名字段）' },
-  { method: 'POST', path: bad => `/api/pico/shared-skills/demo/${bad}/install`, note: '组织技能安装（版本段）' },
-  { method: 'POST', path: bad => `/api/pico/shared-skills/${bad}/1.0.0/uninstall`, note: '组织技能卸载' },
+  { method: 'POST', path: bad => `/api/zeokeel/skills/builtin/${bad}/install`, note: '内置技能安装' },
+  { method: 'POST', path: bad => `/api/zeokeel/skills/builtin/${bad}/uninstall`, note: '内置技能卸载' },
+  { method: 'POST', path: bad => `/api/zeokeel/skills/${bad}/install`, note: '市场技能安装' },
+  { method: 'POST', path: bad => `/api/zeokeel/skills/${bad}/uninstall`, note: '市场技能卸载' },
+  { method: 'GET', path: bad => `/api/zeokeel/skills/${bad}/archive`, note: '市场技能归档下载' },
+  { method: 'POST', path: bad => `/api/zeokeel/agent-presets/${bad}/install`, note: '共享 Agent 安装' },
+  { method: 'POST', path: bad => `/api/zeokeel/agent-presets/${bad}/uninstall`, note: '共享 Agent 卸载' },
+  { method: 'GET', path: bad => `/api/zeokeel/agent-presets/${bad}/archive`, note: '共享 Agent 归档下载' },
+  { method: 'POST', path: bad => `/api/zeokeel/shared-skills/${bad}/1.0.0/install`, note: '组织技能安装（名字段）' },
+  { method: 'POST', path: bad => `/api/zeokeel/shared-skills/demo/${bad}/install`, note: '组织技能安装（版本段）' },
+  { method: 'POST', path: bad => `/api/zeokeel/shared-skills/${bad}/1.0.0/uninstall`, note: '组织技能卸载' },
 ]
 
 function fakeRequest(url: string, method: string): IncomingMessage {
@@ -95,7 +95,7 @@ function harness(session: Session | null): { call: (url: string, method: string)
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? { requestRejection: () => undefined } : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -160,7 +160,7 @@ describe('R6-B P3：本机路由的路径段解码不得让 URIError 抛穿 hand
     const outbound = vi.fn(async () => new Response('not found', { status: 404 }))
     vi.stubGlobal('fetch', outbound)
     const h = harness(SESSION)
-    const out = await h.call('/api/pico/skills/demo%2Dtool/archive', 'GET')
+    const out = await h.call('/api/zeokeel/skills/demo%2Dtool/archive', 'GET')
     // 过了解码 + 命名校验 ⇒ 打到上游；上游 404 原样透出（不是 INVALID_PATH）。
     expect(outbound).toHaveBeenCalledTimes(1)
     expect(String((outbound.mock.calls[0] as unknown[])[0])).toContain('/marketplace/skills/demo-tool/archive')

@@ -38,9 +38,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/agentshare"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/agentshare"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func TestBlankPresetChecksumHeaderParityAcrossAgentSurfaces(t *testing.T) {
@@ -94,7 +94,7 @@ func TestBlankPresetChecksumHeaderParityAcrossAgentSurfaces(t *testing.T) {
 		t.Fatalf("建管理会话: %v", err)
 	}
 	req := httptest.NewRequest("GET", "/api/server/admin/agents/"+marketName+"/archive", nil)
-	req.AddCookie(&http.Cookie{Name: "picoaide_session", Value: sess.ID})
+	req.AddCookie(&http.Cookie{Name: "zeokeel_session", Value: sess.ID})
 	mktW := httptest.NewRecorder()
 	r.ServeHTTP(mktW, req)
 	if mktW.Code != http.StatusOK {

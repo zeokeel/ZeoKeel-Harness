@@ -105,7 +105,7 @@ describe('技能用量上报去重键（R13-GC / B-P2-5）', () => {
     const { apply } = await telemetry()
     const handlers = new Map<string, (...args: unknown[]) => void>()
     const ctx = {
-      picoSession: { getSession: () => ALICE },
+      zeokeelSession: { getSession: () => ALICE },
       on: (event: string, fn: (...args: unknown[]) => void) => {
         if (!handlers.has(event)) handlers.set(event, fn)
       },

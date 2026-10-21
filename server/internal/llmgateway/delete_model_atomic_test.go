@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // excludedListInDB 直读名单(绕过缓存)。

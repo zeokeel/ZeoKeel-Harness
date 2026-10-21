@@ -9,7 +9,7 @@
 ## 问题
 
 渠道客户端（acme 等白标构建）与官方客户端共用**同一个**数据根：Harness home 是
-编译期常量 `~/.picoaide-harness`（`desktop-home.ts` 的 `PRODUCT_DSH_HOME_DIR`），
+编译期常量 `~/.zeokeel-harness`（`desktop-home.ts` 的 `PRODUCT_DSH_HOME_DIR`），
 用户明确报告"dsh_Home 这个目录没有随着渠道修改"。
 
 后果（不是观感问题）：
@@ -27,24 +27,24 @@
 - Electron userData 之前只是**碰巧**随渠道（`app.setName(PRODUCT_NAME)`），而 beta
   渠道复用官方品牌 ⇒ 产品名与 official 逐字相同 ⇒ userData 与**单实例锁**和 official
   撞车（两个客户端互相顶掉启动）。`bin.ts` 的 npm 启动器路径还把 userData 目录名
-  硬编码成 `PicoAide Harness`。
-- `main.ts` 的 `app.setAppUserModelId('ai.deepseek.dsh.desktop')` 硬编码厂商 app id，
+  硬编码成 `ZeoKeel Harness`。
+- `main.ts` 的 `app.setAppUserModelId('com.zeokeel.harness')` 硬编码厂商 app id，
   与 electron-builder 写进快捷方式的渠道 app_id 不一致（Windows 通知身份对不上）。
-- `packages/host/enterprise` 里四处自己拼 `~/.picoaide-harness` 兜底
+- `packages/host/enterprise` 里四处自己拼 `~/.zeokeel-harness` 兜底
   （`session-service.ts` / `skill-install.ts` / `agent-preset-install.ts` /
   `server-connector/tls.ts`），违反"数据目录权威源唯一"。
 
 ## 决策
 
 1. **渠道包新增 `desktop.home_dir`**（`~` 下的单段目录名，`^\.[a-z0-9][a-z0-9-]{0,62}$`）。
-   品牌渠道**必填**（CI 中止）；**beta 显式写 `.picoaide-harness`**（公共渠道刻意与
+   品牌渠道**必填**（CI 中止）；**beta 显式写 `.zeokeel-harness`**（公共渠道刻意与
    official 共用数据根：beta 环境要经常跑测试，共用现成的登录态/设置更省事，CI 对
    公共渠道放行、只对品牌渠道禁用）；official 不需要（官方构建不随包分发渠道包）。
 2. **派生唯一入口**：`desktop-home.ts` 的 `channelDshHomeDir(channelId, { homeDir, slug })`。
    取值链：显式值 → slug 小写（`Acme-Harness` → `.acme-harness`）→
-   `.picoaide-harness-<channelId>`。**非官方渠道永不得到官方目录**（显式写官方目录、
+   `.zeokeel-harness-<channelId>`。**非官方渠道永不得到官方目录**（显式写官方目录、
    slug 等于官方 slug 都被忽略并退档）。
-3. **官方渠道逐字节不变**：`~/.picoaide-harness`，无渠道包时走官方缺省；存量数据不搬。
+3. **官方渠道逐字节不变**：`~/.zeokeel-harness`，无渠道包时走官方缺省；存量数据不搬。
 4. **`$DSH_HOME` / 显式配置仍然优先**（e2e、便携安装、多 profile 依赖）。
 5. **userData 也显式按渠道 setPath**（`desktopUserDataDirectoryName`）：官方 =
    产品名（不变）；**其余每个渠道 = `<产品名> (<渠道 id>)`**（2026-09-12 审计 P1-13
@@ -62,20 +62,20 @@
   fail-loud 用例，以及"公共渠道 beta 显式共用官方目录必须通过"的用例（全部通过）。
 - 用**真实主进程代码**跑三个探针（Xvfb + 独立 HOME，`electron packages/host/desktop`）：
   - 假渠道 probe（`home_dir: .probe-harness`）→ `~/.probe-harness` ✓、
-    `~/.config/Probe Harness` ✓、`~/.picoaide-harness` **未创建** ✓；
-  - 官方（无渠道包）→ `~/.picoaide-harness` + `~/.config/PicoAide Harness`（不变）✓；
-  - beta 式渠道（产品名与官方相同，显式 `home_dir: .picoaide-harness`）→ 数据根与
-    官方相同 ✓，userData 为 `~/.config/PicoAide Harness (beta)`（日志/更新态/单实例锁
+    `~/.config/Probe Harness` ✓、`~/.zeokeel-harness` **未创建** ✓；
+  - 官方（无渠道包）→ `~/.zeokeel-harness` + `~/.config/ZeoKeel Harness`（不变）✓；
+  - beta 式渠道（产品名与官方相同，显式 `home_dir: .zeokeel-harness`）→ 数据根与
+    官方相同 ✓，userData 为 `~/.config/ZeoKeel Harness (beta)`（日志/更新态/单实例锁
     不互相顶）✓。
 - 真实渠道包（本地 `channels/acme`、`channels/beta`、`channels/example-brand`）走
   `scripts/ci-channels.sh` 校验通过（两者已补 `home_dir`）。
 
 ## 私有仓同步（已完成）
 
-`picoaide/channels`（私有）已补齐 `desktop.home_dir`（2026-09-11，`main`）：
+`zeokeel/channels`（私有）已补齐 `desktop.home_dir`（2026-09-11，`main`）：
 
 - **acme** → `.acme-harness`（与 slug 派生结果一致，将来即便漏配也不会换目录）；
-- **beta** → **`.picoaide-harness`（显式与 official 共用）**：2026-09-11 当日修正 ——
+- **beta** → **`.zeokeel-harness`（显式与 official 共用）**：2026-09-11 当日修正 ——
   beta 环境要经常跑测试，共用现成的登录态/设置更省事；CI 对公共渠道（official/beta）
   放行官方目录，只对**品牌渠道**禁用。运行时仍保留"派生/回落路径不得撞官方目录"的
   兜底（防漏配），但**显式声明一律照办**；
@@ -98,7 +98,7 @@ SSO 回调通过桌面壳闸门并进入 token 预验证（探针期间临时清
 ## 修订（2026-09-12）：beta 不再与 official 共用数据根
 
 **结论**：`desktop.home_dir` 的**必填范围从"品牌渠道"扩到"除 official 之外的每个渠道"**；
-`beta` 恢复为**独立数据根** `.picoaide-harness-beta`；CI 不再给 `official || beta` 开豁免。
+`beta` 恢复为**独立数据根** `.zeokeel-harness-beta`；CI 不再给 `official || beta` 开豁免。
 
 **为什么推翻 2026-09-11 的"共用更省事"**：那次决定的隐含前提是"两条线跑同一份客户端"，
 但 DSH 升级到 0.1.5-rc.2 之后这个前提不成立了：
@@ -111,41 +111,41 @@ SSO 回调通过桌面壳闸门并进入 token 预验证（探针期间临时清
   - 预发期间新建的会话（只有 v3）对正式客户端**永久不可见**；
   - 已经双边存在的会话，正式客户端继续往 v0 追加、预发客户端只认 v3
     ⇒ **历史分叉**，且两边都不报错；
-- 两代客户端的 Electron userData 不同（`PicoAide Harness` vs `PicoAide Harness (beta)`）
+- 两代客户端的 Electron userData 不同（`ZeoKeel Harness` vs `ZeoKeel Harness (beta)`）
   ⇒ **单实例锁挡不住**，两个进程可以同时活着写同一个数据根。
 
 共用省下的是一次登录，代价是静默丢数据 —— 不划算，因此：
 
 1. `scripts/ci-channels.sh`：`desktop.home_dir` 对所有非 `official` 渠道必填；任何渠道
-   写成 `.picoaide-harness` 一律 fail-loud（错误信息不回显渠道名）。
+   写成 `.zeokeel-harness` 一律 fail-loud（错误信息不回显渠道名）。
 2. `scripts/verify-ci-scripts.mjs`：三条新用例 —— beta 写官方目录必须失败、beta 写
-   `.picoaide-harness-beta` 必须通过、beta 缺字段必须失败（原来的"beta 共用必须通过"
+   `.zeokeel-harness-beta` 必须通过、beta 缺字段必须失败（原来的"beta 共用必须通过"
    用例已删除）。
-3. `picoaide/channels`（私有）`channels/beta/channel.json`：`home_dir` →
-   `.picoaide-harness-beta`，`meta.description` 同步说明原因。
+3. `zeokeel/channels`（私有）`channels/beta/channel.json`：`home_dir` →
+   `.zeokeel-harness-beta`，`meta.description` 同步说明原因。
 4. **运维口径**：预发客户端升级后**不会**再看到正式客户端的登录态与历史会话（这是
-   目的，不是回归）；需要在预发环境复用数据时，请手动从 `~/.picoaide-harness`
-   复制到 `~/.picoaide-harness-beta`，且**不要**让两代客户端交替打开同一份拷贝。
+   目的，不是回归）；需要在预发环境复用数据时，请手动从 `~/.zeokeel-harness`
+   复制到 `~/.zeokeel-harness-beta`，且**不要**让两代客户端交替打开同一份拷贝。
 
 ---
 
 ## 修订（2026-09-12，二次）：beta 回到与 official 一致的数据根
 
 **结论（用户定案）**：预发版是正式版的**前置验证**，登录态、设置与会话必须与正式版
-延续 —— `picoaide/channels` 的 `channels/beta/channel.json` 把 `desktop.home_dir` 改回
-`.picoaide-harness`；CI 规则同步改成"**beta 必须与官方一致**，品牌渠道仍不得写官方
+延续 —— `zeokeel/channels` 的 `channels/beta/channel.json` 把 `desktop.home_dir` 改回
+`.zeokeel-harness`；CI 规则同步改成"**beta 必须与官方一致**，品牌渠道仍不得写官方
 目录"。上面那次"beta 独立数据根"的修订作废。
 
 **触发它的真实事故（同日下午）**：已装 `v2.7.2-beta.1/beta.2` 的用户直接升级到
 `beta.6` 后报"**所有对话都没了**"。原因不是跨版本，而是上面那条修订：
 
-- 随包 `build/channel.json` 的 `desktop.home_dir` 在 beta.2 里是 `.picoaide-harness`
-  （与官方共用），在 beta.3 起是 `.picoaide-harness-beta`（独立）—— 已用产物级证据确认
+- 随包 `build/channel.json` 的 `desktop.home_dir` 在 beta.2 里是 `.zeokeel-harness`
+  （与官方共用），在 beta.3 起是 `.zeokeel-harness-beta`（独立）—— 已用产物级证据确认
   （从两次 CI 的 `desktop-Linux` artifact 解出 AppImage → `app.asar` →
-  `build/channel.json`：beta.2 = `.picoaide-harness`，beta.6 = `.picoaide-harness-beta`）；
+  `build/channel.json`：beta.2 = `.zeokeel-harness`，beta.6 = `.zeokeel-harness-beta`）；
 - DSH home 里装的是**对话本身**：`sessions/`、`storages/`、`settings.yaml`、
   `.credentials.yaml`、`session.json`（企业登录 token）—— 换根 = 空会话列表 + 重新登录；
-- 旧数据没被删（仍在 `~/.picoaide-harness`），但客户端**没有任何迁移**，发布说明也
+- 旧数据没被删（仍在 `~/.zeokeel-harness`），但客户端**没有任何迁移**，发布说明也
   没写，所以对用户就是"数据丢了"。
 
 **机制根因（比这次配置更值得记）**：`scripts/ci-channels.sh` 每次构建都
@@ -157,9 +157,9 @@ SSO 回调通过桌面壳闸门并进入 token 预验证（探针期间临时清
 **新规则（唯一取值，显式且 fail-loud）**：
 
 1. `scripts/ci-channels.sh`：`desktop.home_dir` 仍对所有非 `official` 渠道必填；`beta`
-   必须**恰好**是 `.picoaide-harness`（写别的目录、含派生兜底 `.picoaide-harness-<渠道>`
-   一律中止）；品牌渠道仍**不得**写 `.picoaide-harness`。两个方向都拦，防止再次静默漂移。
-2. `scripts/verify-ci-scripts.mjs`：三条 beta 用例翻转 —— 写 `.picoaide-harness` 必须
+   必须**恰好**是 `.zeokeel-harness`（写别的目录、含派生兜底 `.zeokeel-harness-<渠道>`
+   一律中止）；品牌渠道仍**不得**写 `.zeokeel-harness`。两个方向都拦，防止再次静默漂移。
+2. `scripts/verify-ci-scripts.mjs`：三条 beta 用例翻转 —— 写 `.zeokeel-harness` 必须
    **通过**、写自己的目录必须**失败**、缺字段必须失败。
 3. 运行期派生逻辑（`desktop-home.ts` 的 `channelDshHomeDir`）不变：显式声明一律采纳
    （本来就允许渠道声明官方目录），变的只是渠道包与构建期守卫。
@@ -171,8 +171,8 @@ SSO 回调通过桌面壳闸门并进入 token 预验证（探针期间临时清
 预发版客户端。
 
 **数据口径（已经装过 beta.3~beta.6 的机器）**：换回后，那段时间写在
-`~/.picoaide-harness-beta` 的会话在新客户端里看不到，需要人工合并一次：退出两个客户端
-后把 `~/.picoaide-harness-beta/` 的内容并入 `~/.picoaide-harness/`（两代 pin 的上游同一
+`~/.zeokeel-harness-beta` 的会话在新客户端里看不到，需要人工合并一次：退出两个客户端
+后把 `~/.zeokeel-harness-beta/` 的内容并入 `~/.zeokeel-harness/`（两代 pin 的上游同一
 commit、会话格式同为 v3，直接拷即可；同名文件先备份）。只装过 beta.1/beta.2 的机器
 什么都不用做 —— 它们本来就在官方目录里。
 

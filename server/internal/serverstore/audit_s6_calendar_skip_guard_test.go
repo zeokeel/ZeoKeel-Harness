@@ -1166,7 +1166,7 @@ var calendarScanRoots = []string{"..", filepath.Join("..", "..", "cmd")}
 // 字面量里时，"新包落在面外"与"目录被删导致面缩小"两种变化都没有任何提示。
 // 新增任何含测试面文件的目录都必须在这里加一行 —— 代价是复核者会被强制看到覆盖面的变化。
 var calendarSkipScanDirRegistry = []string{
-	"../../cmd/picoaide-wasm-imports-gen",
+	"../../cmd/zeokeel-wasm-imports-gen",
 	"../../cmd/server",
 	"../agentshare",
 	"../appstore",

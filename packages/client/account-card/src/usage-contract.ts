@@ -11,7 +11,7 @@
  *   - balance_activated=false 表示从未入账 —— 客户端不渲染余额行;
  *   - token/金额配额与部门预算已下线,不再下发 quota_ 与 remaining_ 系列字段。
  *
- * @module @picoaide/dsh-account-card/usage-contract
+ * @module @zeokeel/dsh-account-card/usage-contract
  */
 
 /** 服务端 `/auth/usage` 的完整字段集合(与 Go handler 一一对应)。 */

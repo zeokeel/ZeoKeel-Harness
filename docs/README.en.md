@@ -1,22 +1,22 @@
-# PicoAide Harness Documentation
+# ZeoKeel Harness Documentation
 
 [中文文档](README.md)
 
-This directory is the documentation entry for PicoAide Harness. **User documentation has moved to the official wiki** ([Desktop Client](https://www.picoaide.com/en/docs/desktop/) · [Product Philosophy](https://www.picoaide.com/en/docs/philosophy/) · [FAQ](https://www.picoaide.com/en/docs/faq/)); this directory keeps maintainer-oriented material. Want to contribute? See [CONTRIBUTING](../CONTRIBUTING.en.md).
+This directory is the documentation entry for ZeoKeel Harness. **User documentation has moved to the official wiki** ([Desktop Client](https://www.zeokeel.com/en/docs/desktop/) · [Product Philosophy](https://www.zeokeel.com/en/docs/philosophy/) · [FAQ](https://www.zeokeel.com/en/docs/faq/)); this directory keeps maintainer-oriented material. Want to contribute? See [CONTRIBUTING](../CONTRIBUTING.en.md).
 
 ## Read by goal
 
-Ordinary users should start at the official wiki ([Getting Started](https://www.picoaide.com/en/docs/getting-started/)) and do not need the developer docs.
+Ordinary users should start at the official wiki ([Getting Started](https://www.zeokeel.com/en/docs/getting-started/)) and do not need the developer docs.
 
 ### User content (single source: official wiki)
 
 | Content | Wiki page |
 | --- | --- |
-| Install / usage / troubleshooting | [Desktop Client](https://www.picoaide.com/en/docs/desktop/) · [Getting Started](https://www.picoaide.com/en/docs/getting-started/) |
-| FAQ | [FAQ](https://www.picoaide.com/en/docs/faq/) |
-| Product positioning and design philosophy | [Product Philosophy](https://www.picoaide.com/en/docs/philosophy/) |
-| Plugin development / ecosystem | [Plugin Development](https://www.picoaide.com/en/docs/plugin-development/) · [Plugin Ecosystem](https://www.picoaide.com/en/docs/plugin-ecosystem/) |
-| System architecture / API | [System Architecture](https://www.picoaide.com/en/docs/architecture/) · [API Reference](https://www.picoaide.com/en/docs/api-reference/) |
+| Install / usage / troubleshooting | [Desktop Client](https://www.zeokeel.com/en/docs/desktop/) · [Getting Started](https://www.zeokeel.com/en/docs/getting-started/) |
+| FAQ | [FAQ](https://www.zeokeel.com/en/docs/faq/) |
+| Product positioning and design philosophy | [Product Philosophy](https://www.zeokeel.com/en/docs/philosophy/) |
+| Plugin development / ecosystem | [Plugin Development](https://www.zeokeel.com/en/docs/plugin-development/) · [Plugin Ecosystem](https://www.zeokeel.com/en/docs/plugin-ecosystem/) |
+| System architecture / API | [System Architecture](https://www.zeokeel.com/en/docs/architecture/) · [API Reference](https://www.zeokeel.com/en/docs/api-reference/) |
 
 > The corresponding in-repo files (`user-guide*`, `faq*`, `why-desktop*`, `plugin-ecosystem*`, `plugin-development*`) are now pointer pages to the wiki and no longer maintain independent content.
 

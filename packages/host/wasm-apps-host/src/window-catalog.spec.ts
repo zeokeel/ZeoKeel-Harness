@@ -91,7 +91,7 @@ describe('目录兜底来源（window-catalog）', () => {
     expect(calls[0]?.init.method).toBe('GET')
     expect((calls[0]?.init.headers as Record<string, string>).Authorization).toBe('Bearer tok-a')
     // 目录路由不要求持有性证明（proof 按 app_id 绑定，而目录是跨应用的读）。
-    expect((calls[0]?.init.headers as Record<string, string>)['X-Pico-App-Proof']).toBeUndefined()
+    expect((calls[0]?.init.headers as Record<string, string>)['X-ZeoKeel-App-Proof']).toBeUndefined()
   })
 
   it('invalidate() 与会话变化后重新拉取', async () => {

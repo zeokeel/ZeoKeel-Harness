@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // SG-1(审计 2026-09-17,r2 server-gateway P3)回归:上报文本里的控制字符

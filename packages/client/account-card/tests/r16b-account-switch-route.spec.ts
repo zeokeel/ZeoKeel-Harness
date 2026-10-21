@@ -3,10 +3,10 @@
  * 回归（R16B-01，第十六轮审计泳道 B，P1）：**同服务端换号后，本机路由不得交付
  * 上一个账号的余额。**
  *
- * 缺陷形态（修前实测）：`pico/session-changed` 只在 `next === null`（登出）时
+ * 缺陷形态（修前实测）：`zeokeel/session-changed` 只在 `next === null`（登出）时
  * `service.clear()`；换号（A→B，不经登出）只排一次 **300ms 尾随去抖**的
  * `service.refresh(B)`，而 `refreshNow()` 只把 `state` 置 `loading` 却**保留
- * `data`** ⇒ 去抖窗口内 `GET /api/pico/account/usage` 回 `200` + **A 的金额**，
+ * `data`** ⇒ 去抖窗口内 `GET /api/zeokeel/account/usage` 回 `200` + **A 的金额**，
  * 账户卡把它渲染在 B 的名字下（跨账号金额交付）。P2-22 那条守卫比较的是"请求开始
  * 时"与"刷新后"的会话 —— 换号后两边**都已经是 B**，抓不到"快照还是 A 取的"。
  *
@@ -25,7 +25,7 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
-import { sessionIdentity } from '@picoaide/dsh-enterprise/session-identity'
+import { sessionIdentity } from '@zeokeel/dsh-enterprise/session-identity'
 import { apply } from '../src/index.ts'
 
 const USAGE_KEYS = {
@@ -52,7 +52,7 @@ interface ProbeSession {
 }
 
 interface Harness {
-  /** 本机路由地址（`/api/pico/account/usage`）。 */
+  /** 本机路由地址（`/api/zeokeel/account/usage`）。 */
   base: string
   /** 假网关地址（会话里的 serverURL）。 */
   serverURL: string
@@ -116,20 +116,20 @@ async function harness(): Promise<Harness> {
     effect: (fn: () => unknown) => fn(),
     // FIX-42②：持有性证明的 fence 来源（上游 `connection.requestRejection` 的替身）。
     get: (name: string) => (name === 'connection' ? browserFence() : undefined),
-    picoSession: {
+    zeokeelSession: {
       getSession: () => state.session,
       clear: () => { state.session = null },
     },
     webServer: {
       register: (route: { path: string, handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void }) => {
-        if (route.path === '/api/pico/account/usage') handler = route.handler
+        if (route.path === '/api/zeokeel/account/usage') handler = route.handler
         return () => { handler = null }
       },
     },
   }
   apply(ctx as never)
   state.emitSession = (session) => {
-    const listener = listeners.get('pico/session-changed')
+    const listener = listeners.get('zeokeel/session-changed')
     if (listener === undefined) throw new Error('the plugin did not register a session-changed listener')
     listener(session)
   }
@@ -168,7 +168,7 @@ function browserFence(): { requestRejection: (r: { headers: Record<string, unkno
 /** 打本机路由（真 socket；Host/Origin 都是 loopback 同源 + 持有性证明 ⇒ 过两道守卫）。 */
 async function getUsage(base: string, force = false): Promise<UsageAnswer> {
   const authority = base.replace(/^http:\/\//u, '')
-  const response = await fetch(`${base}/api/pico/account/usage${force ? '?refresh=1' : ''}`, {
+  const response = await fetch(`${base}/api/zeokeel/account/usage${force ? '?refresh=1' : ''}`, {
     headers: { Origin: base, accept: 'application/json', cookie: proofCookieFor(authority) },
   })
   const text = await response.text()
@@ -239,7 +239,7 @@ describe('R16B-01：换号后本机路由不得交付上一个账号的余额', 
   }, 30_000)
 
   /**
-   * 事件**迟到/没到**的那一半：`pico/session-changed` 的回调要排队（它先
+   * 事件**迟到/没到**的那一半：`zeokeel/session-changed` 的回调要排队（它先
    * `teardownAll` 再 `syncServerDefs` 再 `reconfigureUser`，中间是一次网络往返），
    * 而 HTTP 路由不在那条队列里。所以"会话服务已经指向 B、事件还没跑完"是一个真实
    * 窗口 —— 此时快照仍是 A 的，路由必须靠 `service.owns(s)` 自己拒绝，不能指望

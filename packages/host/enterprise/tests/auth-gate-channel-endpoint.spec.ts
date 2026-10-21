@@ -4,7 +4,7 @@ import { type Config } from '../src/auth-gate.ts'
 import { applyFullComposition as apply } from './helpers/apply-full-composition.ts'
 
 /**
- * 客户端本地端点 `/api/pico/channel` 的**出口契约**：只对外给绝对素材 URL。
+ * 客户端本地端点 `/api/zeokeel/channel` 的**出口契约**：只对外给绝对素材 URL。
  *
  * 为什么钉死：服务端下发的 `logo_url`/`favicon_url` 是相对路径（如
  * `/api/client/v2/channel/logo`）。本端点的返回值会被客户端 store 直接存下并交给
@@ -17,7 +17,7 @@ import { applyFullComposition as apply } from './helpers/apply-full-composition.
 function fakeRequest(method = 'GET'): IncomingMessage {
   return {
     method,
-    url: '/api/pico/channel',
+    url: '/api/zeokeel/channel',
     headers: { origin: 'http://127.0.0.1:3080', host: '127.0.0.1:3080' },
     socket: { remoteAddress: '127.0.0.1' },
   } as unknown as IncomingMessage
@@ -36,7 +36,7 @@ function fakeResponse(): { res: ServerResponse, read: () => { code: number, body
   return { res, read: () => ({ code, body }) }
 }
 
-/** 装一个 auth-gate，并取出 /api/pico/channel 的 handler。 */
+/** 装一个 auth-gate，并取出 /api/zeokeel/channel 的 handler。 */
 function channelHandler(
   config: Config,
   session: { serverURL: string, token: string } | null,
@@ -45,7 +45,7 @@ function channelHandler(
   const ctx = {
     effect: (fn: () => unknown) => { fn() },
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -53,13 +53,13 @@ function channelHandler(
     webServer: {
       tapIndex: () => () => {},
       register: (route: { path: string, handler: typeof handler }) => {
-        if (route.path === '/api/pico/channel') handler = route.handler
+        if (route.path === '/api/zeokeel/channel') handler = route.handler
         return () => {}
       },
     },
   }
   apply(ctx as never, config)
-  expect(handler, 'auth-gate 必须注册 /api/pico/channel').toBeDefined()
+  expect(handler, 'auth-gate 必须注册 /api/zeokeel/channel').toBeDefined()
   return handler!
 }
 
@@ -73,7 +73,7 @@ const UPSTREAM = {
   accent: '#2563eb',
 }
 
-describe('auth-gate /api/pico/channel asset URL contract', () => {
+describe('auth-gate /api/zeokeel/channel asset URL contract', () => {
   afterEach(() => { vi.unstubAllGlobals() })
 
   it('returns absolute asset URLs when a session provides the server address', async () => {
@@ -103,9 +103,9 @@ describe('auth-gate /api/pico/channel asset URL contract', () => {
   })
 
   it('fills the packaged-only short_name the server never sends', async () => {
-    // 侧边栏要的是**短名**（"PicoAide"），而服务端下发的载荷里没有 `client.short_name`
+    // 侧边栏要的是**短名**（"ZeoKeel"），而服务端下发的载荷里没有 `client.short_name`
     // —— 它是随包品牌独有的字段。此前本端点把服务端载荷原样透传，短名整条丢失，
-    // 侧边栏于是回落到显示名 "PicoAide Harness"，在 184px 的定高行里折成两行
+    // 侧边栏于是回落到显示名 "ZeoKeel Harness"，在 184px 的定高行里折成两行
     // （2026-09-11 现场）。出口必须以随包品牌为底做逐字段叠加。
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -114,13 +114,13 @@ describe('auth-gate /api/pico/channel asset URL contract', () => {
       json: async () => UPSTREAM,
       text: async () => JSON.stringify(UPSTREAM),
     }))
-    // 无渠道包 = 官方构建：随包兜底就是内置官方内容（短名 "PicoAide"）。
+    // 无渠道包 = 官方构建：随包兜底就是内置官方内容（短名 "ZeoKeel"）。
     const handler = channelHandler({ brand: undefined }, { serverURL: 'https://ai.example.com', token: 't' })
     const { res, read } = fakeResponse()
     await handler(fakeRequest(), res)
 
     const body = read().body as { client: { display_name?: string, short_name?: string }, title?: string }
-    expect(body.client.short_name).toBe('PicoAide')
+    expect(body.client.short_name).toBe('ZeoKeel')
     // 服务端的显示名仍然胜出（叠加不是替换）。
     expect(body.client.display_name).toBe('Acme AI')
     expect(body.title).toBe('Acme 门户')
@@ -142,7 +142,7 @@ describe('auth-gate /api/pico/channel asset URL contract', () => {
     await handler(fakeRequest(), res)
     const body = read().body as { client: { short_name?: string, display_name?: string } }
     expect(body.client.short_name).toBe('Acme')
-    expect(JSON.stringify(body)).not.toContain('PicoAide')
+    expect(JSON.stringify(body)).not.toContain('ZeoKeel')
   })
 
   it('keeps already-absolute asset URLs untouched', async () => {

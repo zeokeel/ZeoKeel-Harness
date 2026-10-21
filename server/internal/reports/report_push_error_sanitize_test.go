@@ -26,8 +26,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // routePermFromSource 从真实 router.go 正文里读出某条管理路由申报的权限常量名,
@@ -74,7 +74,7 @@ func TestTestPushErrorSanitized(t *testing.T) {
 	allowLocalWebhooks(t)
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef")
 
 	permConst, permValue := routePermFromSource(t, "POST", "/report-subscriptions/:id/test")
 	t.Logf("route_perm_const=%s route_perm_value=%q", permConst, permValue)

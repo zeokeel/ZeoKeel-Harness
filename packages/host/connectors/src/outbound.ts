@@ -774,7 +774,7 @@ function describeRedirect(response: Response): string {
  * construction passes ({@link allowedOutboundOriginsOf}). A `Symbol` keeps
  * this out of the provider's public shape and out of JSON.
  */
-export const OUTBOUND_ALLOWED_ORIGINS = Symbol('picoaide.connectors.outbound.allowed-origins')
+export const OUTBOUND_ALLOWED_ORIGINS = Symbol('zeokeel.connectors.outbound.allowed-origins')
 
 /** The origin of one URL, or null when it does not parse. */
 export function originOfUrl(raw: string | undefined | null): string | null {

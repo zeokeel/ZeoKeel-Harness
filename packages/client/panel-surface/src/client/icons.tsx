@@ -5,7 +5,7 @@
  * 歪斜的残字，而细描边图标在 13px 下会糊成浅色斑点。这里的 path 全部是**实心/统一线宽**
  * 的几何，且在 14–18px 下都可辨。
  *
- * @module @picoaide/dsh-panel-surface/client/icons
+ * @module @zeokeel/dsh-panel-surface/client/icons
  */
 
 /** 图标通用属性。 */

@@ -11,7 +11,7 @@
 
 | 层 | 开关 | 语义 |
 |----|------|------|
-| 环境变量（排障/临时） | `PICOAI_ALLOW_SYSTEM_PROXY=1` | 允许使用宿主机代理；`=0` 显式禁止（压过渠道配置） |
+| 环境变量（排障/临时） | `ZEOKEEL_ALLOW_SYSTEM_PROXY=1` | 允许使用宿主机代理；`=0` 显式禁止（压过渠道配置） |
 | 渠道包（部署级） | `desktop.allow_system_proxy: true` | 允许使用宿主机代理（只认严格布尔 `true`） |
 | 缺省 | —— | 禁止 |
 
@@ -101,7 +101,7 @@ Harness home 的 `.env` 分层结构上赶不上）。
 
 - **路由 = 复刻 Node 的 env-proxy 判定，不新造开关。** 唯一判定点是
   `packages/host/connectors/src/proxy-route.ts` 的 `resolveConnectorProxyRoute()`，读的正是桌面壳那几个名字
-  （`PICOAI_ALLOW_SYSTEM_PROXY`、`NODE_USE_ENV_PROXY`、`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`、`NO_PROXY`），
+  （`ZEOKEEL_ALLOW_SYSTEM_PROXY`、`NODE_USE_ENV_PROXY`、`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`、`NO_PROXY`），
   取值语义与 `packages/host/desktop/src/network-policy.ts` 之间有**源码级 parity 判据**（文件缺失即 fail-loud）。
   判定只做一次：`resolveOutboundTarget()` 把路由放在 target 上，`sendPinned()` 照用 ——
   不存在"判定直连、出门却走代理"的窗口。

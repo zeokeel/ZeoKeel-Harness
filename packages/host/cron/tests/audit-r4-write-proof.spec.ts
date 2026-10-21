@@ -174,7 +174,7 @@ async function ledgerContains(id: string): Promise<boolean> {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'pico-cron-proof-'))
+  home = mkdtempSync(join(tmpdir(), 'zeokeel-cron-proof-'))
   mkdirSync(join(home, 'cron'), { recursive: true })
   boot()
 })

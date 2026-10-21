@@ -70,7 +70,7 @@
  * 跑法，`tests/env-gated-criteria.spec.ts` **全扫整棵 `tests/`** 逐项对账（用例名还在、
  * 每个 spec 的闸门与消费点调用数、真实原因取自 stderr）；缺能力时本文件经
  * `consumeMountGate` 打印的 `[env-gated:mount/SKIP]` 就是 CI 日志里的**覆盖声明**
- * （含真实原因与"有权限时怎么真跑"）。有权限的环境带上 `PICOAI_MOUNT_TESTS=required`
+ * （含真实原因与"有权限时怎么真跑"）。有权限的环境带上 `ZEOKEEL_MOUNT_TESTS=required`
  * 跑同一套时，缺能力**不再是自跳而是硬红**。
  *
  * **诚实边界（审计 P2-3）**：本仓 CI（GitHub 托管 runner，非 root）上 G1/G2 与
@@ -301,7 +301,7 @@ describe('R19A-S2-03：挂载点形态的"库内目录"⇒ 拒收（库外唯一
     await mkdir(join(skills, '.skill-tmp', 'install-boom'), { recursive: true })
     const mountAttempt = bind(join(vault, 'payload'), join(skills, '.skill-tmp', 'install-boom'))
     // 判定**必须**经 `consumeMountGate` 消费 —— 登记在案的两条性质就落在它身上：
-    // 声明了"必须提供"（`PICOAI_MOUNT_TESTS=required`）⇒ 抛错硬红；缺省 ⇒ 打一行含
+    // 声明了"必须提供"（`ZEOKEEL_MOUNT_TESTS=required`）⇒ 抛错硬红；缺省 ⇒ 打一行含
     // 真实原因与跑法的 `[env-gated:mount/SKIP]` 覆盖声明。这两条由
     // tests/env-gated-criteria.spec.ts 的行为夹具判决，不再只钉在这两行的**文本**上
     // （审计 P2-2：删掉它们门禁照绿）。

@@ -11,11 +11,11 @@
  *    宁可多显示一次引导，也不能因为存储异常把引导永久吃掉；
  *  - 任何存储实现抛出的异常都被吞掉（引导卡不该有能力打断面板渲染）。
  *
- * @module @picoaide/dsh-wasm-apps/client/onboarding
+ * @module @zeokeel/dsh-wasm-apps/client/onboarding
  */
 
 /** 引导卡的存储键（值 `'1'` = 已关闭）。 */
-export const ONBOARDING_STORAGE_KEY = 'picoaide.wasm-apps.onboarding.v1'
+export const ONBOARDING_STORAGE_KEY = 'zeokeel.wasm-apps.onboarding.v1'
 
 /** 读/删所需的存储子集（`localStorage` 满足它）。 */
 export interface OnboardingStore {

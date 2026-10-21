@@ -5,7 +5,7 @@
  * capability namespace; `t()` resolves the zh key source directly so the panel
  * components stay dependency-free.
  *
- * 2026-10-13:逐字搬自 `@picoaide/dsh-enterprise` 的 `src/client/locales.ts`
+ * 2026-10-13:逐字搬自 `@zeokeel/dsh-enterprise` 的 `src/client/locales.ts`
  * （能力中心客户端面整包搬出）。**键路径与取值一字未改** —— 变的只是注册的命名
  * 空间（`enterprise` → `capability`）与字典的归属包；面板用的是模块级 `t()`
  * （zh 源直接查表），所以渲染出来的文案与搬前逐字相同。

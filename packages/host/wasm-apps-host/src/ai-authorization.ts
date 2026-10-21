@@ -44,7 +44,7 @@
  * （调用方还收到成功）。{@link classifyAiConsent} 把这两档分开，`load()` 据此决定
  * `writable`：只有**可识别的旧版本**（`version: 1` 且 v1 形状完整）才允许就地改写。
  *
- * @module @picoaide/dsh-wasm-apps-host/ai-authorization
+ * @module @zeokeel/dsh-wasm-apps-host/ai-authorization
  */
 
 import { readFile } from 'node:fs/promises'
@@ -308,7 +308,7 @@ export function serializeAiConsent(keys: ReadonlySet<string>): string {
   for (const key of keys) {
     const [user, server, app, ...rest] = key.split('\u0000')
     if (rest.length > 0 || user === undefined || server === undefined || app === undefined) {
-      throw new Error('pico-wasm-apps-host: refusing to serialize an app AI consent key that is not <user>\\0<server>\\0<app>')
+      throw new Error('zeokeel-wasm-apps-host: refusing to serialize an app AI consent key that is not <user>\\0<server>\\0<app>')
     }
     grants.push({ user, server, app })
   }
@@ -373,11 +373,11 @@ export function createAiChatAuthorization(options: AiChatAuthorizationOptions = 
       if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return { keys: new Set(), writable: true }
       // 读失败（权限/EIO）⇒ fail-closed 到"无授权"，但必须留痕：静默会让"磁盘坏了"
       // 与"没人授权"长得一样。**同时把写面也关掉**（读不动的文件不得被整份覆盖）。
-      warn(`pico-wasm-apps-host: reading the app AI consent file failed (${cause instanceof Error ? cause.message : String(cause)}); treating every grant as absent and refusing writes`)
+      warn(`zeokeel-wasm-apps-host: reading the app AI consent file failed (${cause instanceof Error ? cause.message : String(cause)}); treating every grant as absent and refusing writes`)
       return {
         keys: new Set(),
         writable: false,
-        blocked: `pico-wasm-apps-host: the app AI consent file at ${String(options.file)} could not be read; refusing to overwrite it`,
+        blocked: `zeokeel-wasm-apps-host: the app AI consent file at ${String(options.file)} could not be read; refusing to overwrite it`,
       }
     }
     const verdict = classifyAiConsent(text)
@@ -386,17 +386,17 @@ export function createAiChatAuthorization(options: AiChatAuthorizationOptions = 
       // 它与"读不动"同等对待：读面 fail-closed，写面拒绝。**绝不能走升级路径** ——
       // 那会让下一次 grant 以"空集合 + 本次一条"整份覆盖，把文件里其它账号/应用的
       // 记录静默销毁（FIX-17 / V6 F3）；这一份内容本来也不被当成任何授权。
-      warn(`pico-wasm-apps-host: the app AI consent file at ${options.file} is not a usable record (${verdict.reason}); treating every grant as absent and refusing writes`)
+      warn(`zeokeel-wasm-apps-host: the app AI consent file at ${options.file} is not a usable record (${verdict.reason}); treating every grant as absent and refusing writes`)
       return {
         keys: new Set(),
         writable: false,
-        blocked: `pico-wasm-apps-host: the app AI consent file at ${String(options.file)} is not a usable record (${verdict.reason}); refusing to overwrite it`,
+        blocked: `zeokeel-wasm-apps-host: the app AI consent file at ${String(options.file)} is not a usable record (${verdict.reason}); refusing to overwrite it`,
       }
     }
     if (verdict.kind === 'legacy') {
       // **可识别的旧格式**（v1 没有服务端段）⇒ 允许就地改写成当前版本，否则 v1 用户
       // 永远无法重新授权。方向安全：这一份内容本来就不被当成任何授权。
-      warn(`pico-wasm-apps-host: the app AI consent file at ${options.file} is a version ${String(verdict.version)} record; treating every grant as absent (the next write rewrites it as version ${String(AI_CONSENT_FORMAT_VERSION)})`)
+      warn(`zeokeel-wasm-apps-host: the app AI consent file at ${options.file} is a version ${String(verdict.version)} record; treating every grant as absent (the next write rewrites it as version ${String(AI_CONSENT_FORMAT_VERSION)})`)
       return { keys: new Set(), writable: true }
     }
     return { keys: verdict.keys, writable: true }
@@ -446,7 +446,7 @@ export function createAiChatAuthorization(options: AiChatAuthorizationOptions = 
       if (key === null) {
         // fail-closed：写一条"谁都不是"的记录比拒绝更糟（下一个账号可能正好撞上它）。
         return Promise.reject(new AiConsentScopeError(
-          'pico-wasm-apps-host: an app AI grant needs the current user, server address and app id; this session does not provide all three',
+          'zeokeel-wasm-apps-host: an app AI grant needs the current user, server address and app id; this session does not provide all three',
         ))
       }
       return mutate((keys) => { keys.add(key) })
@@ -455,7 +455,7 @@ export function createAiChatAuthorization(options: AiChatAuthorizationOptions = 
       const key = keyFor(userId, appId, serverURL)
       if (key === null) {
         return Promise.reject(new AiConsentScopeError(
-          'pico-wasm-apps-host: an app AI revocation needs the current user, server address and app id; this session does not provide all three',
+          'zeokeel-wasm-apps-host: an app AI revocation needs the current user, server address and app id; this session does not provide all three',
         ))
       }
       return mutate((keys) => { keys.delete(key) })

@@ -1,4 +1,4 @@
-/** Headless smoke for the complete published PicoAide Harness profile and renderer manifest. */
+/** Headless smoke for the complete published ZeoKeel Harness profile and renderer manifest. */
 
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -185,7 +185,7 @@ try {
   // P0-9（2026-09-20 升级审计）：这是**唯一**挂载完整桌面组合树的地方，所以
   // 「我方必需行真的活了」只能在这里端到端证明。上游 0.1.6 的
   // `auditStartupEntries` 只对 7 个全局 required id 抛错，我方 18 个
-  // `desktop-*`/`picoaide-*`/`pico-*` 行失败只打 warn（"树上不存在"与"被 disabled"
+  // `desktop-*`/`zeokeel-*`/`zeokeel-*` 行失败只打 warn（"树上不存在"与"被 disabled"
   // 两类更是被它明确忽略）、启动照常成功；运行期由 src/main.ts 的
   // `assertRequiredRowsActive` 兜底，这里让它在 CI 上可判红。
   // 清单与断言都来自 `lib/startup-rows.js`（唯一真源，两处 import 同一份）。
@@ -346,7 +346,7 @@ try {
   // 直接抛 ManagementFailure。
   //
   // **这是有意的，本轮不修组合实现**（2026-09-23 主控裁决）：让 session 内的
-  // `plugin_manager` 能改写 `picoaide-*`/`pico-*`/`dsh-memory-evolve` 这些行，等于把
+  // `plugin_manager` 能改写 `zeokeel-*`/`zeokeel-*`/`dsh-memory-evolve` 这些行，等于把
   // "关掉企业面/渠道面/记忆面"的能力交给模型 —— 那不是在修 bug，是在扩权。所以改为把
   // 缺口**钉死**：行集差异与读面行集都必须**恰好等于**登记值，变大变小都红；
   // 将来组合实现真的改了（例如把注入层落进 profile 自己的 `cordis.patch.yml`），
@@ -768,33 +768,33 @@ try {
   // 网关模型 provider（2026-09-28，DSH 0.1.7-rc.2）：同一份 `describe()` 解析值就是适配器读的
   // 那份（schema 缺省 → 组装 base → user 层），而命名空间 = profile 条目 id。
   // 0.1.7 删除了 `protocol`（配了抛错）、把鉴权搬到 provider 注册面，所以这里判两件事：
-  //  ① 组装期**存在**自研 provider 行 `picoaide-gateway-llm`（上游 `llm-deepseek` 行被禁用，
+  //  ① 组装期**存在**自研 provider 行 `zeokeel-gateway-llm`（上游 `llm-deepseek` 行被禁用，
   //     否则没有任何插件注册 `deepseek-official`，模型面全灭）；
   //  ② 它解析出的值里 **没有** `protocol` 键 —— 任何一层加回这个已删除的键都会让
   //     `resolveAdapterOptions` 在装载时抛错（`protocol is not configurable`），本判据是
   //     那个抛错之前在组装期的观测点。
-  const gatewayLlmSection = readSettingsNamespace(ctx.settings, 'picoaide-gateway-llm')
+  const gatewayLlmSection = readSettingsNamespace(ctx.settings, 'zeokeel-gateway-llm')
   if (gatewayLlmSection === undefined) {
-    throw new Error('assembled desktop profile has no picoaide-gateway-llm settings namespace')
+    throw new Error('assembled desktop profile has no zeokeel-gateway-llm settings namespace')
   }
   if (Object.hasOwn(gatewayLlmSection, 'protocol')) {
-    throw new Error(`assembled desktop profile resolves picoaide-gateway-llm protocol=${String(gatewayLlmSection.protocol)}; the key was removed upstream and now fails the row at load`)
+    throw new Error(`assembled desktop profile resolves zeokeel-gateway-llm protocol=${String(gatewayLlmSection.protocol)}; the key was removed upstream and now fails the row at load`)
   }
   // 用户层形态：现场机的段由旧版客户端写入（只有 baseURL/models）——它必须原样落进**同一个**
   // 命名空间，且不能带回 `protocol`。
-  await ctx.settings.replace('picoaide-gateway-llm', {
+  await ctx.settings.replace('zeokeel-gateway-llm', {
     baseURL: 'https://harness.example.com/v1',
     models: [{ id: 'smoke-model', name: 'smoke-model', maxTokens: 4096, inputModalities: ['text'] }],
   })
-  const fieldShaped = readSettingsNamespace(ctx.settings, 'picoaide-gateway-llm')
+  const fieldShaped = readSettingsNamespace(ctx.settings, 'zeokeel-gateway-llm')
   if (Object.hasOwn(fieldShaped, 'protocol')) {
-    throw new Error('a user picoaide-gateway-llm section brought back the removed protocol key')
+    throw new Error('a user zeokeel-gateway-llm section brought back the removed protocol key')
   }
   if (fieldShaped.baseURL !== 'https://harness.example.com/v1') {
-    throw new Error(`the user picoaide-gateway-llm section lost fields: baseURL=${String(fieldShaped.baseURL)}`)
+    throw new Error(`the user zeokeel-gateway-llm section lost fields: baseURL=${String(fieldShaped.baseURL)}`)
   }
   if (fieldShaped.models?.[0]?.id !== 'smoke-model') {
-    throw new Error(`the user picoaide-gateway-llm section lost its model catalog: ${JSON.stringify(fieldShaped.models)}`)
+    throw new Error(`the user zeokeel-gateway-llm section lost its model catalog: ${JSON.stringify(fieldShaped.models)}`)
   }
   if (!trayItems.some(item => item.label() === 'Check for Updates…')) {
     throw new Error('assembled desktop profile is missing the update tray command')
@@ -807,7 +807,7 @@ try {
   }
   // The enterprise login gate serves its own page at the Web root while logged
   // out, so authenticate before verifying the assembled Web app root.
-  ctx.picoSession.setSession({
+  ctx.zeokeelSession.setSession({
     serverURL: 'http://127.0.0.1:1',
     username: 'profile-smoke',
     token: 'profile-smoke-token',

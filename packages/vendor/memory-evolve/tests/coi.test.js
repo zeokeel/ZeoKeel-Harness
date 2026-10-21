@@ -627,7 +627,7 @@ test('skills sync: version-gated copy protects user edits', async () => {
   const { syncBuiltinSkills, BUILTIN_SKILLS } = await import('../lib/coi/skills-sync.js')
   // 清单是**冻结**的：新增内置技能必须同时改这里（防止"目录加了但忘了登记"）。
   // 2026-09-18：**平台技能不得进入随包同步清单**（用户口径「客户端可以按需安装」
-  // + 独立审计 P1-1）。app-builder（原名 picoaide-app-builder）随服务端镜像发布、
+  // + 独立审计 P1-1）。app-builder（原名 zeokeel-app-builder）随服务端镜像发布、
   // 由能力中心按需安装；把它放进这张表就等于开机自动装上，「按需」名存实亡。
   assert.deepEqual(BUILTIN_SKILLS, ['kimi-cli-calling', 'codex-cli-calling', 'grok-cli-calling', 'hermes-cli-calling', 'memory-consolidate'])
   const { PLATFORM_SKILLS } = await import('../lib/coi/skills-sync.js')

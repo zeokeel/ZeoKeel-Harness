@@ -9,9 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/edge"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/edge"
 )
 
 // openApp 是 `POST /api/client/v2/apps/wasm/:app_id/open`（契约 §5.1b / §8.9，F16）。
@@ -27,7 +27,7 @@ import (
 //	① **每次调用 +1**：计数写在 open 端点，不写在应用请求路径上（否则"一次打开"
 //	   会变成"每请求一次"，PV 失去意义）；
 //	② **计数 best-effort**：计数异常只 warn，不改响应、不阻塞打开（§8.9）；
-//	③ **成功响应带 `X-PicoAide-App-Version`**：客户端的缓存键来源（R1-DAT-12 /
+//	③ **成功响应带 `X-ZeoKeel-App-Version`**：客户端的缓存键来源（R1-DAT-12 /
 //	   R2I-21），与 `request` 端点的版本头同源同值。
 //
 // 闸门强度（§5.1b，客户端侧负责执行）：新建窗口 = **硬闸门**（本端点失败 ⇒

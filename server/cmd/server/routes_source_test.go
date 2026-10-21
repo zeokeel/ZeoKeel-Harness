@@ -36,7 +36,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/features"
+	"github.com/zeokeel/zeokeel-harness/server/internal/features"
 )
 
 // routeKeys 提取一棵路由树的 (method, path) 集合。

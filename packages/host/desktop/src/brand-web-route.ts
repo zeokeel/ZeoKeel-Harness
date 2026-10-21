@@ -40,8 +40,8 @@ export const BRAND_FAVICON_PATH = '/favicon.svg'
 /** PWA manifest 地址。 */
 export const BRAND_MANIFEST_PATH = '/manifest.webmanifest'
 
-/** 官方构建的短名（与 `@picoaide/dsh-enterprise` 的 `DEFAULT_CHANNEL.client.short_name` 同值）。 */
-export const OFFICIAL_SHORT_NAME = 'PicoAide'
+/** 官方构建的短名（与 `@zeokeel/dsh-enterprise` 的 `DEFAULT_CHANNEL.client.short_name` 同值）。 */
+export const OFFICIAL_SHORT_NAME = 'ZeoKeel'
 
 /**
  * 渠道包内容里的脚本特征：命中即视为不可信，丢弃并回落。

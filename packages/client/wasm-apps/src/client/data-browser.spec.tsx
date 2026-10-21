@@ -131,13 +131,13 @@ describe('展开才取数（详情页是高频入口，收起状态必须零请�
     await mount()
     expect(calls).toHaveLength(0)
 
-    await click('.pico-app-data-toggle')
+    await click('.zeokeel-app-data-toggle')
     // 第一条是**授权状态**（AI 读取默认关；面板必须从宿主读真相，不能拿 localStorage 当真相），
     // 然后才是 schema 与首张表的 rows。顺序由 effect 声明顺序固定（用例钉住）。
     expect(calls.map(call => new URL(call.url, 'http://x').pathname)).toEqual([
-      '/api/pico/apps/wasm/roster/ai-rows-consent',
-      '/api/pico/apps/wasm/roster/schema',
-      '/api/pico/apps/wasm/roster/rows',
+      '/api/zeokeel/apps/wasm/roster/ai-rows-consent',
+      '/api/zeokeel/apps/wasm/roster/schema',
+      '/api/zeokeel/apps/wasm/roster/rows',
     ])
     // 首张表自动选中（作者点开就能看到数据，不需要再点一次）。
     expect(container.querySelector('[data-role="data-rows"]')).not.toBeNull()
@@ -153,7 +153,7 @@ describe('默认脱敏：原值必须由服务端给（客户端不自己替换�
       return url.includes('unmask=1') ? jsonResponse(200, ROWS_UNMASKED) : jsonResponse(200, ROWS_MASKED)
     })
     await mount()
-    await click('.pico-app-data-toggle')
+    await click('.zeokeel-app-data-toggle')
 
     // ① 默认：脱敏值来自服务端，且列头标了敏感。
     expect(container.textContent).toContain('***')
@@ -162,12 +162,12 @@ describe('默认脱敏：原值必须由服务端给（客户端不自己替换�
     expect(container.querySelector('[data-role="data-masked-note"]')).not.toBeNull()
 
     // ② 点「显示原值」：**确实重新请求**（不是客户端把 *** 换掉）。
-    await click('.pico-app-data-unmask')
+    await click('.zeokeel-app-data-unmask')
     const last = calls.at(-1)
     expect(last?.url).toContain('unmask=1')
     expect(container.textContent).toContain('secret-a')
     // ③ 恢复脱敏按钮出现（否则作者无法回到默认态）。
-    expect(container.querySelector('.pico-app-data-remask')).not.toBeNull()
+    expect(container.querySelector('.zeokeel-app-data-remask')).not.toBeNull()
   })
 })
 
@@ -175,7 +175,7 @@ describe('失败原样呈现（绝不回落成"空表/0 行"）', () => {
   it('schema 500 ⇒ 渲染错误码与建议，而不是"这个应用还没有数据库"', async () => {
     stubFetch(() => jsonResponse(500, { error: { code: 'INTERNAL', message: '应用库不可用', hints: ['稍后重试'] } }))
     await mount()
-    await click('.pico-app-data-toggle')
+    await click('.zeokeel-app-data-toggle')
     const block = container.querySelector('[data-role="data-schema-error"]')
     expect(block).not.toBeNull()
     expect(block?.textContent).toContain('INTERNAL')
@@ -188,7 +188,7 @@ describe('失败原样呈现（绝不回落成"空表/0 行"）', () => {
       ? jsonResponse(200, SCHEMA_OK)
       : jsonResponse(404, { error: { code: 'NOT_FOUND', message: '应用不存在', hints: ['检查表名'] } }))
     await mount()
-    await click('.pico-app-data-toggle')
+    await click('.zeokeel-app-data-toggle')
     expect(container.querySelector('[data-role="data-rows-error"]')).not.toBeNull()
     expect(container.querySelector('[data-role="data-no-rows"]')).toBeNull()
   })
@@ -198,14 +198,14 @@ describe('失败原样呈现（绝不回落成"空表/0 行"）', () => {
       ? jsonResponse(200, SCHEMA_OK)
       : jsonResponse(200, { rows: { ...ROWS_MASKED.rows, rows: [], returned: 0, total_rows: 0, has_more: false, masked_columns: [] } }))
     await mount()
-    await click('.pico-app-data-toggle')
+    await click('.zeokeel-app-data-toggle')
     expect(container.querySelector('[data-role="data-no-rows"]')).not.toBeNull()
   })
 
   it('没有表 ⇒ 说明"应用还没建过表"，而不是空白面板', async () => {
     stubFetch(() => jsonResponse(200, { schema: { ...SCHEMA_OK.schema, tables: [], table_count: 0 } }))
     await mount()
-    await click('.pico-app-data-toggle')
+    await click('.zeokeel-app-data-toggle')
     expect(container.querySelector('[data-role="data-empty"]')).not.toBeNull()
     // 没有表就不该发 rows 请求（查一张不存在的表只会拿 404）。
     expect(calls.filter(call => call.url.includes('/rows'))).toHaveLength(0)
@@ -220,10 +220,10 @@ describe('分页与截断提示', () => {
       return jsonResponse(200, { rows: { ...ROWS_MASKED.rows, offset: Number(offset ?? '0') } })
     })
     await mount()
-    await click('.pico-app-data-toggle')
-    const next = container.querySelector('.pico-app-data-next') as HTMLButtonElement | null
+    await click('.zeokeel-app-data-toggle')
+    const next = container.querySelector('.zeokeel-app-data-next') as HTMLButtonElement | null
     expect(next?.disabled).toBe(false)
-    await click('.pico-app-data-next')
+    await click('.zeokeel-app-data-next')
     expect(calls.at(-1)?.url).toContain('offset=50')
   })
 
@@ -232,7 +232,7 @@ describe('分页与截断提示', () => {
       ? jsonResponse(200, SCHEMA_OK)
       : jsonResponse(200, { rows: { ...ROWS_MASKED.rows, truncated_values: 2 } }))
     await mount()
-    await click('.pico-app-data-toggle')
+    await click('.zeokeel-app-data-toggle')
     expect(container.querySelector('[data-role="data-truncated-note"]')).not.toBeNull()
   })
 })
@@ -266,9 +266,9 @@ describe('迟到响应不得覆盖新状态（2026-09-21 审计 P2-3）', () => 
     }))
 
     await mount()
-    await click('.pico-app-data-toggle')          // 展开 ⇒ schema 到货 + **notes 的 rows 请求在飞**（未放行）
+    await click('.zeokeel-app-data-toggle')          // 展开 ⇒ schema 到货 + **notes 的 rows 请求在飞**（未放行）
     // 在 notes 还没回来时切到 tags（表按钮来自 schema，与 rows 状态无关 ⇒ 可点）。
-    await click('.pico-app-data-table[data-table="tags"]')
+    await click('.zeokeel-app-data-table[data-table="tags"]')
     // 先放行**后发**的 tags，再放行**先发**的 notes：没有序号守卫时后者会覆盖前者。
     const last = pending.pop()
     last?.()

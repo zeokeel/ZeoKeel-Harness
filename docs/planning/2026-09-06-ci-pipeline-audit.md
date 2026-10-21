@@ -84,7 +84,7 @@
 | G4 | **better-sidebar 无任何 check/test**（只有打包时 build） | 根 `check` 未列之；仅在 `prebuildWorkspaceDeps` 中被构建 | 唯一无测试覆盖的自研插件 |
 | G5 | **官网 site 构建无 CI** | workflows 无 site job；记忆记载 wiki 改动需手工 `astro build` | 官网 30 页可被默默破坏 |
 | G6 | **平台门禁面不一致**：linux 跑根 check；mac 跑根 check（经 `check:mac-package`）；win 只跑 `check:win-package`（desktop 12 个测试文件子集 + 三包 build） | 见 §1.2 入口 4/5 | 同一 PR 在 win 平台上 6 个包无 typecheck/test；「跨平台失败」先发生在打包阶段而非门禁 |
-| G7 | `server` job 产物 `picoaide-server-linux-amd64` 在 CI 内**无消费者** | release job 只下载 AppImage/exe/dmg/SHA256SUMS.txt；部署走 docker 镜像 | 上传即归档，缺失失败校验意义（artifact 本身没问题，但属「无下游」）
+| G7 | `server` job 产物 `zeokeel-server-linux-amd64` 在 CI 内**无消费者** | release job 只下载 AppImage/exe/dmg/SHA256SUMS.txt；部署走 docker 镜像 | 上传即归档，缺失失败校验意义（artifact 本身没问题，但属「无下游」）
 | G8 | `docker.yml` 与 `ci.yml server` 维护两套 PG 启动脚本（docker run + pg_isready + SELECT 1 轮询） | ci.yml:41-52 / docker.yml:185-201 | 复制粘贴维护，后续改一处忘一处（历史上已因此多次修补） |
 | G9 | 无 CodeQL | 4 workflows 无 | 安全审计依赖本地人工（项目有 codeql skill 但非 CI） |
 | G10 | `on: push` 无 `paths` 过滤 | — | 改 docs/wiki 也触发三平台打包 |

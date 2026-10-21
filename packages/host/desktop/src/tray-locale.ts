@@ -20,7 +20,7 @@ export type DesktopTrayLabelKey =
  * 托盘/通知文案里的产品名必须走参数（渠道构建下是渠道自己的名字）——渠道客户
  * 不该在系统托盘里看到厂商名。
  */
-const OFFICIAL_PRODUCT_NAME = 'PicoAide Harness'
+const OFFICIAL_PRODUCT_NAME = 'ZeoKeel Harness'
 
 const labels: Record<DesktopLocale, Record<DesktopTrayLabelKey, (value: string, product: string) => string>> = {
   en: {

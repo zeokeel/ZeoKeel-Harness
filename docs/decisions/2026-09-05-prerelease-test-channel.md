@@ -20,7 +20,7 @@
 隔离不是靠客户端逻辑，而是 GitHub Releases 的既有语义：
 
 - 客户端 `update-checker` / `update-download` 只请求
-  `GET /repos/picoaide/picoaide-harness/releases/latest`；
+  `GET /repos/zeokeel/ZeoKeel-Harness/releases/latest`；
 - GitHub 该端点**只返回最新且非 draft、非 prerelease** 的 release——所以只要测试版以
   Pre-release 发布，`releases/latest` 不会包含它，正式用户端检查永远返回 up-to-date；
 - 双保险：`update-checker` 解析响应时要求严格 stable SemVer（`parseCanonicalStableVersion`
@@ -63,7 +63,7 @@ GitHub Release 的官方 label 语义（我们按其执行）：
   "rc" 等自定义叫法（2026-09-05 前历史 tag 如 v2.6.7-rc.3 仅是失败尝试的残留，
   无 GitHub Release，后续不再沿用 rc 后缀）。
 - `scripts/version.mjs` 的 `validateVersion` / docker.yml 白名单本就接受 `-后缀`，
-  资产名 `PicoAide-Harness-2.7.0-rc.1-mac.dmg` 等自动对齐 tag，无特殊处理。
+  资产名 `ZeoKeel-Harness-2.7.0-rc.1-mac.dmg` 等自动对齐 tag，无特殊处理。
 
 ## 操作流程
 

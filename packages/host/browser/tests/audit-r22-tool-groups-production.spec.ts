@@ -5,7 +5,7 @@
  * `index.ts` 的 `Config` schema 里 `toolGroups: z.array(z.string())` **没有 `.default()`**，
  * 而 Schemastery 会把**缺键的数组**物化成 `[]`（同一 schema 的标量字段缺键仍是
  * `undefined`，只有数组/字典中招）。生产装配注入的正是"缺键"形态 ——
- * `packages/host/desktop/src/profile.ts` 给 `pico-browser` 行只注入 `{ appOriginScheme }`，
+ * `packages/host/desktop/src/profile.ts` 给 `zeokeel-browser` 行只注入 `{ appOriginScheme }`，
  * `cordis.patch.yml` 的 insert 没有 config，而 patch 的 `config` 是**整键替换** ——
  * ⇒ `parseToolGroups(config.toolGroups)` 拿到 `[]` ⇒ 空集 ⇒ `applyBrowserTools` 注册
  * **0** 个工具，而 system prompt 的 `tool:browser` 指引照旧宣称 31 个工具存在：
@@ -35,7 +35,7 @@ import { DEFAULT_GROUPS, applyBrowserTools, parseToolGroups } from '../src/tools
  * 生产装配注入的 config 形态（`packages/host/desktop/src/profile.ts` 的
  * `BROWSER_ROW_ID` 分支：只有 `appOriginScheme` 一个键）。
  */
-const PRODUCTION_CONFIG = { appOriginScheme: 'picoaide-app' } as const
+const PRODUCTION_CONFIG = { appOriginScheme: 'zeokeel-app' } as const
 
 /** 工具面大小（V6 2026-09-26 实测 31 = `tools.ts` 的 `GROUP_OF` 键数）。 */
 const TOOL_COUNT = 31

@@ -26,7 +26,7 @@ function appRequest(
   const requestInit: RequestInit = { method: init.method ?? 'GET' }
   if (init.headers !== undefined) requestInit.headers = init.headers
   if (init.body !== undefined) requestInit.body = init.body
-  return new Request(`picoaide-app://demo${path}`, requestInit)
+  return new Request(`zeokeel-app://demo${path}`, requestInit)
 }
 
 /** 造一个平台成功响应（响应信封）。 */
@@ -72,7 +72,7 @@ function harness(
   const warnings: string[] = []
   let locale: 'zh' | 'en' | undefined = 'zh'
   const deps: AppSchemeHandlerDeps = {
-    appOriginScheme: 'picoaide-app',
+    appOriginScheme: 'zeokeel-app',
     session: () => session,
     fetch: fetchMock as unknown as AppSchemeHandlerDeps['fetch'],
     clearSession,
@@ -112,14 +112,14 @@ describe('app scheme handler — forwarding', () => {
     expect(init.method).toBe('POST')
     const headers = init.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer tok')
-    expect(headers.Origin).toBe('picoaide-app://demo')
+    expect(headers.Origin).toBe('zeokeel-app://demo')
     expect(headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(String(init.body))).toEqual({
       method: 'POST',
       path: '/notes',
       query: 'page=2',
-      host: 'picoaide-app://demo',
-      headers: { 'content-type': 'application/json', accept: 'text/html', origin: 'picoaide-app://demo' },
+      host: 'zeokeel-app://demo',
+      headers: { 'content-type': 'application/json', accept: 'text/html', origin: 'zeokeel-app://demo' },
       body: Buffer.from('{"title":"x"}').toString('base64'),
     })
     expect(response.status).toBe(200)
@@ -188,7 +188,7 @@ describe('app scheme handler — local refusals stay readable', () => {
     expect(options.headers.get('allow')).toContain('POST')
     // `Request` 构造器不允许 TRACE/CONNECT 这类方法，用一个合法的自定义方法名
     // 覆盖"白名单之外一律 405"这条分支。
-    const brew = await h.handler(new Request('picoaide-app://demo/', { method: 'BREW' }))
+    const brew = await h.handler(new Request('zeokeel-app://demo/', { method: 'BREW' }))
     expect(brew.status).toBe(405)
     expect(h.fetch).not.toHaveBeenCalled()
   })
@@ -298,21 +298,21 @@ describe('客户端持有性证明的带出与重签（§20.1/§23.1；R2-X-4/R2
     truncated: false,
   })
 
-  it('出站请求实际带上了 X-Pico-App-Proof（断言 headers，不只是常量）', async () => {
+  it('出站请求实际带上了 X-ZeoKeel-App-Proof（断言 headers，不只是常量）', async () => {
     const h = harness(async () => new Response(okEnvelope, { status: 200 }))
-    await h.handler(new Request('picoaide-app://demo/'))
+    await h.handler(new Request('zeokeel-app://demo/'))
     const [, init] = h.fetch.mock.calls[0] as unknown as [string, RequestInit]
-    expect((init.headers as Record<string, string>)['X-Pico-App-Proof']).toBe('proof-token')
+    expect((init.headers as Record<string, string>)['X-ZeoKeel-App-Proof']).toBe('proof-token')
   })
 
   it('签发失败（provider 返回 null）时不带该头，但仍按正常流程出站', async () => {
     const h = harness(async () => new Response(okEnvelope, { status: 200 }), undefined, {
       appProof: { get: async () => null, invalidate: () => {} },
     })
-    const response = await h.handler(new Request('picoaide-app://demo/'))
+    const response = await h.handler(new Request('zeokeel-app://demo/'))
     expect(response.status).toBe(200)
     const [, init] = h.fetch.mock.calls[0] as unknown as [string, RequestInit]
-    expect((init.headers as Record<string, string>)['X-Pico-App-Proof']).toBeUndefined()
+    expect((init.headers as Record<string, string>)['X-ZeoKeel-App-Proof']).toBeUndefined()
   })
 
   it('proof_ 前缀的 401 ⇒ 重签一次再重试；重试成功后返回内容', async () => {
@@ -336,13 +336,13 @@ describe('客户端持有性证明的带出与重签（§20.1/§23.1；R2-X-4/R2
         invalidate,
       },
     })
-    const response = await h.handler(new Request('picoaide-app://demo/'))
+    const response = await h.handler(new Request('zeokeel-app://demo/'))
     expect(response.status).toBe(200)
     expect(h.fetch).toHaveBeenCalledTimes(2)
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(issued).toBe(1)
     const [, retryInit] = h.fetch.mock.calls[1] as unknown as [string, RequestInit]
-    expect((retryInit.headers as Record<string, string>)['X-Pico-App-Proof']).toBe('proof-fresh')
+    expect((retryInit.headers as Record<string, string>)['X-ZeoKeel-App-Proof']).toBe('proof-fresh')
   })
 
   it('重签后仍 401 ⇒ 按正常错误上抛（不无限重试、不清会话 —— 这是 proof 失效不是会话失效）', async () => {
@@ -350,7 +350,7 @@ describe('客户端持有性证明的带出与重签（§20.1/§23.1；R2-X-4/R2
     const h = harness(async () => new Response(JSON.stringify({ error: { code: 'proof_mismatch', message: 'no' } }), { status: 401 }), undefined, {
       appProof: { get: async () => 'proof-token', invalidate },
     })
-    const response = await h.handler(new Request('picoaide-app://demo/'))
+    const response = await h.handler(new Request('zeokeel-app://demo/'))
     expect(response.status).toBe(401)
     expect(h.fetch).toHaveBeenCalledTimes(2)
     expect(h.clearSession).not.toHaveBeenCalled()
@@ -362,7 +362,7 @@ describe('客户端持有性证明的带出与重签（§20.1/§23.1；R2-X-4/R2
     const h = harness(async () => new Response(JSON.stringify({ error: { code: 'AUTH_FAILED', message: 'session' } }), { status: 401 }), undefined, {
       appProof: { get: async () => 'proof-token', invalidate },
     })
-    const response = await h.handler(new Request('picoaide-app://demo/'))
+    const response = await h.handler(new Request('zeokeel-app://demo/'))
     expect(response.status).toBe(401)
     expect(h.fetch).toHaveBeenCalledTimes(1)
     expect(invalidate).not.toHaveBeenCalled()
@@ -372,16 +372,16 @@ describe('客户端持有性证明的带出与重签（§20.1/§23.1；R2-X-4/R2
 
 describe('宿主保留命名空间（§21.2 ②③；R2-X-3 / R2-L2-3）', () => {
   /**
-   * 保留面 = 裸前缀 `/__picoaide` **与** `/__picoaide/...`。
+   * 保留面 = 裸前缀 `/__zeokeel` **与** `/__zeokeel/...`。
    *
-   * R2-L2-3：只判 `startsWith('/__picoaide/')` 会让裸前缀落进"普通应用请求"分支被
+   * R2-L2-3：只判 `startsWith('/__zeokeel/')` 会让裸前缀落进"普通应用请求"分支被
    * **转发平台**（实测形态）。这里三种形态一起钉住：裸前缀、带尾斜杠、AI 桥之外的子路径。
-   * 变异：把 `isReservedHostPath` 改回 `startsWith('/__picoaide/')` ⇒ 裸前缀那条红。
+   * 变异：把 `isReservedHostPath` 改回 `startsWith('/__zeokeel/')` ⇒ 裸前缀那条红。
    */
-  it('`__picoaide` 裸前缀 / 子路径 / 深路径一律 404，绝不转发平台', async () => {
+  it('`__zeokeel` 裸前缀 / 子路径 / 深路径一律 404，绝不转发平台', async () => {
     const h = harness(async () => new Response('{"status":200,"headers":{},"body":"","truncated":false}', { status: 200 }))
-    for (const path of ['/__picoaide', '/__picoaide/', '/__picoaide/ai', '/__picoaide/ai/chat/extra', '/__picoaide/secret']) {
-      const response = await h.handler(new Request(`picoaide-app://demo${path}`, { headers: { accept: 'application/json' } }))
+    for (const path of ['/__zeokeel', '/__zeokeel/', '/__zeokeel/ai', '/__zeokeel/ai/chat/extra', '/__zeokeel/secret']) {
+      const response = await h.handler(new Request(`zeokeel-app://demo${path}`, { headers: { accept: 'application/json' } }))
       expect(response.status, path).toBe(404)
       expect(await response.text(), path).toContain('no such host bridge')
     }
@@ -389,9 +389,9 @@ describe('宿主保留命名空间（§21.2 ②③；R2-X-3 / R2-L2-3）', () =>
     expect(h.fetch).not.toHaveBeenCalled()
   })
 
-  it('前缀**不是**被过度拦截：`/__picoaidex` 仍是普通应用请求（走平台）', async () => {
+  it('前缀**不是**被过度拦截：`/__zeokeelx` 仍是普通应用请求（走平台）', async () => {
     const h = harness(async () => new Response('{"status":200,"headers":{},"body":"","truncated":false}', { status: 200 }))
-    const response = await h.handler(new Request('picoaide-app://demo/__picoaidex', { headers: { accept: 'application/json' } }))
+    const response = await h.handler(new Request('zeokeel-app://demo/__zeokeelx', { headers: { accept: 'application/json' } }))
     expect(response.status).toBe(200)
     expect(h.fetch).toHaveBeenCalledTimes(1)
   })
@@ -404,7 +404,7 @@ describe('宿主保留命名空间（§21.2 ②③；R2-X-3 / R2-L2-3）', () =>
       {},
     )
     void calls
-    const response = await h.handler(appRequest('/__picoaide', { headers: { accept: 'application/json' } }))
+    const response = await h.handler(appRequest('/__zeokeel', { headers: { accept: 'application/json' } }))
     expect(response.status).toBe(404)
     expect(h.fetch).not.toHaveBeenCalled()
   })
@@ -417,7 +417,7 @@ describe('冻结 / 下架 / 不存在三档文案不塌缩（§19 Q3；R2-X-2）
       error: { code, message: 'platform message', ...(reason === undefined ? {} : { reason }) },
     }), { status })
 
-  const navigationRequest = (): Request => new Request('picoaide-app://demo/', { headers: { accept: 'text/html' } })
+  const navigationRequest = (): Request => new Request('zeokeel-app://demo/', { headers: { accept: 'text/html' } })
 
   it('reason=app_frozen ⇒ 「已被管理员停用」而不是「应用不存在」', async () => {
     const h = harness(async () => platformError(404, 'NOT_FOUND', 'app_frozen'))
@@ -503,7 +503,7 @@ describe('本机内容缓存接线（§7.5 / F11）', () => {
     // 版本头是客户端缓存键的唯一来源：直出的响应也必须带（§5.1 / DAT-12）。
     // 安全头由缓存**读**路径叠加（`CachedResponse.headers` 的契约，见 cache.ts 的
     // `securityHeaders`），真实缓存的端到端用例在文件末尾断言它。
-    expect(response.headers.get('x-picoaide-app-version')).toBe(VERSION)
+    expect(response.headers.get('x-zeokeel-app-version')).toBe(VERSION)
   })
 
   it('If-None-Match 命中 ⇒ 304（静态子资源才走这条）', async () => {
@@ -518,7 +518,7 @@ describe('本机内容缓存接线（§7.5 / F11）', () => {
     expect(spy.conditionals).toEqual(['"v1"'])
     expect(spy.gets).toEqual([])
     expect(h.fetch).not.toHaveBeenCalled()
-    expect(response.headers.get('x-picoaide-app-version')).toBe(VERSION)
+    expect(response.headers.get('x-zeokeel-app-version')).toBe(VERSION)
   })
 
   it('回源成功 ⇒ put（scope/version/path 含 query/响应头原样），且响应带版本头', async () => {
@@ -535,7 +535,7 @@ describe('本机内容缓存接线（§7.5 / F11）', () => {
     expect(spy.puts[0]).toMatchObject({ appId: 'demo', version: VERSION, path: '/assets/app.js?v=7', status: 200 })
     expect(Buffer.from(spy.puts[0]!.body).toString('utf8')).toBe('body-bytes')
     // 版本头（§5.1 / DAT-12）：平台没在信封头里给时宿主也要补上。
-    expect(response.headers.get('x-picoaide-app-version')).toBe('1.2.3')
+    expect(response.headers.get('x-zeokeel-app-version')).toBe('1.2.3')
   })
 
   it('文档导航与 /api/* 一律不读不写（本地缓存不得成为绕过准入的第二入口）', async () => {
@@ -614,7 +614,7 @@ describe('本机内容缓存接线（§7.5 / F11）', () => {
       // 直出的响应必须带**当前**宿主安全头（真实缓存 `get()` 叠加）与版本头。
       expect(second.headers.get('content-security-policy')).toContain("default-src 'self'")
       expect(second.headers.get('x-content-type-options')).toBe('nosniff')
-      expect(second.headers.get('x-picoaide-app-version')).toBe(VERSION)
+      expect(second.headers.get('x-zeokeel-app-version')).toBe(VERSION)
       // 缓存键含 query：带不同 query 的同一路径是**另一次**回源（不得互相命中）。
       const third = await h.handler(appRequest('/assets/app.js?v=2'))
       expect(await third.text()).toBe('payload-2')

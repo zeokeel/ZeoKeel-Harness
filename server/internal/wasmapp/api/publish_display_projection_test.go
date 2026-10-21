@@ -26,8 +26,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
 )
 
 // catalogRow 读员工面目录里某个应用的行（不存在返回 nil）。

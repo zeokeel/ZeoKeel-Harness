@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // ⚠️ TestFrameRoundTrip 是**唯一**能抓到 "WriteFrame 丢魔数" 这类 bug 的用例：

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // 本文件是**编译子进程 env 白名单**的验收（§4.3「参数 / 环境变量」+ R31）。
@@ -23,12 +23,12 @@ var fakeParentEnv = []string{
 	"TMPDIR=/tmp",
 	"TZ=Asia/Shanghai",
 	"LANG=zh_CN.UTF-8",
-	"PG_DSN=postgres://picoaide:secret@127.0.0.1:5432/picoaide",
+	"PG_DSN=postgres://zeokeel:secret@127.0.0.1:5432/zeokeel",
 	"PGDSN=postgres://x",
 	"DATABASE_URL=postgres://y",
-	"PICOAI_MASTER_KEY=deadbeef",
-	"PICOAI_ADMIN_PASSWORD=Admin@12345",
-	"PICOAI_TRUSTED_PROXIES=172.28.0.2",
+	"ZEOKEEL_MASTER_KEY=deadbeef",
+	"ZEOKEEL_ADMIN_PASSWORD=Admin@12345",
+	"ZEOKEEL_TRUSTED_PROXIES=172.28.0.2",
 	"MASTER_KEY=deadbeef",
 	"MASTERKEY=deadbeef",
 	"AES_KEY=deadbeef",
@@ -93,7 +93,7 @@ func TestCompileProcessEnvDropsSecretsNames(t *testing.T) {
 	// 断言的是"明确危险的名字一个都不能出现"——这是回归口径，
 	// 任何一条漏出都意味着"读不可信字节的进程拿到了平台凭据"。
 	forbidden := []string{
-		"PG_DSN", "PGDSN", "DATABASE_URL", "PICOAI_", "MASTER", "DSN", "KEY",
+		"PG_DSN", "PGDSN", "DATABASE_URL", "ZEOKEEL_", "MASTER", "DSN", "KEY",
 		"SECRET", "PASSWORD", "TOKEN", "PRIVATE", "CERT",
 	}
 	for _, f := range forbidden {
@@ -144,7 +144,7 @@ func TestCompileProcessEnvRejectsMalformedEntries(t *testing.T) {
 func TestCompileProcessEnvDropsWholeAppEnv(t *testing.T) {
 	prod := []string{
 		"PATH=/usr/bin", "HOSTNAME=abc", "HOME=/root", "PWD=/app",
-		"PG_DSN=postgres://u:p@db:5432/picoaide", "PICOAI_MASTER_KEY_FILE=/data/master.key",
+		"PG_DSN=postgres://u:p@db:5432/zeokeel", "ZEOKEEL_MASTER_KEY_FILE=/data/master.key",
 		"HTTP_PROXY=http://proxy", "HTTPS_PROXY=http://proxy", "NO_PROXY=db",
 		"GOMAXPROCS=4", "GODEBUG=gcstoptheworld=1",
 	}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 拉取私有渠道仓(picoaide/channels)并决定**本次要构建哪些渠道**。
+# 拉取私有渠道仓(zeokeel/channels)并决定**本次要构建哪些渠道**。
 #
 # 为什么是脚本而不是内联 YAML:这段逻辑(路径层数、非空目录、克隆失败残留、
 # 渠道 id 掩码、tag→渠道集策略)出错都会静默发错镜像,必须能被本地测试。
@@ -26,7 +26,7 @@
 #                         `ci-release-policy.sh` 判形态与渠道集的唯一依据
 #   GITHUB_REF_NAME       tag 名(交给 ci-release-policy.sh 判定;形态不认识即中止)
 #   CI_CHANNELS_SOURCE    已有检出目录(本地测试用;给了就跳过克隆)
-#   CI_CHANNELS_REPO      渠道仓 slug(缺省 picoaide/channels)
+#   CI_CHANNELS_REPO      渠道仓 slug(缺省 zeokeel/channels)
 #   CI_CHANNELS_PIN       渠道仓 commit SHA(40 位小写 hex)。**发布 tag 上必填**:
 #                         gate 里 `ci-channels.sh --resolve-only` 解析一次,四处调用点
 #                         共用同一个值 ⇒ 同一次 tag 的"包内客户端"与"镜像内渠道内容"
@@ -76,7 +76,7 @@ done
 # 生产链的 pin 不带换行：它经 GitHub job output（`${{ needs.gate.outputs.channels_rev }}`，
 # 平台会去掉尾随换行）或 `--pin <sha>` 传入。
 
-REPO="${CI_CHANNELS_REPO:-picoaide/channels}"
+REPO="${CI_CHANNELS_REPO:-zeokeel/channels}"
 # 原始名字留着只用于告警(见下);**渠道集判定不在这里**,交给唯一真源
 # `scripts/ci-release-policy.sh`(它自己按 `GITHUB_REF` 的类型前缀判是不是 tag)。
 RAW_REF_NAME="${GITHUB_REF_NAME:-}"
@@ -504,9 +504,11 @@ fi
 #      硬度按 ref 形态分档（判据在下面、CHANNEL_SET 之后）：**正式 tag（channel_set=all）
 #      跌破下限 = 红**（那正是本次审计的现场）；其余 ref 只告警 —— PR/预发线上渠道正在
 #      上下线时不该阻断无关构建，但必须在日志里看得见。
-#      `verify-ci-scripts.mjs` 另有一条棘轮判据钉住"下限不得低于 4"，
+#      `verify-ci-scripts.mjs` 另有一条棘轮判据钉住"下限不得低于 2"，
 #      防止有人把它调到 1 把闸门关掉。
-MIN_EXPECTED_CHANNELS=4
+#      2026-10-21 fork 改名（ZeoKeel）时从上游的 4 显式下调到 2：新私有渠道仓
+#      zeokeel/channels 当前只有 official + beta 两个渠道目录；新增渠道时必须同步上调。
+MIN_EXPECTED_CHANNELS=2
 if [ "$CHANNELS_FROM_REMOTE" -eq 1 ] && [ "${#FOUND[@]}" -gt "$MIN_EXPECTED_CHANNELS" ]; then
   echo "::warning::渠道仓里的渠道目录数(${#FOUND[@]})多于登记下限(${MIN_EXPECTED_CHANNELS})：新增渠道时请把 MIN_EXPECTED_CHANNELS 一起调高，否则将来少一个渠道不会被这条判据拦住(渠道名不打印)" >&2
 fi
@@ -715,7 +717,7 @@ for id in "${SELECTED[@]}"; do
   #
   # 2026-09-10 审计后加严的部分:
   #   - 品牌渠道(official/beta 之外)**必须**给 desktop.slug / desktop.app_id:
-  #     缺 slug 时安装包名回落 `PicoAide-Harness-…`,缺 app_id 时 bundle id /
+  #     缺 slug 时安装包名回落 `ZeoKeel-Harness-…`,缺 app_id 时 bundle id /
   #     AppUserModelId 回落厂商值 —— 前者是交付物上的厂商品牌,后者会让两个渠道的
   #     客户端在系统里变成"同一个 app";
   #   - deep_link_scheme 必须是合法 scheme(它进浏览器确认框,还会与 electron-builder
@@ -737,7 +739,7 @@ done
 # 机器上,重复在任何一轮构建里都是配置事故,早一轮发现早一轮修。
 #
 # 公共渠道 official/beta 是**一个命名空间**(设计 §16 W3 / §8.3:两者取值同为
-# `picoaide-app`):它们之间相同属预期,**唯一性豁免只给这一种形态**;品牌渠道必须
+# `zeokeel-app`):它们之间相同属预期,**唯一性豁免只给这一种形态**;品牌渠道必须
 # 彼此不同,也不得取公共渠道的值(否则品牌客户端与官方客户端的应用页同源)。
 #
 # 输出纪律(同本脚本头部):扫的是渠道侧配置,输出**只允许出现字段名与中性词** ——

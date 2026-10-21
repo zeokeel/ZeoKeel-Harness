@@ -18,9 +18,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // full 是一份"首次发布"用的合法配置（新 schema）。
@@ -92,7 +92,7 @@ func TestAccessDefaultsToLogin(t *testing.T) {
 	}
 }
 
-// 旧 schema 兼容 shim：**已发布版本**里的 config_json 与随包 picoaide.app.json 还是
+// 旧 schema 兼容 shim：**已发布版本**里的 config_json 与随包 zeokeel.app.json 还是
 // 旧形态，Parse 必须接受并映射，且不报 unknown field。重新发布后写出的是新 schema。
 //
 // 变异方式：删掉 Parse 的旧形态映射分支（或把 legacy 字段当未知字段拒）⇒ 红。

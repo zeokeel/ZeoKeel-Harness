@@ -125,7 +125,7 @@ function countClears(): () => number {
 
 describe('BUG-02: a connect intent must not outlive a cancel', () => {
   it('cancelling during the first credential read publishes no form and leaves the row disconnected', async () => {
-    const dir = await tempDir('pico-intent-cancel-')
+    const dir = await tempDir('zeokeel-intent-cancel-')
     // Hold the FIRST credential read so the cancel lands while startConnect is
     // parked exactly where the audit's repro did (before anything was published).
     const original = ConnectorStore.prototype.readCredential
@@ -147,15 +147,15 @@ describe('BUG-02: a connect intent must not outlive a cancel', () => {
     })
 
     const h = createHarness([settingsDef()], dir)
-    await callRoute(h, '/api/pico/connectors/racetest/connect', 'POST')
-    await callRoute(h, '/api/pico/connectors/racetest/cancel', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/racetest/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/racetest/cancel', 'POST')
     release()
     // 等 park 的读真的返回（它的续体是同步判定 intent，之后没有别的 await），
     // 再让出一轮事件循环 —— 不再裸睡 50ms。
     await readReturnedPromise
     await flush()
 
-    const state = JSON.parse((await callRoute(h, '/api/pico/connectors/racetest/state', 'GET')).body) as
+    const state = JSON.parse((await callRoute(h, '/api/zeokeel/connectors/racetest/state', 'GET')).body) as
       { status: string, request: unknown }
     // The cancelled connect used to come back as `connecting` + a settings form.
     expect(state.status).toBe('disconnected')
@@ -165,7 +165,7 @@ describe('BUG-02: a connect intent must not outlive a cancel', () => {
   })
 
   it('a disconnect during the credential write leaves no credential behind', async () => {
-    const dir = await tempDir('pico-intent-write-')
+    const dir = await tempDir('zeokeel-intent-write-')
     const store = new ConnectorStore({ baseDir: dir })
     // Park INSIDE updateCredential, after the pre-write liveness check passed:
     // this is the window in which the old code wrote a credential after the
@@ -187,12 +187,12 @@ describe('BUG-02: a connect intent must not outlive a cancel', () => {
     })
 
     const h = createHarness([tokenDef()], dir)
-    void callRoute(h, '/api/pico/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'secret' } })
+    void callRoute(h, '/api/zeokeel/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'secret' } })
     // 确定性：必须等到写真的进入 park（否则用例走的是"写前检查"那条路，
     // 补偿代码根本不会被执行 —— 2026-09-15 复核实测到的假绿）。
     await waitFor(() => parked, 5000)
     const clears = countClears()
-    await callRoute(h, '/api/pico/connectors/tok/disconnect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/tok/disconnect', 'POST')
     release()
     // 必须先看到补偿删除真的执行（否则 null 在写入落地前就成立 —— 假绿）。
     await waitFor(() => clears() >= 1, 10_000)
@@ -204,7 +204,7 @@ describe('BUG-02: a connect intent must not outlive a cancel', () => {
   })
 
   it('断开后新尝试仍在飞行时，迟到的旧写入也必须被清掉（第二轮复核：判据回归要靠这条钉住）', async () => {
-    const dir = await tempDir('pico-intent-write-newer-')
+    const dir = await tempDir('zeokeel-intent-write-newer-')
     const store = new ConnectorStore({ baseDir: dir })
     const original = ConnectorStore.prototype.updateCredential
     const gates: Array<() => void> = []
@@ -229,10 +229,10 @@ describe('BUG-02: a connect intent must not outlive a cancel', () => {
     })
 
     const h = createHarness([tokenDef()], dir)
-    void callRoute(h, '/api/pico/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'STALE-A' } })
+    void callRoute(h, '/api/zeokeel/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'STALE-A' } })
     await waitFor(() => calls === 1 && gates.length === 1, 5000)
-    await callRoute(h, '/api/pico/connectors/tok/disconnect', 'POST')
-    void callRoute(h, '/api/pico/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'FRESH-B' } })
+    await callRoute(h, '/api/zeokeel/connectors/tok/disconnect', 'POST')
+    void callRoute(h, '/api/zeokeel/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'FRESH-B' } })
     await waitFor(() => calls === 2 && gates.length === 2, 5000)
     void secondParked
 
@@ -257,7 +257,7 @@ describe('BUG-02: a connect intent must not outlive a cancel', () => {
   })
 
   it('a newer write that already landed is never replaced by stale bytes', async () => {
-    const dir = await tempDir('pico-intent-write-invariant-')
+    const dir = await tempDir('zeokeel-intent-write-invariant-')
     const store = new ConnectorStore({ baseDir: dir })
     const original = ConnectorStore.prototype.updateCredential
     let release!: () => void
@@ -276,12 +276,12 @@ describe('BUG-02: a connect intent must not outlive a cancel', () => {
     })
 
     const h = createHarness([tokenDef()], dir)
-    void callRoute(h, '/api/pico/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'STALE-A' } })
+    void callRoute(h, '/api/zeokeel/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'STALE-A' } })
     await waitFor(() => parked, 5000)
-    await callRoute(h, '/api/pico/connectors/tok/disconnect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/tok/disconnect', 'POST')
     // 更新的意图**真的写了盘**（第二次 updateCredential 不再被 park）。
     const clears = countClears()
-    await callRoute(h, '/api/pico/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'FRESH-B' } })
+    await callRoute(h, '/api/zeokeel/connectors/tok/auth-submit', 'POST', { fields: { apiKey: 'FRESH-B' } })
     release()
     // 迟到写入的补偿必须先跑过，再读盘判定不变式。
     await waitFor(() => clears() >= 1, 10_000)
@@ -296,7 +296,7 @@ describe('BUG-02: a connect intent must not outlive a cancel', () => {
 
 describe('BUG-06: a public MCP endpoint survives a restart', () => {
   it('persists the public marker and registers again from the stored credential', async () => {
-    const dir = await tempDir('pico-public-mcp-')
+    const dir = await tempDir('zeokeel-public-mcp-')
     const server = createHttpServer((_req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end('{}')
@@ -306,7 +306,7 @@ describe('BUG-06: a public MCP endpoint survives a restart', () => {
     const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 
     const first = createHarness([publicDef(origin)], dir, { refreshSweepIntervalMs: 0 })
-    await callRoute(first, '/api/pico/connectors/pub/connect', 'POST')
+    await callRoute(first, '/api/zeokeel/connectors/pub/connect', 'POST')
     await waitFor(() => first.configs.length === 1, 8000)
     const stored = await new ConnectorStore({ baseDir: dir }).readCredential('pub')
     expect(stored?.publicMcp).toBe(true)
@@ -317,7 +317,7 @@ describe('BUG-06: a public MCP endpoint survives a restart', () => {
     // same server from the stored credential alone.
     const second = createHarness([publicDef(origin)], dir, { refreshSweepIntervalMs: 0 })
     await waitFor(() => second.configs.length === 1, 8000)
-    const row = JSON.parse((await callRoute(second, '/api/pico/connectors', 'GET')).body) as
+    const row = JSON.parse((await callRoute(second, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string }> }
     expect(row.connectors.find(c => c.id === 'pub')?.status).toBe('connected')
     second.dispose()
@@ -326,7 +326,7 @@ describe('BUG-06: a public MCP endpoint survives a restart', () => {
 
 describe('ConnectorStore.clearCredentialIfUnchanged：原子 compare-and-delete', () => {
   it('内容一致才删；不一致（已被更新的写入换掉）返回 false 且不动文件', async () => {
-    const dir = await tempDir('pico-store-cas-')
+    const dir = await tempDir('zeokeel-store-cas-')
     const store = new ConnectorStore({ baseDir: dir })
     await store.writeCredential('c', { updatedAt: 1, fields: { apiKey: 'A' } })
     expect(await store.clearCredentialIfUnchanged('c', { updatedAt: 1, fields: { apiKey: 'A' } })).toBe(true)
@@ -338,7 +338,7 @@ describe('ConnectorStore.clearCredentialIfUnchanged：原子 compare-and-delete'
   })
 
   it('并发写不会被比较-删除误删（50 轮属性断言）', async () => {
-    const dir = await tempDir('pico-store-cas-race-')
+    const dir = await tempDir('zeokeel-store-cas-race-')
     const store = new ConnectorStore({ baseDir: dir })
     for (let round = 0; round < 50; round += 1) {
       await store.writeCredential('c', { updatedAt: 1, fields: { apiKey: 'A' } })
@@ -352,7 +352,7 @@ describe('ConnectorStore.clearCredentialIfUnchanged：原子 compare-and-delete'
   })
 
   it('非法 updatedAt 被规范为 0，后续写入恢复单调', async () => {
-    const dir = await tempDir('pico-store-bad-updatedat-')
+    const dir = await tempDir('zeokeel-store-bad-updatedat-')
     const store = new ConnectorStore({ baseDir: dir })
     await store.writeCredential('c', { updatedAt: 1, fields: { apiKey: 'A' } })
     // 手工把时间戳写坏：必须写 `1e999` 字面量（JSON.stringify(Infinity) 会先变成
@@ -371,7 +371,7 @@ describe('ConnectorStore.clearCredentialIfUnchanged：原子 compare-and-delete'
   })
 
   it('updateCredentialIfUnchanged：快照变了 / 文件没了都不写（断开不复活）', async () => {
-    const dir = await tempDir('pico-store-cas-update-')
+    const dir = await tempDir('zeokeel-store-cas-update-')
     const store = new ConnectorStore({ baseDir: dir })
     const first = await store.updateCredential('c', { accessToken: 'a1', fields: { apiKey: 'A' } })
     expect((await store.updateCredentialIfUnchanged('c', first, { accessToken: 'a2' }))?.accessToken).toBe('a2')
@@ -385,7 +385,7 @@ describe('ConnectorStore.clearCredentialIfUnchanged：原子 compare-and-delete'
   })
 
   it('updateCredential 的 updatedAt 严格递增（同毫秒也不重复）', async () => {
-    const dir = await tempDir('pico-store-updatedat-')
+    const dir = await tempDir('zeokeel-store-updatedat-')
     const store = new ConnectorStore({ baseDir: dir })
     const first = await store.updateCredential('c', { accessToken: 'a1' })
     const second = await store.updateCredential('c', { accessToken: 'a2' })
@@ -415,7 +415,7 @@ describe('ConnectorStore：独占区与比较的两条收尾护栏（第三轮�
   })
 
   it('独占区非重入：在独占任务里调公开写方法是显式异常，而不是无声挂死', async () => {
-    const dir = await tempDir('pico-store-reentrant-')
+    const dir = await tempDir('zeokeel-store-reentrant-')
     const store = new ConnectorStore({ baseDir: dir })
     await store.writeCredential('c', { updatedAt: 1, fields: { apiKey: 'A' } })
     // 直接在独占任务里调用公开写方法（模拟误用）：AsyncLocalStorage 判定为

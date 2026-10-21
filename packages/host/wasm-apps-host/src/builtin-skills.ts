@@ -2,9 +2,9 @@
  * 平台内置技能（服务端下发、客户端按需安装）的**共享事实**。
  *
  * 用户要求：「skill 应该是内置到服务端，客户端可以按需安装」。链路的三个落点：
- *   - 服务端：`server/internal/skillseed` 把镜像内 `/opt/picoaide/skills`
+ *   - 服务端：`server/internal/skillseed` 把镜像内 `/opt/zeokeel/skills`
  *     打包下发（`GET /api/client/v2/skills/builtin[/:name/archive]`）；
- *   - 客户端安装：`auth-gate.ts` 的 `/api/pico/skills/builtin*` 两条分支 →
+ *   - 客户端安装：`auth-gate.ts` 的 `/api/zeokeel/skills/builtin*` 两条分支 →
  *     `installSkillArchive()` → `<dshHome>/skills/<name>`（复用市场那条链路）；
  *   - 入口：能力中心的「平台内置技能」区（`client/BuiltinSkillsStrip.tsx`）。
  *
@@ -15,14 +15,14 @@
  */
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { resolveSkillsDir } from '@picoaide/dsh-host-home'
+import { resolveSkillsDir } from '@zeokeel/dsh-host-home'
 import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from './locale.ts'
 
 /**
  * 平台内置的 WASM 应用作者手册技能名（服务端资产目录名 = 技能运行时名）。
  *
  * 名字必须与 `server/skills/app-builder/` 的**目录名**和 SKILL.md frontmatter 的
- * `name` 逐字一致（2026-09-19 由 `picoaide-app-builder` 改名而来）：服务端
+ * `name` 逐字一致（2026-09-19 由 `zeokeel-app-builder` 改名而来）：服务端
  * `skillseed` 用目录名当 declaredAppID 调 `skillmanifest.Parse`，不一致会让整条
  * 技能在启动扫描时被静默丢弃（接口 200 + 空数组），客户端这里也就永远提示"未安装"。
  */

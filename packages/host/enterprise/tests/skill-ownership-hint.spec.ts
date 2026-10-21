@@ -47,7 +47,7 @@ let pluginSkills = ''
 
 beforeEach(async () => {
   isolateRuntimeSkillRoots()
-  root = await mkdtemp(join(tmpdir(), 'pico-p6-own-'))
+  root = await mkdtemp(join(tmpdir(), 'zeokeel-p6-own-'))
   skillsDir = join(root, 'skills')
   pluginSkills = join(root, 'plugin-skills')
   await mkdir(skillsDir, { recursive: true })
@@ -134,7 +134,7 @@ function harness(): { call: (method: string, url: string) => Promise<{ code: num
       ? { requestRejection: (r: { headers: Record<string, unknown> }) => (r.headers['cookie'] === undefined ? (401 as const) : undefined) }
       : undefined),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => true,
       getSession: () => SESSION,
@@ -166,7 +166,7 @@ function harness(): { call: (method: string, url: string) => Promise<{ code: num
 async function installViaSync(): Promise<void> {
   await seedPluginSkill(1)
   expect(syncEntry().action, '前置事实：随包同步必须真的把技能装下来').toBe('synced')
-  const prov = JSON.parse(await readFile(join(skillsDir, NAME, '.picoaide', 'release.json'), 'utf8')) as { channel?: string }
+  const prov = JSON.parse(await readFile(join(skillsDir, NAME, '.zeokeel', 'release.json'), 'utf8')) as { channel?: string }
   expect(prov.channel, '前置事实：落点溯源必须是 plugin（墓碑只对这一档存在）').toBe('plugin')
 }
 
@@ -179,7 +179,7 @@ describe('C2-1 取值面：无法识别的 `?ownership` 必须 fail-loud（400�
     await installViaSync()
     const gate = harness()
     for (const value of illegal) {
-      const res = await gate.call('POST', `/api/pico/skills/${NAME}/uninstall?overwrite=1&ownership=${encodeURIComponent(value)}`)
+      const res = await gate.call('POST', `/api/zeokeel/skills/${NAME}/uninstall?overwrite=1&ownership=${encodeURIComponent(value)}`)
       expect(res.code, `ownership=${JSON.stringify(value)} ⇒ ${JSON.stringify(res.body)}`).toBe(400)
       expect(res.body?.code, `ownership=${JSON.stringify(value)}`).toBe('INVALID_OWNERSHIP')
       // 消息必须点名那个非法取值（否则调用方拿不到可行动的线索）。
@@ -195,7 +195,7 @@ describe('C2-1 取值面：无法识别的 `?ownership` 必须 fail-loud（400�
 
     // unknown：删除生效、没有墓碑、下一轮同步装回来。
     await installViaSync()
-    const unknownRes = await gate.call('POST', `/api/pico/skills/${NAME}/uninstall?overwrite=1&ownership=unknown`)
+    const unknownRes = await gate.call('POST', `/api/zeokeel/skills/${NAME}/uninstall?overwrite=1&ownership=unknown`)
     expect(unknownRes.code, JSON.stringify(unknownRes.body)).toBe(200)
     expect(existsSync(join(skillsDir, NAME)), 'unknown：删除本身必须照常生效').toBe(false)
     expect(existsSync(tombstonePath()), 'unknown：证明不了归属 ⇒ 不得替所有账号下永久判词').toBe(false)
@@ -210,7 +210,7 @@ describe('C2-1 取值面：无法识别的 `?ownership` 必须 fail-loud（400�
       await rm(join(skillsDir, NAME), { recursive: true, force: true })
       await rm(tombstonePath(), { force: true })
       await installViaSync()
-      const res = await gate.call('POST', `/api/pico/skills/${NAME}/uninstall?overwrite=1${suffix}`)
+      const res = await gate.call('POST', `/api/zeokeel/skills/${NAME}/uninstall?overwrite=1${suffix}`)
       expect(res.code, `${label}: ${JSON.stringify(res.body)}`).toBe(200)
       expect(existsSync(join(skillsDir, NAME)), `${label}：删除必须生效`).toBe(false)
       expect(existsSync(tombstonePath()), `${label}：必须写机器级墓碑（R4-B-4 的既有承诺）`).toBe(true)

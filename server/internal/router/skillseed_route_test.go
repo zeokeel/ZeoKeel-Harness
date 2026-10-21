@@ -17,32 +17,32 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/agentshare"
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/bootstrap"
-	"github.com/picoaide/picoaide/internal/capabilities"
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/marketplace"
-	"github.com/picoaide/picoaide/internal/portal"
-	"github.com/picoaide/picoaide/internal/reports"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/sharedskills"
-	"github.com/picoaide/picoaide/internal/skillseed"
-	"github.com/picoaide/picoaide/internal/telemetry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/agentshare"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/capabilities"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/marketplace"
+	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
+	"github.com/zeokeel/zeokeel-harness/server/internal/reports"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/telemetry"
 )
 
 // seedSkillSource 是仓库里内置技能资产的源头（Dockerfile 把它 COPY 进镜像的
-// /opt/picoaide/skills/app-builder）。
+// /opt/zeokeel/skills/app-builder）。
 //
 // 测试拷贝**这一个**技能目录而不是整个 skills/ —— 与镜像里的形态逐字对齐
 // （Dockerfile 是逐技能 COPY 的）。用假资产的话，「仓库里那份资产真的能被服务端
 // 下发」这条最该被钉住的断言就没了，所以拷的是真货。
 //
 // 2026-09-19：源目录从客户端 vendored 包（packages/vendor/memory-evolve/skills/）
-// 搬进服务端仓库（server/skills/），技能同时改名 picoaide-app-builder → app-builder。
+// 搬进服务端仓库（server/skills/），技能同时改名 zeokeel-app-builder → app-builder。
 const seedSkillSource = "../../../server/skills/app-builder"
 
 // buildSkillSeedRouter 组装**生产同形**的路由树（真实临时库 + 真实内置技能目录）。
@@ -252,7 +252,7 @@ func TestBuiltinSkillsAdminFaceRequiresAdminSession(t *testing.T) {
 		t.Fatalf("admin session: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/api/server/admin/skills/builtin", nil)
-	req.AddCookie(&http.Cookie{Name: "picoaide_session", Value: sess.ID})
+	req.AddCookie(&http.Cookie{Name: "zeokeel_session", Value: sess.ID})
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

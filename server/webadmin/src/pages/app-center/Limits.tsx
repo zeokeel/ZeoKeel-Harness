@@ -270,7 +270,7 @@ function fmtTime(iso: string): string {
 }
 
 /**
- * 应用中心 · 限制项页的**变体哨兵串**（P3；命名 = `picoaide.feature.<模块>.v1`，模块名 `apps`
+ * 应用中心 · 限制项页的**变体哨兵串**（P3；命名 = `zeokeel.feature.<模块>.v1`，模块名 `apps`
  * 与 Go 侧 `-tags`、渠道配置 `features` 逐字一致）。
  *
  * **每个模块页各自带哨兵**（不是只在分区布局 `AppCenterLayout.tsx` 上写一份）：产物判据的
@@ -278,7 +278,7 @@ function fmtTime(iso: string): string {
  * 被拉进来的正是**这个文件** —— 哨兵不在它身上，泄漏就没有任何观测面。双侧判据与两条纪律见
  * `pages/CapabilityCenter.tsx` 的同名常量，产物级断言在 `scripts/check-feature-chunks.mjs`。
  */
-export const FEATURE_SENTINEL = 'picoaide.feature.apps.v1'
+export const FEATURE_SENTINEL = 'zeokeel.feature.apps.v1'
 
 export default function Limits() {
   const [view, setView] = useState<LimitsView | null>(null)

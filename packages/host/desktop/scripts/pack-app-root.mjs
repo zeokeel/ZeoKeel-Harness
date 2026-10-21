@@ -163,7 +163,7 @@ export function stagePackAppRoot(packageRoot, outDir = 'dist') {
   }
   // 功能模块变体（2026-10-13，P2）：**这是"模块代码不进产物"的真开关**。
   // 实测口径（见 docs/decisions/2026-10-13-module-host-face-ownership.md §2）：
-  // app.asar 里 `@picoaide/*` 的集合恰好等于这份 `dependencies` 的集合 ——
+  // app.asar 里 `@zeokeel/*` 的集合恰好等于这份 `dependencies` 的集合 ——
   // 从 profile 的 bundle 层里摘掉某模块只等于"不加载"，文件照样进包。
   //
   // 清单不存在（= 三个模块全开 / 官方渠道）时**一个键都不碰**：这正是

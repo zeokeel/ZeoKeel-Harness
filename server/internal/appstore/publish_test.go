@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func req(appID, version, checksum, publisher string) PublishRequest {

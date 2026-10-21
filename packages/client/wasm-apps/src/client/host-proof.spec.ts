@@ -1,5 +1,5 @@
 /**
- * 本机持有性证明（`X-Pico-Host-Proof` 请求头机制）的**纯语义**判据（R2-X-1，P0）。
+ * 本机持有性证明（`X-ZeoKeel-Host-Proof` 请求头机制）的**纯语义**判据（R2-X-1，P0）。
  *
  * 覆盖四类容易写错、且错了会很贵的行为：
  *  1. **缓存与提前量**：有效期内复用、临期重取（不把"刚好过期"发出去）；
@@ -56,8 +56,8 @@ const proofResponse = (token: string, ttlMs = 300_000): Response =>
  * （先例：`packages/host/wasm-apps-host/src/header-spec-parity.spec.ts`、
  * `packages/host/desktop/tests/wasm-app-open-route-parity.spec.ts`）。
  *
- * **大小写口径**：HTTP 头名大小写不敏感，宿主声明的是小写 `x-pico-host-proof`，
- * 客户端按惯例写标准形态 `X-Pico-Host-Proof` ⇒ 比较前统一 `toLowerCase()`，
+ * **大小写口径**：HTTP 头名大小写不敏感，宿主声明的是小写 `x-zeokeel-host-proof`，
+ * 客户端按惯例写标准形态 `X-ZeoKeel-Host-Proof` ⇒ 比较前统一 `toLowerCase()`，
  * 并额外断言"宿主声明的是小写形态"（防止有人把宿主那份写成别的形态后这条对拍失去意义）。
  * 路径没有大小写问题，逐字比。
  */
@@ -112,10 +112,10 @@ describe('跨端对拍：头名与引导路径 vs 宿主 seam 源码（R2-L3-11�
     expect(hostIndex, `${HOST_INDEX_REPO_PATH} 必须存在（前缀真源）`).not.toBeNull()
     const parity = hostProofParity(hostRequest!, hostIndex!)
     expect(parity.problems).toEqual([])
-    expect(parity.header).toBe('x-pico-host-proof')
+    expect(parity.header).toBe('x-zeokeel-host-proof')
     expect(parity.path).toBe(HOST_PROOF_PATH)
     // 客户端一侧的形态是标准写法（对拍按小写比较，见本节注释）。
-    expect(HOST_PROOF_HEADER).toBe('X-Pico-Host-Proof')
+    expect(HOST_PROOF_HEADER).toBe('X-ZeoKeel-Host-Proof')
   })
 
   /**
@@ -130,11 +130,11 @@ describe('跨端对拍：头名与引导路径 vs 宿主 seam 源码（R2-L3-11�
     const hostIndex = readRepoFile(HOST_INDEX_REPO_PATH)!
     expect(hostProofParity(hostRequest, hostIndex).problems).toEqual([])
     // ① 头名改一个字母。
-    const typoHeader = hostRequest.replace("export const HOST_PROOF_HEADER = 'x-pico-host-proof'", "export const HOST_PROOF_HEADER = 'x-pico-host-prooof'")
+    const typoHeader = hostRequest.replace("export const HOST_PROOF_HEADER = 'x-zeokeel-host-proof'", "export const HOST_PROOF_HEADER = 'x-zeokeel-host-prooof'")
     const headerProblems = hostProofParity(typoHeader, hostIndex).problems
     expect(headerProblems.some(problem => problem.includes('头名不一致'))).toBe(true)
     // ② 前缀改掉（路径随之变）。
-    const typoPrefix = hostIndex.replace("export const WASM_APPS_LOCAL_PREFIX = '/api/pico/wasm-apps'", "export const WASM_APPS_LOCAL_PREFIX = '/api/pico/wasm-app'")
+    const typoPrefix = hostIndex.replace("export const WASM_APPS_LOCAL_PREFIX = '/api/zeokeel/wasm-apps'", "export const WASM_APPS_LOCAL_PREFIX = '/api/zeokeel/wasm-app'")
     const pathProblems = hostProofParity(hostRequest, typoPrefix).problems
     expect(pathProblems.some(problem => problem.includes('引导路径不一致'))).toBe(true)
     // ③ 宿主把 proofRoute 的后缀改名。
@@ -145,8 +145,8 @@ describe('跨端对拍：头名与引导路径 vs 宿主 seam 源码（R2-L3-11�
   })
 
   it('本地常量本身是冻结形态（宿主对拍见上一条）', () => {
-    expect(HOST_PROOF_HEADER).toBe('X-Pico-Host-Proof')
-    expect(HOST_PROOF_PATH).toBe('/api/pico/wasm-apps/host-proof')
+    expect(HOST_PROOF_HEADER).toBe('X-ZeoKeel-Host-Proof')
+    expect(HOST_PROOF_PATH).toBe('/api/zeokeel/wasm-apps/host-proof')
   })
 
   it('响应解析：只有 {"proof","expires_at"} 齐全才算拿到', () => {

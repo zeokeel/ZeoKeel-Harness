@@ -1100,7 +1100,7 @@ export default function Gateway() {
             <h3 className="text-sm font-medium text-muted-foreground">部署</h3>
             <div className="space-y-1">
               <Label htmlFor="server-base-url">对外访问地址 (Server Base URL)</Label>
-              <Input id="server-base-url" type="url" placeholder="https://picoaide.example.com" value={cfg.server_base_url}
+              <Input id="server-base-url" type="url" placeholder="https://zeokeel.example.com" value={cfg.server_base_url}
                 onChange={(e) => setCfg({ ...cfg, server_base_url: e.target.value })} />
               <p className="text-xs text-muted-foreground">
                 客户端登录与员工访问入口(经 Caddy HTTPS 反代后的地址);填写后管理页顶部展示;清空保存可移除

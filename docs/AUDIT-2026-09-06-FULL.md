@@ -1,4 +1,4 @@
-# PicoAide Harness 全项目代码与文档审查报告
+# ZeoKeel Harness 全项目代码与文档审查报告
 
 - 日期：2026-09-06
 - 范围：`server/`（Go 服务端 + webadmin）、`packages/host/*`、`packages/client/*`、`packages/vendor/*`、`community/fabric`、`site/`、`docs/`、CI 与根脚本
@@ -93,7 +93,7 @@
 22. `package.json:325-326` electronFuses 仅 `runAsNode:true`（应 false + 补 `onlyLoadAppFromAsar`/防 Node CLI/env 注入）。
 23. mac 产物 arm64-only 但资产名 `-mac.dmg` 架构中立（package.json:402-414 + verify-mac-smoke.ts:124），Intel Mac 会提示下载但无法运行。
 24. `scripts/mac-runtime.ts:12,16` sharp/libvips 精确版本号硬编码在路径里，依赖 patch 升级时发布前静默失败且本地 CI 不触发。
-25. `main.ts:205,211,232` `picoaide://` 深链仅 `startsWith` 前缀校验即原样转发。
+25. `main.ts:205,211,232` `zeokeel://` 深链仅 `startsWith` 前缀校验即原样转发。
 26. `updates.ts:200` 下载失败一律压成 `'network'`，checksum-mismatch/release-missing 等高价值诊断丢失。
 27. `package.json:426` 顶层 `win.artifactName` 是 `-Portable`，NSIS 目标实际不生效（陈旧误导配置）。
 28. `main.ts:55,234`、`index.ts:104-105`、tray/崩溃页文案——**brand.json（自封"唯一事实源"）至今未接入**：产品名/AppId/文案/更新源/资产名模板散落 ~10 处硬编码；`DESKTOP_RELEASE_REPOSITORY` 在 update-checker.ts:4 与 update-download.ts:20 各一份；崩溃页中英混排。
@@ -110,7 +110,7 @@
 35. `server/README.md` 文档表漏掉 `05-agent-system.md`，且 `08-agent-share.md` 与 `08-development.md` 编号重复。
 36. **迁移号文档漂移两处**：server/docs/06-database.md:6 写"0001–0057"（实为 0059）；server/AGENTS.md §7.1 写"0001–0048"。
 37. **CI server job 无 PostgreSQL**（ci.yml:29-31 注释明说；dbtest.go:21/47 无 PG 自动 Skip）→ DB 测试在 CI 中零运行，业务 SQL 正确性完全依赖本地。建议恢复"PG service + PG_DSN_TEST"独立 job。
-38. `integration-tests/electron-shots/electron-shots.mjs:8-24` 硬编码绝对路径 `/data/picoaide-harness/...`。
+38. `integration-tests/electron-shots/electron-shots.mjs:8-24` 硬编码绝对路径 `/data/zeokeel-harness/...`。
 39. `install-server.sh:42`/compose 默认 `SERVER_IMAGE=...:latest`，生产一键部署建议默认 pin 具体版本 tag。
 40. `error-reporting.ts:89,95,105` 3 处 `console.log` 调试残留进入发货插件。
 

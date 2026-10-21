@@ -26,8 +26,8 @@
 
 ## 为什么"手动跟随重定向"(2026-09-23 审计 W3-02)
 
-    urllib **无法跟随自定义 scheme**(`picoaide://…`):它抛 HTTPError,而旧 `fetch()` 的
-    异常分支返回的是**传入的 url**(=回调地址)⇒ `'picoaide://' in url` 恒假、else 分支
+    urllib **无法跟随自定义 scheme**(`zeokeel://…`):它抛 HTTPError,而旧 `fetch()` 的
+    异常分支返回的是**传入的 url**(=回调地址)⇒ `'zeokeel://' in url` 恒假、else 分支
     必然执行 —— 即使 SSO 全流程正常,用例也永远 `RESULT: FAIL`(深链断言结构上不可达)。
     本脚本改为手动跟随 http(s) 重定向、遇到**桌面深链**就停下并把它读出来(见 `follow()`)。
     **负向对照**:把深链换成 http 目标时 `follow()` 会继续跟随到终点 ⇒ "有没有拿到深链"
@@ -160,7 +160,7 @@ def resolve_location(current, location):
 
     · 相对 Location(`/auth/local?req=…`、`?code=…`、`#frag`)是**同源重定向**,
       浏览器与 urllib 都按当前 URL 解析成绝对地址;
-    · 桌面深链(`picoaide://auth?token=…`)是**自定义 scheme**,`urljoin` 会原样返回它
+    · 桌面深链(`zeokeel://auth?token=…`)是**自定义 scheme**,`urljoin` 会原样返回它
       (带 scheme 的引用是绝对引用),所以归一化之后仍然不是 http(s)。
 
     真 Dex 的 `/auth` 就是 302 + 相对 Location 跳到自己的登录页;不归一化就把它误判成
@@ -456,7 +456,7 @@ CRITERIA = [
 # ---------------------------------------------------------------------------
 # 自检夹具:**每条判据都必须有正例与负例**(纯合成数据,不需要服务端/Docker/Dex)
 # ---------------------------------------------------------------------------
-GOOD_DEEP_LINK = 'picoaide://auth?token=' + 'a1b2c3d4' * 5 + '&user=admin'
+GOOD_DEEP_LINK = 'zeokeel://auth?token=' + 'a1b2c3d4' * 5 + '&user=admin'
 GOOD_LOGIN_PAGE = '<html><form method="post" action="/dex/auth/local?req=x">' \
     '<input type="text" name="login"><input type="password" name="password"></form></html>'
 IDP_ORIGIN = 'http://127.0.0.1:5556'
@@ -602,12 +602,12 @@ SELF_TEST_FIXTURES = [
     {
         'id': 'deep-link', 'expect': False,
         'why': '负例:host 不是 auth',
-        'observation': {'location': 'picoaide://evil?token=' + 'a' * 40, 'expected_scheme': ''},
+        'observation': {'location': 'zeokeel://evil?token=' + 'a' * 40, 'expected_scheme': ''},
     },
     {
         'id': 'deep-link', 'expect': False,
         'why': '负例:token 过短',
-        'observation': {'location': 'picoaide://auth?token=abc', 'expected_scheme': ''},
+        'observation': {'location': 'zeokeel://auth?token=abc', 'expected_scheme': ''},
     },
     {
         'id': 'deep-link', 'expect': False,
@@ -617,7 +617,7 @@ SELF_TEST_FIXTURES = [
     {
         'id': 'deep-link', 'expect': True,
         'why': '正常:scheme 命中期望',
-        'observation': {'location': GOOD_DEEP_LINK, 'expected_scheme': 'picoaide'},
+        'observation': {'location': GOOD_DEEP_LINK, 'expected_scheme': 'zeokeel'},
     },
 
     # ---- deep-link-identity ----

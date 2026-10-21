@@ -3,11 +3,11 @@ package appserver
 import (
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/appdb"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/queue"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appdb"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 )
 
 // 本文件是「控制台限制项 → 运行中组件」的**唯一落地点**（2026-09-19）。

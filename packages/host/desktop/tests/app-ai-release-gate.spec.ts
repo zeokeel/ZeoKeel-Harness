@@ -144,7 +144,7 @@ async function plane(adapter: LlmAdapter): Promise<Context> {
   await ctx.plugin(AgentDefaultModelConfig, { provider: 'mock', model: 'mock' })
   await ctx.plugin(SessionPersistenceJsonl, { root })
   ctx.llm.registerAdapter(['mock'], adapter)
-  ctx.provide('picoSession', { isRestored: () => false, getSession: () => null })
+  ctx.provide('zeokeelSession', { isRestored: () => false, getSession: () => null })
   return ctx
 }
 

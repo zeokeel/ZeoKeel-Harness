@@ -58,8 +58,8 @@ describe('advanced desktop layout subscription granularity', () => {
     let panelEvents = 0
     const stop = layout.panelInfo.subscribe(() => { panelEvents += 1 })
 
-    layout.retainMainPanels(['conversation', 'pico-cron'])
-    layout.selectPanel('pico-cron' as MainPanelId)
+    layout.retainMainPanels(['conversation', 'zeokeel-cron'])
+    layout.selectPanel('zeokeel-cron' as MainPanelId)
     expect(panelEvents).toBe(1)
 
     // Every geometry mutation the frame's drag handles and ResizeObserver can

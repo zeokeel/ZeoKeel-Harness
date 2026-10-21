@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // ---------------------------------------------------------------------------

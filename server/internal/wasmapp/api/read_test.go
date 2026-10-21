@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/appdb"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appdb"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // ===========================================================================
@@ -272,7 +272,7 @@ func TestCatalogListsEveryAppWithAccessAndState(t *testing.T) {
 		t.Fatalf("目录行必须有 名称/一句话说明/负责人: %+v", row)
 	}
 	if row["responsible"] != "张伟" {
-		t.Fatalf("负责人取自 picoaide.app.json 的 owner: %v", row["responsible"])
+		t.Fatalf("负责人取自 zeokeel.app.json 的 owner: %v", row["responsible"])
 	}
 	// ⚠️ 目录行**不再有** `entry_url`（W4 删除；总纲 §8.4/§5.2 冻结契约）。
 	if v, ok := row["entry_url"]; ok {

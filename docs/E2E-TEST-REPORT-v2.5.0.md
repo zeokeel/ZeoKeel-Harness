@@ -1,8 +1,8 @@
-# PicoAide Harness v2.5.0 端到端测试报告
+# ZeoKeel Harness v2.5.0 端到端测试报告
 
 - 日期：2026-08-31
 - 环境：PostgreSQL 16 (127.0.0.1:15435) + OpenLDAP (127.0.0.1:1389) + Dex OIDC (127.0.0.1:5556) + 真实 DeepSeek API
-- 服务端：本地编译 `picoaide-server` v2.5.0，端口 8091，数据库 `picoaide_e2e`
+- 服务端：本地编译 `zeokeel-server` v2.5.0，端口 8091，数据库 `zeokeel_e2e`
 - 客户端：打包 `linux-unpacked/dsh-plugin-desktop`（Electron + Xvfb :99 + CDP 驱动）
 - 测试角色：admin（超管）、alice（LDAP）、bob（LDAP）、dave（本地用户，研发部）、carol（本地用户）
 
@@ -21,7 +21,7 @@
 - ✅ LDAP 登录（alice/bob）→ role=user，本地 admin → super_admin
 - ✅ 错误密码 401 AUTH_FAILED、不存在用户拒绝、logout 后 token 失效
 - ✅ auth/methods 公开发现（local/ldap/oidc）
-- ✅ Dex OIDC 完整流：`/api/client/v2/auth/oidc/login` 302 → Dex 登录 → 授权 → `picoaide://` 深链 token → `/api/client/v2/auth/me` 200
+- ✅ Dex OIDC 完整流：`/api/client/v2/auth/oidc/login` 302 → Dex 登录 → 授权 → `zeokeel://` 深链 token → `/api/client/v2/auth/me` 200
 - ✅ usage 接口字段完整（quota/remaining/today/monthly/dept_budgets）
 
 ### 网关（真实 DeepSeek key）
@@ -70,7 +70,7 @@
 ## 4. 桌面客户端 UI 测试（真实服务端 8091）
 
 ### 登录/会话
-- ✅ alice/bob/dave 登录成功；品牌（名称「PicoAide Harness 企业版」+ logo）正确显示
+- ✅ alice/bob/dave 登录成功；品牌（名称「ZeoKeel Harness 企业版」+ logo）正确显示
 - ✅ 账号卡余额：不限/本月已用/今日已用（修复后）
 
 ### 工作区
@@ -112,11 +112,11 @@
 |------|------|
 | `go test`（serverauth/llmgateway/marketplace/serverstore/agentshare/sharedskills/bootstrap/util） | ✅ 全绿 |
 | `make check`（gofmt + go vet + 全部 Go 测试 + webadmin 101 测试 + webadmin build） | ✅ 全绿 |
-| `yarn workspace @picoaide/dsh-connectors check` | ✅ 21 测试 |
-| `yarn workspace @picoaide/dsh-enterprise check` | ✅ 101 测试 |
-| `yarn workspace @picoaide/dsh-account-card check` | ✅ 8 测试 |
+| `yarn workspace @zeokeel/dsh-connectors check` | ✅ 21 测试 |
+| `yarn workspace @zeokeel/dsh-enterprise check` | ✅ 101 测试 |
+| `yarn workspace @zeokeel/dsh-account-card check` | ✅ 8 测试 |
 | `yarn workspace dsh-plugin-desktop build/typecheck/test` | ✅ 417 测试 |
-| `yarn workspace @picoaide/dsh-branding / dsh-browser / dsh-cron check` | ✅ 全绿 |
+| `yarn workspace @zeokeel/dsh-branding / dsh-browser / dsh-cron check` | ✅ 全绿 |
 
 ## 7. 遗留说明
 
@@ -143,9 +143,9 @@
 4. **设置「关于」区**：当前版本 + 检查更新按钮 + 状态（发现新版本/下载中 x%/检查失败网络/已是最新）
 5. **侧边栏版本角标**：品牌版本号旁蓝点 + 新版本号提醒（点击触发检查）
 6. **网络失败提示**：lastError 状态推到设置页显示「检查更新失败：网络不可达」
-7. **安装端点修复**：installEndpoint/uninstallEndpoint 按 source 路由（market→/api/pico/skills，org→shared-skills）
+7. **安装端点修复**：installEndpoint/uninstallEndpoint 按 source 路由（market→/api/zeokeel/skills，org→shared-skills）
 
 ### 验证
 - 单测：desktop 421 / enterprise 106 全绿（新增 linux AppImage 接受/拒绝、origin 无头放行、进度状态等用例）
-- 真机：`/api/pico/desktop/update` 从 403 修复为 200 `{"isPackaged":true,"canDownload":true,"currentVersion":"2.5.0"}`
+- 真机：`/api/zeokeel/desktop/update` 从 403 修复为 200 `{"isPackaged":true,"canDownload":true,"currentVersion":"2.5.0"}`
 - 已发布 v2.5.1：2.5.0 客户端 60s 内显示更新徽章（真实闭环）

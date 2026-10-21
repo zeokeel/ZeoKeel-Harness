@@ -44,7 +44,7 @@ var r4EnvKeyCorpus = []r4EnvKeyCase{
 	{"node-options-tab", "\tNODE_OPTIONS\n", true, false},
 	{"dsH-home-mixed", "DsH_Home", true, false},
 	{"electron-prefix", "ELECTRON_RUN_AS_NODE", true, false},
-	{"picoaide-prefix", "PICOAIDE_HOME", true, false},
+	{"zeokeel-prefix", "ZEOKEEL_HOME", true, false},
 	{"ld-preload", "LD_PRELOAD", true, false},
 	{"path", "Path", true, false},
 	{"empty", "", true, false},

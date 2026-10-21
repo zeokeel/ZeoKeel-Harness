@@ -20,7 +20,7 @@
  *   The invariant "every `SECRET_VALUE` term is also a `SENSITIVE_KEY_PATTERN`
  *   term" is pinned by `tests/sensitive.spec.ts` so the historical drift cannot
  *   come back silently.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 /** Sensitive key/parameter name fragments (case-insensitive substring match).

@@ -1,9 +1,9 @@
 /**
  * R21 F-01：宿主语言解析的**导出面契约**（本包不再持有第二份实现）。
  *
- * 缺陷形态（修前）：`src/locale.ts` 是零依赖叶子包 `@picoaide/dsh-host-locale` 的
+ * 缺陷形态（修前）：`src/locale.ts` 是零依赖叶子包 `@zeokeel/dsh-host-locale` 的
  * 一份**手抄镜像**，理由写的是"跨包 import 会把构建顺序绑死" —— 而同一个包的
- * `src/session.ts` 早就在 import `@picoaide/dsh-host-locale/session-events`，
+ * `src/session.ts` 早就在 import `@zeokeel/dsh-host-locale/session-events`，
  * `package.json` 与 `scripts/check-workspaces.mjs` 也都登记了这条依赖边。镜像因此
  * 已经漂移：真源导出 `HOST_LOCALES` / `selectHostVariant`，镜像没有，而**全仓没有
  * 任何判据同时读这两份**（`src/locale.spec.ts` 只 `from './locale.ts'` 自测）。
@@ -16,12 +16,12 @@
  *  3. 语义仍由叶子包自己的 spec 钉（`packages/host/host-locale/tests/host-locale.spec.ts`），
  *     本文件刻意**不重复**那些用例：重复的语义断言会让"两份实现各自自洽"重新变成可能。
  *
- * 类型层面的缺失由 `yarn workspace @picoaide/dsh-wasm-apps-host typecheck` 抓（消费方
+ * 类型层面的缺失由 `yarn workspace @zeokeel/dsh-wasm-apps-host typecheck` 抓（消费方
  * 从 `./locale.ts` 取 `HostLocale` 等类型）；本文件管运行期值面。两者互补，都不是
  * "文件里有没有那段字面量"式的断言。
  */
 import { describe, expect, it } from 'vitest'
-import * as leaf from '@picoaide/dsh-host-locale'
+import * as leaf from '@zeokeel/dsh-host-locale'
 import * as local from './locale.ts'
 
 /** 只比较**值导出**（类型导出在运行期不存在，由 tsc 负责）。 */

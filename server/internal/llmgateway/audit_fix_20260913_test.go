@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/llmgateway/channels"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway/channels"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // P2-11:单用户并发准入必须有界且正确归还(旧实现无任何准入闸门)。

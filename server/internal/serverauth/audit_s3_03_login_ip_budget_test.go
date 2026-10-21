@@ -37,7 +37,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // loginIPBucketFor 返回某个来源 IP 在共享 IP 桶里的键（测试只用同一条键构造点）。

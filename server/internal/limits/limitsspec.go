@@ -46,7 +46,7 @@ func Table() []Entry {
 		{"server_read_timeout", secs(ServerReadTimeout), "seconds", "§4.2", "服务端 ReadTimeout", "48 MiB 需约 6.7 Mbps 保底"},
 		{"publish_total_budget", secs(PublishTotalBudget), "seconds", "§4.2", "单次发布/预检的平台侧总预算", "编译 + 抽取 + 干跑**共用**一个 deadline（从请求到达起算，含请求体读取）：必须小于 client_upload_timeout，且严格大于 compile_timeout（否则控制台配的编译预算不可达）"},
 		{"section_total_max_bytes", itoa(SectionTotalMaxBytes), "bytes", "§4.2", "自定义段总量上限", "超限 SECTION_OVERRIDE_OVERSIZE"},
-		{"app_config_max_bytes", itoa(AppConfigMaxBytes), "bytes", "§4.2", "应用配置文件上限", "picoaide.app.json，不计入 wasm 上限"},
+		{"app_config_max_bytes", itoa(AppConfigMaxBytes), "bytes", "§4.2", "应用配置文件上限", "zeokeel.app.json，不计入 wasm 上限"},
 		{"app_config_whitelist_max", itoa(AppConfigWhitelistMax), "count", "§4.2", "白名单条目上限", "平台不校验账号是否存在（否则等于账号枚举接口）"},
 		{"app_config_sensitive_columns_max", itoa(AppConfigSensitiveColumnsMax), "count", "§4.2", "作者声明敏感列上限", "sensitive_columns：默认启发式之外**由作者补充**的脱敏列；条目去重按大小写不敏感"},
 		{"app_config_sensitive_column_max_bytes", itoa(AppConfigSensitiveColumnMaxBytes), "bytes", "§4.2", "声明敏感列名单项字节上限", "单条列名超过它只可能是走样输入（整行/整段被粘进来），且永远匹配不到任何一列"},
@@ -88,7 +88,7 @@ func Table() []Entry {
 		// ===== §21.2 客户端 AI 桥（跨端冻结契约）=====
 		// 桥由客户端协议 handler 实现，但形状是跨端契约；作者文档/技能的数字必须
 		// 来自本表（§5.5），否则技能里的"单条 16 KiB"会与实现漂移。
-		{"ai_bridge_max_messages", itoa(AIBridgeMaxMessages), "count", "§21.2", "AI 桥消息条数上限", "应用前端 fetch('/__picoaide/ai/chat') 的 messages 数组长度"},
+		{"ai_bridge_max_messages", itoa(AIBridgeMaxMessages), "count", "§21.2", "AI 桥消息条数上限", "应用前端 fetch('/__zeokeel/ai/chat') 的 messages 数组长度"},
 		{"ai_bridge_message_max_bytes", itoa(AIBridgeMessageMaxBytes), "bytes", "§21.2", "AI 桥单条消息上限", "单条 message.content 的字节上限（应用侧据此截断/切分）"},
 
 		// ===== §4.5 SQL / 数据层 =====

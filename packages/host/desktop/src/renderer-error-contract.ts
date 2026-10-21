@@ -19,7 +19,7 @@
  */
 
 /** 渲染进程未捕获错误/崩溃的单向 IPC 通道。 */
-export const RENDERER_ERROR_CHANNEL = 'picoaide:desktop/renderer-error'
+export const RENDERER_ERROR_CHANNEL = 'zeokeel:desktop/renderer-error'
 
 /** 单条文本字段的上限(字符)。栈可能很长,但不需要无限长。 */
 export const RENDERER_ERROR_MAX_TEXT = 8 * 1024

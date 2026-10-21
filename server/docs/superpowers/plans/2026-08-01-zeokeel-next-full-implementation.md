@@ -1,4 +1,4 @@
-# PicoAide-Next 全量实施计划
+# ZeoKeel-Next 全量实施计划
 
 > **2026-08-19 注记**:自研 Electron 客户端(desktop/)与浏览器插件已下线删除,仓库仅保留服务端接口与 webadmin 管理端。本文档为历史设计与计划,服务端相关部分仍有效,客户端相关部分不再适用。
 
@@ -6,11 +6,11 @@
 
 **Goal:** 全新重写企业内网桌面 AI 办公智能体:Electron+React+TS 桌面客户端(本地跑完整 Agent)+ Go 服务端纯网关(认证/AI 网关/双商城/知识库)。
 
-**Architecture:** 客户端(Agent 引擎基于 Vercel AI SDK streamText 多步循环,本地工具 + 本地受限沙盒执行 + 本地 MCP/Skill 运行时 + better-sqlite3 会话,消息持久化、中断可重跑恢复;**员工零配置:登录即用,模型/技能/MCP 建议全部由服务端 bootstrap 下发,所有配置由管理员在管理页完成**)经 Bearer token 连服务端;服务端(AI 网关 OpenAI 兼容代理 + LDAP/OIDC/本地认证 + Skill/MCP 商城(建议安装制)+ 知识库远程 MCP + 极简管理页)。零代码迁移,旧仓库 `/data/picoaide` 仅作参考。
+**Architecture:** 客户端(Agent 引擎基于 Vercel AI SDK streamText 多步循环,本地工具 + 本地受限沙盒执行 + 本地 MCP/Skill 运行时 + better-sqlite3 会话,消息持久化、中断可重跑恢复;**员工零配置:登录即用,模型/技能/MCP 建议全部由服务端 bootstrap 下发,所有配置由管理员在管理页完成**)经 Bearer token 连服务端;服务端(AI 网关 OpenAI 兼容代理 + LDAP/OIDC/本地认证 + Skill/MCP 商城(建议安装制)+ 知识库远程 MCP + 极简管理页)。零代码迁移,旧仓库 `/data/zeokeel` 仅作参考。
 
 **Tech Stack:** 服务端 Go 1.24+(gin、modernc.org/sqlite、argon2id、AES-GCM、FTS5);客户端 Electron + TypeScript + React 18 + electron-vite + Vercel AI SDK(`ai`、`@ai-sdk/openai-compatible`、`@ai-sdk/sandbox-just-bash`)+ better-sqlite3 + @modelcontextprotocol/sdk + tesseract.js + iconv-lite + Vitest。
 
-**前置参考(只读,禁止复制):** `/data/picoaide/internal/store/users.go`(argon2)、`/data/picoaide/internal/store/migrations/`(迁移命名)、`/data/picoaide/internal/authsource/`(认证注册表)、`/data/picoaide/internal/skill/`(技能解析)。
+**前置参考(只读,禁止复制):** `/data/zeokeel/internal/store/users.go`(argon2)、`/data/zeokeel/internal/store/migrations/`(迁移命名)、`/data/zeokeel/internal/authsource/`(认证注册表)、`/data/zeokeel/internal/skill/`(技能解析)。
 
 ---
 
@@ -18,7 +18,7 @@
 
 ### 0.1 仓库与约定
 
-- 仓库:`/data/picoaide-next`,module 名 `github.com/picoaide/picoaide`
+- 仓库:`/data/zeokeel-next`,module 名 `github.com/zeokeel/zeokeel-harness/server`
 - 分支:开发在 `dev` 分支(自 `master` 切出),每任务完成后 commit 到 dev;阶段验收后合并 master
 - 提交信息:`feat: / fix: / test: / docs: / chore:`,单行 ≤72 字符,如 `feat: add api token auth middleware`
 - 每个任务结束必须 commit,不允许"多个任务一个 commit"
@@ -41,9 +41,9 @@ webadmin/ docs/ scripts/ data/
 | `make test-client` | `cd desktop && npm test && npm run typecheck`(客户端 Vitest) |
 | `make build-client` | `cd desktop && npm run build`(electron-vite 产出 `desktop/out/`;`dist/` 为 electron-builder 打包输出) |
 | `make webadmin` | `cd webadmin && npm run build` |
-| `make build-server` | 编译 `bin/picoaide-server` |
+| `make build-server` | 编译 `bin/zeokeel-server` |
 | `make build-desktop` | `cd desktop && npm run build && npx electron-builder --dir`(本地调试包,产出 `desktop/dist/`) |
-| `make docker-image` | `docker buildx build --platform linux/amd64 -t ghcr.io/picoaide/picoaide-harness-server .`(amd64 镜像,阶段 4) |
+| `make docker-image` | `docker buildx build --platform linux/amd64 -t ghcr.io/zeokeel/zeokeel-harness-server .`(amd64 镜像,阶段 4) |
 | `make check` | format + lint(go vet + tsc)+ test |
 | `make pkg-linux` / `pkg-windows` / `pkg-macos` | 阶段 4 打包(Linux 本机;Windows/macOS 走 CI 矩阵) |
 
@@ -62,7 +62,7 @@ webadmin/ docs/ scripts/ data/
 #### 0.4.2 认证头
 
 - 客户端 API:`Authorization: Bearer <api_token>`
-- 管理页:`Cookie: picoaide_session=<session_id>` + CSRF 头 `X-CSRF-Token`
+- 管理页:`Cookie: zeokeel_session=<session_id>` + CSRF 头 `X-CSRF-Token`
 
 #### 0.4.3 流式 LLM 事件(客户端 UI 协议)
 
@@ -75,7 +75,7 @@ Electron main 进程经 ipc(`agent:event`)发送给 renderer 的事件:
 {"type":"tool_end","data":{"id":"...","name":"file_read","output":"...","duration_ms":120}}
 {"type":"tool_error","data":{"id":"...","name":"...","error":"..."}}
 {"type":"confirm_required","data":{"request_id":"...","op":"file_delete","target":"/home/u/x.doc","reason":"删除文件"}}
-{"type":"artifact","data":{"path":"/home/u/picoaide/workspaces/1/reports/2026-08-01.md","type":"file","size":1234}}
+{"type":"artifact","data":{"path":"/home/u/zeokeel/workspaces/1/reports/2026-08-01.md","type":"file","size":1234}}
 {"type":"done","data":{"usage":{"prompt_tokens":100,"completion_tokens":50}}}
 {"type":"canceled","data":{"reason":"user_canceled"}}
 {"type":"error","data":"错误信息"}
@@ -106,8 +106,8 @@ Electron main 进程经 ipc(`agent:event`)发送给 renderer 的事件:
 
 - [ ] **Step 1: 初始化 module 与目录**
 
-Run: `cd /data/picoaide-next && go mod init github.com/picoaide/picoaide && mkdir -p cmd/server internal/{serverauth,llmgateway,marketplace,knowledge,serverstore,util} desktop/src/{main,preload,renderer} webadmin docs scripts data`
-Expected: 目录创建成功,`go.mod` 第一行 `module github.com/picoaide/picoaide`
+Run: `cd /data/zeokeel-next && go mod init github.com/zeokeel/zeokeel-harness/server && mkdir -p cmd/server internal/{serverauth,llmgateway,marketplace,knowledge,serverstore,util} desktop/src/{main,preload,renderer} webadmin docs scripts data`
+Expected: 目录创建成功,`go.mod` 第一行 `module github.com/zeokeel/zeokeel-harness/server`
 
 - [ ] **Step 2: 写最小 main + db 打开测试(红)**
 
@@ -125,7 +125,7 @@ Expected: PASS
 
 Create: `Makefile`(§0.3 全部目标,先给 `test`/`build-server` 真实实现,其余占位 `@echo "not yet"`)、`.gitignore`(bin/ build/ node_modules/ dist/ data/ *.db)
 Run: `make test && make build-server`
-Expected: 测试通过,`bin/picoaide-server` 产出
+Expected: 测试通过,`bin/zeokeel-server` 产出
 
 - [ ] **Step 5: 写 util/safe.go 及测试**
 
@@ -265,7 +265,7 @@ CREATE TABLE api_tokens (
 CREATE INDEX idx_tokens_user ON api_tokens(user_id);
 ```
 `handler.go`:gin 路由组 `/api/auth`;登录限流:内存滑动窗口 map[ip+username] 10 次/5 分钟(**有界:上限 10000 条目;满时拒绝新条目(429)且不逐出窗口内活跃条目,过期条目惰性清理;超出返回 429 `RATE_LIMITED`**);登录成功更新 `last_used_at`
-**超管引导**:`main.go` 支持 `--bootstrap-admin <username>` 启动参数;密码必须取 env `PICOAI_ADMIN_PASSWORD`(**缺失则启动失败并提示,不打印密码/随机密码到日志**);仅当 `users` 表无任何 `is_admin=1` 用户时生效,已存在超管则忽略——**不做"首注册即超管"注册端点**(存在抢先接管与 TOCTOU 风险)
+**超管引导**:`main.go` 支持 `--bootstrap-admin <username>` 启动参数;密码必须取 env `ZEOKEEL_ADMIN_PASSWORD`(**缺失则启动失败并提示,不打印密码/随机密码到日志**);仅当 `users` 表无任何 `is_admin=1` 用户时生效,已存在超管则忽略——**不做"首注册即超管"注册端点**(存在抢先接管与 TOCTOU 风险)
 `main.go`:注册路由,`/api/auth/me` 走 `BearerAuth` 中间件(读 `Authorization` → `VerifyToken` → 注入 context)
 Run: 同上
 Expected: PASS
@@ -341,7 +341,7 @@ type BrowserProvider interface {
   HandleCallback(code, state string) (UserInfo, error)
 }
 ```
-端点:`GET /api/auth/oidc/login`(返回 authURL)、`GET /api/auth/oidc/callback`(code 兑换 → 建/取用户 → **颁发正式 api_token(90 天,与登录 token 同构)** → 重定向 `picoaide://auth?token=...` 给客户端 scheme;**URL 日志风险由 OS 协议拉起确认缓解,不缩短 token 时效**)
+端点:`GET /api/auth/oidc/login`(返回 authURL)、`GET /api/auth/oidc/callback`(code 兑换 → 建/取用户 → **颁发正式 api_token(90 天,与登录 token 同构)** → 重定向 `zeokeel://auth?token=...` 给客户端 scheme;**URL 日志风险由 OS 协议拉起确认缓解,不缩短 token 时效**)
 配置键:issuer/client_id/client_secret/redirect_url
 **状态管理**:state + PKCE verifier 服务端存内存/session(重启失效,注明);校验 nonce;state 不匹配拒绝
 Run: 同上
@@ -521,7 +521,7 @@ git add -A && git commit -m "feat: skill marketplace with git pack and download 
 - [ ] **Step 1: 写测试(红)**
 
 - `crypto_test.go`:Encrypt/Decrypt 往返;错误密文报错;密文带 `enc:v1:` 前缀;不同明文不同密文(随机 nonce)
-- 集成:无 `PICOAI_MASTER_KEY` env 时 `EnsureMasterKey()` 生成 32 字节随机写入 `data/master.key`(0600),可被 `GetMasterKey()` 取回;有 env 时优先用 env;**master key 不写 settings 表**(与密文同库则加密形同虚设)
+- 集成:无 `ZEOKEEL_MASTER_KEY` env 时 `EnsureMasterKey()` 生成 32 字节随机写入 `data/master.key`(0600),可被 `GetMasterKey()` 取回;有 env 时优先用 env;**master key 不写 settings 表**(与密文同库则加密形同虚设)
 Run: `go test ./internal/util/ -count=1`
 Expected: FAIL
 
@@ -692,7 +692,7 @@ CREATE TABLE admin_sessions (
   expires_at DATETIME NOT NULL
 );
 ```
-`admin_session.go`:登录走现有 `AuthenticateLocal` + `is_admin` 校验;`AdminAuth` 中间件(cookie `picoaide_session` → 校验未过期;**cookie 设 HttpOnly + SameSite=Lax,HTTPS 下加 Secure**);CSRF:HMAC-SHA256(csrf_key, 小时窗口)双窗口校验,管理端请求带 `X-CSRF-Token`;**`POST /api/admin/logout` 删除 session(webadmin 提供登出按钮)**
+`admin_session.go`:登录走现有 `AuthenticateLocal` + `is_admin` 校验;`AdminAuth` 中间件(cookie `zeokeel_session` → 校验未过期;**cookie 设 HttpOnly + SameSite=Lax,HTTPS 下加 Secure**);CSRF:HMAC-SHA256(csrf_key, 小时窗口)双窗口校验,管理端请求带 `X-CSRF-Token`;**`POST /api/admin/logout` 删除 session(webadmin 提供登出按钮)**
 `admin.go`:`/api/admin/users` CRUD、`/api/admin/logout`、`/api/admin/usage` 聚合(by day/model/user,`?from=&to=&group=`)
 `main.go`:`/api/admin/*` 挂 AdminAuth
 **注:** go:embed 的 `webadmin/dist/index.html` 由 Task 1.1 预置占位文件,1.16c 构建后自动替换(空目录 embed 会编译失败)
@@ -773,7 +773,7 @@ Expected: 全部 PASS
 Run(依次,每步断言):
 ```bash
 # 1. 建超管(密码必须经 env 提供;缺失则启动失败)
-PICOAI_ADMIN_PASSWORD='Admin@123456' bin/picoaide-server -addr :8080 -data ./data --bootstrap-admin admin &
+ZEOKEEL_ADMIN_PASSWORD='Admin@123456' bin/zeokeel-server -addr :8080 -data ./data --bootstrap-admin admin &
 TOKEN=$(curl -s -XPOST localhost:8080/api/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"Admin@123456"}' | jq -r .token)
 # 1.5 启动配置(零配置核心:模型+默认模型+建议清单)
@@ -824,12 +824,12 @@ git checkout master && git merge dev && git tag -a v0.1.0 -m "server gateway mil
 
 - [ ] **Step 1: 初始化 package + 依赖**
 
-Run: `cd /data/picoaide-next && mkdir -p desktop/src/{main,preload,renderer}`
+Run: `cd /data/zeokeel-next && mkdir -p desktop/src/{main,preload,renderer}`
 > 注:postinstall 的 `electron-rebuild -f -w better-sqlite3` 在 2.2 安装 better-sqlite3 前必失败,故 **2.1 用 `npm install --ignore-scripts` 安装**;2.2 装完 better-sqlite3 后手动执行 `npx electron-rebuild -f -w better-sqlite3`(此后每次 `npm install` 自动 rebuild)
 Create: `desktop/package.json`:
 ```json
 {
-  "name": "picoaide-desktop",
+  "name": "zeokeel-desktop",
   "version": "0.2.0",
   "main": "out/main/index.js",
   "scripts": {
@@ -856,9 +856,9 @@ Expected: 安装成功,`node_modules` 出现(postinstall 跳过;2.2 装完 bette
 
 Create: `desktop/electron.vite.config.ts` — main/preload 用 esbuild(外置 `electron` 与原生模块),renderer 用 react 插件(此为本项目标准三段式构建,`dev` 同时起 vite 与 electron)
 Create: `desktop/src/main/index.ts` — 创建 `BrowserWindow`(900x680,`webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true }`),开发环境加载 `process.env['ELECTRON_RENDERER_URL']`(electron-vite 注入),生产加载 `out/renderer/index.html`;`app.whenReady` → 创建窗口
-Create: `desktop/src/main/ipc.ts` — `registerIpcHandlers()` 纯函数:`ipcMain.handle('picoaide:version', () => '0.2.0')`(handler 抽成纯函数、不依赖 Electron API,便于 Vitest 单测)
-Create: `desktop/src/preload/index.ts` — `contextBridge.exposeInMainWorld('picoaide', { version: () => ipcRenderer.invoke('picoaide:version') })`
-Create: `desktop/src/renderer/main.tsx` — React 渲染 `App.tsx`,`App.tsx` 显示 `window.picoaide.version()`
+Create: `desktop/src/main/ipc.ts` — `registerIpcHandlers()` 纯函数:`ipcMain.handle('zeokeel:version', () => '0.2.0')`(handler 抽成纯函数、不依赖 Electron API,便于 Vitest 单测)
+Create: `desktop/src/preload/index.ts` — `contextBridge.exposeInMainWorld('zeokeel', { version: () => ipcRenderer.invoke('zeokeel:version') })`
+Create: `desktop/src/renderer/main.tsx` — React 渲染 `App.tsx`,`App.tsx` 显示 `window.zeokeel.version()`
 Run: `cd desktop && npm run build`
 Expected: `desktop/out/main/index.js` 与 `desktop/out/renderer/index.html` 产出
 
@@ -869,7 +869,7 @@ Expected: electron 窗口自动出现,页面显示 `0.2.0`(dev 一体化:主进�
 
 - [ ] **Step 4: 写最小测试**
 
-Create: `desktop/src/main/ipc.test.ts` — 测试 `registerIpcHandlers` 中 `picoaide:version` handler 返回 `0.2.0`(handler 为纯函数,不依赖 Electron API)
+Create: `desktop/src/main/ipc.test.ts` — 测试 `registerIpcHandlers` 中 `zeokeel:version` handler 返回 `0.2.0`(handler 为纯函数,不依赖 Electron API)
 Run: `cd desktop && npm test`
 Expected: PASS
 
@@ -904,7 +904,7 @@ Expected: FAIL(db 模块未实现)
 
 - [ ] **Step 3: 实现**
 
-`paths.ts`:`dataDir()` 按平台:`~/.local/share/picoaide`(Linux)/`~/Library/Application Support/picoaide`(macOS)/`%APPDATA%/picoaide`(Windows);`dbPath()`/`workspaceDir()`
+`paths.ts`:`dataDir()` 按平台:`~/.local/share/zeokeel`(Linux)/`~/Library/Application Support/zeokeel`(macOS)/`%APPDATA%/zeokeel`(Windows);`dbPath()`/`workspaceDir()`
 `db.ts`:`openDb(filePath)` 返回 better-sqlite3 实例,WAL + `foreign_keys=ON`
 `migrations.ts`:版本表 `schema_migrations(version INTEGER PRIMARY KEY, applied_at)` + 迁移数组(与设计文档 §3.5 表结构一致,4 张业务表:conversations/messages/artifacts/settings;**conversations 含 `status` 列,messages 含 `tool_call_id`/`tool_name`/`is_error` 列**,无 memories/workflow_state——任务状态即消息历史,见设计 3.3.1a):
 ```sql
@@ -1079,7 +1079,7 @@ git commit -m "feat: ask-mode engine with ipc bridge"
 ### Task 2.6: React 聊天 UI(shadcn/ui)
 
 **Files:**
-- Create: `desktop/src/renderer/src/api/picoaide.ts`、`desktop/src/renderer/src/stores/chat.ts`、`desktop/src/renderer/src/stores/auth.ts`、`desktop/src/renderer/src/pages/Main.tsx`、`desktop/src/renderer/src/components/{ChatInput,Messages}.tsx`、`desktop/src/renderer/src/components/ui/(shadcn 生成的组件)`
+- Create: `desktop/src/renderer/src/api/zeokeel.ts`、`desktop/src/renderer/src/stores/chat.ts`、`desktop/src/renderer/src/stores/auth.ts`、`desktop/src/renderer/src/pages/Main.tsx`、`desktop/src/renderer/src/components/{ChatInput,Messages}.tsx`、`desktop/src/renderer/src/components/ui/(shadcn 生成的组件)`
 - Modify: `desktop/src/renderer/App.tsx`、`desktop/package.json`
 
 - [ ] **Step 1: 安装依赖 + 初始化 shadcn/ui + 状态层准备**
@@ -1090,7 +1090,7 @@ Expected: 安装成功,Tailwind + shadcn 组件就绪(`components/ui/` 生成)
 
 - [ ] **Step 2: 状态层 + API 封装**
 
-Create: `desktop/src/renderer/src/api/picoaide.ts` — 封装 `window.picoaide.*`(chatAsk/onEvent/loadConversations/…),事件订阅 `window.picoaide.onAgentEvent(cb)`(preload 的 ipcRenderer.on 包装,返回取消函数)
+Create: `desktop/src/renderer/src/api/zeokeel.ts` — 封装 `window.zeokeel.*`(chatAsk/onEvent/loadConversations/…),事件订阅 `window.zeokeel.onAgentEvent(cb)`(preload 的 ipcRenderer.on 包装,返回取消函数)
 Create: `desktop/src/renderer/src/stores/chat.ts`(Zustand):`conversations/messages/streaming/mode`,actions:`newConversation/loadConversation/sendMessage/onAgentEvent/appendDelta/selectConversation`
 Create: `desktop/src/renderer/src/stores/auth.ts`:`status/login/logout`
 Run: `cd desktop && npm run build`
@@ -1129,7 +1129,7 @@ Expected: 类型通过
 
 - [ ] **Step 2: Login 页 + OIDC 深链**
 
-Form:服务端 URL + 用户名 + 密码 + 登录按钮 + **"企业账号登录"(OIDC)入口**(打开系统浏览器走 `/api/auth/oidc/login`)+ 错误提示(401 → "用户名或密码错误";网络错误 → "无法连接服务器");**登录成功后自动拉取 bootstrap(模型/默认模型/建议清单)再进主界面——员工登录即用,无任何配置步骤**;**OIDC 深链处理**(`main/index.ts` 注册 `open-url`/`second-instance` 事件):`picoaide://auth?token=...` → 解析 token → saveSession → 通知 renderer 进入主界面;**token 为正式 api_token,直接作为会话 token 使用**;`App.tsx` 用 `loadSession()` 判断初始路由
+Form:服务端 URL + 用户名 + 密码 + 登录按钮 + **"企业账号登录"(OIDC)入口**(打开系统浏览器走 `/api/auth/oidc/login`)+ 错误提示(401 → "用户名或密码错误";网络错误 → "无法连接服务器");**登录成功后自动拉取 bootstrap(模型/默认模型/建议清单)再进主界面——员工登录即用,无任何配置步骤**;**OIDC 深链处理**(`main/index.ts` 注册 `open-url`/`second-instance` 事件):`zeokeel://auth?token=...` → 解析 token → saveSession → 通知 renderer 进入主界面;**token 为正式 api_token,直接作为会话 token 使用**;`App.tsx` 用 `loadSession()` 判断初始路由
 Run: `cd desktop && npm run build && npx electron .`,连本机服务端验证成功/失败分支
 Expected: 正常
 
@@ -1401,7 +1401,7 @@ Expected: FAIL
 // → 主进程缓冲 confirm_required 事件,renderer 就绪后补发(防弹窗丢失)
 // → ConfirmModal 按 request_id 串行排队,一次一个弹窗
 ```
-**审批测试钩子**:引擎读 env `PICOAI_TEST_AUTO_APPROVE`(`1` 自动允许 / `0` 自动拒绝),**仅测试构建生效(打包时剔除),E2E 免人工点弹窗**;单测直接测 `confirm()` 全分支
+**审批测试钩子**:引擎读 env `ZEOKEEL_TEST_AUTO_APPROVE`(`1` 自动允许 / `0` 自动拒绝),**仅测试构建生效(打包时剔除),E2E 免人工点弹窗**;单测直接测 `confirm()` 全分支
 `ipc.ts` 增:`agent:confirm` handler;`index.ts` 转发 `confirm_required` 事件到 renderer(带缓冲)
 `ConfirmModal.tsx`:弹窗(操作名 + 目标路径 + 原因 + 允许/拒绝 + 60s 倒计时;队列中待显示条目可见)
 Run: 同上 + 手工验证
@@ -1714,13 +1714,13 @@ git checkout master && git merge dev && git tag -a v0.3.0 -m "local capabilities
 
 `desktop/electron-builder.yml`:
 ```yaml
-appId: com.picoaide.desktop
-productName: PicoAide
+appId: com.zeokeel.harness
+productName: ZeoKeel
 directories: { output: dist, buildResources: resources }
 files: [out/**, resources/**]        # resources 随包:OCR 语言包/图标
-protocols:                               # OIDC 回调 picoaide://auth?token=... 需要
-  - name: PicoAide
-    schemes: [picoaide]
+protocols:                               # OIDC 回调 zeokeel://auth?token=... 需要
+  - name: ZeoKeel
+    schemes: [zeokeel]
 asarUnpack:                              # 原生模块与 wasm/模型必须解包
   - "**/*.node"
   - "**/tesseract.js-core/**/*.wasm"
@@ -1734,9 +1734,9 @@ mac: { target: [dmg], category: public.app-category.productivity, arch: [arm64, 
 - **签名/公证(企业内部分发注意)**:macOS 未签名 dmg 会被 Gatekeeper 拦截——需 Developer ID 证书 + notarize 配置(有证书则加 `mac.notarize`,无证书企业内用"右键打开"并文档说明);Windows 同理需代码签名证书(无证书则 SmartScreen 警告,企业内可接受并说明)
 - [ ] **Step 2: 打包脚本**
 
-- Linux:`npm run build && electron-builder --linux` → `dist/picoaide_0.4.0_amd64.deb` + AppImage(arm64 可选)
-- Windows:`electron-builder --win` → `dist/picoaide-setup.exe`(CI windows-latest)
-- macOS:`electron-builder --mac` → `dist/picoaide-arm64.dmg` + `picoaide-x64.dmg`(CI macos-14 arm64 原生 + x64 交叉;M 系列即装 arm64)
+- Linux:`npm run build && electron-builder --linux` → `dist/zeokeel_0.4.0_amd64.deb` + AppImage(arm64 可选)
+- Windows:`electron-builder --win` → `dist/zeokeel-setup.exe`(CI windows-latest)
+- macOS:`electron-builder --mac` → `dist/zeokeel-arm64.dmg` + `zeokeel-x64.dmg`(CI macos-14 arm64 原生 + x64 交叉;M 系列即装 arm64)
 - 版本号从 `package.json` version 注入
 Run: `bash scripts/pkg-linux.sh`
 Expected: Linux 安装包产出,安装后可启动登录(Windows/macOS 在 CI 对应 runner 验证)
@@ -1825,7 +1825,7 @@ Expected: 全绿
 
 - [ ] **Step 2: 客户端全自动冒烟(审批钩子)**
 
-在打包产物上:**Playwright(Electron)** 驱动启动 → 自动登录(预设 config)→ 发起一次 Ask → 断言收到 done 事件;**Craft 高危操作:置 `PICOAI_TEST_AUTO_APPROVE=1` 自动允许,断言工具执行结果;`=0` 自动拒绝,断言 Agent 收到拒绝并继续**;CI(Linux)用 `xvfb-run` 跑无头 Electron(依赖:`cd desktop && npm i -D playwright`)
+在打包产物上:**Playwright(Electron)** 驱动启动 → 自动登录(预设 config)→ 发起一次 Ask → 断言收到 done 事件;**Craft 高危操作:置 `ZEOKEEL_TEST_AUTO_APPROVE=1` 自动允许,断言工具执行结果;`=0` 自动拒绝,断言 Agent 收到拒绝并继续**;CI(Linux)用 `xvfb-run` 跑无头 Electron(依赖:`cd desktop && npm i -D playwright`)
 Run: CI(xvfb-run)与打包机执行
 Expected: 通过
 
@@ -1847,7 +1847,7 @@ git commit -m "test: e2e smoke scripts"
 ### Task 4.6: 发布(客户端三平台 + 服务端 Docker 镜像 + 插件包)
 
 **Files:**
-- Create: `Dockerfile`(服务端多阶段:golang 构建 → distroless/alpine 运行,ARG TARGETARCH 交叉编译)、`scripts/pkg-extension.sh`(浏览器插件 zip:打包 `browser-extension/` 为 `picoaide-extension.zip`)
+- Create: `Dockerfile`(服务端多阶段:golang 构建 → distroless/alpine 运行,ARG TARGETARCH 交叉编译)、`scripts/pkg-extension.sh`(浏览器插件 zip:打包 `browser-extension/` 为 `zeokeel-extension.zip`)
 - Modify: `.github/workflows/ci.yml`(阶段 4 追加发布矩阵)
 
 - [ ] **Step 1: 版本与发布**
@@ -1856,13 +1856,13 @@ git commit -m "test: e2e smoke scripts"
 # 本机(Linux)出 deb + AppImage
 bash scripts/pkg-linux.sh
 # Windows/macOS 由 CI 矩阵产出(.github/workflows/ci.yml 阶段 4 追加:
-#   windows-latest → npm test + electron-builder --win → picoaide-setup.exe
-#   macos-14(arm64)→ npm test + electron-builder --mac(arm64/x64)→ picoaide-arm64.dmg + picoaide-x64.dmg
+#   windows-latest → npm test + electron-builder --win → zeokeel-setup.exe
+#   macos-14(arm64)→ npm test + electron-builder --mac(arm64/x64)→ zeokeel-arm64.dmg + zeokeel-x64.dmg
 #   ubuntu         → docker buildx build --platform linux/amd64 \
-#                      -t ghcr.io/picoaide/picoaide-harness-server:<tag> --push(amd64 镜像)
-#                    + bash scripts/pkg-extension.sh → picoaide-extension.zip
+#                      -t ghcr.io/zeokeel/zeokeel-harness-server:<tag> --push(amd64 镜像)
+#                    + bash scripts/pkg-extension.sh → zeokeel-extension.zip
 #  全部产物上传 artifact/Release)
-git checkout master && git merge dev && git tag -a v0.4.0 -m "picoaide desktop 0.4.0"
+git checkout master && git merge dev && git tag -a v0.4.0 -m "zeokeel desktop 0.4.0"
 ```
 Expected: Linux 安装包在本机 `desktop/dist/`;win/mac(含 M 系列 arm64)包、服务端双架构 Docker 镜像、浏览器插件 zip 由 CI 产出,全部可下载;tag 建立
 
@@ -1870,13 +1870,13 @@ Expected: Linux 安装包在本机 `desktop/dist/`;win/mac(含 M 系列 arm64)�
 
 `Dockerfile`:多阶段——`golang:1.24` 构建(`CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH` + `go:embed webadmin/dist` 预构建传入)→ 运行镜像 `distroless` 或 `alpine`(含 `-data` 目录挂载卷、0700 权限说明);CI 用 `docker/build-push-action` + buildx QEMU 交叉构建双平台
 Run: `make docker-image` 本地验证单平台 + CI 验证双平台
-Expected: `ghcr.io/picoaide/picoaide-harness-server` 出现 `linux/amd64` 与 `linux/arm64` 两个平台标签
+Expected: `ghcr.io/zeokeel/zeokeel-harness-server` 出现 `linux/amd64` 与 `linux/arm64` 两个平台标签
 
 - [ ] **Step 3: 浏览器插件包**
 
-`scripts/pkg-extension.sh`:`zip -r picoaide-extension.zip browser-extension/`(剔除 README/测试,含 manifest.json/background/content);产物上传 Release
+`scripts/pkg-extension.sh`:`zip -r zeokeel-extension.zip browser-extension/`(剔除 README/测试,含 manifest.json/background/content);产物上传 Release
 Run: `bash scripts/pkg-extension.sh`
-Expected: `picoaide-extension.zip` 产出,解压后 `chrome://extensions` 开发者模式可直接加载
+Expected: `zeokeel-extension.zip` 产出,解压后 `chrome://extensions` 开发者模式可直接加载
 
 - [ ] **Step 4: 发布说明**
 
@@ -1974,11 +1974,11 @@ git commit -m "docs: changelog for 0.4.0"
 ### 本地一键环境(dev-env)
 - `scripts/dev-env.sh` + `make dev-env`:起 mock 上游 + 本地服务端(dev-data/ 持久)→ 管理 API 灌 seed(部门知识库/技能/MCP/授权/alice·bob)→ 客户端 `npm run dev` 登录 `http://127.0.0.1:18080`
 - seed.sh `SEED_LOCAL=1`(技能本地 file:// 裸仓库,不 ssh)+ gateway.local.json(mock-chat 默认模型)
-- `PICOAI_UPSTREAM_KEY=sk-xxx` 可切真实 DeepSeek;`PICOAI_LOGIN_MAX_ATTEMPTS` 放宽测试登录限流
+- `ZEOKEEL_UPSTREAM_KEY=sk-xxx` 可切真实 DeepSeek;`ZEOKEEL_LOGIN_MAX_ATTEMPTS` 放宽测试登录限流
 - 期间修复:用户组 JSON 数组拆分、mock 渠道缺失致 gateway 校验失败吞错
 
 ### UI 组件测试(Vitest + Testing Library + jsdom,`make test-ui`)
-- desktop renderer:ChatInput(9)/ArtifactsPanel(4)/Main(3)/Settings(3),window.picoaide 桥统一 stub
+- desktop renderer:ChatInput(9)/ArtifactsPanel(4)/Main(3)/Settings(3),window.zeokeel 桥统一 stub
 - webadmin:Gateway(4)/Knowledge(4)/Marketplace(3)/Users(3),request API mock
 - 经验:Radix Select item 选择在 jsdom 不可用 → 由浏览器 E2E 覆盖(组件测试断言选项渲染)
 

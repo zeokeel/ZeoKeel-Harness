@@ -1263,12 +1263,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-client-ui-brand-official@patch:@deepseek-ai/dsh-client-ui-brand-official@npm%3A0.2.1-rc.2#./patches/dsh-client-ui-brand-official@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-client-ui-brand-official@patch:@deepseek-ai/dsh-client-ui-brand-official@npm%3A0.2.1-rc.2#./patches/dsh-client-ui-brand-official@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-client-ui-brand-official@patch:@deepseek-ai/dsh-client-ui-brand-official@npm%3A0.2.1-rc.2#./patches/dsh-client-ui-brand-official@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=27709c&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-client-ui-brand-official@patch:@deepseek-ai/dsh-client-ui-brand-official@npm%3A0.2.1-rc.2#./patches/dsh-client-ui-brand-official@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=f35417&locator=zeokeel-harness%40workspace%3A."
   peerDependencies:
     "@deepseek-ai/cordis": ~4.0.5
-  checksum: 10c0/c1987b0cecf76a394d53b0443fd06847f3b615ad649f032b0e2cc4e988423505a736a55825f7f97829548f1484aabaee65fdec7bf480f455bbea2d72cc73e34a
+  checksum: 10c0/b58a92b6f36e8c8d02f44f72bb968ae4333facdc35bca900c7fc945e85f67305a77ead42c68be0a72f6a38fc20f5b0df4e0ac4f9d9aad3d384520206c36be228
   languageName: node
   linkType: hard
 
@@ -1644,14 +1644,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-client-ui-sidebar-documentpreview@patch:@deepseek-ai/dsh-client-ui-sidebar-documentpreview@npm%3A0.2.1-rc.2#./patches/dsh-client-ui-sidebar-documentpreview@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-client-ui-sidebar-documentpreview@patch:@deepseek-ai/dsh-client-ui-sidebar-documentpreview@npm%3A0.2.1-rc.2#./patches/dsh-client-ui-sidebar-documentpreview@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-client-ui-sidebar-documentpreview@patch:@deepseek-ai/dsh-client-ui-sidebar-documentpreview@npm%3A0.2.1-rc.2#./patches/dsh-client-ui-sidebar-documentpreview@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=d660d2&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-client-ui-sidebar-documentpreview@patch:@deepseek-ai/dsh-client-ui-sidebar-documentpreview@npm%3A0.2.1-rc.2#./patches/dsh-client-ui-sidebar-documentpreview@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=ae7122&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/schemastery": "npm:~3.18.5"
   peerDependencies:
     "@deepseek-ai/cordis": ~4.0.5
-  checksum: 10c0/ae7a035c6b2b42a2d9823b964cad4d6a80bfa329fecbe8d485fd212f7f66887a0df0fe833cfbd6b202d5cfb7155798935ffbfbec3cfd7ea3995a448cbb877c89
+  checksum: 10c0/5a643bcaec2d2f330ef65ec5cae05db80d1f8d297d34fbbbb9a242bbcb24c0325228533326825eb8b5f0f17941883c20c2c4767d7b61a89c267e7116d4d5fbea
   languageName: node
   linkType: hard
 
@@ -2093,9 +2093,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-experimental-badge-skill-bundle@patch:@deepseek-ai/dsh-experimental-badge-skill-bundle@npm%3A0.2.1-rc.2#./patches/dsh-experimental-badge-skill-bundle@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-experimental-badge-skill-bundle@patch:@deepseek-ai/dsh-experimental-badge-skill-bundle@npm%3A0.2.1-rc.2#./patches/dsh-experimental-badge-skill-bundle@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-experimental-badge-skill-bundle@patch:@deepseek-ai/dsh-experimental-badge-skill-bundle@npm%3A0.2.1-rc.2#./patches/dsh-experimental-badge-skill-bundle@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=6a19a7&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-experimental-badge-skill-bundle@patch:@deepseek-ai/dsh-experimental-badge-skill-bundle@npm%3A0.2.1-rc.2#./patches/dsh-experimental-badge-skill-bundle@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=6a19a7&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/dsh-skill-badge": "npm:0.2.1-rc.2"
   peerDependencies:
@@ -2398,9 +2398,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-fs-local@patch:@deepseek-ai/dsh-fs-local@npm%3A0.2.1-rc.2#./patches/dsh-fs-local@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-fs-local@patch:@deepseek-ai/dsh-fs-local@npm%3A0.2.1-rc.2#./patches/dsh-fs-local@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-fs-local@patch:@deepseek-ai/dsh-fs-local@npm%3A0.2.1-rc.2#./patches/dsh-fs-local@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=7f4ac1&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-fs-local@patch:@deepseek-ai/dsh-fs-local@npm%3A0.2.1-rc.2#./patches/dsh-fs-local@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=7f4ac1&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/schemastery": "npm:~3.18.5"
     chokidar: "npm:5.0.0"
@@ -2945,9 +2945,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-mcp-client@patch:@deepseek-ai/dsh-mcp-client@npm%3A0.2.1-rc.2#./patches/dsh-mcp-client@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-mcp-client@patch:@deepseek-ai/dsh-mcp-client@npm%3A0.2.1-rc.2#./patches/dsh-mcp-client@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-mcp-client@patch:@deepseek-ai/dsh-mcp-client@npm%3A0.2.1-rc.2#./patches/dsh-mcp-client@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=88ce27&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-mcp-client@patch:@deepseek-ai/dsh-mcp-client@npm%3A0.2.1-rc.2#./patches/dsh-mcp-client@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=444f23&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/dsh-util-values": "npm:0.2.1-rc.2"
     "@deepseek-ai/schemastery": "npm:~3.18.5"
@@ -2967,7 +2967,7 @@ __metadata:
       optional: true
     "@deepseek-ai/dsh-system-prompt":
       optional: true
-  checksum: 10c0/b30fb8fb9d91fdf6c6109e0cb97f9ee92a9560a842e43e243cfe4414223b5aef67b94275716796bbe2b4a132c228bf742f8b7c55395e42cb9b55dcda839b8d0f
+  checksum: 10c0/bcc66b13158ce7ec0d94492f89d0b09237429614cea3132d3fee471778984bcf6944268f7098122b90320b8e0835e87d15c34265aadf9d2d1d4c7af259e7fbbe
   languageName: node
   linkType: hard
 
@@ -3333,9 +3333,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-sandbox-windows-acl@patch:@deepseek-ai/dsh-sandbox-windows-acl@npm%3A0.2.1-rc.2#./patches/dsh-sandbox-windows-acl@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-sandbox-windows-acl@patch:@deepseek-ai/dsh-sandbox-windows-acl@npm%3A0.2.1-rc.2#./patches/dsh-sandbox-windows-acl@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-sandbox-windows-acl@patch:@deepseek-ai/dsh-sandbox-windows-acl@npm%3A0.2.1-rc.2#./patches/dsh-sandbox-windows-acl@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=294d35&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-sandbox-windows-acl@patch:@deepseek-ai/dsh-sandbox-windows-acl@npm%3A0.2.1-rc.2#./patches/dsh-sandbox-windows-acl@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=7f0f71&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/dsh-lazy-require": "npm:0.2.1-rc.2"
     "@deepseek-ai/dsh-win32-process": "npm:0.2.1-rc.2"
@@ -3345,7 +3345,7 @@ __metadata:
     "@deepseek-ai/cordis": ~4.0.5
     "@deepseek-ai/dsh-skill": 0.2.1-rc.2
     "@deepseek-ai/dsh-subprocess": 0.2.1-rc.2
-  checksum: 10c0/a87ddd96bb9326f5f17390746460ff9bdd247ed8d0528811d84403e74981c3bcbb7cdab09f26ba51f3a9421c711ed0ee1f9f5a3c596beb07298df7a448d5d3f8
+  checksum: 10c0/a6af041688f762d1ebb3be7e992ffa33edbce6a000a4b693d1274f9077ac99d4f9c85da98412b19d242fa91f83731cc5b5e9da96040ad9f7066e58bd8ea02843
   languageName: node
   linkType: hard
 
@@ -3387,9 +3387,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-schedule@patch:@deepseek-ai/dsh-schedule@npm%3A0.2.1-rc.2#./patches/dsh-schedule@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-schedule@patch:@deepseek-ai/dsh-schedule@npm%3A0.2.1-rc.2#./patches/dsh-schedule@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-schedule@patch:@deepseek-ai/dsh-schedule@npm%3A0.2.1-rc.2#./patches/dsh-schedule@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=a57913&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-schedule@patch:@deepseek-ai/dsh-schedule@npm%3A0.2.1-rc.2#./patches/dsh-schedule@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=942c86&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/schemastery": "npm:~3.18.5"
     "@js-temporal/polyfill": "npm:0.5.1"
@@ -3408,7 +3408,7 @@ __metadata:
     "@deepseek-ai/dsh-tools": 0.2.1-rc.2
     "@deepseek-ai/dsh-typert-protocol": 0.2.1-rc.2
     "@deepseek-ai/dsh-workspace": 0.2.1-rc.2
-  checksum: 10c0/d1b877812f316b80f332d717771f1bf9db8aa36f64dcc4203af012ae84664c7f1f33091cbf1692024a3ff5209733e0e95b73d50016cf58db14a7707d165393db
+  checksum: 10c0/ef88cb4fd7c5439978a4d16b7069dc2f95b3bfc55cc9d83c7009fde355f361cbdb0abea62b3cda021a4842e5751f4fb8adf9dd1036f6ed0b323909591eb9a224
   languageName: node
   linkType: hard
 
@@ -3967,13 +3967,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-skill-badge@patch:@deepseek-ai/dsh-skill-badge@npm%3A0.2.1-rc.2#./patches/dsh-skill-badge@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-skill-badge@patch:@deepseek-ai/dsh-skill-badge@npm%3A0.2.1-rc.2#./patches/dsh-skill-badge@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-skill-badge@patch:@deepseek-ai/dsh-skill-badge@npm%3A0.2.1-rc.2#./patches/dsh-skill-badge@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=7b8ecd&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-skill-badge@patch:@deepseek-ai/dsh-skill-badge@npm%3A0.2.1-rc.2#./patches/dsh-skill-badge@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=10e4b6&locator=zeokeel-harness%40workspace%3A."
   peerDependencies:
     "@deepseek-ai/cordis": ~4.0.5
     "@deepseek-ai/dsh-skill": 0.2.1-rc.2
-  checksum: 10c0/ca45cae25c1ea00f111c4ca4721be402c9c11ef7a4c22a94a5934e2a5f44abd51026e1bca5fd8ff97f4023b490d70a555661d7ce5c4baca3a3292c6d63ab1782
+  checksum: 10c0/877b1a14ffb6d04db62e8e0743f95fdb8ecc0aae266c4e6a6ec0742f10889ce8de39535081d77faaf03d9931f7ab56c4f451125ef78a5b5930ddcb71f9ea1cec
   languageName: node
   linkType: hard
 
@@ -4193,9 +4193,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-subprocess-local@patch:@deepseek-ai/dsh-subprocess-local@npm%3A0.2.1-rc.2#./patches/dsh-subprocess-local@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-subprocess-local@patch:@deepseek-ai/dsh-subprocess-local@npm%3A0.2.1-rc.2#./patches/dsh-subprocess-local@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-subprocess-local@patch:@deepseek-ai/dsh-subprocess-local@npm%3A0.2.1-rc.2#./patches/dsh-subprocess-local@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=141750&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-subprocess-local@patch:@deepseek-ai/dsh-subprocess-local@npm%3A0.2.1-rc.2#./patches/dsh-subprocess-local@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=222aa5&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/dsh-lazy-require": "npm:0.2.1-rc.2"
     "@deepseek-ai/dsh-win32-process": "npm:0.2.1-rc.2"
@@ -4205,7 +4205,7 @@ __metadata:
     "@deepseek-ai/cordis": ~4.0.5
     "@deepseek-ai/dsh-subprocess": 0.2.1-rc.2
     "@deepseek-ai/dsh-timeout": 0.2.1-rc.2
-  checksum: 10c0/a91c98a3b7fe55c868e822c2fdbe388e0e70e5fb8e43850a17e33f75170bef48dae2593bcfeef9b29b2525d4cfa945697a1d2346e2b5e1a93ccd90c6419b66f9
+  checksum: 10c0/c980025c9726e67aca2904ca118e9f6d7dec5f2d0c86e6dec92ac2d6ff1f2449c5d72c5e1924ed6faa144af9e9097b8eeb98b3c45be07d1d1bbd6e25af11ccbf
   languageName: node
   linkType: hard
 
@@ -4558,9 +4558,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-tool-ralph@patch:@deepseek-ai/dsh-tool-ralph@npm%3A0.2.1-rc.2#./patches/dsh-tool-ralph@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-tool-ralph@patch:@deepseek-ai/dsh-tool-ralph@npm%3A0.2.1-rc.2#./patches/dsh-tool-ralph@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-tool-ralph@patch:@deepseek-ai/dsh-tool-ralph@npm%3A0.2.1-rc.2#./patches/dsh-tool-ralph@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=bc2ed8&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-tool-ralph@patch:@deepseek-ai/dsh-tool-ralph@npm%3A0.2.1-rc.2#./patches/dsh-tool-ralph@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=bc2ed8&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/schemastery": "npm:~3.18.5"
   peerDependencies:
@@ -4751,9 +4751,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-tool-workflow@patch:@deepseek-ai/dsh-tool-workflow@npm%3A0.2.1-rc.2#./patches/dsh-tool-workflow@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-tool-workflow@patch:@deepseek-ai/dsh-tool-workflow@npm%3A0.2.1-rc.2#./patches/dsh-tool-workflow@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-tool-workflow@patch:@deepseek-ai/dsh-tool-workflow@npm%3A0.2.1-rc.2#./patches/dsh-tool-workflow@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=55ef01&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-tool-workflow@patch:@deepseek-ai/dsh-tool-workflow@npm%3A0.2.1-rc.2#./patches/dsh-tool-workflow@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=55ef01&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/schemastery": "npm:~3.18.5"
   peerDependencies:
@@ -5077,9 +5077,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-web-app@patch:@deepseek-ai/dsh-web-app@npm%3A0.2.1-rc.2#./patches/dsh-web-app@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-web-app@patch:@deepseek-ai/dsh-web-app@npm%3A0.2.1-rc.2#./patches/dsh-web-app@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-web-app@patch:@deepseek-ai/dsh-web-app@npm%3A0.2.1-rc.2#./patches/dsh-web-app@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=89e4b8&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-web-app@patch:@deepseek-ai/dsh-web-app@npm%3A0.2.1-rc.2#./patches/dsh-web-app@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=89e4b8&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/dsh-agent-instructions": "npm:0.2.1-rc.2"
     "@deepseek-ai/dsh-agent-preset": "npm:0.2.1-rc.2"
@@ -5259,9 +5259,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-web-fetch-http@patch:@deepseek-ai/dsh-web-fetch-http@npm%3A0.2.1-rc.2#./patches/dsh-web-fetch-http@0.2.1-rc.2.patch::locator=picoaide-harness%40workspace%3A.":
+"@deepseek-ai/dsh-web-fetch-http@patch:@deepseek-ai/dsh-web-fetch-http@npm%3A0.2.1-rc.2#./patches/dsh-web-fetch-http@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 0.2.1-rc.2
-  resolution: "@deepseek-ai/dsh-web-fetch-http@patch:@deepseek-ai/dsh-web-fetch-http@npm%3A0.2.1-rc.2#./patches/dsh-web-fetch-http@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=0777cf&locator=picoaide-harness%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-web-fetch-http@patch:@deepseek-ai/dsh-web-fetch-http@npm%3A0.2.1-rc.2#./patches/dsh-web-fetch-http@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=9649e1&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@deepseek-ai/schemastery": "npm:~3.18.5"
     ipaddr.js: "npm:^2.5.0"
@@ -5271,7 +5271,7 @@ __metadata:
     "@deepseek-ai/dsh-http-proxy": 0.2.1-rc.2
     "@deepseek-ai/dsh-timeout": 0.2.1-rc.2
     "@deepseek-ai/dsh-web": 0.2.1-rc.2
-  checksum: 10c0/078e0e83f919eb957f2255daf96e6ceed7e6115f401d2aaf1e5a6dfc34865301794cf6c52f77d39f2ed936f4ebf794352bcb92458b1ce63d0d0fca4fb4e1e2c7
+  checksum: 10c0/535e14091b32c8dd33c4c0dd7c34aacdf96f1469fe9df708ff16411c28635f8b952f2a1cb3eb49912761dab9d03c755c95bcca5c9ce81994df8dbb8a8bd7d612
   languageName: node
   linkType: hard
 
@@ -6835,458 +6835,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@picoaide/dsh-account-card@workspace:*, @picoaide/dsh-account-card@workspace:packages/client/account-card":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-account-card@workspace:packages/client/account-card"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-agent": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-primitives": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
-    "@picoaide/dsh-capability-center": "workspace:*"
-    "@picoaide/dsh-enterprise": "workspace:*"
-    "@picoaide/dsh-panel-surface": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18"
-    "@types/react-dom": "npm:^18.3.5"
-    jsdom: "npm:25.0.1"
-    react: "npm:18.3.1"
-    react-dom: "npm:18.3.1"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-branding@workspace:packages/client/branding":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-branding@workspace:packages/client/branding"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-conversation": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-layout": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-theme": "npm:0.2.1-rc.2"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18"
-    react: "npm:18.3.1"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-browser@workspace:*, @picoaide/dsh-browser@workspace:packages/host/browser":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-browser@workspace:packages/host/browser"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-agent": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-attachment": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-brand": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-commands": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-input-trigger": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-llm": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-ptc-runtime": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-sandbox": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-system-prompt": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-timeout": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-typert-protocol": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-user-approval": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-util-values": "npm:0.2.1-rc.2"
-    "@picoaide/dsh-connectors": "workspace:*"
-    "@picoaide/dsh-foot-menu": "workspace:*"
-    "@picoaide/dsh-host-home": "workspace:*"
-    "@picoaide/dsh-host-locale": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18"
-    dsh-plugin-desktop: "workspace:*"
-    electron: "npm:44.0.0"
-    jsdom: "npm:^25.0.0"
-    react: "npm:18.3.1"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-    "@picoaide/dsh-connectors": "workspace:*"
-    electron: 44.0.0
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-capability-center@workspace:*, @picoaide/dsh-capability-center@workspace:packages/host/capability-center":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-capability-center@workspace:packages/host/capability-center"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
-    "@picoaide/dsh-foot-menu": "workspace:*"
-    "@picoaide/dsh-gateway-client": "workspace:*"
-    "@picoaide/dsh-host-home": "workspace:*"
-    "@picoaide/dsh-host-locale": "workspace:*"
-    "@picoaide/dsh-panel-surface": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18"
-    adm-zip: "npm:^0.6.0"
-    react: "npm:18.3.1"
-    tar: "npm:^7.5.0"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-    yaml: "npm:^2.9.0"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-connectors@workspace:*, @picoaide/dsh-connectors@workspace:packages/host/connectors":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-connectors@workspace:packages/host/connectors"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-commands": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-input-trigger": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-mcp-client": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-ptc-runtime": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-system-prompt": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
-    "@modelcontextprotocol/client": "npm:2.0.0"
-    "@modelcontextprotocol/sdk": "npm:^1.12.0"
-    "@picoaide/dsh-foot-menu": "workspace:*"
-    "@picoaide/dsh-host-home": "workspace:*"
-    "@picoaide/dsh-host-locale": "workspace:*"
-    "@picoaide/dsh-panel-surface": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18"
-    react: "npm:18.3.1"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-cron@workspace:packages/host/cron":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-cron@workspace:packages/host/cron"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-agent-preset-registry": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-api-remotes": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-api-session-controller": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-api-workspace-controller": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-plugin-manager": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-settings-plugins": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar-right": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-workspace": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-cordis-host-runner": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-host-plugin-inventory": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-ptc-runtime": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-sandbox": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-settings": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-system-prompt": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-timeout": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-workspace": "npm:0.2.1-rc.2"
-    "@deepseek-ai/schemastery": "npm:^3.18.4"
-    "@picoaide/dsh-foot-menu": "workspace:*"
-    "@picoaide/dsh-host-locale": "workspace:*"
-    "@picoaide/dsh-panel-surface": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:~18.3.1"
-    "@types/react-dom": "npm:^18.3.5"
-    dsh-plugin-desktop: "workspace:*"
-    jsdom: "npm:^25.0.0"
-    react: "npm:^18.3.1"
-    react-dom: "npm:^18.3.1"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:~5.7.2"
-    vitest: "npm:^3.0.0"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-    react: ^18.2.0
-    react-dom: ^18.2.0
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-enterprise@workspace:*, @picoaide/dsh-enterprise@workspace:packages/host/enterprise":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-enterprise@workspace:packages/host/enterprise"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-anonymous-user-id": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-attachment": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-brand": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-conversation": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-layout": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-credentials": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-home-paths": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-launch-environment": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-llm": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-llm-deepseek": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-sandbox": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-settings": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-skill": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-skill-filesystem": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-tool-skill": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-util-values": "npm:0.2.1-rc.2"
-    "@deepseek-ai/schemastery": "npm:^3.18.4"
-    "@picoaide/dsh-foot-menu": "workspace:*"
-    "@picoaide/dsh-gateway-client": "workspace:*"
-    "@picoaide/dsh-host-locale": "workspace:*"
-    "@picoaide/dsh-panel-surface": "workspace:*"
-    "@sentry/node": "npm:^7.120.0"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18"
-    adm-zip: "npm:^0.6.0"
-    dsh-plugin-desktop: "workspace:*"
-    electron: "npm:44.0.0"
-    react: "npm:18.3.1"
-    tar: "npm:^7.5.0"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-    yaml: "npm:^2.9.0"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-foot-menu@workspace:*, @picoaide/dsh-foot-menu@workspace:packages/client/foot-menu":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-foot-menu@workspace:packages/client/foot-menu"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@picoaide/dsh-panel-surface": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18"
-    "@types/react-dom": "npm:^18.3.5"
-    jsdom: "npm:25.0.1"
-    react: "npm:18.3.1"
-    react-dom: "npm:18.3.1"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-gateway-client@workspace:*, @picoaide/dsh-gateway-client@workspace:packages/host/gateway-client":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-gateway-client@workspace:packages/host/gateway-client"
-  dependencies:
-    "@picoaide/dsh-host-locale": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    electron: "npm:44.0.0"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-host-home@workspace:*, @picoaide/dsh-host-home@workspace:packages/host/host-home":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-host-home@workspace:packages/host/host-home"
-  dependencies:
-    "@types/node": "npm:^22.20.0"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-host-locale@workspace:*, @picoaide/dsh-host-locale@workspace:packages/host/host-locale":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-host-locale@workspace:packages/host/host-locale"
-  dependencies:
-    "@types/node": "npm:^22.20.0"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-panel-surface@workspace:*, @picoaide/dsh-panel-surface@workspace:packages/client/panel-surface":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-panel-surface@workspace:packages/client/panel-surface"
-  dependencies:
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18.3.1"
-    "@types/react-dom": "npm:^18.3.5"
-    jsdom: "npm:25.0.1"
-    react: "npm:18.3.1"
-    react-dom: "npm:18.3.1"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  peerDependencies:
-    react: ^18.2.0
-    react-dom: ^18.2.0
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-wasm-apps-host@workspace:*, @picoaide/dsh-wasm-apps-host@workspace:packages/host/wasm-apps-host":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-wasm-apps-host@workspace:packages/host/wasm-apps-host"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-agent": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-atomic-write": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-llm": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-ptc-runtime": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-sandbox": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-sandbox-policy": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-system-prompt": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-user-approval": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-util-values": "npm:0.2.1-rc.2"
-    "@deepseek-ai/schemastery": "npm:^3.18.4"
-    "@picoaide/dsh-browser": "workspace:*"
-    "@picoaide/dsh-gateway-client": "workspace:*"
-    "@picoaide/dsh-host-home": "workspace:*"
-    "@picoaide/dsh-host-locale": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    electron: "npm:44.0.0"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-    electron: 44.0.0
-  languageName: unknown
-  linkType: soft
-
-"@picoaide/dsh-wasm-apps@workspace:*, @picoaide/dsh-wasm-apps@workspace:packages/client/wasm-apps":
-  version: 0.0.0-use.local
-  resolution: "@picoaide/dsh-wasm-apps@workspace:packages/client/wasm-apps"
-  dependencies:
-    "@deepseek-ai/cordis": "npm:4.0.4"
-    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
-    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
-    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
-    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
-    "@picoaide/dsh-foot-menu": "workspace:*"
-    "@picoaide/dsh-panel-surface": "workspace:*"
-    "@types/node": "npm:^22.20.0"
-    "@types/react": "npm:^18"
-    "@types/react-dom": "npm:^18.3.5"
-    jsdom: "npm:25.0.1"
-    react: "npm:18.3.1"
-    react-dom: "npm:18.3.1"
-    tsdown: "npm:0.22.2"
-    typescript: "npm:6.0.3"
-    vitest: "npm:4.1.8"
-  peerDependencies:
-    "@deepseek-ai/cordis": 4.0.4
-    "@deepseek-ai/cordis-plugin-include": 1.0.9
-    "@deepseek-ai/cordis-plugin-loader": 1.0.5
-  languageName: unknown
-  linkType: soft
-
 "@protobufjs/aspromise@npm:^1.1.1, @protobufjs/aspromise@npm:^1.1.2":
   version: 1.1.2
   resolution: "@protobufjs/aspromise@npm:1.1.2"
@@ -8419,6 +7967,458 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@zeokeel/dsh-account-card@workspace:*, @zeokeel/dsh-account-card@workspace:packages/client/account-card":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-account-card@workspace:packages/client/account-card"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-agent": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-primitives": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18"
+    "@types/react-dom": "npm:^18.3.5"
+    "@zeokeel/dsh-capability-center": "workspace:*"
+    "@zeokeel/dsh-enterprise": "workspace:*"
+    "@zeokeel/dsh-panel-surface": "workspace:*"
+    jsdom: "npm:25.0.1"
+    react: "npm:18.3.1"
+    react-dom: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-branding@workspace:packages/client/branding":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-branding@workspace:packages/client/branding"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-conversation": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-layout": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-theme": "npm:0.2.1-rc.2"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18"
+    react: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-browser@workspace:*, @zeokeel/dsh-browser@workspace:packages/host/browser":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-browser@workspace:packages/host/browser"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-agent": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-attachment": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-brand": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-commands": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-input-trigger": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-llm": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-ptc-runtime": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-sandbox": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-system-prompt": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-timeout": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-typert-protocol": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-user-approval": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-util-values": "npm:0.2.1-rc.2"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18"
+    "@zeokeel/dsh-connectors": "workspace:*"
+    "@zeokeel/dsh-foot-menu": "workspace:*"
+    "@zeokeel/dsh-host-home": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
+    dsh-plugin-desktop: "workspace:*"
+    electron: "npm:44.0.0"
+    jsdom: "npm:^25.0.0"
+    react: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+    "@zeokeel/dsh-connectors": "workspace:*"
+    electron: 44.0.0
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-capability-center@workspace:*, @zeokeel/dsh-capability-center@workspace:packages/host/capability-center":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-capability-center@workspace:packages/host/capability-center"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18"
+    "@zeokeel/dsh-foot-menu": "workspace:*"
+    "@zeokeel/dsh-gateway-client": "workspace:*"
+    "@zeokeel/dsh-host-home": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-panel-surface": "workspace:*"
+    adm-zip: "npm:^0.6.0"
+    react: "npm:18.3.1"
+    tar: "npm:^7.5.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+    yaml: "npm:^2.9.0"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-connectors@workspace:*, @zeokeel/dsh-connectors@workspace:packages/host/connectors":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-connectors@workspace:packages/host/connectors"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-commands": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-input-trigger": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-mcp-client": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-ptc-runtime": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-system-prompt": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
+    "@modelcontextprotocol/client": "npm:2.0.0"
+    "@modelcontextprotocol/sdk": "npm:^1.12.0"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18"
+    "@zeokeel/dsh-foot-menu": "workspace:*"
+    "@zeokeel/dsh-host-home": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-panel-surface": "workspace:*"
+    react: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-cron@workspace:packages/host/cron":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-cron@workspace:packages/host/cron"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-agent-preset-registry": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-api-remotes": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-api-session-controller": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-api-workspace-controller": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-workspace": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-cordis-host-runner": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-host-plugin-inventory": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-ptc-runtime": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-sandbox": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-settings": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-system-prompt": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-timeout": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-workspace": "npm:0.2.1-rc.2"
+    "@deepseek-ai/schemastery": "npm:^3.18.4"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:~18.3.1"
+    "@types/react-dom": "npm:^18.3.5"
+    "@zeokeel/dsh-foot-menu": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-panel-surface": "workspace:*"
+    dsh-plugin-desktop: "workspace:*"
+    jsdom: "npm:^25.0.0"
+    react: "npm:^18.3.1"
+    react-dom: "npm:^18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:~5.7.2"
+    vitest: "npm:^3.0.0"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+    react: ^18.2.0
+    react-dom: ^18.2.0
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-enterprise@workspace:*, @zeokeel/dsh-enterprise@workspace:packages/host/enterprise":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-enterprise@workspace:packages/host/enterprise"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-anonymous-user-id": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-attachment": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-brand": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-store": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-conversation": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-layout": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-settings": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-credentials": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-home-paths": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-launch-environment": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-llm": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-llm-deepseek": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-sandbox": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-settings": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-skill": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-skill-filesystem": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-tool-skill": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-util-values": "npm:0.2.1-rc.2"
+    "@deepseek-ai/schemastery": "npm:^3.18.4"
+    "@sentry/node": "npm:^7.120.0"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18"
+    "@zeokeel/dsh-foot-menu": "workspace:*"
+    "@zeokeel/dsh-gateway-client": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-panel-surface": "workspace:*"
+    adm-zip: "npm:^0.6.0"
+    dsh-plugin-desktop: "workspace:*"
+    electron: "npm:44.0.0"
+    react: "npm:18.3.1"
+    tar: "npm:^7.5.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+    yaml: "npm:^2.9.0"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-foot-menu@workspace:*, @zeokeel/dsh-foot-menu@workspace:packages/client/foot-menu":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-foot-menu@workspace:packages/client/foot-menu"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18"
+    "@types/react-dom": "npm:^18.3.5"
+    "@zeokeel/dsh-panel-surface": "workspace:*"
+    jsdom: "npm:25.0.1"
+    react: "npm:18.3.1"
+    react-dom: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-gateway-client@workspace:*, @zeokeel/dsh-gateway-client@workspace:packages/host/gateway-client":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-gateway-client@workspace:packages/host/gateway-client"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    "@zeokeel/dsh-host-locale": "workspace:*"
+    electron: "npm:44.0.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-host-home@workspace:*, @zeokeel/dsh-host-home@workspace:packages/host/host-home":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-host-home@workspace:packages/host/host-home"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-host-locale@workspace:*, @zeokeel/dsh-host-locale@workspace:packages/host/host-locale":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-host-locale@workspace:packages/host/host-locale"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-panel-surface@workspace:*, @zeokeel/dsh-panel-surface@workspace:packages/client/panel-surface":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-panel-surface@workspace:packages/client/panel-surface"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18.3.1"
+    "@types/react-dom": "npm:^18.3.5"
+    jsdom: "npm:25.0.1"
+    react: "npm:18.3.1"
+    react-dom: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    react: ^18.2.0
+    react-dom: ^18.2.0
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-wasm-apps-host@workspace:*, @zeokeel/dsh-wasm-apps-host@workspace:packages/host/wasm-apps-host":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-wasm-apps-host@workspace:packages/host/wasm-apps-host"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-agent": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-atomic-write": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-host-webserver": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-llm": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-ptc-runtime": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-sandbox": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-sandbox-policy": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-scope": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-session": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-system-prompt": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-tools": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-user-approval": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-util-values": "npm:0.2.1-rc.2"
+    "@deepseek-ai/schemastery": "npm:^3.18.4"
+    "@types/node": "npm:^22.20.0"
+    "@zeokeel/dsh-browser": "workspace:*"
+    "@zeokeel/dsh-gateway-client": "workspace:*"
+    "@zeokeel/dsh-host-home": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
+    electron: "npm:44.0.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+    electron: 44.0.0
+  languageName: unknown
+  linkType: soft
+
+"@zeokeel/dsh-wasm-apps@workspace:*, @zeokeel/dsh-wasm-apps@workspace:packages/client/wasm-apps":
+  version: 0.0.0-use.local
+  resolution: "@zeokeel/dsh-wasm-apps@workspace:packages/client/wasm-apps"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.4"
+    "@deepseek-ai/cordis-plugin-include": "npm:1.0.9"
+    "@deepseek-ai/cordis-plugin-loader": "npm:1.0.5"
+    "@deepseek-ai/dsh-client-locale": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-renderer": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-sidebar": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": "npm:0.2.1-rc.2"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18"
+    "@types/react-dom": "npm:^18.3.5"
+    "@zeokeel/dsh-foot-menu": "workspace:*"
+    "@zeokeel/dsh-panel-surface": "workspace:*"
+    jsdom: "npm:25.0.1"
+    react: "npm:18.3.1"
+    react-dom: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.4
+    "@deepseek-ai/cordis-plugin-include": 1.0.9
+    "@deepseek-ai/cordis-plugin-loader": 1.0.5
+  languageName: unknown
+  linkType: soft
+
 "abbrev@npm:^4.0.0":
   version: 4.0.0
   resolution: "abbrev@npm:4.0.0"
@@ -8565,9 +8565,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"app-builder-lib@patch:app-builder-lib@npm%3A26.15.3#./patches/app-builder-lib@26.15.3.patch::locator=picoaide-harness%40workspace%3A.":
+"app-builder-lib@patch:app-builder-lib@npm%3A26.15.3#./patches/app-builder-lib@26.15.3.patch::locator=zeokeel-harness%40workspace%3A.":
   version: 26.15.3
-  resolution: "app-builder-lib@patch:app-builder-lib@npm%3A26.15.3#./patches/app-builder-lib@26.15.3.patch::version=26.15.3&hash=17e0f0&locator=picoaide-harness%40workspace%3A."
+  resolution: "app-builder-lib@patch:app-builder-lib@npm%3A26.15.3#./patches/app-builder-lib@26.15.3.patch::version=26.15.3&hash=17e0f0&locator=zeokeel-harness%40workspace%3A."
   dependencies:
     "@electron/asar": "npm:3.4.1"
     "@electron/fuses": "npm:^1.8.0"
@@ -9625,19 +9625,19 @@ __metadata:
     "@electron/asar": "npm:3.4.1"
     "@electron/fuses": "npm:^1.8.0"
     "@modelcontextprotocol/sdk": "npm:^1.30.0"
-    "@picoaide/dsh-account-card": "workspace:*"
-    "@picoaide/dsh-browser": "workspace:*"
-    "@picoaide/dsh-capability-center": "workspace:*"
-    "@picoaide/dsh-connectors": "workspace:*"
-    "@picoaide/dsh-enterprise": "workspace:*"
-    "@picoaide/dsh-foot-menu": "workspace:*"
-    "@picoaide/dsh-gateway-client": "workspace:*"
-    "@picoaide/dsh-host-home": "workspace:*"
-    "@picoaide/dsh-host-locale": "workspace:*"
-    "@picoaide/dsh-wasm-apps": "workspace:*"
-    "@picoaide/dsh-wasm-apps-host": "workspace:*"
     "@types/node": "npm:^22.20.0"
     "@types/react": "npm:^18"
+    "@zeokeel/dsh-account-card": "workspace:*"
+    "@zeokeel/dsh-browser": "workspace:*"
+    "@zeokeel/dsh-capability-center": "workspace:*"
+    "@zeokeel/dsh-connectors": "workspace:*"
+    "@zeokeel/dsh-enterprise": "workspace:*"
+    "@zeokeel/dsh-foot-menu": "workspace:*"
+    "@zeokeel/dsh-gateway-client": "workspace:*"
+    "@zeokeel/dsh-host-home": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-wasm-apps": "workspace:*"
+    "@zeokeel/dsh-wasm-apps-host": "workspace:*"
     adm-zip: "npm:^0.6.0"
     dsh-memory-evolve: "workspace:*"
     electron: "npm:44.0.0"
@@ -12235,31 +12235,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"picoaide-harness@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "picoaide-harness@workspace:."
-  dependencies:
-    yaml: "npm:^2.9.0"
-  dependenciesMeta:
-    "@deepseek-ai/dsh-subprocess-local":
-      built: true
-    "@google/genai":
-      built: false
-    electron:
-      built: true
-    electron-winstaller:
-      built: false
-    esbuild:
-      built: true
-    koffi:
-      built: true
-    node-pty:
-      built: true
-    protobufjs:
-      built: false
-  languageName: unknown
-  linkType: soft
-
 "picocolors@npm:^1.1.1":
   version: 1.1.1
   resolution: "picocolors@npm:1.1.1"
@@ -14485,6 +14460,31 @@ __metadata:
   checksum: 10c0/ca179aa83401aa0711f268fda38145a44c828e612a5f5265439efb5796cd63c46ca6b786bae3b74c75440a48518c36b5b23cba7fbb76ea8af5a9f85f830a5754
   languageName: node
   linkType: hard
+
+"zeokeel-harness@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "zeokeel-harness@workspace:."
+  dependencies:
+    yaml: "npm:^2.9.0"
+  dependenciesMeta:
+    "@deepseek-ai/dsh-subprocess-local":
+      built: true
+    "@google/genai":
+      built: false
+    electron:
+      built: true
+    electron-winstaller:
+      built: false
+    esbuild:
+      built: true
+    koffi:
+      built: true
+    node-pty:
+      built: true
+    protobufjs:
+      built: false
+  languageName: unknown
+  linkType: soft
 
 "zod-to-json-schema@npm:^3.25.1":
   version: 3.25.2

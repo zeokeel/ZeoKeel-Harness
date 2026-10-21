@@ -30,7 +30,7 @@
  *   - 把 `SKILL.md` 四种状态表里冻结那一行的"发布者本人 / 其他员工"区分去掉
  *     ⇒ 「手册的四种状态表区分两类人」红。
  *
- * @module @picoaide/dsh-wasm-apps/client/freeze-author-face-parity
+ * @module @zeokeel/dsh-wasm-apps/client/freeze-author-face-parity
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

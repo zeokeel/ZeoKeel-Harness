@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
 )
 
 // TestGatewayFileReaperWiring：装配接缝必须把启动期 ctx、同一个 db、间隔常量

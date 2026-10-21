@@ -1,9 +1,9 @@
 ---
 title: Welcome
-description: 'What PicoAide Harness is, the three layers it is made of, which pages each role should read, and what the product does and does not support today.'
+description: 'What ZeoKeel Harness is, the three layers it is made of, which pages each role should read, and what the product does and does not support today.'
 ---
 
-PicoAide Harness is an **enterprise-grade DeepSeek Harness all-in-one platform**: a desktop client, a local Harness service, and an enterprise server in three layers, with sessions and files staying on the employee machine and accounts and governance staying on the customer's own server. Everything in the product is a plugin.
+ZeoKeel Harness is an **enterprise-grade DeepSeek Harness all-in-one platform**: a desktop client, a local Harness service, and an enterprise server in three layers, with sessions and files staying on the employee machine and accounts and governance staying on the customer's own server. Everything in the product is a plugin.
 
 This page is the site's entry point: see what each layer owns, which order to read in, and the boundary list that tells you whether the capability you need exists yet.
 

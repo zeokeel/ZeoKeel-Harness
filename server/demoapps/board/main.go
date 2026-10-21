@@ -9,7 +9,7 @@
 //  2. **身份**：请求帧里带 `user{id,username,display_name,dept,is_publisher}`，
 //     应用不做登录、也拿不到别人的身份。
 //  3. **准入**：`access=whitelist` 时平台只把「模式」告诉应用（R24），
-//     **名单比对由应用自己读 `picoaide.app.json` 完成**；名单外的人必须看到
+//     **名单比对由应用自己读 `zeokeel.app.json` 完成**；名单外的人必须看到
 //     一页写着**本人账号 + 当前名单 + 负责人**的提示 —— 那是作者发现名单拼错的
 //     唯一途径。
 //  4. **一块界面**：`/static/*` 由宿主按路径直出（不经过 wasm），入口 `/` 走 wasm
@@ -34,7 +34,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/picoaide/picoaide/demoapps/internal/demoapp"
+	"github.com/zeokeel/zeokeel-harness/server/demoapps/internal/demoapp"
 )
 
 const (
@@ -564,7 +564,7 @@ func deniedPage(app *demoapp.App, cfg demoapp.Config, reason string) string {
 		}
 		b.WriteString(`</ul>`)
 	}
-	b.WriteString(`<p class="soft">名单是应用自己的配置（<code>picoaide.app.json</code> 的 <code>whitelist</code>，访问模式 <code>access=`)
+	b.WriteString(`<p class="soft">名单是应用自己的配置（<code>zeokeel.app.json</code> 的 <code>whitelist</code>，访问模式 <code>access=`)
 	b.WriteString(html.EscapeString(cfg.Access))
 	b.WriteString(`</code>）：平台只负责要求登录并告知模式，<strong>名单比对由应用自己完成</strong>。` +
 		`比对口径是<strong>忽略大小写与首尾空格</strong>，所以这两样不会是被拒的原因 —— 请重点看拼写。</p></section>`)

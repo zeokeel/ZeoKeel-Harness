@@ -427,9 +427,9 @@ export async function requestVoiceMicPermission(): Promise<boolean> {
 }
 
 /** 本机只读路由：宿主给出的麦克风系统授权状态（macOS TCC；见 `voice-mic-route.ts`）。 */
-export const VOICE_MIC_STATUS_PATH = '/api/pico/voice/mic'
+export const VOICE_MIC_STATUS_PATH = '/api/zeokeel/voice/mic'
 /** 触发系统授权询问（POST，宿主侧过写面证明）。 */
-export const VOICE_MIC_REQUEST_PATH = '/api/pico/voice/mic/request'
+export const VOICE_MIC_REQUEST_PATH = '/api/zeokeel/voice/mic/request'
 
 /**
  * 读宿主的麦克风授权状态。

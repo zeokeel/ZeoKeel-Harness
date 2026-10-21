@@ -11,11 +11,11 @@ import type { NativeSession } from '../src/electron-adapter.ts'
  * 三轮审计 P1-①：**持有性证明挡不住"模型自己开浏览器"**。
  *
  * 三个使能条件（当时都实测过）：
- *  1. 宿主本机路由 `GET /api/pico/apps/wasm/:app_id/rows?unmask=1` 要求 `dsh-auth-*` cookie；
+ *  1. 宿主本机路由 `GET /api/zeokeel/apps/wasm/:app_id/rows?unmask=1` 要求 `dsh-auth-*` cookie；
  *  2. 内置浏览器的分区**故意镜像**了那把 cookie（`index.ts` 的 `mirrorBrowserAuthCookies`，
  *     本插件自己两个 shell 页面的写操作要靠它）；
  *  3. 导航策略对浏览器标签放行一切 `http(s)`（`classifyNavigation`），**不拦 shell origin**。
- * ⇒ 模型 `browser_navigate('http://127.0.0.1:<port>/api/pico/...&unmask=1')` + `get_text`
+ * ⇒ 模型 `browser_navigate('http://127.0.0.1:<port>/api/zeokeel/...&unmask=1')` + `get_text`
  * 就能读未脱敏数据；而且被绕过的**不只是** `unmask` —— 任何依赖持有性证明的本机守卫都失效。
  *
  * 修法：模型可达的三条导航入口（`browser_navigate` / `window.open` / `browser_download`）
@@ -147,8 +147,8 @@ describe('内置浏览器不得导航到本机 shell origin（三轮审计 P1-�
   it('① browser_navigate 到 shell origin 被拒（含 rows?unmask=1 的绕过尝试）', async () => {
     const { runtime } = makeRuntime()
     for (const url of [
-      `${SHELL}/api/pico/apps/wasm/demo/rows?table=notes&unmask=1`,
-      `${SHELL}/api/pico/apps/wasm`,
+      `${SHELL}/api/zeokeel/apps/wasm/demo/rows?table=notes&unmask=1`,
+      `${SHELL}/api/zeokeel/apps/wasm`,
       `${SHELL}/browser-shell`,
       `${SHELL}/`,
     ]) {
@@ -175,7 +175,7 @@ describe('内置浏览器不得导航到本机 shell origin（三轮审计 P1-�
     //  - shell origin ⇒ 不该多出标签（拒绝生效）；
     //  - 正常外站 ⇒ 必须多出一个标签（反向对照：不能把 window.open 一律掐死）。
     const before = runtime.listTabs().length
-    capturedWindowOpen!({ url: `${SHELL}/api/pico/apps/wasm/demo/rows?unmask=1` })
+    capturedWindowOpen!({ url: `${SHELL}/api/zeokeel/apps/wasm/demo/rows?unmask=1` })
     await new Promise(resolve => { setTimeout(resolve, 20) })
     expect(runtime.listTabs().length, 'window.open 到 shell origin 不得产生新标签').toBe(before)
     // ⚠️ "标签数不变"这一条**单独不足以**证明是这一行闸门起的作用（四轮审计实测：把这行
@@ -194,7 +194,7 @@ describe('内置浏览器不得导航到本机 shell origin（三轮审计 P1-�
 
   it('① browser_download 到 shell origin 被拒', async () => {
     const { runtime } = makeRuntime()
-    await expect(runtime.downloadUrl(`${SHELL}/api/pico/apps/wasm/demo/export`)).rejects.toMatchObject({
+    await expect(runtime.downloadUrl(`${SHELL}/api/zeokeel/apps/wasm/demo/export`)).rejects.toMatchObject({
       constructor: BrowserError,
       code: 'navigation-blocked',
     })
@@ -204,7 +204,7 @@ describe('内置浏览器不得导航到本机 shell origin（三轮审计 P1-�
   it('① 页面自己发起的导航与**服务端重定向**落到 shell origin 也被拒（will-navigate/will-redirect）', async () => {
     // 为什么这条必须独立存在（2026-09-21）：`browser_navigate` 那条闸只罩"模型显式调用的
     // 导航"。模型可以先把标签导航到一个**它控制的**外站，再让那个站 302 到
-    // `http://127.0.0.1:<port>/api/pico/...`（Electron 对重定向**不触发** `will-navigate`），
+    // `http://127.0.0.1:<port>/api/zeokeel/...`（Electron 对重定向**不触发** `will-navigate`），
     // 或（若 eval 允许）直接 `location.href = …` —— 两者都不经过显式导航闸门，
     // 同样会落到本机控制面上（纵深防御：§7b 方案 A 之后那个 jar 里已无凭据，
     // 但"模型驱动的页面不得触达宿主控制面"这条口径不变）。
@@ -221,8 +221,8 @@ describe('内置浏览器不得导航到本机 shell origin（三轮审计 P1-�
       return state
     }
     // 两条事件都必须在 shell origin 上**取消**导航。
-    expect(fire('will-redirect', `${SHELL}/api/pico/apps/wasm/demo/rows?unmask=1`).prevented).toBe(true)
-    expect(fire('will-navigate', `${SHELL}/api/pico/apps/wasm/demo/rows?unmask=1`).prevented).toBe(true)
+    expect(fire('will-redirect', `${SHELL}/api/zeokeel/apps/wasm/demo/rows?unmask=1`).prevented).toBe(true)
+    expect(fire('will-navigate', `${SHELL}/api/zeokeel/apps/wasm/demo/rows?unmask=1`).prevented).toBe(true)
     // 反向对照：正常外站（含重定向目标）不得被取消。
     expect(fire('will-redirect', 'https://b.example/next').prevented).toBe(false)
     expect(fire('will-navigate', 'https://b.example/next').prevented).toBe(false)
@@ -246,7 +246,7 @@ describe('内置浏览器不得导航到本机 shell origin（三轮审计 P1-�
       'http://localhost:3000/app',
       'http://[::1]:8080/',
       'http://0.0.0.0:9000/',
-      `${SHELL}/api/pico/apps/wasm`,
+      `${SHELL}/api/zeokeel/apps/wasm`,
     ]) {
       await expect(runtime.navigate(1, local), local).rejects.toMatchObject({ code: 'navigation-blocked' })
     }
@@ -268,7 +268,7 @@ describe('内置浏览器不得导航到本机 shell origin（三轮审计 P1-�
     const state = { prevented: false }
     const handler = view!.listeners.get('will-frame-navigate')?.[0]
     expect(handler, '标签视图必须注册 will-frame-navigate（否则这条判据是空转）').toBeTypeOf('function')
-    handler!({ url: `${SHELL}/api/pico/apps/wasm/demo/rows?unmask=1`, isMainFrame: false, preventDefault: () => { state.prevented = true } })
+    handler!({ url: `${SHELL}/api/zeokeel/apps/wasm/demo/rows?unmask=1`, isMainFrame: false, preventDefault: () => { state.prevented = true } })
     expect(state.prevented, '子框架导航到本机目标必须被取消').toBe(true)
     // 反向对照：子框架指向外站不得被取消（正常的第三方 iframe 仍要能显示）。
     const ok = { prevented: false }

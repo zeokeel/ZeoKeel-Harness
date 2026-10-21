@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 余额闸门回归(2026-09-11):此前 QUOTA_EXCEEDED 只有 token/金额配额/部门预算

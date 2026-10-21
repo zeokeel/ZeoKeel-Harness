@@ -10,17 +10,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/bootstrap"
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/portal"
-	"github.com/picoaide/picoaide/internal/reports"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/telemetry"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
+	"github.com/zeokeel/zeokeel-harness/server/internal/reports"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/telemetry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // buildRouterWithDB 是 buildTestRouter 的"真库"版本：给需要认证的路由用。

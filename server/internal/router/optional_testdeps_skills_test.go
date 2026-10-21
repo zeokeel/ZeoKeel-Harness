@@ -12,11 +12,11 @@ package router
 import (
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/agentshare"
-	"github.com/picoaide/picoaide/internal/capabilities"
-	"github.com/picoaide/picoaide/internal/marketplace"
-	"github.com/picoaide/picoaide/internal/sharedskills"
-	"github.com/picoaide/picoaide/internal/skillseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/agentshare"
+	"github.com/zeokeel/zeokeel-harness/server/internal/capabilities"
+	"github.com/zeokeel/zeokeel-harness/server/internal/marketplace"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillseed"
 )
 
 // fillSkillsTestDeps 填技能面五个 handler（测试树必须与生产树同形 —— 否则

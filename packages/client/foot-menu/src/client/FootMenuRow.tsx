@@ -5,7 +5,7 @@
  *
  * 改造前，五个插件各自往 `sidebar.footer.action` 注册**一整行**（定时任务 / 能力中心 /
  * 连接器 / 浏览器 / 应用中心），底部固定占掉约 210px。现在这一行是**唯一**的占用者：
- * 条目经客户端 Cordis 服务 `picoFootMenu` 收集（见 `contract.ts` 的"为什么是服务"）。
+ * 条目经客户端 Cordis 服务 `zeokeelFootMenu` 收集（见 `contract.ts` 的"为什么是服务"）。
  *
  * ## 两个容易踩的点
  *
@@ -18,13 +18,13 @@
  * 激活态文案（`更多 · 能力中心`）来自 `panel-surface` 的**唯一**激活态属性；面板关闭
  * 只删属性、不发事件，所以这里必须用 `MutationObserver`，不能只听 `PANEL_ACTIVATE_EVENT`。
  *
- * @module @picoaide/dsh-foot-menu/client/FootMenuRow
+ * @module @zeokeel/dsh-foot-menu/client/FootMenuRow
  */
 
 import { useCallback, useEffect, useId, useReducer, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { PANEL_ACTIVE_ATTR, activePanelId, hasInnerModal } from '@picoaide/dsh-panel-surface/client'
+import { PANEL_ACTIVE_ATTR, activePanelId, hasInnerModal } from '@zeokeel/dsh-panel-surface/client'
 import { currentFootMenuService, type FootMenuEntry } from './contract.ts'
 import { CHECK_GLYPH, CHEVRON_GLYPH, FootMenuGlyph, MORE_GLYPH } from './glyphs.tsx'
 import { t } from './locales.ts'
@@ -42,7 +42,7 @@ const ROW_WIDE: CSSProperties = {
   boxSizing: 'border-box',
   border: 'none',
   borderRadius: 12,
-  // **不写 `background`**：行内样式优先级高于注入的 `.pico-foot-menu-trigger:hover`
+  // **不写 `background`**：行内样式优先级高于注入的 `.zeokeel-foot-menu-trigger:hover`
   // 规则，写在这里 hover 就永远是死的（2026-09-21 与账户行走查发现同一坑）。
   // 透明底与 hover 底都进注入的样式表（见 index.ts）。
   cursor: 'pointer',
@@ -170,7 +170,7 @@ export function FootMenuRow(props: PropsRuntime<'sidebar.footer.action'>): JSX.E
   const panelRef = useRef<HTMLDivElement | null>(null)
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
   const rawId = useId()
-  const panelId = `pico-foot-menu-${rawId.replace(/[^a-zA-Z0-9_-]/gu, '')}`
+  const panelId = `zeokeel-foot-menu-${rawId.replace(/[^a-zA-Z0-9_-]/gu, '')}`
 
   // 每次渲染都重新取快照并**重新求值** title()/attention()：条目的这两个取值是函数，
   // 语言切换与轮询结果都靠"渲染时读取"生效（`touch()` 负责把变化推过来）。
@@ -200,7 +200,7 @@ export function FootMenuRow(props: PropsRuntime<'sidebar.footer.action'>): JSX.E
     setOpen(false)
     if (!restoreFocus) return
     // **不许抢已经离开浮层的焦点**：条目的 `activate()` 可能自己把焦点移走 —— 打开整页
-    // 面板时装载器（`@picoaide/dsh-panel-surface`）会把焦点聚焦到面板容器上，此时再把
+    // 面板时装载器（`@zeokeel/dsh-panel-surface`）会把焦点聚焦到面板容器上，此时再把
     // 焦点拉回「更多」行，键盘用户就 Tab 不进面板了（2026-09-25 审计 FIX-29 P2 的组合
     // 现场：浮层这一侧原本把错的行为写成了契约）。
     // 只在"焦点还在浮层/锚点上、或已经没有落点"时才归还。
@@ -358,7 +358,7 @@ export function FootMenuRow(props: PropsRuntime<'sidebar.footer.action'>): JSX.E
       <button
         ref={anchorRef}
         type="button"
-        className="pico-foot-menu-trigger"
+        className="zeokeel-foot-menu-trigger"
         aria-label={accessibleLabel}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -411,7 +411,7 @@ export function FootMenuRow(props: PropsRuntime<'sidebar.footer.action'>): JSX.E
                 ref={(element) => { itemRefs.current[index] = element }}
                 type="button"
                 role="menuitem"
-                className="pico-foot-menu-item"
+                className="zeokeel-foot-menu-item"
                 aria-current={isActive ? 'true' : undefined}
                 aria-label={waitingText}
                 title={waitingText}

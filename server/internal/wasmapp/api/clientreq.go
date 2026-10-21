@@ -19,7 +19,7 @@
 //	【传输层 = 外层 HTTP 状态 + 平台错误信封】——"这次调用本身"失败了
 //	  401 AUTH_REQUIRED      缺令牌（BearerAuth 中间件）
 //	  401 AUTH_FAILED        令牌无效/过期/被吊销（BearerAuth 中间件）
-//	  401 proof_required     缺 X-Pico-App-Proof（§20.1）
+//	  401 proof_required     缺 X-ZeoKeel-App-Proof（§20.1）
 //	  401 proof_expired      proof 过期
 //	  401 proof_mismatch     proof 绑定不符（含结构/签名不可验证）
 //	  401 proof_replayed     非幂等请求的 jti 重放
@@ -42,7 +42,7 @@
 // （appserver.checkClientOrigin）把 `Origin` 与**由 app_id 推导的自身源**比较，
 // 而合成请求的 Host 就是那次推导的输入。如果 Host 可以被调用方随意指定，
 // `Origin` 校验就退化成"调用方说自己是谁就是谁"。
-// 因此 Host 只能是 `picoaide-app://<app_id>` 或裸 `<app_id>`
+// 因此 Host 只能是 `zeokeel-app://<app_id>` 或裸 `<app_id>`
 // （app_id 来自**路由路径**，绝不从 Host 反向解析）。
 package api
 
@@ -58,11 +58,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/appserver"
-	"github.com/picoaide/picoaide/internal/wasmapp/edge"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appserver"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/edge"
 )
 
 // maxClientEnvelopeBytes 是信封的请求体上限。
@@ -140,7 +140,7 @@ var clientAllowedMethods = map[string]struct{}{
 // 准入顺序（契约 §5.1，**冻结**）：
 //
 //	① BearerAuth（路由中间件）—— 身份只来自 bearer；
-//	② **app-proof**（本函数，`X-Pico-App-Proof`）—— 持有性证明；
+//	② **app-proof**（本函数，`X-ZeoKeel-App-Proof`）—— 持有性证明；
 //	③ 信封形态（方法/path/query/host/头白名单/体积，serveClientRequest）；
 //	④ Origin（非幂等，管线内的 checkClientOrigin）。
 //
@@ -219,7 +219,7 @@ func (h *Handlers) serveClientRequest(c *gin.Context, appID string, user *server
 		}
 		writeErr(c, apperr.New(apperr.CodeValidation, "请求信封不是合法 JSON").
 			WithDetail("reason", "decode_failed").
-			WithHint(`信封形如 {"method":"GET","path":"/","query":"","host":"picoaide-app://<app_id>","headers":{},"body":"<base64>"}`))
+			WithHint(`信封形如 {"method":"GET","path":"/","query":"","host":"zeokeel-app://<app_id>","headers":{},"body":"<base64>"}`))
 		return
 	}
 
@@ -270,7 +270,7 @@ func (h *Handlers) clientAppOrigin(appID string) string {
 	if h.opt.AppOrigin != nil {
 		return h.opt.AppOrigin(appID)
 	}
-	return appserver.PicoaideAppOrigin(appID)
+	return appserver.ZeoKeelAppOrigin(appID)
 }
 
 // buildClientRequest 把信封还原成一次合成请求。
@@ -391,14 +391,14 @@ func readClientEnvelopeBody(c *gin.Context) ([]byte, *apperr.Error) {
 //
 // 唯一允许的形态（app_id 来自**路由**，绝不从 Host 反解，契约 §4.2）：
 //
-//	picoaide-app://<app_id>   规范形态（app_id 小写，与 registry 同一套归一化规则）
+//	zeokeel-app://<app_id>   规范形态（app_id 小写，与 registry 同一套归一化规则）
 //	<app_id>                  裸标识简写（协议 handler 可以省掉 scheme）
 //
 // 其它一切形态一律 400 VALIDATION：任意域名/IP、旧草稿的 `<app_id>.app.localhost`、
-// 带端口（`picoaide-app://<app_id>:8080`）、带路径/查询/片段/凭据（`…/x`、`…?a=1`、
+// 带端口（`zeokeel-app://<app_id>:8080`）、带路径/查询/片段/凭据（`…/x`、`…?a=1`、
 // `user@…`、末尾斜杠）、大小写不符的 app_id —— 见文件头"为什么 Host 必须逐字符校验"。
 //
-// 端口被明确拒绝而不是忽略：本模型的 origin 是 `picoaide-app://<app_id>`（**没有端口
+// 端口被明确拒绝而不是忽略：本模型的 origin 是 `zeokeel-app://<app_id>`（**没有端口
 // 这一维**），放行端口等于承认两个不同的 origin 都算"自身源"。
 //
 // 返回值是**规范主机部分**（= app_id）：合成请求的 `URL.Scheme` 另由

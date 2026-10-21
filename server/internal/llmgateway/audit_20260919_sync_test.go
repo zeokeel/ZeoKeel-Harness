@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // syncExcludedCatalog 是渠道同步用的固定目录(2 个模型)。

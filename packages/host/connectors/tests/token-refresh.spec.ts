@@ -521,17 +521,17 @@ describe('refresh route + panel metadata', () => {
       expiresAt: Date.now() + 10 * 60 * 1000,
     })
     const h = createHarness([def], dir, { refreshSweepIntervalMs: 0 })
-    const before = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const before = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string }> }).connectors.find(item => item.id === 'example-mcp')
     expect(before?.status).toBe('disconnected')
 
-    const refreshed = await callRoute(h, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const refreshed = await callRoute(h, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(refreshed.status).toBe(200)
     const payload = JSON.parse(refreshed.body) as { ok: boolean, expiresAt: number }
     expect(payload.ok).toBe(true)
     expect(payload.expiresAt).toBeGreaterThan(Date.now())
 
-    const after = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const after = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string, expiresAt: number | null }> }).connectors.find(item => item.id === 'example-mcp')
     expect(after?.status).toBe('connected')
     expect(after?.expiresAt).toBeGreaterThan(Date.now())
@@ -554,7 +554,7 @@ describe('refresh route + panel metadata', () => {
     const dir = mkdtempSync(join(tmpdir(), 'conn-route-token-'))
     const h = createHarness([def], dir, { refreshSweepIntervalMs: 0 })
     await seedCredential(dir, 'glitchtip', { fields: { token: 'fixed' } })
-    const res = await callRoute(h, '/api/pico/connectors/glitchtip/refresh', 'POST')
+    const res = await callRoute(h, '/api/zeokeel/connectors/glitchtip/refresh', 'POST')
     expect(res.status).toBe(400)
     h.dispose()
   })
@@ -610,13 +610,13 @@ describe('re-registration must not collide with the live MCP instance', () => {
     })
     h.emitSession({ username: 'user-a' })
     await waitFor(() => h.configs.length === 1)
-    expect(h.configs[0]?.env?.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe('at-seeded')
+    expect(h.configs[0]?.env?.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe('at-seeded')
     const first = h.fibers[0]?.dispose
     expect(first).toBeDefined()
 
     // Refresh + re-register without a teardown in between: the live instance
     // still owns "example-mcp" at this moment.
-    const refreshed = await callRoute(h, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const refreshed = await callRoute(h, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(refreshed.status).toBe(200)
     await waitFor(() => h.configs.length === 2)
     // The previous instance was retired, not leaked — and the new child carries
@@ -625,7 +625,7 @@ describe('re-registration must not collide with the live MCP instance', () => {
     expect(stored?.accessToken).not.toBe('at-seeded')
     expect(first).toHaveBeenCalled()
     expect(h.fibers.length).toBeGreaterThanOrEqual(2)
-    expect((h.configs[1] as unknown as { env?: Record<string, string> })?.env?.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe(stored?.accessToken)
+    expect((h.configs[1] as unknown as { env?: Record<string, string> })?.env?.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe(stored?.accessToken)
     h.dispose()
   })
 })
@@ -693,15 +693,15 @@ describe('MCP registration receives the official auth provider', () => {
     })
     h.emitSession({ username: 'user-a' })
     await waitFor(() => h.configs.length === 1)
-    expect(h.configs[0]?.env?.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe('at-first')
+    expect(h.configs[0]?.env?.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe('at-first')
 
     // The refresh engine writes a new token and announces it on the host bus.
     const store = new ConnectorStore({ baseDir: dir })
     await store.updateCredential('stdio-crm', { accessToken: 'at-second', expiresAt: Date.now() + 30 * 60 * 1000 })
-    h.emit('pico/connector-credentials-changed', { id: 'stdio-crm' })
+    h.emit('zeokeel/connector-credentials-changed', { id: 'stdio-crm' })
 
     await waitFor(() => h.configs.length === 2)
-    expect(h.configs[1]?.env?.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe('at-second')
+    expect(h.configs[1]?.env?.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe('at-second')
     expect(server.grants).toEqual([])
     h.dispose()
   })
@@ -748,7 +748,7 @@ describe('background sweep (stdio connectors cannot re-read a token)', () => {
     })
     h.emitSession({ username: 'user-a' })
     await waitFor(() => h.configs.length === 1)
-    expect(h.configs[0]?.env?.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe('at-first')
+    expect(h.configs[0]?.env?.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe('at-first')
     assert.ok(sweep !== undefined, '插件必须把扫掠函数交给注入的观察者')
 
     // The token lapses while the app keeps running: nothing calls the server,
@@ -771,7 +771,7 @@ describe('background sweep (stdio connectors cannot re-read a token)', () => {
       if (server.grants.length === 0 || h.configs.length < 2) await new Promise(r => setTimeout(r, 20))
     }
     expect(server.grants.length).toBe(1)
-    expect(h.configs[1]?.env?.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe('at-1')
+    expect(h.configs[1]?.env?.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe('at-1')
     const stored = await store.readCredential('stdio-crm')
     expect(stored?.expiresAt).toBeGreaterThan(Date.now())
     h.dispose()

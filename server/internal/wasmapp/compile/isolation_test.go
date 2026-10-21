@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile/testdata/wasmtest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 )
 
 // 本文件覆盖**隔离三模式**的行为（R31 / §15.1 第 14 条）。
@@ -203,7 +203,7 @@ func TestBwrapArgvRejectsMissingCacheDir(t *testing.T) {
 
 func TestBwrapArgvDoesNotLeakParentEnv(t *testing.T) {
 	// 即使宿主 env 里有密钥，bwrap argv 里也不得出现它的名字或值。
-	t.Setenv("PICOAI_MASTER_KEY", "deadbeef-cafe")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "deadbeef-cafe")
 	t.Setenv("PG_DSN", "postgres://secret")
 
 	dir := t.TempDir()
@@ -217,7 +217,7 @@ func TestBwrapArgvDoesNotLeakParentEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(argv, " ")
-	if strings.Contains(joined, "PICOAI_MASTER_KEY") || strings.Contains(joined, "deadbeef-cafe") {
+	if strings.Contains(joined, "ZEOKEEL_MASTER_KEY") || strings.Contains(joined, "deadbeef-cafe") {
 		t.Errorf("master key 泄漏进 bwrap argv：%s", joined)
 	}
 	if strings.Contains(joined, "PG_DSN") || strings.Contains(joined, "postgres://secret") {
@@ -513,7 +513,7 @@ func TestCompileTimeoutUnderBwrapLeavesNoResidue(t *testing.T) {
 	}
 	helper := compileHelperChild(t)
 	// marker 保证只匹配本用例启动的进程（不误伤同机其他 bwrap）。
-	marker := "picoaide-residue-probe-" + itoa(os.Getpid()) + "-" + time.Now().Format("150405.000000")
+	marker := "zeokeel-residue-probe-" + itoa(os.Getpid()) + "-" + time.Now().Format("150405.000000")
 	c := newTestCompiler(t, helper, func(o *Options) {
 		o.Isolation = IsolationAuto
 		o.Timeout = 400 * time.Millisecond

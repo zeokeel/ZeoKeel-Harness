@@ -2,7 +2,7 @@
  * 跨包路由对拍（R2-P0-1；5 路审计独立发现的同一个 P0）。
  *
  * **为什么必须有这条用例**：客户端的 `OPEN_APP_PATH` 与宿主注册的路由曾各写一份且不一致
- * （客户端 `/api/pico/wasm-apps/open`、宿主 `/api/pico/apps/wasm/app/open`），两端各自的
+ * （客户端 `/api/zeokeel/wasm-apps/open`、宿主 `/api/zeokeel/apps/wasm/app/open`），两端各自的
  * 单测还把**各自**的字面量钉成期望 ⇒ 双绿假象，而"点打开"必然 404。
  *
  * **为什么是源码级三方对拍**（而不是 import 常量）：客户端常量位于 client bundle 入口内，
@@ -46,7 +46,7 @@ describe('wasm 应用本机打开路由：跨包一致性', () => {
 
   it('宿主路由挂在前缀之下（前缀注册 + handler 内按 pathname 分发）', () => {
     const { prefix, open } = hostRoutes()
-    expect(prefix.startsWith('/api/pico/')).toBe(true)
+    expect(prefix.startsWith('/api/zeokeel/')).toBe(true)
     expect(open.startsWith(`${prefix}/`)).toBe(true)
     const source = read('packages/host/wasm-apps-host/src/index.ts')
     // R1 冻结（§22.2）：**所有**本机路由经唯一 seam 注册；`ctx.webServer` 只允许出现在
@@ -72,7 +72,7 @@ describe('wasm 应用本机打开路由：跨包一致性', () => {
  * 客户端的应用打不开或跨渠道串味：
  *   ① `main.ts` 的**启动期特权注册**（必须在 `app.whenReady()` 之前，取值来自渠道包）；
  *   ② profile 行注入的 `config.appOriginScheme`（插件运行期用它合成 Origin/URL）；
- *   ③ 本机只读路由 `GET /api/pico/wasm-apps/channel` 返回给渲染层的 `appOriginScheme`。
+ *   ③ 本机只读路由 `GET /api/zeokeel/wasm-apps/channel` 返回给渲染层的 `appOriginScheme`。
  *
  * 这三条在这里做**源码级**对拍（运行期断言见 `packages/host/wasm-apps-host/src/index.spec.ts`
  * 的 channel 路由用例与桌面 `profile.spec.ts` 的注入用例）。
@@ -80,7 +80,7 @@ describe('wasm 应用本机打开路由：跨包一致性', () => {
 describe('应用源 scheme 参数化：三个终点同源（§10/§16.1）', () => {
   it('客户端渲染层不再硬编码应用 scheme（只有渠道注入的运行期取值）', () => {
     const source = read('packages/client/wasm-apps/src/client/open-app.ts')
-    expect(source).not.toMatch(/['"`]picoaide-app:['"`]/u)
+    expect(source).not.toMatch(/['"`]zeokeel-app:['"`]/u)
     expect(source).not.toMatch(/APP_PROTOCOL = ['"`]/u)
   })
 
@@ -99,7 +99,7 @@ describe('应用源 scheme 参数化：三个终点同源（§10/§16.1）', () 
     expect(readyAt, 'main.ts 必须有 await app.whenReady()').toBeGreaterThan(-1)
     expect(registerAt).toBeLessThan(readyAt)
     // ③ 不得写死官方 scheme 字面量（缺省值只允许来自 desktop-channel.ts 的常量）。
-    expect(source).not.toMatch(/['"`]picoaide-app['"`]/u)
+    expect(source).not.toMatch(/['"`]zeokeel-app['"`]/u)
   })
 
   it('profile 注入的 config.appOriginScheme 与 main.ts / 渠道字段同源', () => {
@@ -110,7 +110,7 @@ describe('应用源 scheme 参数化：三个终点同源（§10/§16.1）', () 
     // 字段名逐字（渠道仓写的是 desktop.app_origin_scheme）。
     expect(channel).toContain('desktopRecord.app_origin_scheme')
     // 缺省值只有一个来源：DEFAULT_APP_ORIGIN_SCHEME（官方构建），且渠道包字段缺失时 fail-loud。
-    expect(channel).toMatch(/export const DEFAULT_APP_ORIGIN_SCHEME = 'picoaide-app'/u)
+    expect(channel).toMatch(/export const DEFAULT_APP_ORIGIN_SCHEME = 'zeokeel-app'/u)
     expect(channel).toContain('resolveAppOriginScheme')
     const host = read('packages/host/wasm-apps-host/src/index.ts')
     // 宿主只读路由把同一个 config 值回给渲染层（不是自己重新推导）。
@@ -118,13 +118,13 @@ describe('应用源 scheme 参数化：三个终点同源（§10/§16.1）', () 
     expect(host).toContain('WASM_APP_CHANNEL_ROUTE')
     const client = read('packages/client/wasm-apps/src/client/channel-seam.ts')
     // 渲染层经该路由取值（L3 的消费面；路径字面量必须一致）。
-    expect(client).toContain('/api/pico/wasm-apps/channel')
+    expect(client).toContain('/api/zeokeel/wasm-apps/channel')
   })
 
   it('浏览器面按 surface 分流，且不含任何写死的渠道 scheme（CHN-3）', () => {
     for (const file of ['guard.ts', 'tools.ts', 'shell-pages.ts', 'credential-site.ts']) {
       const source = read(`packages/host/browser/src/${file}`)
-      expect(source, `${file} 不得写死渠道 scheme`).not.toMatch(/picoaide-app/u)
+      expect(source, `${file} 不得写死渠道 scheme`).not.toMatch(/zeokeel-app/u)
     }
     const guard = read('packages/host/browser/src/guard.ts')
     // 浏览器标签不得导航到应用 scheme（R2-P0-2）：默认 surface 是 browser-tab。
@@ -143,7 +143,7 @@ describe('异渠道深链事件名（J13）', () => {
   it('宿主广播名 === 客户端订阅名（逐字）', () => {
     const host = read('packages/host/wasm-apps-host/src/index.ts')
     const eventName = /export const WASM_APP_DEEP_LINK_FOREIGN_EVENT = '([^']+)'/u.exec(host)?.[1]
-    expect(eventName, '宿主必须导出 WASM_APP_DEEP_LINK_FOREIGN_EVENT 字面量').toBe('pico/wasm-app-deep-link-foreign')
+    expect(eventName, '宿主必须导出 WASM_APP_DEEP_LINK_FOREIGN_EVENT 字面量').toBe('zeokeel/wasm-app-deep-link-foreign')
     // 客户端半边（L3）必须订阅同一个字面量（它把它定义在 `app-toast.tsx`，
     // index.ts 引用常量 —— 两处都查，避免"定义对了但订阅了别的名字"）。
     const clientToast = read('packages/client/wasm-apps/src/client/app-toast.tsx')

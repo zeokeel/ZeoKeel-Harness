@@ -10,7 +10,7 @@
  *      看不到，而唯一有权续传的是他；
  *   3. 下架后的**智能体**本机行既不能更新也不能卸载：可移除判据只认
  *      `skill` 的 builtin/plugin 两渠道，于是 `uninstallEndpoint` 里那条
- *      `/api/pico/agent-presets/:name/uninstall`（宿主**早就有**）永远走不到。
+ *      `/api/zeokeel/agent-presets/:name/uninstall`（宿主**早就有**）永远走不到。
  *
  * 本文件钉住修好之后的行为，并同时钉住**没有被误伤**的两条既有口径：
  *  - 本机自制、从未上传过的行照旧出「上传」（不然"上传"这个产品动作就没了）；
@@ -107,7 +107,7 @@ describe('R5-B-1 已下架：员工面能表达出来，且动作与状态一致
     // 页脚给的是**真的可达**的那一个动作：本地卸载（既有端点）。
     expect(planCardAction(item)).toEqual({
       kind: 'uninstall',
-      endpoint: '/api/pico/shared-skills/r5b-skill/1.0.0/uninstall',
+      endpoint: '/api/zeokeel/shared-skills/r5b-skill/1.0.0/uninstall',
       localContent: false,
     })
   })
@@ -141,7 +141,7 @@ describe('R5-B-1 已下架：员工面能表达出来，且动作与状态一致
     expect(isDelistedItem(merged[0]!)).toBe(false)
     expect(planCardAction(merged[0]!)).toEqual({
       kind: 'uninstall',
-      endpoint: '/api/pico/shared-skills/codeql/1.0.0/uninstall',
+      endpoint: '/api/zeokeel/shared-skills/codeql/1.0.0/uninstall',
       localContent: false,
     })
   })
@@ -204,12 +204,12 @@ describe('R5-B-3 下架后的智能体：本机行也要走到 agent 卸载端�
     const item = localRow('agent', 'r5b-agent', 'org', { localOwnership: 'mine' })
     expect(planCardAction(item)).toEqual({
       kind: 'uninstall',
-      endpoint: '/api/pico/agent-presets/r5b-agent/uninstall',
+      endpoint: '/api/zeokeel/agent-presets/r5b-agent/uninstall',
       localContent: false,
     })
-    // 这条端点一直都在（宿主 auth-gate 的 `POST /api/pico/agent-presets/:name/uninstall`），
+    // 这条端点一直都在（宿主 auth-gate 的 `POST /api/zeokeel/agent-presets/:name/uninstall`），
     // 修前只是 `planCardAction` 在 local 分支里永远走不到它。
-    expect(uninstallEndpoint(item, '1.0.0')).toBe('/api/pico/agent-presets/r5b-agent/uninstall')
+    expect(uninstallEndpoint(item, '1.0.0')).toBe('/api/zeokeel/agent-presets/r5b-agent/uninstall')
   })
 
   it('对照：智能体仍有商店行时照旧出卸载（行为不变）', () => {
@@ -227,8 +227,8 @@ describe('R5-B-3 下架后的智能体：本机行也要走到 agent 卸载端�
       kind: 'skill', source: 'local', name: 'app-builder', displayName: '', version: '2.5.0',
       description: '', author: '', versions: [], isLocal: true, installedOrigin: 'store',
     }
-    expect(localRemoveEndpoint({ ...base, originChannel: 'builtin' })).toBe('/api/pico/skills/builtin/app-builder/uninstall')
-    expect(localRemoveEndpoint({ ...base, originChannel: 'plugin' })).toBe('/api/pico/skills/app-builder/uninstall')
+    expect(localRemoveEndpoint({ ...base, originChannel: 'builtin' })).toBe('/api/zeokeel/skills/builtin/app-builder/uninstall')
+    expect(localRemoveEndpoint({ ...base, originChannel: 'plugin' })).toBe('/api/zeokeel/skills/app-builder/uninstall')
     expect(localRemoveEndpoint({ ...base, originChannel: 'market' })).toBeUndefined()
     expect(localRemoveEndpoint({ ...base, kind: 'agent', originChannel: 'plugin' })).toBeUndefined()
   })

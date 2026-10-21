@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // errReportingRewriteTransport 把出站请求重写到 httptest 服务器,使用例
@@ -94,7 +94,7 @@ func TestErrorReportingTestEventSuccess(t *testing.T) {
 	if gotPath != "/api/1/store/" {
 		t.Fatalf("store path = %q, want /api/1/store/", gotPath)
 	}
-	if gotBody["message"] != "PicoAide 管理端连通性自检" {
+	if gotBody["message"] != "ZeoKeel 管理端连通性自检" {
 		t.Fatalf("event message = %v, want 管理端连通性自检", gotBody["message"])
 	}
 	if gotBody["level"] != "error" {

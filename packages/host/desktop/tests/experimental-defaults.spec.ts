@@ -39,9 +39,9 @@ describe('default experimental composition', () => {
 
   it('keeps the schedule owner-scoping patch markers in the installed package', () => {
     const source = read('node_modules/@deepseek-ai/dsh-schedule/lib/index.js')
-    expect(source).toContain('function picoOwner(ctx)')
+    expect(source).toContain('function zeokeelOwner(ctx)')
     expect(source).toContain('function ownerMatches(ctx, owner)')
-    expect(source).toContain('owner: picoOwner(this.ctx)')
+    expect(source).toContain('owner: zeokeelOwner(this.ctx)')
     expect(source).toContain('ownerMatches(this.ctx, task.owner)')
     expect(source).toContain('ownerMatches(this.ctx, current.owner)')
   })

@@ -18,7 +18,7 @@
  * 所以本插件取代上游的 `@deepseek-ai/dsh-llm-deepseek-api-key`（它的 `resolveAuth` 硬编码
  * `x-api-key`，对只认 Bearer 的网关必然 401，且没有任何换头的接缝），用同一份 Config 形状
  * 注册同一个 provider 路由 `deepseek-official`，把**会话令牌作为 Bearer** 交给请求。
- * 组装期 `cordis.patch.yml` 把上游那一行 `disabled` 掉并插入本行（id `picoaide-gateway-llm`）。
+ * 组装期 `cordis.patch.yml` 把上游那一行 `disabled` 掉并插入本行（id `zeokeel-gateway-llm`）。
  *
  * 令牌来源是 `credentials` 服务（`gateway-model.ts` 在会话变化时写入 `TOKEN_ENV`），
  * **不再**经过 `apiKeyEnv`：0.1.7 起 base `llm-deepseek` Config 里没有这个键（0.2.1-rc.2
@@ -79,7 +79,7 @@ export function normalizeGatewayEndpoint(value: string | undefined): string | un
  * 渠道包把网关放在自己的域名下时，`defaults.server_url` 就是 `serverURL`，因此这条推导
  * 天然覆盖"渠道自己的网关"；管理员把网关搬到**别的**主机属于需要显式声明的合法异址
  * （见本模块末尾的取舍说明）。
- * @param serverURL - `ctx.picoSession.getSession()?.serverURL`。
+ * @param serverURL - `ctx.zeokeelSession.getSession()?.serverURL`。
  * @returns 归一化的 `<serverURL>/v1`，会话缺席/地址非法时 `undefined`（= 拒绝）。
  */
 export function allowedGatewayEndpoint(serverURL: string | null | undefined): string | undefined {
@@ -153,7 +153,7 @@ export function apply(ctx: Context, config: Config): void {
   // 请求**不会**发出去 —— 缺令牌时是"没有请求"而不是"一个无凭据的请求"。
   const resolveAuth = async (connection: { baseURL?: string }): Promise<{ headers: Record<string, string> }> => {
     // 硬边界先于凭据解析：端点不对时**连令牌都不读**（读也不发，但少一次凭据面接触）。
-    const session = ctx.get('picoSession')?.getSession?.() ?? null
+    const session = ctx.get('zeokeelSession')?.getSession?.() ?? null
     const refusal = endpointMismatch(connection?.baseURL, allowedGatewayEndpoint(session?.serverURL))
     if (refusal !== undefined) throw new LlmError(refusal, ENDPOINT_MISMATCH_CODE)
     const hit = await ctx.credentials.resolve(ref)

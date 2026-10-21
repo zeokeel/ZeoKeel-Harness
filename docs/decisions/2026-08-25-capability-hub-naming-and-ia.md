@@ -2,7 +2,7 @@
 
 日期：2026-08-25　分支：master　状态：**已实施（Phase 1-3）**——Phase 4 远期
 
-> ⚠️ **后续变更（2026-09-21，底部并道改造）**：本文 §"单入口"里"新增 `CapabilityCenterTrigger` 并往 `sidebar.footer.action` 注册 id=`capability-center`(order=-1)"的**注册形态已被取代** —— 能力中心入口现在登记进 `@picoaide/dsh-foot-menu` 的 `picoFootMenu` 条目（`id: 'capability'`（= panel-surface 的 PanelId）、`order: -1`），`CapabilityCenterTrigger.tsx` 已删除。"单入口 + 两个维度"的信息架构结论不变。
+> ⚠️ **后续变更（2026-09-21，底部并道改造）**：本文 §"单入口"里"新增 `CapabilityCenterTrigger` 并往 `sidebar.footer.action` 注册 id=`capability-center`(order=-1)"的**注册形态已被取代** —— 能力中心入口现在登记进 `@zeokeel/dsh-foot-menu` 的 `zeokeelFootMenu` 条目（`id: 'capability'`（= panel-surface 的 PanelId）、`order: -1`），`CapabilityCenterTrigger.tsx` 已删除。"单入口 + 两个维度"的信息架构结论不变。
 
 ## 目标
 
@@ -88,17 +88,17 @@
 1. `locales.ts`：新增 `capability.*` 双语键（能力中心/我的/市场/组织/技能/智能体/`officialBadge`/`featuredBadge`/`viewVersions`…）；**旧 `skill.*`/`agent.*` 键保守保留**（AgentSharePanel 复用了 `skill.installedBadge`/`skill.cancel`，且 account 会话等键共用），待全部引用清除后再删。
 2. 单入口：新增 `CapabilityCenterTrigger`，`sidebar.footer.action` 注册 id=`capability-center`（order=-1）；移除 `skill-center`、`agent-share` 两个注册；`dsh-panel-activate` 改用 `capability-center`。删除 `SkillCenterTrigger.tsx` / `AgentShareTrigger.tsx`。
 3. `CapabilityCenterPanel` 以 `SkillCenterPanel` 卡片网格为骨架，插入 Agent 卡片类目；渲染逻辑收敛为统一 `CapabilityItem[]`（见 §六），`latestApprovedVersion` 泛化为按 `(kind, name)` 计算。
-4. **补齐能力不对称（现有缺陷）**：共享技能 host 代理已有 `POST /api/pico/shared-skills/:name/:version/uninstall`（auth-gate.ts:761），但 `SkillCenterPanel` 无卸载入口——合并时对齐 Agent 的卸载/确认卸载（走现有 confirm 条交互）。
+4. **补齐能力不对称（现有缺陷）**：共享技能 host 代理已有 `POST /api/zeokeel/shared-skills/:name/:version/uninstall`（auth-gate.ts:761），但 `SkillCenterPanel` 无卸载入口——合并时对齐 Agent 的卸载/确认卸载（走现有 confirm 条交互）。
 5. **修复 hasUpdate 误报（现有缺陷）**：`SkillCenterPanel.hasUpdate` 现只要存在 approved 行即提示更新（不比较版本大小，已装 2.0.0 会误导「更新到 v1.0.0」）；统一为「approved 最高版本 > 已装版本」才提示（复用项目内既有 semver 比较，无则抽 `compareVersions` 公共函数 + 单测）。
 6. **轮询与无障碍取更完善实现**：AgentSharePanel 的 30s 静默轮询（pending→approved/rejected 刷新）+ Tab focus trap 统一到新面板（SkillCenterPanel 两者皆无）。
-7. **同名校验与确认**：并发加载三个端点（`/api/pico/skills` + `/api/pico/shared-skills` + `/api/pico/agent-presets`，Promise.all 并行）时，安装前检测目标名冲突：磁盘/installed 已有同名 → 弹「将覆盖本地同名目录/已安装内容」确认；确认后携带 `?force=1` 重发（见 §六 409/CONFLICT 契约）。**⚠️ 实际未按此落地：宿主不读 `?force=1`，参数面已于 2026-09-19 从客户端删除，见 §九.1（R2-SK-5）。**
+7. **同名校验与确认**：并发加载三个端点（`/api/zeokeel/skills` + `/api/zeokeel/shared-skills` + `/api/zeokeel/agent-presets`，Promise.all 并行）时，安装前检测目标名冲突：磁盘/installed 已有同名 → 弹「将覆盖本地同名目录/已安装内容」确认；确认后携带 `?force=1` 重发（见 §六 409/CONFLICT 契约）。**⚠️ 实际未按此落地：宿主不读 `?force=1`，参数面已于 2026-09-19 从客户端删除，见 §九.1（R2-SK-5）。**
 8. **分区独立错误态**：一个端点失败仅该分区显示「加载失败+重试」，其他分区照常渲染（现状是整个面板 error+整体重试）。
 9. **文案同步**：`desktop/scripts/e2e-client.mjs:237/243` 硬断言「技能中心」与截图 marker `04-skills` 改为「能力中心」/新 marker；`skill-center-panel.spec.ts`、`agent-share-panel.spec.ts` 更新/合并为 `capability-center-panel.spec.ts`（含 `splitCatalog`/`latestApproved*`/`avatarColor`/`hasUpdate` 用例）。
 10. **设置页排查项**：07-marketplace.md 提到「设置页可管理建议安装」；该入口若在上游客户端则**不改**（上游只读约束，仅备注）；若在 enterprise 侧则跟随改名。
 
 ### Phase 2 服务端聚合面（facade，不动表结构 + 新增质量标记迁移）
 
-1. 员工侧：新增 `GET /api/client/v2/capabilities`（Bearer），聚合 `listVisible` 语义：`source=market` 走 marketplace 已授权清单、`source=org` 走 shared-skills + agent-presets 的已授权+自己的全部状态；响应统一 `CapabilityItem[]`；`installed`/`hasUpdate` 由 host 代理层（`/api/pico/capabilities`）合并本地状态（沿 `/api/pico/shared-skills` 现模式）。
+1. 员工侧：新增 `GET /api/client/v2/capabilities`（Bearer），聚合 `listVisible` 语义：`source=market` 走 marketplace 已授权清单、`source=org` 走 shared-skills + agent-presets 的已授权+自己的全部状态；响应统一 `CapabilityItem[]`；`installed`/`hasUpdate` 由 host 代理层（`/api/zeokeel/capabilities`）合并本地状态（沿 `/api/zeokeel/shared-skills` 现模式）。
 2. **组织库质量标记（新迁移 0037）**：`shared_skills` 与 `agent_presets` 各加 `quality TEXT NOT NULL DEFAULT ''`（`''`/`official`/`featured`，互斥）；授权表不动。管理端审核页在 approve 时可勾选「官方/精选」，并支持事后修改（新增 `PUT .../quality` 或并入现有编辑端点），审计动作 `shared_skill_qualify`/`agent_preset_qualify`（沿用 audit 90 天契约）。**注意 0037 必须同时落地 sqlite（migrations/）与 pg（migrations-pg/）两套迁移**。
 3. **安装冲突契约**：host 代理安装端点检测目标目录已存在且非同源 → 409 `{"error":{"code":"CONFLICT"}}`；客户端确认后带 `?force=1` 重试（服务端/host 放行，仍做归档安全校验）。市场与组织同名、与本地手工同名统一走此路径。**（未实现：宿主无 409/CONFLICT 与 force 分支，见 §九.1 / R2-SK-5）**
 4. 管理端：新增 `GET /api/server/admin/approvals?type=skill|agent|all&status=` 统一审批队列（内部复用两个域的 listAll + decide，**不复制审核逻辑**）；单资源 approve/reject/delete/grants 仍走各自原路由，避免破坏性重命名。
@@ -184,7 +184,7 @@ interface CapabilityItem {
 ### 实施记录（2026-08-25 完成 Phase 1-3）
 
 - **服务端**：0037 迁移（双后端 sqlite+pg）`shared_skills`/`agent_presets` 加 `quality`；serverstore 增加 `SetSharedSkillQuality`/`SetAgentPresetQuality`、`ValidSharedQuality`/`ValidAgentQuality`，approve 保留 quality、reject/pending 清空；两域 JSON 输出 quality；新增 `PUT /api/server/admin/{shared-skills,agent-presets}/:name/:version/quality`（qualify 审计）；新增 `server/internal/capabilities` 包（`/api/client/v2/capabilities` 员工聚合面 + `/api/server/admin/capabilities/approvals` 统一审批队列，`marketplace.API.AccessibleSkills` 导出复用）。
-- **host 代理**：`/api/pico/capabilities`（GET ?source=market|org|local）合并已安装/本地创作状态；保留原共享技能/Agent 安装/卸载端点。
+- **host 代理**：`/api/zeokeel/capabilities`（GET ?source=market|org|local）合并已安装/本地创作状态；保留原共享技能/Agent 安装/卸载端点。
 - **客户端**：`CapabilityCenterPanel`（三分区 my/market/org × 类型筛选 × 徽章（类型/来源/质量/状态）× 多版本归并·历史展开 × hasUpdate semver 修复 × 30s 轮询 × Tab focus trap × 分区独立错误态 × 同名确认框）；`CapabilityCenterTrigger` 单入口替换两个旧 trigger；删除 4 个旧面板/触发器文件+2 个旧单测；新增 `capability-center-panel.spec.ts`（compareVersions/hasUpdateFor/mergeItems/latestApprovedVersionByName/avatarColor）；e2e-client.mjs 更新「能力中心」。
 - **webadmin**：菜单「市场 · 技能」+「能力中心」（统一审批页 `Capabilities.tsx`，类型/状态筛选、官方/精选质量标记、approve/reject/delete 走原域端点、授权弹窗）；**2026-09 归一**：`Capabilities.tsx` 恢复承载共享技能+共享 Agent 统一审核（含类型/状态筛选、名称冲突列、下载/调用统计、按 kind 预览 SKILL.md/agent.cordis.yml），独立页 `SharedSkills.tsx`/`AgentPresets.tsx` 与其测试删除，`/shared-skills`、`/agent-presets` 路由与导航同步移除（原域 API 端点保留，供队列 base_path 引用）；服务端 `/api/server/admin/capabilities/approvals` 支持 `?status=all|pending|approved|rejected`（显式 status=all 才全量，缺省仅 pending）与 `?type=`，base_path/preview_path 修复为 `/api/server/admin` 前缀；新增 `Capabilities.test.tsx`。
 

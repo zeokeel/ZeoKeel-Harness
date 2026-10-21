@@ -2,13 +2,13 @@
 #
 # 把逐渠道的镜像包发布到更新服务器(R2)。
 #
-# 为什么是脚本而不是内联 YAML:`release.picoaide.com/<channel>/` 是**客户侧唯一**
+# 为什么是脚本而不是内联 YAML:`release.zeokeel.com/<channel>/` 是**客户侧唯一**
 # 的取包地址,这里的每一步出错都是静默的 —— 发到错目录、latest.json 少一个字段、
 # 保留策略删多/删少、缓存头给错(新版本不生效)。这些只能在发版时才暴露,所以
 # 逻辑必须能在本地用假的 `aws` 断言(见 scripts/verify-ci-scripts.mjs)。
 #
 # 布局(每个渠道一套,**互相独立**):
-#   <channel>/releases/<version>/picoaide-server-<version>-amd64.zip   (immutable)
+#   <channel>/releases/<version>/zeokeel-server-<version>-amd64.zip   (immutable)
 #   <channel>/releases/<version>/SHA256SUMS                            (immutable)
 #   <channel>/latest.json                                              (no-cache)
 #
@@ -44,14 +44,14 @@
 #                                  Release 本身仍应可用)
 #   R2_ENDPOINT                    覆盖端点(本地测试用;缺省按 account id 拼)
 #   VERSION                        版本(带不带 v 都接受)
-#   PUBLIC_URL_BASE                清单里 image_asset 的基址(缺省 release.picoaide.com)
+#   PUBLIC_URL_BASE                清单里 image_asset 的基址(缺省 release.zeokeel.com)
 #
 # 退出码:0 成功或按策略跳过;非 0 明确失败(缺文件/上传失败/**完整性校验不过**/
 #         清单写入失败)。
 set -euo pipefail
 
 # 公开日志里的品牌串脱敏:aws 失败信息会回显对象键。这里的 zip 名是中性的
-# (picoaide-server-<ver>-amd64.zip),但渠道目录/清单字段仍带渠道身份,且
+# (zeokeel-server-<ver>-amd64.zip),但渠道目录/清单字段仍带渠道身份,且
 # 调用点的掩码一旦漏登记就是一次泄漏 —— 统一走共享库(scripts/ci-brand-mask.sh)。
 # shellcheck source=scripts/ci-brand-mask.sh
 . "$(dirname "$0")/ci-brand-mask.sh"
@@ -169,7 +169,7 @@ if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${R2_BUCKET:-}" ]; then
 fi
 
 ENDPOINT="${R2_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
-PUBLIC_BASE="${PUBLIC_URL_BASE:-https://release.picoaide.com}"
+PUBLIC_BASE="${PUBLIC_URL_BASE:-https://release.zeokeel.com}"
 aws() { command aws --endpoint-url "$ENDPOINT" "$@"; }
 
 # base64(sha256(file)) —— S3/R2 的 `ChecksumSHA256` 是**摘要原始字节**的 base64,
@@ -437,7 +437,7 @@ while IFS= read -r channel; do
   # 脱敏库在上面的登记里装好了它的 EXIT trap ⇒ 现在把探测对象的收尾链上去。
   install_probe_exit_trap
 
-  zip="$BUNDLE/$channel/picoaide-server-${VER}-amd64.zip"
+  zip="$BUNDLE/$channel/zeokeel-server-${VER}-amd64.zip"
   sums="$BUNDLE/$channel/SHA256SUMS"
   if [ ! -f "$zip" ] || [ ! -f "$sums" ]; then
     echo "::error::渠道构建产物缺失(zip 或 SHA256SUMS)—— 拒绝发布不完整的版本" >&2
@@ -445,7 +445,7 @@ while IFS= read -r channel; do
   fi
 
   base="s3://${R2_BUCKET}/${channel}"
-  zip_key="${channel}/releases/${VER}/picoaide-server-${VER}-amd64.zip"
+  zip_key="${channel}/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
   sums_key="${channel}/releases/${VER}/SHA256SUMS"
 
   # 本地产物不自洽:SHA256SUMS 必须真的写着本包的 sha256。空文件/写错包名在客户侧表现
@@ -696,7 +696,7 @@ while IFS= read -r channel; do
   "server": {
     "version": "${VER}",
     "image_tag": "v${VER}",
-    "image_asset": "${PUBLIC_BASE}/${channel}/releases/${VER}/picoaide-server-${VER}-amd64.zip"
+    "image_asset": "${PUBLIC_BASE}/${channel}/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
   },
   "client": { "version": "${VER}" },
   "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

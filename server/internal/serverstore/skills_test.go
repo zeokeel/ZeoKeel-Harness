@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 func TestSkills(t *testing.T) {
@@ -16,7 +16,7 @@ func TestSkills(t *testing.T) {
 
 	id, err := AddSkill(db, &Skill{
 		Name: "demo", Version: "1.0.0", Description: "demo skill",
-		Author: "pico", Enabled: 1,
+		Author: "zeokeel", Enabled: 1,
 	})
 	if err != nil || id == 0 {
 		t.Fatalf("AddSkill: id=%d err=%v", id, err)

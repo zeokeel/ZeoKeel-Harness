@@ -46,7 +46,7 @@
 | --- | --- | --- |
 | `access=public` | 允许匿名浏览器访问 | **仅客户端内匿名可用**（不再是"公网任何人"） |
 | `access=login` / `whitelist` | 浏览器登录 + 换票 | **客户端注入员工身份**；浏览器入口关闭 |
-| 分享应用 | 发 `https://<app>.<基域>` 链接 | 发深链（`picoaide://` / 渠道 scheme）→ 在客户端打开 |
+| 分享应用 | 发 `https://<app>.<基域>` 链接 | 发深链（`zeokeel://` / 渠道 scheme）→ 在客户端打开 |
 | 浏览器换票链路 | 主路径 | **兼容模式**（由平台开关保留，默认关闭）；保留已落地的 fail-closed 加固作为安全网 |
 | 应用 CRUD/诊断/发布 | 已有（客户端内） | 不变 |
 
@@ -63,15 +63,15 @@
 ## 5. 深链必须渠道化（OEM/白标硬约束）
 
 **深链 scheme 不属于厂商，属于渠道**：`channel.json` 的 `desktop.deep_link_scheme` 是唯一真源
-（官方缺省 `picoaide`；品牌渠道各自在渠道包里声明（如 `example-harness`）；OEM 客户可自定义，
-甚至由客户方指定自己的 scheme）。任何地方**不得写死 `picoaide://`**。
+（官方缺省 `zeokeel`；品牌渠道各自在渠道包里声明（如 `example-harness`）；OEM 客户可自定义，
+甚至由客户方指定自己的 scheme）。任何地方**不得写死 `zeokeel://`**。
 
 现状（已核实，可直接复用）：
 
 - 服务端真源=`server/internal/channel` 的 `DeepLinkScheme()`（带缺省与畸形校验，遇非法回落官方），
   已被 OIDC 深链复用：`server/internal/serverauth/oidc.go:389` 生成 `<scheme>://auth?token=…`；
 - 客户端侧 scheme 随渠道包构建注入（桌面壳构造期注入 `DEEP_LINK_SCHEME`；企业侧由
-  `picoaide-session` 行 config 注入）。
+  `zeokeel-session` 行 config 注入）。
 
 因此本决策补充三条硬规则：
 

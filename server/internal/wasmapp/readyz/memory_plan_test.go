@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // 本文件是「内存四笔账改按部署档位计算」的回归（2026-09-18）。
@@ -106,7 +106,7 @@ func TestCheckStartupMemoryForCarriesProfile(t *testing.T) {
 	}
 	// hints/details 走 JSON 信封（Error() 只渲染 code+message），排障面要看它们。
 	body := err.JSON()
-	if !strings.Contains(body, "PICOAI_WASM_MEMORY_PROFILE") {
+	if !strings.Contains(body, "ZEOKEEL_WASM_MEMORY_PROFILE") {
 		t.Fatalf("错误应提示可用档位（环境变量名）：%s", body)
 	}
 	if !strings.Contains(body, `"profile":"default"`) {

@@ -3,11 +3,11 @@
  *
  * The single authority is `brands/official/logo.svg` (AGENTS.md: never
  * hand-draw, never copy geometry from memory). The desktop assembly does NOT
- * include `@picoaide/dsh-branding` (web-only), and client bundles must not
+ * include `@zeokeel/dsh-branding` (web-only), and client bundles must not
  * import another package's client code, so this package keeps its own parsed
  * copy — `tests/channel-geometry.spec.ts` parses the SVG and fails on any drift
  * (audit 2026-09-08 P2-39).
- * @module @picoaide/dsh-enterprise/channel-geometry
+ * @module @zeokeel/dsh-enterprise/channel-geometry
  */
 
 /** Canvas size of the authoritative artwork (square). */

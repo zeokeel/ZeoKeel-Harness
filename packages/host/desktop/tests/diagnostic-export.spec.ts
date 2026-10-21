@@ -173,7 +173,7 @@ describe('exportDiagnosticsZip', () => {
     // 宽松 umask 是默认环境:归档权限不能跟着 umask 走(adm-zip 会显式 chmod)。
     const previousUmask = process.umask(0o022)
     try {
-      const userData = join(root, 'never-launched', 'PicoAide Harness')
+      const userData = join(root, 'never-launched', 'ZeoKeel Harness')
       const archive = await exportDesktopDiagnostics(userData, {
         appVersion: APP_VERSION,
         sessionsDir: join(root, 'sessions'),

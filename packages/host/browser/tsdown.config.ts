@@ -1,18 +1,18 @@
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from '../../../scripts/platform-modules.mjs'
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-browser'
+const PACKAGE_NAME = '@zeokeel/dsh-browser'
 
 export default defineConfig([
   {
     name: PACKAGE_NAME,
     entry: {
       index: 'src/index.ts',
-      // surface seam（§16.1）：`@picoaide/dsh-wasm-apps-host` 反向依赖它注册/取得
+      // surface seam（§16.1）：`@zeokeel/dsh-wasm-apps-host` 反向依赖它注册/取得
       // 应用窗口 surface —— 单独一个入口，避免整个 runtime 被拖进那个包。
       surface: 'src/surface.ts',
       // 权限守卫 + 应用 scheme 请求闸门（§16.1）：应用窗口宿主经
-      // `@picoaide/dsh-browser/guard` 复用**同一份**实现（浏览器与应用窗口共用）。
+      // `@zeokeel/dsh-browser/guard` 复用**同一份**实现（浏览器与应用窗口共用）。
       guard: 'src/guard.ts',
     },
     outDir: 'lib',
@@ -31,10 +31,10 @@ export default defineConfig([
       // 可选依赖：`src/index.ts` 用 `createRequire` 惰性解析，包不在时不加载
       // （契约与 fail-closed 路径见 `src/connectors-contract.ts`）。留 external
       // 是**必须**的 —— 内联会让"连接器模块被关掉"这件事在构建期就变成硬失败。
-      '@picoaide/dsh-connectors/store',
+      '@zeokeel/dsh-connectors/store',
       // 数据根叶子包（静态 import）。留 external 让运行期解析到**同一份**实现
       // （与连接器/桌面共用），而不是在浏览器产物里内联第二份。
-      '@picoaide/dsh-host-home',
+      '@zeokeel/dsh-host-home',
       'electron',
       'node:crypto',
       'node:fs',

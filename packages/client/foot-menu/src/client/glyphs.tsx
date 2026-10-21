@@ -8,7 +8,7 @@
  * 新增条目时：id 与 panel-surface 的 PanelId 同名即可拿到对应图标；未登记的 id
  * 落到 {@link FALLBACK_GLYPH}（不是"没有图标"，而是"这个 id 还没有专属图形"）。
  *
- * @module @picoaide/dsh-foot-menu/client/glyphs
+ * @module @zeokeel/dsh-foot-menu/client/glyphs
  */
 
 import type { CSSProperties, ReactNode } from 'react'

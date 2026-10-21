@@ -82,7 +82,7 @@ function createHarness(platform: DesktopRuntime['platform'] = 'darwin'): PluginH
     microphone: undefined,
     locale: 'en',
     // native 文案(托盘/通知)的产品名:渠道构建下由 profile 组装成渠道名。
-    productName: 'PicoAide Harness',
+    productName: 'ZeoKeel Harness',
     updates: {
       isPackaged: false,
       canDownload: platform === 'darwin' || platform === 'win32',
@@ -156,7 +156,7 @@ function createHarness(platform: DesktopRuntime['platform'] = 'darwin'): PluginH
     emit,
   } as unknown as Context
   // 真实 runtime 的 setLocalePreference 会改 `runtime.locale`（同值早退）；
-  // `pico/locale-changed` 的发射条件依赖这个语义。
+  // `zeokeel/locale-changed` 的发射条件依赖这个语义。
   // `DesktopRuntime.locale` is readonly in the interface; the mock mutates it.
   setLocalePreference.mockImplementation((locale) => { (runtime as { locale: string }).locale = locale ?? 'en' })
   return {
@@ -202,8 +202,8 @@ describe('desktop Host plugin', () => {
       port: validated.port.get(),
       logLevel: validated.logLevel.get(),
     }).toEqual({
-      productName: 'PicoAide Harness',
-      windowTitle: 'PicoAide Harness',
+      productName: 'ZeoKeel Harness',
+      windowTitle: 'ZeoKeel Harness',
       port: 0,
       width: 1280,
       height: 840,
@@ -272,8 +272,8 @@ describe('desktop Host plugin', () => {
     expect(loaderAwait).not.toHaveBeenCalled()
     expect(harness.shell()).toEqual(expect.objectContaining({
       url: 'http://127.0.0.1:43120/?dsh-desktop-mode=advanced&dsh-desktop-platform=darwin',
-      productName: 'PicoAide Harness',
-      windowTitle: 'PicoAide Harness',
+      productName: 'ZeoKeel Harness',
+      windowTitle: 'ZeoKeel Harness',
       iconPath: expect.stringMatching(/\/build\/app-icon-mac\.png$/u),
       trayIcons: {
         templatePath: expect.stringMatching(/\/build\/tray-iconTemplate\.png$/u),
@@ -403,14 +403,14 @@ describe('desktop Host plugin', () => {
     harness.emit.mockClear()
 
     harness.notifyLocale('zh')
-    expect(harness.emit).toHaveBeenCalledWith('pico/locale-changed', 'zh')
+    expect(harness.emit).toHaveBeenCalledWith('zeokeel/locale-changed', 'zh')
 
     harness.emit.mockClear()
     harness.notifyLocale('zh')
     expect(harness.emit).not.toHaveBeenCalled()
 
     harness.notifyLocale('en')
-    expect(harness.emit).toHaveBeenCalledWith('pico/locale-changed', 'en')
+    expect(harness.emit).toHaveBeenCalledWith('zeokeel/locale-changed', 'en')
   })
 
   it('requires the desktop Web carrier to remain loopback-only', () => {

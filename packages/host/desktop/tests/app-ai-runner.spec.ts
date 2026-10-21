@@ -31,9 +31,9 @@ import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { afterEach, describe, expect, it } from 'vitest'
 import { APP_AI_PROMPT_SECTION, APP_AI_SYSTEM_PROMPT, createAppAiRunner } from '../src/app-ai-runner.ts'
 import { provideAppAiRunner } from '../src/app-ai-runner.ts'
-import { WASM_APPS_AI_RUNNER_SERVICE } from '@picoaide/dsh-wasm-apps-host'
+import { WASM_APPS_AI_RUNNER_SERVICE } from '@zeokeel/dsh-wasm-apps-host'
 import { readFileSync } from 'node:fs'
-import { hiddenSessionId, type AiChatTurnRunner } from '@picoaide/dsh-wasm-apps-host/ai-chat'
+import { hiddenSessionId, type AiChatTurnRunner } from '@zeokeel/dsh-wasm-apps-host/ai-chat'
 import { WAIT_BUDGETS } from './wait-budgets.ts'
 
 /** 一段文本回答的流（字符级 `text-delta`，便于断言增量顺序）。 */
@@ -353,7 +353,7 @@ describe('应用 AI 执行面（隐藏会话 + 仅对话）', () => {
   })
 
   it('导出面：平台提示与分段名是稳定的（客户端/宿主对拍用）', () => {
-    expect(APP_AI_PROMPT_SECTION).toBe('pico-app-ai')
+    expect(APP_AI_PROMPT_SECTION).toBe('zeokeel-app-ai')
     expect(APP_AI_SYSTEM_PROMPT).toContain('no tools')
   })
 })
@@ -377,7 +377,7 @@ describe('宿主接线（§21.2 步骤③ 的生产 provide；2026-09-20 独立�
     // 正对照：provide 之前必须取不到 —— 否则下面的断言可能因为别处已 provide 而恒真。
     expect(ctx.get(WASM_APPS_AI_RUNNER_SERVICE)).toBeUndefined()
 
-    const runner = provideAppAiRunner(ctx, { cwd: '/tmp/picoaide-app-ai-接线判据' })
+    const runner = provideAppAiRunner(ctx, { cwd: '/tmp/zeokeel-app-ai-接线判据' })
     expect(typeof runner.run).toBe('function')
     // 关键：**从 ctx 取回来的**就是被 provide 的那个对象（真实 provide/get 往返）。
     expect(ctx.get(WASM_APPS_AI_RUNNER_SERVICE)).toBe(runner)

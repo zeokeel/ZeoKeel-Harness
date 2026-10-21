@@ -19,7 +19,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
 )
 
 // startFileReaper 是回收器的装配接缝：生产恒为 llmgateway.StartFileReaper，

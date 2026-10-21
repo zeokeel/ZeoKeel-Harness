@@ -19,12 +19,12 @@
  *（仅脱敏列 / 每次调用写审计 / 可随时撤销），且**只有发布者本人**看得到
  *（`isOwner` 是必填 prop：默认关的能力不允许挂在一个"忘了传就默认可见"的开关上）。
  *
- * @module @picoaide/dsh-wasm-apps/client/DataBrowserPanel
+ * @module @zeokeel/dsh-wasm-apps/client/DataBrowserPanel
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
-import { PanelButton } from '@picoaide/dsh-panel-surface/client'
+import { PanelButton } from '@zeokeel/dsh-panel-surface/client'
 
 import {
   fetchAiRowsConsent,
@@ -159,13 +159,13 @@ export function DataBrowserPanel({ appId, isOwner, deps }: { appId: string, isOw
   }, [open, table, offset, unmask, loadRows])
 
   return (
-    <section className="pico-app-data" data-role="app-data" data-open={open ? 'true' : 'false'}>
+    <section className="zeokeel-app-data" data-role="app-data" data-open={open ? 'true' : 'false'}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <strong style={{ fontSize: 13 }}>{t('appCenter.dataTitle')}</strong>
         <PanelButton
           variant="ghost"
           size="sm"
-          className="pico-app-data-toggle"
+          className="zeokeel-app-data-toggle"
           onClick={() => { setOpen(previous => !previous) }}
         >
           {open ? t('appCenter.dataHide') : t('appCenter.dataShow')}
@@ -174,7 +174,7 @@ export function DataBrowserPanel({ appId, isOwner, deps }: { appId: string, isOw
           <PanelButton
             variant="ghost"
             size="sm"
-            className="pico-app-data-reload"
+            className="zeokeel-app-data-reload"
             onClick={() => { void loadSchema() }}
           >
             {t('appCenter.dataReload')}
@@ -211,7 +211,7 @@ export function DataBrowserPanel({ appId, isOwner, deps }: { appId: string, isOw
                 key={row.name}
                 variant={row.name === table ? 'primary' : 'ghost'}
                 size="sm"
-                className="pico-app-data-table"
+                className="zeokeel-app-data-table"
                 data-table={row.name}
                 disabled={row.skipped}
                 onClick={() => { setOffset(0); setTable(row.name) }}
@@ -234,7 +234,7 @@ export function DataBrowserPanel({ appId, isOwner, deps }: { appId: string, isOw
               <PanelButton
                 variant="ghost"
                 size="sm"
-                className="pico-app-data-prev"
+                className="zeokeel-app-data-prev"
                 disabled={rows.report.offset <= 0}
                 onClick={() => { setOffset(Math.max(0, rows.report.offset - PAGE_SIZE)) }}
               >
@@ -246,7 +246,7 @@ export function DataBrowserPanel({ appId, isOwner, deps }: { appId: string, isOw
               <PanelButton
                 variant="ghost"
                 size="sm"
-                className="pico-app-data-next"
+                className="zeokeel-app-data-next"
                 disabled={!rows.report.hasMore}
                 onClick={() => { setOffset(rows.report.offset + PAGE_SIZE) }}
               >
@@ -263,7 +263,7 @@ export function DataBrowserPanel({ appId, isOwner, deps }: { appId: string, isOw
                   <PanelButton
                     variant="ghost"
                     size="sm"
-                    className="pico-app-data-unmask"
+                    className="zeokeel-app-data-unmask"
                     onClick={() => { setUnmask(true) }}
                   >
                     {t('appCenter.dataUnmask')}
@@ -274,7 +274,7 @@ export function DataBrowserPanel({ appId, isOwner, deps }: { appId: string, isOw
                 <PanelButton
                   variant="ghost"
                   size="sm"
-                  className="pico-app-data-remask"
+                  className="zeokeel-app-data-remask"
                   onClick={() => { setUnmask(false) }}
                 >
                   {t('appCenter.dataRemask')}
@@ -311,7 +311,7 @@ function AiRowsConsentCard({ state, saving, failure, onEnable, onRevoke, onRetry
   const enabled = state.kind === 'ready' && state.enabled
   return (
     <div
-      className="pico-app-data-ai-consent"
+      className="zeokeel-app-data-ai-consent"
       data-role="ai-rows-consent"
       data-enabled={enabled ? 'true' : 'false'}
       style={{ marginTop: 8, fontSize: 12, lineHeight: '18px' }}
@@ -326,7 +326,7 @@ function AiRowsConsentCard({ state, saving, failure, onEnable, onRevoke, onRetry
       {state.kind === 'failed' && (
         <div data-role="ai-rows-consent-error">
           <p style={{ margin: 0 }}>{`${t('appCenter.aiRowsUnknown')}: ${state.failure.code}`}</p>
-          <PanelButton variant="ghost" size="sm" className="pico-app-data-ai-retry" onClick={onRetry}>
+          <PanelButton variant="ghost" size="sm" className="zeokeel-app-data-ai-retry" onClick={onRetry}>
             {t('appCenter.retry')}
           </PanelButton>
         </div>
@@ -342,12 +342,12 @@ function AiRowsConsentCard({ state, saving, failure, onEnable, onRevoke, onRetry
         <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
           {enabled
             ? (
-              <PanelButton variant="ghost" size="sm" className="pico-app-data-ai-revoke" disabled={saving} onClick={onRevoke}>
+              <PanelButton variant="ghost" size="sm" className="zeokeel-app-data-ai-revoke" disabled={saving} onClick={onRevoke}>
                 {t('appCenter.aiRowsRevoke')}
               </PanelButton>
               )
             : (
-              <PanelButton variant="ghost" size="sm" className="pico-app-data-ai-allow" disabled={saving} onClick={onEnable}>
+              <PanelButton variant="ghost" size="sm" className="zeokeel-app-data-ai-allow" disabled={saving} onClick={onEnable}>
                 {t('appCenter.aiRowsAllow')}
               </PanelButton>
               )}
@@ -424,7 +424,7 @@ function FailureBlock({ failure, role, onRetry }: { failure: PublishFailure, rol
           {failure.hints.map(hint => <li key={hint}>{hint}</li>)}
         </ul>
       )}
-      <PanelButton variant="ghost" size="sm" className="pico-app-data-retry" onClick={onRetry}>
+      <PanelButton variant="ghost" size="sm" className="zeokeel-app-data-retry" onClick={onRetry}>
         {t('appCenter.retry')}
       </PanelButton>
     </div>

@@ -44,7 +44,7 @@
 2. **续传**：`downloadDesktopUpdate` 把未完成的字节留在 `<name>.partial` 并写 `<name>.partial.json`（来源 URL、SHA-256、已收字节、ETag/Last-Modified）。重试时带 `Range` + `If-Range`；服务端回 206 且 `Content-Range` 起点与验证器一致才续，否则**关掉这份响应重新整份下载**（CDN 实测会忽略尾段 Range 并回 200 整份）。长度与清单声明一致时不再请求，直接按哈希确认后落地。
 3. **下载完成的安装包可复用**：`state.json` 记 `downloadedVersion/downloadedPath`；启动、换源、以及每次"发现可用版本"时先跑 `resolveUpdateInstaller`，按清单 SHA-256 + 平台魔数校验磁盘上的完成件，命中即进入**可安装**状态，不发第二次下载请求（只重新取一次清单确认哈希）。记录指向已装上/更旧的版本时清掉。
 4. **后台静默下载 → 下载完才提示**：检查到新版本直接开始传输（`Config.backgroundDownload`，缺省开），全程不弹对话框；下载完成、校验通过后由平台通报一次"已下载可安装"（`announceUpdateReady`，只通报不安装），真正的安装在用户点「安装更新」（设置-关于按钮 / 托盘菜单 / header 徽标）时执行（`installUpdate`）。Windows 启动下载好的 NSIS 并退出、macOS 打开 DMG、Linux 提示替换 AppImage——与既有交付口径一致。
-5. **客户端单源状态**：桌面 client 面用 `desktopUpdateService`（`ctx.provide`）提供**窗口级唯一**的快照 store（5 秒单轮询、引用相同时不通知、首个订阅者启动/最后一个订阅者停止）；侧边栏、设置-关于、header 徽标都 `useSyncExternalStore` 读它，动作入口也统一为 `act()`（已下载→POST 安装路由，否则→POST 检查路由）。跨包不 import（client bundle 各自独立），只按服务名 + 契约字段消费，与 `picoSession` 同一套做法。
+5. **客户端单源状态**：桌面 client 面用 `desktopUpdateService`（`ctx.provide`）提供**窗口级唯一**的快照 store（5 秒单轮询、引用相同时不通知、首个订阅者启动/最后一个订阅者停止）；侧边栏、设置-关于、header 徽标都 `useSyncExternalStore` 读它，动作入口也统一为 `act()`（已下载→POST 安装路由，否则→POST 检查路由）。跨包不 import（client bundle 各自独立），只按服务名 + 契约字段消费，与 `zeokeelSession` 同一套做法。
 6. **失败对用户可见**：`lastError` 的每个类别都有明确文案（网络不可达/校验不一致/格式不正确/服务端未配置对外地址/请先登录/缺少安装包）；侧边栏指示器在下载中与可安装时同样显示（橙点/绿点），不再只有"有新版本"才可见。
 
 ## 边界（不做）
@@ -61,7 +61,7 @@
 - `packages/host/desktop/tests/update-download-integration.spec.ts`：真实 HTTP 服务器（真 socket、真 206/`Content-Range`）—— 第一次写一半就 `socket.destroy()`，断言失败可重试且留下可续传残留；第二次带 `Range` 续传并落到通过哈希与魔数校验的完成件；第三次不再请求安装包。mock 的 `Response` 证明不了这一层。
 - `packages/host/desktop/tests/client-desktop-update.spec.ts`：12 例，覆盖单轮询/多订阅、同值不通知、路由 404 时保留快照、动作按状态分派到检查或安装路由、徽标三态与重试文案。
 - `packages/host/enterprise/tests/update-status-text.spec.ts`：4 例，钉住"可安装/下载中（含重试）/各类失败"的文案与按钮状态。
-- 相关门禁：`corepack yarn workspace dsh-plugin-desktop typecheck|test`、`corepack yarn workspace @picoaide/dsh-enterprise typecheck|test`。
+- 相关门禁：`corepack yarn workspace dsh-plugin-desktop typecheck|test`、`corepack yarn workspace @zeokeel/dsh-enterprise typecheck|test`。
 
 ## 修订（2026-09-23）：续传验证器解析错误与完成语义
 

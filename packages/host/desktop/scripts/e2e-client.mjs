@@ -1,5 +1,5 @@
 /**
- * PicoAide Harness client E2E automation.
+ * ZeoKeel Harness client E2E automation.
  *
  * One command: build mock gateway up, launch the packaged app (or dev main),
  * drive it over CDP, log in, assert every client surface, capture screenshots,
@@ -26,7 +26,7 @@ const PRODUCT_NAME = packagedProductName()
  *
  * 只用于"渠道构建下不得出现"这条反向断言 —— 官方构建里它就是合法文案。
  */
-const OFFICIAL_BRAND_NAME = 'PicoAide'
+const OFFICIAL_BRAND_NAME = 'ZeoKeel'
 
 /**
  * 上游厂商标识：**任何构建**（含官方）都不得出现在品牌面上。
@@ -200,8 +200,8 @@ async function clickLabel(cdp, label, waitMs = 2500) {
     if (!els.length && wanted === '设置') {
       // 0.2.1 图标化后的设置触发器：文本/aria-label 都可能不是「设置」。
       els = visibleButtons.filter(b => b.matches('button[aria-haspopup="dialog"]')
-        && !b.classList.contains('pico-account-row')
-        && !b.classList.contains('pico-foot-menu-trigger'))
+        && !b.classList.contains('zeokeel-account-row')
+        && !b.classList.contains('zeokeel-foot-menu-trigger'))
     }
     if (!els.length) return 'NOT_FOUND'
     els[0].click()
@@ -226,7 +226,7 @@ const VISIBLE_BOX = `((el) => { const r = el.getBoundingClientRect(); return r.w
  * 打开侧边栏底部的「更多」浮层（2026-09-21 并道改造）。
  *
  * 五个面板入口（定时任务 / 能力中心 / 连接器 / 浏览器 / 应用中心）不再是常显行，
- * 都住在 `.pico-foot-menu-trigger` 点开的上浮层里 —— 点它们之前必须先开这一层，
+ * 都住在 `.zeokeel-foot-menu-trigger` 点开的上浮层里 —— 点它们之前必须先开这一层，
  * 否则 `clickLabel` 会以 NOT_FOUND 静默失败（浮层关闭时条目 `display:none`，
  * `offsetParent` 为 null，本来也点不到）。
  * @param cdp - CDP session.
@@ -235,7 +235,7 @@ const VISIBLE_BOX = `((el) => { const r = el.getBoundingClientRect(); return r.w
  */
 async function openFootMenu(cdp, waitMs = 700) {
   const clicked = await evalSafe(cdp, `(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row === null || row.offsetParent === null) return 'NOT_FOUND'
     if (row.getAttribute('aria-expanded') === 'true') return 'ALREADY_OPEN'
     row.click()
@@ -244,7 +244,7 @@ async function openFootMenu(cdp, waitMs = 700) {
   if (clicked === 'NOT_FOUND') return 'NOT_FOUND'
   await wait(waitMs)
   const open = await evalSafe(cdp, `(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row === null) return false
     const menu = document.getElementById(row.getAttribute('aria-controls') ?? '')
     return row.getAttribute('aria-expanded') === 'true'
@@ -257,7 +257,7 @@ async function openFootMenu(cdp, waitMs = 700) {
 /**
  * 点开「更多」浮层里的一个条目，并断言点完浮层关掉了。
  * @param cdp - CDP session.
- * @param label - 条目文案（`.pico-foot-menu-item` 的可见文本）。
+ * @param label - 条目文案（`.zeokeel-foot-menu-item` 的可见文本）。
  * @param waitMs - settle time after the click.
  * @returns `'CLICKED'`（且浮层已收起）/ `'NOT_FOUND'` / `'OPEN_FAILED'` / `'STILL_OPEN'`.
  */
@@ -265,7 +265,7 @@ async function clickFootMenuItem(cdp, label, waitMs = 2500) {
   const opened = await openFootMenu(cdp)
   if (opened !== 'OPENED' && opened !== 'ALREADY_OPEN') return opened === 'NOT_FOUND' ? 'NOT_FOUND' : 'OPEN_FAILED'
   const clicked = await evalSafe(cdp, `(() => {
-    const items = [...document.querySelectorAll('.pico-foot-menu-item')].filter(b => b.offsetParent)
+    const items = [...document.querySelectorAll('.zeokeel-foot-menu-item')].filter(b => b.offsetParent)
     const hit = items.find(b => (b.textContent ?? '').trim() === ${JSON.stringify(label)})
     if (hit === undefined) return 'NOT_FOUND'
     hit.click()
@@ -274,7 +274,7 @@ async function clickFootMenuItem(cdp, label, waitMs = 2500) {
   await wait(waitMs)
   if (clicked !== 'CLICKED') return clicked
   const closed = await evalSafe(cdp, `(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row === null) return false
     const menu = document.getElementById(row.getAttribute('aria-controls') ?? '')
     return row.getAttribute('aria-expanded') === 'false'
@@ -358,7 +358,7 @@ async function main() {
     child = spawn(appBinary, ['--no-sandbox', '--lang=zh-CN', `--remote-debugging-port=${String(cdpPort)}`], {
       env: {
         ...process.env,
-        PICOAI_ALLOW_DEBUG_SWITCHES: '1',
+        ZEOKEEL_ALLOW_DEBUG_SWITCHES: '1',
         HOME: HOME_DIR,
         DSH_HOME: HOME_DIR,
         XDG_CONFIG_HOME: join(workDir, 'cfg'),
@@ -389,7 +389,7 @@ async function main() {
   // "restoring session" page first (it re-requests the index after 1.2s), so
   // wait until the real login form (with a #f submit form) is present before
   // filling it — filling the restoring page would be wiped by its reload.
-  // auth-gate 登录页已是两步式(2026-09):f1 服务端地址 → /api/pico/auth/methods
+  // auth-gate 登录页已是两步式(2026-09):f1 服务端地址 → /api/zeokeel/auth/methods
   // 探测 → f2 本地表单。e2e 脚本原按旧单页 #f 断言,2026-09-05 同步两步流程。
   const step1Ready = await waitFor(cdp, `!!document.getElementById('f1') && !!document.getElementById('server')`, 15000, 300)
   if (!step1Ready) throw new Error('login form did not appear within 15s')
@@ -462,7 +462,7 @@ async function main() {
   // 任何**自动化护栏。fixture 里既硬编码生产 DSN、又缺 `error_reporting_enabled`，
   // error-reporting.ts 于是按 `=== true` 判定为关闭并 initSentry('') —— E2E 一路
   // 全绿，上报链路却从未执行过一次。现在 fixture 自报本地 mock DSN 且
-  // enabled=true / heartbeat=true，客户端 init 成功后会发一条带 `picoaide.heartbeat`
+  // enabled=true / heartbeat=true，客户端 init 成功后会发一条带 `zeokeel.heartbeat`
   // tag 的正向事件（`客户端错误上报链路自检 (<release>)`），打到 fixture 自己的
   // Sentry 摄取端点；这里断言它真的到了。
   //
@@ -499,7 +499,7 @@ async function main() {
   // （监听装在了隔离世界）。这条断言把那个缺口钉成行为级判据：
   //   ① 用 CDP 在**页面主世界**真的抛一个未捕获错误（`Runtime.evaluate` 默认
   //      执行在页面主世界；若改成隔离世界，本断言应当变红）；
-  //   ② 要求摄取账本里出现带 `picoaide.process=renderer` tag、且消息含**本次
+  //   ② 要求摄取账本里出现带 `zeokeel.process=renderer` tag、且消息含**本次
   //      一次性 marker** 的事件（marker 保证不是旧事件/心跳造成的假绿）。
   const rendererMarker = `E2E_RENDERER_UNCAUGHT_${Date.now()}`
   const rendererScheduled = await evalSafe(cdp, `(() => {
@@ -538,14 +538,14 @@ async function main() {
   //
   // 前置：先把它收起来（这个脚本会复用已在运行的 app，上一轮探针可能把它留在展开态）。
   await evalSafe(cdp, `(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row !== null && row.getAttribute('aria-expanded') === 'true') row.click()
     return true
   })()`)
   await wait(400)
   const lane = await evalSafe(cdp, `(() => {
     const visible = ${VISIBLE_BOX}
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     const menu = row === null ? null : document.getElementById(row.getAttribute('aria-controls') ?? '')
     const inPopover = (el) => menu !== null && menu.contains(el)
     const rowButtons = [...document.querySelectorAll('button')].filter(b => visible(b) && !inPopover(b))
@@ -555,16 +555,16 @@ async function main() {
       const text = (b.textContent ?? '').trim()
       return text !== '' ? text : (b.getAttribute('aria-label') ?? '').trim()
     }).filter(Boolean)
-    // 账户行按它自己的类名取（pico-account-row）：设置触发器同样带 aria-haspopup=dialog，
+    // 账户行按它自己的类名取（zeokeel-account-row）：设置触发器同样带 aria-haspopup=dialog，
     // 用属性选会把它当成账户行（2026-09-21 真机 e2e 实测）。
     // ⚠️ 注入到页面里的这段代码是**宿主模板串的文本**：这里不许出现反引号（那会提前
     // 结束模板串，语法错误只会在很远处报出来 —— 2026-09-21 踩过）。
-    const accountRow = [...document.querySelectorAll('button.pico-account-row')].find(visible) ?? null
+    const accountRow = [...document.querySelectorAll('button.zeokeel-account-row')].find(visible) ?? null
     // 0.2.1 的设置触发器是**图标按钮**（文案在 aria-label，且随语言变）。用它的
     // 结构锚点识别：aria-haspopup=dialog，且不是账户行 / 「更多」行。
     const settingsTrigger = rowButtons.find(b => b.matches('button[aria-haspopup="dialog"]')
-      && !b.classList.contains('pico-account-row')
-      && !b.classList.contains('pico-foot-menu-trigger')) ?? null
+      && !b.classList.contains('zeokeel-account-row')
+      && !b.classList.contains('zeokeel-foot-menu-trigger')) ?? null
     // 0.2.1 起设置入口由账户 launcher 承载（settings.launcher slot）：不再有独立
     // 的「设置」按钮，设置项在账户菜单里。判据接受这条入口，但仍要求它真实可见。
     const settingsLauncher = rowButtons.find(b => b.getAttribute('aria-haspopup') === 'menu'
@@ -597,7 +597,7 @@ async function main() {
     laneOk, `lane=${JSON.stringify(lane)}`)
   // 展开一次、合上一次：浮层真的能开，「更多」行是"点得到的那一行"。
   const laneOpened = await openFootMenu(cdp)
-  const laneItems = await evalSafe(cdp, `[...document.querySelectorAll('.pico-foot-menu-item')].filter(b => b.offsetParent).map(b => (b.textContent ?? '').trim())`)
+  const laneItems = await evalSafe(cdp, `[...document.querySelectorAll('.zeokeel-foot-menu-item')].filter(b => b.offsetParent).map(b => (b.textContent ?? '').trim())`)
   reportStep('「更多」浮层可展开且列出五个面板入口（自动化任务仍为第一项）',
     laneOpened === 'OPENED' && Array.isArray(laneItems)
       && laneItems.length >= 5
@@ -605,7 +605,7 @@ async function main() {
       && ['自动化任务', '能力中心', '连接器', '浏览器', '应用中心', '设置'].every(t => laneItems.includes(t)),
     `open=${laneOpened} items=${JSON.stringify(laneItems)}`)
   const menuSurface = await evalSafe(cdp, `(() => {
-    const menu = [...document.querySelectorAll('.pico-foot-menu-item')][0]?.closest('[role="menu"]')
+    const menu = [...document.querySelectorAll('.zeokeel-foot-menu-item')][0]?.closest('[role="menu"]')
     if (menu === undefined) return null
     const style = getComputedStyle(menu)
     return { background: style.backgroundColor, opacity: style.opacity }
@@ -618,7 +618,7 @@ async function main() {
   reportStep('「更多」浮层使用不透明实底（原生材质窗口不透视）', menuSurface !== null && menuSurface.opacity === '1' && menuOpaque,
     `menu=${JSON.stringify(menuSurface)}`)
   await screenshot(cdp, '05c-foot-menu')
-  await evalSafe(cdp, `(() => { const row = document.querySelector('.pico-foot-menu-trigger'); if (row !== null) row.click(); return true })()`)
+  await evalSafe(cdp, `(() => { const row = document.querySelector('.zeokeel-foot-menu-trigger'); if (row !== null) row.click(); return true })()`)
   await wait(500)
 
   // 5.4 官方重复入口与账户菜单项的隐藏：插件/自动化任务的 sidebar.panellist 行、
@@ -691,7 +691,7 @@ async function main() {
   //     renderer 命中后经本路由请宿主执行。非 macOS 上宿主是 no-op，但"路由已注册 +
   //     页面持有写面证明"必须成立 —— 404（没注册）或 403（证明链断）都说明这条通道废了。
   const titleBar = await evalAsync(cdp, `(async () => {
-    const res = await fetch(${JSON.stringify('/api/pico/desktop/window/titlebar-double-click')}, {
+    const res = await fetch(${JSON.stringify('/api/zeokeel/desktop/window/titlebar-double-click')}, {
       method: 'POST', headers: { accept: 'application/json' },
     })
     return { status: res.status, body: await res.text() }
@@ -731,13 +731,13 @@ async function main() {
     })()`, 15000, 300)
     reportStep(`${item.label}面板占满中列（会话区已让位）`, tookOver, `panel=${item.id} click=${open}`)
     // 正文必须**真的能滚**（2026-09-21 用户报「能力中心不能往下翻页」）：根因是面板根
-    // 包装层没有高度 ⇒ `PanelPage` 的 height:100% 退化成 auto ⇒ `.pico-scroll` 拿到的是
+    // 包装层没有高度 ⇒ `PanelPage` 的 height:100% 退化成 auto ⇒ `.zeokeel-scroll` 拿到的是
     // **内容高度**，永远不溢出、永远没有滚动条，内容被容器裁掉。
-    // 判据必须是"注入超高内容后能滚"：只查 `.pico-scroll` 存在、只在 jsdom 里钉样式表
+    // 判据必须是"注入超高内容后能滚"：只查 `.zeokeel-scroll` 存在、只在 jsdom 里钉样式表
     // 字符串，都是假绿（前者在故障态下同样成立，后者量不到排版）。
     const scrollable = await evalSafe(cdp, `(() => {
       const view = document.querySelector('[data-dsh-panel-surface=' + JSON.stringify(${JSON.stringify(item.id)}) + ']')
-      const scroller = view === null ? null : view.querySelector('.pico-scroll')
+      const scroller = view === null ? null : view.querySelector('.zeokeel-scroll')
       if (view === null || scroller === null) return null
       const inner = scroller.firstElementChild
       const prev = inner === null ? null : inner.style.minHeight
@@ -980,7 +980,7 @@ async function main() {
   let usageProbe = null
   try {
     const probe = await cdp.send('Runtime.evaluate', {
-      expression: `fetch('/api/pico/account/usage').then(r=>r.json()).then(j=>({balance:j?.data?.balance_money ?? null, activated:j?.data?.balance_activated === true, enabled:j?.data?.balance_enabled === true}))`,
+      expression: `fetch('/api/zeokeel/account/usage').then(r=>r.json()).then(j=>({balance:j?.data?.balance_money ?? null, activated:j?.data?.balance_activated === true, enabled:j?.data?.balance_enabled === true}))`,
       returnByValue: true,
       awaitPromise: true,
     })
@@ -996,7 +996,7 @@ async function main() {
   // 选择器必须**按各自的稳定标记**取，不能用"第一个可见的 dialog"：
   //   - 设置触发器**自己也带** `aria-haspopup="dialog"`，而且它的 `[role="dialog"]` 与
   //     账户浮层同形 —— 设置模态还开着时，通用选择器取到的是「设置」；
-  //   - 账户行用 `button.pico-account-row`，账户浮层用 `[role="dialog"][aria-label="账户"]`
+  //   - 账户行用 `button.zeokeel-account-row`，账户浮层用 `[role="dialog"][aria-label="账户"]`
   //     （account-card 的 DOM 契约）。
   // 2026-09-21 真机 e2e 实测过这个坑：rowText="设置"、dialog="设置通用设置…"，两条断言
   // 全红而产品本身没问题。
@@ -1015,7 +1015,7 @@ async function main() {
   reportStep('账户步骤前置：设置模态已关闭（无可见 dialog）', settingsGone === true, `settingsGone=${settingsGone}`)
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false }).catch(() => {})
   await wait(600)
-  const ACCOUNT_ROW_SELECTOR = 'button.pico-account-row'
+  const ACCOUNT_ROW_SELECTOR = 'button.zeokeel-account-row'
   const ACCOUNT_DIALOG_SELECTOR = '[role="dialog"][aria-label="账户"]'
   const accountRowProbe = await evalSafe(cdp, `(() => {
     const visible = ${VISIBLE_BOX}
@@ -1132,7 +1132,7 @@ async function run() {
     await cleanup()
     const failed = results.filter(r => !r.ok)
     const lines = [
-      '# PicoAide Harness 客户端 E2E 报告',
+      '# ZeoKeel Harness 客户端 E2E 报告',
       '',
       `- 时间：${new Date().toISOString()}`,
       `- 应用：${appBinary}`,

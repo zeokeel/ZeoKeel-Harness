@@ -10,7 +10,7 @@ import {
   PanelPage,
   icons,
   type PanelTone,
-} from '@picoaide/dsh-panel-surface/client'
+} from '@zeokeel/dsh-panel-surface/client'
 import { PublishErrorBlock, PublishForm } from './PublishForm.tsx'
 import {
   openAppEntry,
@@ -80,14 +80,14 @@ import { t, tCount, type AppCenterKey } from './locales.ts'
  *  - **R36：不显示额度/用量**。额度唯一的入口是桌面客户端本来的账号卡；这一页只有
  *    名称 / 一句话说明 / 负责人 / 访问级别 / 当前版本。**不做安装语义**：应用点开即用
  *    （没有"装到本地"这一步），但它**只在客户端内**打开 —— 打开走本机路由
- *    `POST /api/pico/wasm-apps/open`，由宿主确保协议 handler 与分区就绪后让内置浏览器
+ *    `POST /api/zeokeel/wasm-apps/open`，由宿主确保协议 handler 与分区就绪后让内置浏览器
  *    加载 `<本安装的 app scheme>://<app_id>/`（冻结契约 2026-09-19 §4.5）。这一页没有入口链接、
  *    也没有系统浏览器兜底：应用不存在"可以贴进浏览器的地址"。
  *
  * 发布者本人（`is_owner`）额外拿到**作者自服务**那一组（R1-pm-1）：发新版、下架/上架、
  * 删除、诊断。三个判据：
  *
- *  - 每个动作都打**本机**路由（`/api/pico/apps/wasm/*`，宿主代理到服务端），由页面
+ *  - 每个动作都打**本机**路由（`/api/zeokeel/apps/wasm/*`，宿主代理到服务端），由页面
  *    上下文发起 —— 页面天然持有 `dsh-auth-*` 持有性证明，不需要任何新信任机制；
  *  - **行状态只由服务端返回的值更新**（`app.enabled` / `app.deleted`）：请求成功不等于
  *    状态变了（服务端会幂等返回 `changed:false`），乐观更新会把"我点了下架"说成
@@ -98,7 +98,7 @@ import { t, tCount, type AppCenterKey } from './locales.ts'
  * 冻结/解冻、导出、自省**不在这里**：宿主有路由，但那是管理动作，员工侧要不要暴露是
  * 产品决策（独立评审 R1-pm-1 的边界即"只做作者自服务那一组"）。
  *
- * @module @picoaide/dsh-wasm-apps/client/AppCenterPanel
+ * @module @zeokeel/dsh-wasm-apps/client/AppCenterPanel
  */
 
 /** 目录条目（服务端 `catalog` 的字段子集；未知字段一律忽略）。 */
@@ -325,7 +325,7 @@ const LOGIN_POLL_MS = 5000
  * 按可见性/权限/上下架的筛选（目录展示全部应用）。但**跳过必须是可诊断的**：
  * 字段改名（`visible`→`access` 那次就是）会让每一行都被跳过，面板那时显示的是
  * 空态"还没有可用的应用" —— 一个把契约漂移说成"你没有应用"的假答案。
- * @param payload - `GET /api/pico/apps/wasm` 的响应体。
+ * @param payload - `GET /api/zeokeel/apps/wasm` 的响应体。
  * @returns 条目 + 行数统计（结构不对时 `rows = 0`、`items` 为空）。
  */
 export function parseCatalogReport(payload: unknown): CatalogReport {
@@ -383,7 +383,7 @@ export function parseCatalogReport(payload: unknown): CatalogReport {
 
 /**
  * 解析目录载荷（{@link parseCatalogReport} 的条目部分）。
- * @param payload - `GET /api/pico/apps/wasm` 的响应体。
+ * @param payload - `GET /api/zeokeel/apps/wasm` 的响应体。
  * @returns 归一化后的条目；结构不对时返回空数组。
  */
 export function parseCatalog(payload: unknown): AppCenterItem[] {
@@ -466,11 +466,11 @@ export function openFailureEnvelope(failure: OpenFailure): PublishFailure {
 }
 
 /**
- * 面板外壳（返回出口 / 标题 / 工具条 / 滚动）由 `@picoaide/dsh-panel-surface`
+ * 面板外壳（返回出口 / 标题 / 工具条 / 滚动）由 `@zeokeel/dsh-panel-surface`
  * 的 `PanelPage` 提供 —— 2026-09-20 之前这里是一整块 `position:fixed` 的模态浮层，
  * 与「定时任务」中列整页是两套切换语义。现在四个面板同一套。
  *
- * 下面的样式只剩**卡片与正文**，几何在内联、颜色在共享样式表（`.pico-card` 等）。
+ * 下面的样式只剩**卡片与正文**，几何在内联、颜色在共享样式表（`.zeokeel-card` 等）。
  */
 
 /** 卡片外框（网格里的应用卡；纵向排布，动作条贴底）。 */
@@ -651,15 +651,15 @@ const NOTICE: React.CSSProperties = {
  * 应用中心面板（模态）。
  *
  * 视图（FIX-38 + F16）：**目录**（默认）/ **发布**（员工发布入口）/ **详情**
- * （打开次数 + 分享 + 应用 AI）。发布由页面上下文 `POST /api/pico/apps/wasm/publish`
+ * （打开次数 + 分享 + 应用 AI）。发布由页面上下文 `POST /api/zeokeel/apps/wasm/publish`
  * —— 页面天然持 `dsh-auth-*` 持有性证明，因此不需要任何新的信任机制；分片/续传/90 s
  * 预算全部复用宿主那一份编排。
  *
  * 挂载期取三样东西（各自**独立**失败，互不阻塞）：
- *  1. 目录（`GET /api/pico/apps/wasm`）——失败 ⇒ 错误/未登录态；
- *  2. 渠道参数（`GET /api/pico/wasm-apps/channel`，§16.1）——失败 ⇒ 分享入口**不渲染**
+ *  1. 目录（`GET /api/zeokeel/apps/wasm`）——失败 ⇒ 错误/未登录态；
+ *  2. 渠道参数（`GET /api/zeokeel/wasm-apps/channel`，§16.1）——失败 ⇒ 分享入口**不渲染**
  *     （fail-closed，§19 Q6），打开链路会自己再补一次取数；
- *  3. 身份（`GET /api/pico/auth/state`）——只为应用 AI 的"按用户×服务端×应用授权"
+ *  3. 身份（`GET /api/zeokeel/auth/state`）——只为应用 AI 的"按用户×服务端×应用授权"
  *     提供作用域（与宿主闸门逐段同源），拿不到就按未登录处理（授权不被记住，fail-closed）。
  *
  * @param props - `onClose` 由触发按钮提供（关闭时卸载面板）；其余为可注入依赖（测试用）。
@@ -675,7 +675,7 @@ export function AppCenterPanel({
   channelLoader?: () => Promise<AppChannel | null>
   /** 渠道取数的**分档结果**（测试注入失败原因；优先于 `channelLoader`）。 */
   channelResultLoader?: () => Promise<AppChannelResult>
-  /** 应用 AI 的身份取数（缺省 `/api/pico/auth/state`）；`null` = 未登录/缺段。 */
+  /** 应用 AI 的身份取数（缺省 `/api/zeokeel/auth/state`）；`null` = 未登录/缺段。 */
   identityLoader?: () => Promise<AppAiScope | null>
   /** 写剪贴板（缺省 `navigator.clipboard.writeText`；测试注入 spy）。 */
   writeClipboard?: (text: string) => Promise<void>
@@ -687,7 +687,7 @@ export function AppCenterPanel({
   dataDeps?: RequestDeps
   /** 「未登录时记住这次打开」的存储（缺省 `sessionStorage`）。 */
   intentStore?: OpenIntentStore | null
-  /** 登录态取数（缺省读本机 `/api/pico/auth/state`；测试注入假实现）。 */
+  /** 登录态取数（缺省读本机 `/api/zeokeel/auth/state`；测试注入假实现）。 */
   loginStateLoader?: () => Promise<boolean>
   /** 待继续打开的登录态轮询间隔（缺省 5s，与 auth-gate 的 tripwire 同节奏）。 */
   loginPollMs?: number
@@ -729,7 +729,7 @@ export function AppCenterPanel({
   const load = useCallback(async (): Promise<void> => {
     setState({ kind: 'loading' })
     try {
-      const response = await fetch('/api/pico/apps/wasm')
+      const response = await fetch('/api/zeokeel/apps/wasm')
       if (!response.ok) {
         // 非 2xx 时**必须解析响应体**（P1-5）：宿主/服务端给的是可执行的
         // `{error:{code,message,details,hints}}`（例如网关的 GATEWAY_UNAVAILABLE +
@@ -827,7 +827,7 @@ export function AppCenterPanel({
     return () => { cancelled = true }
   }, [identityLoader])
 
-  // Esc 由装载器统一处理（`@picoaide/dsh-panel-surface`：面板自身是激活态时关闭，
+  // Esc 由装载器统一处理（`@zeokeel/dsh-panel-surface`：面板自身是激活态时关闭，
   // 检测到内层模态时让位）。这里**不要**再注册一份：2026-09-21 真机审计发现这份
   // 重复的 document 级监听会把内层场景一起关掉 ——
   //   ① 在 `type="search"` 搜索框里按 Esc（浏览器本来会清空输入）会连面板一起关；
@@ -859,7 +859,7 @@ export function AppCenterPanel({
   }, [writeClipboard])
 
   /**
-   * 登录态取数（缺省读本机 `/api/pico/auth/state`）。
+   * 登录态取数（缺省读本机 `/api/zeokeel/auth/state`）。
    *
    * 复用 `app-ai.ts` 的身份解析：它返回 `null` 表示"未登录/拿不到（缺用户名或服务端
    * 地址）"，非空表示已登录。身份取不到时按**未登录**处理 —— 对"自动继续"来说，
@@ -1005,7 +1005,7 @@ export function AppCenterPanel({
   /**
    * 版本历史：只读，不改任何行状态（R1-pm-3）。
    *
-   * 与诊断共用同一条路径形状（`/api/pico/apps/wasm/:app_id/<后缀>`）：页面上下文发起，
+   * 与诊断共用同一条路径形状（`/api/zeokeel/apps/wasm/:app_id/<后缀>`）：页面上下文发起，
    * 宿主代理到服务端员工面；非发布者服务端一律 404，失败由行自己渲染信封。
    */
   const handleReleases = useCallback(
@@ -1014,7 +1014,7 @@ export function AppCenterPanel({
   )
 
   return (
-    <div className="pico-app-center" data-role="app-center-page">
+    <div className="zeokeel-app-center" data-role="app-center-page">
       <PanelPage
         icon={<icons.IconApps size={16} />}
         title={view === 'publish' ? t('appCenter.publishTitle') : t('appCenter.title')}
@@ -1027,7 +1027,7 @@ export function AppCenterPanel({
                 <PanelButton
                   variant="primary"
                   size="md"
-                  className="pico-app-center-publish"
+                  className="zeokeel-app-center-publish"
                   data-action="open-publish"
                   icon={<icons.IconPlus size={14} />}
                   aria-label={t('appCenter.publishAria')}
@@ -1245,7 +1245,7 @@ export function AppCenterBody({
           <IconTile size={46} radius={15} tone="warn"><icons.IconShield size={22} /></IconTile>
           <div data-role="signed-out-message" style={{ fontSize: 14, fontWeight: 600 }}>{t('appCenter.notLoggedIn')}</div>
           <div data-role="signed-out-hint">{t('appCenter.notLoggedInHint')}</div>
-          <PanelButton variant="secondary" size="md" className="pico-app-center-retry" icon={<icons.IconRefresh size={14} />} style={{ marginTop: 6 }} onClick={onRetry}>
+          <PanelButton variant="secondary" size="md" className="zeokeel-app-center-retry" icon={<icons.IconRefresh size={14} />} style={{ marginTop: 6 }} onClick={onRetry}>
             {t('appCenter.retry')}
           </PanelButton>
         </div>
@@ -1265,7 +1265,7 @@ export function AppCenterBody({
           {state.error.details !== undefined && state.error.details !== '' && (
             <pre style={{ ...DETAILS, textAlign: 'left' }} data-role="error-details">{state.error.details}</pre>
           )}
-          <PanelButton variant="secondary" size="md" className="pico-app-center-retry" icon={<icons.IconRefresh size={14} />} style={{ marginTop: 6 }} onClick={onRetry}>
+          <PanelButton variant="secondary" size="md" className="zeokeel-app-center-retry" icon={<icons.IconRefresh size={14} />} style={{ marginTop: 6 }} onClick={onRetry}>
             {t('appCenter.retry')}
           </PanelButton>
         </div>
@@ -1287,7 +1287,7 @@ export function AppCenterBody({
           <div style={{ fontSize: 14, fontWeight: 600 }}>{t('appCenter.empty')}</div>
           <div>{t('appCenter.emptyHint')}</div>
           {onPublish !== undefined && (
-            <PanelButton variant="primary" size="md" className="pico-app-center-empty-publish" icon={<icons.IconPlus size={14} />} style={{ marginTop: 6 }} onClick={onPublish}>
+            <PanelButton variant="primary" size="md" className="zeokeel-app-center-empty-publish" icon={<icons.IconPlus size={14} />} style={{ marginTop: 6 }} onClick={onPublish}>
               {t('appCenter.publish')}
             </PanelButton>
           )}
@@ -1320,7 +1320,7 @@ export function AppCenterBody({
             <PanelButton
               variant="secondary"
               size="md"
-              className="pico-app-center-clear-filters"
+              className="zeokeel-app-center-clear-filters"
               style={{ marginTop: 6 }}
               onClick={() => { onFilterChange(EMPTY_FILTER) }}
             >
@@ -1365,7 +1365,7 @@ export function AppCenterBody({
       )}
       {state.kind === 'ready' && remaining > 0 && onShowMore !== undefined && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-          <PanelButton variant="secondary" size="md" className="pico-app-center-show-more" onClick={onShowMore}>
+          <PanelButton variant="secondary" size="md" className="zeokeel-app-center-show-more" onClick={onShowMore}>
             {tCount('appCenter.showMore', remaining)}
           </PanelButton>
         </div>
@@ -1390,7 +1390,7 @@ export function CatalogToolbar({ filter, onFilterChange }: {
     <div style={{ ...PANEL_TOOLBAR, marginBottom: 14 }} data-role="catalog-toolbar">
       <input
         type="search"
-        className="pico-app-center-search"
+        className="zeokeel-app-center-search"
         style={PANEL_SEARCH}
         value={filter.query}
         placeholder={t('appCenter.searchPlaceholder')}
@@ -1398,10 +1398,10 @@ export function CatalogToolbar({ filter, onFilterChange }: {
         disabled={disabled}
         onChange={event => { onFilterChange?.({ ...filter, query: event.target.value }) }}
       />
-      <label className="pico-checkchip">
+      <label className="zeokeel-checkchip">
         <input
           type="checkbox"
-          className="pico-app-center-owned-only"
+          className="zeokeel-app-center-owned-only"
           checked={filter.ownedOnly}
           disabled={disabled}
           onChange={event => { onFilterChange?.({ ...filter, ownedOnly: event.target.checked }) }}
@@ -1418,13 +1418,13 @@ export function CatalogToolbar({ filter, onFilterChange }: {
  */
 export function OnboardingCard({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <Card style={CARD_BOX} className="pico-app-center-onboarding" data-role="catalog-onboarding" role="note">
+    <Card style={CARD_BOX} className="zeokeel-app-center-onboarding" data-role="catalog-onboarding" role="note">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <IconTile size={32} radius={10} tone="brand"><icons.IconInfo size={17} /></IconTile>
         <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600 }} data-role="onboarding-title">
           {t('appCenter.onboarding.title')}
         </div>
-        <PanelButton variant="ghost" size="sm" className="pico-app-center-onboarding-dismiss" onClick={onDismiss}>
+        <PanelButton variant="ghost" size="sm" className="zeokeel-app-center-onboarding-dismiss" onClick={onDismiss}>
           {t('appCenter.onboarding.dismiss')}
         </PanelButton>
       </div>
@@ -1476,8 +1476,8 @@ export function AppDetailView({
   const [copyFailed, setCopyFailed] = useState(false)
   const link = appShareLink(item.appId)
   return (
-    <div className="pico-app-detail" data-role="app-detail" data-app-id={item.appId}>
-      <PanelButton variant="ghost" size="sm" className="pico-app-center-back" icon={<icons.IconBack size={14} />} onClick={onBack}>
+    <div className="zeokeel-app-detail" data-role="app-detail" data-app-id={item.appId}>
+      <PanelButton variant="ghost" size="sm" className="zeokeel-app-center-back" icon={<icons.IconBack size={14} />} onClick={onBack}>
         {t('appCenter.backToCatalog')}
       </PanelButton>
       <h3 style={{ ...ROW_TITLE, whiteSpace: 'normal', marginTop: 8 }} data-role="detail-title">{item.title}</h3>
@@ -1526,7 +1526,7 @@ export function AppDetailView({
         <PanelButton
           variant="primary"
           size="lg"
-          className="pico-app-center-open"
+          className="zeokeel-app-center-open"
           data-action="open-app"
           icon={<icons.IconExternal size={14} />}
           disabled={!item.enabled || opening}
@@ -1543,7 +1543,7 @@ export function AppDetailView({
           <PanelButton
             variant="secondary"
             size="lg"
-            className="pico-app-center-copy-link"
+            className="zeokeel-app-center-copy-link"
             data-action="copy-link"
             icon={<icons.IconCopy size={14} />}
             aria-label={`${t('appCenter.copyLinkAria')} ${item.title}`}
@@ -1643,7 +1643,7 @@ type RowReleases =
  * 一行应用：名称 / 访问级别 / 当前版本 / 一句话说明 / 负责人 / 打开 /
  * （发布者本人）发新版 + 下架·上架 / **版本历史** / 诊断 / 删除。
  *
- * "打开"打的是**本机路由**（`POST /api/pico/wasm-apps/open`），成功即本机确认
+ * "打开"打的是**本机路由**（`POST /api/zeokeel/wasm-apps/open`），成功即本机确认
  * `<本安装的 app scheme>://<app_id>/` 已就绪；失败把 reason 渲染成**可读原因**（未登录 /
  * 应用不存在 / **被管理员冻结**（只读快照，数据保留）/ 平台拒绝 / 协议未就绪 /
  * 本机证明缺失 各自可辨，见 {@link openFailureEnvelope}）。
@@ -1766,8 +1766,8 @@ export function AppCenterRow({
   const canManage = item.isOwner
     && (onSetPublished !== undefined || onDelete !== undefined || onDiagnostics !== undefined
       || onReleases !== undefined || onSetFrozen !== undefined)
-  const diagnosticsPanelId = `pico-app-center-diagnostics-${item.appId}`
-  const releasesPanelId = `pico-app-center-releases-${item.appId}`
+  const diagnosticsPanelId = `zeokeel-app-center-diagnostics-${item.appId}`
+  const releasesPanelId = `zeokeel-app-center-releases-${item.appId}`
 
   /** 执行上下架：只认服务端返回的 `enabled`（回调里已写回行状态）。 */
   const runSetPublished = async (enabled: boolean): Promise<void> => {
@@ -1841,7 +1841,7 @@ export function AppCenterRow({
   }
 
   return (
-    <Card interactive muted={!item.enabled || item.frozen} style={CARD} className="pico-app-center-card">
+    <Card interactive muted={!item.enabled || item.frozen} style={CARD} className="zeokeel-app-center-card">
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, minWidth: 0 }}>
         <IconTile
           size={40}
@@ -1857,7 +1857,7 @@ export function AppCenterRow({
               : (
                   <button
                     type="button"
-                    className="pico-app-center-detail"
+                    className="zeokeel-app-center-detail"
                     data-action="open-detail"
                     style={{ ...ROW_TITLE, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', maxWidth: '100%' }}
                     title={item.title}
@@ -1867,29 +1867,29 @@ export function AppCenterRow({
                     {item.title}
                   </button>
                 )}
-            <span className="pico-app-center-access" data-role="access-level" data-access={item.access} style={{ display: 'inline-flex' }}>
+            <span className="zeokeel-app-center-access" data-role="access-level" data-access={item.access} style={{ display: 'inline-flex' }}>
               <Chip tone={accessTone(item.access)}>{accessBadge(item.access)}</Chip>
             </span>
             {!item.enabled && (
-              <span className="pico-app-center-disabled" data-role="app-disabled" style={{ display: 'inline-flex' }}>
+              <span className="zeokeel-app-center-disabled" data-role="app-disabled" style={{ display: 'inline-flex' }}>
                 <Chip tone="neutral" plain>{t('appCenter.disabled')}</Chip>
               </span>
             )}
             {/* 冻结（R5-B-7）：形状与「已下架」同款（中性胶囊 + 卡片置灰），但**多一
                 个解冻入口**（见下面的动作条）—— 冻结不是终态，发布者本人能解开。 */}
             {item.frozen && (
-              <span className="pico-app-center-frozen" data-role="app-frozen" style={{ display: 'inline-flex' }}>
+              <span className="zeokeel-app-center-frozen" data-role="app-frozen" style={{ display: 'inline-flex' }}>
                 <Chip tone="neutral" plain>{t('appCenter.frozen')}</Chip>
               </span>
             )}
           </div>
           {item.description !== '' && (
-            <p style={ROW_DESC} className="pico-clamp-2" title={item.description}>{item.description}</p>
+            <p style={ROW_DESC} className="zeokeel-clamp-2" title={item.description}>{item.description}</p>
           )}
           <p style={ROW_META}>
             {/* 当前版本（P1-4）：发新版前必须能看见它 —— 新版本号要严格大于它。 */}
             {item.currentVersion !== '' && (
-              <span className="pico-app-center-current-version" data-role="current-version">
+              <span className="zeokeel-app-center-current-version" data-role="current-version">
                 {`${t('appCenter.currentVersion')}: ${item.currentVersion}`}
               </span>
             )}
@@ -1897,7 +1897,7 @@ export function AppCenterRow({
             {item.responsible !== '' && <span>{`${t('appCenter.responsible')}: ${item.responsible}`}</span>}
             {/* F16 的消费端：服务端回传过计数才显示（不编造、也不用别处的数字凑）。 */}
             {counts !== undefined && (
-              <span className="pico-app-center-open-count" data-role="open-count">
+              <span className="zeokeel-app-center-open-count" data-role="open-count">
                 {` · ${tCount('appCenter.opensToday', counts.todayPv)}`}
               </span>
             )}
@@ -1947,7 +1947,7 @@ export function AppCenterRow({
             <PanelButton
               variant="ghost"
               size="sm"
-              className="pico-app-center-publish-new"
+              className="zeokeel-app-center-publish-new"
               data-action="publish-new-version"
               icon={<icons.IconPlus size={13} />}
               // 下架状态下**保留按钮但禁用**：发新版不会恢复访问（仍是 410 Gone），
@@ -1966,7 +1966,7 @@ export function AppCenterRow({
                   <PanelButton
                     variant="danger"
                     size="sm"
-                    className="pico-app-center-take-offline"
+                    className="zeokeel-app-center-take-offline"
                     data-action="take-offline"
                     disabled={busy !== null}
                     aria-label={`${t('appCenter.takeOfflineAria')} ${item.title}`}
@@ -1979,7 +1979,7 @@ export function AppCenterRow({
                   <PanelButton
                     variant="ghost"
                     size="sm"
-                    className="pico-app-center-bring-online"
+                    className="zeokeel-app-center-bring-online"
                     data-action="bring-online"
                     disabled={busy !== null}
                     aria-label={`${t('appCenter.bringOnlineAria')} ${item.title}`}
@@ -1998,7 +1998,7 @@ export function AppCenterRow({
                   <PanelButton
                     variant="ghost"
                     size="sm"
-                    className="pico-app-center-unfreeze"
+                    className="zeokeel-app-center-unfreeze"
                     data-action="unfreeze"
                     disabled={busy !== null}
                     aria-label={`${t('appCenter.unfreezeAria')} ${item.title}`}
@@ -2011,7 +2011,7 @@ export function AppCenterRow({
                   <PanelButton
                     variant="danger"
                     size="sm"
-                    className="pico-app-center-freeze"
+                    className="zeokeel-app-center-freeze"
                     data-action="freeze"
                     disabled={busy !== null}
                     aria-label={`${t('appCenter.freezeAria')} ${item.title}`}
@@ -2025,7 +2025,7 @@ export function AppCenterRow({
             <PanelButton
               variant="ghost"
               size="sm"
-              className="pico-app-center-diagnostics-toggle"
+              className="zeokeel-app-center-diagnostics-toggle"
               data-action="diagnostics"
               aria-label={`${t('appCenter.diagnosticsAria')} ${item.title}`}
               aria-expanded={diagnostics.kind !== 'closed'}
@@ -2041,7 +2041,7 @@ export function AppCenterRow({
             <PanelButton
               variant="ghost"
               size="sm"
-              className="pico-app-center-releases-toggle"
+              className="zeokeel-app-center-releases-toggle"
               data-action="releases"
               aria-label={`${t('appCenter.releasesAria')} ${item.title}`}
               aria-expanded={releases.kind !== 'closed'}
@@ -2055,7 +2055,7 @@ export function AppCenterRow({
             <PanelButton
               variant="danger"
               size="sm"
-              className="pico-app-center-delete"
+              className="zeokeel-app-center-delete"
               data-action="delete"
               disabled={busy !== null}
               aria-label={`${t('appCenter.deleteAria')} ${item.title}`}
@@ -2076,7 +2076,7 @@ export function AppCenterRow({
           size="md"
           // 稳定钩子（自动化与真机探针用）：打开走本机路由，失败在行内显示可读原因。
           data-action="open-app"
-          className="pico-app-center-open"
+          className="zeokeel-app-center-open"
           icon={<icons.IconExternal size={14} />}
           onClick={open}
           disabled={!openable || opening}
@@ -2092,7 +2092,7 @@ export function AppCenterRow({
           <PanelButton
             variant="secondary"
             size="md"
-            className="pico-app-center-copy-link"
+            className="zeokeel-app-center-copy-link"
             data-action="copy-link"
             icon={<icons.IconCopy size={14} />}
             aria-label={`${t('appCenter.copyLinkAria')} ${item.title}`}
@@ -2113,7 +2113,7 @@ export function AppCenterRow({
               variant="danger"
               size="sm"
               ref={confirmRef}
-              className="pico-app-center-confirm-take-offline"
+              className="zeokeel-app-center-confirm-take-offline"
               data-action="confirm-take-offline"
               disabled={busy !== null}
               onClick={() => { void runSetPublished(false) }}
@@ -2123,7 +2123,7 @@ export function AppCenterRow({
             <PanelButton
               variant="secondary"
               size="sm"
-              className="pico-app-center-confirm-cancel"
+              className="zeokeel-app-center-confirm-cancel"
               data-action="cancel-confirm"
               disabled={busy !== null}
               onClick={() => { setConfirm('none') }}
@@ -2142,7 +2142,7 @@ export function AppCenterRow({
               variant="danger"
               size="sm"
               ref={confirmRef}
-              className="pico-app-center-confirm-freeze"
+              className="zeokeel-app-center-confirm-freeze"
               data-action="confirm-freeze"
               disabled={busy !== null}
               onClick={() => { void runSetFrozen(true) }}
@@ -2152,7 +2152,7 @@ export function AppCenterRow({
             <PanelButton
               variant="secondary"
               size="sm"
-              className="pico-app-center-confirm-cancel"
+              className="zeokeel-app-center-confirm-cancel"
               data-action="cancel-confirm"
               disabled={busy !== null}
               onClick={() => { setConfirm('none') }}
@@ -2171,7 +2171,7 @@ export function AppCenterRow({
               variant="danger"
               size="sm"
               ref={confirmRef}
-              className="pico-app-center-confirm-delete"
+              className="zeokeel-app-center-confirm-delete"
               data-action="confirm-delete"
               disabled={busy !== null}
               onClick={() => { void runDelete() }}
@@ -2181,7 +2181,7 @@ export function AppCenterRow({
             <PanelButton
               variant="secondary"
               size="sm"
-              className="pico-app-center-confirm-cancel"
+              className="zeokeel-app-center-confirm-cancel"
               data-action="cancel-confirm"
               disabled={busy !== null}
               onClick={() => { setConfirm('none') }}
@@ -2234,7 +2234,7 @@ export function AppCenterRow({
  */
 export function ReleasesBlock({ report }: { report: MyReleasesReport }) {
   return (
-    <div className="pico-app-center-releases">
+    <div className="zeokeel-app-center-releases">
       <div data-role="releases-summary">
         {`${t('appCenter.currentVersion')}: ${report.currentVersion === '' ? '—' : report.currentVersion}`}
         {` · ${t('appCenter.versionLabel')}: ${String(report.releases.length)}`}
@@ -2281,7 +2281,7 @@ export function ReleasesBlock({ report }: { report: MyReleasesReport }) {
  */
 export function DiagnosticsBlock({ report }: { report: DiagnosticsReport }) {
   return (
-    <div className="pico-app-center-diagnostics">
+    <div className="zeokeel-app-center-diagnostics">
       <div data-role="diagnostics-summary">
         {`${t('appCenter.diagnosticsWindow')}: ${String(report.windowMinutes)}`}
         {` · ${t('appCenter.diagnosticsCalls')}: ${String(report.total)}`}

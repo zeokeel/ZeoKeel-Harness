@@ -119,7 +119,7 @@ function harness(session: Session | null): Harness {
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? browserFence() : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -166,7 +166,7 @@ const DELISTED_MESSAGE = '该技能已下架，暂不能发布新版本：请先
 let home: string
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-delist-upload-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-delist-upload-'))
   await mkdir(join(home, 'skills', 'codeql'), { recursive: true })
   await writeFile(join(home, 'skills', 'codeql', 'SKILL.md'), SKILL_MD, 'utf8')
   await mkdir(join(home, '.agent-presets', 'preset-a'), { recursive: true })
@@ -185,7 +185,7 @@ describe('下架冻结(409 APP_DELISTED)：本机写面透传错误码，面板�
     const h = harness(SESSION)
     stubGatewayError(h, 409, 'APP_DELISTED', DELISTED_MESSAGE)
 
-    const skill = await postUpload(h, '/api/pico/shared-skills', '/api/pico/shared-skills/upload', '{"name":"codeql"}')
+    const skill = await postUpload(h, '/api/zeokeel/shared-skills', '/api/zeokeel/shared-skills/upload', '{"name":"codeql"}')
     expect(skill.code).toBe(409)
     // 判据必须是 code（409 同时是 NAME_TAKEN/VERSION_*/CONFLICT 的码）。
     expect(skill.body.code).toBe('APP_DELISTED')
@@ -196,7 +196,7 @@ describe('下架冻结(409 APP_DELISTED)：本机写面透传错误码，面板�
     expect(shown).toContain('重新上架')
 
     // 智能体面的代理是另一条分支（同一类缺陷的孪生），必须逐字同形。
-    const agent = await postUpload(h, '/api/pico/agent-presets', '/api/pico/agent-presets/upload', '{"name":"preset-a"}')
+    const agent = await postUpload(h, '/api/zeokeel/agent-presets', '/api/zeokeel/agent-presets/upload', '{"name":"preset-a"}')
     expect(agent.code).toBe(409)
     expect(agent.body.code).toBe('APP_DELISTED')
     expect(uploadFailureText({ code: agent.body.code, message: agent.body.error, status: agent.code }))
@@ -208,7 +208,7 @@ describe('下架冻结(409 APP_DELISTED)：本机写面透传错误码，面板�
     const takenMessage = '名称已被占用，无法上传：请更换名称或联系管理员'
     stubGatewayError(h, 409, 'NAME_TAKEN', takenMessage)
 
-    const res = await postUpload(h, '/api/pico/shared-skills', '/api/pico/shared-skills/upload', '{"name":"codeql"}')
+    const res = await postUpload(h, '/api/zeokeel/shared-skills', '/api/zeokeel/shared-skills/upload', '{"name":"codeql"}')
     expect(res.code).toBe(409)
     expect(res.body.code).toBe('NAME_TAKEN')
     const shown = uploadFailureText({ code: res.body.code, message: res.body.error, status: res.code })

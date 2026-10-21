@@ -8,7 +8,7 @@ describe('Windows assisted installer messages', () => {
       installing?: Record<string, string>
     }
 
-    expect(messages.installing?.zh_CN).toBe('PicoAide Harness 正在安装，可能需要几分钟；请保持此窗口打开。')
+    expect(messages.installing?.zh_CN).toBe('ZeoKeel Harness 正在安装，可能需要几分钟；请保持此窗口打开。')
     expect(messages.installing?.en).toContain('This may take several minutes')
   })
 })

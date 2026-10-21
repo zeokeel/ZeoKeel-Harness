@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // previewLimitDecl 匹配常量声明行:既覆盖 `const maxFilePreviewBytes = ...`,

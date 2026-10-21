@@ -1,7 +1,7 @@
 // refapp 是 WASM 应用平台的**参考实现**：一份可以整份抄走的 Go 应用骨架。
 //
 // 它同时承担三个角色（§4.2 / §5.5 / §9.3）：
-//  1. **导入白名单的唯一来源**：cmd/picoaide-wasm-imports-gen 真编译本包
+//  1. **导入白名单的唯一来源**：cmd/zeokeel-wasm-imports-gen 真编译本包
 //     （GOOS=wasip1 GOARCH=wasm）后 dump 导入集，生成 wasmmod/imports_gen.go——白名单不手写；
 //  2. **ABI 的活文档**：read_request → call_host ×N → write_response 三层，就是应用的全部流程；
 //  3. **skill 的 examples/ 基础**：作者与 AI 直接以本文件为模板改。
@@ -36,7 +36,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 )
 
 // protocolErrorCode 仅用于示例：把"协议层失败"（帧读不出来）与宿主返回的平台错误码区分开。
@@ -238,7 +238,7 @@ func callHosts(c *hostClient) []callRecord {
 	records = append(records, begin)
 	records = append(records, c.record(abi.MethodDBExec, abi.SQLParams{
 		SQL:  "INSERT INTO notes (title, body) VALUES (?, ?)",
-		Args: []any{"第一条", "hello picoaide"},
+		Args: []any{"第一条", "hello zeokeel"},
 	}))
 	records = append(records, c.record(abi.MethodDBQuery, abi.SQLParams{
 		SQL:  "SELECT title FROM notes",
@@ -257,7 +257,7 @@ func callHosts(c *hostClient) []callRecord {
 
 	// ⚠️ W4 删除：这里原来是 `ai.chat` 的演示调用（用使用者身份调平台 /v1 网关）。
 	// 服务端 wasm **不再具备任何 AI 能力**（总纲 §21.3）；应用要调模型必须走
-	// **客户端 AI loop**（§21.2）：应用**前端 JS** `fetch('/__picoaide/ai/chat', …)`
+	// **客户端 AI loop**（§21.2）：应用**前端 JS** `fetch('/__zeokeel/ai/chat', …)`
 	// 由宿主本地处理，拿到的结果再 POST 回应用、由 wasm 落库。
 	// 因此参考实现不再演示任何宿主 AI 调用 —— 六个原语是
 	// db.define / db.query / db.exec / db.tx / log / assets.read。
@@ -268,9 +268,9 @@ func callHosts(c *hostClient) []callRecord {
 		Message: "refapp 参考实现跑通了全部宿主调用",
 	}))
 
-	// assets.read：读随包静态资源（发布期从 wasm 自定义段抽出来的 picoaide.app.json）。
+	// assets.read：读随包静态资源（发布期从 wasm 自定义段抽出来的 zeokeel.app.json）。
 	records = append(records, c.record(abi.MethodAssetsRead, abi.AssetsReadParams{
-		Path: "picoaide.app.json",
+		Path: "zeokeel.app.json",
 	}))
 
 	return records

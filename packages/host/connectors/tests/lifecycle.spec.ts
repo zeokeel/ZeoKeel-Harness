@@ -61,12 +61,12 @@ function createHarness(connectors: ConnectorDef[], storeBaseDir: string): Harnes
     return fiber
   })
   const ctx = {
-    get: (name: string) => name === 'picoSession'
+    get: (name: string) => name === 'zeokeelSession'
       // No token/serverURL: syncServerDefs returns immediately (no network).
       ? { getSession: () => (username === null ? null : { username }) }
       : undefined,
     on: (event: string, handler: (next: unknown) => void) => {
-      if (event === 'pico/session-changed') sessionHandlers.push(handler)
+      if (event === 'zeokeel/session-changed') sessionHandlers.push(handler)
       return () => {}
     },
     plugin,
@@ -98,7 +98,7 @@ async function seedStore(dir: string, ids: string[]): Promise<void> {
 
 describe('connectors lifecycle serialization (P2-23)', () => {
   it('supersedes an older session change instead of restoring twice', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-lifecycle-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-lifecycle-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const harness = createHarness([def('demo', 'demo-server')], dir)
     // Let the boot restore settle before the credential exists (it registers
@@ -119,7 +119,7 @@ describe('connectors lifecycle serialization (P2-23)', () => {
   })
 
   it('disposes the previous registration when the same server key is registered again', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-rekey-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-rekey-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     // Two connectors exposing the SAME MCP server name: one restore pass
     // registers the key twice, so the old disposer must not be overwritten.

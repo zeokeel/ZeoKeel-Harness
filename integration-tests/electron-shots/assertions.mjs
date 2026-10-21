@@ -9,7 +9,7 @@
  *      的字符串判据。
  *   ② **陈旧夹具**:同一处断言钉的是已退役的旧品牌夹具 `Acme AI`,而当前实现里登录页
  *      品牌区渲染的是**服务端渠道内容**的 `login.display_name`,回落值是随包品牌的
- *      `PicoAide`(`packages/host/enterprise/src/auth-gate.ts:433`,兜底分支 `:410-416`,
+ *      `ZeoKeel`(`packages/host/enterprise/src/auth-gate.ts:433`,兜底分支 `:410-416`,
  *      随包默认值 `:667`)⇒ 该项在今天的正确环境里**永远不可能 PASS**。
  *
  * 处置:判据从脚本里抽到这张表,两边共用 ——
@@ -27,11 +27,11 @@
 import { Buffer } from 'node:buffer'
 
 /**
- * 登录页品牌名的**回落值** = 随包品牌的 `login.displayName`(官方渠道 `PicoAide`)。
+ * 登录页品牌名的**回落值** = 随包品牌的 `login.displayName`(官方渠道 `ZeoKeel`)。
  * 真源:`packages/host/enterprise/src/auth-gate.ts:667`(`BRAND.login.displayName`),
  * 渲染点同文件 `:433`(`login.display_name || BRAND.login.displayName`)。
  */
-export const CHANNEL_FALLBACK_BRAND = 'PicoAide'
+export const CHANNEL_FALLBACK_BRAND = 'ZeoKeel'
 
 /**
  * 期望看到的品牌名:渠道内容驱动(与服务端 `GET /api/client/v2/channel` 同源,而不是
@@ -43,8 +43,8 @@ export const CHANNEL_FALLBACK_BRAND = 'PicoAide'
  *      (`auth-gate.ts:433` 的 `login.display_name || BRAND.login.displayName`,而
  *      `BRAND.login.displayName` 来自渠道包 `copy.login_display_name`,见
  *      `desktop-channel.ts:398`);
- *   ③ 包内也没有(官方构建)⇒ `PicoAide`。
- * 只做 ①③ 会在渠道包上把期望值算成 `PicoAide` —— 那条腿此前在渠道包上**根本没被求值**
+ *   ③ 包内也没有(官方构建)⇒ `ZeoKeel`。
+ * 只做 ①③ 会在渠道包上把期望值算成 `ZeoKeel` —— 那条腿此前在渠道包上**根本没被求值**
  * (旧实现的 `if (step1)` 把它整条跳过了),所以这个洞一直没露出来。
  * @param channel - `/api/client/v2/channel` 的响应体(可缺省 = 服务端没给渠道内容)。
  * @param packageBrand - 随包品牌(`build/channel.json` 的 `copy.login_display_name`

@@ -3,7 +3,7 @@ title: 产品哲学
 description: 七条设计原则与它们在本仓库里的证据：一切皆插件、控制面在服务端、客户端与服务端绑定、默认拒绝、数据留在客户机器、AI 只提议人批准、上游固定版本，以及每条原则的代价。
 ---
 
-PicoAide Harness 不是「一堆功能的集合」，而是一组**有明确边界的设计取舍**。这一页把七条原则写清楚，并且每条都给出**本仓库里可核对的证据**（配置项、代码路径、可观察行为），最后列出这些取舍各自的**代价**——没有代价的取舍通常意味着还没想清楚。
+ZeoKeel Harness 不是「一堆功能的集合」，而是一组**有明确边界的设计取舍**。这一页把七条原则写清楚，并且每条都给出**本仓库里可核对的证据**（配置项、代码路径、可观察行为），最后列出这些取舍各自的**代价**——没有代价的取舍通常意味着还没想清楚。
 
 判断标准很简单：如果一条原则在代码里找不到落点，它就不该出现在这一页。
 
@@ -14,7 +14,7 @@ PicoAide Harness 不是「一堆功能的集合」，而是一组**有明确边�
 **证据**
 
 - 上游以固定版本放在 `deepseek-harness/`（git submodule），真源是仓库根的 `upstream.json`（`repository` / `commit` / `sourceVersion`）。
-- 桌面壳是一个**普通插件行**：`packages/host/desktop/cordis.patch.yml` 用 `- insert:` 声明 `desktop-shell`（`dsh-plugin-desktop`）以及 `desktop-diagnostics`、`desktop-updates`、`desktop-loop-notify` 等行；企业能力同样是行：`packages/host/enterprise/cordis.patch.yml` 声明 `picoaide-enterprise`、`picoaide-session`、`picoaide-auth-gate` 等。
+- 桌面壳是一个**普通插件行**：`packages/host/desktop/cordis.patch.yml` 用 `- insert:` 声明 `desktop-shell`（`dsh-plugin-desktop`）以及 `desktop-diagnostics`、`desktop-updates`、`desktop-loop-notify` 等行；企业能力同样是行：`packages/host/enterprise/cordis.patch.yml` 声明 `zeokeel-enterprise`、`zeokeel-session`、`zeokeel-auth-gate` 等。
 - 界面能力通过上游的 slot 机制注入，服务能力通过 service contract 提供；桌面对第三方公开的只有 `desktopRuntime.registerTrayItem` / `desktopActions` 这类明确契约（`packages/host/desktop/docs/plugin-services.md`），窗口、托盘、打包器内部**不是**第三方 API。
 - 因为桌面壳是插件，「替换上游某一行」这件事是配置级的：`packages/host/desktop/cordis.patch.yml` 里既有 `disabled: true`（关掉不需要的上游行），也有整行 `config` 覆盖。
 
@@ -48,7 +48,7 @@ PicoAide Harness 不是「一堆功能的集合」，而是一组**有明确边�
 
 **证据**
 
-- 更新源是**会话派生**的：`packages/host/desktop/src/updates.ts` 监听 `pico/session-changed`，从会话里取 `serverURL`；`serverURL === null`（未登录）时**没有更新源**，不做任何外发检查。换服务端会让在飞的检查与下载整份作废（代际计数），「已下载待安装」的安装包被撤回。
+- 更新源是**会话派生**的：`packages/host/desktop/src/updates.ts` 监听 `zeokeel/session-changed`，从会话里取 `serverURL`；`serverURL === null`（未登录）时**没有更新源**，不做任何外发检查。换服务端会让在飞的检查与下载整份作废（代际计数），「已下载待安装」的安装包被撤回。
 - 清单与安装包来自同一台服务端：`GET /api/client/v2/updates/manifest` 与 `/updates/client/*` 都在服务端（`server/internal/clientrelease/`），客户端**不访问更新服务器、不访问 GitHub**。
 - 渠道对账是硬判据：清单里的 `channel_id` 必须存在，且必须与服务端 `/api/client/v2/channel` 自报的渠道 id 精确相等；不一致直接判清单非法、不重试。
 - 模型链路同样绑定会话：`packages/host/enterprise/src/gateway-model.ts` 把 `baseURL` 设为 `${session.serverURL}/v1`；登录页、渠道内容、模型目录、能力中心与连接器目录都来自这台服务端。
@@ -71,7 +71,7 @@ PicoAide Harness 不是「一堆功能的集合」，而是一组**有明确边�
 - 本地写面要求**持有性证明**：`packages/host/desktop/src/write-proof.ts` 对非 GET 请求校验上游 `connection` 的 `dsh-auth-*` cookie，证明不足返回 403，证明机制缺席返回 503——绝不放行。
 - 连接器出站是 fail-closed 的：`packages/host/connectors/src/outbound.ts` 只允许 https（或回环 http），拒绝私网/链路本地/元数据地址，`redirect: 'manual'` 不跟随 3xx；域名解析不可验证（解析失败、超时、空答案）与解析到非公网**同等拒绝**，并把已校验的地址钉给连接使用，杜绝「判完了再解析一次」的 TOCTOU。
 - 渲染进程默认没有任何权限：主窗口的权限处理器对非本应用顶层文档一律拒绝，只对本安装回环源的顶层文档放行剪贴板（内嵌浏览器与应用窗口各有自己的权限面）。
-- 出站代理默认禁止：`packages/host/desktop/src/network-policy.ts` 忽略系统代理、代理环境变量、PAC 与 `--proxy-server`；退路只有渠道字段 `desktop.allow_system_proxy` 或**真实进程环境变量** `PICOAI_ALLOW_SYSTEM_PROXY=1`。
+- 出站代理默认禁止：`packages/host/desktop/src/network-policy.ts` 忽略系统代理、代理环境变量、PAC 与 `--proxy-server`；退路只有渠道字段 `desktop.allow_system_proxy` 或**真实进程环境变量** `ZEOKEEL_ALLOW_SYSTEM_PROXY=1`。
 - 服务端侧同样是默认拒绝：项目内容未授权不可见（404 不泄露存在性），管理面每条路由都要申报权限点，登录限流只对**失败**计数（成功即清空）。
 
 **代价**
@@ -86,7 +86,7 @@ PicoAide Harness 不是「一堆功能的集合」，而是一组**有明确边�
 
 **证据**
 
-- 本机数据只有一个权威目录：`packages/host/desktop/src/desktop-home.ts` 定义 Harness home（`~/.picoaide-harness`，`DSH_HOME` 优先，渠道不同则目录不同），会话、设置、工作区、技能都落在它下面；平台会检查它是否落在系统关键目录上，拒绝把会话令牌写进攻击者可读的位置。
+- 本机数据只有一个权威目录：`packages/host/desktop/src/desktop-home.ts` 定义 Harness home（`~/.zeokeel-harness`，`DSH_HOME` 优先，渠道不同则目录不同），会话、设置、工作区、技能都落在它下面；平台会检查它是否落在系统关键目录上，拒绝把会话令牌写进攻击者可读的位置。
 - 连接器凭据落在按（账号 + 服务端）分隔的作用域目录（`packages/host/connectors/src/user-scope.ts`），目录 `0700`、文件 `0600`、原子写入，防符号链接与路径逃逸。
 - 本地 Harness 服务只监听 `127.0.0.1`；会话正文、工作区文件、工具执行、沙箱状态、语音音频都在员工机器上。
 - 服务端只保存它必须知道的：账号、模型用量与费用、余额账本、内容与授权、审计事件。它**不接触**员工本机文件与会话日志。

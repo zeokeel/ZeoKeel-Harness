@@ -51,7 +51,7 @@ LDAP/OIDC 配置无效时对应 provider 不注册(启动即降级,不会崩)。
 
 ## 4. 管理端 session + CSRF
 
-- 登录:`POST /api/server/admin/login`,成功设置 Cookie `picoaide_session`(HttpOnly、SameSite=Lax、MaxAge=12h),session id 为随机值,存 `admin_sessions` 表。
+- 登录:`POST /api/server/admin/login`,成功设置 Cookie `zeokeel_session`(HttpOnly、SameSite=Lax、MaxAge=12h),session id 为随机值,存 `admin_sessions` 表。
 - 会话 TTL:`AdminSessionTTL = 12h` 硬上限 + 60min 空闲滑动到期(0046 起 `last_used_at`)。
 - **CSRF**:session 携带随机 `csrf_key`;登录响应返回 `X-CSRF-Token`(基于 csrf_key + 时间窗 HMAC,窗口 1h,±1 窗口容差)。所有写请求须带 `X-CSRF-Token` 头,`AdminAuth` 校验;读请求(GET)仅校验 cookie。
 - 登出:`POST /api/server/admin/logout` 删除 session 行。
@@ -59,10 +59,10 @@ LDAP/OIDC 配置无效时对应 provider 不注册(启动即降级,不会崩)。
 ## 5. 超管引导(--bootstrap-admin)
 
 ```bash
-PICOAI_ADMIN_PASSWORD=x bin/picoaide-server -data ./data --bootstrap-admin admin
+ZEOKEEL_ADMIN_PASSWORD=x bin/zeokeel-server -data ./data --bootstrap-admin admin
 ```
 
-- 仅在**没有任何管理员**时创建该用户(密码来自 `PICOAI_ADMIN_PASSWORD`,缺失则启动失败)。
+- 仅在**没有任何管理员**时创建该用户(密码来自 `ZEOKEEL_ADMIN_PASSWORD`,缺失则启动失败)。
 - 若用户名已存在但非管理员 → 启动失败(防提权)。
 - 首次启动后,后续启动该用户已存在,不再重复创建(重复传参无害)。
 
@@ -79,7 +79,7 @@ PICOAI_ADMIN_PASSWORD=x bin/picoaide-server -data ./data --bootstrap-admin admin
 > **升级说明（2026-09-22）**：网关限流的**默认值**由 60/min 改为 0（不限制），但改的是代码缺省，
 > **库里已保存的 `settings.gateway.rate_limit = 60` 不会被自动覆盖** —— 老库升级后仍按 60/min 限流。
 > 要按官方口径放开（官方只限账号级并发、不设请求速率上限），需在管理后台网关页把该值显式改为 0
-> 或清空。并发侧仍由 in-flight 闸门兜底（每用户 32，`PICOAI_GATEWAY_MAX_INFLIGHT_PER_USER` 可调）。
+> 或清空。并发侧仍由 in-flight 闸门兜底（每用户 32，`ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER` 可调）。
 
 ## 7. 用户模型
 

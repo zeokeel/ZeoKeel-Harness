@@ -30,14 +30,14 @@ import type { CronPermissionPresets, CronSessionHandle } from './host-executor.t
 // Type-only: declare the enterprise session event so `ctx.on` resolves it.
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'pico/session-changed'(session: { username?: string; token?: string; serverURL?: string } | null): void
+    'zeokeel/session-changed'(session: { username?: string; token?: string; serverURL?: string } | null): void
   }
 }
 
 /** Order of the announcement section within the tool-guidance band. */
 const SECTION_ORDER = 200
 
-export const name = 'pico-cron'
+export const name = 'zeokeel-cron'
 
 /** Required Host services (cordis inject waiting). */
 export const inject = ['systemPrompt', 'webServer', 'tools', 'sessionController', 'workspaceRegistry', 'agentPresets']
@@ -50,7 +50,7 @@ export const inject = ['systemPrompt', 'webServer', 'tools', 'sessionController'
  * {@link cronGuidance}, so what the model actually receives follows the host
  * locale resolved at each prompt assembly.
  */
-export const CRON_GUIDANCE = '本机已安装 dsh-cron 插件（PicoAide Harness 的定时任务调度器）：可创建定时任务（cron 表达式，分钟级精度），到点由 Host 进程执行——关闭窗口或浏览器页面后仍会执行；应用完全退出期间、以及任务所属账号未登录期间错过的触发点默认跳过（可在设置中开启补跑最近一次）；夏令时前拨时当地不存在的时刻（例如时钟从 02:00 直接跳到 03:00、02:30 这一分钟不存在）同样不触发，跳过记录会显示在任务面板上；每个定时任务执行时会新建一个智能体会话（可指定工作区、智能体预设与权限），并把任务提示词发给该会话；执行详情（会话、开始/结束时间、结果、错误）记录在任务下可随时查看。模型可直接调用 cron_create / cron_list / cron_set_enabled / cron_run / cron_remove 工具创建、查看、启停、触发和删除定时任务。用户提到「定时任务 / cron / 定时执行」时即指本插件，请据此协作。'
+export const CRON_GUIDANCE = '本机已安装 dsh-cron 插件（ZeoKeel Harness 的定时任务调度器）：可创建定时任务（cron 表达式，分钟级精度），到点由 Host 进程执行——关闭窗口或浏览器页面后仍会执行；应用完全退出期间、以及任务所属账号未登录期间错过的触发点默认跳过（可在设置中开启补跑最近一次）；夏令时前拨时当地不存在的时刻（例如时钟从 02:00 直接跳到 03:00、02:30 这一分钟不存在）同样不触发，跳过记录会显示在任务面板上；每个定时任务执行时会新建一个智能体会话（可指定工作区、智能体预设与权限），并把任务提示词发给该会话；执行详情（会话、开始/结束时间、结果、错误）记录在任务下可随时查看。模型可直接调用 cron_create / cron_list / cron_set_enabled / cron_run / cron_remove 工具创建、查看、启停、触发和删除定时任务。用户提到「定时任务 / cron / 定时执行」时即指本插件，请据此协作。'
 
 /** Settings namespace of the cron plugin (spelled here and in the browser half). */
 export const CRON_SETTINGS_NAMESPACE = 'cron' as SettingsNamespace
@@ -62,7 +62,7 @@ export const CRON_SETTINGS_NAMESPACE = 'cron' as SettingsNamespace
  * separate document; 0.1.7 makes it the profile entry id, which for a launcher
  * patch row is the row id from `cordis.patch.yml`.
  */
-export const CRON_SETTINGS_ROW_ID = 'pico-cron'
+export const CRON_SETTINGS_ROW_ID = 'zeokeel-cron'
 
 export interface Config {
   /** Master switch for the scheduler (host + browser surfaces). */
@@ -117,8 +117,8 @@ export function apply(ctx: Context, config: Config): void {
   // drives it; without the plugin the cron board stays legacy-visible.
   const currentUser = (): string | null => {
     try {
-      const pico = ctx.get('picoSession') as { getSession?: () => { username?: string } | null } | undefined
-      return pico?.getSession?.()?.username ?? null
+      const zeokeel = ctx.get('zeokeelSession') as { getSession?: () => { username?: string } | null } | undefined
+      return zeokeel?.getSession?.()?.username ?? null
     } catch {
       return null
     }
@@ -129,22 +129,22 @@ export function apply(ctx: Context, config: Config): void {
   // username now; otherwise the event will arrive later.
   const sampleSessionUsername = (): void => {
     try {
-      const pico = ctx.get('picoSession') as
+      const zeokeel = ctx.get('zeokeelSession') as
         | { isRestored?: () => boolean, getSession?: () => { username?: string } | null }
         | undefined
-      if (pico?.isRestored?.() === true) host.setUsername(pico.getSession?.()?.username ?? null)
+      if (zeokeel?.isRestored?.() === true) host.setUsername(zeokeel.getSession?.()?.username ?? null)
     } catch {
       // Keep the null/legacy scope; the event path still recovers later.
     }
   }
   host.setUsername(currentUser())
   sampleSessionUsername()
-  ctx.on('pico/session-changed', (next: unknown) => {
+  ctx.on('zeokeel/session-changed', (next: unknown) => {
     host.setUsername((next as { username?: string } | null)?.username ?? null)
   })
 
-  // The picoCronService surface sibling plugins inject.
-  const serviceDisposer = ctx.provide('picoCronService', host)
+  // The zeokeelCronService surface sibling plugins inject.
+  const serviceDisposer = ctx.provide('zeokeelCronService', host)
 
   ctx.effect(() => {
     const disposers: Array<() => void> = [serviceDisposer]

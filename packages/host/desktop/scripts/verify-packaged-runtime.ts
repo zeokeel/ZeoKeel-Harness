@@ -245,15 +245,15 @@ export const REQUIRED_PACKAGED_RUNTIME_ENTRIES = [
   // 平台内置技能（作者手册，2026-09-19 起叫 `app-builder`）**不在本清单里**，也不在包里：
   // 它的源目录已从本 vendored 包搬到服务端仓库的 `server/skills/app-builder/`，随服务端
   // 镜像发布、由员工在能力中心按需安装（`server/Dockerfile` 直接 COPY，客户端产物里
-  // 没有它）。曾经在这里逐条钉住的 11 个条目（`skills/picoaide-app-builder/**`）随搬迁
+  // 没有它）。曾经在这里逐条钉住的 11 个条目（`skills/zeokeel-app-builder/**`）随搬迁
   // 一并删除；`tests/verify-packaged-runtime.spec.ts` 的「清单必须覆盖 vendored 源目录
   // 每个文件、且不得留死条目」用例会自动要求这次同步 —— 源目录里没有它了，清单里也
   // 就不能再有它。要核对它随镜像分发，改看 scripts/ci-build-channel-images.sh 的
-  // verify_image（镜像内断言 /opt/picoaide/skills/app-builder/SKILL.md）。
+  // verify_image（镜像内断言 /opt/zeokeel/skills/app-builder/SKILL.md）。
   //
-  // 自有插件（@picoaide/*）必须随包（P2，2026-09-19）。它们**不在** `verify:closure` 的
+  // 自有插件（@zeokeel/*）必须随包（P2，2026-09-19）。它们**不在** `verify:closure` 的
   // 覆盖里：`scripts/runtime-closure.mjs:3` 的 `FIRST_PARTY_PREFIX = '@deepseek-ai/'` 只走
-  // 上游包，而 desktop 的 `dependencies` 里有 7 个 `@picoaide` 包 —— 也就是说这 5 个包
+  // 上游包，而 desktop 的 `dependencies` 里有 7 个 `@zeokeel` 包 —— 也就是说这 5 个包
   // （account-card / browser / cron / wasm-apps / wasm-apps-host）此前**没有任何门禁**保证
   // 它们进了 app.asar，只有 connectors / enterprise 在 REQUIRED_ASAR_EXPORTS 里被点名。
   // 同类事故已经发生过：`dsh-memory-evolve` 的 skills/ 被 `files` 排除规则静默丢出包
@@ -262,67 +262,67 @@ export const REQUIRED_PACKAGED_RUNTIME_ENTRIES = [
   // 路径形状依据（逐条落在磁盘上的真实产物上核对，2026-09-19）：
   //   - account-card / browser / cron 的这 5 条在 2026-09-16 打出的 v2.7.5-beta.1
   //     app.asar（`dist/linux-unpacked/resources/app.asar`）里逐条存在；
-  //   - `@picoaide/dsh-wasm-apps` 建立（2026-09-18）与 `@picoaide/dsh-wasm-apps-host`
+  //   - `@zeokeel/dsh-wasm-apps` 建立（2026-09-18）与 `@zeokeel/dsh-wasm-apps-host`
   //     建立（2026-09-19）都晚于那份产物 ⇒ 它们的条目**只**在磁盘上确认过
   //     （各自的 lib/ 产物 + package.json + cordis.patch.yml，与其余自有包的形状一致），
   //     **尚未经真实 app.asar 验证**：下一次打包后请复跑 verify-packaged-runtime
   //     （afterPack 会逐条断言）。wasm-apps-host 另有 `lib/electron-adapter.js`：
   //     它被 desktop `lib/main.js` 静态 import，缺它是**启动期**失败而非装配期。
   //   - 为什么这几条：`package.json` + `cordis.patch.yml` 是桌面 profile 在组装期用
-  //     `createRequire(...).resolve('@picoaide/<pkg>/package.json')` 拼绝对路径读的两份
+  //     `createRequire(...).resolve('@zeokeel/<pkg>/package.json')` 拼绝对路径读的两份
   //     （src/profile.ts），`lib/index.js` / `lib/client.js` / `lib/invariant.js` 是各包
   //     声明的入口；缺任何一条都表现为"那一行插件整块不装配"，且只在组装期可见。
   //   - 覆盖这几包的用例在 tests/verify-packaged-runtime.spec.ts 的
-  //     「every @picoaide dependency is asserted」：新增自有插件依赖而不补清单即红。
-  'node_modules/@picoaide/dsh-account-card/lib/index.js',
-  'node_modules/@picoaide/dsh-account-card/lib/client.js',
-  'node_modules/@picoaide/dsh-account-card/package.json',
-  'node_modules/@picoaide/dsh-account-card/cordis.patch.yml',
-  'node_modules/@picoaide/dsh-browser/lib/index.js',
-  'node_modules/@picoaide/dsh-browser/lib/client.js',
-  // surface seam（§16.1）：`@picoaide/dsh-wasm-apps-host/lib/index.js` **值导入**
+  //     「every @zeokeel dependency is asserted」：新增自有插件依赖而不补清单即红。
+  'node_modules/@zeokeel/dsh-account-card/lib/index.js',
+  'node_modules/@zeokeel/dsh-account-card/lib/client.js',
+  'node_modules/@zeokeel/dsh-account-card/package.json',
+  'node_modules/@zeokeel/dsh-account-card/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-browser/lib/index.js',
+  'node_modules/@zeokeel/dsh-browser/lib/client.js',
+  // surface seam（§16.1）：`@zeokeel/dsh-wasm-apps-host/lib/index.js` **值导入**
   // `BROWSER_SURFACE_SERVICE` 去取 browser 插件 provide 的 surface 注册表 —— 应用窗口
   // 就是经它注册成 `kind:'app'` 的（2026-09-21 审计 P0-1）。缺这个产物 ⇒ 打包版
   // 启动即 ERR_MODULE_NOT_FOUND（与 2026-09-20 的 app-proof 事故同一形态）。
-  'node_modules/@picoaide/dsh-browser/lib/surface.js',
+  'node_modules/@zeokeel/dsh-browser/lib/surface.js',
   // 同一条 seam 的另一半（2026-09-23 第三轮审计的反向 oracle 抓到）：应用窗口宿主
-  // `lib/electron-adapter.js` 值导入 `@picoaide/dsh-browser/guard`（权限守卫 +
+  // `lib/electron-adapter.js` 值导入 `@zeokeel/dsh-browser/guard`（权限守卫 +
   // 应用 scheme 请求闸门），而 `electron-adapter.js` 被 desktop 的 `lib/main.js`
   // 静态 import ⇒ 这条掉出产物是**启动期** ERR_MODULE_NOT_FOUND（整个应用起不来），
   // 与上面 `surface.js` 完全同族。它此前不在三张表的任何一张里 —— 只有"清单必须覆盖
   // 产物的真实 specifier"这条反向判据能看见它。
-  'node_modules/@picoaide/dsh-browser/lib/guard.js',
-  'node_modules/@picoaide/dsh-browser/package.json',
-  'node_modules/@picoaide/dsh-browser/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-browser/lib/guard.js',
+  'node_modules/@zeokeel/dsh-browser/package.json',
+  'node_modules/@zeokeel/dsh-browser/cordis.patch.yml',
   // 侧边栏底部「更多」行（2026-09-21 并道改造）：五个面板插件的底部条目都登记进它
-  // 提供的 `picoFootMenu` 服务，`lib/client.js` 就是那个注册了**唯一**底部座位占用者
+  // 提供的 `zeokeelFootMenu` 服务，`lib/client.js` 就是那个注册了**唯一**底部座位占用者
   // 的客户端 bundle。它**没有** `lib/invariant.js`（本包没有伴生不变量行），所以这里
   // 只列它真实声明的入口；`package.json` + `cordis.patch.yml` 仍是 profile 组装期
-  // `createRequire(...).resolve('@picoaide/dsh-foot-menu/package.json')` 要读的两份。
-  'node_modules/@picoaide/dsh-foot-menu/lib/index.js',
-  'node_modules/@picoaide/dsh-foot-menu/lib/client.js',
-  'node_modules/@picoaide/dsh-foot-menu/package.json',
-  'node_modules/@picoaide/dsh-foot-menu/cordis.patch.yml',
-  // 能力中心（技能商店）的客户端面（2026-10-13 从 `@picoaide/dsh-enterprise`
-  // 整块搬出）：`lib/index.js` 是 profile 行 `picoaide-capability-center` 的入口
+  // `createRequire(...).resolve('@zeokeel/dsh-foot-menu/package.json')` 要读的两份。
+  'node_modules/@zeokeel/dsh-foot-menu/lib/index.js',
+  'node_modules/@zeokeel/dsh-foot-menu/lib/client.js',
+  'node_modules/@zeokeel/dsh-foot-menu/package.json',
+  'node_modules/@zeokeel/dsh-foot-menu/cordis.patch.yml',
+  // 能力中心（技能商店）的客户端面（2026-10-13 从 `@zeokeel/dsh-enterprise`
+  // 整块搬出）：`lib/index.js` 是 profile 行 `zeokeel-capability-center` 的入口
   // （宿主半边是 no-op），`lib/client.js` 是那个装了整页面板与底部「更多」条目的
   // 客户端 bundle —— 缺它会被 `dsh-client-modules` 判成"declares dsh.client but
   // exports no ./client bundle"，界面上的技能商店整块消失。`package.json` +
   // `cordis.patch.yml` 是 profile 组装期按包名解析要读的两份（与其余自有包同形）。
   // 本包**没有** `lib/invariant.js`（没有伴生不变量行），所以只列真实声明的入口。
-  'node_modules/@picoaide/dsh-capability-center/lib/index.js',
-  'node_modules/@picoaide/dsh-capability-center/lib/client.js',
-  // 2026-10-13（P0-b）：技能遥测行随技能面从 `@picoaide/dsh-enterprise/skill-telemetry`
-  // 搬到本包的同名子路径（profile 行 `picoaide-skill-telemetry` 的名字随之改）。
+  'node_modules/@zeokeel/dsh-capability-center/lib/index.js',
+  'node_modules/@zeokeel/dsh-capability-center/lib/client.js',
+  // 2026-10-13（P0-b）：技能遥测行随技能面从 `@zeokeel/dsh-enterprise/skill-telemetry`
+  // 搬到本包的同名子路径（profile 行 `zeokeel-skill-telemetry` 的名字随之改）。
   // 它掉出 asar ⇒ 那一行 `failed to import loader entry`，而技能用量计数会**静默**
   // 变成"服务端一行都没有" —— 没有别的判据会看见。
-  'node_modules/@picoaide/dsh-capability-center/lib/skill-telemetry.js',
-  'node_modules/@picoaide/dsh-capability-center/package.json',
-  'node_modules/@picoaide/dsh-capability-center/cordis.patch.yml',
-  'node_modules/@picoaide/dsh-wasm-apps/lib/index.js',
-  'node_modules/@picoaide/dsh-wasm-apps/lib/client.js',
-  'node_modules/@picoaide/dsh-wasm-apps/package.json',
-  'node_modules/@picoaide/dsh-wasm-apps/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-capability-center/lib/skill-telemetry.js',
+  'node_modules/@zeokeel/dsh-capability-center/package.json',
+  'node_modules/@zeokeel/dsh-capability-center/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-wasm-apps/lib/index.js',
+  'node_modules/@zeokeel/dsh-wasm-apps/lib/client.js',
+  'node_modules/@zeokeel/dsh-wasm-apps/package.json',
+  'node_modules/@zeokeel/dsh-wasm-apps/cordis.patch.yml',
   // 客户端专属 WASM 应用 origin（2026-09-19，契约 §2）：宿主插件（协议 handler +
   // 本机打开路由）。三条 lib 产物都是真实入口：`lib/index.js` 由 profile 行加载，
   // `lib/invariant.js` 是 Cordis 伴生行，`lib/electron-adapter.js` 被 desktop 的
@@ -334,19 +334,19 @@ export const REQUIRED_PACKAGED_RUNTIME_ENTRIES = [
   // `electron` 被 enterprise 的 `session-service` 导入。`package.json` 是 profile 组装期
   // `createRequire().resolve` 的落点。它没有 `cordis.patch.yml` / `dsh.client` /
   // `./invariant`（刻意不是插件），所以只有这五条。
-  'node_modules/@picoaide/dsh-gateway-client/lib/index.js',
-  'node_modules/@picoaide/dsh-gateway-client/lib/auth.js',
-  'node_modules/@picoaide/dsh-gateway-client/lib/config.js',
-  'node_modules/@picoaide/dsh-gateway-client/lib/electron.js',
-  'node_modules/@picoaide/dsh-gateway-client/package.json',
-  'node_modules/@picoaide/dsh-wasm-apps-host/lib/index.js',
-  'node_modules/@picoaide/dsh-wasm-apps-host/lib/electron-adapter.js',
+  'node_modules/@zeokeel/dsh-gateway-client/lib/index.js',
+  'node_modules/@zeokeel/dsh-gateway-client/lib/auth.js',
+  'node_modules/@zeokeel/dsh-gateway-client/lib/config.js',
+  'node_modules/@zeokeel/dsh-gateway-client/lib/electron.js',
+  'node_modules/@zeokeel/dsh-gateway-client/package.json',
+  'node_modules/@zeokeel/dsh-wasm-apps-host/lib/index.js',
+  'node_modules/@zeokeel/dsh-wasm-apps-host/lib/electron-adapter.js',
   // 2026-09-20 补：`lib/main.js` 还**值导入** `…/app-proof`（安装密钥仓库）。
   // 此前该子路径既没被构建、也没进本清单 ⇒ 打包版启动报 ERR_MODULE_NOT_FOUND，
   // 而 afterPack 断言照样通过（清单不完整 = 门禁瞎）。同批补齐 tsdown 的 entry 列表。
-  'node_modules/@picoaide/dsh-wasm-apps-host/lib/app-proof.js',
-  'node_modules/@picoaide/dsh-wasm-apps-host/package.json',
-  'node_modules/@picoaide/dsh-wasm-apps-host/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-wasm-apps-host/lib/app-proof.js',
+  'node_modules/@zeokeel/dsh-wasm-apps-host/package.json',
+  'node_modules/@zeokeel/dsh-wasm-apps-host/cordis.patch.yml',
   // 宿主侧共享工具的**两个零依赖叶子包**（2026-09-20，构建环修复路线 A / A 扩展）。
   //
   // 为什么它们在产物里：desktop 的 `dependencies` 里有它们（`src/host-locale.ts` 与
@@ -356,20 +356,20 @@ export const REQUIRED_PACKAGED_RUNTIME_ENTRIES = [
   // **启动期** ERR_MODULE_NOT_FOUND，与 wasm-apps-host 的 electron-adapter 同类。
   // 路径形状与其余自有包一致（`main`/`exports["."]` 都指向 `lib/index.js`）——
   // 它们**不是** Cordis 插件，所以没有 `cordis.patch.yml` / `lib/invariant.js` 条目。
-  'node_modules/@picoaide/dsh-host-locale/lib/index.js',
+  'node_modules/@zeokeel/dsh-host-locale/lib/index.js',
   // 2026-09-23：`loopback.ts` 四份合一后，connectors / enterprise / browser / cron
   // 的 lib 都**运行期** import 这个**子路径**（tsdown 把 `dependencies` 当 external，
   // 所以各自的 `src/loopback.ts` re-export 不会被内联）。缺它就是**启动期**
   // ERR_MODULE_NOT_FOUND —— 正是本清单存在的理由，故逐条登记。
-  'node_modules/@picoaide/dsh-host-locale/lib/loopback.js',
-  // 2026-09-24（R13）：`pico/session-changed` 的订阅契约收口到叶子包后，
+  'node_modules/@zeokeel/dsh-host-locale/lib/loopback.js',
+  // 2026-09-24（R13）：`zeokeel/session-changed` 的订阅契约收口到叶子包后，
   // enterprise / wasm-apps-host / desktop 的 lib 都**运行期** import 这个子路径
   // （`session-service.ts`、`session.ts`、`app-ai-runner.ts`）⇒ 与 loopback 同理，
   // 缺它就是启动期 ERR_MODULE_NOT_FOUND（不是"某个插件不装配"）。
-  'node_modules/@picoaide/dsh-host-locale/lib/session-events.js',
-  'node_modules/@picoaide/dsh-host-locale/package.json',
-  'node_modules/@picoaide/dsh-host-home/lib/index.js',
-  'node_modules/@picoaide/dsh-host-home/package.json',
+  'node_modules/@zeokeel/dsh-host-locale/lib/session-events.js',
+  'node_modules/@zeokeel/dsh-host-locale/package.json',
+  'node_modules/@zeokeel/dsh-host-home/lib/index.js',
+  'node_modules/@zeokeel/dsh-host-home/package.json',
 ] as const
 
 /** Physical entries that Electron cannot load from ASAR (native binaries). */
@@ -431,7 +431,7 @@ export const PACKAGED_WEB_BRAND_ASSETS = [
  * 那条 map 排除同理只匹配「某个目录的直属文件」，根级的 map 全部漏过。
  * 实测 11 个已发布的正式/预发包都带着：
  *   - 桌面包自身源码目录（76 个文件）+ 测试目录 + 构建脚本目录，其中含发布/公证脚本
- *   - 各 `@picoaide/dsh-*` 的源码目录（工作区依赖是 symlink，electron-builder 会
+ *   - 各 `@zeokeel/dsh-*` 的源码目录（工作区依赖是 symlink，electron-builder 会
  *     **忽略子包自己的 `files` 字段**整体收编，`.spec.tsx` 也在内）
  *   - 33 个 sourcemap，`sourcesContent` 里内嵌**原始 TypeScript 源码**
  * 而 `webPreferences.devTools` 从没被覆写（Electron 默认可用）⇒ 客户开一次 DevTools
@@ -447,9 +447,9 @@ export const FORBIDDEN_PACKAGED_ARCHIVE_PATTERNS: ReadonlyArray<readonly [string
   ['desktop build scripts (scripts/**)', /^scripts\//u],
   ['desktop root TypeScript config/sources', /^[^/]+\.(ts|tsx|mts|cts)$/u],
   // 工作区包源码：electron-builder 不遵守子包 `files`，必须在这里兜底。
-  ['workspace package sources (@picoaide/*/src/**)', /^node_modules\/@picoaide\/[^/]+\/src\//u],
-  ['workspace package tests (@picoaide/*/tests/**)', /^node_modules\/@picoaide\/[^/]+\/tests\//u],
-  ['workspace package docs (@picoaide/*/docs/**)', /^node_modules\/@picoaide\/[^/]+\/docs\//u],
+  ['workspace package sources (@zeokeel/*/src/**)', /^node_modules\/@zeokeel\/[^/]+\/src\//u],
+  ['workspace package tests (@zeokeel/*/tests/**)', /^node_modules\/@zeokeel\/[^/]+\/tests\//u],
+  ['workspace package docs (@zeokeel/*/docs/**)', /^node_modules\/@zeokeel\/[^/]+\/docs\//u],
   // sourcemap 是**独立**泄漏面（`sourcesContent` = 原始 TS 源码），与上面的 .ts 分开判。
   ['sourcemaps', /\.map$/u],
   // 开发期产物。`.e2e-*` 是 E2E 的截图/缓存目录，实测每个 12~16 MiB。
@@ -1360,7 +1360,7 @@ function verifyWebBrandAssets(read: (entry: string) => string, where: string): v
  * import 都要求目标条目存在（含内容哈希命名的 chunk，rolldown 已把 specifier 写成真实
  * 文件名）。已知边界：`../` 形式与非 `.js` 扩展名（`.cjs`/`.mjs`）不在判据内 —— 真实产物
  * 里 `../build/channel.json` 这类路径**存在但不属于 lib**，收进来会变假红；`require(`
- * 形式同样不入判据（本仓产物是纯 ESM）。覆盖面只到**桌面自身的 `lib/**`**：`@picoaide/*`
+ * 形式同样不入判据（本仓产物是纯 ESM）。覆盖面只到**桌面自身的 `lib/**`**：`@zeokeel/*`
  * 插件包**包内**的内容哈希 chunk 不在本判据内（这里只登记它们的具名入口）。那一层的网是
  * `scripts/verify-profile-boot.mjs`（`yarn check` 内、真组合树 boot，缺 chunk 会抛）与
  * `e2e:client`（只在 Linux CI 跑）——**不要**把 `verify:closure` 当兜底：它只走 package.json
@@ -1395,17 +1395,17 @@ function assertRelativeImportsPresent(
   }
 }
 
-/** `@picoaide/*` 在归档/产物里的条目前缀（三张清单表都用这个写法）。 */
-const WORKSPACE_SCOPE_PREFIX = 'node_modules/@picoaide/'
+/** `@zeokeel/*` 在归档/产物里的条目前缀（三张清单表都用这个写法）。 */
+const WORKSPACE_SCOPE_PREFIX = 'node_modules/@zeokeel/'
 /**
  * 自有包的**包名前缀**（不带 `node_modules/`）。
  *
  * 与 {@link WORKSPACE_SCOPE_PREFIX} 是两个不同的东西，混用会静默失效：前者拼的是
- * **归档/产物内的路径**（`node_modules/@picoaide/x/…`），后者拼的是**包名**（`@picoaide/x`，
+ * **归档/产物内的路径**（`node_modules/@zeokeel/x/…`），后者拼的是**包名**（`@zeokeel/x`，
  * 也就是 `REQUIRED_WORKSPACE_PACKAGE_COVERAGE[*].package` 前面要补的那一段）。
  * 变体裁剪的清单里存的是**包名**，所以两处都要用到，不能只留一个。
  */
-const WORKSPACE_PACKAGE_PREFIX = '@picoaide/'
+const WORKSPACE_PACKAGE_PREFIX = '@zeokeel/'
 
 /** 反向 oracle 的定位标签（错误消息前缀）。 */
 const WORKSPACE_COVERAGE_LABEL = 'dsh-plugin-desktop: first-party workspace runtime surface'
@@ -1450,7 +1450,7 @@ export interface WorkspaceSurfaceCensus {
   readonly required: readonly WorkspaceRequiredEntry[]
   /** `<包名>` → 该包必须有条目数（供棘轮比对）。 */
   readonly perPackage: ReadonlyMap<string, readonly string[]>
-  /** 从产物里解析出的 `@picoaide/*` specifier 条数（防空转的前置量）。 */
+  /** 从产物里解析出的 `@zeokeel/*` specifier 条数（防空转的前置量）。 */
   readonly resolvedSpecifiers: number
   /**
    * 被功能模块变体裁掉的那些 specifier 条数（全开构建恒为 0）。
@@ -1478,7 +1478,7 @@ export interface WorkspaceSurfaceCensus {
  * 以及删产物入口。新增自有插件包而不登记这里 = 红。
  */
 export interface WorkspacePackageCoverageFloor {
-  /** 包名（`@picoaide/` 之后的部分）。 */
+  /** 包名（`@zeokeel/` 之后的部分）。 */
   readonly package: string
   /** 扁平必需清单里该包的条目数下限。 */
   readonly flattened: number
@@ -1553,10 +1553,10 @@ export const REQUIRED_WORKSPACE_PACKAGE_COVERAGE: readonly WorkspacePackageCover
 
 /**
  * 生效清单的总条数下限（只允许上调）—— 兜"整段删除"这类批量形态，
- * 以及 `@picoaide/*` 之外的条目（build/、lib/preload/、上游 node_modules）。
+ * 以及 `@zeokeel/*` 之外的条目（build/、lib/preload/、上游 node_modules）。
  *
  * 2026-09-29：122 → 129（语音输入默认开启，+7 条 voice-input 链）。
- * 2026-10-13：129 → 133（能力中心的客户端面搬进 `@picoaide/dsh-capability-center`，
+ * 2026-10-13：129 → 133（能力中心的客户端面搬进 `@zeokeel/dsh-capability-center`，
  * 该包 4 条扁平条目：`lib/index.js` / `lib/client.js` / `package.json` /
  * `cordis.patch.yml`）。enterprise 侧的条目一条未减 —— 搬走的是客户端面，不是它的
  * 宿主代理或基础面。
@@ -1564,7 +1564,7 @@ export const REQUIRED_WORKSPACE_PACKAGE_COVERAGE: readonly WorkspacePackageCover
  * `REQUIRED_ASAR_EXPORTS` 的增删**一样计入**本下限）：
  *   · 能力中心 +1（`lib/skill-telemetry.js` —— 技能遥测行随技能面搬入）；
  *   · 网关客户端叶子包 +5（`lib/{index,auth,config,electron}.js` + `package.json`）；
- *   · enterprise −1（`@picoaide/dsh-enterprise/skill-telemetry` 从导出表移除）；
+ *   · enterprise −1（`@zeokeel/dsh-enterprise/skill-telemetry` 从导出表移除）；
  *   · 应用宿主 +0（`app-routes.ts` 刻意**不**做成独立入口，它由 `lib/index.js` 的
  *     静态 import 带出来 —— 少一个只有本包可见的入口，就少一处"声明了却没构建"的
  *     风险面；本包 2026-09-20 正是在那一类上挂过）。
@@ -1578,17 +1578,17 @@ export const REQUIRED_WORKSPACE_PACKAGE_COVERAGE_MANIFEST_FLOOR = 155
 // 111 → 114（2026-09-23 合并 origin/master 的 #138）：那条线给必需清单加了
 // `@deepseek-ai/dsh-plugin-manager` 的 3 个 `lib/**` 条目，生效清单随之增长 3 条。
 // 棘轮语义是"贴住下限、只允许上调" ⇒ 合并后同步上调（删条目仍会打破等式）。
-// 114 → 116（R16B-01）：新增 `@picoaide/dsh-enterprise/session-identity`（account-card
+// 114 → 116（R16B-01）：新增 `@zeokeel/dsh-enterprise/session-identity`（account-card
 // 的余额快照身份章，跨包 specifier 真实存在）+ 它在 ASAR 导出表里的一条落点。
 // 116 → 121（2026-09-28，DSH 0.1.7-rc.2 升级）：预置面从 `dsh-agent-presets/presets/`
 // 搬到 `dsh-web-app/presets/*.patch.yml` + `dsh-agent-preset/{lib,skills}`，净增 4 条
 // （-3 旧条目 / +7 新条目）；同一次升级另加 `dsh-web-frontend/dist/favicon-dark.svg`
 // 一条（目录 oracle 的固定名清单要求）。棘轮语义是"贴住下限、只允许上调"。
 // 121 → 122（2026-09-28，DSH 0.1.7-rc.2 网关鉴权迁移）：新增自研 provider 行入口
-// `@picoaide/dsh-enterprise/gateway-llm`（它取代被禁用的上游 `llm-deepseek` 行）。
+// `@zeokeel/dsh-enterprise/gateway-llm`（它取代被禁用的上游 `llm-deepseek` 行）。
 
 /**
- * 反向 oracle 至少要解析出的 `@picoaide/*` specifier 条数（只允许上调，下调必须写明理由）。
+ * 反向 oracle 至少要解析出的 `@zeokeel/*` specifier 条数（只允许上调，下调必须写明理由）。
  *
  * 它的用途**只有一个**：防空转 —— 产物根本没构建时这个计数会掉到 ≈0，
  * 于是整条"反向覆盖"判据会静默变成恒真。**它不是删条目的保证**
@@ -1598,10 +1598,10 @@ export const REQUIRED_WORKSPACE_PACKAGE_COVERAGE_MANIFEST_FLOOR = 155
  * `needs` 闭包先生成 `lib/`）21 条 ⇒ 曾取 20。
  *
  * **2026-09-28 下调到 17（DSH 0.1.7-rc.2 升级）**：十个自研补丁层不再用
- * `createRequire(…).resolve('@picoaide/<pkg>/package.json')` 在 `profile.ts` 里解析
+ * `createRequire(…).resolve('@zeokeel/<pkg>/package.json')` 在 `profile.ts` 里解析
  * （那个写法在 0.1.7 上会让"组合复算 ≠ 真实装配"，是升级引入的 P0，见
  * `docs/AUDIT-2026-09-23-FULL.md` §8.9.5 U1），改成各包 `package.json` 的
- * `dsh.bundle.patch` 清单项 ⇒ 桌面产物里的 `@picoaide/*` specifier 随之减少：
+ * `dsh.bundle.patch` 清单项 ⇒ 桌面产物里的 `@zeokeel/*` specifier 随之减少：
  * **CI 干净检出实测 18**（本地完整树 ≥20）。取 17 = 给 CI 留 1 条余量，
  * 仍远高于"完全没构建"这一真正要抓的形态。
  */
@@ -1682,11 +1682,11 @@ function workspaceEntryTarget(manifest: WorkspacePackageManifest, subpath: strin
  * **反向 oracle**：清单必须覆盖产物，而不是清单自己说了算（2026-09-23 第三轮审计 P-1）。
  *
  * 与既有三条 oracle 的分工与差别：
- *  - `spec:206`（desktop `lib/*.js` 的 `@picoaide/*` 子路径）只看**桌面自身**的产物；
+ *  - `spec:206`（desktop `lib/*.js` 的 `@zeokeel/*` 子路径）只看**桌面自身**的产物；
  *    插件包之间的 import（`wasm-apps-host → dsh-browser/surface` 这类）它看不见。
  *  - G-9 那张只看**上游补丁目标**的子路径 import。
  *  - G-2 的目录 oracle（`build/`、`lib/preload/`、前端 dist）要求"目录里每个文件都在清单里"，
- *    但它**结构上无法**覆盖 `node_modules/@picoaide/<pkg>/lib`：那里有内容哈希命名的 chunk
+ *    但它**结构上无法**覆盖 `node_modules/@zeokeel/<pkg>/lib`：那里有内容哈希命名的 chunk
  *    （`host-routes-DZDVSIog.js`、`auth-7L36hEyX.js`），名字每次构建都变。
  *  - 2026-09-16 的 vendored 技能 oracle 只枚举 `dsh-memory-evolve/skills/**` 一个**源目录**。
  *
@@ -1694,7 +1694,7 @@ function workspaceEntryTarget(manifest: WorkspacePackageManifest, subpath: strin
  * 都与清单无关：
  *  1. **包自己声明的入口面** —— `package.json`（`exports["."]`/`main`、`dsh.bundle.patch`、
  *     `dsh.client` ⇒ `exports["./client"]`、`exports["./invariant"]`）；
- *  2. **产物里真实的 `@picoaide/*` specifier** —— 桌面 `lib/**` 与每个自有包
+ *  2. **产物里真实的 `@zeokeel/*` specifier** —— 桌面 `lib/**` 与每个自有包
  *     `lib/**` 的 JS 里出现的包 specifier，按目标包 `exports` 解析成落点。
  * 两条来源推出的每一条都必须在生效清单里。
  *
@@ -1707,7 +1707,7 @@ function workspaceEntryTarget(manifest: WorkspacePackageManifest, subpath: strin
  *    这一步根本不存在 ⇒ 产物驱动的那条此刻只能覆盖已构建的部分）。
  *
  * **为什么读磁盘产物而不是归档列表**：afterPack 本就跑在构建工作区里，磁盘 `lib/` +
- * `node_modules/@picoaide/` 就是被打进包的那份输入；读它同时让这条判据在 `vitest`
+ * `node_modules/@zeokeel/` 就是被打进包的那份输入；读它同时让这条判据在 `vitest`
  * 里可判（不必真打包），也避免依赖各调用点注入的读缝（那些读缝在单测里是桩）。
  * "归档里真的在"由既有三条断言负责（扁平表 / `REQUIRED_ASAR_EXPORTS` / 锚点表），
  * 两者合起来才是闭环：**清单必须覆盖产物，产物必须覆盖清单**。
@@ -1758,7 +1758,7 @@ export function assertRequiredEntriesCoverWorkspaceSurface(
   const effectiveMin = Math.max(0, minResolvedSpecifiers - census.prunedSpecifiers)
   if (census.resolvedSpecifiers < effectiveMin) {
     throw new Error(
-      `${WORKSPACE_COVERAGE_LABEL}: 只从产物里解析出 ${census.resolvedSpecifiers} 条 @picoaide/* specifier `
+      `${WORKSPACE_COVERAGE_LABEL}: 只从产物里解析出 ${census.resolvedSpecifiers} 条 @zeokeel/* specifier `
       + `（下限 ${effectiveMin}${census.prunedSpecifiers === 0 ? '' : ` = ${minResolvedSpecifiers} − 变体裁掉的 ${census.prunedSpecifiers}`}）`
       + '—— 产物没构建或判据已空转，不能当成通过',
     )
@@ -1803,7 +1803,7 @@ export function assertWorkspacePackageCoverage(
       violations.push(`${floor.package}: lib/ 产物 ${library} < 下限 ${floor.library}`)
     }
   }
-  // 全局下限同样只允许上调：它兜"整段删除"这类批量形态与 @picoaide 之外的条目。
+  // 全局下限同样只允许上调：它兜"整段删除"这类批量形态与 @zeokeel 之外的条目。
   // 变体构建传的是**按声明削减过**的下限（`packagedRuntimeVariantView().manifestFloor`）：
   // 削减量只等于"被关闭模块本来就占着的那几条"，其余余量一条都不放开。
   if (manifest.length < manifestFloor) {
@@ -1835,9 +1835,9 @@ export function collectWorkspaceSurface(
   productRoot: string,
   prunedPackages: readonly string[] = [],
 ): WorkspaceSurfaceCensus {
-  const scopeRoot = join(productRoot, 'node_modules', '@picoaide')
+  const scopeRoot = join(productRoot, 'node_modules', '@zeokeel')
   const pruned = new Set(prunedPackages)
-  /** 该产物条目是否属于被本次变体裁掉的包（`@picoaide/x` 与 `@picoaide/x/...` 都算）。 */
+  /** 该产物条目是否属于被本次变体裁掉的包（`@zeokeel/x` 与 `@zeokeel/x/...` 都算）。 */
   const isPrunedEntry = (entry: string): boolean =>
     [...pruned].some(name => entry === name || entry.startsWith(`${name}/`))
   /** 目录名（`dsh-connectors`）→ 该包是否被本次变体裁掉。 */
@@ -1896,13 +1896,13 @@ export function collectWorkspaceSurface(
   for (const artifact of artifacts) {
     const absolute = join(productRoot, artifact)
     const source = readFileSync(absolute, 'utf8')
-    // 刻意用"任何以 @picoaide/ 开头的字符串字面量"而不是精确的 import/require 语法：
-    // `createRequire(...).resolve('@picoaide/x/package.json')` 这类**也是运行期依赖**
+    // 刻意用"任何以 @zeokeel/ 开头的字符串字面量"而不是精确的 import/require 语法：
+    // `createRequire(...).resolve('@zeokeel/x/package.json')` 这类**也是运行期依赖**
     // （profile 锚点就是这么解析的），而漏掉它等于放掉一整类。代价是文档字符串里提到
     // 的包名也会被要求登记 —— 这是**偏严**的方向，且解析不到落点/通配子路径会被跳过。
-    for (const match of source.matchAll(/["'](@picoaide\/[^"']+)["']/gu)) {
+    for (const match of source.matchAll(/["'](@zeokeel\/[^"']+)["']/gu)) {
       const specifier = match[1]!
-      const [, name, subpath = ''] = /^@picoaide\/([^/]+)(?:\/(.*))?$/u.exec(specifier) ?? []
+      const [, name, subpath = ''] = /^@zeokeel\/([^/]+)(?:\/(.*))?$/u.exec(specifier) ?? []
       if (name === undefined) continue
       const manifest = manifests.get(name)
       if (manifest === undefined) continue
@@ -2007,7 +2007,7 @@ function tryListArchive(
   // 上面那条只证明"清单里的条目都在包里" —— 而清单是这条判据的唯一来源，删掉一条
   // 等于同时删掉那条断言（审计实测 16 次单条删除里 9 次全绿）。这两条一起兜：
   //   * 每包覆盖棘轮：构建无关，删掉任何一条即红（含"删条目 + 加假条目"抵消总数）；
-  //   * 产物反向覆盖：产物里真实需要的入口（声明面 + `@picoaide/*` specifier）
+  //   * 产物反向覆盖：产物里真实需要的入口（声明面 + `@zeokeel/*` specifier）
   //     必须都在清单里 —— 抓"产物多出一个没被覆盖的入口"与"清单路径拼写被改坏"。
   // 两条都**不带参数**调用：变体折叠在各自的缺省参数里（`packagedRuntimeVariantView()`），
   // 于是"归档分支必须真的调用这两条 oracle"的接线判据（tests/verify-packaged-runtime.spec.ts）
@@ -2044,12 +2044,12 @@ export interface RequiredExport {
 }
 
 /**
- * 自有（@picoaide/*）与桌面自身导出面的**生产门禁表**（specifier + 它在包内的落点）。
+ * 自有（@zeokeel/*）与桌面自身导出面的**生产门禁表**（specifier + 它在包内的落点）。
  *
  * 导出它（2026-09-19）是为了让 tests/verify-packaged-runtime.spec.ts 能**直接读真源**：
  * 复验实测，测试里那份本地拷贝（`REQUIRED_ASAR_EXPORT_PATHS`）此前既没有一致性守卫、
  * 又比这张表多一条早已不存在的 `dsh-connectors/lib/sales-easy.js` —— 往本地拷贝里补假条目
- * 就能让"每个 @picoaide 依赖都被断言"的覆盖性用例假绿。现在测试同时断言两张表逐字相等。
+ * 就能让"每个 @zeokeel 依赖都被断言"的覆盖性用例假绿。现在测试同时断言两张表逐字相等。
  */
 export const REQUIRED_ASAR_EXPORTS: readonly RequiredExport[] = [
   // The desktop package is the application root (asar /lib, /package.json),
@@ -2066,52 +2066,52 @@ export const REQUIRED_ASAR_EXPORTS: readonly RequiredExport[] = [
   { specifier: 'dsh-plugin-desktop/renderer-error-contract', archivePath: 'lib/renderer-error-contract.js' },
   { specifier: '@deepseek-ai/dsh-base/package.json', archivePath: 'node_modules/@deepseek-ai/dsh-base/package.json' },
   { specifier: '@deepseek-ai/dsh-web-app/package.json', archivePath: 'node_modules/@deepseek-ai/dsh-web-app/package.json' },
-  { specifier: '@picoaide/dsh-enterprise/session-service', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/session-service.js' },
-  { specifier: '@picoaide/dsh-enterprise/auth-gate', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/auth-gate.js' },
-  { specifier: '@picoaide/dsh-enterprise/gateway-model', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/gateway-model.js' },
+  { specifier: '@zeokeel/dsh-enterprise/session-service', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/session-service.js' },
+  { specifier: '@zeokeel/dsh-enterprise/auth-gate', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/auth-gate.js' },
+  { specifier: '@zeokeel/dsh-enterprise/gateway-model', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/gateway-model.js' },
   // DSH 0.1.7 起网关 provider 由自研行注册（上游 `llm-deepseek-api-key` 硬编码 `x-api-key`，
-  // 对只认 Bearer 的网关必然 401）。这个入口掉出 asar ⇒ 组合里 `picoaide-gateway-llm` 行
+  // 对只认 Bearer 的网关必然 401）。这个入口掉出 asar ⇒ 组合里 `zeokeel-gateway-llm` 行
   // 加载失败，`deepseek-official` 没有适配器，模型面全灭。
-  { specifier: '@picoaide/dsh-enterprise/gateway-llm', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/gateway-llm.js' },
-  { specifier: '@picoaide/dsh-enterprise/bootstrap', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/bootstrap.js' },
-  { specifier: '@picoaide/dsh-enterprise/client', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/client.js' },
+  { specifier: '@zeokeel/dsh-enterprise/gateway-llm', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/gateway-llm.js' },
+  { specifier: '@zeokeel/dsh-enterprise/bootstrap', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/bootstrap.js' },
+  { specifier: '@zeokeel/dsh-enterprise/client', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/client.js' },
   // P1-1(2026-09-16):error-reporting 静态 import `@sentry/node`(enterprise 的 tsdown 把它
   // 标为 external,运行时才解析)。这个模块一旦掉出 app.asar,Cordis 加载整个插件模块时
   // 失败且**零日志**(GlitchTip 采集静默整体失效)。存在性由这里钉住,真实加载由下面的
   // `smokePackagedErrorReporting` 在打包版 Electron 里证明 —— 两层缺一不可。
-  { specifier: '@picoaide/dsh-enterprise/error-reporting', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/error-reporting.js' },
+  { specifier: '@zeokeel/dsh-enterprise/error-reporting', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/error-reporting.js' },
   // 同批补漏的三个兄弟导出:它们都已在 `exports` 里发布、lib/ 也有产物,只是此前没进清单
   // (清单是"允许失败"的唯一真源,少一条就少一道门)。
-  { specifier: '@picoaide/dsh-enterprise/channel-sync', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/channel-sync.js' },
+  { specifier: '@zeokeel/dsh-enterprise/channel-sync', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/channel-sync.js' },
   // 2026-09-23（第三轮审计的反向 oracle）：下面 7 条都是**产物里真实存在、且被真实
   // specifier 引用**的入口，但此前不在任何一张表里 —— 也就是"删掉它们没有任何判据会红"。
-  //   `@picoaide/dsh-enterprise`                 ← profile 行 `picoaide-enterprise` 的入口
-  //   `@picoaide/dsh-enterprise/loopback`        ← account-card `lib/index.js` 值导入
-  //   `@picoaide/dsh-enterprise/server-connector/auth` ← account-card `lib/index.js` 值导入
-  //   `@picoaide/dsh-enterprise/session-identity` ← account-card `lib/index.js` 值导入
+  //   `@zeokeel/dsh-enterprise`                 ← profile 行 `zeokeel-enterprise` 的入口
+  //   `@zeokeel/dsh-enterprise/loopback`        ← account-card `lib/index.js` 值导入
+  //   `@zeokeel/dsh-enterprise/server-connector/auth` ← account-card `lib/index.js` 值导入
+  //   `@zeokeel/dsh-enterprise/session-identity` ← account-card `lib/index.js` 值导入
   //     （R16B-01：余额快照的身份章。会话身份口径的唯一实现在 enterprise，account-card
   //      只 import 它、不就地再拼一份 `serverURL + username`。）
-  //   `@picoaide/dsh-connectors`                 ← profile 行 `pico-connectors` 的入口
-  //   `@picoaide/dsh-connectors/invariant`       ← 该包声明的 `./invariant` 伴生入口
-  //   `@picoaide/dsh-connectors/store`           ← browser `lib/index.js` 的**惰性**
+  //   `@zeokeel/dsh-connectors`                 ← profile 行 `zeokeel-connectors` 的入口
+  //   `@zeokeel/dsh-connectors/invariant`       ← 该包声明的 `./invariant` 伴生入口
+  //   `@zeokeel/dsh-connectors/store`           ← browser `lib/index.js` 的**惰性**
   //     `createRequire` require（连接器是可选依赖：包不在 ⇒ 凭据功能 fail-closed，
   //      浏览器照常工作；清单仍然必须覆盖它，因为产物里有）
-  //   `@picoaide/dsh-connectors/user-scope`      ← 该包 `exports` 里发布的子路径入口
+  //   `@zeokeel/dsh-connectors/user-scope`      ← 该包 `exports` 里发布的子路径入口
   //     （2026-10-13 起 browser **不再**值导入它：数据根改直连零依赖叶子包
-  //      `@picoaide/dsh-host-home`，而那份实现本来就是 user-scope re-export 出去的
+  //      `@zeokeel/dsh-host-home`，而那份实现本来就是 user-scope re-export 出去的
   //      同一个函数。产物里仍有 `lib/user-scope.js` ⇒ 扁平清单照旧必须覆盖它；
   //      运行期还剩 browser `tests/helpers/connectors-module.ts` 一处取用。）
   // 判据是 `assertRequiredEntriesCoverWorkspaceSurface`（清单必须覆盖产物）。
-  { specifier: '@picoaide/dsh-enterprise', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/index.js' },
-  { specifier: '@picoaide/dsh-enterprise/loopback', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/loopback.js' },
-  { specifier: '@picoaide/dsh-enterprise/server-connector/auth', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/server-connector/auth.js' },
-  { specifier: '@picoaide/dsh-enterprise/session-identity', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/session-identity.js' },
-  { specifier: '@picoaide/dsh-enterprise/package.json', archivePath: 'node_modules/@picoaide/dsh-enterprise/package.json' },
-  { specifier: '@picoaide/dsh-connectors', archivePath: 'node_modules/@picoaide/dsh-connectors/lib/index.js' },
-  { specifier: '@picoaide/dsh-connectors/store', archivePath: 'node_modules/@picoaide/dsh-connectors/lib/store.js' },
-  { specifier: '@picoaide/dsh-connectors/user-scope', archivePath: 'node_modules/@picoaide/dsh-connectors/lib/user-scope.js' },
-  { specifier: '@picoaide/dsh-connectors/client', archivePath: 'node_modules/@picoaide/dsh-connectors/lib/client.js' },
-  { specifier: '@picoaide/dsh-connectors/package.json', archivePath: 'node_modules/@picoaide/dsh-connectors/package.json' },
+  { specifier: '@zeokeel/dsh-enterprise', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/index.js' },
+  { specifier: '@zeokeel/dsh-enterprise/loopback', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/loopback.js' },
+  { specifier: '@zeokeel/dsh-enterprise/server-connector/auth', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/server-connector/auth.js' },
+  { specifier: '@zeokeel/dsh-enterprise/session-identity', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/session-identity.js' },
+  { specifier: '@zeokeel/dsh-enterprise/package.json', archivePath: 'node_modules/@zeokeel/dsh-enterprise/package.json' },
+  { specifier: '@zeokeel/dsh-connectors', archivePath: 'node_modules/@zeokeel/dsh-connectors/lib/index.js' },
+  { specifier: '@zeokeel/dsh-connectors/store', archivePath: 'node_modules/@zeokeel/dsh-connectors/lib/store.js' },
+  { specifier: '@zeokeel/dsh-connectors/user-scope', archivePath: 'node_modules/@zeokeel/dsh-connectors/lib/user-scope.js' },
+  { specifier: '@zeokeel/dsh-connectors/client', archivePath: 'node_modules/@zeokeel/dsh-connectors/lib/client.js' },
+  { specifier: '@zeokeel/dsh-connectors/package.json', archivePath: 'node_modules/@zeokeel/dsh-connectors/package.json' },
 ]
 
 /**
@@ -2133,25 +2133,25 @@ export const REQUIRED_ASAR_EXPORTS: readonly RequiredExport[] = [
  * （已由 `REQUIRED_PACKAGED_RUNTIME_ENTRIES` 的 `cordis.patch.yml` 钉住）。
  */
 export const REQUIRED_PROFILE_PATCH_ANCHORS: readonly string[] = [
-  'node_modules/@picoaide/dsh-enterprise/package.json',
-  'node_modules/@picoaide/dsh-enterprise/cordis.patch.yml',
-  'node_modules/@picoaide/dsh-account-card/package.json',
-  'node_modules/@picoaide/dsh-account-card/cordis.patch.yml',
-  'node_modules/@picoaide/dsh-wasm-apps/package.json',
-  'node_modules/@picoaide/dsh-wasm-apps/cordis.patch.yml',
-  'node_modules/@picoaide/dsh-foot-menu/package.json',
-  'node_modules/@picoaide/dsh-foot-menu/cordis.patch.yml',
-  'node_modules/@picoaide/dsh-connectors/package.json',
-  'node_modules/@picoaide/dsh-connectors/cordis.patch.yml',
-  'node_modules/@picoaide/dsh-browser/package.json',
-  'node_modules/@picoaide/dsh-browser/cordis.patch.yml',
-  'node_modules/@picoaide/dsh-wasm-apps-host/package.json',
-  'node_modules/@picoaide/dsh-wasm-apps-host/cordis.patch.yml',
-  // 2026-10-13：能力中心的客户端面（`@picoaide/dsh-capability-center`）同样是
+  'node_modules/@zeokeel/dsh-enterprise/package.json',
+  'node_modules/@zeokeel/dsh-enterprise/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-account-card/package.json',
+  'node_modules/@zeokeel/dsh-account-card/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-wasm-apps/package.json',
+  'node_modules/@zeokeel/dsh-wasm-apps/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-foot-menu/package.json',
+  'node_modules/@zeokeel/dsh-foot-menu/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-connectors/package.json',
+  'node_modules/@zeokeel/dsh-connectors/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-browser/package.json',
+  'node_modules/@zeokeel/dsh-browser/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-wasm-apps-host/package.json',
+  'node_modules/@zeokeel/dsh-wasm-apps-host/cordis.patch.yml',
+  // 2026-10-13：能力中心的客户端面（`@zeokeel/dsh-capability-center`）同样是
   // profile 的一层 bundle ⇒ 它的 `package.json` + `cordis.patch.yml` 必须随包
   // （缺任一份，`prepareDesktopProfile()` 组装期解析即抛错、应用根本起不来）。
-  'node_modules/@picoaide/dsh-capability-center/package.json',
-  'node_modules/@picoaide/dsh-capability-center/cordis.patch.yml',
+  'node_modules/@zeokeel/dsh-capability-center/package.json',
+  'node_modules/@zeokeel/dsh-capability-center/cordis.patch.yml',
   'node_modules/dsh-memory-evolve/package.json',
   'node_modules/dsh-memory-evolve/cordis.patch.yml',
 ]
@@ -2412,7 +2412,7 @@ function featureModuleArchivePrefix(pkg: string): string {
  *
  * 设计稿的不变量 1 是"模块关闭 ⇒ 它的代码不进产物"。2026-10-13 的实测把这条
  * 不变量的**真开关**定位到 `packages/host/desktop/package.json` 的 `dependencies`
- * （asar 里 `@picoaide/*` 的集合恰好等于它）。也就是说：**声明关了、清单没摘**，
+ * （asar 里 `@zeokeel/*` 的集合恰好等于它）。也就是说：**声明关了、清单没摘**，
  * 产物里照样有整包，而且**没有任何既有判据会红** —— 三张必需表是全量的，缺了才红、
  * 多了不红。
  *
@@ -3203,11 +3203,11 @@ const sentry = appRequire('@sentry/node')
 if (typeof sentry.init !== 'function') {
   throw new Error('@sentry/node loaded from the package does not expose init()')
 }
-const reportingUrl = pathToFileURL(appRequire.resolve('@picoaide/dsh-enterprise/error-reporting')).href
+const reportingUrl = pathToFileURL(appRequire.resolve('@zeokeel/dsh-enterprise/error-reporting')).href
 const reporting = await import(reportingUrl)
 for (const key of ['apply', 'initSentry', 'name']) {
   if (!(key in reporting)) {
-    throw new Error('@picoaide/dsh-enterprise/error-reporting does not expose ' + key)
+    throw new Error('@zeokeel/dsh-enterprise/error-reporting does not expose ' + key)
   }
 }
 process.stdout.write('${SENTRY_SMOKE_OK}\\n')
@@ -3252,7 +3252,7 @@ function runSentrySmokeProcess(
 /**
  * Smoke the packaged error-reporting path end to end: run the sealed
  * application's Node runtime, require `@sentry/node` from inside the package and
- * import the built `@picoaide/dsh-enterprise/error-reporting` entry.
+ * import the built `@zeokeel/dsh-enterprise/error-reporting` entry.
  *
  * P1-1: `verifyPackagedRuntime` only proves the *files* exist; a module whose
  * static `@sentry/node` import no longer resolves would still pass the static

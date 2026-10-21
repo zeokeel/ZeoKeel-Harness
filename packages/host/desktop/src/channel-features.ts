@@ -5,7 +5,7 @@
  * ## 为什么需要它
  *
  * 2026-10-13 的实测结论（见 `docs/decisions/2026-10-13-module-host-face-ownership.md` §2）：
- * `app.asar` 里 `@picoaide/*` 的集合**恰好等于** `packages/host/desktop/package.json`
+ * `app.asar` 里 `@zeokeel/*` 的集合**恰好等于** `packages/host/desktop/package.json`
  * 的 `dependencies` 集合 —— 把模块行从 profile 的 bundle 层摘掉只是"不加载"，
  * **文件照样进包**。所以"关掉一个模块"是**两件事同时做**：
  *
@@ -72,25 +72,25 @@ export interface FeatureModuleSurface {
  *
  * `packages` 与 `rows` 的取值依据（逐条实测/对拍过，不凭记忆写）：
  *   - `packages`：`packages/host/desktop/package.json` 的 `dependencies` 里
- *     `@picoaide/dsh-{capability-center,wasm-apps,wasm-apps-host,connectors}` 四条，
+ *     `@zeokeel/dsh-{capability-center,wasm-apps,wasm-apps-host,connectors}` 四条，
  *     以及 `src/profile.ts` 的 `REQUIRED_BUNDLES` 里的同名字符串；
  *   - `rows`：`src/startup-rows.ts` 的 `REQUIRED_DESKTOP_ROWS` 里与各模块对应的行，
  *     以及各模块自己的 `cordis.patch.yml` 的 `- insert:` 行 id
- *     （`capability-center/cordis.patch.yml` 插 `picoaide-capability-center` 与
- *     `picoaide-skill-telemetry`；`connectors/cordis.patch.yml` 插 `pico-connectors`；
- *     `wasm-apps-host/cordis.patch.yml` 插 `pico-wasm-apps-host`）。
+ *     （`capability-center/cordis.patch.yml` 插 `zeokeel-capability-center` 与
+ *     `zeokeel-skill-telemetry`；`connectors/cordis.patch.yml` 插 `zeokeel-connectors`；
+ *     `wasm-apps-host/cordis.patch.yml` 插 `zeokeel-wasm-apps-host`）。
  */
 export const FEATURE_MODULE_SURFACES: readonly FeatureModuleSurface[] = [
   {
     module: 'skills',
-    packages: ['@picoaide/dsh-capability-center'],
-    rows: ['picoaide-capability-center', 'picoaide-skill-telemetry'],
+    packages: ['@zeokeel/dsh-capability-center'],
+    rows: ['zeokeel-capability-center', 'zeokeel-skill-telemetry'],
     directories: ['packages/host/capability-center'],
   },
   {
     module: 'apps',
-    packages: ['@picoaide/dsh-wasm-apps', '@picoaide/dsh-wasm-apps-host'],
-    rows: ['pico-wasm-apps-host'],
+    packages: ['@zeokeel/dsh-wasm-apps', '@zeokeel/dsh-wasm-apps-host'],
+    rows: ['zeokeel-wasm-apps-host'],
     directories: ['packages/client/wasm-apps', 'packages/host/wasm-apps-host'],
     // 2026-10-13（P2）：桌面壳自身**静态 import** 这个模块的宿主包 ——
     // `src/main.ts`（`electron-adapter` / `app-proof` / 两个服务常量）、
@@ -103,13 +103,13 @@ export const FEATURE_MODULE_SURFACES: readonly FeatureModuleSurface[] = [
     // （P0-b 决策记录 §6.2 第 4 条登记的就是这三处）。
     blockedReason:
       'packages/host/desktop/src/{main,app-ai-runner,wasm-apps-windows}.ts 仍静态 import '
-      + '@picoaide/dsh-wasm-apps-host（依赖清单摘掉它 = 启动期 ERR_MODULE_NOT_FOUND）。'
+      + '@zeokeel/dsh-wasm-apps-host（依赖清单摘掉它 = 启动期 ERR_MODULE_NOT_FOUND）。'
       + '先把这三处改成"模块不在时不接线"，再从本字段移除本条。',
   },
   {
     module: 'connectors',
-    packages: ['@picoaide/dsh-connectors'],
-    rows: ['pico-connectors'],
+    packages: ['@zeokeel/dsh-connectors'],
+    rows: ['zeokeel-connectors'],
     directories: ['packages/host/connectors'],
   },
 ] as const

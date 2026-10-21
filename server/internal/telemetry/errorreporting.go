@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ var errorReportingLevels = map[string]bool{
 // 留出重连/重试余量;与 skill-call 的双桶分开,互不挤占预算。
 // 可用环境变量下调(测试/压测);0 = 不限。
 var (
-	errorReportingPerUserPerMin = envInt("PICOAI_TELEMETRY_ERROR_REPORTING_MAX_PER_MIN", 10)
+	errorReportingPerUserPerMin = envInt("ZEOKEEL_TELEMETRY_ERROR_REPORTING_MAX_PER_MIN", 10)
 	errorReportingLimiter       = newCallLimiter(time.Minute)
 )
 

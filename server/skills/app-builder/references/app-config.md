@@ -5,10 +5,10 @@
 上限数字与单位不在本文件里重复：一律见 `references/limits.md`（同一生成器产出）。
 改字段 = 改平台的 `appcfgspec.go` 并重新生成，**不要手改本文件**。
 
-## 1. 应用配置文件 `picoaide.app.json`
+## 1. 应用配置文件 `zeokeel.app.json`
 
 随发布一起提交（不计入 wasm 体积上限），发布期被抽到资源目录，
-应用用 `assets.read("picoaide.app.json")` 读它。
+应用用 `assets.read("zeokeel.app.json")` 读它。
 顶层字段集合是封闭的：多一个未知字段即拒。
 
 | 字段 | 类型 | 必填 | 缺省 | 取值 / 上限 | 说明 |
@@ -89,7 +89,7 @@
 | `title` | string | 首次发布 | — | — | 应用中心显示名称（可中文）：**首次发布必填**，之后的版本可省略（沿用上一版） |
 | `changelog` | string | 非首版 | — | — | 本版改动说明：**非首版必填**（空即拒，422 MISSING_FIELD） |
 | `wasm_base64` | string | 是 | — | ≤ 33554432 | wasm 模块的 base64 编码（`GOOS=wasip1 GOARCH=wasm` 的产物）：解码后不超过 32 MiB；**平台不做构建**，本地编译后上传 |
-| `config` | object | 是 | — | ≤ 65536 | 应用配置文件的内容（即 `picoaide.app.json` 的对象形态）：字段见 `config_fields` |
+| `config` | object | 是 | — | ≤ 65536 | 应用配置文件的内容（即 `zeokeel.app.json` 的对象形态）：字段见 `config_fields` |
 
 字段提示：
 
@@ -115,5 +115,5 @@
 
 - **`access` 缺省是 `login`**（要求登录）：写漏了不会意外变成匿名可达。
 - **准入由应用自己判**：平台只把 `access` 与身份注入帧，**不比对名单**；
-  名单在 `picoaide.app.json` 里，应用入口第一件事就该读它。
+  名单在 `zeokeel.app.json` 里，应用入口第一件事就该读它。
 - **改配置 = 发新版**：运行期改不了；`access="whitelist"` 且名单为空会被拒发布。

@@ -84,36 +84,36 @@ describe('hasUpdateFor', () => {
 describe('installEndpoint / uninstallEndpoint (来源路由 bug 回归)', () => {
   const base: CapabilityItem = { kind: 'skill', source: 'org', name: 'codeql', displayName: '', version: '1.0.0', description: '', author: 'a', status: 'approved', versions: ['1.0.0'], installed: false }
 
-  it('market skill installs via /api/pico/skills (gateway marketplace), NOT shared-skills', () => {
+  it('market skill installs via /api/zeokeel/skills (gateway marketplace), NOT shared-skills', () => {
     const market = { ...base, source: 'market' as const }
-    expect(installEndpoint(market, '1.0.0')).toBe('/api/pico/skills/codeql/install')
+    expect(installEndpoint(market, '1.0.0')).toBe('/api/zeokeel/skills/codeql/install')
     // 回归:57aeffecbb 曾把所有技能路由到 shared-skills → 网关 404 gateway error。
     expect(installEndpoint(market, '1.0.0')).not.toContain('shared-skills')
   })
 
-  it('org shared skill installs via /api/pico/shared-skills with version', () => {
-    expect(installEndpoint(base, '1.2.0')).toBe('/api/pico/shared-skills/codeql/1.2.0/install')
+  it('org shared skill installs via /api/zeokeel/shared-skills with version', () => {
+    expect(installEndpoint(base, '1.2.0')).toBe('/api/zeokeel/shared-skills/codeql/1.2.0/install')
   })
 
-  it('market skill uninstalls via /api/pico/skills (matched install route)', () => {
+  it('market skill uninstalls via /api/zeokeel/skills (matched install route)', () => {
     const market = { ...base, source: 'market' as const }
-    expect(uninstallEndpoint(market, '1.0.0')).toBe('/api/pico/skills/codeql/uninstall')
-    expect(uninstallEndpoint(base, '1.0.0')).toBe('/api/pico/shared-skills/codeql/1.0.0/uninstall')
+    expect(uninstallEndpoint(market, '1.0.0')).toBe('/api/zeokeel/skills/codeql/uninstall')
+    expect(uninstallEndpoint(base, '1.0.0')).toBe('/api/zeokeel/shared-skills/codeql/1.0.0/uninstall')
   })
 
-  it('agent install/uninstall route via /api/pico/agent-presets', () => {
+  it('agent install/uninstall route via /api/zeokeel/agent-presets', () => {
     const agent: CapabilityItem = { ...base, kind: 'agent', name: 'creative-writer', source: 'org' }
-    expect(installEndpoint(agent, '1.0.0')).toBe('/api/pico/agent-presets/creative-writer/install')
-    expect(uninstallEndpoint(agent, '1.0.0')).toBe('/api/pico/agent-presets/creative-writer/uninstall')
+    expect(installEndpoint(agent, '1.0.0')).toBe('/api/zeokeel/agent-presets/creative-writer/install')
+    expect(uninstallEndpoint(agent, '1.0.0')).toBe('/api/zeokeel/agent-presets/creative-writer/uninstall')
   })
 
   it('安装端点不带 query：宿主不读 ?force=1（R2-SK-5），覆盖确认是纯客户端交互', () => {
     // 曾经的形态：确认后把 `?force=1` 拼进 URL —— 而宿主按 pathname 分发（auth-gate），
     // 谁都没读它。变异：把 `?force=1` 加回端点 ⇒ 本断言必红。
-    expect(installEndpoint(base, '1.0.0')).toBe('/api/pico/shared-skills/codeql/1.0.0/install')
+    expect(installEndpoint(base, '1.0.0')).toBe('/api/zeokeel/shared-skills/codeql/1.0.0/install')
     expect(installEndpoint(base, '1.0.0')).not.toContain('?')
     const market: CapabilityItem = { ...base, source: 'market' }
-    expect(installEndpoint(market, '1.0.0')).toBe('/api/pico/skills/codeql/install')
+    expect(installEndpoint(market, '1.0.0')).toBe('/api/zeokeel/skills/codeql/install')
     expect(installEndpoint(market, '1.0.0')).not.toContain('?')
   })
 })
@@ -265,7 +265,7 @@ describe('nameTakenError（上传预检撞同名，2026-09-16 i18n）', () => {
 describe('R2-SK-6 内置卡与本机卡去重（数量断言）', () => {
   const localSkill = (name: string, version: string, originChannel?: string): CapabilityItem => ({
     kind: 'skill', source: 'local', name, displayName: name, version, description: '',
-    author: 'PicoAide', versions: [version], installed: true, installedVersion: version,
+    author: 'ZeoKeel', versions: [version], installed: true, installedVersion: version,
     ...(originChannel === undefined ? {} : { originChannel }),
   })
   /** 与面板真实输入同形：清单 1.1.0 + 本机 1.0.0 ⇒ 出「更新到 v1.1.0」卡。 */
@@ -273,7 +273,7 @@ describe('内置技能的分区归属（2026-09-20 用户口径）', () => {
   const card = (name: string, action: 'install' | 'update') => ({
     skill: { name, version: '2.0.0' },
     action,
-    endpoint: `/api/pico/skills/builtin/${name}/install`,
+    endpoint: `/api/zeokeel/skills/builtin/${name}/install`,
     installed: action === 'update',
     state: 'action' as const,
     failure: null,
@@ -343,7 +343,7 @@ describe('内置技能的分区归属（2026-09-20 用户口径）', () => {
  * 与卡片形态必须只取决于**已合并后的单一数据源**，不取决于两次并发取数的到达顺序。
  *
  * 现场（审计 §5.18 实测）：
- *  - 面板 mount 时并发发 `/api/pico/capabilities?source=market` 与 `?source=local`
+ *  - 面板 mount 时并发发 `/api/zeokeel/capabilities?source=market` 与 `?source=local`
  *    （后者内部还要打 3 次上游 + 扫盘），谁先回来不定；
  *  - **market-first**：同名商店行先入 Map ⇒ `mergeItems` 用它打底 ⇒ 本机行独有的
  *    `originChannel` 被吞 ⇒ **「随客户端内置」徽章与本机卸载入口都渲染不出来**（A6）；
@@ -408,12 +408,12 @@ describe('A6/N1 本机行与同名商店行的归并（只依赖合并结果，�
       expect(capabilitySourceBadgeKey(item, 'mine')).toBe('capability.sourcePlugin')
       expect(planCardAction(item)).toEqual({
         kind: 'uninstall',
-        endpoint: '/api/pico/skills/app-builder/uninstall',
+        endpoint: '/api/zeokeel/skills/app-builder/uninstall',
         localContent: false,
       })
-      // 卸载端点也不是市场那一条（market 分支会拼 /api/pico/skills/:name/uninstall，
+      // 卸载端点也不是市场那一条（market 分支会拼 /api/zeokeel/skills/:name/uninstall，
       // 恰好同路径；这里钉的是 localRemoveEndpoint 认得它 —— 徽章与入口同源）。
-      expect(localRemoveEndpoint(item)).toBe('/api/pico/skills/app-builder/uninstall')
+      expect(localRemoveEndpoint(item)).toBe('/api/zeokeel/skills/app-builder/uninstall')
     }
   })
 
@@ -496,13 +496,13 @@ describe('覆盖标记只由"用户已确认"产生（withOverwrite，A2/A3 两�
     const store: CapabilityItem = { kind: 'skill', source: 'market', name: 'foo', displayName: '', version: '1.2.0', description: '', author: '', versions: ['1.2.0'], installed: true, installedOrigin: 'store' }
     const local: CapabilityItem = { ...store, installedOrigin: 'local' }
     // 商店来源的正常更新：不需要确认 ⇒ 不带标记。
-    expect(installRequestUrl(store)).toBe('/api/pico/skills/foo/install')
+    expect(installRequestUrl(store)).toBe('/api/zeokeel/skills/foo/install')
     // 本机自制同名：未确认不带、确认后才带（面板与宿主两端契约）。
-    expect(installRequestUrl(local)).toBe('/api/pico/skills/foo/install')
-    expect(installRequestUrl(local, { overwrite: true })).toBe('/api/pico/skills/foo/install?overwrite=1')
+    expect(installRequestUrl(local)).toBe('/api/zeokeel/skills/foo/install')
+    expect(installRequestUrl(local, { overwrite: true })).toBe('/api/zeokeel/skills/foo/install?overwrite=1')
     // 用户在详情弹层点选的版本必须跟着走（A11：确认后重放的是同一发）。
     expect(installRequestUrl({ ...local, kind: 'skill', source: 'org' }, { overwrite: true, version: '1.0.0' }))
-      .toBe('/api/pico/shared-skills/foo/1.0.0/install?overwrite=1')
+      .toBe('/api/zeokeel/shared-skills/foo/1.0.0/install?overwrite=1')
   })
 
   it('installNeedsConfirm 是"确认条可达"的唯一判定入口（A15）', () => {
@@ -515,14 +515,14 @@ describe('覆盖标记只由"用户已确认"产生（withOverwrite，A2/A3 两�
 
   it('未确认时端点保持无 query（历史死参数 ?force=1 不得回来）', () => {
     const url = installEndpoint({ kind: 'skill', source: 'market', name: 'foo', displayName: '', version: '1.0.0', description: '', author: '', versions: [], installed: false }, '1.0.0')
-    expect(withOverwrite(url, false)).toBe('/api/pico/skills/foo/install')
+    expect(withOverwrite(url, false)).toBe('/api/zeokeel/skills/foo/install')
     expect(withOverwrite(url, false)).not.toContain('?')
   })
 
   it('确认后带上宿主真的会读的 ?overwrite=1', () => {
-    expect(withOverwrite('/api/pico/skills/foo/install', true)).toBe('/api/pico/skills/foo/install?overwrite=1')
-    expect(withOverwrite('/api/pico/skills/foo/uninstall', true)).toBe('/api/pico/skills/foo/uninstall?overwrite=1')
-    expect(withOverwrite('/api/pico/shared-skills/foo/1.0.0/install', true)).toContain('overwrite=1')
+    expect(withOverwrite('/api/zeokeel/skills/foo/install', true)).toBe('/api/zeokeel/skills/foo/install?overwrite=1')
+    expect(withOverwrite('/api/zeokeel/skills/foo/uninstall', true)).toBe('/api/zeokeel/skills/foo/uninstall?overwrite=1')
+    expect(withOverwrite('/api/zeokeel/shared-skills/foo/1.0.0/install', true)).toContain('overwrite=1')
   })
 
   it('N2：智能体（agent-presets）走同一个标记 —— 宿主侧路由真的读它', () => {
@@ -534,12 +534,12 @@ describe('覆盖标记只由"用户已确认"产生（withOverwrite，A2/A3 两�
     // 商店来源：面板「更新智能体」直接发请求（不带标记）；宿主允许商店来源覆盖。
     expect(planCardAction(agent)).toEqual({ kind: 'update', version: '2.0.0' })
     expect(installNeedsConfirm(agent)).toBe(false)
-    expect(installRequestUrl(agent)).toBe('/api/pico/agent-presets/creative-writer/install')
+    expect(installRequestUrl(agent)).toBe('/api/zeokeel/agent-presets/creative-writer/install')
     // 本机自制同名：先出确认条，确认后才把标记交给宿主（否则宿主 409 LOCAL_CONTENT）。
     const local: CapabilityItem = { ...agent, installedOrigin: 'local' }
     expect(installNeedsConfirm(local)).toBe(true)
-    expect(installRequestUrl(local)).toBe('/api/pico/agent-presets/creative-writer/install')
-    expect(installRequestUrl(local, { overwrite: true })).toBe('/api/pico/agent-presets/creative-writer/install?overwrite=1')
+    expect(installRequestUrl(local)).toBe('/api/zeokeel/agent-presets/creative-writer/install')
+    expect(installRequestUrl(local, { overwrite: true })).toBe('/api/zeokeel/agent-presets/creative-writer/install?overwrite=1')
   })
 })
 
@@ -564,14 +564,14 @@ describe('A6 + 跨泳道契约 S2 本机内置技能的卸载端点', () => {
 
   it('builtin ⇒ 新增的内置技能卸载路由', () => {
     const item = { ...base, originChannel: 'builtin' }
-    expect(localRemoveEndpoint(item)).toBe('/api/pico/skills/builtin/app-builder/uninstall')
-    expect(uninstallEndpoint(item, '2.5.0')).toBe('/api/pico/skills/builtin/app-builder/uninstall')
+    expect(localRemoveEndpoint(item)).toBe('/api/zeokeel/skills/builtin/app-builder/uninstall')
+    expect(uninstallEndpoint(item, '2.5.0')).toBe('/api/zeokeel/skills/builtin/app-builder/uninstall')
   })
 
   it('plugin（随客户端内置）⇒ 纯本地删除端点，绝不走市场端点', () => {
     const item = { ...base, originChannel: 'plugin' }
-    expect(localRemoveEndpoint(item)).toBe('/api/pico/skills/app-builder/uninstall')
-    expect(uninstallEndpoint(item, '2.5.0')).toBe('/api/pico/skills/app-builder/uninstall')
+    expect(localRemoveEndpoint(item)).toBe('/api/zeokeel/skills/app-builder/uninstall')
+    expect(uninstallEndpoint(item, '2.5.0')).toBe('/api/zeokeel/skills/app-builder/uninstall')
   })
 
   it('自制 / 市场 / 组织来源 ⇒ 不给本机内置的卸载入口（沿用既有规则）', () => {
@@ -654,7 +654,7 @@ describe('A2/A3/A11/A15 接线判据（源码级）', () => {
         versions: [], installedOrigin: 'store', originChannel: 'plugin', localOwnership: 'unknown',
       },
       { overwrite: true },
-    )).toBe('/api/pico/skills/x/uninstall?overwrite=1&ownership=unknown')
+    )).toBe('/api/zeokeel/skills/x/uninstall?overwrite=1&ownership=unknown')
   })
 
   it('内置技能入口卡的安装/更新也走同一条确认条（否则「更新到 vX」绕过确认被宿主 409）', () => {

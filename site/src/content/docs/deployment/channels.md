@@ -1,6 +1,6 @@
 ---
 title: 渠道与白标
-description: PicoAide Harness 的渠道机制：渠道内容为什么随镜像构建、渠道之间为什么互不升级、部署侧哪几个值必须自洽，以及升级后品牌丢失怎么定位。
+description: ZeoKeel Harness 的渠道机制：渠道内容为什么随镜像构建、渠道之间为什么互不升级、部署侧哪几个值必须自洽，以及升级后品牌丢失怎么定位。
 ---
 
 同一套代码可以交付成多个**渠道**（channel）。渠道决定这一份交付物"叫什么、长什么样、
@@ -19,15 +19,15 @@ description: PicoAide Harness 的渠道机制：渠道内容为什么随镜像�
 
 | 渠道 | 用途 | 分发面 |
 |---|---|---|
-| `official` | 正式发布 | 更新服务器 `release.picoaide.com/official/` + GitHub Release（完整历史归档） |
-| `beta` | 预发布（版本 tag 含 `-beta` / `-rc` / `-alpha`） | 更新服务器 `release.picoaide.com/beta/` + GitHub Pre-release |
-| `<渠道 id>` | 企业定制 / 白标交付 | **只**经更新服务器 `release.picoaide.com/<渠道 id>/`（不进公开 Release） |
+| `official` | 正式发布 | 更新服务器 `release.zeokeel.com/official/` + GitHub Release（完整历史归档） |
+| `beta` | 预发布（版本 tag 含 `-beta` / `-rc` / `-alpha`） | 更新服务器 `release.zeokeel.com/beta/` + GitHub Pre-release |
+| `<渠道 id>` | 企业定制 / 白标交付 | **只**经更新服务器 `release.zeokeel.com/<渠道 id>/`（不进公开 Release） |
 
 每个渠道在更新服务器上有独立目录，结构与官方完全同构：
 
 ```
 <渠道>/latest.json
-<渠道>/releases/<版本>/picoaide-server-<版本>-amd64.zip
+<渠道>/releases/<版本>/zeokeel-server-<版本>-amd64.zip
 <渠道>/releases/<版本>/SHA256SUMS
 ```
 
@@ -41,13 +41,13 @@ description: PicoAide Harness 的渠道机制：渠道内容为什么随镜像�
 
 **为什么渠道之间互不升级（启动期拒绝，而不是回落）。** 服务端启动时校验"镜像内渠道 ==
 进程渠道"，检查更新时校验"清单 `channel_id` == 本部署渠道"。任一处不一致都**拒绝**：
-`PICOAI_CHANNEL` 非法 → 拒绝启动；镜像内容与进程渠道冲突 → 拒绝启动；清单渠道不匹配 →
+`ZEOKEEL_CHANNEL` 非法 → 拒绝启动；镜像内容与进程渠道冲突 → 拒绝启动；清单渠道不匹配 →
 判为"检查更新不可用"（而不是"没有新版本"）。
 为什么不回落成 `official`：回落会让定制部署接受官方清单，升级后品牌与渠道配置一起丢失，
 且**现场没有任何报错**。
 
 **为什么同一个镜像归档在所有渠道里 tag 相同（而内容不同）。** 渠道差异在镜像**内容**里
-（`/opt/picoaide/channel/` 与烘焙的渠道标记），不在 tag 里。这带来一个必须记住的操作约束：
+（`/opt/zeokeel/channel/` 与烘焙的渠道标记），不在 tag 里。这带来一个必须记住的操作约束：
 同一台宿主机上第二个渠道栈 `docker load` 会覆盖同名 tag，因此每个归档额外带一个渠道专属 tag，
 多栈宿主机的 `.env` 必须指向它（见[升级、备份与回滚](/deployment/upgrade/)）。
 
@@ -57,9 +57,9 @@ description: PicoAide Harness 的渠道机制：渠道内容为什么随镜像�
 
 ```
 镜像构建 --build-arg CHANNEL=<渠道 id>
-        ├─ ENV PICOAI_CHANNEL=<渠道 id>     ← 运行期渠道身份
-        ├─ /opt/picoaide/CHANNEL            ← 权威声明文件（部署侧不配也生效）
-        └─ /opt/picoaide/channel/           ← 渠道内容（名称 / 文案 / 标识 / 主题色）
+        ├─ ENV ZEOKEEL_CHANNEL=<渠道 id>     ← 运行期渠道身份
+        ├─ /opt/zeokeel/CHANNEL            ← 权威声明文件（部署侧不配也生效）
+        └─ /opt/zeokeel/channel/           ← 渠道内容（名称 / 文案 / 标识 / 主题色）
 ```
 
 渠道内容包含：
@@ -169,29 +169,29 @@ description: PicoAide Harness 的渠道机制：渠道内容为什么随镜像�
 
 | 值 | 由谁决定 | 说明 |
 |---|---|---|
-| 本部署的渠道 | **镜像自带**（`/opt/picoaide/CHANNEL`） | `.env` 的 `PICOAI_CHANNEL` **留空即可**；填了必须与镜像一致 |
-| 更新清单地址 | `PICOAI_UPDATE_ENDPOINT`，留空 = 本渠道默认目录 | **留空不等于关闭**；关闭请显式写 `off` |
+| 本部署的渠道 | **镜像自带**（`/opt/zeokeel/CHANNEL`） | `.env` 的 `ZEOKEEL_CHANNEL` **留空即可**；填了必须与镜像一致 |
+| 更新清单地址 | `ZEOKEEL_UPDATE_ENDPOINT`，留空 = 本渠道默认目录 | **留空不等于关闭**；关闭请显式写 `off` |
 | 清单里的 `channel_id` | 更新服务器上对应目录的 `latest.json` | 必须与本部署渠道相同 |
 | 镜像 tag（多栈宿主机） | 每个归档里的 `<渠道 id>-<版本>` | 让每栈的 `SERVER_IMAGE` 指向自己的渠道 tag |
 
 服务端在启动与检查更新时强制校验：
 
-- `PICOAI_CHANNEL` 非法 → **拒绝启动**（不会回落到 `official`）；
+- `ZEOKEEL_CHANNEL` 非法 → **拒绝启动**（不会回落到 `official`）；
 - 镜像内渠道与进程渠道不一致（典型成因：`.env` / compose 覆盖了镜像声明）→ **拒绝启动**；
 - 清单 `channel_id` 与本部署不一致 → 判为"检查更新不可用"，而**不是**"没有新版本"，
   绝不静默跨渠道升级。
 
 > 从旧版本升级过来的部署注意：compose 的默认值**不再写死渠道**。如果 `.env` 里手工留着
-> `PICOAI_CHANNEL=official`，定制渠道部署会被判为不一致 —— 删掉这一行即可。
+> `ZEOKEEL_CHANNEL=official`，定制渠道部署会被判为不一致 —— 删掉这一行即可。
 
 ## 判据
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2-)
 
 # 1) 镜像里烘焙的渠道（权威声明）
-docker exec picoaide-server cat /opt/picoaide/CHANNEL
+docker exec zeokeel-server cat /opt/zeokeel/CHANNEL
 
 # 2) 服务端对外自报的渠道
 curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/channel"
@@ -205,7 +205,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 
 | # | 判据 | 通过的样子 | 失败的样子 |
 |---|---|---|---|
-| 1 | 镜像渠道可读 | `cat /opt/picoaide/CHANNEL` 输出本栈渠道 id | 文件缺失 ⇒ 镜像不是正式发布包 |
+| 1 | 镜像渠道可读 | `cat /opt/zeokeel/CHANNEL` 输出本栈渠道 id | 文件缺失 ⇒ 镜像不是正式发布包 |
 | 2 | 对外渠道一致 | `/api/client/v2/channel` 的 `channel_id` == 判据 1 | 两者不同 ⇒ 渠道被覆盖，容器可能已经拒绝启动 |
 | 3 | 更新端点正确 | 日志里 `channel resolved: … (update endpoint …)` 指向本渠道目录 | 端点为空 ⇒ 更新检查被显式设成 `off`；指向别渠道 ⇒ 升级会被拒（不是静默跨渠道） |
 | 4 | 清单渠道一致 | `channel_id` == 判据 1 | 不一致 ⇒ 服务端把检查更新判为不可用 |
@@ -214,10 +214,10 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 
 | 现象 | 判据（怎么确认） | 恢复动作 |
 |---|---|---|
-| 一直不显示"发现新版本" | `docker compose logs server` 打印 `manifest channel "…" != this server's channel "…"` | 渠道三值不自洽：最常见是改了 `PICOAI_CHANNEL` 却没改端点（或反之）；也可能是端点被设成 `off`。服务端有 **6 小时缓存**，刚发版时等待属正常延迟 |
-| 容器启动即退出，打印"渠道配置非法" | 日志点名 `PICOAI_CHANNEL` | 该值（或镜像内渠道标记）不是合法渠道 id：修拼写或删掉覆盖 —— **不要**指望回落 |
+| 一直不显示"发现新版本" | `docker compose logs server` 打印 `manifest channel "…" != this server's channel "…"` | 渠道三值不自洽：最常见是改了 `ZEOKEEL_CHANNEL` 却没改端点（或反之）；也可能是端点被设成 `off`。服务端有 **6 小时缓存**，刚发版时等待属正常延迟 |
+| 容器启动即退出，打印"渠道配置非法" | 日志点名 `ZEOKEEL_CHANNEL` | 该值（或镜像内渠道标记）不是合法渠道 id：修拼写或删掉覆盖 —— **不要**指望回落 |
 | 容器启动即退出，打印"渠道不一致" | 日志点名镜像内渠道与进程渠道 | `.env` / compose 覆盖的渠道与镜像内容不同：删掉覆盖或改成与镜像一致 |
-| 升级后品牌变了 / 门户显示厂商品牌 | `cat /opt/picoaide/CHANNEL` ≠ `/api/client/v2/channel` 的 `channel_id` | 用错渠道镜像：改 `.env` 指回本渠道的**渠道 tag** 后重建；并按[升级、备份与回滚](/deployment/upgrade/)核对 image id，不要继续用它升级 |
+| 升级后品牌变了 / 门户显示厂商品牌 | `cat /opt/zeokeel/CHANNEL` ≠ `/api/client/v2/channel` 的 `channel_id` | 用错渠道镜像：改 `.env` 指回本渠道的**渠道 tag** 后重建；并按[升级、备份与回滚](/deployment/upgrade/)核对 image id，不要继续用它升级 |
 | 客户拿到的是旧行为的包 | 该渠道 `latest.json` 的 `server.version` 未变 | 品牌渠道只在**正式 tag** 产出：等正式 tag，或确认渠道仓的改动已经 push（CI 从渠道仓拉取） |
 | 客户端看到的品牌与服务端不同 | 客户端登录页/侧边栏的品牌 | 客户端品牌来自**随包副本**（服务端不可达或较旧时用它）：重装随服务端分发的客户端即可（见[客户端分发与升级](/deployment/client-delivery/)） |
 | 同机两个渠道栈互相顶掉品牌 | 一栈的容器 image id 指向别渠道镜像 | 渠道 tag 覆盖问题：按[升级、备份与回滚](/deployment/upgrade/)的多栈章节重做（`.env` 指向 `<渠道 id>-<版本>`） |
@@ -227,7 +227,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 渠道化客户端的配置、会话、连接器凭据与浏览器数据存放在**各自的**数据目录中，
 不同渠道的客户端可以装在同一台机器上而互不影响：
 
-- 官方渠道：`~/.picoaide-harness`；
+- 官方渠道：`~/.zeokeel-harness`；
 - 预发布渠道（`beta`）：**与官方正式版共用同一个数据目录** —— 预发版是正式版的前置验证，
   登录态、设置与会话必须延续（这是有意的：独立目录会让预发版用户升级后看不到既有会话）；
 - 品牌渠道：按渠道派生的独立目录（**不得**与官方目录共用：两代客户端的会话格式世代可能不同，

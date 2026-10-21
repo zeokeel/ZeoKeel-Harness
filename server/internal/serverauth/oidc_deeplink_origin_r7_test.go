@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // srvcore-1(P0,审计 2026-09-13):OIDC 深链把**刚签发的真实 token** 交给 login
@@ -19,7 +19,7 @@ import (
 //	GET https://<真实服务端>/api/client/v2/auth/oidc/login?server=https://attacker.example
 //
 // 在受害者完成真实 SSO 后 302 到
-// `picoaide://auth?token=<真token>&server=https://attacker.example`,
+// `zeokeel://auth?token=<真token>&server=https://attacker.example`,
 // 客户端会把 token 发往攻击者(90 天有效,等同该员工全部员工面权限)。
 //
 // 回归判据:`?server=` 必须与本次 login 请求自身的来源一致(scheme+host),
@@ -74,7 +74,7 @@ func TestOIDCLoginRejectsForeignReturnServer(t *testing.T) {
 	}
 }
 
-// 反代改写了 Host 的正常部署:显式声明的对外来源(PICOAI_PUBLIC_BASE_URL,
+// 反代改写了 Host 的正常部署:显式声明的对外来源(ZEOKEEL_PUBLIC_BASE_URL,
 // 与门户下载地址同一口径)必须照旧放行 —— 修复不得把这类部署的 SSO 打断;
 // 同时也证明"配置了对外来源"不等于"任意域名放行"。
 func TestOIDCLoginAcceptsConfiguredPublicOrigin(t *testing.T) {
@@ -114,7 +114,7 @@ func TestOIDCLoginAcceptsConfiguredPublicOrigin(t *testing.T) {
 //
 // R7-F3-N3(复核 2026-09-13):本用例原先断言"请求 Host 与 ?server= 相同即放行",
 // 而那正是新发现的硬化缺口(Host 是请求头,不是来源证明)。现在改为按服务端配置
-// (PICOAI_PUBLIC_BASE_URL / OIDC redirect_url / PICOAI_TRUSTED_HOSTS)判定;
+// (ZEOKEEL_PUBLIC_BASE_URL / OIDC redirect_url / ZEOKEEL_TRUSTED_HOSTS)判定;
 // Host 单独不足以放行的回归见 oidc_login_origin_r7b_test.go。
 func TestOIDCLoginAcceptsConfiguredReturnServer(t *testing.T) {
 	t.Setenv(clientrelease.PublicBaseURLEnv, "https://gw.example.com")
@@ -174,7 +174,7 @@ func TestOIDCLoginAcceptsConfiguredReturnServer(t *testing.T) {
 	if w.Code != http.StatusFound {
 		t.Fatalf("callback = %d body=%s", w.Code, w.Body.String())
 	}
-	dlink := urlParse(t, strings.Replace(w.Header().Get("Location"), "picoaide://auth", "https://auth.example", 1))
+	dlink := urlParse(t, strings.Replace(w.Header().Get("Location"), "zeokeel://auth", "https://auth.example", 1))
 	if got := dlink.Query().Get("server"); got != "https://gw.example.com" {
 		t.Fatalf("deep link server = %q, want https://gw.example.com", got)
 	}

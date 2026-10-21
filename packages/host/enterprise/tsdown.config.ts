@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from '../../../scripts/platform-modules.mjs'
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-enterprise'
+const PACKAGE_NAME = '@zeokeel/dsh-enterprise'
 
 // 产品版本号:构建时从仓库根 package.json 读取,经 define 注入 client bundle,
 // 供 BrandName 在侧边栏品牌名旁渲染 vX.Y.Z 标签(与安装包/更新检查同源)。
@@ -74,7 +74,7 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: false,
-    // `@picoaide/dsh-panel-surface` 必须**内联**进本客户端产物，因此它在
+    // `@zeokeel/dsh-panel-surface` 必须**内联**进本客户端产物，因此它在
     // package.json 里登记为 **devDependency**（2026-09-20）：tsdown 会把
     // `dependencies` 自动当 external，而它不在平台模块表里 —— 外置会让浏览器里的
     // 模块加载器 `require()` 一个不存在的模块，四个面板整个挂不上。
@@ -96,7 +96,7 @@ export default defineConfig([
     define: {
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
       // 品牌名旁的产品版本标签(见 src/client/Channel.tsx BrandName)
-      'process.env.PICOAI_PRODUCT_VERSION': JSON.stringify(PRODUCT_VERSION),
+      'process.env.ZEOKEEL_PRODUCT_VERSION': JSON.stringify(PRODUCT_VERSION),
     },
     outputOptions: {
       entryFileNames: 'client.js',

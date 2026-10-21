@@ -468,7 +468,7 @@ for (const args of [
     `S15-4(正例): 点名的包必须真的执行，实际 corepack argv=${JSON.stringify(invoked)}`,
   )
   check(
-    !invoked.includes('workspace @picoaide/dsh-cron run check'),
+    !invoked.includes('workspace @zeokeel/dsh-cron run check'),
     `S15-4(正例): 只应跑点名的包，实际 corepack argv=${JSON.stringify(invoked)}`,
   )
 }
@@ -832,7 +832,7 @@ function expandWorkspaceGlobs(treeRoot, patterns) {
 /**
  * 「`PACKAGES` 表 ↔ 磁盘上的 workspace 包」的**语义**对拍（2026-09-24 第十轮审计 C-12/F5）。
  *
- * 现场：回归门禁的合成树里 `corepack` 是桩、**没有任何真实包** ⇒ 「把 `@picoaide/dsh-cron`
+ * 现场：回归门禁的合成树里 `corepack` 是桩、**没有任何真实包** ⇒ 「把 `@zeokeel/dsh-cron`
  * 从表里整条删掉」「把某包的 `script` 字段换掉」这类破坏**零新增失败**（子泳道差分实测
  * 0 行）。合成树证明的是"编排器把 argv 发出去了"，证明不了"那个包真的存在/真的该在此时跑"。
  * 所以这里对**真实树**（或任何给定树）做三条语义判据：
@@ -1505,7 +1505,7 @@ function parseCounts(output) {
 // ---------------------------------------------------------------------------
 // C-12/F5（2026-09-24 第十轮审计）：**真实树**的包表语义对拍（合成树夹具覆盖不到的那一半）
 //
-// 现场：合成树里 `corepack` 是桩、没有任何真实包 ⇒ 「把 `@picoaide/dsh-cron` 从 PACKAGES
+// 现场：合成树里 `corepack` 是桩、没有任何真实包 ⇒ 「把 `@zeokeel/dsh-cron` 从 PACKAGES
 // 表里整条删除（整包静默退出门禁）」「把某包的 `script` 字段换掉」两条变异的新增失败行数
 // 都是 **0**。这一段把判据从"argv 发出去了"推进到**语义**：包目录/名字/脚本必须真的存在，
 // 且磁盘上的每个 workspace 包都必须在表里。

@@ -361,7 +361,7 @@ const SCAN_SKIP_DIRS = new Set(['node_modules', 'lib', 'dist', 'build', 'coverag
 /** 测试文件不算产品源码（它们只断言契约，不构造出站头）。 */
 const SCAN_SKIP_FILE = /(\.spec\.|\.test\.|_test\.go$)/u
 /** 出站头名（大小写不敏感）。 */
-const ATTRIBUTION_HEADER_RE = /x-pico-app-id/iu
+const ATTRIBUTION_HEADER_RE = /x-zeokeel-app-id/iu
 
 /**
  * 递归收集"提到出站头名"的产品源文件（仓库相对 POSIX 路径，已排序）。
@@ -409,10 +409,10 @@ function scanAttributionHeaderFiles(root: string): { hits: string[]; scanned: nu
  * （常量间接写法的兜底仍是登记表 + 人工决定）。
  */
 const ATTRIBUTION_WRITE_PATTERNS: Array<[string, RegExp]> = [
-  ['Go: Header.Set(...)', /(?:Header|h)\.(?:Set|Add)\(\s*(?:appIDHeader|"X-Pico-App-Id")/iu],
-  ['Go: req.Header["X-Pico-App-Id"] = ...', /\[\s*"X-Pico-App-Id"\s*\]\s*=/u],
-  ['TS: new Headers({...})/headers: {...}', /['"]x-pico-app-id['"]\s*:/iu],
-  ['TS: headers.set(...)', /\.(?:set|append)\(\s*['"]x-pico-app-id['"]/iu],
+  ['Go: Header.Set(...)', /(?:Header|h)\.(?:Set|Add)\(\s*(?:appIDHeader|"X-ZeoKeel-App-Id")/iu],
+  ['Go: req.Header["X-ZeoKeel-App-Id"] = ...', /\[\s*"X-ZeoKeel-App-Id"\s*\]\s*=/u],
+  ['TS: new Headers({...})/headers: {...}', /['"]x-zeokeel-app-id['"]\s*:/iu],
+  ['TS: headers.set(...)', /\.(?:set|append)\(\s*['"]x-zeokeel-app-id['"]/iu],
 ]
 
 describe('跨端对拍 · D 应用 AI 归因通道（R4-D-4 / R13-GB）', () => {
@@ -423,14 +423,14 @@ describe('跨端对拍 · D 应用 AI 归因通道（R4-D-4 / R13-GB）', () => 
     ...ATTRIBUTION_HEADER_TEXT_ONLY,
   ].sort()
 
-  it('出站头 X-Pico-App-Id 的登记表与实际源码**双向**相等（冒出写方即红）', () => {
+  it('出站头 X-ZeoKeel-App-Id 的登记表与实际源码**双向**相等（冒出写方即红）', () => {
     expect(found.scanned, '扫描面必须真的覆盖到源码（缩面即失败）').toBeGreaterThan(200)
     for (const rel of declared) {
       expect(existsSync(join(REPO_ROOT, rel)), `登记表里的文件不存在：${rel}`).toBe(true)
     }
     expect(
       found.hits,
-      'X-Pico-App-Id 出现的文件必须全部登记（新出现写方/读方 ⇒ 本用例红，逼着同步接线状态与文案）',
+      'X-ZeoKeel-App-Id 出现的文件必须全部登记（新出现写方/读方 ⇒ 本用例红，逼着同步接线状态与文案）',
     ).toEqual(declared)
   })
 
@@ -452,7 +452,7 @@ describe('跨端对拍 · D 应用 AI 归因通道（R4-D-4 / R13-GB）', () => 
       // 自报头必须仍然**零写方**（它的设计发不出来，网关也只识别并忽略）。
       expect(
         offenders,
-        `自报头 X-Pico-App-Id 不该有任何写方（真实链路是会话 id 的前缀）：${offenders.join(', ')}`,
+        `自报头 X-ZeoKeel-App-Id 不该有任何写方（真实链路是会话 id 的前缀）：${offenders.join(', ')}`,
       ).toEqual([])
     }
   })

@@ -10,7 +10,7 @@
  *    自己带 `display:contents` 之类的行内样式，不加 `!important` 压不住。这里的选择器
  *    与 `CONVERSATION_COLUMN_SELECTOR` 是**成对的**，改一个必须改另一个。
  * 3. **高度必须逐层有界**：容器 `height:100%` → 面板根（各插件自己的 div）→
- *    `PanelPage` → `.pico-scroll`。中间任何一层是 auto，正文滚动区就变成内容高度，
+ *    `PanelPage` → `.zeokeel-scroll`。中间任何一层是 auto，正文滚动区就变成内容高度，
  *    面板"翻不动页"（2026-09-21 能力中心的真实 bug，实测内容 2714px / 容器 813px）。
  *    因为面板根由插件提供，这条只能由共享样式表用 `> *` 兜住，见下方规则。
  *
@@ -20,7 +20,7 @@
  * 样式表里），内联样式负责**几何**（尺寸/间距/圆角）。反过来做就会被行内样式压死：
  * 内联 `background: transparent` 会让 `:hover` 的背景永远不生效。
  *
- * @module @picoaide/dsh-panel-surface/client/stylesheet
+ * @module @zeokeel/dsh-panel-surface/client/stylesheet
  */
 
 import { CONVERSATION_COLUMN_SELECTOR, PANEL_ACTIVE_ATTR, PANEL_SURFACE_ATTR } from '../index.ts'
@@ -50,173 +50,173 @@ const SHARED_CSS = `
 ${YIELD_SELECTORS} { display: none !important; }
 
 /* 面板根包装层必须把高度**透传**下去（2026-09-21 真机实测的能力中心"翻不动页"根因）。
-   面板根是各插件自己的 div（.pico-capability / .pico-connectors / …），默认 height:auto；
+   面板根是各插件自己的 div（.zeokeel-capability / .zeokeel-connectors / …），默认 height:auto；
    而 PanelPage 是 height:100% 的 flex 列 —— 百分比高度在"包含块高度 auto"时按 auto
-   解析，于是正文滚动区（.pico-scroll，flex:1 + min-height:0）拿到的是**内容高度**，
+   解析，于是正文滚动区（.zeokeel-scroll，flex:1 + min-height:0）拿到的是**内容高度**，
    永远不产生溢出、也就永远没有滚动条；内容一路向下长，被容器 overflow:hidden 裁掉，
    用户看到的就是"翻不到下面"。
-   （实测数据：内容 2714px / 容器 813px / .pico-scroll clientHeight = scrollHeight = 2652px。）
+   （实测数据：内容 2714px / 容器 813px / .zeokeel-scroll clientHeight = scrollHeight = 2652px。）
    写在共享样式表里 = 四个面板与任何第三方面板都自动获得有界高度，不必各自记得加。
    注意：这个模板字符串里不能出现反引号（会提前结束字符串，tsdown 直接 PARSE_ERROR）。 */
 html[${PANEL_ACTIVE_ATTR}] [${PANEL_SURFACE_ATTR}] > * { height: 100%; min-height: 0; }
 
 /* ---- 滚动条（默认的粗灰条在整页面板里很扎眼） ---- */
-.pico-scroll { scrollbar-width: thin; scrollbar-color: var(--dsw-alias-border-l3) transparent; }
-.pico-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
-.pico-scroll::-webkit-scrollbar-track { background: transparent; }
-.pico-scroll::-webkit-scrollbar-thumb {
+.zeokeel-scroll { scrollbar-width: thin; scrollbar-color: var(--dsw-alias-border-l3) transparent; }
+.zeokeel-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.zeokeel-scroll::-webkit-scrollbar-track { background: transparent; }
+.zeokeel-scroll::-webkit-scrollbar-thumb {
   background: var(--dsw-alias-border-l3); border-radius: 999px;
   border: 3px solid transparent; background-clip: content-box;
 }
-.pico-scroll::-webkit-scrollbar-thumb:hover { background: var(--dsw-alias-label-tertiary); background-clip: content-box; }
+.zeokeel-scroll::-webkit-scrollbar-thumb:hover { background: var(--dsw-alias-label-tertiary); background-clip: content-box; }
 
 /* ---- 按钮：颜色在这里，几何在内联样式 ---- */
-.pico-btn {
+.zeokeel-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   cursor: pointer; font-family: inherit; white-space: nowrap; border: 1px solid transparent;
   background: transparent; color: var(--dsw-alias-label-primary);
   transition: background-color .14s ease, border-color .14s ease, color .14s ease,
     box-shadow .14s ease, opacity .14s ease, transform .1s ease;
 }
-.pico-btn:disabled { opacity: .45; cursor: default; }
-.pico-btn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
-.pico-btn:active:not(:disabled) { transform: translateY(1px); }
-.pico-btn--primary {
+.zeokeel-btn:disabled { opacity: .45; cursor: default; }
+.zeokeel-btn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.zeokeel-btn:active:not(:disabled) { transform: translateY(1px); }
+.zeokeel-btn--primary {
   background: var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary));
   color: var(--dsw-alias-label-primary-foreground, #fff); border-color: transparent;
 }
-.pico-btn--primary:hover:not(:disabled) {
+.zeokeel-btn--primary:hover:not(:disabled) {
   box-shadow: 0 4px 14px color-mix(in srgb, var(--dsw-alias-brand-primary) 30%, transparent);
   filter: brightness(1.06);
 }
-.pico-btn--secondary { border-color: var(--dsw-alias-border-l2); }
-.pico-btn--secondary:hover:not(:disabled) {
+.zeokeel-btn--secondary { border-color: var(--dsw-alias-border-l2); }
+.zeokeel-btn--secondary:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
   border-color: var(--dsw-alias-border-l3);
 }
-.pico-btn--ghost { color: var(--dsw-alias-label-secondary); }
-.pico-btn--ghost:hover:not(:disabled) {
+.zeokeel-btn--ghost { color: var(--dsw-alias-label-secondary); }
+.zeokeel-btn--ghost:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
   color: var(--dsw-alias-label-primary);
 }
-.pico-btn--danger { color: var(--dsw-alias-state-error-primary); }
-.pico-btn--danger:hover:not(:disabled) {
+.zeokeel-btn--danger { color: var(--dsw-alias-state-error-primary); }
+.zeokeel-btn--danger:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover-danger, color-mix(in srgb, currentColor 10%, transparent));
 }
 
 /* ---- 卡片 ---- */
-.pico-card {
+.zeokeel-card {
   border: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1, transparent);
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease, background-color .16s ease;
 }
-.pico-card:hover { border-color: var(--dsw-alias-border-l3); box-shadow: 0 6px 22px rgb(0 0 0 / 7%); }
-.pico-card[data-interactive="true"]:hover { transform: translateY(-1px); }
-.pico-card[data-interactive="true"]:active { transform: translateY(0); }
-.pico-card[data-muted="true"] { opacity: .72; }
-.pico-card[data-muted="true"]:hover { opacity: 1; }
+.zeokeel-card:hover { border-color: var(--dsw-alias-border-l3); box-shadow: 0 6px 22px rgb(0 0 0 / 7%); }
+.zeokeel-card[data-interactive="true"]:hover { transform: translateY(-1px); }
+.zeokeel-card[data-interactive="true"]:active { transform: translateY(0); }
+.zeokeel-card[data-muted="true"] { opacity: .72; }
+.zeokeel-card[data-muted="true"]:hover { opacity: 1; }
 
 /* ---- 分段切换（整页面板里代替"标签页"的那一条） ---- */
-.pico-seg {
+.zeokeel-seg {
   display: inline-flex; align-items: center; gap: 2px; padding: 3px;
   border-radius: 11px; border: 1px solid var(--dsw-alias-border-l1);
   background: var(--dsw-alias-bg-layer-3, color-mix(in srgb, currentColor 6%, transparent));
 }
-.pico-seg > button {
+.zeokeel-seg > button {
   border: none; background: transparent; color: var(--dsw-alias-label-secondary);
   border-radius: 8px; padding: 5px 12px; margin: 0; font: inherit; font-size: 13px;
   line-height: 18px; cursor: pointer; white-space: nowrap;
   transition: background-color .14s ease, color .14s ease, box-shadow .14s ease;
 }
-.pico-seg > button:hover { color: var(--dsw-alias-label-primary); }
-.pico-seg > button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
-.pico-seg > button[data-active="true"] {
+.zeokeel-seg > button:hover { color: var(--dsw-alias-label-primary); }
+.zeokeel-seg > button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.zeokeel-seg > button[data-active="true"] {
   background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary);
   box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
 }
 
 /* ---- 可点的筛选片（与徽章同形，但可交互；颜色会随 data-active 翻转） ---- */
-.pico-chipbtn {
+.zeokeel-chipbtn {
   display: inline-flex; align-items: center; gap: 5px; flex: none;
   border: 1px solid var(--dsw-alias-border-l2); background: transparent;
   color: var(--dsw-alias-label-secondary); font-family: inherit; cursor: pointer;
   transition: border-color .14s ease, color .14s ease, background-color .14s ease;
 }
-.pico-chipbtn:hover { border-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-primary); }
-.pico-chipbtn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
-.pico-chipbtn[data-active="true"] {
+.zeokeel-chipbtn:hover { border-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-primary); }
+.zeokeel-chipbtn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.zeokeel-chipbtn[data-active="true"] {
   border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary);
   background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
 }
 
 /* ---- 徽章（底色跟着 color 走，调用方只给文字色） ---- */
-.pico-chip {
+.zeokeel-chip {
   display: inline-flex; align-items: center; gap: 4px; flex: none;
   border-radius: 999px; padding: 1px 8px; font-size: 11px; line-height: 18px;
   white-space: nowrap; border: 1px solid transparent;
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
-.pico-chip[data-plain="true"] { background: transparent; border-color: var(--dsw-alias-border-l2); }
+.zeokeel-chip[data-plain="true"] { background: transparent; border-color: var(--dsw-alias-border-l2); }
 
 /* ---- 图标块 / 头像块 ---- */
-.pico-tile { display: flex; align-items: center; justify-content: center; flex: none; font-weight: 600; line-height: 1; }
+.zeokeel-tile { display: flex; align-items: center; justify-content: center; flex: none; font-weight: 600; line-height: 1; }
 
 /* ---- 勾选式筛选片（真实 checkbox 包在 chip 外观里：语义不变、键盘可达） ---- */
-.pico-checkchip {
+.zeokeel-checkchip {
   display: inline-flex; align-items: center; gap: 7px; flex: none; height: 30px;
   padding: 0 11px; border-radius: 9px; box-sizing: border-box; cursor: pointer;
   border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary);
   font-size: 12.5px; line-height: 18px;
   transition: border-color .14s ease, color .14s ease, background-color .14s ease;
 }
-.pico-checkchip:hover { border-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-primary); }
-.pico-checkchip:has(input:checked) {
+.zeokeel-checkchip:hover { border-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-primary); }
+.zeokeel-checkchip:has(input:checked) {
   border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary);
   background: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent);
 }
-.pico-checkchip > input {
+.zeokeel-checkchip > input {
   margin: 0; flex: none; width: 13px; height: 13px; cursor: pointer;
   accent-color: var(--dsw-alias-brand-primary);
 }
-.pico-checkchip > input:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
-.pico-checkchip:has(input:disabled) { opacity: .5; cursor: default; }
+.zeokeel-checkchip > input:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.zeokeel-checkchip:has(input:disabled) { opacity: .5; cursor: default; }
 
 /* ---- 开关（把原生 checkbox 画成开关，保持真实 input 语义） ---- */
-.pico-switch { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
-.pico-switch > input {
+.zeokeel-switch { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.zeokeel-switch > input {
   appearance: none; -webkit-appearance: none; margin: 0; flex: none;
   width: 32px; height: 18px; border-radius: 999px; position: relative; cursor: pointer;
   background: var(--dsw-alias-border-l3);
   transition: background-color .16s ease;
 }
-.pico-switch > input::after {
+.zeokeel-switch > input::after {
   content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
   border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 28%);
   transition: transform .16s ease;
 }
-.pico-switch > input:checked { background: var(--dsw-alias-state-success-primary); }
-.pico-switch > input:checked::after { transform: translateX(14px); }
-.pico-switch > input:disabled { opacity: .45; cursor: default; }
-.pico-switch > input:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.zeokeel-switch > input:checked { background: var(--dsw-alias-state-success-primary); }
+.zeokeel-switch > input:checked::after { transform: translateX(14px); }
+.zeokeel-switch > input:disabled { opacity: .45; cursor: default; }
+.zeokeel-switch > input:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 
 /* ---- 文本截断 ---- */
-.pico-clamp-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pico-clamp-2, .pico-clamp-3 {
+.zeokeel-clamp-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zeokeel-clamp-2, .zeokeel-clamp-3 {
   display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden;
 }
-.pico-clamp-2 { -webkit-line-clamp: 2; }
-.pico-clamp-3 { -webkit-line-clamp: 3; }
+.zeokeel-clamp-2 { -webkit-line-clamp: 2; }
+.zeokeel-clamp-3 { -webkit-line-clamp: 3; }
 
 /* ---- 进场面板的轻微淡入（尊重"减少动态效果"） ---- */
 /* **只动 opacity，不动 transform**：运行中的 transform 会让面板容器成为内部 fixed
    定位后代（JobEditor 的遮罩、能力中心详情弹层）的包含块，而容器又是 overflow:hidden
    —— 动画那 180ms 里内层遮罩会被裁成"只铺满面板区域"再跳成全窗。opacity 不产生包含块。
    （再次提醒：本模板字符串里不能出现反引号，会提前结束字符串，构建直接 PARSE_ERROR。） */
-@keyframes pico-surface-in { from { opacity: 0; } to { opacity: 1; } }
-html[${PANEL_ACTIVE_ATTR}] [${PANEL_SURFACE_ATTR}] { animation: pico-surface-in .18s ease-out; }
+@keyframes zeokeel-surface-in { from { opacity: 0; } to { opacity: 1; } }
+html[${PANEL_ACTIVE_ATTR}] [${PANEL_SURFACE_ATTR}] { animation: zeokeel-surface-in .18s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   html[${PANEL_ACTIVE_ATTR}] [${PANEL_SURFACE_ATTR}] { animation: none; }
-  .pico-btn, .pico-card, .pico-seg > button, .pico-switch > input { transition: none; }
+  .zeokeel-btn, .zeokeel-card, .zeokeel-seg > button, .zeokeel-switch > input { transition: none; }
 }
 `
 

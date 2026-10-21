@@ -5,10 +5,10 @@ diff --git a/lib/index.js b/lib/index.js
  import { MessageId } from "@deepseek-ai/dsh-llm/brand";
  import { defineDomain, domainTable } from "@deepseek-ai/dsh-storage-domain";
  import { isDeepStrictEqual } from "node:util";
-+/** Current Pico account identity (server + username); undefined for non-enterprise hosts. */
-+function picoOwner(ctx) {
++/** Current ZeoKeel account identity (server + username); undefined for non-enterprise hosts. */
++function zeokeelOwner(ctx) {
 +	try {
-+		const session = ctx.get?.("picoSession")?.getSession?.();
++		const session = ctx.get?.("zeokeelSession")?.getSession?.();
 +		if (typeof session?.username === "string" && session.username !== "") {
 +			const server = String(session.serverURL ?? "").trim().replace(/\/+$/u, "").toLowerCase();
 +			return JSON.stringify([server, session.username.trim()]);
@@ -20,10 +20,10 @@ diff --git a/lib/index.js b/lib/index.js
 +function ownerMatches(ctx, owner) {
 +	let aware = false;
 +	try {
-+		aware = ctx.get?.("picoSession") !== undefined;
++		aware = ctx.get?.("zeokeelSession") !== undefined;
 +	} catch {}
 +	if (!aware) return true;
-+	const current = picoOwner(ctx);
++	const current = zeokeelOwner(ctx);
 +	return current !== undefined && owner === current;
 +}
  //#region lib/types/domain.js
@@ -60,7 +60,7 @@ diff --git a/lib/index.js b/lib/index.js
  				}, this.retention);
  				this.runtime.requestDrive();
 +				ctx.effect(() => {
-+					const off = ctx.on?.("pico/session-changed", () => this.runtime?.requestDrive());
++					const off = ctx.on?.("zeokeel/session-changed", () => this.runtime?.requestDrive());
 +					return () => {
 +						if (typeof off === "function") off();
 +					};
@@ -72,7 +72,7 @@ diff --git a/lib/index.js b/lib/index.js
  				signal?.throwIfAborted();
  				await domain.table("tasks").put(id, {
  					sessionId,
-+					owner: picoOwner(this.ctx),
++					owner: zeokeelOwner(this.ctx),
  					record,
  					status: "active",
  					deliveryHistory: {
@@ -137,4 +137,4 @@ diff --git a/lib/index.js b/lib/index.js
  })();
  //#endregion
 -export { MAX_TITLE_LENGTH, MIN_EVERY_INTERVAL_SECONDS, REQUIRED_TITLE_MESSAGE, SCHEDULE_CHANGE_VERSION, ScheduleId, ScheduleInputError, ScheduleLogError, ScheduleService, ScheduleService as default, canonicalizeCronExpression, createAfterScheduleRecord, createAtScheduleRecord, createCronScheduleRecord, createDailyScheduleRecord, createEveryScheduleRecord, createWeeklyScheduleRecord, decodeScheduleChange, decodeScheduleRecord, foldScheduleEvents, isRecurringScheduleRecord, normalizeWeekdays, parseCronInput, parseWeeklyInput, renderRecurringReminderBatchFraming, renderReminderFraming, resolveCronOccurrence, resolveDailyOccurrence, resolveEveryOccurrence, resolveRecurringOccurrence, resolveWeeklyOccurrence, scheduleDomain, scheduleTitle, scheduleView, weeklyTime };
-+export { MAX_TITLE_LENGTH, MIN_EVERY_INTERVAL_SECONDS, REQUIRED_TITLE_MESSAGE, SCHEDULE_CHANGE_VERSION, ScheduleId, ScheduleInputError, ScheduleLogError, ScheduleService, ScheduleService as default, canonicalizeCronExpression, createAfterScheduleRecord, createAtScheduleRecord, createCronScheduleRecord, createDailyScheduleRecord, createEveryScheduleRecord, createWeeklyScheduleRecord, decodeScheduleChange, decodeScheduleRecord, foldScheduleEvents, isRecurringScheduleRecord, normalizeWeekdays, parseCronInput, parseWeeklyInput, renderRecurringReminderBatchFraming, renderReminderFraming, resolveCronOccurrence, resolveDailyOccurrence, resolveEveryOccurrence, resolveRecurringOccurrence, resolveWeeklyOccurrence, scheduleDomain, scheduleTitle, scheduleView, weeklyTime, ownerMatches, picoOwner };
++export { MAX_TITLE_LENGTH, MIN_EVERY_INTERVAL_SECONDS, REQUIRED_TITLE_MESSAGE, SCHEDULE_CHANGE_VERSION, ScheduleId, ScheduleInputError, ScheduleLogError, ScheduleService, ScheduleService as default, canonicalizeCronExpression, createAfterScheduleRecord, createAtScheduleRecord, createCronScheduleRecord, createDailyScheduleRecord, createEveryScheduleRecord, createWeeklyScheduleRecord, decodeScheduleChange, decodeScheduleRecord, foldScheduleEvents, isRecurringScheduleRecord, normalizeWeekdays, parseCronInput, parseWeeklyInput, renderRecurringReminderBatchFraming, renderReminderFraming, resolveCronOccurrence, resolveDailyOccurrence, resolveEveryOccurrence, resolveRecurringOccurrence, resolveWeeklyOccurrence, scheduleDomain, scheduleTitle, scheduleView, weeklyTime, ownerMatches, zeokeelOwner };

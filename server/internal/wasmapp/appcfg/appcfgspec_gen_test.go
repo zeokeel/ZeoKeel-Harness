@@ -36,9 +36,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 路径常量（**只有这一处**：产物或 SKILL 换位置时改这里）。
@@ -66,7 +66,7 @@ var retiredFieldNames = []string{"visible", "login_required"}
 
 // ===== (a) 生成物与源码逐字节一致 =====
 
-// TestAppcfgArtifactsAreByteIdentical 用**真生成器**（cmd/picoaide-limits-gen）
+// TestAppcfgArtifactsAreByteIdentical 用**真生成器**（cmd/zeokeel-limits-gen）
 // 在临时"假仓库"里重新生成一遍，再与提交的产物逐字节比对。
 //
 // 为什么要编出生成器跑、而不是在测试里复刻渲染逻辑：复刻出来的第二份实现本身就是
@@ -78,7 +78,7 @@ func TestAppcfgArtifactsAreByteIdentical(t *testing.T) {
 
 	fakeRepo := t.TempDir()
 	fakeServer := filepath.Join(fakeRepo, "server")
-	writeFile(t, filepath.Join(fakeServer, "go.mod"), []byte("module github.com/picoaide/picoaide\n\ngo 1.26\n"))
+	writeFile(t, filepath.Join(fakeServer, "go.mod"), []byte("module github.com/zeokeel/zeokeel-harness/server\n\ngo 1.26\n"))
 	if err := os.MkdirAll(filepath.Join(fakeRepo, filepath.FromSlash(skillDirRelPath), "references"), 0o755); err != nil {
 		t.Fatalf("创建假 skill 目录: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestAccessContractMatchesABIAndDesign(t *testing.T) {
 	if !strings.Contains(design, "### 4.2 上传与包") {
 		t.Fatal("设计基线里找不到 §4.2 章节（文档结构变了？门禁要跟着改）")
 	}
-	row := rowContaining(t, design, "应用配置文件", "picoaide.app.json")
+	row := rowContaining(t, design, "应用配置文件", "zeokeel.app.json")
 	for _, needle := range []string{`"public"`, `"login"`, `"whitelist"`, "access", "缺省"} {
 		if !strings.Contains(row, needle) {
 			t.Errorf("设计基线 §4.2 的配置文件行里没有 %q —— 变更必须就地反映到文档：\n  %s", needle, clip(row))
@@ -486,7 +486,7 @@ func loadSpecArtifact(t *testing.T) specArtifact {
 	if doc.ABIVersion != abi.ABIVersion {
 		t.Errorf("%s 的 abi_version = %q, want %q（与 abi 包同源）", appcfgJSONRelPath, doc.ABIVersion, abi.ABIVersion)
 	}
-	if doc.ConfigFile != "picoaide.app.json" {
+	if doc.ConfigFile != "zeokeel.app.json" {
 		t.Errorf("%s 的 config_file = %q", appcfgJSONRelPath, doc.ConfigFile)
 	}
 	return doc
@@ -719,8 +719,8 @@ func clip(s string) string {
 // buildGenerator 编译生成器到临时目录（一次编译，多次执行）。
 func buildGenerator(t *testing.T, moduleRoot string) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "picoaide-limits-gen")
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/picoaide-limits-gen")
+	bin := filepath.Join(t.TempDir(), "zeokeel-limits-gen")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/zeokeel-limits-gen")
 	cmd.Dir = moduleRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("编译生成器失败: %v\n%s", err, out)

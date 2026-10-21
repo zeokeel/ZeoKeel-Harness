@@ -139,9 +139,9 @@ describe('FIX-31: background lifecycle tasks no longer drop a queued session tra
     await waitFor(() => keysOf(harness).includes(SECRET_B))
 
     const keys = keysOf(harness)
-    const connect = await callRoute(harness, '/api/pico/connectors/example-mcp/connect', 'POST')
+    const connect = await callRoute(harness, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     await sleep(250)
-    const disconnect = await callRoute(harness, '/api/pico/connectors/example-mcp/disconnect', 'POST')
+    const disconnect = await callRoute(harness, '/api/zeokeel/connectors/example-mcp/disconnect', 'POST')
 
     // (1) the LIVE registration belongs to B: it is the newest config, and A's
     // own registration was retired by the transition that now really ran
@@ -196,7 +196,7 @@ describe('FIX-31: background lifecycle tasks no longer drop a queued session tra
     const rotated = 'SCOPE-A-SECRET-ROTATED'
     await seedCredential(dirOf(USER_A), 'example-mcp', { fields: { API_KEY: rotated }, updatedAt: Date.now() + 1000 })
     const before = harness.configs.length
-    harness.emit('pico/connector-credentials-changed', { id: 'example-mcp' })
+    harness.emit('zeokeel/connector-credentials-changed', { id: 'example-mcp' })
     await waitFor(() => harness.configs.length > before)
 
     expect(keysOf(harness).at(-1), 'background rebuild must still work').toBe(rotated)

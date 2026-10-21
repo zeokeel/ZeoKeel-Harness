@@ -304,7 +304,7 @@ func emptyTestDB(t *testing.T) (*sql.DB, func()) {
 	}
 	adminURL := *u
 	adminURL.Path = "/postgres"
-	name := "picoaide_test_empty_" + randomSuffix(6)
+	name := "zeokeel_test_empty_" + randomSuffix(6)
 	if _, err := admin.Exec("CREATE DATABASE " + name); err != nil {
 		admin.Close()
 		t.Fatalf("create empty test db %s: %v", name, err)

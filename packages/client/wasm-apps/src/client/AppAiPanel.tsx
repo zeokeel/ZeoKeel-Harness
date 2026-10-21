@@ -18,7 +18,7 @@
  *  - **错误分层**（§21.2）：失败渲染成 `code + message`（本地化文案 + 英文诊断），
  *    `ai_cancelled` 只当"你停了"（不是错误样式）。
  *
- * @module @picoaide/dsh-wasm-apps/client/AppAiPanel
+ * @module @zeokeel/dsh-wasm-apps/client/AppAiPanel
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -203,7 +203,7 @@ export function AppAiPanel({ appId, scope, store, deps }: {
    * 不允许（审计 C-25）：**必须真的关掉宿主闸门**。
    *
    * 此前它只 `setDenied(true)` —— 一句界面标记而已：用户读到"这个应用不能使用 AI"，
-   * 而应用照样能经 `/__picoaide/ai/chat` 花掉他的额度。现在与「允许」走**同一条写面
+   * 而应用照样能经 `/__zeokeel/ai/chat` 花掉他的额度。现在与「允许」走**同一条写面
    * 路径**（`syncAppAiConsent(appId, false)`），并同步清掉渲染层的 UI 记忆（否则下次
    * 打开面板会因为 localStorage 里还留着 `granted` 而跳过说明卡，与关掉的闸门自相矛盾）。
    * 写失败 ⇒ 不宣称已拒绝（闸门可能还开着），如实报错。
@@ -259,11 +259,11 @@ export function AppAiPanel({ appId, scope, store, deps }: {
   const stop = useCallback((): void => { controller.current?.abort() }, [])
 
   return (
-    <div style={BOX} className="pico-app-ai" data-role="app-ai">
+    <div style={BOX} className="zeokeel-app-ai" data-role="app-ai">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <strong data-role="ai-title">{t('appCenter.ai.title')}</strong>
         {consented && (
-          <button type="button" className="pico-app-ai-revoke" data-action="ai-revoke" style={{ ...BUTTON, marginLeft: 'auto' }} onClick={revoke}>
+          <button type="button" className="zeokeel-app-ai-revoke" data-action="ai-revoke" style={{ ...BUTTON, marginLeft: 'auto' }} onClick={revoke}>
             {t('appCenter.ai.revoke')}
           </button>
         )}
@@ -293,7 +293,7 @@ export function AppAiPanel({ appId, scope, store, deps }: {
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button
               type="button"
-              className="pico-app-ai-allow"
+              className="zeokeel-app-ai-allow"
               data-action="ai-allow"
               style={{ ...BUTTON, ...(identityPending ? { opacity: 0.55, cursor: 'default' } : {}) }}
               disabled={identityPending}
@@ -301,7 +301,7 @@ export function AppAiPanel({ appId, scope, store, deps }: {
             >
               {t('appCenter.ai.allow')}
             </button>
-            <button type="button" className="pico-app-ai-deny" data-action="ai-deny" style={BUTTON} onClick={deny}>
+            <button type="button" className="zeokeel-app-ai-deny" data-action="ai-deny" style={BUTTON} onClick={deny}>
               {t('appCenter.ai.deny')}
             </button>
           </div>
@@ -332,7 +332,7 @@ export function AppAiPanel({ appId, scope, store, deps }: {
             </div>
           )}
           <textarea
-            className="pico-app-ai-input"
+            className="zeokeel-app-ai-input"
             style={{ ...TEXT, marginTop: 6 }}
             rows={2}
             value={draft}
@@ -341,11 +341,11 @@ export function AppAiPanel({ appId, scope, store, deps }: {
             onChange={event => { setDraft(event.target.value) }}
           />
           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-            <button type="button" className="pico-app-ai-send" data-action="ai-send" style={BUTTON} disabled={busy || draft.trim() === ''} onClick={() => { void send() }}>
+            <button type="button" className="zeokeel-app-ai-send" data-action="ai-send" style={BUTTON} disabled={busy || draft.trim() === ''} onClick={() => { void send() }}>
               {t('appCenter.ai.send')}
             </button>
             {busy && (
-              <button type="button" className="pico-app-ai-stop" data-action="ai-stop" style={BUTTON} onClick={stop}>
+              <button type="button" className="zeokeel-app-ai-stop" data-action="ai-stop" style={BUTTON} onClick={stop}>
                 {t('appCenter.ai.cancel')}
               </button>
             )}

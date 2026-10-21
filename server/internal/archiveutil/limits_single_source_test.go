@@ -6,9 +6,9 @@ package archiveutil_test
 import (
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/agentshare"
-	"github.com/picoaide/picoaide/internal/archiveutil"
-	"github.com/picoaide/picoaide/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/agentshare"
+	"github.com/zeokeel/zeokeel-harness/server/internal/archiveutil"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
 )
 
 // TestArchiveLimitsSingleSource 锁"四入口同一套边界"的数字只有一个真源。

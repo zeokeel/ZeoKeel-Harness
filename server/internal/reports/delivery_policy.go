@@ -36,7 +36,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 const (
@@ -48,7 +48,7 @@ const (
 
 // reportPushLockClass 是投递认领的 advisory-lock 命名空间（int4 类号）。
 //
-// 取值刻意与既有锁键不同空间：本仓其它调用点用的是 int8 键（"Pico"/"PicT" 等）
+// 取值刻意与既有锁键不同空间：本仓其它调用点用的是 int8 键（"ZeoKeel"/"PicT" 等）
 // 或 hashtext(单键)，而 `pg_advisory_lock(int4,int4)` 会打包成
 // `(classid << 32) | objid` ⇒ 只要 classid 不为 0 就不会撞上那些小整数键。
 const reportPushLockClass = int32(0x52505431) // "RPT1"

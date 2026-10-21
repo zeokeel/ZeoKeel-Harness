@@ -19,10 +19,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
 
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // errOIDCState is returned by HandleCallback for unknown or reused state.
@@ -282,7 +282,7 @@ func (p *OIDCProvider) HandleCallback(code, state string) (UserInfo, error) {
 // the state is written into a SameSite=Lax cookie at /oidc/login and must be
 // echoed by the /oidc/callback request (login CSRF 防护:第三方页面不能在受害者
 // 浏览器里发起登录流程并把自己的身份塞给受害者)。
-const oidcStateCookieName = "picoaide_oidc_state"
+const oidcStateCookieName = "zeokeel_oidc_state"
 
 // handleOIDCLoginWith runs the login flow for a specific browser provider.
 // `?server=<url>` records the initiating client's server address, carried in
@@ -542,13 +542,13 @@ func returnServerOf(p BrowserProvider, state string) string {
 // 每项可为 `https://host[:port]` 或裸 `host[:port]`,裸主机按 https 解释)。
 //
 // 用途:多 vhost / 内外双域名部署 —— 客户端登录页填的地址既不是某次请求的 Host
-// 依据,又不该占用 PICOAI_PUBLIC_BASE_URL(后者是客户端下载地址的唯一权威来源,
+// 依据,又不该占用 ZEOKEEL_PUBLIC_BASE_URL(后者是客户端下载地址的唯一权威来源,
 // 改它会影响下发)。请求方改不了这个环境变量,故它可以作为来源证明。
 //
-// 注意区分:这是 **OIDC 深链回跳地址** 的允许清单,与 `PICOAI_TRUSTED_PROXIES`
+// 注意区分:这是 **OIDC 深链回跳地址** 的允许清单,与 `ZEOKEEL_TRUSTED_PROXIES`
 // (反代 IP,用于登录限流取真实客户端 IP)不是一回事;它也不是 HTTP Host 头的
 // 允许清单 —— Host 头根本不参与来源判定(见 returnServerIsTrusted)。
-const TrustedReturnServerHostsEnv = "PICOAI_TRUSTED_HOSTS"
+const TrustedReturnServerHostsEnv = "ZEOKEEL_TRUSTED_HOSTS"
 
 // returnServerIsTrusted 判定 `?server=` 是否指向**服务端配置**声明的本服务对外
 // 来源(scheme + host,默认端口/大小写/尾斜杠/子路径归一后比对)。
@@ -556,8 +556,8 @@ const TrustedReturnServerHostsEnv = "PICOAI_TRUSTED_HOSTS"
 // 可信来源只有三类,都是请求方改不了的服务端配置:
 //  1. OIDC `redirect_url` 的 origin —— IdP 把浏览器重定向回来的地址,SSO 能走通
 //     就说明它是本服务的浏览器可达来源;
-//  2. `PICOAI_PUBLIC_BASE_URL`(客户端下载地址的唯一权威,见 clientrelease);
-//  3. `PICOAI_TRUSTED_HOSTS`(上面的显式补充清单)。
+//  2. `ZEOKEEL_PUBLIC_BASE_URL`(客户端下载地址的唯一权威,见 clientrelease);
+//  3. `ZEOKEEL_TRUSTED_HOSTS`(上面的显式补充清单)。
 //
 // R7-F3-N3(复核 2026-09-13):这里**刻意不看请求 Host**。Host 是请求头,不是
 // 来源证明 —— 任何能决定"浏览器用哪个 Host 到达本服务端"的入口(自有 vhost 的

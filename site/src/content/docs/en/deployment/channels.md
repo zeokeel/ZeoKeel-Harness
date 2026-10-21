@@ -1,6 +1,6 @@
 ---
 title: Channels & white-label
-description: 'The PicoAide Harness channel mechanism: why channel content is built into the image, why channels never upgrade into one another, which deployment values must agree, and how to diagnose branding lost after an upgrade.'
+description: 'The ZeoKeel Harness channel mechanism: why channel content is built into the image, why channels never upgrade into one another, which deployment values must agree, and how to diagnose branding lost after an upgrade.'
 ---
 
 The same code base can be delivered as multiple **channels**. A channel decides what a given
@@ -23,15 +23,15 @@ and is injected into the image. This documentation always uses placeholders (`<c
 
 | Channel | Purpose | Distribution surface |
 |---|---|---|
-| `official` | Official releases | Update server `release.picoaide.com/official/` + GitHub Release (complete historical archive) |
-| `beta` | Pre-release (version tags containing `-beta` / `-rc` / `-alpha`) | Update server `release.picoaide.com/beta/` + GitHub Pre-release |
-| `<channel id>` | Enterprise custom / white-label delivery | **Only** via the update server `release.picoaide.com/<channel id>/` (never in a public Release) |
+| `official` | Official releases | Update server `release.zeokeel.com/official/` + GitHub Release (complete historical archive) |
+| `beta` | Pre-release (version tags containing `-beta` / `-rc` / `-alpha`) | Update server `release.zeokeel.com/beta/` + GitHub Pre-release |
+| `<channel id>` | Enterprise custom / white-label delivery | **Only** via the update server `release.zeokeel.com/<channel id>/` (never in a public Release) |
 
 Each channel has its own directory on the update server, with a structure identical to the official one:
 
 ```
 <channel>/latest.json
-<channel>/releases/<version>/picoaide-server-<version>-amd64.zip
+<channel>/releases/<version>/zeokeel-server-<version>-amd64.zip
 <channel>/releases/<version>/SHA256SUMS
 ```
 
@@ -48,14 +48,14 @@ back to the official brand" is one mistaken edit away.
 **Why channels never upgrade into one another (refuse at startup instead of falling back).** At startup
 the server verifies "the channel inside the image == the process channel", and during update checks it
 verifies "the manifest's `channel_id` == this deployment's channel". Any mismatch **refuses**: an
-invalid `PICOAI_CHANNEL` refuses to start; content conflicting with the process channel refuses to
+invalid `ZEOKEEL_CHANNEL` refuses to start; content conflicting with the process channel refuses to
 start; a mismatched manifest channel is reported as "update check unavailable" (not as "no new
 version"). Why not fall back to `official`: a fallback would let a customised deployment accept the
 official manifest, losing its branding and channel configuration after the upgrade, **with no error
 anywhere**.
 
 **Why one image archive carries identical tags in every channel (while the content differs).** Channel
-differences live in the image **content** (`/opt/picoaide/channel/` and the baked channel marker), not
+differences live in the image **content** (`/opt/zeokeel/channel/` and the baked channel marker), not
 in the tag. That creates an operational constraint worth remembering: a second channel stack on the same
 host overwrites identically named tags when it runs `docker load`, so every archive additionally carries
 a channel-specific tag and a multi-stack host's `.env` must point at it
@@ -67,9 +67,9 @@ A channel is not a runtime configuration upload; it is injected at build time an
 
 ```
 image build --build-arg CHANNEL=<channel id>
-        ├─ ENV PICOAI_CHANNEL=<channel id>   ← runtime channel identity
-        ├─ /opt/picoaide/CHANNEL             ← authoritative declaration file (works even if the deployment sets nothing)
-        └─ /opt/picoaide/channel/            ← channel content (names / copy / marks / accent colour)
+        ├─ ENV ZEOKEEL_CHANNEL=<channel id>   ← runtime channel identity
+        ├─ /opt/zeokeel/CHANNEL             ← authoritative declaration file (works even if the deployment sets nothing)
+        └─ /opt/zeokeel/channel/            ← channel content (names / copy / marks / accent colour)
 ```
 
 Channel content includes:
@@ -205,30 +205,30 @@ behaviour. Criterion: whether that channel's `latest.json` on the update server 
 
 | Value | Decided by | Notes |
 |---|---|---|
-| This deployment's channel | **The image** (`/opt/picoaide/CHANNEL`) | `.env`'s `PICOAI_CHANNEL` **may be left empty**; if set it must match the image |
-| Update manifest address | `PICOAI_UPDATE_ENDPOINT`, empty = this channel's default directory | **Empty does not mean off**; write `off` to disable |
+| This deployment's channel | **The image** (`/opt/zeokeel/CHANNEL`) | `.env`'s `ZEOKEEL_CHANNEL` **may be left empty**; if set it must match the image |
+| Update manifest address | `ZEOKEEL_UPDATE_ENDPOINT`, empty = this channel's default directory | **Empty does not mean off**; write `off` to disable |
 | The manifest's `channel_id` | The `latest.json` in that channel's directory | Must equal this deployment's channel |
 | The image tag (multi-stack hosts) | The `<channel id>-<version>` tag in each archive | Each stack's `SERVER_IMAGE` must point at its own channel tag |
 
 The server enforces this at startup and during update checks:
 
-- An invalid `PICOAI_CHANNEL` → **refuses to start** (it never falls back to `official`);
+- An invalid `ZEOKEEL_CHANNEL` → **refuses to start** (it never falls back to `official`);
 - The image's channel conflicting with the process channel (typically because `.env` / compose overrode
   the image declaration) → **refuses to start**;
 - A manifest `channel_id` that differs from this deployment → reported as "update check unavailable",
   not as "no new version"; channels never silently upgrade into one another.
 
 > Upgrading from an older version: compose no longer hard-codes a channel. If `.env` still carries a
-> hand-written `PICOAI_CHANNEL=official`, a branded deployment is judged inconsistent — delete that line.
+> hand-written `ZEOKEEL_CHANNEL=official`, a branded deployment is judged inconsistent — delete that line.
 
 ## Criteria
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2-)
 
 # 1) the channel baked into the image (authoritative declaration)
-docker exec picoaide-server cat /opt/picoaide/CHANNEL
+docker exec zeokeel-server cat /opt/zeokeel/CHANNEL
 
 # 2) the channel the server reports publicly
 curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/channel"
@@ -242,7 +242,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 
 | # | Criterion | Passing looks like | Failing looks like |
 |---|---|---|---|
-| 1 | The image channel is readable | `cat /opt/picoaide/CHANNEL` prints this stack's channel id | The file is missing ⇒ the image is not a released package |
+| 1 | The image channel is readable | `cat /opt/zeokeel/CHANNEL` prints this stack's channel id | The file is missing ⇒ the image is not a released package |
 | 2 | The public channel agrees | `/api/client/v2/channel`'s `channel_id` == criterion 1 | They differ ⇒ the channel was overridden and the container may already have refused to start |
 | 3 | The update endpoint is right | the log's `channel resolved: … (update endpoint …)` points at this channel's directory | An empty endpoint ⇒ update checks were explicitly set to `off`; another channel's endpoint ⇒ the upgrade will be refused (never a silent cross-channel upgrade) |
 | 4 | The manifest channel agrees | `channel_id` == criterion 1 | Mismatch ⇒ the server reports the update check as unavailable |
@@ -251,10 +251,10 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 
 | Symptom | Criterion (how to confirm) | Recovery |
 |---|---|---|
-| "New version available" never appears | `docker compose logs server` prints `manifest channel "…" != this server's channel "…"` | The three channel values disagree: most often `PICOAI_CHANNEL` was changed without the endpoint (or the reverse); it may also be that the endpoint is set to `off`. The server caches for **6 hours**, so a delay right after a release is normal |
-| The container exits at startup, printing an invalid channel configuration | the log names `PICOAI_CHANNEL` | That value (or the image's channel marker) is not a valid channel id: fix the spelling or remove the override — **never** count on a fallback |
+| "New version available" never appears | `docker compose logs server` prints `manifest channel "…" != this server's channel "…"` | The three channel values disagree: most often `ZEOKEEL_CHANNEL` was changed without the endpoint (or the reverse); it may also be that the endpoint is set to `off`. The server caches for **6 hours**, so a delay right after a release is normal |
+| The container exits at startup, printing an invalid channel configuration | the log names `ZEOKEEL_CHANNEL` | That value (or the image's channel marker) is not a valid channel id: fix the spelling or remove the override — **never** count on a fallback |
 | The container exits at startup, printing a channel mismatch | the log names the image channel and the process channel | `.env` / compose overrode the channel and it differs from the image content: remove the override or make it match the image |
-| Branding changed after an upgrade / the portal shows vendor branding | `cat /opt/picoaide/CHANNEL` ≠ `/api/client/v2/channel`'s `channel_id` | Wrong channel image: point `.env` back at this channel's **channel tag** and recreate; verify the image id as described in [Upgrade, backup & rollback](/en/deployment/upgrade/) and do not keep upgrading from it |
+| Branding changed after an upgrade / the portal shows vendor branding | `cat /opt/zeokeel/CHANNEL` ≠ `/api/client/v2/channel`'s `channel_id` | Wrong channel image: point `.env` back at this channel's **channel tag** and recreate; verify the image id as described in [Upgrade, backup & rollback](/en/deployment/upgrade/) and do not keep upgrading from it |
 | Customers received old-behaviour packages | That channel's `latest.json` still shows the old `server.version` | Branded channels are only produced on a **release tag**: wait for one, or confirm the channel repository change was pushed (CI fetches from the channel repository) |
 | The client shows different branding from the server | The client's sign-in page / sidebar branding | The client's branding comes from the **bundled copy** (used when the server is unreachable or older): reinstall the client delivered with the server (see [Client delivery & updates](/en/deployment/client-delivery/)) |
 | Two channel stacks on one host overwrite each other's branding | One stack's container image id points at another channel's image | Channel tag overwrite: redo the multi-stack section of [Upgrade, backup & rollback](/en/deployment/upgrade/) (`.env` must point at `<channel id>-<version>`) |
@@ -265,7 +265,7 @@ A channel-scoped client keeps its configuration, sessions, connector credentials
 **own** data directory, so clients of different channels can live on the same machine without
 interfering:
 
-- Official channel: `~/.picoaide-harness`;
+- Official channel: `~/.zeokeel-harness`;
 - Pre-release channel (`beta`): **shares the official release's data directory** — a pre-release is the
   release's own verification stage, so sign-in state, settings and sessions must carry over (this is
   deliberate: a separate directory would make pre-release users lose their existing sessions after

@@ -13,7 +13,7 @@ const VChartLazy = React.lazy(async () => {
   const { createChart } = await import('@visactor/react-vchart/esm/charts/BaseChart')
   const { VChart: SimpleVChart } = await import('@visactor/vchart/esm/vchart-simple')
   // vchart-simple 内置注册 line/bar/area/pie/common 及其轴/图例/tooltip/label
-  const VChart = createChart('PicoVChart', { vchartConstructor: SimpleVChart })
+  const VChart = createChart('ZeoKeelVChart', { vchartConstructor: SimpleVChart })
   return { default: VChart }
 })
 

@@ -28,8 +28,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // resetBalanceAdmissionState 复位准入侧的进程内状态（计数/最近一条/下限/日志节流）。

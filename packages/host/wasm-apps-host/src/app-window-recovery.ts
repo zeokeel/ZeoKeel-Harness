@@ -29,7 +29,7 @@
  * 额度、重试目标、失败页），把它与 Electron 隔开就能在纯 Node 下逐条钉住
  * （`app-window-recovery.spec.ts`）。`electron-adapter.ts` 只负责把原生事件喂进来。
  *
- * @module @picoaide/dsh-wasm-apps-host/app-window-recovery
+ * @module @zeokeel/dsh-wasm-apps-host/app-window-recovery
  */
 
 import type { AppWindowFailureCopy } from './app-window-copy.ts'
@@ -155,10 +155,10 @@ export function createAppWindowRecovery(options: AppWindowRecoveryOptions): AppW
             setCrashed(false)
             return
           } catch (cause) {
-            warn(`pico-wasm-apps-host: the automatic reload of an application window did not complete (${cause instanceof Error ? cause.message : String(cause)})`)
+            warn(`zeokeel-wasm-apps-host: the automatic reload of an application window did not complete (${cause instanceof Error ? cause.message : String(cause)})`)
           }
         } else {
-          warn('pico-wasm-apps-host: an application window failed before it had a document URL; showing the failure page without a reload target')
+          warn('zeokeel-wasm-apps-host: an application window failed before it had a document URL; showing the failure page without a reload target')
         }
       }
       // 走到这里只有两种可能：自动重载失败，或重试额度已用尽（`phase !== 'idle'`）。
@@ -185,7 +185,7 @@ export function createAppWindowRecovery(options: AppWindowRecoveryOptions): AppW
       }))
     } catch (cause) {
       // 连失败页都加载不出来：只能留一条诊断（窗口已经是空白，没有别的出口）。
-      warn(`pico-wasm-apps-host: the application window failure page failed to load (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: the application window failure page failed to load (${cause instanceof Error ? cause.message : String(cause)})`)
     }
   }
 
@@ -196,7 +196,7 @@ export function createAppWindowRecovery(options: AppWindowRecoveryOptions): AppW
       setCrashed(true)
       if (options.host.isDestroyed()) return
       if (pending !== undefined) {
-        warn(`pico-wasm-apps-host: an application window failure arrived while recovery was in flight; joining it instead of navigating again (${failure.kind})`)
+        warn(`zeokeel-wasm-apps-host: an application window failure arrived while recovery was in flight; joining it instead of navigating again (${failure.kind})`)
         return await pending
       }
       const settled = recover()

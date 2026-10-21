@@ -18,7 +18,7 @@ const SKILLS = [
 
 const BUILTIN = [{
   name: 'app-builder', version: '1.0.0', title: '应用构建（WASM 应用）',
-  description: '用 Go 写一个应用平台上的 WASM 应用', author: 'PicoAide', category: '应用开发',
+  description: '用 Go 写一个应用平台上的 WASM 应用', author: 'ZeoKeel', category: '应用开发',
   sha256: 'a'.repeat(64), size: 43282, files: 11, source: 'builtin',
 }]
 
@@ -28,7 +28,7 @@ beforeEach(() => {
     if (path === '/api/server/admin/skills') return { skills: SKILLS }
     if (path === '/api/server/admin/skills/builtin') {
       return {
-        dir: '/opt/picoaide/skills',
+        dir: '/opt/zeokeel/skills',
         dir_exists: true,
         skills: BUILTIN,
         problems: [],
@@ -92,7 +92,7 @@ describe('CapabilityCenter 能力中心(统一管理面)', () => {
       expect(mockRequest).toHaveBeenCalledWith('/api/server/admin/skills/builtin')
     })
     expect(await screen.findByTestId('builtin-row-app-builder')).toHaveTextContent('1.0.0')
-    expect(screen.getByTestId('builtin-dir')).toHaveTextContent('/opt/picoaide/skills')
+    expect(screen.getByTestId('builtin-dir')).toHaveTextContent('/opt/zeokeel/skills')
     // 只读面：没有任何上架/授权/审批入口。
     expect(screen.queryByText('上架技能')).not.toBeInTheDocument()
   })

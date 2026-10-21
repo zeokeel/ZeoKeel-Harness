@@ -1,6 +1,6 @@
 /**
  * Host cron service: composes the ledger, scheduler, and executor behind the
- * picoCronService surface, owns the browser-visible snapshot/SSE state, and
+ * zeokeelCronService surface, owns the browser-visible snapshot/SSE state, and
  * exposes the sibling-plugin registration API.
  */
 import { HostCronLedger } from './host-ledger.ts'
@@ -8,7 +8,7 @@ import { HostCronExecutor, type CronExecutorDeps } from './host-executor.ts'
 import { HostCronScheduler } from './host-scheduler.ts'
 import { jobVisibleTo, type JobRecord } from './jobs.ts'
 import { CRON_SCHEMA_VERSION, type CronEventPayload, type CronSchedulerSnapshot, type CronSnapshot, type CronAction } from './protocol.ts'
-import type { CronJobRegistration, PicoCronService } from './service.ts'
+import type { CronJobRegistration, ZeoKeelCronService } from './service.ts'
 
 export interface HostCronServiceOptions {
   ledger?: HostCronLedger
@@ -17,7 +17,7 @@ export interface HostCronServiceOptions {
   now?: () => number
 }
 
-export class HostCronService implements PicoCronService {
+export class HostCronService implements ZeoKeelCronService {
   readonly ledger: HostCronLedger
   readonly scheduler: HostCronScheduler
   private readonly listeners = new Set<() => void>()
@@ -141,7 +141,7 @@ export class HostCronService implements PicoCronService {
     return this.snapshot()
   }
 
-  // picoCronService surface (sibling plugins)
+  // zeokeelCronService surface (sibling plugins)
 
   registerJob(registration: CronJobRegistration): void {
     this.assertOpen()

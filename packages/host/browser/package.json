@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-browser",
+  "name": "@zeokeel/dsh-browser",
   "version": "0.1.0",
-  "description": "Embedded agent-driven browser (WebContentsView + CDP) for PicoAide Harness",
+  "description": "Embedded agent-driven browser (WebContentsView + CDP) for ZeoKeel Harness",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -32,7 +32,7 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-store",
-        "@picoaide/dsh-foot-menu"
+        "@zeokeel/dsh-foot-menu"
       ],
       "platform": "web"
     }
@@ -54,14 +54,14 @@
     "@deepseek-ai/dsh-timeout": "0.2.1-rc.2",
     "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/dsh-user-approval": "0.2.1-rc.2",
-    "@picoaide/dsh-host-home": "workspace:*",
-    "@picoaide/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-host-home": "workspace:*",
+    "@zeokeel/dsh-host-locale": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/cordis-plugin-include": "1.0.9",
     "@deepseek-ai/cordis-plugin-loader": "1.0.5",
-    "@picoaide/dsh-connectors": "workspace:*",
+    "@zeokeel/dsh-connectors": "workspace:*",
     "electron": "44.0.0"
   },
   "devDependencies": {
@@ -87,10 +87,10 @@
     "@deepseek-ai/dsh-session": "0.2.1-rc.2",
     "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2",
     "@deepseek-ai/dsh-util-values": "0.2.1-rc.2",
-    "@picoaide/dsh-connectors": "workspace:*",
-    "@picoaide/dsh-foot-menu": "workspace:*",
     "@types/node": "^22.20.0",
     "@types/react": "^18",
+    "@zeokeel/dsh-connectors": "workspace:*",
+    "@zeokeel/dsh-foot-menu": "workspace:*",
     "dsh-plugin-desktop": "workspace:*",
     "electron": "44.0.0",
     "jsdom": "^25.0.0",

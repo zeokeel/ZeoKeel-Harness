@@ -547,7 +547,7 @@ function harness(withRuntime = true): void {
   runtimeProbe = withRuntime ? { locale: 'zh' } : undefined
   const ctx = {
     get: (name: string) => {
-      if (name === 'picoSession') return { getSession: () => null }
+      if (name === 'zeokeelSession') return { getSession: () => null }
       if (name === 'desktopRuntime') return runtimeProbe
       if (name === 'connection') return undefined
       return undefined
@@ -576,7 +576,7 @@ async function get(path: string, acceptLanguage?: string): Promise<string> {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'pico-browser-i18n-'))
+  home = mkdtempSync(join(tmpdir(), 'zeokeel-browser-i18n-'))
   vi.stubEnv('DSH_HOME', home)
 })
 

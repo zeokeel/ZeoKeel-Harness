@@ -32,8 +32,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 )
 
 // mainGoCodeOnly 读取 main.go 并**剥掉注释**后返回源码文本。

@@ -132,7 +132,7 @@ async function awaitRow(
   const deadline = Date.now() + timeoutMs
   let last: { status: string, error?: string, request?: { fields?: unknown[] } | null } = { status: '?' }
   while (Date.now() < deadline) {
-    const listed = JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const listed = JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string, error?: string, request?: { fields?: unknown[] } | null }> }
     last = listed.connectors.find(c => c.id === id) ?? last
     if (predicate(last)) return last
@@ -212,7 +212,7 @@ describe('audit: refresh failure must not park the connector forever', () => {
       30_000,
       'recovery after the endpoint returns',
     )
-    const status = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const status = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string }> }).connectors.find(c => c.id === 'example-mcp')
     expect(status?.status).toBe('connected')
     h.dispose()
@@ -235,7 +235,7 @@ describe('audit: reconnect paths', () => {
     // the user starts a fresh authorization and the authorization server fails
     // the token exchange -> the flow ends in an error
     server.fail = 'server_error'
-    const connect = await callRoute(h, '/api/pico/connectors/example-mcp/connect', 'POST')
+    const connect = await callRoute(h, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     expect(connect.status).toBe(200)
     // Wait until the row reports the failure (the flow ended), then assert the
     // previous registration survived it.
@@ -290,13 +290,13 @@ describe('audit: state and announcement hygiene', () => {
     })
     h.emitSession({ username: 'user-a' })
     await waitFor(() => h.configs.length === 1)
-    const before = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const before = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, expiresAt: number | null }> }).connectors.find(c => c.id === 'example-mcp')
     expect(before?.expiresAt).toBeGreaterThan(Date.now())
 
-    const res = await callRoute(h, '/api/pico/connectors/example-mcp/disconnect', 'POST')
+    const res = await callRoute(h, '/api/zeokeel/connectors/example-mcp/disconnect', 'POST')
     expect(res.status).toBe(200)
-    const after = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const after = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string, expiresAt: number | null, refreshedAt: number | null }> })
       .connectors.find(c => c.id === 'example-mcp')
     expect(after?.status).toBe('disconnected')
@@ -344,9 +344,9 @@ describe('audit: auth flows other than OAuth', () => {
     const h = createHarness([def], dir, { refreshSweepIntervalMs: 0, requestApproval: () => true })
     h.emitSession({ username: 'user-a' })
 
-    const connect = await callRoute(h, '/api/pico/connectors/glitchtip/connect', 'POST')
+    const connect = await callRoute(h, '/api/zeokeel/connectors/glitchtip/connect', 'POST')
     expect(connect.status).toBe(200)
-    const submitted = await callRoute(h, '/api/pico/connectors/glitchtip/auth-submit', 'POST', {
+    const submitted = await callRoute(h, '/api/zeokeel/connectors/glitchtip/auth-submit', 'POST', {
       fields: { base_url: 'https://g.example.com', token: 'tok-1' },
     })
     // The harness' callRoute cannot send a JSON body; the real route reads one,
@@ -356,7 +356,7 @@ describe('audit: auth flows other than OAuth', () => {
 
     const store = new ConnectorStore({ baseDir: dir })
     await store.updateCredential('glitchtip', { fields: { base_url: 'https://g.example.com', token: 'tok-1' } })
-    h.emit('pico/connector-credentials-changed', { id: 'glitchtip' })
+    h.emit('zeokeel/connector-credentials-changed', { id: 'glitchtip' })
     await waitFor(() => h.configs.length >= 1, 5000)
     const config = h.configs.at(-1) as unknown as { env?: Record<string, string> }
     expect(config.env?.base_url).toBe('https://g.example.com')
@@ -370,13 +370,13 @@ describe('audit: auth flows other than OAuth', () => {
     connector.settings = [{ key: 'tenant', label: 'Tenant', type: 'text', required: true }]
     const dir = mkdtempSync(join(tmpdir(), 'audit-j-'))
     const h = createHarness([connector], dir, { refreshSweepIntervalMs: 0 })
-    await callRoute(h, '/api/pico/connectors/example-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
 
     // The pre-connect settings form is shown, before any OAuth flow starts.
     const settingsRow = await awaitRow(h, 'example-mcp', (r) => Array.isArray(r.request?.fields) && r.request!.fields!.length === 1)
     expect(settingsRow.request!.fields![0]!.key).toBe('tenant')
 
-    await callRoute(h, '/api/pico/connectors/example-mcp/auth-submit', 'POST', { fields: { tenant: 'acme' } })
+    await callRoute(h, '/api/zeokeel/connectors/example-mcp/auth-submit', 'POST', { fields: { tenant: 'acme' } })
     // After settings are submitted the real authorization flow must start (an
     // authorize URL appears) and nothing may register yet.
     const authorizeRow = await awaitRow(h, 'example-mcp', (r) => typeof r.request?.authorizeUrl === 'string')
@@ -410,8 +410,8 @@ describe('audit: auth flows other than OAuth', () => {
     const server = await start({ expiresIn: 3600 })
     const dir = mkdtempSync(join(tmpdir(), 'audit-h-'))
     const h = createHarness([oauthDef(server.origin)], dir, { refreshSweepIntervalMs: 0 })
-    const first = await callRoute(h, '/api/pico/connectors/example-mcp/connect', 'POST')
-    const second = await callRoute(h, '/api/pico/connectors/example-mcp/connect', 'POST')
+    const first = await callRoute(h, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
+    const second = await callRoute(h, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     expect([first.status, second.status]).toEqual([200, 200])
     await new Promise(r => setTimeout(r, 200))
     // no credential was ever authorized, so nothing may have registered
@@ -431,7 +431,7 @@ describe('audit: device-code connectors', () => {
     }
     const dir = mkdtempSync(join(tmpdir(), 'audit-i-'))
     const h = createHarness([def], dir, { refreshSweepIntervalMs: 0, requestApproval: () => true })
-    const connect = await callRoute(h, '/api/pico/connectors/dev-conn/connect', 'POST')
+    const connect = await callRoute(h, '/api/zeokeel/connectors/dev-conn/connect', 'POST')
     expect(connect.status).toBe(200)
 
     const store = new ConnectorStore({ baseDir: dir })
@@ -445,10 +445,10 @@ describe('audit: device-code connectors', () => {
     expect(h.configs.length).toBe(0)
 
     // the user fills the form: now it may connect
-    const submitted = await callRoute(h, '/api/pico/connectors/dev-conn/auth-submit', 'POST', { fields: { token: 'tok-9' } })
+    const submitted = await callRoute(h, '/api/zeokeel/connectors/dev-conn/auth-submit', 'POST', { fields: { token: 'tok-9' } })
     expect(submitted.status).toBe(200)
     await waitFor(() => h.configs.length === 1, 5000)
-    const after = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const after = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string }> }).connectors.find(c => c.id === 'dev-conn')
     expect(after?.status).toBe('connected')
     expect((await store.readCredential('dev-conn'))?.fields?.token).toBe('tok-9')

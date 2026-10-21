@@ -1,4 +1,4 @@
-# 内置 AI 浏览器（@picoaide/dsh-browser v4.2）Bug 审计报告
+# 内置 AI 浏览器（@zeokeel/dsh-browser v4.2）Bug 审计报告
 
 - 日期：2026-09-07
 - 对象：`packages/host/browser`（v4.2 单池定案，2026-09-07 13:17 构建 + 14:17 打包产物 `dist/linux-unpacked`）
@@ -54,9 +54,9 @@
 
 ## P1-3　浏览器数据 store 目录不随登录切换（多账号数据混用）
 
-**根因**：`index.ts:193-199` 在插件 apply 时一次性计算 `usernameForStore` 并固定 store 目录（`userData/browser-store/<user>`）；而 partition 是 `runtime.setPartition()` 随 `pico/session-changed` 活的。`session-service.ts` 的 `restore()` 是**异步**的（safeStorage 读写），apply 同步执行时 `currentUser()` 常为 `null` → store 落在 `…/browser-store/anonymous`；此后登录/换人只换 partition 不换 store。同机多账号切换 → 书签/历史/下载/标签 ledger 互相可见；重启后登录与未登录状态下的数据也不是同一份。
+**根因**：`index.ts:193-199` 在插件 apply 时一次性计算 `usernameForStore` 并固定 store 目录（`userData/browser-store/<user>`）；而 partition 是 `runtime.setPartition()` 随 `zeokeel/session-changed` 活的。`session-service.ts` 的 `restore()` 是**异步**的（safeStorage 读写），apply 同步执行时 `currentUser()` 常为 `null` → store 落在 `…/browser-store/anonymous`；此后登录/换人只换 partition 不换 store。同机多账号切换 → 书签/历史/下载/标签 ledger 互相可见；重启后登录与未登录状态下的数据也不是同一份。
 
-**修复**：`pico/session-changed` 处理器中同步切换 store（`runtime.setStoreForUser(username)`，重建 BrowserStore 或加 `setDir`/重载）；或 store 位置改为依赖 partition（`session.partition` 派生目录）并随切换重建。ledger 建议按用户分文件即已隔离目录。
+**修复**：`zeokeel/session-changed` 处理器中同步切换 store（`runtime.setStoreForUser(username)`，重建 BrowserStore 或加 `setDir`/重载）；或 store 位置改为依赖 partition（`session.partition` 派生目录）并随切换重建。ledger 建议按用户分文件即已隔离目录。
 
 ## P1-4　下载守卫按标签重复挂载 → 单次下载产生 N 份记录 + 双写
 
@@ -72,7 +72,7 @@
 |---|---|---|---|---|
 | 1 | `runtime.ts:1207-1210` | `wait_for` `url-change` 表达式 = `location.href.length > 0`（恒真）；`network-idle` = `… || true`（恒真） | 工具立即返回 `ok:true`，模型误以为 URL 已变化/网络空闲——SPA 等待类任务核心语义失效 | url-change 注入 startUrl 比较（`location.href !== <startUrl>`）；network-idle 用 `performance.getEntriesByType('resource')` 末项 loadTime 判定；两者补测试 |
 | 2 | `pool.restoreLedger` + `runtime.restoreLedger` | 重启后 ledger 只恢复 pool 元数据（url/title/active），无视图、无重建；`shellState` 读 `runtime.tabs` 为空 → 标签不可见但占配额；`destroyTab` 对无视图标签提前 return → `pool.removeTab` 不执行 → **僵尸标签永久无法关闭**；新标签 id 从 1 开始与恢复 id 冲突 | 每次重启后配额虚耗、僵尸标签滞留，设计「views recreated on demand」无实现者 | 恢复时按 url 重建视图（或恢复即置为「已关闭但记录在案」，点开时懒建）；修 destroyTab 先 pool.removeTab；nextTabId 从 max(ledger ids)+1 起 |
-| 3 | `runtime.ts:122` + 无 wiring | `downloadDir` 默认 `.picoaide-downloads`（**相对 cwd**）；打包安装目录通常只读/无权限；与设计「DSH_HOME/downloads」不符；`setSavePath` 抛错被 `.catch(() => item.cancel())` 吞掉 → 记录永远 `in-progress` | 下载静默失败 + 挂死记录 | 默认 `join(DSH_HOME, 'downloads')`，desktop 层注入；download 失败路径更新状态为 `rejected` 并记 op |
+| 3 | `runtime.ts:122` + 无 wiring | `downloadDir` 默认 `.zeokeel-downloads`（**相对 cwd**）；打包安装目录通常只读/无权限；与设计「DSH_HOME/downloads」不符；`setSavePath` 抛错被 `.catch(() => item.cancel())` 吞掉 → 记录永远 `in-progress` | 下载静默失败 + 挂死记录 | 默认 `join(DSH_HOME, 'downloads')`，desktop 层注入；download 失败路径更新状态为 `rejected` 并记 op |
 | 4 | `runtime.ts:468` | `record()` 硬编码 `actor:'ai'` | 用户 shell 操作（开页/导航/关闭/接管）在 op log 全标 AI；历史 actor 正确（user 路径传参），但活动面板时间线失真 | record 增加 actor 参数（navigate 用户路径已带，接线即可） |
 | 5 | `runtime.ts:565-568` | `waitUntil:'networkidle'` 只是固定 sleep 800ms | 语义桩；与 wait_for network-idle 同样失真 | 沿用 waitForLoad 的 networkidle 判定（`did-finish-load`+800ms 空闲） |
 | 6 | `runtime.ts:752` | eval `frame` 负值静默回落主 frame；越界才报 not-found | 设计 §7.3-9 要求负值也报错；模型传数错误时静默读错 frame | `frame < 0` 直接 `not-found` |
@@ -122,7 +122,7 @@ phase B: wait_for busy=true busyTool=browser_wait_for      ← 忙态正常
 ### P0-1　overlay 架构落地（shell 悬浮 UI → 常驻透明 overlay 视图）
 - `shell-pages.ts` 重写：`BROWSER_SHELL_HTML` 只保留两行 chrome（TabStrip + Omnibox + 空态）；新增 `BROWSER_OVERLAY_HTML`（AI 指示胶囊 / 活动面板 / ⋮ 菜单 / 查看器 / 忙时遮罩），加载在独立 `transparent:true` 的 **z-top WebContentsView**（复用原 mask 视图）中。
 - `runtime.ts`：`shouldMaskShow/applyMask` → `effectiveOverlayMode/overlayBounds/applyOverlay`。**视图 bounds 即布局**——capsule=右下 248×34；panel=右侧 340 竖栏；menu=右上 224×340；viewer/mask=全内容区——overlay 页按 `state.ui.mode` 渲染对应 surface 填充视口；视图外区域点击天然落在页面（无需 setIgnoreMouseEvents 的整面穿透问题）。
-- `index.ts`：新增 `POST /api/pico/browser/overlay {mode}` + `/browser-overlay` 路由；`shellState.ui.mode` 下发（overlay 页与 shell 经 SSE 同步）。
+- `index.ts`：新增 `POST /api/zeokeel/browser/overlay {mode}` + `/browser-overlay` 路由；`shellState.ui.mode` 下发（overlay 页与 shell 经 SSE 同步）。
 - 语义保持：忙时（busy && !controlled）强制 'mask'（scrim + pill「AI 正在操作 · 点击让我接管」全内容区拦截）；接管后回用户所选模式；Esc 关闭浮层/释放。
 
 ### P0-2　browser_open 接入互斥/忙态/用户闸
@@ -139,7 +139,7 @@ phase B: wait_for busy=true busyTool=browser_wait_for      ← 忙态正常
 - `runtime.uploadFile` 增加 `allowedDirs`（下载目录 + 会话 cwd，`tools.ts` 从 `exec.agent.session(*.cwd)` 提取）；`realpath` 规范化 + 前缀匹配；越界 → `policy` 错误。无白名单（未配置）→ 直接 policy 拒绝。
 
 ### P1-3　store 随会话切换
-- `index.ts`：`pico/session-changed` → `closeAll` + `setPartition` + `switchStoreForUser`（新建该用户 BrowserStore → `runtime.setStore` → `restoreLedger`）。store 目录 `userData/browser-store/<user>` 与 partition 同源切换；匿名→登录、多账号切换不再混用书签/历史/下载/ledger。
+- `index.ts`：`zeokeel/session-changed` → `closeAll` + `setPartition` + `switchStoreForUser`（新建该用户 BrowserStore → `runtime.setStore` → `restoreLedger`）。store 目录 `userData/browser-store/<user>` 与 partition 同源切换；匿名→登录、多账号切换不再混用书签/历史/下载/ledger。
 
 ### P1-4　下载守卫去重（guard.ts）
 - `BrowserGuard.guardedSessions`（WeakSet）：同一 session 只装一次 `will-download`；多标签共享分区不再产生重复下载记录/op/路径竞争。
@@ -208,12 +208,12 @@ phase B: wait_for busy=true busyTool=browser_wait_for      ← 忙态正常
 | R3-1 | 标签页 favicon 是死灰占位块，真实 favicon 从未加载 | 监听 `page-favicon-updated` → `BrowserTabState.favicon` → shell 渲染 `<img class=favicon>`（src 用 DOM 属性赋值防注入）；E2E 断言真实 favicon 出现 |
 | R3-2 | 后退/前进/刷新按钮从不置灰（不可用时点了没反应） | `webContents.navigationHistory.canGoBack/canGoForward`（Electron 43 新 API）进 tab 状态；shell 按可用性禁用按钮；E2E 断言无历史时 back 禁用 |
 | R3-3 | 书签/历史查看器条目是死文本 | 行可点击：关闭 viewer → `navigate` 打开该 URL（E2E 断言点击后地址栏更新） |
-| R3-4 | 下载条目无法打开文件 | 新增 `POST /api/pico/browser/downloads/open {id}` → `adapter.openPath`（`shell.openPath`）；「打开」按钮 + 成功/失败 toast；runtime 单测覆盖 |
+| R3-4 | 下载条目无法打开文件 | 新增 `POST /api/zeokeel/browser/downloads/open {id}` → `adapter.openPath`（`shell.openPath`）；「打开」按钮 + 成功/失败 toast；runtime 单测覆盖 |
 | R3-5 | 无 Ctrl+Tab 切换标签 / 无中键关闭 | shell + overlay 转发 Ctrl+Tab（循环切换）；标签 `auxclick` button===1 关闭；E2E 两项断言 |
 | R3-6 | 导航失败/配额超限等错误零反馈 | shell/overlay 各加 toast（错误 3.2s 自动消失，aria-live）；`postErr` 统一「错误→toast+refresh」；E2E 断言 `file://` 被拒后 toast 出现 |
 | R3-7 | 无 `prefers-reduced-motion` 降级；状态点无 aria-live | 两个页面加 `@media (prefers-reduced-motion: reduce)`（呼吸动画→静态）；胶囊 label `aria-live="polite"` |
 | R3-8 | 活动时间线只有时分秒，跨天条目无法分辨 | `fmtTime` 非当日加 `M/D` 前缀 |
-| R3-9 | 窗口标题恒「PicoAide 浏览器」 | `updateTabState`/`switchTab` 时 `refreshWindowTitle`：活动标签页标题 →「标题 — PicoAide 浏览器」；单测锁定 |
+| R3-9 | 窗口标题恒「ZeoKeel 浏览器」 | `updateTabState`/`switchTab` 时 `refreshWindowTitle`：活动标签页标题 →「标题 — ZeoKeel 浏览器」；单测锁定 |
 
 ### 验证
 - browser check 全绿（**160 单测**：新增 favicon/history 标志暴露、窗口标题跟随、openDownloadPath 正/反例）

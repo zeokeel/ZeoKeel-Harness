@@ -104,7 +104,7 @@ async function waitForRow(
   let row: Row = {}
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
-    const res = await callRoute(harness, `/api/pico/connectors/${id}/state`, 'GET')
+    const res = await callRoute(harness, `/api/zeokeel/connectors/${id}/state`, 'GET')
     row = JSON.parse(res.body) as Row
     if (settle(row)) return row
     await new Promise(resolve => setTimeout(resolve, 25))
@@ -163,7 +163,7 @@ async function authRequiredRow(def = stickyDef()): Promise<{ harness: ReturnType
   globalThis.fetch = discoveryFetch()
   const dir = mkdtempSync(join(tmpdir(), 's04-3-sticky-'))
   const harness = createHarness([def], dir)
-  await callRoute(harness, '/api/pico/connectors/sticky-mcp/connect', 'POST')
+  await callRoute(harness, '/api/zeokeel/connectors/sticky-mcp/connect', 'POST')
   const row = await waitForRow(harness, 'sticky-mcp', candidate => candidate.status === 'unauthorized')
   // Every case in this file starts here, so this is where the file's outbound
   // dependency is pinned: `auth-required` can only be reached after the
@@ -180,7 +180,7 @@ it('a later uncoded failure clears the row\u2019s stale `auth-required`', async 
   globalThis.fetch = (async (input: unknown) => {
     throw new TypeError(`fetch failed: ${String(input)}`)
   }) as typeof fetch
-  await callRoute(harness, '/api/pico/connectors/sticky-mcp/connect', 'POST')
+  await callRoute(harness, '/api/zeokeel/connectors/sticky-mcp/connect', 'POST')
   const uncoded = await waitForRow(harness, 'sticky-mcp', candidate => candidate.status === 'error')
   harness.dispose()
 
@@ -193,7 +193,7 @@ it('disconnect clears the row\u2019s stale `auth-required`', async () => {
   const { harness, row: classified } = await authRequiredRow()
   expect(classified.errorCode).toBe('auth-required')
 
-  await callRoute(harness, '/api/pico/connectors/sticky-mcp/disconnect', 'POST')
+  await callRoute(harness, '/api/zeokeel/connectors/sticky-mcp/disconnect', 'POST')
   const cleared = await waitForRow(harness, 'sticky-mcp', candidate => candidate.status === 'disconnected')
   harness.dispose()
 
@@ -213,7 +213,7 @@ it('a refused registration clears the row\u2019s stale `auth-required`', async (
   // 与连接异常那条（经 withCode）是同一个字段的第二种粘法。
   def.mcp = [{ serverName: 'sticky-mcp', transport: 'stdio' }] as unknown as ConnectorDef['mcp']
   globalThis.fetch = (async () => new Response('ok', { status: 200 })) as typeof fetch
-  await callRoute(harness, '/api/pico/connectors/sticky-mcp/connect', 'POST')
+  await callRoute(harness, '/api/zeokeel/connectors/sticky-mcp/connect', 'POST')
   const refused = await waitForRow(harness, 'sticky-mcp', candidate => candidate.status === 'error')
   harness.dispose()
 
@@ -234,7 +234,7 @@ it('entering `connecting` clears the previous error and its code', async () => {
   let release!: () => void
   const gate = new Promise<void>((resolve) => { release = resolve })
   globalThis.fetch = (async () => { await gate; throw new TypeError('fetch failed') }) as typeof fetch
-  await callRoute(harness, '/api/pico/connectors/sticky-mcp/connect', 'POST')
+  await callRoute(harness, '/api/zeokeel/connectors/sticky-mcp/connect', 'POST')
   const connecting = await waitForRow(harness, 'sticky-mcp', candidate => candidate.status === 'connecting')
 
   // 关键断言：连接中既不得显示上一条失败，也不得带着它的分类（两者同进同退）。

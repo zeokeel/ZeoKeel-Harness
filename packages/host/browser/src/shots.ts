@@ -2,7 +2,7 @@
  * Screenshot capture for the embedded browser: `capturePage` → downscale to a
  * bounded width → JPEG base64. Screenshots are returned to the model and
  * never persisted (audit keeps op log text only).
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import type { NativeWebContents } from './electron-adapter.ts'

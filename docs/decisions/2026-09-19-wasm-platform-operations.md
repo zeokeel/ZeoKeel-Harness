@@ -22,7 +22,7 @@
 | 内存 | `appdb_cache_kib` | 下一个新建连接（连接级 PRAGMA） |
 | 内存 | `app_db_readers` | **下一个应用库句柄**（只读连接必须在 appdb 建库的一次性令牌窗口内一次建满；默认 4，范围 1–16）——2026-09-19 新增，见 `2026-09-19-wasm-app-concurrency-default.md` |
 
-优先级：**控制台保存的设置（`settings.wasm.limits`）> 部署档位 `PICOAI_WASM_MEMORY_PROFILE` > 编译期默认**。
+优先级：**控制台保存的设置（`settings.wasm.limits`）> 部署档位 `ZEOKEEL_WASM_MEMORY_PROFILE` > 编译期默认**。
 解析与持有在 `cmd/server/wasmapp_limits.go`（原子读；写路径只有控制台）。
 
 ### 1.2 保存路径 fail-loud，启动路径可恢复
@@ -50,16 +50,16 @@
 
 ## 2. 内置演示应用（装完即用、可删除）
 
-- **制品与清单随镜像分发**：`/opt/picoaide/demo-apps/{app.wasm,demos.json}`（Dockerfile 构建，
+- **制品与清单随镜像分发**：`/opt/zeokeel/demo-apps/{app.wasm,demos.json}`（Dockerfile 构建，
   `demoapps/appdemo` 编译成 wasm32-wasip1）。
 - **一份 wasm，三种权限模式**：`demos.json` 把它播种成
   `demo-public`（历史上标为公开，现按登录处理）/ `demo-login`（登录可见）/ `demo-whitelist`（名单可见）。
-  准入模式是平台侧配置；**whitelist 的名单比对按 R24 由应用自己读 `picoaide.app.json` 完成**
+  准入模式是平台侧配置；**whitelist 的名单比对按 R24 由应用自己读 `zeokeel.app.json` 完成**
   （平台只负责"要求登录 + 告知模式"），演示页把这一点直接写在页面上。
 - **播种**：`internal/wasmapp/appseed` 在服务端启动时执行（`cmd/server/wasmapp_demo.go`，
   归属人 = 最早的超管）。**判据是"库里是否已存在该 app_id"**：存在（含软删/冻结）即跳过
   ⇒ 管理员删除演示应用后，重启也不会被塞回来。
-- 播种会显式写出**版本资源目录** `<data_root>/apps/<app_id>/assets/<release_id>/picoaide.app.json`
+- 播种会显式写出**版本资源目录** `<data_root>/apps/<app_id>/assets/<release_id>/zeokeel.app.json`
   （见 §3.2），播种的 release 为 `approved` 且应用直接上架。
 
 ## 3. 三个必须记住的坑
@@ -73,11 +73,11 @@
 ### 3.2 版本**必须**有资源目录
 
 应用请求管线在请求路径上 `assets.Open(root, app_id, release_id)`，**失败即 500**
-（"该版本的资源目录缺失"）；随后还要 `loadAppConfig` 读 `picoaide.app.json`，读不到同样 500
+（"该版本的资源目录缺失"）；随后还要 `loadAppConfig` 读 `zeokeel.app.json`，读不到同样 500
 （绝不按匿名处理）。因此任何"绕过 HTTP 发布链路"的播种（内置演示、批量导入）都必须自己把
 资源目录与配置写出来 —— 只写 `apps` + `app_releases` 是不够的。
 
-### 3.3 镜像内文件权限：服务端以 `picoaide` 用户运行
+### 3.3 镜像内文件权限：服务端以 `zeokeel` 用户运行
 
 演示制品拷进镜像时若保留 `0600 root`，运行期读不到（`appseed: 装载失败：Permission denied`）。
 Dockerfile 里补了 `chmod -R a+rX /out/demo-apps`；本机往容器里 `docker cp` 时也要先 `chmod 644`。

@@ -11,14 +11,14 @@
  *
  * scheme 由渠道包 `desktop.app_origin_scheme` 决定（官方与每个品牌渠道各不相同），
  * 客户端 bundle 读不到渠道包 ⇒ 它来自宿主的本机只读路由
- * `GET /api/pico/wasm-apps/channel`（`channel-seam.ts`）。本模块**不再有**写死的
+ * `GET /api/zeokeel/wasm-apps/channel`（`channel-seam.ts`）。本模块**不再有**写死的
  * `APP_PROTOCOL` 常量：拿不到 scheme 就当"还开不了"，给一个可辨的 reason
  * （{@link OpenFailureReason} 的 `scheme-unavailable`）并**一次请求都不发**。
  *
  * 客户端这一侧只做一件事：调**本机路由**（冻结接口，C3 实现）
  *
  * ```
- * POST /api/pico/wasm-apps/open     body: {"app_id":"<app_id>"}
+ * POST /api/zeokeel/wasm-apps/open     body: {"app_id":"<app_id>"}
  *   → 200 {"url":"<app-origin-scheme>://<app_id>/", "opens":{"today":{"pv":N,"uv":M}}?}
  * ```
  *
@@ -29,9 +29,9 @@
  *
  * ## 持有性证明（**请求头**机制，2026-09-20 P0 订正）
  *
- * 本机写面要求 **`X-Pico-Host-Proof` 请求头**（宿主 seam 的实现，见
+ * 本机写面要求 **`X-ZeoKeel-Host-Proof` 请求头**（宿主 seam 的实现，见
  * `packages/host/wasm-apps-host/src/host-request.ts` 与 §22.2 R2）：渲染层先用
- * `GET /api/pico/wasm-apps/host-proof` 引导一枚短时令牌（内存持有），再在每个本机调用上
+ * `GET /api/zeokeel/wasm-apps/host-proof` 引导一枚短时令牌（内存持有），再在每个本机调用上
  * 带着它。**不是** cookie 机制 —— 旧注释写的"证明随同源 cookie 自动发出"是错的
  * （那是上一版 `write-proof.ts` 的形态，改成请求头正是 R2 的要求：零端口下没有
  * Cookie/Host/Origin/端口）。
@@ -46,7 +46,7 @@
  *
  * ## 平台侧的 app-proof（§20/§23）与"客户端不重试"
  *
- * 平台端点 `request` / `open` 都要求 `X-Pico-App-Proof`
+ * 平台端点 `request` / `open` 都要求 `X-ZeoKeel-App-Proof`
  * （{@link APP_PROOF_HEADER}，值由宿主持有并**只存内存**：客户端半边不持 bearer、
  * 也不签发 proof）。因此本模块：①发的是**本机**路由（宿主自己给平台请求带上 proof）；
  * ②**永不重试**：401 只翻译成 `not-signed-in`（会话过期/被吊销交给宿主与重登流程），
@@ -60,7 +60,7 @@
  * 等于请求的 app_id）—— 退回"fetch 没抛错就算打开"就是存在性断言，正是本仓点名的
  * 假绿形态。
  *
- * @module @picoaide/dsh-wasm-apps/client/open-app
+ * @module @zeokeel/dsh-wasm-apps/client/open-app
  */
 
 import { APP_ID_MAX_LENGTH, APP_ID_PATTERN } from './appcfg-contract.ts'
@@ -80,7 +80,7 @@ import {
 } from './host-proof.ts'
 
 /**
- * 本机打开路由（**冻结接口**：契约 §5.2 的表格；与 C3 的 `/api/pico/wasm-apps`
+ * 本机打开路由（**冻结接口**：契约 §5.2 的表格；与 C3 的 `/api/zeokeel/wasm-apps`
  * 前缀路由逐字一致，两端不得各写一份路径）。
  *
  * 它是**路径**而不是渠道变量（§22.2 R1 的 `hostRequestSurface` seam：今天映射到
@@ -89,7 +89,7 @@ import {
  * `packages/host/desktop/tests/wasm-app-open-route-parity.spec.ts`。
  * 会随渠道变的是 **scheme**（见模块注释），不是这条路径。
  */
-export const OPEN_APP_PATH = '/api/pico/wasm-apps/open'
+export const OPEN_APP_PATH = '/api/zeokeel/wasm-apps/open'
 
 /**
  * 平台 app-proof 头名（§20.1/§23.1 冻结）。
@@ -98,7 +98,7 @@ export const OPEN_APP_PATH = '/api/pico/wasm-apps/open'
  * 签发 proof（§5.1b：谁调用 = 宿主的本机打开路由）。这里导出它，是为了让"客户端这一侧
  * 没有第二份拼装点"可被断言（用例同时断言本模块源码里不出现它）。
  */
-export const APP_PROOF_HEADER = 'X-Pico-App-Proof'
+export const APP_PROOF_HEADER = 'X-ZeoKeel-App-Proof'
 
 /** 失败原因（机器可读；UI 与用例都按它分派，不要匹配 message 文本）。 */
 export type OpenFailureReason =
@@ -410,7 +410,7 @@ export async function openAppEntry(rawAppId: unknown, deps: OpenAppDeps = defaul
     return {
       ok: false,
       reason: 'scheme-unavailable',
-      error: 'the app origin scheme for this installation is unknown: the host channel route (/api/pico/wasm-apps/channel) has not answered with a usable appOriginScheme, so no request was sent',
+      error: 'the app origin scheme for this installation is unknown: the host channel route (/api/zeokeel/wasm-apps/channel) has not answered with a usable appOriginScheme, so no request was sent',
       status: null,
     }
   }

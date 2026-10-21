@@ -125,7 +125,7 @@ describe('打开校验闸门：404 的两档语义（R2-L2-2）', () => {
       session: () => ({ serverURL: SERVER, token: 'tok' }),
       fetch: async (_url, init) => {
         calls += 1
-        proofs.push(new Headers(init.headers).get('x-pico-app-proof') ?? '')
+        proofs.push(new Headers(init.headers).get('x-zeokeel-app-proof') ?? '')
         if (calls === 1) {
           return new Response(JSON.stringify({ error: { code: 'proof_replayed', message: '持有性证明重放' } }), { status: 401 })
         }

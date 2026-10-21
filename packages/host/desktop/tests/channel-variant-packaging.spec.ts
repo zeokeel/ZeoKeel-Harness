@@ -41,8 +41,8 @@ function manifest(modules: readonly string[], packages: readonly string[]): Chan
   }
 }
 
-const SKILLS_PACKAGE = '@picoaide/dsh-capability-center'
-const CONNECTORS_PACKAGE = '@picoaide/dsh-connectors'
+const SKILLS_PACKAGE = '@zeokeel/dsh-capability-center'
+const CONNECTORS_PACKAGE = '@zeokeel/dsh-connectors'
 
 const skillsClosed = manifest(['skills'], [SKILLS_PACKAGE])
 const connectorsClosed = manifest(['connectors'], [CONNECTORS_PACKAGE])
@@ -205,7 +205,7 @@ describe('缺席判据（承重）：关闭的模块整包不在产物里 + 全�
     expect(() => assertFeatureModulePresence(entries, 'fixture.asar', connectorsClosed)).not.toThrow()
     // 前缀必须带 `/` 边界：把 `dsh-wasm-apps` 当成 `dsh-wasm-apps-host` 的残留，
     // 或反过来漏判，都会让这条判据失去意义。
-    const wasmOnly = new Set([`node_modules/@picoaide/dsh-wasm-apps/package.json`])
+    const wasmOnly = new Set([`node_modules/@zeokeel/dsh-wasm-apps/package.json`])
     expect(() => assertFeatureModulePresence(wasmOnly, 'fixture.asar', null))
       .toThrow(/dsh-wasm-apps-host/u)
   })
@@ -216,7 +216,7 @@ describe('缺席判据（承重）：关闭的模块整包不在产物里 + 全�
     const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
     const { tmpdir } = await import('node:os')
     const { join } = await import('node:path')
-    const root = mkdtempSync(join(tmpdir(), 'pico-variant-afterpack-'))
+    const root = mkdtempSync(join(tmpdir(), 'zeokeel-variant-afterpack-'))
     const resources = join(root, 'resources')
     mkdirSync(join(resources, 'app.asar.unpacked'), { recursive: true })
     // 归档条目取自**全开**清单（再补齐六个模块包的 manifest）：这样前面那些"缺条目"
@@ -232,7 +232,7 @@ describe('缺席判据（承重）：关闭的模块整包不在产物里 + 全�
     const context = {
       appOutDir: root,
       electronPlatformName: 'linux',
-      packager: { appInfo: { productFilename: 'fixture', id: 'ai.deepseek.dsh.desktop' } },
+      packager: { appInfo: { productFilename: 'fixture', id: 'com.zeokeel.harness' } },
     } as unknown as PackagedRuntimeContext
     // 用真实清单文件驱动：写进 `temp/`（`packagedRuntimeVariantView()` 的缺省读取点）。
     const { applyChannelVariant } = await import('../scripts/channel-variant.ts')
@@ -277,7 +277,7 @@ describe('缺席判据在两套布局上都成立（物理布局 = 目录形态�
     const manifestPath = join(defaultChannelVariantDir(), 'channel-variant.json')
     const had = existsSync(manifestPath)
     const backup = had ? readFileSync(manifestPath, 'utf8') : undefined
-    const root = mkdtempSync(join(tmpdir(), 'pico-variant-physical-'))
+    const root = mkdtempSync(join(tmpdir(), 'zeokeel-variant-physical-'))
     const previous = process.env.PACKAGED_RUNTIME_LAYOUT
     try {
       // 随包声明与临时清单**两侧一致**地就位（见 withPackagedDeclaration 的说明）。
@@ -292,7 +292,7 @@ describe('缺席判据在两套布局上都成立（物理布局 = 目录形态�
         const context = {
           appOutDir: root,
           electronPlatformName: 'linux',
-          packager: { appInfo: { productFilename: 'fixture', id: 'ai.deepseek.dsh.desktop' } },
+          packager: { appInfo: { productFilename: 'fixture', id: 'com.zeokeel.harness' } },
         } as unknown as PackagedRuntimeContext
         // 探针一律说"在"：前面几条断言全过，唯一能红的就只剩缺席判据。
         expect(() => verifyPackagedRuntime(context, () => [], () => true, () => ''))
@@ -341,7 +341,7 @@ describe('随包声明是裁剪面的权威（2026-10-14 R2 审计 S3）', () =>
     expect(declaredFeaturePrune({ features: { connectors: false } } as never)).toEqual({
       closedModules: ['connectors'],
       packages: [CONNECTORS_PACKAGE],
-      rows: ['pico-connectors'],
+      rows: ['zeokeel-connectors'],
       directories: ['packages/host/connectors'],
     })
     // 没有渠道包（官方/未渠道化构建）= 全开：一个包都不摘。
@@ -367,7 +367,7 @@ describe('随包声明是裁剪面的权威（2026-10-14 R2 审计 S3）', () =>
       declared,
       { ...connectorsClosed, packages: [], rows: [] },
       '/fixture/temp/channel-variant.json',
-    )).toThrow(/packages: 随包声明=\[@picoaide\/dsh-connectors\] vs 临时清单=\[\]/u)
+    )).toThrow(/packages: 随包声明=\[@zeokeel\/dsh-connectors\] vs 临时清单=\[\]/u)
     expect(() => assertVariantDeclarationConsistency(
       declared, { ...connectorsClosed, rows: [] }, '/fixture/temp/channel-variant.json',
     )).toThrow(/rows:/u)
@@ -384,7 +384,7 @@ describe('随包声明是裁剪面的权威（2026-10-14 R2 审计 S3）', () =>
     // 一致形态：spec 的 `manifest()` 夹具不写 rows/directories，这里补齐成与声明同源的那份。
     const consistent = {
       ...connectorsClosed,
-      rows: ['pico-connectors'],
+      rows: ['zeokeel-connectors'],
       directories: ['packages/host/connectors'],
     }
     expect(() => assertVariantDeclarationConsistency(declared, consistent, '/fixture/x.json')).not.toThrow()

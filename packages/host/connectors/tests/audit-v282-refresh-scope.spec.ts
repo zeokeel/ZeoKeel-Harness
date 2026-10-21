@@ -132,7 +132,7 @@ async function awaitAuthorizeUrl(h: Harness, id: string): Promise<string> {
   const deadline = Date.now() + 15_000
   let url: string | undefined
   while (Date.now() < deadline && url === undefined) {
-    const res = await callRoute(h, `/api/pico/connectors/${id}/state`, 'GET')
+    const res = await callRoute(h, `/api/zeokeel/connectors/${id}/state`, 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request?.authorizeUrl
     if (url === undefined) await new Promise(r => setTimeout(r, 20))
   }
@@ -146,7 +146,7 @@ const refreshGrants = (server: RealMcpServer): number =>
 
 /** The `refreshing` flag the panel's list route reports for the CURRENT scope. */
 async function panelRefreshing(h: Harness): Promise<boolean> {
-  const body = JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+  const body = JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
     { connectors: Array<{ id: string, refreshing?: boolean }> }
   return body.connectors.find(entry => entry.id === ID)?.refreshing === true
 }
@@ -169,7 +169,7 @@ async function seedScopes(server: RealMcpServer, dirs: string[]): Promise<Connec
   cleanups.push(async () => { await rm(seedDir, { recursive: true, force: true }) })
   const seed = createHarness([def(server.origin)], seedDir, { refreshSweepIntervalMs: 0 })
   cleanups.push(() => { seed.dispose() })
-  await callRoute(seed, `/api/pico/connectors/${ID}/connect`, 'POST')
+  await callRoute(seed, `/api/zeokeel/connectors/${ID}/connect`, 'POST')
   await completeAuthorization(await awaitAuthorizeUrl(seed, ID))
   await waitFor(() => seed.configs.length === 1, 15_000)
   const bytes = await readFile(join(seedDir, `${ID}.json`), 'utf8')
@@ -287,7 +287,7 @@ describe('C3-04: a refresh result is keyed by (account scope, connector id)', ()
 
     // A's refresh is on the wire, stopped before the token endpoint answers.
     const token = parkFirstTokenRequest()
-    const refreshed = callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+    const refreshed = callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
     await token.entered
 
     // The session moves to the NEXT account. Its transition parks inside
@@ -335,7 +335,7 @@ describe('C3-05: the single-flight slot is keyed by (account scope, connector id
     // A's forced refresh is stopped on the wire: past the clock fast path, past
     // every local judgement, registered in the single-flight map, unanswered.
     const token = parkFirstTokenRequest()
-    const aRefresh = callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+    const aRefresh = callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
     await token.entered
     const grantsWhileAParked = refreshGrants(server)
 
@@ -355,7 +355,7 @@ describe('C3-05: the single-flight slot is keyed by (account scope, connector id
       // answered with A's outcome — zero token-endpoint requests for B, and the
       // 401 hook fell back to the SDK's own refresh path (a SECOND refresh owner
       // for one grant).
-      const bRefresh = callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+      const bRefresh = callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
       const deadline = Date.now() + 8_000
       while (Date.now() < deadline && refreshGrants(server) === grantsWhileAParked) {
         await new Promise(r => setTimeout(r, 20))
@@ -390,7 +390,7 @@ describe('C3-08: the scope judgement is enforced on the write, not only on a CAS
     // refresh is in flight when the account changes, and the next scope's
     // credential file is a field-for-field identical copy.
     const token = parkFirstTokenRequest()
-    const refreshed = callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+    const refreshed = callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
     await token.entered
 
     try {
@@ -443,7 +443,7 @@ describe('C3-04 (publish): a refresh reaches only its own account\'s live transp
 
     // Parked inside the write: the account recheck has passed, the write has not.
     const cas = parkFirstCasWrite()
-    const refreshed = callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+    const refreshed = callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
     await cas.entered
 
     try {

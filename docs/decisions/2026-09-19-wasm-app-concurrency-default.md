@@ -54,7 +54,7 @@ SQLite 单写者 + `BEGIN IMMEDIATE`：appdb 的 `writeMu` 保证同一应用同
 
 ## 4. 小机器（`small` 档）下的表现
 
-`PICOAI_WASM_MEMORY_PROFILE=small`：全局并发 3、单实例 64 MiB、模块缓存 64 MiB（四笔账 630 MiB，
+`ZEOKEEL_WASM_MEMORY_PROFILE=small`：全局并发 3、单实例 64 MiB、模块缓存 64 MiB（四笔账 630 MiB，
 适配 2 GB 级机器）。两个连带处理：
 
 1. **档位折算必须自洽**（本次修）：`app_running` 默认 4 > 全局 3，若不钳位，`FromProfile` 会给出

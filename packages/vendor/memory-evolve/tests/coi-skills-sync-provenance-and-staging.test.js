@@ -3,11 +3,11 @@
  * `A-skill-management.md` 的 A9 / A16 回归。
  *
  * A9（P2）随包插件开机同步**吃掉安装溯源**：`syncBuiltinSkills` 的整目录换入把
- *   目标目录里的 `.picoaide/release.json`（来源徽章 + 「是否被本地修改」判据）与
+ *   目标目录里的 `.zeokeel/release.json`（来源徽章 + 「是否被本地修改」判据）与
  *   `.install-version`（遥测读的已装版本）连同旧目录一起丢掉，且**同步自己不写
  *   provenance** ⇒ 同步之后该技能在能力中心退回"用户自制"（用户点一次"卸载"还能
  *   把它删掉，下次开机再装回来）。修复：
- *     1. 换入时把旧目录的 `.picoaide/` 与 `.install-version` **搬进新内容**，
+ *     1. 换入时把旧目录的 `.zeokeel/` 与 `.install-version` **搬进新内容**，
  *        随同一次原子 rename 回到位（失败回滚时必须搬回，见第三条用例）；
  *     2. 目标没有 provenance 时补一份本插件自己的：`channel: 'plugin'`，
  *        字段与客户端安装器 `writeProvenance` 一致（`appId` / `version` /
@@ -108,19 +108,19 @@ function seedPluginSkill(pluginSkills, { xVersion } = {}) {
  * 渠道必须是 `plugin`：P1-1 的来源闸门只允许整树换入"本插件自己的内容"
  * （见 tests/coi-skills-sync-source-gate.test.js），`market` 那一份会被拒收。 */
 function seedPluginInstall(userSkills, { channel = 'plugin', version = '9.9.9' } = {}) {
-  mkdirSync(join(userSkills, NAME, '.picoaide'), { recursive: true })
+  mkdirSync(join(userSkills, NAME, '.zeokeel'), { recursive: true })
   writeFileSync(join(userSkills, NAME, 'SKILL.md'), `---\nname: ${NAME}\ndescription: installed\nx-version: 1\n---\n# OLD-INSTALLED\n`)
   writeFileSync(
-    join(userSkills, NAME, '.picoaide', 'release.json'),
+    join(userSkills, NAME, '.zeokeel', 'release.json'),
     `${JSON.stringify({ appId: NAME, version, channel, installedAt: '2026-09-01T00:00:00.000Z' }, null, 2)}\n`,
   )
   writeFileSync(join(userSkills, NAME, '.install-version'), version)
-  return readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8')
+  return readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8')
 }
 
 /* ------------------------------------------------- A9：保留安装溯源（同步成功） */
 
-test('A9 + R4-B-1 成功换入：`.picoaide/` 与 `.install-version` 不丢，且版本跟到新的 x-version', () => {
+test('A9 + R4-B-1 成功换入：`.zeokeel/` 与 `.install-version` 不丢，且版本跟到新的 x-version', () => {
   const dir = tempDir()
   try {
     const pluginSkills = join(dir, 'plugin-skills')
@@ -132,7 +132,7 @@ test('A9 + R4-B-1 成功换入：`.picoaide/` 与 `.install-version` 不丢，�
 
     assert.equal(results.find((r) => r.name === NAME).action, 'synced')
     assert.match(readFileSync(join(userSkills, NAME, 'SKILL.md'), 'utf8'), /BUNDLED/, '内容必须来自插件源（换入仍然生效）')
-    const releasePath = join(userSkills, NAME, '.picoaide', 'release.json')
+    const releasePath = join(userSkills, NAME, '.zeokeel', 'release.json')
     assert.equal(existsSync(releasePath), true, '同步吃掉了安装溯源（A9）')
     const info = JSON.parse(readFileSync(releasePath, 'utf8'))
     // R4-B-1（第四轮）：整树换入新内容（x-version 2）之后，**我们自己写的**那份
@@ -164,7 +164,7 @@ test('R4-B-1 别的渠道的溯源一个字都不动（只有自己写的 plugin
 
     assert.equal(results.find((r) => r.name === NAME).action, 'refused')
     assert.equal(results.find((r) => r.name === NAME).code, 'SKILL_CHANNEL_CONFLICT')
-    assert.equal(readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8'), marketProv, 'market 溯源必须逐字不变')
+    assert.equal(readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8'), marketProv, 'market 溯源必须逐字不变')
     assert.equal(readFileSync(join(userSkills, NAME, '.install-version'), 'utf8'), '9.9.9')
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -181,7 +181,7 @@ test('A9 补齐 provenance：全新落盘写 `channel: "plugin"`，version 取 x
     const results = syncBuiltinSkills(pluginSkills, userSkills)
     assert.equal(results.find((r) => r.name === NAME).action, 'synced')
 
-    const releasePath = join(userSkills, NAME, '.picoaide', 'release.json')
+    const releasePath = join(userSkills, NAME, '.zeokeel', 'release.json')
     assert.equal(existsSync(releasePath), true, '同步必须写自己的 provenance（否则能力中心把它当"用户自制"）')
     const info = JSON.parse(readFileSync(releasePath, 'utf8'))
     assert.deepEqual(
@@ -210,7 +210,7 @@ test('A9 无 x-version：version 写空串，且不写 .install-version（与安
 
     syncBuiltinSkills(pluginSkills, userSkills)
 
-    const info = JSON.parse(readFileSync(join(userSkills, NAME, '.picoaide', 'release.json'), 'utf8'))
+    const info = JSON.parse(readFileSync(join(userSkills, NAME, '.zeokeel', 'release.json'), 'utf8'))
     assert.equal(info.version, '')
     assert.equal(info.channel, 'plugin')
     assert.equal(existsSync(join(userSkills, NAME, '.install-version')), false, '版本未知时不写 .install-version')
@@ -226,7 +226,7 @@ test('A9 幂等：第二次同步（版本相同 → unchanged）不得改写已
     const userSkills = join(dir, 'skills')
     seedPluginSkill(pluginSkills, { xVersion: 1 })
     syncBuiltinSkills(pluginSkills, userSkills)
-    const releasePath = join(userSkills, NAME, '.picoaide', 'release.json')
+    const releasePath = join(userSkills, NAME, '.zeokeel', 'release.json')
     const before = readFileSync(releasePath, 'utf8')
 
     const second = syncBuiltinSkills(pluginSkills, userSkills)
@@ -266,7 +266,7 @@ test('A9 换入失败回滚：搬进暂存目录的安装器标记必须搬回�
   assert.equal(ok.installVersion, '2')
 
   // 故障：staging→dest 换入失败 → 回滚把旧目录改回来；此前搬进暂存目录的
-  // `.picoaide/` 与 `.install-version` 必须一起搬回，**且必须还原成换入前的字节**
+  // `.zeokeel/` 与 `.install-version` 必须一起搬回，**且必须还原成换入前的字节**
   // （R4-B-1：我们可能已经把它们改写成新版本号，回滚不还原就会让旧内容配上新版本号）。
   const bad = run(true)
   assert.equal(bad.entry.action, 'refused', `换入失败必须如实记 refused：${JSON.stringify(bad.entry)}`)

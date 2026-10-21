@@ -10,7 +10,7 @@
  * browser 只差 3 个 `export` 关键字，cron 只差注释），四份互为独立实现意味着
  * 「一处收紧、其余三处不跟」——对信任边界，这种漂移是不对称的。四个包现在各自
  * 保留 `src/loopback.ts` 作为**同名 re-export**（对外子路径与导出面不变；
- * `@picoaide/dsh-enterprise/loopback` 是 `packages/client/account-card` 在消费的
+ * `@zeokeel/dsh-enterprise/loopback` 是 `packages/client/account-card` 在消费的
  * 外部契约）。改判定请只改本文件。
  *
  * 出处署名：设计移植自 dsh-web-ui `shared/host`（Apache-2.0）。
@@ -31,9 +31,9 @@
  * wasm-apps-host 六处各有一份同形拷贝。这里放的是**规范实现**（零依赖叶子：只
  * import `node:http` 的**类型**，与 `loopback` 入口同一口径），消费方经各自
  * `src/loopback.ts` 的同名 re-export 取用 —— `packages/client/account-card` 因此
- * 不需要新增任何依赖边（它已经在消费 `@picoaide/dsh-enterprise/loopback`），
+ * 不需要新增任何依赖边（它已经在消费 `@zeokeel/dsh-enterprise/loopback`），
  * 也不可能复用 desktop 那份（`dsh-plugin-desktop` 在 `scripts/check-workspaces.mjs`
- * 里声明了 `needs: ['@picoaide/dsh-account-card']`，反向 import 会成环）。
+ * 里声明了 `needs: ['@zeokeel/dsh-account-card']`，反向 import 会成环）。
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 

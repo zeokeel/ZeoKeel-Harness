@@ -132,7 +132,7 @@ export class McpTransportFenceUnavailableError extends Error {
  * Two jobs: a re-install never double-wraps, and the behavioural probe can tell
  * a fenced fetch from a caller's raw one without calling it.
  */
-const FENCED_FETCH = Symbol('picoaide.mcp.transport-fence.fenced-fetch')
+const FENCED_FETCH = Symbol('zeokeel.mcp.transport-fence.fenced-fetch')
 
 /**
  * Marks a transport instance whose own request fields were already rewritten.
@@ -143,7 +143,7 @@ const FENCED_FETCH = Symbol('picoaide.mcp.transport-fence.fenced-fetch')
  * hardened `_fetch` / `_fetchWithInit` / `_requestInit` without calling us
  * again.
  */
-const HARDENED = Symbol('picoaide.mcp.transport-fence.hardened')
+const HARDENED = Symbol('zeokeel.mcp.transport-fence.hardened')
 
 /**
  * The owner token of one transport instance's outbound bookkeeping.
@@ -154,7 +154,7 @@ const HARDENED = Symbol('picoaide.mcp.transport-fence.hardened')
  * endpoint-wide give-up release is gated on `soleLiveTransport` instead of
  * assuming the endpoint has one user.
  */
-const ACTIVITY_OWNER = Symbol('picoaide.mcp.transport-fence.activity-owner')
+const ACTIVITY_OWNER = Symbol('zeokeel.mcp.transport-fence.activity-owner')
 
 /**
  * Carries a transport's **live** request-header record on the one object
@@ -176,7 +176,7 @@ const ACTIVITY_OWNER = Symbol('picoaide.mcp.transport-fence.activity-owner')
  * instance. It therefore installs THIS record when the connector attached one,
  * and the connector mutates that very object when a credential changes.
  */
-const LIVE_HEADERS = Symbol('picoaide.mcp.transport-fence.live-headers')
+const LIVE_HEADERS = Symbol('zeokeel.mcp.transport-fence.live-headers')
 
 /**
  * Attach the record a provider-backed transport must read its headers from.
@@ -540,7 +540,7 @@ const AUTH_PROVIDER_FIELD = '_authProvider'
  */
 const FENCED_METHODS = ['start', 'send', 'terminateSession', 'resumeStream', 'finishAuth'] as const
 /** Header the probe instance carries, so a leaked probe is recognizable. */
-const PROBE_HEADER = 'x-picoaide-transport-fence'
+const PROBE_HEADER = 'x-zeokeel-transport-fence'
 /** Never contacted: the probe always supplies its own recording `fetch`. */
 const PROBE_URL = 'http://127.0.0.1:1/mcp'
 /**

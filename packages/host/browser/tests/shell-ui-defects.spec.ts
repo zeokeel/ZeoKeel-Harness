@@ -14,7 +14,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { HostLocale } from '@picoaide/dsh-host-locale'
+import type { HostLocale } from '@zeokeel/dsh-host-locale'
 import { BrowserRuntime } from '../src/runtime.ts'
 import { BrowserStore } from '../src/store.ts'
 import { raiseChildView, type ElectronAdapter, type NativeBounds, type NativeSession, type NativeView } from '../src/electron-adapter.ts'
@@ -409,7 +409,7 @@ describe('活动面板 summary 的语言（缺陷 #5c）', () => {
     // 页面自己发起的导航（will-navigate）落在**本机目标**上 ⇒ 记一条拒绝。
     const view = adapter.views.at(-1)!
     let prevented = false
-    view.emit('will-navigate', { preventDefault: () => { prevented = true } }, 'http://127.0.0.1:1/api/pico/browser/state')
+    view.emit('will-navigate', { preventDefault: () => { prevented = true } }, 'http://127.0.0.1:1/api/zeokeel/browser/state')
     expect(prevented).toBe(true)
 
     runtime.setUserControl(true, 'user')
@@ -436,7 +436,7 @@ describe('活动面板 summary 的语言（缺陷 #5c）', () => {
     expect(zh.get('browser_switch_tab')).toEqual(['切换标签页：1'])
     expect(zh.get('browser_takeover')).toEqual(['用户接管了浏览器'])
     expect(zh.get('browser_release')).toEqual(['用户交还了浏览器控制权'])
-    expect(zh.get('navigate:failed')).toEqual(['导航被拒（本机目标，http://127.0.0.1:1/api/pico/browser/state）'])
+    expect(zh.get('navigate:failed')).toEqual(['导航被拒（本机目标，http://127.0.0.1:1/api/zeokeel/browser/state）'])
   })
 
   it('英文：同一批 op 出英文（en 侧行为与本地化之前逐字一致）', async () => {
@@ -449,7 +449,7 @@ describe('活动面板 summary 的语言（缺陷 #5c）', () => {
     expect(en.get('browser_switch_tab')).toEqual(['switch to tab 1'])
     expect(en.get('browser_takeover')).toEqual(['user took over the browser'])
     expect(en.get('browser_release')).toEqual(['user released browser control'])
-    expect(en.get('navigate:failed')).toEqual(['navigation denied (local target, http://127.0.0.1:1/api/pico/browser/state)'])
+    expect(en.get('navigate:failed')).toEqual(['navigation denied (local target, http://127.0.0.1:1/api/zeokeel/browser/state)'])
   })
 
   it('语言按**调用**解析：同一个 runtime 先 zh 后 en，无需重新 apply', async () => {

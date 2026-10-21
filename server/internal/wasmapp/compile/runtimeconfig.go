@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/tetratelabs/wazero"
 )
 
@@ -25,14 +25,14 @@ import (
 //	调大（128 MiB）：声明 100 MiB 的模块被编译子进程按 64 MiB 误拒 ⇒ 应用永远发不出去，
 //	               连错误文案里的数字也是过期的 64 MiB。
 //
-// 通道为什么是环境变量而不是子进程 flag：flag 集是跨进程契约（cmd/picoaide-app-compile
+// 通道为什么是环境变量而不是子进程 flag：flag 集是跨进程契约（cmd/zeokeel-app-compile
 // 与本包两侧各自解析），加一个 flag 要同时改两侧；而这条参数是**部署级、进程生命周期内
 // 不可变**的（它属于子进程的 wazero RuntimeConfig，与执行侧同语义："改了要重启生效"），
-// 环境变量恰好表达这个语义，命名空间也与 PICOAI_COMPILE_ISOLATION 一致。
+// 环境变量恰好表达这个语义，命名空间也与 ZEOKEEL_COMPILE_ISOLATION 一致。
 //
 // ⚠️ 它**不在** compileEnvAllowlist 里：父环境里的同名变量永远不会被透传，值只可能来自
 // CompileChildEnv 的显式注入（"冒充值不得生效"用例：TestCompileChildEnvCarriesEffectiveMemoryPages）。
-const CompilerMemoryPagesEnvVar = "PICOAI_COMPILE_MEMORY_PAGES"
+const CompilerMemoryPagesEnvVar = "ZEOKEEL_COMPILE_MEMORY_PAGES"
 
 // maxCompilerMemoryPages 是 wazero 对 `WithMemoryLimitPages` 的硬上限
 // （超过它 wazero 直接 panic：`memoryLimitPages invalid: N > 65536`）。
@@ -52,7 +52,7 @@ func compilerMemoryPagesFromProcess() uint32 {
 	}
 	n, err := strconv.ParseUint(raw, 10, 32)
 	if err != nil || n == 0 || n > maxCompilerMemoryPages {
-		fmt.Fprintf(os.Stderr, "picoaide-app-compile: %s=%q 非法（应为 1–%d 页）⇒ 回落编译期默认 %d 页（%d MiB）\n",
+		fmt.Fprintf(os.Stderr, "zeokeel-app-compile: %s=%q 非法（应为 1–%d 页）⇒ 回落编译期默认 %d 页（%d MiB）\n",
 			CompilerMemoryPagesEnvVar, raw, maxCompilerMemoryPages,
 			limits.InstanceMemoryPages, limits.InstanceMemoryPages*limits.WasmPageSize>>20)
 		return limits.InstanceMemoryPages

@@ -32,16 +32,16 @@ Caddy 的 IP，60 次失败登录即可锁死全组织登录）——按 `server
 ## 1. 现象与复现
 
 ```bash
-cd server && GOCACHE=/data/picoaide-harness/temp/go-build GOMODCACHE=/data/picoaide-harness/temp/gomodcache \
-  GOPATH=/data/picoaide-harness/temp/gopath \
-  PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/picoaide_test \
+cd server && GOCACHE=/data/zeokeel-harness/temp/go-build GOMODCACHE=/data/zeokeel-harness/temp/gomodcache \
+  GOPATH=/data/zeokeel-harness/temp/gopath \
+  PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test \
   go test ./internal/serverauth -count=1
 ```
 
 ```
 --- FAIL: TestAdminUsageDept (0.87s)
     usage_admin_test.go:33: login: 429 {"error":{"code":"RATE_LIMITED","message":"登录尝试过于频繁,请稍后再试"}}
-FAIL	github.com/picoaide/picoaide/internal/serverauth	295.038s
+FAIL	github.com/zeokeel/zeokeel-harness/server/internal/serverauth	295.038s
 ```
 
 `usage_admin_test.go:33` 是 `adminSession()` 里**第一次、且密码完全正确**的管理面登录
@@ -57,7 +57,7 @@ go test ./internal/serverauth -count=1 -run TestAdminUsageDept   # PASS
 
 ### 2.1 谁把桶打满的
 
-给 limiter 加临时日志（`PICOAI_RL_DEBUG=1`，已随本次改动移除）跑整包，日志把**归属**钉死：
+给 limiter 加临时日志（`ZEOKEEL_RL_DEBUG=1`，已随本次改动移除）跑整包，日志把**归属**钉死：
 
 ```
 === RUN   TestAuditFixRandomUsernameStillRateLimitedByIP            (audit_fix_20260913_test.go:155)
@@ -112,7 +112,7 @@ distinct pointers over 40 open/close cycles: 2
 ### 2.3 为什么"正常登录"会被 429
 
 `TestAdminUsageDept` 第一步就是 `adminSession()`（正确密码）。管理面登录在
-`admin.go:344` 先做三桶判定，`PICOAI_LOGIN_MAX_ATTEMPTS=10000` 已被 `adminRouter`
+`admin.go:344` 先做三桶判定，`ZEOKEEL_LOGIN_MAX_ATTEMPTS=10000` 已被 `adminRouter`
 （`admin_test.go:557`）放宽，唯一的 60 上限桶就是 IP 桶 —— 只要它满，**正确密码也到不了
 `AuthenticateConfiguredAdmin`**。且成功登录才有机会 `reset` 桶（`admin.go:365`），
 而成功登录正是被拒的那一步 ⇒ 窗口内**自我锁死**，只能等 5 分钟滑窗自然过期。
@@ -126,7 +126,7 @@ distinct pointers over 40 open/close cycles: 2
 # A：常量作用域 + 无重置（= 修复前的产品+测试状态）
 --- FAIL: TestAdminUsageDept (1.32s)
     usage_admin_test.go:33: login: 429 {"error":{"code":"RATE_LIMITED","message":"登录尝试过于频繁,请稍后再试"}}
-FAIL	github.com/picoaide/picoaide/internal/serverauth	35.564s
+FAIL	github.com/zeokeel/zeokeel-harness/server/internal/serverauth	35.564s
 ```
 
 **与现场报错逐字一致**。同一把"复用"改成用例级重置后（= 本次修复）：
@@ -135,7 +135,7 @@ FAIL	github.com/picoaide/picoaide/internal/serverauth	35.564s
     audit_fix_20260913_test.go:166: 第 61 个随机用户名请求被 IP 桶拦下
 --- PASS: TestAuditFixRandomUsernameStillRateLimitedByIP (21.27s)
 --- PASS: TestAdminUsageDept (1.58s)
-ok  	github.com/picoaide/picoaide/internal/serverauth	23.401s
+ok  	github.com/zeokeel/zeokeel-harness/server/internal/serverauth	23.401s
 ```
 
 注意：爆破用例**自己那条 429 断言照旧成立**（限流没有被放宽），只是不再溢出到下一个用例。
@@ -144,12 +144,12 @@ ok  	github.com/picoaide/picoaide/internal/serverauth	23.401s
 
 | 桶 | 键 | 上限 | 窗口 | 计数（`record`） | 不计数 | 清空（`reset`） |
 |---|---|---|---|---|---|---|
-| `ip\|username` | `scope + loginHost(c) + "\|" + username`（**RemoteAddr**） | `PICOAI_LOGIN_MAX_ATTEMPTS`（缺省 10，**每次判定实时读 env**，`ratelimit.go:41-46,94-101`） | 5min（`newRateLimiter`，`ratelimit.go:114-121`） | 认证失败（`loginFailed` / 管理面 `lim.record(ipKey)`） | `allow()` 本身**不记账**（2026-09-08 P1-3：成功登录不再占配额） | 认证成功（`loginSucceeded` / `reset(ipKey)`） |
+| `ip\|username` | `scope + loginHost(c) + "\|" + username`（**RemoteAddr**） | `ZEOKEEL_LOGIN_MAX_ATTEMPTS`（缺省 10，**每次判定实时读 env**，`ratelimit.go:41-46,94-101`） | 5min（`newRateLimiter`，`ratelimit.go:114-121`） | 认证失败（`loginFailed` / 管理面 `lim.record(ipKey)`） | `allow()` 本身**不记账**（2026-09-08 P1-3：成功登录不再占配额） | 认证成功（`loginSucceeded` / `reset(ipKey)`） |
 | `u:username` | `scope + "u:" + username` | 同上（10） | 5min | 同上 | 同上 | 同上 |
 | **登录 IP 桶** | `loginIPBudgetKey`（本次改为 **ClientIP**；原 `scope+"ip:"+loginHost(c)`） | **`loginIPMaxAttempts = 60`（常量，不读 env）**，`ratelimit.go:60` | 5min | 同上（每个失败请求给 IP 桶 +1） | 同上；`/auth/me`、`/auth/usage` 等已认证接口**不经**此桶 | 同上（**成功登录才清空**——这正是"桶满即无人能登录"的原因） |
 | OIDC 回调桶 | `clientIPKey(c)` = `"ip:"+ClientIP()`（**无 db scope**） | 60（`callbackLimiterMaxAttempts`，`ratelimit.go:50`） | 5min | 失败回调（`oidcCallbackFailed`） | 成功回调 | `oidcCallbackSucceeded` |
 | OIDC/OpenID 流程桶 | `"oidc-login-ip:"+ClientIP()`（**无 db scope**） | 60（与 IP 桶同一个 limiter 实例） | 5min | **每个** `/auth/{oidc,openid}/login` 请求都 +1（`oidc.go:246-252`：`allow` 后立即 `record`，防流程表/出站 discovery 被放大） | — | 无（该键不随成功清空） |
-| MFA 第二步 IP 桶 | `"mfa-ip:"+ClientIP()`（本次由 RemoteAddr 改；**无 db scope**） | `PICOAI_LOGIN_MAX_ATTEMPTS`（10） | 5min | 动态码错误 | 票据无效/用户不可用等前置拒绝**不计数**（`admin.go:408-414` 直接返回） | MFA 成功（`admin.go:437-438`） |
+| MFA 第二步 IP 桶 | `"mfa-ip:"+ClientIP()`（本次由 RemoteAddr 改；**无 db scope**） | `ZEOKEEL_LOGIN_MAX_ATTEMPTS`（10） | 5min | 动态码错误 | 票据无效/用户不可用等前置拒绝**不计数**（`admin.go:408-414` 直接返回） | MFA 成功（`admin.go:437-438`） |
 | MFA 第二步账号桶 | `"u:"+username+"\|mfa"` | 同上（10） | 5min | 同上 | 同上 | 同上 |
 
 另外两条与本案相关的判定事实：①密码校验前还有**并发闸** `passwordVerifySlots`（`ratelimit.go:356`，
@@ -161,7 +161,7 @@ ok  	github.com/picoaide/picoaide/internal/serverauth	23.401s
 | 猜测 | 复核结果 |
 |---|---|
 | "成功登录也被计数" | **不成立**：2026-09-08 P1-3 起 `allow()` 不记账，只有 `record()`（失败）记账，成功走 `reset`。本次未改这条语义。 |
-| "`PICOAI_LOGIN_MAX_ATTEMPTS` 被前一个用例改小" | **不成立**：`loginLimiter.maxAttemptsFn`（`ratelimit.go:41-46,94-101`）每次判定实时读 env，`t.Setenv` 不泄漏；且 IP 桶 **60 是常量**，不受 env 影响。 |
+| "`ZEOKEEL_LOGIN_MAX_ATTEMPTS` 被前一个用例改小" | **不成立**：`loginLimiter.maxAttemptsFn`（`ratelimit.go:41-46,94-101`）每次判定实时读 env，`t.Setenv` 不泄漏；且 IP 桶 **60 是常量**，不受 env 影响。 |
 | "IP 桶键带用户名、被换用户名绕过" | **不成立**：打满的键是 `...\|ip:192.0.2.1`（纯 IP），与用户名无关。 |
 
 ## 3. 为什么 CI 没抓到（其实 CI 也会红，条件如下）
@@ -217,7 +217,7 @@ CI 跑的是 `go test ./... -count=1 -p 1`（`.github/workflows/ci.yml:216`，
 
 **缺陷**：审计 2026-09-13 P1-3 把 OIDC **回调**桶从 `RemoteAddr` 改成 `ClientIP()`（因为反代下
 60 次失败回调会锁死全组织 SSO），但**登录 IP 桶漏了** —— 它仍用 `loginHost()`（= `RemoteAddr`）。
-生产 compose 前面是 Caddy（`docker-compose.yml:98` 缺省 `PICOAI_TRUSTED_PROXIES=172.28.0.2`），
+生产 compose 前面是 Caddy（`docker-compose.yml:98` 缺省 `ZEOKEEL_TRUSTED_PROXIES=172.28.0.2`），
 所有请求的 `RemoteAddr` 都是代理 IP ⇒ 那个 60 次/5min 的桶变成**全组织共用**：
 任意 60 次失败登录就能让**所有人**（含密码正确者）在窗口内登不进来，攻击者用 ~12 次/分钟
 即可长期维持。`cmd/server/main.go:135-139` 的注释写着 `SetTrustedProxies` 的目的就是
@@ -262,7 +262,7 @@ CI 跑的是 `go test ./... -count=1 -p 1`（`.github/workflows/ci.yml:216`，
 
 - **产品行为**：登录/MFA 的**阈值与窗口不变**；变化只在"IP 维度按哪个 IP 计"——
   反代部署（compose 缺省 trusted proxies）下由"代理 IP"变为"真实客户端 IP"，
-  即恢复 `cmd/server/main.go` 声明的意图。未配置 `PICOAI_TRUSTED_PROXIES` 时
+  即恢复 `cmd/server/main.go` 声明的意图。未配置 `ZEOKEEL_TRUSTED_PROXIES` 时
   `ClientIP()==RemoteAddr`，行为与修复前**完全一致**（fail-closed，无回归）。
 - **攻击面**：不变差 —— 伪造 XFF 仍只对可信代理生效；`ip|username`、`u:username` 桶语义未动；
   纯 IP 桶的阈值未动。唯一变化是"一个来源的失败不再连坐其他来源"，这正是审计 P1-2/P1-3 的本意。

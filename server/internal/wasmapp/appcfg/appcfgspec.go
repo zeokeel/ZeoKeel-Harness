@@ -10,7 +10,7 @@
 //	  ├─ SKILL references/app-config.md   —— 作者/AI 看的字段表（从本表生成）
 //	  └─ 服务端错误 hints                  —— 字段名从本表取（api/publish.go）
 //
-// 生成物由 `cmd/picoaide-limits-gen` 一并写出（一个生成器、一次 `-check` 门禁），
+// 生成物由 `cmd/zeokeel-limits-gen` 一并写出（一个生成器、一次 `-check` 门禁），
 // `appcfgspec_gen_test.go` 守住五条：
 //
 //	(a) 生成物逐字节一致；        (b) 表覆盖 Config 结构体的每个 json 字段（反射，双向）；
@@ -21,14 +21,14 @@
 package appcfg
 
 import (
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 )
 
 // FieldSpec 是**一个字段**的机器可读规格。
 //
 // 它同时描述两类字段（见 ConfigFields / PublishFields）：
-//   - 应用配置文件 `picoaide.app.json` 的字段（作者手写、随发布提交）；
+//   - 应用配置文件 `zeokeel.app.json` 的字段（作者手写、随发布提交）；
 //   - 发布载荷（publish/validate 请求体）的字段。
 //
 // 两类的 Key 都是**外部契约**：改名即破坏已发布应用与已上线的客户端表单。
@@ -113,7 +113,7 @@ type Spec struct {
 }
 
 // SpecSchema 是 appcfg.json 的格式版本（消费者做兼容判断用）。
-const SpecSchema = "picoaide-app-config/1"
+const SpecSchema = "zeokeel-app-config/1"
 
 // ConfigFields 返回**应用配置文件**字段表（有序；顺序即文档与报错提示顺序）。
 //
@@ -317,7 +317,7 @@ func PublishFields() []FieldSpec {
 			Type:     "object",
 			Required: true,
 			Max:      limits.AppConfigMaxBytes,
-			Desc:     "应用配置文件的内容（即 `picoaide.app.json` 的对象形态）：字段见 `config_fields`",
+			Desc:     "应用配置文件的内容（即 `zeokeel.app.json` 的对象形态）：字段见 `config_fields`",
 			Hints: []string{
 				"平台存的是**解析并归一化之后**的配置（名单去空白/去重、access 缺省落定）",
 				"**更新版本**时 config 里**缺席**的字段沿用上一版生效值（access/whitelist/purpose/data_sensitivity/owner/sensitive_columns 逐字段各自沿用）；显式给值——包括显式空串——以提交为准",

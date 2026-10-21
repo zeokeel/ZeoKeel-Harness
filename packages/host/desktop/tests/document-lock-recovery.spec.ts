@@ -149,7 +149,7 @@ describe('orphaned document write locks are reclaimed', () => {
   })
 
   it('stays in step with the cron ledger stale-lock age (the documented same convention)', () => {
-    // 模块头与决策文档都写"与 `@picoaide/dsh-cron` 的 `host-ledger.ts:STALE_LOCK_AGE_MS` 同口径"。
+    // 模块头与决策文档都写"与 `@zeokeel/dsh-cron` 的 `host-ledger.ts:STALE_LOCK_AGE_MS` 同口径"。
     // 那句话此前没有判据（第 4 轮审计 N5）：两处各自漂移没人拦。这里直接读对方源码对拍 ——
     // 顺序任一侧改值都会红，逼改动者回来同步口径。
     const cronLedger = readFileSync(

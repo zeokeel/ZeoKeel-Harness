@@ -2,7 +2,7 @@
  * Single authority for the desktop update source.
  *
  * 2026-09-10 定案（用户拍板）：**客户端只从它登录的那台服务端取更新**，
- * 不直接访问 `release.picoaide.com`。
+ * 不直接访问 `release.zeokeel.com`。
  *
  * 为什么不能直连分发面（这是本文件的核心约束，改设计前先读完）：
  *   - **渠道版本错乱**：分发面按渠道分目录（`<channel>/latest.json`），客户端

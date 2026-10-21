@@ -18,7 +18,7 @@
  * **未变时返回同一引用**；`touch()` 只发布（不改快照），用来把 `title()` / `attention()`
  * 这类动态取值推给已经渲染的「更多」行。
  *
- * @module @picoaide/dsh-foot-menu/client/contract
+ * @module @zeokeel/dsh-foot-menu/client/contract
  */
 
 // Type-only, but load-bearing: the `declare module '@deepseek-ai/cordis'` block
@@ -68,12 +68,12 @@ export interface FootMenuService {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** 侧边栏底部「更多」菜单的登记表（本包客户端半边 provide）。 */
-    picoFootMenu: FootMenuService
+    zeokeelFootMenu: FootMenuService
   }
 }
 
 /** Cordis 服务名（唯一真源；`ctx.provide` 与消费者的 `inject` 都用它）。 */
-export const FOOT_MENU_SERVICE = 'picoFootMenu'
+export const FOOT_MENU_SERVICE = 'zeokeelFootMenu'
 
 /**
  * 建一个空的登记表。
@@ -95,7 +95,7 @@ export function createFootMenuService(): FootMenuService {
         listener()
       } catch (cause) {
         // 一个订阅者抛错不能拖垮登记表本身（它可能是别的插件已卸载的组件）。
-        console.warn('[pico-foot-menu] subscriber failed', cause)
+        console.warn('[zeokeel-foot-menu] subscriber failed', cause)
       }
     }
   }

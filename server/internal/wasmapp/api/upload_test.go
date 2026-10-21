@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/upload"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/upload"
 )
 
 // 本文件是 §4.2 分片上传面的**端到端**用例：真 PG + 真编译器 + 真文件系统 +
@@ -253,7 +253,7 @@ func TestUploadFlowEqualsOneShotPublish(t *testing.T) {
 		t.Fatalf("current_release_id 未指向新版本: app=%+v err=%v", app, err)
 	}
 	// 库内权威：宿主解析后的应用配置落在**版本行**（config_json）—— 2026-09-20 起
-	// 随包资源不再抽到磁盘，应用读到的那份 picoaide.app.json 由运行期
+	// 随包资源不再抽到磁盘，应用读到的那份 zeokeel.app.json 由运行期
 	// assets.Build 用库内这份 config_json 注入内存资源集（决策文档
 	// docs/decisions/2026-09-20-wasm-assets-in-memory.md）。
 	var storedCfg appcfg.Config

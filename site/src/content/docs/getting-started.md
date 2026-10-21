@@ -24,19 +24,19 @@ description: 从零到可用：按角色拿到客户端、首次启动会发生�
 客户端安装包**随服务端镜像发布**（不单独挂在下载站），所以只有两个来源：
 
 1. **企业服务器**（推荐）：部署完成后打开 `https://<企业域名>/`（门户页），页面上直接列出三平台下载入口；
-2. **官方镜像包**（试用 / 单机）：从更新服务器或 [GitHub Release](https://github.com/picoaide/picoaide-harness/releases) 取官方镜像包，再解出安装包：
+2. **官方镜像包**（试用 / 单机）：从更新服务器或 [GitHub Release](https://github.com/zeokeel/ZeoKeel-Harness/releases) 取官方镜像包，再解出安装包：
 
 ```bash
 VER=<版本>        # 以 latest.json 里的 server.version 为准
 # 正式渠道是 official，预发布渠道是 beta，按需替换
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/picoaide-server-${VER}-amd64.zip"
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/SHA256SUMS"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/SHA256SUMS"
 sha256sum -c SHA256SUMS
-unzip -p "picoaide-server-${VER}-amd64.zip" image.tar | docker load
-mkdir -p ./picoaide-stack
-docker run --rm -v "$PWD/picoaide-stack:/out" -e PICOAI_UNPACK_STACK=/out \
-  "picoaide-harness-server:${VER}"
-ls -1 ./picoaide-stack/client    # 三平台安装包 + CLIENT-RELEASE.json
+unzip -p "zeokeel-server-${VER}-amd64.zip" image.tar | docker load
+mkdir -p ./zeokeel-stack
+docker run --rm -v "$PWD/zeokeel-stack:/out" -e ZEOKEEL_UNPACK_STACK=/out \
+  "zeokeel-harness-server:${VER}"
+ls -1 ./zeokeel-stack/client    # 三平台安装包 + CLIENT-RELEASE.json
 ```
 
 **判据**：`sha256sum -c` 输出全部 `OK`；`client/` 目录里出现三平台安装包与 `CLIENT-RELEASE.json`。没有 `client/` 说明你用的不是正式发布包（本地自建的镜像不带客户端资产）。
@@ -112,7 +112,7 @@ dsh-desktop:
 | macOS 提示「未能验证开发者」 | 包内没有公证票据 | 预发布包仅签名；请使用正式发布的安装包 |
 | Linux 双击没反应 | AppImage 没有执行权限 | `chmod +x` 后运行 |
 | 应用反复闪退 | 有崩溃记录，但界面没机会显示 | 运行安装后的程序并加 `--export-diagnostics`（不启动服务端，只打印诊断 ZIP 路径）；或从托盘「导出诊断信息…」 |
-| 插件/预设没出现 | 应用固定运行 `desktop` profile，改动要重启才进 Loader 组合 | 重启应用；第三方插件写 `~/.picoaide-harness/cordis.patch.yml`（渠道不同则数据根不同） |
+| 插件/预设没出现 | 应用固定运行 `desktop` profile，改动要重启才进 Loader 组合 | 重启应用；第三方插件写 `~/.zeokeel-harness/cordis.patch.yml`（渠道不同则数据根不同） |
 
 ## 算装好了的判据
 

@@ -25,7 +25,7 @@ export interface MinimalAsar {
 }
 
 /** 夹具**缺省写入**的 bundle id（= 官方身份，与 `packagedAppId()` 的缺省回落同值）。 */
-export const MAC_BUNDLE_FIXTURE_IDENTIFIER = 'ai.deepseek.dsh.desktop'
+export const MAC_BUNDLE_FIXTURE_IDENTIFIER = 'com.zeokeel.harness'
 
 /** `minimalAsar` 的可选项。 */
 export interface MinimalAsarOptions {

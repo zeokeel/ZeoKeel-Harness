@@ -3,7 +3,7 @@ title: 客户端分发与升级
 description: 客户端安装包随服务端镜像发布：员工从自己企业的服务器下载与自动升级，服务器与员工机器都不需要外网。
 ---
 
-PicoAide Harness 的客户端**不单独发布**：三平台安装包打进服务端镜像，由服务端自己对外提供。
+ZeoKeel Harness 的客户端**不单独发布**：三平台安装包打进服务端镜像，由服务端自己对外提供。
 员工机器不需要访问任何外网，客户端版本也因此天然跟随服务端版本 —— "客户端升了、服务端没升"
 在结构上不可能发生。
 
@@ -18,7 +18,7 @@ PicoAide Harness 的客户端**不单独发布**：三平台安装包打进服�
 | 前提 | 说明 |
 |---|---|
 | 服务端已部署且 `/healthz` 返回 200 | 见[容器化部署](/deployment/compose/) |
-| 服务端能给客户端一个**绝对 https** 的下载地址 | 反代场景要配 `PICOAI_PUBLIC_BASE_URL`，否则清单按设计拒发 `client` 段 |
+| 服务端能给客户端一个**绝对 https** 的下载地址 | 反代场景要配 `ZEOKEEL_PUBLIC_BASE_URL`，否则清单按设计拒发 `client` 段 |
 | 员工机器能访问企业域名 | 只需要这一个地址，不需要任何公网 |
 | 员工客户端与服务端**同版本** | 应用（WASM）只在客户端内打开且要求两端同版本 |
 
@@ -47,7 +47,7 @@ http 链接。为什么后者更糟：客户端丢弃非 https 清单后界面�
 ## 分发链路
 
 ```
-官方更新服务器 release.picoaide.com/<渠道>/   ← 只有服务端镜像（管理员升级服务端用）
+官方更新服务器 release.zeokeel.com/<渠道>/   ← 只有服务端镜像（管理员升级服务端用）
         │ 管理员取镜像并部署
         ▼
 企业服务器（本项目部署目标）                  ← 镜像里已含三平台客户端安装包
@@ -77,9 +77,9 @@ http 链接。为什么后者更糟：客户端丢弃非 https 清单后界面�
   "client": {
     "version": "<版本>",
     "assets": {
-      "win-x64":       { "url": "https://harness.example.com/updates/client/PicoAide-Harness-<版本>-x64-Setup.exe", "sha256": "…", "size": 123456789 },
-      "mac-universal": { "url": "https://harness.example.com/updates/client/PicoAide-Harness-<版本>-mac.dmg",        "sha256": "…", "size": 123456789 },
-      "linux-x64":     { "url": "https://harness.example.com/updates/client/PicoAide-Harness-<版本>-x86_64.AppImage", "sha256": "…", "size": 123456789 }
+      "win-x64":       { "url": "https://harness.example.com/updates/client/ZeoKeel-Harness-<版本>-x64-Setup.exe", "sha256": "…", "size": 123456789 },
+      "mac-universal": { "url": "https://harness.example.com/updates/client/ZeoKeel-Harness-<版本>-mac.dmg",        "sha256": "…", "size": 123456789 },
+      "linux-x64":     { "url": "https://harness.example.com/updates/client/ZeoKeel-Harness-<版本>-x86_64.AppImage", "sha256": "…", "size": 123456789 }
     }
   }
 }
@@ -104,7 +104,7 @@ http 链接。为什么后者更糟：客户端丢弃非 https 清单后界面�
 
 服务端按以下优先级推导"客户端可达的绝对地址"：
 
-1. `PICOAI_PUBLIC_BASE_URL`（**配了就是唯一权威**）；
+1. `ZEOKEEL_PUBLIC_BASE_URL`（**配了就是唯一权威**）；
 2. 管理后台配置的对外地址（`settings: server.base_url`，取值非法时不生效并打印一条告警）；
 3. 反向代理声明的 `X-Forwarded-Proto: https`；
 4. 本请求是 TLS 直连；
@@ -115,7 +115,7 @@ http 链接。为什么后者更糟：客户端丢弃非 https 清单后界面�
 
 ```json
 { "schema": 1, "channel_id": "official", "server": { "version": "<版本>" },
-  "client_unavailable": "server origin is not https; set PICOAI_PUBLIC_BASE_URL" }
+  "client_unavailable": "server origin is not https; set ZEOKEEL_PUBLIC_BASE_URL" }
 ```
 
 **部署后自检**（`internal` 自签证书的内网环境尤其重要）：
@@ -126,7 +126,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 ```
 
 - 看到 `client.assets` 且地址是 `https://…` → 正常；
-- 看到 `client_unavailable` → 在 `.env` 补 `PICOAI_PUBLIC_BASE_URL=https://<域名>` 后
+- 看到 `client_unavailable` → 在 `.env` 补 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 后
   `docker compose up -d server`。
 
 ## 客户端如何自动升级
@@ -153,7 +153,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 
 > **客户端默认不使用系统代理**（系统代理、代理环境变量、PAC 与启动参数一律忽略）。
 > 只有"必须经代理才能出公网"的部署才需要打开退路：渠道字段 `desktop.allow_system_proxy`，
-> 或**真实进程环境变量** `PICOAI_ALLOW_SYSTEM_PROXY=1`（写在 `.env` 分层里不生效）。
+> 或**真实进程环境变量** `ZEOKEEL_ALLOW_SYSTEM_PROXY=1`（写在 `.env` 分层里不生效）。
 > 打开后启动日志会打印 `proxy system/<来源>`；默认直连时打印 `proxy direct`。
 
 单机桌面（不接服务器）的形态见[桌面客户端](/desktop/)；企业定制渠道的品牌与渠道内容见[渠道与白标](/deployment/channels/)。
@@ -162,7 +162,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 
 | # | 判据 | 怎么判 |
 |---|---|---|
-| 1 | 清单可取且结构正确 | `schema` 为 `1`、`channel_id` 与 `/opt/picoaide/CHANNEL` 一致、`server.version` 是当前运行版本 |
+| 1 | 清单可取且结构正确 | `schema` 为 `1`、`channel_id` 与 `/opt/zeokeel/CHANNEL` 一致、`server.version` 是当前运行版本 |
 | 2 | 下载地址安全 | `client.assets.*.url` 是**绝对 https**；出现 `client_unavailable` 即判失败并按其原因处置 |
 | 3 | 安装包可下载且完整 | `curl -o` 拉下来后比对清单里的 `sha256` 与 `size` |
 | 4 | 断点续传可用 | 带 `Range: bytes=0-99` 的请求返回 **206** 且长度 100 |
@@ -194,13 +194,13 @@ curl -sk -o /dev/null -w '%{http_code}\n' -H 'Range: bytes=0-99' \
 
 | 现象 | 判据 | 恢复动作 |
 |---|---|---|
-| 员工端"检查更新永远说已是最新" | 清单里有 `client_unavailable` | 配 `PICOAI_PUBLIC_BASE_URL=https://<域名>` 后 `docker compose up -d server`；反代场景必配 |
+| 员工端"检查更新永远说已是最新" | 清单里有 `client_unavailable` | 配 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 后 `docker compose up -d server`；反代场景必配 |
 | 门户页没有下载入口 | 清单没有 `client` 段且**没有** `client_unavailable` | 说明镜像里没带客户端资产（`CLIENT-RELEASE.json` 读不到）：确认用的是正式发布包，而不是本地自建镜像。另一种成因是管理端设置 `portal.public=false`（门户不对外开放，根路径会跳转到管理后台登录页）—— 清掉该设置即可 |
 | 下载到一半断流 | 客户端提示可重试 | 属预期：文件大、链路慢；客户端支持 Range 续传，重试会接着下。服务端侧单次响应的写截止 = max(5 分钟, 体积/64 KiB/s)，上限 1 小时 |
 | 下载 404 | 响应是 JSON 信封 `NOT_FOUND` | 文件名不在资产清单里，或扩展名不在白名单内；以清单里的 `file` 为准，不要手拼文件名 |
 | 安装包校验失败 | 客户端界面提示校验不通过 | 传输损坏或缓存了半份文件：重新下载；服务端侧用第 3 条判据确认清单里的 sha256 与实际下发的字节一致 |
 | 员工装的是旧版本、应用打不开 | 客户端版本 < 服务端版本 | 应用只在客户端内打开且要求同版本：提示员工升级客户端；旧客户端打不开是预期行为 |
-| 客户端连不上服务器（只有经代理才能出公网） | 客户端日志里 `proxy direct` | 打开退路：渠道字段 `desktop.allow_system_proxy: true`，或真实进程环境 `PICOAI_ALLOW_SYSTEM_PROXY=1`，然后重启客户端 |
+| 客户端连不上服务器（只有经代理才能出公网） | 客户端日志里 `proxy direct` | 打开退路：渠道字段 `desktop.allow_system_proxy: true`，或真实进程环境 `ZEOKEEL_ALLOW_SYSTEM_PROXY=1`，然后重启客户端 |
 | macOS 提示"未能验证开发者" | 包内没有公证票据 | 只有**正式发布**的渠道包经过公证；预发布包仅签名。让员工使用正式版本，或按渠道流程重出正式 tag 的包 |
 | 员工机器上重复安装了两个客户端 | 两个不同的应用标识 | 不同渠道的客户端是**独立应用**（应用 ID、数据根、单实例锁都按渠道区分）；同渠道重装是覆盖，跨渠道是并存（见[渠道与白标](/deployment/channels/)） |
 

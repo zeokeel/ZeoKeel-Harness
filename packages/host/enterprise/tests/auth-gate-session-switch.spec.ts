@@ -7,7 +7,7 @@ import type { Session } from '../src/server-connector/config.ts'
 /**
  * 审计 2026-09-12 P1-3 / FIX-18 回归。
  *
- * 缺陷:`POST /api/pico/auth/login` 在已登录时**无条件** `setSession`,可静默
+ * 缺陷:`POST /api/zeokeel/auth/login` 在已登录时**无条件** `setSession`,可静默
  * 换掉整个会话(含换到攻击者服务端);而同一个动作在深链路径
  * (`deep-link.ts:112-116`)是显式拒绝的 —— 两条路径判定不一致。
  *
@@ -21,7 +21,7 @@ function fakeRequest(body: unknown, method = 'POST'): IncomingMessage {
   const chunks = [Buffer.from(JSON.stringify(body))]
   return {
     method,
-    url: '/api/pico/auth/login',
+    url: '/api/zeokeel/auth/login',
     headers: { origin: 'http://127.0.0.1:3080', host: '127.0.0.1:3080' },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() { for (const c of chunks) yield c },
@@ -72,7 +72,7 @@ function sessionHarness(
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? fence : undefined))),
     logger: { info: vi.fn(), warn: (m: string) => { warns.push(String(m)) }, error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -88,8 +88,8 @@ function sessionHarness(
     },
   }
   apply(ctx as never, {} as Config)
-  const handler = routes.get('/api/pico/auth/login')
-  expect(handler, 'auth-gate 必须注册 /api/pico/auth/login').toBeDefined()
+  const handler = routes.get('/api/zeokeel/auth/login')
+  expect(handler, 'auth-gate 必须注册 /api/zeokeel/auth/login').toBeDefined()
   return { handler: handler!, routes, setSession, clear, warns }
 }
 
@@ -120,7 +120,7 @@ describe('loginServerSwitchConflict(纯函数)', () => {
   })
 })
 
-describe('POST /api/pico/auth/login:已登录时拒绝换服务端(FIX-18)', () => {
+describe('POST /api/zeokeel/auth/login:已登录时拒绝换服务端(FIX-18)', () => {
   afterEach(() => { vi.unstubAllGlobals() })
 
   it('已登录 + 换 server ⇒ 409 且绝不 setSession(改前:200 静默换会话)', async () => {
@@ -232,21 +232,21 @@ describe('会话变更类路由的持有性证明(FIX-18)', () => {
 
     // ① 登录(同一 server,换账号/重登)。
     const login = fakeResponse()
-    await h.routes.get('/api/pico/auth/login')!(
+    await h.routes.get('/api/zeokeel/auth/login')!(
       fakeRequest({ server: 'https://harness.example', username: 'alice', password: 'pw' }), login.res)
     expect(login.read().code).toBe(200)
     expect(h.setSession).toHaveBeenCalledTimes(1)
 
     // ② 改密(旧密码校验通过 ⇒ 服务端已吊销全部令牌 ⇒ 本地清会话)。
     const pwd = fakeResponse()
-    await h.routes.get('/api/pico/auth/password')!(
+    await h.routes.get('/api/zeokeel/auth/password')!(
       fakeRequest({ old_password: 'old12345678', new_password: 'new12345678' }), pwd.res)
     expect(pwd.read().code).toBe(200)
     expect(h.clear).toHaveBeenCalledTimes(1)
 
     // ③ 登出。
     const out = fakeResponse()
-    await h.routes.get('/api/pico/auth/logout')!(fakeRequest({}), out.res)
+    await h.routes.get('/api/zeokeel/auth/logout')!(fakeRequest({}), out.res)
     expect(out.read().code).toBe(200)
     expect(h.clear).toHaveBeenCalledTimes(2)
 
@@ -289,7 +289,7 @@ describe('connection 服务查找(真 Cordis Context)', () => {
     let handler: ((req: IncomingMessage, res: ServerResponse) => Promise<void>) | undefined
     const setSession = vi.fn()
     const ctx = root.extend({
-      picoSession: {
+      zeokeelSession: {
         isRestored: () => true,
         isLoggedIn: () => false,
         getSession: () => null,
@@ -299,7 +299,7 @@ describe('connection 服务查找(真 Cordis Context)', () => {
       webServer: {
         tapIndex: () => () => {},
         register: (route: { path: string, handler: typeof handler }) => {
-          if (route.path === '/api/pico/auth/login') handler = route.handler
+          if (route.path === '/api/zeokeel/auth/login') handler = route.handler
           return () => {}
         },
       },
@@ -327,7 +327,7 @@ describe('connection 缺席(真 Cordis Context)', () => {
     const setSession = vi.fn()
     const clear = vi.fn()
     const ctx = root.extend({
-      picoSession: {
+      zeokeelSession: {
         isRestored: () => true, isLoggedIn: () => false, getSession: () => null,
         setSession, clear,
       },
@@ -343,20 +343,20 @@ describe('connection 缺席(真 Cordis Context)', () => {
 
     // ① 登录(换 server ⇒ 高危):503,绝不 setSession。
     const login = fakeResponse()
-    await routes.get('/api/pico/auth/login')!(
+    await routes.get('/api/zeokeel/auth/login')!(
       fakeRequest({ server: 'https://ok.example', username: 'u', password: 'p' }), login.res)
     expect(login.read().code).toBe(503)
     expect(setSession).not.toHaveBeenCalled()
 
     // ② 登出(强制踢出 ⇒ 高危):503,绝不 clear。
     const logout = fakeResponse()
-    await routes.get('/api/pico/auth/logout')!(fakeRequest({}), logout.res)
+    await routes.get('/api/zeokeel/auth/logout')!(fakeRequest({}), logout.res)
     expect(logout.read().code).toBe(503)
     expect(clear).not.toHaveBeenCalled()
 
     // ③ 改密:必须先交出旧密码 ⇒ 低危,维持既有降级(不把这条锁死)。
     const login2 = fakeResponse()
-    await routes.get('/api/pico/auth/password')!(
+    await routes.get('/api/zeokeel/auth/password')!(
       fakeRequest({ old_password: 'old-pass', new_password: 'new-pass' }), login2.res)
     expect(login2.read().code).toBe(401) // 未登录(本用例 session=null),不是 503
   })

@@ -1,6 +1,6 @@
 /**
  * 作者**生命周期出口**的客户端半边（R1-pm-1）：应用中心面板 → 本机
- * `/api/pico/apps/wasm/:app_id/(publish|unpublish)` / `DELETE :app_id` /
+ * `/api/zeokeel/apps/wasm/:app_id/(publish|unpublish)` / `DELETE :app_id` /
  * `GET :app_id/diagnostics`。
  *
  * 为什么需要它：宿主早已把发布者的全套代理到本机面
@@ -29,7 +29,7 @@
  * 有授权、没有可达路径，正是这条 finding。现在两端同源：面板给出冻结/解冻入口，
  * 文案指向面板。
  *
- * @module @picoaide/dsh-wasm-apps/client/app-lifecycle
+ * @module @zeokeel/dsh-wasm-apps/client/app-lifecycle
  */
 
 import { t } from './locales.ts'
@@ -52,7 +52,7 @@ export const SET_PUBLISHED_SUFFIX = { online: 'publish', offline: 'unpublish' } 
 export const SET_FROZEN_SUFFIX = 'freeze'
 
 /** 本机路由前缀（与 `wasm-apps.ts` 的 `WASM_APPS_PREFIX` 同值；客户端不 import 宿主包）。 */
-export const WASM_APPS_LOCAL_PREFIX = '/api/pico/apps/wasm'
+export const WASM_APPS_LOCAL_PREFIX = '/api/zeokeel/apps/wasm'
 
 /**
  * 一个 app_id 的本机路由（app_id 是路径段，必须 URI 编码）。
@@ -178,7 +178,7 @@ export interface SetPublishedSuccess {
  * —— 回落成"我请求的那个值"就是把乐观更新伪装成服务端结果（本函数的全部意义）。
  *
  * 2026-09-19：响应里**不再有** `entry_url`（冻结契约 §4.5：应用只在客户端内以
- * `picoaide-app://<app_id>/` 打开，服务端目录/发布/上下架响应一律不下发入口链接）。
+ * `zeokeel-app://<app_id>/` 打开，服务端目录/发布/上下架响应一律不下发入口链接）。
  * 客户端也不再读它 —— 服务端多带一个字段时这里是**忽略**，不是回落。
  * @param appId - 本次请求的 app_id（与回显比对，防串行）。
  * @param payload - 响应体。

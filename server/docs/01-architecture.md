@@ -1,8 +1,8 @@
-# PicoAide Harness 系统架构
+# ZeoKeel Harness 系统架构
 
 > 企业内网 AI 办公智能体服务端与管理系统。本文描述系统总体架构、进程模型、数据流与安全设计;端点/表名以实际代码为准(API 全量端点见 03-api-reference.md)。
 >
-> 服务端是 PicoAide Harness 平台的企业管控面;桌面客户端(`packages/host/*`)与 webadmin 均经本服务端接口工作。本文聚焦**服务端 + webadmin 管理端**。
+> 服务端是 ZeoKeel Harness 平台的企业管控面;桌面客户端(`packages/host/*`)与 webadmin 均经本服务端接口工作。本文聚焦**服务端 + webadmin 管理端**。
 
 ## 1. 总体形态
 

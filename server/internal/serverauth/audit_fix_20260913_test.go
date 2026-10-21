@@ -15,8 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // P1-1:同一票据的"最多 5 次"必须是硬上限 —— 旧实现 SELECT 判 attempts 后再
@@ -59,7 +59,7 @@ func TestAuditFixMFALoginIsRateLimited(t *testing.T) {
 	defer db.Close()
 	ensureTestMasterKey(t)
 	// 注意顺序:adminRouter 自己会把阈值放宽到 10000,必须在它之后覆盖。
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "3")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "3")
 
 	u, err := serverstore.GetUserByUsername(db, "boss")
 	if err != nil {
@@ -282,7 +282,7 @@ func TestAuditFixPlaintextLDAPRejectedByDefault(t *testing.T) {
 	if err := validateLDAPServerURL("ldaps://dir.corp:636"); err != nil {
 		t.Fatalf("ldaps:// 应放行: %v", err)
 	}
-	t.Setenv("PICOAI_LDAP_ALLOW_PLAINTEXT", "1")
+	t.Setenv("ZEOKEEL_LDAP_ALLOW_PLAINTEXT", "1")
 	if err := validateLDAPServerURL("ldap://dir.corp:389"); err != nil {
 		t.Fatalf("显式逃生阀下明文 ldap:// 应放行: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestAuditFixPlaintextLDAPRejectedByDefault(t *testing.T) {
 // P3-2:两个登录入口必须共享同一失败预算(旧实现键命名空间不同,实测客户端面
 // 3 次失败后管理面仍可继续尝试)。
 func TestAuditFixLoginBudgetSharedAcrossSurfaces(t *testing.T) {
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "3")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "3")
 	db := mustDB(t)
 	defer db.Close()
 	if _, err := createUserDB(db, "boss", "pw123456", true); err != nil {

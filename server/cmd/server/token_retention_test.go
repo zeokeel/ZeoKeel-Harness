@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/tokenretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/tokenretention"
 )
 
 // fakeObservableScheduler 是 observableScheduler 的桩（记录 Start 是否被调用、

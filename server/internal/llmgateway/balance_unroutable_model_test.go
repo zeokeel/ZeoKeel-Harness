@@ -34,7 +34,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // unroutableModel 在 `gateway_providers.models` 与 `models` 里都不存在：前者让

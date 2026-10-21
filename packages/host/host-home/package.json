@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-host-home",
+  "name": "@zeokeel/dsh-host-home",
   "version": "0.1.0",
-  "description": "Host-side product home resolution for PicoAide Harness: the single authority for the per-channel data root, shared by the launcher and the host plugins",
+  "description": "Host-side product home resolution for ZeoKeel Harness: the single authority for the per-channel data root, shared by the launcher and the host plugins",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",

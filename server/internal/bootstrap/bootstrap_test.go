@@ -13,8 +13,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func setup(t *testing.T) (*gin.Engine, *sql.DB) {
@@ -310,15 +310,15 @@ func TestInjectGlitchTipDefaults(t *testing.T) {
 		t.Fatalf("no-op expected, got %s", out)
 	}
 	// 地址+组织 → 两个 defaultValue。
-	out := injectGlitchTipDefaults(defJSON, "https://gt.example.com", "picoaide")
-	for _, want := range []string{`"defaultValue":"https://gt.example.com"`, `"defaultValue":"picoaide"`} {
+	out := injectGlitchTipDefaults(defJSON, "https://gt.example.com", "zeokeel")
+	for _, want := range []string{`"defaultValue":"https://gt.example.com"`, `"defaultValue":"zeokeel"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %s in %s", want, out)
 		}
 	}
 	// 只配地址 → 只有 BASE_URL 有 defaultValue, 组织无默认值。
 	out = injectGlitchTipDefaults(defJSON, "https://gt.example.com", "")
-	if !strings.Contains(out, `"defaultValue":"https://gt.example.com"`) || strings.Contains(out, `"defaultValue":"picoaide"`) {
+	if !strings.Contains(out, `"defaultValue":"https://gt.example.com"`) || strings.Contains(out, `"defaultValue":"zeokeel"`) {
 		t.Fatalf("partial inject wrong: %s", out)
 	}
 	// 非法 JSON → 原样返回。

@@ -63,7 +63,7 @@ const SITE_HOME = {
 }
 
 /** 源码仓库（两个 locale 同一个落点，只在这里写一次）。 */
-const REPOSITORY = 'https://github.com/picoaide/picoaide-harness'
+const REPOSITORY = 'https://github.com/zeokeel/ZeoKeel-Harness'
 
 /** @type {Record<SiteLocale, NavItem[]>} */
 const HEADER_NAV = {

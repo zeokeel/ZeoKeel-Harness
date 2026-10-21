@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-ldap/ldap/v3"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // P1-4:OIDC 用户同为 Source=external,但不在 ldap_synced_users 中,LDAP

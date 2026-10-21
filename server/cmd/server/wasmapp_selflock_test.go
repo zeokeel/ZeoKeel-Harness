@@ -39,12 +39,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 )
 
 // sparseCacheEntry 在缓存分代目录里造一条**稀疏**条目（逻辑体积 size，实占≈0）。

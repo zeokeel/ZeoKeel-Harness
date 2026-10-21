@@ -46,7 +46,7 @@
  * 不可能是本仓页面。**认账**：注释里写着的 `import('…')` 会被当成边（本仓不允许用注释
  * 藏 import；真出现时红灯指向那行，改注释即可）。
  *
- * @module picoaide-webadmin/feature-page-graph
+ * @module zeokeel-webadmin/feature-page-graph
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'

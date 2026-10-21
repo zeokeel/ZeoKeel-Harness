@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // waitForBlockedBackends 轮询 pg_stat_activity,等到当前测试库里出现

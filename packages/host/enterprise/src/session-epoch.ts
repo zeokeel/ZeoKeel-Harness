@@ -14,7 +14,7 @@
  *
  *  - `bootstrap.ts`：当前会话（B）的 `llm-deepseek.models` 与
  *    `web-search-deepseek.baseURL` 被改写成 **A** 的，而 `gateway-model.ts` 已经把
- *    `PICOAI_GATEWAY_TOKEN` 写成 B 的令牌 ⇒ 上游 `web-search-deepseek` 在**同一次
+ *    `ZEOKEEL_GATEWAY_TOKEN` 写成 B 的令牌 ⇒ 上游 `web-search-deepseek` 在**同一次
  *    请求**里用这份 URL + 这份 key（`x-api-key` 与 `Authorization: Bearer` 都发），
  *    把 B 的 90 天 bearer POST 到 A 的 `/v1/messages`（跨租户凭据外泄）；
  *  - `error-reporting.ts`：Sentry DSN 改回 A 的采集端 ⇒ 未捕获异常的**栈、URL、
@@ -38,13 +38,13 @@
  * `session-events.ts` 三份合一同一手法），而不是在 desktop 里复制一份。
  *
  * 所以 `SessionEpoch` / `createSessionEpoch` 的**实现**落在
- * `@picoaide/dsh-host-locale/session-events`（与本包同族、同一个构建图理由；
+ * `@zeokeel/dsh-host-locale/session-events`（与本包同族、同一个构建图理由；
  * 那里的 JSDoc 保留了完整的"规则 1/2/3"与"为什么用计数而不是令牌"两节）。本文件
  * 继续作为本包的**语义入口**存在，导出面与语义**一字不改** —— `bootstrap.ts` /
  * `error-reporting.ts` / `gateway-model.ts` / `channel-sync.ts` 四个调用点的
  * `import { createSessionEpoch } from './session-epoch.ts'` 原样不动。
  *
- * @module @picoaide/dsh-enterprise/session-epoch
+ * @module @zeokeel/dsh-enterprise/session-epoch
  */
 
-export { createSessionEpoch, type SessionEpoch } from '@picoaide/dsh-host-locale/session-events'
+export { createSessionEpoch, type SessionEpoch } from '@zeokeel/dsh-host-locale/session-events'

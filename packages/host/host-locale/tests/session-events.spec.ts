@@ -1,5 +1,5 @@
 /**
- * `pico/session-changed` 订阅契约（唯一实现）的判据。
+ * `zeokeel/session-changed` 订阅契约（唯一实现）的判据。
  *
  * 这段顺序的价值全在"恢复型启动"这条路径上：`SessionService.restore()` 在**构造期**就
  * 启动，它 emit 的那一刻可能早于消费方的 `apply()` —— 裸 `ctx.on` 于是要等到下一次
@@ -19,15 +19,15 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  PICO_SESSION_SERVICE,
+  ZEOKEEL_SESSION_SERVICE,
   SESSION_CHANGED_EVENT,
   subscribeSessionChanges,
-  type PicoSessionProbe,
+  type ZeoKeelSessionProbe,
   type SessionEventContext,
 } from '../src/session-events.ts'
 
 /** 最小假上下文：记录订阅顺序、可注入服务。 */
-function contextOf(service?: PicoSessionProbe | undefined): SessionEventContext & {
+function contextOf(service?: ZeoKeelSessionProbe | undefined): SessionEventContext & {
   listeners: Array<(session: unknown) => void>
   subscribed: boolean
   emit(session: unknown): void
@@ -46,7 +46,7 @@ function contextOf(service?: PicoSessionProbe | undefined): SessionEventContext 
       }
     },
     get(name: string): unknown {
-      expect(name).toBe(PICO_SESSION_SERVICE)
+      expect(name).toBe(ZEOKEEL_SESSION_SERVICE)
       return service
     },
     emit(session: unknown): void {
@@ -56,10 +56,10 @@ function contextOf(service?: PicoSessionProbe | undefined): SessionEventContext 
   return state
 }
 
-describe('pico/session-changed 订阅契约（宿主侧唯一实现）', () => {
+describe('zeokeel/session-changed 订阅契约（宿主侧唯一实现）', () => {
   it('事件名与服务注册名是契约的一部分', () => {
-    expect(SESSION_CHANGED_EVENT).toBe('pico/session-changed')
-    expect(PICO_SESSION_SERVICE).toBe('picoSession')
+    expect(SESSION_CHANGED_EVENT).toBe('zeokeel/session-changed')
+    expect(ZEOKEEL_SESSION_SERVICE).toBe('zeokeelSession')
   })
 
   it('订阅先于补发：补发时监听已经就位（恢复期的 emit 不会漏）', () => {
@@ -93,7 +93,7 @@ describe('pico/session-changed 订阅契约（宿主侧唯一实现）', () => {
     const absent: unknown[] = []
     subscribeSessionChanges(contextOf(undefined), (session) => { absent.push(session) })
     // C2-2：哨兵只有一个 —— `null`。此前这里投的是 `undefined`，而事件通道
-    // （`SessionService` 的 `pico/session-changed`）一直投 `null` ⇒ 同一个订阅按
+    // （`SessionService` 的 `zeokeel/session-changed`）一直投 `null` ⇒ 同一个订阅按
     // **到达方式**给出两种"没有会话"，而消费方（enterprise 三处）只判 `=== null`。
     expect(absent, '未登录哨兵必须是 null，不是 undefined').toEqual([null])
     expect(absent[0]).not.toBeUndefined()
@@ -133,8 +133,8 @@ describe('pico/session-changed 订阅契约（宿主侧唯一实现）', () => {
     expect(seen).toEqual([{ username: 'from-probe' }])
   })
 
-  it('结构替身（只挂 `picoSession` 属性、没有 `get`）也认：补发一次真实会话', () => {
-    // 本仓 enterprise 的用例大量用这种替身（`{ on, emit, picoSession }`）。真实上下文的
+  it('结构替身（只挂 `zeokeelSession` 属性、没有 `get`）也认：补发一次真实会话', () => {
+    // 本仓 enterprise 的用例大量用这种替身（`{ on, emit, zeokeelSession }`）。真实上下文的
     // 探测顺序是"有 `get` 就只用它"，替身没有 `get` ⇒ 回落到属性面（否则补发会拿到
     // undefined，白标/模型目录那两条"恢复型启动"判据会假红）。
     const listeners: Array<(session: unknown) => void> = []
@@ -144,7 +144,7 @@ describe('pico/session-changed 订阅契约（宿主侧唯一实现）', () => {
         listeners.push(listener)
         return () => { listeners.splice(listeners.indexOf(listener), 1) }
       },
-      picoSession: { isRestored: () => true, getSession: () => ({ username: 'stub-user' }) },
+      zeokeelSession: { isRestored: () => true, getSession: () => ({ username: 'stub-user' }) },
     }
     subscribeSessionChanges(ctx, (session) => { seen.push(session) })
     expect(seen).toEqual([{ username: 'stub-user' }])

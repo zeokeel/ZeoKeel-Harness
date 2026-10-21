@@ -7,7 +7,7 @@
  *   ① **可写值 = `login | whitelist` 两值**。服务端权威是
  *      `server/internal/wasmapp/appcfg` 的 `AccessWritableValues`（写侧 `WritableAccess`
  *      拒绝 `public`）；前端镜像它，免得管理员在界面上点出一个注定 400 的值。
- *   ② **历史值 `public` 的展示文案**。存量行（迁移 0074 之前写下的 picoaide.app.json）
+ *   ② **历史值 `public` 的展示文案**。存量行（迁移 0074 之前写下的 zeokeel.app.json）
  *      读出来仍可能是 `public`：它既不能再显示成"公开"（那会让管理员以为匿名仍可达），
  *      也不能显示裸 `public`（读不懂），更不能**从界面上抹掉** —— 抹掉等于让这些应用
  *      看起来"没有访问级别"，历史数据就真的丢了。统一渲染成「已退役（历史值）」，

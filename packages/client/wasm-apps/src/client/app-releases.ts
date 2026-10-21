@@ -1,6 +1,6 @@
 /**
  * 版本历史（含**审核结论**）的客户端半边：应用中心面板 → 本机
- * `GET /api/pico/apps/wasm/:app_id/releases`（宿主代理到服务端员工面
+ * `GET /api/zeokeel/apps/wasm/:app_id/releases`（宿主代理到服务端员工面
  * `GET /api/client/v2/apps/wasm/:app_id/releases`）。
  *
  * 为什么必须有它（独立审计 R1-pm-3 / R1-uxw-4）：开启审核之后，发布者此前只有发布
@@ -17,7 +17,7 @@
  *
  * 只读：本模块不发任何写请求（发布/上下架/删除在 `app-lifecycle.ts`）。
  *
- * @module @picoaide/dsh-wasm-apps/client/app-releases
+ * @module @zeokeel/dsh-wasm-apps/client/app-releases
  */
 
 import { t } from './locales.ts'

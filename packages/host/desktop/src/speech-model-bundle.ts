@@ -16,7 +16,7 @@
  * downloads** verified files"（`speech-to-text-sensevoice/src/config.ts`）—— 预置文件
  * 本来就是这个插件支持的部署形态；后端在 `runtime.ts` 里对显式来源只查**可访问性**
  * （不下载、也不做哈希），于是语音在**一次网络请求都不发**的情况下直接可用。
- * 我们这边只多一条**组装期 patch**（与 `picoaide-session`/`pico-wasm-apps-host` 同一种
+ * 我们这边只多一条**组装期 patch**（与 `zeokeel-session`/`zeokeel-wasm-apps-host` 同一种
  * 注入），没有释放器、没有标记文件、没有把 230MiB 往数据根再拷一份。
  *
  * 与"释放到数据根"相比的取舍（认账）：

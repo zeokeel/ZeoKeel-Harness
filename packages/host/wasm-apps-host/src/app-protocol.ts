@@ -1,5 +1,5 @@
 /**
- * Wire primitives for the client-only WASM app origin (`picoaide-app://`).
+ * Wire primitives for the client-only WASM app origin (`zeokeel-app://`).
  *
  * 这一层是**纯函数**：URL 解析、信封编解码、头过滤、base64 与体积闸门，全部不碰
  * Electron、不碰 HTTP、不做任何业务判定（准入/静态/执行都在服务端 `serveApp`）。
@@ -7,22 +7,22 @@
  *
  * ```
  * 请求 {"method":"GET","path":"/notes","query":"page=2",
- *       "host":"picoaide-app://demo",
- *       "headers":{"origin":"picoaide-app://demo","content-type":"application/json"},
+ *       "host":"zeokeel-app://demo",
+ *       "headers":{"origin":"zeokeel-app://demo","content-type":"application/json"},
  *       "body":"<base64，可空>"}
  * 响应 {"status":200,"headers":{"Content-Type":["text/html; charset=utf-8"]},
  *       "body":"<base64>","truncated":false}
  * ```
  *
  * 三条不变量（改错任何一条都是安全缺陷，见 §4.2/§4.3）：
- *  1. `host` 只接受 `picoaide-app://<app_id>`；app_id 来自 URL 的 host 段，
+ *  1. `host` 只接受 `zeokeel-app://<app_id>`；app_id 来自 URL 的 host 段，
  *     **绝不从 Host 头反解**；
  *  2. 请求体 ≤ 1 MiB、信封 ≤ `1 MiB*4/3 + 64 KiB`（与 `limits.go` 同源）；
  *     响应体权威上限 8 MiB 在服务端，这里只做兜底截断；
  *  3. `Set-Cookie` 整体丢弃（自定义协议没有 cookie 语义）、逐跳头与
  *     `Content-Length` 剔除。
  *
- * @module @picoaide/dsh-wasm-apps-host/shared
+ * @module @zeokeel/dsh-wasm-apps-host/shared
  */
 
 /**
@@ -33,7 +33,7 @@
  * **不得**用它去覆盖已注入的值。这个常量只在"没有任何渠道配置"的官方构建/单测里
  * 作为缺省，与 desktop 的 `DEFAULT_DEEP_LINK_SCHEME` 同一精神。
  */
-export const DEFAULT_APP_SCHEME = 'picoaide-app'
+export const DEFAULT_APP_SCHEME = 'zeokeel-app'
 
 /**
  * 应用源 scheme 的合法形状（§8.3 冻结，与 Go 侧逐字一致）：

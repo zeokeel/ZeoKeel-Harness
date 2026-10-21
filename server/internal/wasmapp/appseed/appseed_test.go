@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/appseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appseed"
 )
 
 // 本文件是「内置演示应用」的门禁：播种 = 装完即用；已存在/已删除 = **不重建**；
@@ -84,7 +84,7 @@ func newSeederIn(t *testing.T, db *sql.DB, dir, dataRoot string) *appseed.Seeder
 
 // assertNothingWrittenToDataRoot 是**负向断言**：播种的落点只有 PostgreSQL，
 // `<dataRoot>` 下不得出现任何东西 —— 尤其是历史形态的
-// `<dataRoot>/apps/<app_id>/assets/<release_id>/picoaide.app.json`。
+// `<dataRoot>/apps/<app_id>/assets/<release_id>/zeokeel.app.json`。
 //
 // 为什么用"整个数据根必须为空"这种强判据，而不是只查那个具体路径：写盘这件事一旦回到
 // 播种路径，落点必然落在这棵目录树里（资源目录、配置副本、原子写的临时文件都算），
@@ -106,7 +106,7 @@ func assertNothingWrittenToDataRoot(t *testing.T, dataRoot string) {
 	}
 	if len(found) > 0 {
 		t.Fatalf("播种不得在宿主盘上留下任何东西（随包资源已改内存直出；历史形态是 "+
-			"<dataRoot>/apps/<app_id>/assets/<release_id>/picoaide.app.json），实际留下 %d 项：%v",
+			"<dataRoot>/apps/<app_id>/assets/<release_id>/zeokeel.app.json），实际留下 %d 项：%v",
 			len(found), found)
 	}
 }
@@ -301,7 +301,7 @@ func TestSeedRejectsOutOfRangeWindow(t *testing.T) {
 // 判据两段（缺一不可）：
 //  1. 负向：整个数据根一个条目都不能有（`apps/`、`assets/`、原子写的临时文件都算）；
 //  2. 正向：配置仍然交付 —— 它住在库内 `app_releases.config_json`（运行期由应用平台注入
-//     内存资源集，应用自己 `assets.read("picoaide.app.json")` 仍读得到），且能过 appcfg.Parse。
+//     内存资源集，应用自己 `assets.read("zeokeel.app.json")` 仍读得到），且能过 appcfg.Parse。
 func TestSeedWritesNoAssetsToDisk(t *testing.T) {
 	db, cleanup := serverstore.NewTestDB(t)
 	defer cleanup()
@@ -325,7 +325,7 @@ func TestSeedWritesNoAssetsToDisk(t *testing.T) {
 		}
 		// 逐条点名历史形态的路径（失败信息里直接给出来，一眼看懂违了什么）。
 		forbidden := filepath.Join(dataRoot, "apps", appID, "assets",
-			strconv.FormatInt(app.CurrentReleaseID, 10), "picoaide.app.json")
+			strconv.FormatInt(app.CurrentReleaseID, 10), "zeokeel.app.json")
 		if _, serr := os.Stat(forbidden); !os.IsNotExist(serr) {
 			t.Fatalf("宿主盘上出现了按版本抽取的资源目录（%s）：stat err=%v", forbidden, serr)
 		}
@@ -561,7 +561,7 @@ func TestSeedHealsMissingCurrentRelease(t *testing.T) {
 // 判据（三段）：
 //  1. 重跑播种后必须补出**恰好一条** approved 版本行，且 current_release_id 指向它；
 //  2. 补齐的版本行必须带制品字节与库内配置（运行期注入内存资源集、应用自己
-//     `assets.read("picoaide.app.json")` 读的都是它）；
+//     `assets.read("zeokeel.app.json")` 读的都是它）；
 //  3. 应用行不得被改写（标题/归属/配置不变）—— 补齐不是"重新播种"；宿主盘上仍什么都没有。
 //
 // 变异验证：把 healMissingRelease 的调用换回 `return false, nil`（旧行为）⇒ 第 1 段必红。

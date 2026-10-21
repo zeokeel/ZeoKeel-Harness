@@ -79,7 +79,7 @@ interface RegisteredTransport {
 }
 
 async function state(h: ReturnType<typeof createHarness>, id: string): Promise<{ status: string, error?: string, request?: { authorizeUrl?: string } | null }> {
-  const res = await callRoute(h, `/api/pico/connectors/${id}/state`, 'GET')
+  const res = await callRoute(h, `/api/zeokeel/connectors/${id}/state`, 'GET')
   return JSON.parse(res.body) as { status: string, error?: string, request?: { authorizeUrl?: string } | null }
 }
 
@@ -142,7 +142,7 @@ describe('end-to-end against a real OAuth-protected MCP server', () => {
     const dir = mkdtempSync(join(tmpdir(), 'e2e-real-'))
     const h = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
 
-    const connect = await callRoute(h, '/api/pico/connectors/real-mcp/connect', 'POST')
+    const connect = await callRoute(h, '/api/zeokeel/connectors/real-mcp/connect', 'POST')
     expect(connect.status).toBe(200)
 
     // be the browser: open the authorize URL the flow published, follow its
@@ -183,7 +183,7 @@ describe('end-to-end against a real OAuth-protected MCP server', () => {
     const dir = mkdtempSync(join(tmpdir(), 'e2e-expire-'))
     const h = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
 
-    await callRoute(h, '/api/pico/connectors/real-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/real-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'real-mcp'))
     await waitFor(() => h.configs.length === 1, 8000)
 
@@ -232,7 +232,7 @@ describe('end-to-end against a real OAuth-protected MCP server', () => {
     const dir = mkdtempSync(join(tmpdir(), 'e2e-prod-shape-'))
     const h = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
 
-    await callRoute(h, '/api/pico/connectors/real-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/real-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'real-mcp'))
     await waitFor(() => h.configs.length === 1, 8000)
 
@@ -283,7 +283,7 @@ describe('end-to-end against a real OAuth-protected MCP server', () => {
     const dir = mkdtempSync(join(tmpdir(), 'e2e-401-race-'))
     const h = createHarness([twoServerDef(server.origin)], dir, { refreshSweepIntervalMs: 0 })
 
-    await callRoute(h, '/api/pico/connectors/real-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/real-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'real-mcp'))
     await waitFor(() => h.configs.length === 2, 8000)
 
@@ -327,7 +327,7 @@ describe('end-to-end against a real OAuth-protected MCP server', () => {
     servers.push(server)
     const dir = mkdtempSync(join(tmpdir(), 'e2e-engine-'))
     const h = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
-    await callRoute(h, '/api/pico/connectors/real-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/real-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'real-mcp'))
     await waitFor(() => h.configs.length === 1, 8000)
 
@@ -364,7 +364,7 @@ describe('live public MCP endpoints (network)', () => {
   it('initializes and lists tools over the public internet', async () => {
     const results: string[] = []
     for (const target of publicTargets) {
-      const client = new Client({ name: 'picoaide-audit', version: '1.0.0' }, { capabilities: {} })
+      const client = new Client({ name: 'zeokeel-audit', version: '1.0.0' }, { capabilities: {} })
       // 每个目标一份**单次预算**（2026-09-16）：本用例声明"离线 CI 不算失败"，
       // 但此前只看错误类型——链路慢/被丢包时 connect 会一直挂着，把 60s 的测试
       // 预算吃光后以超时失败（CI 实测 60_006ms），把"没网"误报成产品缺陷。
@@ -411,9 +411,9 @@ describe('end-to-end against a real static-token MCP server', () => {
       mcp: [{ serverName: 'static-mcp', transport: 'streamable-http', url: `${server.origin}/mcp`, headers: { Authorization: 'Bearer ${token}' } }],
     }
     const h = createHarness([tokenDef], dir, { refreshSweepIntervalMs: 0 })
-    const connect = await callRoute(h, '/api/pico/connectors/static-mcp/connect', 'POST')
+    const connect = await callRoute(h, '/api/zeokeel/connectors/static-mcp/connect', 'POST')
     expect(connect.status).toBe(200)
-    const submitted = await callRoute(h, '/api/pico/connectors/static-mcp/auth-submit', 'POST', {
+    const submitted = await callRoute(h, '/api/zeokeel/connectors/static-mcp/auth-submit', 'POST', {
       fields: { token: 'secret-token-1' },
     })
     expect(submitted.status).toBe(200)
@@ -447,12 +447,12 @@ describe('end-to-end against a real static-token MCP server', () => {
       mcp: [{ serverName: 'static-mcp', transport: 'streamable-http', url: `${server.origin}/mcp`, headers: { Authorization: 'Bearer ${token}' } }],
     }
     const h = createHarness([tokenDef], dir, { refreshSweepIntervalMs: 0 })
-    await callRoute(h, '/api/pico/connectors/static-mcp/connect', 'POST')
-    await callRoute(h, '/api/pico/connectors/static-mcp/auth-submit', 'POST', { fields: { token: 'wrong-token' } })
+    await callRoute(h, '/api/zeokeel/connectors/static-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/static-mcp/auth-submit', 'POST', { fields: { token: 'wrong-token' } })
     await waitFor(() => h.configs.length === 1, 8000)
-    const refresh = await callRoute(h, '/api/pico/connectors/static-mcp/refresh', 'POST')
+    const refresh = await callRoute(h, '/api/zeokeel/connectors/static-mcp/refresh', 'POST')
     expect(refresh.status).toBe(400) // not-applicable: no OAuth target
-    const row = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const row = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, canRefresh: boolean }> }).connectors.find(c => c.id === 'static-mcp')
     expect(row?.canRefresh).toBe(false)
     h.dispose()
@@ -466,7 +466,7 @@ describe('first connect without a credential', () => {
     const dir = mkdtempSync(join(tmpdir(), 'e2e-nocred-'))
     const h = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
     // No credential exists: the row is disconnected and nothing registers yet.
-    const listed = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const listed = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string }> }).connectors.find(c => c.id === 'real-mcp')
     expect(listed?.status).toBe('disconnected')
 
@@ -477,7 +477,7 @@ describe('first connect without a credential', () => {
     await store.writeCredential('real-mcp', { accessToken: 'revoked-token', updatedAt: Date.now() })
     h.emitSession({ username: 'user-a' })
     await new Promise(r => setTimeout(r, 300))
-    const row = (JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+    const row = (JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
       { connectors: Array<{ id: string, status: string, error?: string }> }).connectors.find(c => c.id === 'real-mcp')
     // either it connected (server would reject the token) or it explained why not
     if (row?.status === 'error') expect(row.error).toContain('需要先完成授权')
@@ -491,7 +491,7 @@ describe('concurrency against the real authorization server', () => {
     servers.push(server)
     const dir = mkdtempSync(join(tmpdir(), 'e2e-race-'))
     const h = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
-    await callRoute(h, '/api/pico/connectors/real-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/real-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'real-mcp'))
     await waitFor(() => h.configs.length === 1, 8000)
 

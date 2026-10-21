@@ -645,7 +645,7 @@ function harness(session: Session): { call: (url: string) => Promise<{ code: num
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? { requestRejection: () => undefined } : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => true,
       getSession: () => session,
@@ -658,7 +658,7 @@ function harness(session: Session): { call: (url: string) => Promise<{ code: num
     },
   }
   apply(ctx as never, {} as AuthGateConfig)
-  const handler = routes.find(route => route.kind === 'prefix' && route.path === '/api/pico/capabilities')?.handler
+  const handler = routes.find(route => route.kind === 'prefix' && route.path === '/api/zeokeel/capabilities')?.handler
   if (handler === undefined) throw new Error('capabilities route not registered')
   return {
     call: async (url: string) => {
@@ -699,7 +699,7 @@ describe('R17B-04：能力中心投影（真 auth-gate 路由 → 真面板归�
 
   it('换服务端后：本机行带 originServer + installedOrigin=local + 需要覆盖确认', async () => {
     await seed('https://old.example')
-    const res = await harness(SESSION).call('/api/pico/capabilities?source=local')
+    const res = await harness(SESSION).call('/api/zeokeel/capabilities?source=local')
     expect(res.code).toBe(200)
     const rows = (res.body.items ?? []) as Array<Record<string, unknown>>
     const local = rows.find(row => row.source === 'local' && row.name === SKILL)
@@ -716,7 +716,7 @@ describe('R17B-04：能力中心投影（真 auth-gate 路由 → 真面板归�
 
   it('同一台服务端（尾斜杠差异）：不带 originServer、照旧算商店内容', async () => {
     await seed('https://harness.example/')
-    const res = await harness(SESSION).call('/api/pico/capabilities?source=local')
+    const res = await harness(SESSION).call('/api/zeokeel/capabilities?source=local')
     const rows = (res.body.items ?? []) as Array<Record<string, unknown>>
     const local = rows.find(row => row.source === 'local' && row.name === SKILL)
     expect(local?.originServer).toBeUndefined()

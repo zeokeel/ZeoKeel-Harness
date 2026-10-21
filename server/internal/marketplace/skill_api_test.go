@@ -16,9 +16,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
 )
 
 // newTestRouter builds a migrated DB with user alice, a registered token,
@@ -89,7 +89,7 @@ func TestSkillAPI(t *testing.T) {
 	demoArchive := skillArchiveBytes(t, "demo")
 	if _, err := serverstore.AddSkill(db, &serverstore.Skill{
 		Name: "demo", Version: "1.0.0", Description: "demo skill",
-		Author: "pico", Enabled: 1, Archive: demoArchive, Checksum: sharedskills.ArchiveChecksum("", demoArchive),
+		Author: "zeokeel", Enabled: 1, Archive: demoArchive, Checksum: sharedskills.ArchiveChecksum("", demoArchive),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -192,8 +192,8 @@ func TestSkillNewArchiveServedImmediately(t *testing.T) {
 	// 上传新版归档后,客户端下载立刻拿到新版本内容,不会残留旧包。
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "1000")
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "1000")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	uid, err := serverstore.CreateUserWithPassword(db, "alice", "pw123456")
 	if err != nil {
 		t.Fatal(err)
@@ -259,11 +259,11 @@ func adminHdr(t *testing.T, r http.Handler) map[string]string {
 	csrf, _ := out["csrf_token"].(string)
 	sess := ""
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "picoaide_session" {
+		if ck.Name == "zeokeel_session" {
 			sess = ck.Value
 		}
 	}
-	return map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	return map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 }
 
 // rewriteRepoVersion bumps metadata.yaml's version in a committed git repo.

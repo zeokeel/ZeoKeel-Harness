@@ -66,7 +66,7 @@
 #        非 Linux 平台：探针显式 SKIP（退出码 77）；`WASM_GATE_REQUIRE_COVERED_PLATFORM=1` 时
 #        未覆盖平台一律 77 而不是"跑完给结论"。
 # 环境变量（参数化，避免把本机路径写死 —— R2T-12）：
-#   PG_DSN_TEST      定向测试的数据库（缺省 postgres://postgres:postgres@127.0.0.1:5432/picoaide_test）
+#   PG_DSN_TEST      定向测试的数据库（缺省 postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test）
 #   PROBE_TIMEOUT    单探针超时秒数（缺省 180）
 #   ELECTRON_BIN     Electron 可执行文件（缺省 packages/host/desktop/node_modules/.bin/electron）
 #   WASM_CHANNELS_REPO  真实私有渠道仓检出（可选；给了就跑正式 tag dry-run；不给则该步骤计入 SKIP）
@@ -104,7 +104,7 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-PG_DSN_TEST="${PG_DSN_TEST:-postgres://postgres:postgres@127.0.0.1:5432/picoaide_test}"
+PG_DSN_TEST="${PG_DSN_TEST:-postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test}"
 PROBE_TIMEOUT="${PROBE_TIMEOUT:-180}"
 ELECTRON_BIN="${ELECTRON_BIN:-$ROOT/packages/host/desktop/node_modules/.bin/electron}"
 LOG_DIR="${WASM_GATE_LOG_DIR:-}"
@@ -938,7 +938,7 @@ fi
 if want 4; then
   group_begin 4
   step "4. 客户端包检查（新包 / 浏览器 / 客户端应用中心）"
-  for pkg in @picoaide/dsh-wasm-apps-host @picoaide/dsh-browser @picoaide/dsh-wasm-apps; do
+  for pkg in @zeokeel/dsh-wasm-apps-host @zeokeel/dsh-browser @zeokeel/dsh-wasm-apps; do
     log="$LOG_DIR/pkg-${pkg//\//_}.log"
     if corepack yarn workspace "$pkg" check >"$log" 2>&1; then
       pass "$pkg check"

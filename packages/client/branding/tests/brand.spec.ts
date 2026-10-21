@@ -32,7 +32,7 @@ function textOf(node: ReactNode): string {
 }
 
 describe('branding BrandName version label', () => {
-  const VERSION_KEY = 'PICOAI_PRODUCT_VERSION'
+  const VERSION_KEY = 'ZEOKEEL_PRODUCT_VERSION'
   // 生产环境里由构建期 define 注入；vitest 跑的是源码，所以直接改 process.env。
   const previous = process.env[VERSION_KEY]
 
@@ -44,7 +44,7 @@ describe('branding BrandName version label', () => {
   it('renders the v-prefixed version pill with the inverted brand tokens', () => {
     process.env[VERSION_KEY] = '1.2.3'
     const tree = BrandName()
-    expect(textOf(tree)).toBe('PicoAidev1.2.3')
+    expect(textOf(tree)).toBe('ZeoKeelv1.2.3')
     const pill = elementsOf(tree).find(element => element.props.children === 'v1.2.3')
     expect(pill, 'the version pill must be rendered next to the product name').toBeDefined()
     // 胶囊取反色墨：`--dsw-alias-label-primary` / `-inverted` 是上游成对存在的
@@ -56,12 +56,12 @@ describe('branding BrandName version label', () => {
     })
   })
 
-  it('omits the version pill when PICOAI_PRODUCT_VERSION is unset or empty', () => {
+  it('omits the version pill when ZEOKEEL_PRODUCT_VERSION is unset or empty', () => {
     delete process.env[VERSION_KEY]
-    expect(textOf(BrandName())).toBe('PicoAide')
+    expect(textOf(BrandName())).toBe('ZeoKeel')
     // 构建期 define 也可能注入空串：空版本号不得渲染出一个孤零零的 "v"。
     process.env[VERSION_KEY] = ''
-    expect(textOf(BrandName())).toBe('PicoAide')
+    expect(textOf(BrandName())).toBe('ZeoKeel')
     expect(elementsOf(BrandName()).filter(element => element.props.children === 'v')).toEqual([])
   })
 
@@ -73,18 +73,18 @@ describe('branding BrandName version label', () => {
   })
 })
 
-describe('branding brand shell surfaces (merged from @picoaide/dsh-shell)', () => {
+describe('branding brand shell surfaces (merged from @zeokeel/dsh-shell)', () => {
   it('OverlayBadge renders the product name', () => {
     const node = OverlayBadge()
     const texts = JSON.stringify(node.props.children)
-    expect(texts).toContain('PicoAide Harness')
+    expect(texts).toContain('ZeoKeel Harness')
   })
 
   it('AboutSection renders the product name and package identity', () => {
     const node = AboutSection()
     const texts = JSON.stringify(node.props.children)
-    expect(texts).toContain('PicoAide Harness')
-    expect(texts).toContain('@picoaide/dsh-branding')
+    expect(texts).toContain('ZeoKeel Harness')
+    expect(texts).toContain('@zeokeel/dsh-branding')
   })
 
   it('applyBrandTheme calls theme.overrideTokens with the brand layer', () => {
@@ -92,7 +92,7 @@ describe('branding brand shell surfaces (merged from @picoaide/dsh-shell)', () =
     const ctx = { get: vi.fn(() => ({ overrideTokens })) }
     applyBrandTheme(ctx)
     expect(ctx.get).toHaveBeenCalledWith('theme')
-    expect(overrideTokens).toHaveBeenCalledWith('picoaide-brand', {
+    expect(overrideTokens).toHaveBeenCalledWith('zeokeel-brand', {
       '--dsw-alias-brand-primary': { light: '#0e8a6a', dark: '#34c79c' },
     })
   })

@@ -3,7 +3,7 @@
  * browser drives every tab through `webContents.debugger` (the built-in CDP
  * channel), so no extra runtime dependency is needed. This module owns the
  * wire protocol only: attach/detach, `sendCommand`, and event fan-out.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import { browserError } from './errors.ts'

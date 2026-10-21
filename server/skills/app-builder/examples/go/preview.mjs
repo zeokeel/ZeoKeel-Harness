@@ -33,7 +33,7 @@
 //       sqlite3 dist/.preview/app.db 'select * from notes'  # 或任何 SQLite 工具
 //
 // 仍**不是**线上：没有 AI（wasm 侧本就没有，应用里的 AI 走页面里的客户端 AI loop
-// `POST /__picoaide/ai/chat`，由客户端本地处理）、没有并发/配额、名单判定也仍是应用自己的事。
+// `POST /__zeokeel/ai/chat`，由客户端本地处理）、没有并发/配额、名单判定也仍是应用自己的事。
 //
 // 直出规则（与平台同源，见 references/abi.md §3.7）：
 //   · 只服务 GET/HEAD；`/api` 与 `/api/*` 一律交给 wasm；
@@ -57,7 +57,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const FRAME_MAGIC = 0x1e
 
 /** 平台保留资源：由平台在发布期写入，包内不允许有同名段。 */
-const RESERVED_ASSET_NAME = 'picoaide.app.json'
+const RESERVED_ASSET_NAME = 'zeokeel.app.json'
 /** 工具链元数据段名：平台按元数据分流，不会当成资源（与 pack-assets.mjs 同源）。 */
 const TOOLCHAIN_SECTION_NAMES = new Set([
   'name', 'producers', 'target_features', 'dylink', 'dylink.0', 'linking',
@@ -80,7 +80,7 @@ function isToolchainSection(name) {
     TOOLCHAIN_SECTION_PREFIXES.some(prefix => name.startsWith(prefix))
 }
 /** 宿主保留命名空间（与宿主 isReservedHostPath 同口径）。 */
-const RESERVED_HOST_PREFIX = '/__picoaide'
+const RESERVED_HOST_PREFIX = '/__zeokeel'
 
 /** 子进程：用 node:wasi 执行应用的 _start（fd 0/1/2 即与父进程相连的管道）。 */
 async function runWasmInChild() {
@@ -176,14 +176,14 @@ async function runFakeHost() {
   const args = parseArgs(process.argv.slice(2))
   if (!args.wasm) {
     console.error('用法: node preview.mjs <app.wasm> [--path /] [--method GET] [--body ...] [--user zhangwei] ' +
-      '[--anonymous] [--config <picoaide.app.json>] [--db <file>] [--data-dir <dir>] [--fresh] [--dump-tables]')
+      '[--anonymous] [--config <zeokeel.app.json>] [--db <file>] [--data-dir <dir>] [--fresh] [--dump-tables]')
     process.exit(2)
   }
   const wasmPath = resolve(args.wasm)
   // 配置来源：**保留资源由平台在发布期写进版本资源目录**，本地预览就用一份磁盘上的
   // 同名文件顶替。缺省读本目录示例的那一份；`--config` 可以让别的应用预览自己的配置
   // （否则演示应用会拿着示例的 access/whitelist 跑，名单场景根本演示不出来）。
-  const configPath = args.config ? resolve(args.config) : join(HERE, 'picoaide.app.json')
+  const configPath = args.config ? resolve(args.config) : join(HERE, 'zeokeel.app.json')
   let config
   try {
     config = JSON.parse(readFileSync(configPath, 'utf8'))
@@ -250,7 +250,7 @@ async function runFakeHost() {
   }
 
   const child = spawn(process.execPath, [fileURLToPath(import.meta.url), wasmPath], {
-    env: { ...process.env, PICOAIDE_PREVIEW_CHILD: '1' },
+    env: { ...process.env, ZEOKEEL_PREVIEW_CHILD: '1' },
     stdio: ['pipe', 'pipe', 'inherit'],
   })
 
@@ -259,7 +259,7 @@ async function runFakeHost() {
 
   // ② 宿主 → 应用：请求帧
   const request = {
-    abi: 'picoaide-app/1',
+    abi: 'zeokeel-app/1',
     app_id: 'shared-notes',
     version: '1.0.0',
     // auth.mode 取自应用的 access（写侧只有 login / whitelist；历史 public 读取侧按
@@ -617,7 +617,7 @@ class FakeHost {
         return ok({ accepted: 1 })
       case 'assets.read': {
         const logical = String(params.path ?? '')
-        // 保留资源由平台在发布期写入：本地用磁盘上的 picoaide.app.json 顶替。
+        // 保留资源由平台在发布期写入：本地用磁盘上的 zeokeel.app.json 顶替。
         if (logical === RESERVED_ASSET_NAME) {
           const text = JSON.stringify(this.config)
           return ok({ content_type: 'application/json', size: Buffer.byteLength(text), encoding: 'text', text })
@@ -636,7 +636,7 @@ class FakeHost {
       }
       default:
         // 平台的宿主能力是封闭清单：宿主没有的能力（**包括任何 AI 能力**）也走这里 ——
-        // 应用里的 AI 走页面里的客户端 AI loop（`__picoaide/ai/chat`，客户端本地处理），
+        // 应用里的 AI 走页面里的客户端 AI loop（`__zeokeel/ai/chat`，客户端本地处理），
         // 不在 wasm 里，因此预览宿主也没有它。
         return fail('NOT_FOUND', `未知的宿主方法: ${method}`)
     }
@@ -763,7 +763,7 @@ function resolveDBPath(args, wasmPath) {
  * @returns 失败条数（0 = 全过）。
  */
 function runSelfTest() {
-  const dir = join(tmpdir(), `picoaide-preview-selftest-${process.pid}`)
+  const dir = join(tmpdir(), `zeokeel-preview-selftest-${process.pid}`)
   mkdirSync(dir, { recursive: true })
   const dbPath = join(dir, 'selftest.db')
   const failures = []
@@ -849,7 +849,7 @@ function runSelfTest() {
 
 // ===== 入口（放在最后：class 声明不提升，顶层 dispatch 必须等它们求值完）=====
 
-if (process.env.PICOAIDE_PREVIEW_CHILD === '1') {
+if (process.env.ZEOKEEL_PREVIEW_CHILD === '1') {
   await runWasmInChild()
 } else if (process.argv.slice(2).includes('--selftest')) {
   process.exit(runSelfTest())

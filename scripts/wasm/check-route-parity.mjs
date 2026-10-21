@@ -117,7 +117,7 @@ if (prefixRegistered) {
 // 修法是把常量补回去，而不是把判据调软。
 const channelSuffix = /export const WASM_APP_CHANNEL_ROUTE\s*=\s*`\$\{WASM_APPS_LOCAL_PREFIX\}([^`]+)`/u.exec(host.source)?.[1]
 const hostChannelRoute = channelSuffix === undefined ? undefined : `${prefixMatch?.[1] ?? ''}${channelSuffix}`
-const channelDoc = /GET (\/api\/pico\/wasm-apps\/channel)/u.exec(doc)?.[1]
+const channelDoc = /GET (\/api\/zeokeel\/wasm-apps\/channel)/u.exec(doc)?.[1]
 let clientChannelRoute
 let clientChannelAt = ''
 for (const file of CLIENT_CHANNEL_SOURCES) {
@@ -127,7 +127,7 @@ for (const file of CLIENT_CHANNEL_SOURCES) {
   } catch {
     continue
   }
-  const match = /'(\/api\/pico\/wasm-apps\/channel)'/u.exec(source)
+  const match = /'(\/api\/zeokeel\/wasm-apps\/channel)'/u.exec(source)
   if (match !== null) {
     clientChannelRoute = match[1]
     clientChannelAt = `${REL(file)}:${lineOf(source, match[1])}`
@@ -139,7 +139,7 @@ console.log(`  §16.1 宿主 ${JSON.stringify(hostChannelRoute ?? null)} / 客�
 if (hostChannelRoute === undefined || clientChannelRoute === undefined) {
   const missing = [
     hostChannelRoute === undefined ? `${REL(HOST_SOURCE)} 里没有 export const WASM_APP_CHANNEL_ROUTE（改名？）` : null,
-    clientChannelRoute === undefined ? `${CLIENT_CHANNEL_SOURCES.map(REL).join(' / ')} 里没有 '/api/pico/wasm-apps/channel' 字面量（改名？）` : null,
+    clientChannelRoute === undefined ? `${CLIENT_CHANNEL_SOURCES.map(REL).join(' / ')} 里没有 '/api/zeokeel/wasm-apps/channel' 字面量（改名？）` : null,
   ].filter(Boolean)
   bad(`§16.1 渠道只读路由缺一端（不得退化为不判失败的 PENDING）：${missing.join('；')}`
     + ' —— 契约已在两端冻结，缺一端就是漂移/删除')

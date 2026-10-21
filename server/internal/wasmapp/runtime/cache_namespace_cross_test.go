@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	wasmruntime "github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	wasmruntime "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 )
 
 // 本文件（外部测试包）是 FIX-34 的**交叉断言**：同一条缓存目录推导必须在两侧算出**同一个
@@ -23,7 +23,7 @@ import (
 //   - 把 cacheNamespaceFor 的回落改成"恒返回传入值" ⇒ 空版本那两条必红。
 
 func TestCompileCacheDirMatchesCompileSide(t *testing.T) {
-	roots := []string{"/data/app", "/var/lib/picoaide", filepath.Join(t.TempDir(), "数据根")}
+	roots := []string{"/data/app", "/var/lib/zeokeel", filepath.Join(t.TempDir(), "数据根")}
 	for _, root := range roots {
 		got := wasmruntime.CompileCacheDir(root)
 		want := compile.CompileCacheDir(root)

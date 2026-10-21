@@ -1,4 +1,4 @@
-// Client-side channel store: subscribes to the Host 'pico/channel-changed'
+// Client-side channel store: subscribes to the Host 'zeokeel/channel-changed'
 // event and exposes the current channel content to slot components via a tiny
 // external store (no context provider needed — slots are function components
 // that call useChannel()).
@@ -9,7 +9,7 @@ import { asChannelPayload, stripRelativeAssetURLs, type ChannelConfig } from '..
 // 声明 Host 侧事件(客户端编译面不加载 channel-sync 的 module 声明)。
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'pico/channel-changed'(channel: ChannelConfig | null): void
+    'zeokeel/channel-changed'(channel: ChannelConfig | null): void
   }
 }
 
@@ -20,7 +20,7 @@ let listeners = new Set<() => void>()
  * CSS 变量这类非 React 消费方要拿到内容本身。
  *
  * 为什么需要:随包品牌的播种发生在客户端本地(`seedFromPackagedBrand`),不会
- * 经过 Host 事件 —— 只订阅 `pico/channel-changed` 的消费方会一直拿着旧值,
+ * 经过 Host 事件 —— 只订阅 `zeokeel/channel-changed` 的消费方会一直拿着旧值,
  * 于是标题停在回落文案上(2026-09-10 实测:侧边栏已是渠道名、窗口标题还是厂商名)。
  */
 const valueListeners = new Set<(channel: ChannelConfig | null) => void>()
@@ -38,7 +38,7 @@ function set(channel: ChannelConfig | null) {
  *
  * 服务端下发要等会话建立，而客户端界面对品牌的第一次渲染更早 —— 中间那段
  * （以及服务端不可达时）显示什么，决定了渠道客户会不会看到厂商名。这里从本地
- * 端点 `/api/pico/channel` 取随包品牌：auth-gate 在未登录/服务端不可达时返回
+ * 端点 `/api/zeokeel/channel` 取随包品牌：auth-gate 在未登录/服务端不可达时返回
  * 的正是它。
  *
  * **只在 store 仍为空时写入**：这个请求与登录后的服务端请求并发，若它后到就会
@@ -47,7 +47,7 @@ function set(channel: ChannelConfig | null) {
  */
 async function seedFromPackagedBrand(): Promise<void> {
   try {
-    const res = await fetch('/api/pico/channel', { headers: { accept: 'application/json' } })
+    const res = await fetch('/api/zeokeel/channel', { headers: { accept: 'application/json' } })
     if (!res.ok) return
     const data = await res.json() as unknown
     // 结构校验:不是渠道内容的载荷(网关兜底 {ok:true}、错误体…)一律不采纳 ——
@@ -69,7 +69,7 @@ async function seedFromPackagedBrand(): Promise<void> {
 export function startChannelStore(ctx: ClientContext): () => void {
   if (started && cancel !== undefined) return cancel
   started = true
-  cancel = ctx.on('pico/channel-changed', (channel) => {
+  cancel = ctx.on('zeokeel/channel-changed', (channel) => {
     set(channel ?? null)
   })
   void seedFromPackagedBrand()

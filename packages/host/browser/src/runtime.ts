@@ -6,7 +6,7 @@
  * the AI panel shows the live action stream. All v4 capabilities remain
  * (eval guardrail, wait_for, fill_form, upload_file, programmatic downloads,
  * stores, crash rebuild, per-frame eval).
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import {
@@ -30,7 +30,7 @@ import { SENSITIVE_KEY_PATTERN, isExactProseSensitiveKey } from './sensitive.ts'
 import { browserError, BrowserError, type BrowserErrorCode } from './errors.ts'
 import { httpOriginOf } from './credential-site.ts'
 import { isFrameOrderProblem, orderFramesByDom, frameOrderErrorMessage, SRCDOC_URL, type FrameCandidate, type FrameOrderProblem } from './frames.ts'
-import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@picoaide/dsh-host-locale'
+import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 import { realpathSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import type {
@@ -428,7 +428,7 @@ export interface BrowserControlState {
   userHeldSurfaces: Array<{ id: number, appId: string }>
 }
 
-/** Shell/panel state projection (GET /api/pico/browser/state). */
+/** Shell/panel state projection (GET /api/zeokeel/browser/state). */
 export interface BrowserShellState extends BrowserControlState {  tabs: BrowserTabState[]
   window: BrowserWindowState
   latestOp: BrowserOpLogEntry | null
@@ -479,8 +479,8 @@ export interface RuntimeDeps {
    */
   locale?: () => HostLocale
   /**
-   * Surface 注册表（§16.1）：应用窗口由宿主（`@picoaide/dsh-wasm-apps-host`）经
-   * `@picoaide/dsh-browser/surface` 注册进来，工具面按它寻址；**浏览器标签**这一半
+   * Surface 注册表（§16.1）：应用窗口由宿主（`@zeokeel/dsh-wasm-apps-host`）经
+   * `@zeokeel/dsh-browser/surface` 注册进来，工具面按它寻址；**浏览器标签**这一半
    * 由 {@link BrowserRuntime.syncSurfaces} 从池子镜像过去。
    *
    * 缺席（纯单测/极简宿主）⇒ 工具面退回"只有浏览器标签"的老口径，不报错。
@@ -653,7 +653,7 @@ export class BrowserRuntime {
       textLimit: options.textLimit ?? 32 * 1024,
       screenshotMaxWidth: options.screenshotMaxWidth ?? 1280,
       screenshotQuality: options.screenshotQuality ?? 70,
-      downloadDir: options.downloadDir ?? '.picoaide-downloads',
+      downloadDir: options.downloadDir ?? '.zeokeel-downloads',
       credentialWindowTtlMs: Number.isFinite(options.credentialWindowTtlMs) && (options.credentialWindowTtlMs ?? 0) > 0
         ? options.credentialWindowTtlMs as number
         : CREDENTIAL_ORIGIN_WINDOW_TTL_MS,
@@ -1021,7 +1021,7 @@ export class BrowserRuntime {
    *   - 当时的形态：内置浏览器的分区**故意镜像**了 shell 的 `dsh-auth-*` cookie（本插件
    *     自己两个 shell 页面的写操作要靠它过 `requireWriteProof`），而导航策略对浏览器标签
    *     放行一切 `http(s)`；两者叠加 ⇒ 模型只要 `browser_navigate` 到
-   *     `http://127.0.0.1:<port>/api/pico/...` 就天然持有那把 cookie，**任何**依赖持有性
+   *     `http://127.0.0.1:<port>/api/zeokeel/...` 就天然持有那把 cookie，**任何**依赖持有性
    *     证明的本机守卫（不只是 `unmask`）都会被绕过 —— 因为它驱动的那个标签页**就是**
    *     一个持有 cookie 的真页面；
    *   - 2026-09-21 §7b **方案 A** 已把凭据移出模型可驱动的 jar（蒙版改跑默认 session，
@@ -1224,7 +1224,7 @@ export class BrowserRuntime {
        * 为什么必须有它（2026-09-21，与三轮审计 P1-① 同一族）：`browser_navigate`
        * 那条闸只罩"模型显式调用的导航"，而这两种导航**不经过**它 ——
        *   · 模型可以先导航到一个**它控制的**外站，再让那个站 302 到
-       *     `http://127.0.0.1:<port>/api/pico/...`（Electron 不触发 `will-navigate` 于重定向）；
+       *     `http://127.0.0.1:<port>/api/zeokeel/...`（Electron 不触发 `will-navigate` 于重定向）；
        *   · 或（若 eval 允许）直接 `location.href = …`。
        * 两者都发生在**持有被镜像 cookie 的标签里**，于是同样绕过所有依赖持有性证明的本机守卫。
        * 只判 shell origin（与 {@link isShellOriginUrl} 同一份判据），不碰其它回环端口。
@@ -1245,7 +1245,7 @@ export class BrowserRuntime {
       view.webContents.on('will-navigate', refuseLocalNavigation)
       view.webContents.on('will-redirect', refuseLocalNavigation)
       // **子框架**也必须管（2026-09-21 四轮审计 P0）：`will-navigate` / `will-redirect`
-      // 只报主框架，而 `<iframe src="http://127.0.0.1:<端口>/api/pico/...">` 是子框架导航 ——
+      // 只报主框架，而 `<iframe src="http://127.0.0.1:<端口>/api/zeokeel/...">` 是子框架导航 ——
       // 模型先用一个自己控制的**本机页面**做父页（同 host ⇒ same-site ⇒ 镜像 cookie 会被带上），
       // 再 `browser_eval({frame:1})` 读子框架内容，就能拿回 `unmask` 后的行数据（真机实测）。
       // 上面"禁一切本机目标"已经掐掉了"父页落在本机"这条前提，这条是**纵深防御**：
@@ -2079,7 +2079,7 @@ export class BrowserRuntime {
    * A tab's live `url`/`title`/`favicon` are raw by design (navigation needs
    * them), but EVERY payload that leaves the runtime is built here: the
    * `browser_list_tabs` / `browser_open` / `browser_navigate` /
-   * `browser_get_snapshot` envelopes, the shell's `/api/pico/browser/state`
+   * `browser_get_snapshot` envelopes, the shell's `/api/zeokeel/browser/state`
    * and its SSE `state` event. Before this the redaction was applied per call
    * site and `browser_get_snapshot` shipped `state.url` in cleartext while the
    * element text beside it read `****` (independent re-verification
@@ -2745,7 +2745,7 @@ export class BrowserRuntime {
     if (user) {
       // 2026-09-15 审计 P1-1：这里原本用 `already` 短路 —— 用户正拿着控制权
       // («我来操作») 时来一次会话切换（token 过期 → auth-gate clear、登出、改密
-      // 都会发 pico/session-changed），finally 就不会把控制权交还：`controlled`
+      // 都会发 zeokeel/session-changed），finally 就不会把控制权交还：`controlled`
       // 永久为 true ⇒ 蒙版不再上锁、用户闸对 agent 失效、胶囊反而显示「交给 AI」。
       // 关闭浏览器这个动作本身就要结束"用户持有"状态，所以无条件交还。
       const wasControlled = this.pool.controlled

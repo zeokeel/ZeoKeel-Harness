@@ -5,7 +5,7 @@
  *
  * `fetchJSON` 此前把**任何** 401（或任何带 `AUTH_REQUIRED`/`AUTH_FAILED` 码的响应）
  * 都翻成 `AuthError('auth_expired')`，而 auth-gate 有 13 处
- * `cause.kind === 'auth_expired' ⇒ ctx.picoSession.clear()`，`clear()` 会**删掉磁盘上的
+ * `cause.kind === 'auth_expired' ⇒ ctx.zeokeelSession.clear()`，`clear()` 会**删掉磁盘上的
  * `$DSH_HOME/session.json`**。两类误判的后果都不是"多一条错误提示"：
  *
  *  - **401 的其它码**（例：`AUDITOR_NOT_ALLOWED` = 账号类型被拒，凭据本身没问题）：

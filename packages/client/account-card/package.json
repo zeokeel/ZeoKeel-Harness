@@ -1,5 +1,5 @@
 {
-  "name": "@picoaide/dsh-account-card",
+  "name": "@zeokeel/dsh-account-card",
   "version": "0.1.0",
   "description": "Bottom sidebar account card: username, logout, and live gateway usage balance refreshed after every agent loop",
   "license": "MIT",
@@ -43,7 +43,7 @@
     "check": "yarn run build && tsc -p tsconfig.tests.json --noEmit && yarn run test"
   },
   "dependencies": {
-    "@picoaide/dsh-enterprise": "workspace:*"
+    "@zeokeel/dsh-enterprise": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
@@ -62,11 +62,11 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-rc.2",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.2",
     "@deepseek-ai/dsh-host-webserver": "0.2.1-rc.2",
-    "@picoaide/dsh-capability-center": "workspace:*",
-    "@picoaide/dsh-panel-surface": "workspace:*",
     "@types/node": "^22.20.0",
     "@types/react": "^18",
     "@types/react-dom": "^18.3.5",
+    "@zeokeel/dsh-capability-center": "workspace:*",
+    "@zeokeel/dsh-panel-surface": "workspace:*",
     "jsdom": "25.0.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",

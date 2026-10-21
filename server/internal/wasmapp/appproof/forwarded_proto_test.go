@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
 )
 
 // ===========================================================================
@@ -29,7 +29,7 @@ import (
 //
 // 现在的形态：判定只有 `clientrelease.ForwardedProtoIsHTTPS` 一份实现（FIX-38 落在
 // `clientrelease` 的理由：它零 internal 依赖、是三个消费点里最靠下的一层；
-// `go list -deps ./internal/clientrelease` 实测只有它自己一个 picoaide 包 ⇒
+// `go list -deps ./internal/clientrelease` 实测只有它自己一个 zeokeel 包 ⇒
 // `appproof → clientrelease` 不可能成环）。本文件钉两件事：
 //
 //  1. **消费点断言**（取值域 = 真实解析面）：同一组 ≥13 种代理形态，`ServerURL` 算出的

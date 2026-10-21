@@ -4,7 +4,7 @@ package llmgateway
 //
 // ## 为什么归因读会话 id 而不是自报头
 //
-// 设计总纲 §21.4 原本要求客户端在出站请求上带 `X-Pico-App-Id`。实施期实测发现那条路
+// 设计总纲 §21.4 原本要求客户端在出站请求上带 `X-ZeoKeel-App-Id`。实施期实测发现那条路
 // **走不通**（§21.7⑤）：chat 出站头的唯一构造点在上游 `llm-deepseek` 的 adapter 里，
 // 而 `GenerateOptions` / `LlmCallConfig` / 深冻结的 `llm/stream` 都没有 header 通道 ⇒
 // 在不改上游 submodule 的前提下这个头永远发不出去，管理端面板恒显示"无归因"。
@@ -50,7 +50,7 @@ import (
 var appSessionIDContractJSON []byte
 
 // appSessionIDContractSchema 是本文件能解析的契约版本。
-const appSessionIDContractSchema = "picoaide-app-session-id/1"
+const appSessionIDContractSchema = "zeokeel-app-session-id/1"
 
 // appSessionIDBuildCase 是"（账号, 服务端, 应用）⇒ 会话 id"的语料行（客户端构造方向）。
 type appSessionIDBuildCase struct {
@@ -165,4 +165,4 @@ func appSessionIDHeaderName() string {
 }
 
 // legacyAppIDHeader 是**已废弃**的自报归因头（§21.4 的初版设计）。见 `app_attribution.go`。
-const legacyAppIDHeader = "X-Pico-App-Id"
+const legacyAppIDHeader = "X-ZeoKeel-App-Id"

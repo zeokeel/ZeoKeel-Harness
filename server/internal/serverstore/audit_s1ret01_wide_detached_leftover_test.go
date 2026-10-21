@@ -417,7 +417,7 @@ func TestAuditS1Ret01OwnedCommentDirections(t *testing.T) {
 		{"missing_version", usageRetentionOwnedCommentPrefix + " from=2020-01-01 to=2020-03-31", false, "缺版本号"},
 		{"unknown_version", usageRetentionOwnedCommentPrefix + " v2 from=2020-01-01 to=2020-03-31", false, "未知版本（除 v1 一律不认）"},
 		{"uppercase_version", usageRetentionOwnedCommentPrefix + " V1 from=2020-01-01 to=2020-03-31", false, "版本号大小写不逐字"},
-		{"uppercase_prefix", "Picoaide:usage-retention:owned v1 from=2020-01-01 to=2020-03-31", false, "前缀大小写不逐字"},
+		{"uppercase_prefix", "ZeoKeel:usage-retention:owned v1 from=2020-01-01 to=2020-03-31", false, "前缀大小写不逐字"},
 		{"double_space_before_version", usageRetentionOwnedCommentPrefix + "  v1 from=2020-01-01 to=2020-03-31", false, "版本号前多一个空格（前缀+版本必须逐字）"},
 		{"empty_date_fields", usageRetentionOwnedCommentPrefix + " v1 from= to=", false, "空日期"},
 		{"leading_space", " " + canonical, false, "前导空白"},

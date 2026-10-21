@@ -1,4 +1,4 @@
-# PicoAide Harness 全项目 Bug 检查报告（2026-09-08）
+# ZeoKeel Harness 全项目 Bug 检查报告（2026-09-08）
 
 - 被检代码：本地 `master` HEAD `b9f8df59f6`（v2.6.7-beta.10）。**注意：本地落后 `origin/master` 5 个提交（v2.6.7-beta.11）**，差异见 §5。
 - 范围：`server/`（Go + webadmin）、`packages/host/*`、`packages/client/*`、`packages/vendor/*`、`.github/workflows`、根 `scripts/`、`integration-tests/`、`site/`、`docs/`。排除 `deepseek-harness/`（只读上游子模块）。
@@ -33,7 +33,7 @@
 - 机制：`main()` 在第一条断言之前就抛错（例如 CDP 30s 未就绪）时 `results=[]` → `failed.length===0` → 打印 `E2E 结果：全部通过`，`process.exitCode` 保持 0。
 - 复现（本机实测）：
   ```
-  node scripts/e2e-client.mjs --app /data/picoaide-harness/temp/audit-0908-stub-app.sh --port 19399 --no-screenshot
+  node scripts/e2e-client.mjs --app /data/zeokeel-harness/temp/audit-0908-stub-app.sh --port 19399 --no-screenshot
   → e2e-client fatal: app did not expose CDP within 30s
   → E2E 结果：全部通过     EXIT_CODE=0     报告 0/0 通过
   ```
@@ -82,7 +82,7 @@
 | 11 | `server/internal/agentshare/routes.go:417,429` + `serverstore/agent_presets.go:64-88` | legacy name 级 approve/reject 用 `GetAgentPreset`（= 最高 **approved** 版本）定位目标 | 已上架 1.0.0 + 待审 2.0.0 时点"拒绝"会把 1.0.0 置 rejected（已上架版本从员工目录消失），2.0.0 仍 pending；"通过"静默无效 | 🔬 |
 | 12 | `packages/host/desktop/src/electron-runtime.ts:791-814` | 崩溃回退页 `did-finish-load` 后立刻 `loadURL(current)` 回应用 URL；`crashRetried` 只挡"再重载一次" | 确定性崩溃时"错误页→应用页→再崩"无限循环，承诺的手动重载按钮留不住，CPU/GPU 空转 | 🔬 |
 | 13 | `packages/host/enterprise/src/session-service.ts:96`（`persist` :155-169） | `void persist(...)` 无 `.catch`；`writeFileSync` 失败 → unhandledRejection → `dsh-app-boot` fail-loud → `exit(1)` | `$DSH_HOME` 不可写（ENOSPC/EACCES/ROFS）时，一次登录直接终止整个桌面应用 | 🔬 |
-| 14 | `server/scripts/deploy.sh:58-70`（另 :252-254,337） | `.env` 复用白名单含 `PG_PASSWORD` 却**不含 `PICOAI_ADMIN_PASSWORD`** | `REINSTALL=yes` 重装（pg-data 已删）写出空超管密码 → `log.Fatalf` → 容器 crash-loop，且末尾仍打印"部署完成" | 📖 |
+| 14 | `server/scripts/deploy.sh:58-70`（另 :252-254,337） | `.env` 复用白名单含 `PG_PASSWORD` 却**不含 `ZEOKEEL_ADMIN_PASSWORD`** | `REINSTALL=yes` 重装（pg-data 已删）写出空超管密码 → `log.Fatalf` → 容器 crash-loop，且末尾仍打印"部署完成" | 📖 |
 | 15 | `server/internal/serverstore/usage_dept.go:183` | `seen := map[string]bool{}` 声明在 `for rows.Next()` **循环体内**，每行重置 | 用户属两个子部门且共享祖先时，祖先部门用量被重复累加（实测 200 vs 100）；与预算 enforcement 口径不一致 | ✅🔬（上一轮 1.1） |
 | 16 | `server/internal/serverstore/usage_ledger.go:276-313` | 默认分支把 `col` 设为 `"month"`，`case "model"` 生成 `month AS label` + `GROUP BY month` | 账本回退时 `group=model` 把所有模型合并成"每月一行"，`top_models` 同路径出错 | ✅🔬（上一轮 1.2） |
 | 17 | `server/internal/serverauth/token.go:56` + `admin.go:845` | `VerifyToken` 只查 `Status`；吊销条件 `demoted := wasRole != RoleUser && u.Role == RoleUser` | `user→auditor`（或 super_admin→auditor）不吊销任何 token，审计角色可继续用旧 token 访问员工面 | ✅（上一轮 1.5） |
@@ -138,7 +138,7 @@
 | P2-35 | `packages/host/desktop/src/log-files.ts:78,213` | 日志目录/文件未指定 mode（0755/0644），与同产品其他敏感落盘（0600）不一致 | 📖 |
 | P2-36 | `packages/host/connectors/src/user-scope.ts:21-60` | 内联复制 DSH home 常量/解析函数（cron 已改 re-export） | 📖（上一轮 2-12） |
 | P2-37 | `packages/host/connectors/src/store.ts:27,98-103`、`enterprise/src/session-service.ts:163` | OAuth token / 会话 token 明文落盘（0600，safeStorage 不可用时） | 📖（上一轮 2-20/2-21） |
-| P2-38 | `packages/client/better-sidebar/lib/client.js:2152` | 构建产物内嵌构建机绝对路径（`\0dsh-css:/data/picoaide-harness/...`）随安装包分发 | 📖 |
+| P2-38 | `packages/client/better-sidebar/lib/client.js:2152` | 构建产物内嵌构建机绝对路径（`\0dsh-css:/data/zeokeel-harness/...`）随安装包分发 | 📖 |
 | P2-38b | `packages/host/browser/src/index.ts:198-199` | `userDataDir` 不可用时浏览器数据落 `<cwd>/.browser-store/<user>`（相对路径），且未被 `.gitignore` 覆盖 | ✅（本次跑 `yarn check` 的 `verify:profile` 后，工作区凭空出现未跟踪的 `packages/host/desktop/.browser-store/{anonymous,profile-smoke}/groups.jsonl`） |
 | P2-39 | 品牌几何手抄 4 处：`auth-gate.ts:152`、`enterprise/src/client/Brand.tsx:42-44`、`favicon.ts:16-17`、`client/branding/src/client/Brand.tsx:43-45` | 与"唯一权威 `brands/official/logo.svg`"规则冲突（webadmin 已修，这 4 处未跟随） | 📖（上一轮 2-17 PARTIAL） |
 
@@ -169,9 +169,9 @@
 | P2-57 | `site/src/content/docs/plugin-development.md:24`（en 同） | 平台模块表含 3 个不存在的 specifier、漏 react/cordis/store/ui-slots（权威 `scripts/platform-modules.mjs:13-22`） | 📖 |
 | P2-58 | `site/src/content/docs/faq.md:8`、`architecture.md:52`、`desktop.md:157`；`server/docs/08-development.md:47,64`；`server/docs/03-api-reference.md:27`；`server/README.md:26-29,49-57`；`server/AGENTS.md:80` | 文档事实漂移：pin 写 0.1.1-rc.2（实为 0.1.2-rc.1）、迁移号 0001–0048/0057（实为 0059）、"Linux 不自动下载"（实为下载+chmod+弹窗）、管理端 session 24h（实为 12h+60min 空闲）、`corepack yarn ws`（实跑报错）、README 重复段/漏 05-agent-system.md | 📖 |
 | P2-59 | `server/scripts/install-server.sh:42` | 默认 `SERVER_IMAGE=…:latest`，生产一键部署未 pin 版本 | 📖（上一轮 2-39） |
-| P2-60 | `integration-tests/electron-shots/electron-shots.mjs:15-20` | 硬编码 `/data/picoaide-harness` 绝对路径 | 📖（上一轮 2-38） |
+| P2-60 | `integration-tests/electron-shots/electron-shots.mjs:15-20` | 硬编码 `/data/zeokeel-harness` 绝对路径 | 📖（上一轮 2-38） |
 | P2-61 | `packages/host/desktop/package.json:327-328,409,416,428` | electronFuses 仅 `runAsNode:true`；mac 产物 arm64-only 却叫 `-mac.dmg`；顶层 `win.artifactName` 是 `-Portable`（陈旧误导） | 📖（上一轮 2-22/2-23/2-27） |
-| P2-62 | `packages/host/desktop/src/main.ts:205,211,232` + `electron-runtime.ts:327` | `picoaide://` 深链只 `startsWith` 前缀校验即原样转发 | 📖（上一轮 2-25） |
+| P2-62 | `packages/host/desktop/src/main.ts:205,211,232` + `electron-runtime.ts:327` | `zeokeel://` 深链只 `startsWith` 前缀校验即原样转发 | 📖（上一轮 2-25） |
 | P2-63 | `packages/host/desktop/src/updates.ts:199-200` | 下载失败一律压成 `'network'`，checksum-mismatch/release-missing 诊断丢失 | 📖（上一轮 2-26） |
 | P2-64 | 品牌文案未接 `brands/official/brand.json`：`main.ts:55`、`index.ts:104-105`、`update-checker.ts:4`、`update-download.ts:20` | 产品名/更新源/资产名模板仍硬编码（上一轮 2-28） | 📖 |
 
@@ -247,7 +247,7 @@
 
 ## 8. 方法与证据索引
 
-- 门禁：`corepack yarn check`、`cd server && make check`（`GOMODCACHE/GOPATH/GOCACHE` 指向 `temp/`，`PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/picoaide_test`）。
+- 门禁：`corepack yarn check`、`cd server && make check`（`GOMODCACHE/GOPATH/GOCACHE` 指向 `temp/`，`PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test`）。
 - 客户端 E2E：`DISPLAY=:99 corepack yarn workspace dsh-plugin-desktop e2e:client`（HEAD 重新 `package:dir` 后跑，13/13；假绿复现见 P0-1）。
 - 真机浏览器 E2E：`DISPLAY=:99 node temp/browser-v4.2-e2e.mjs`（真实服务器 + `import -window root` 合成截图，22/22）。
 - CodeQL：`temp/codeql-0908/run.sh`（JS/TS `js-results.csv` 125 条、Go `go-results.csv` 2 条）。
@@ -285,7 +285,7 @@
 | P1-11 agent preset legacy reject | **仍存在** | `agentshare/routes.go:198-199` name 级 approve/reject 仍走 `GetAgentPreset`（`:65,134` = 最高 approved 版本） |
 | P1-12 崩溃回退循环 | **仍存在** | `electron-runtime.ts:812` `void window.loadURL(current)` |
 | P1-13 persist 无 catch | **仍存在** | `session-service.ts:96` `void persist(this.tokenFile, session)` |
-| P1-14 deploy.sh 空超管密码 | **仍存在** | `deploy.sh:64` 白名单仍含 `PG_PASSWORD` 不含 `PICOAI_ADMIN_PASSWORD` |
+| P1-14 deploy.sh 空超管密码 | **仍存在** | `deploy.sh:64` 白名单仍含 `PG_PASSWORD` 不含 `ZEOKEEL_ADMIN_PASSWORD` |
 | P1-15 部门重复计数 | **仍存在** | `usage_dept.go:183` `seen` 仍在 `for rows.Next()` 内 |
 | P1-17 auditor 旧 token | **仍存在** | `token.go:56` 仅查 Status；`admin.go:845` 仅 role→user 吊销 |
 | P1-18 cookie 未脱敏 | **仍存在** | `eval-policy.ts:313` `maskString`；探针重跑 cookie 原样返回 |
@@ -337,7 +337,7 @@
 |---|---|
 | `packages/host/browser/src/electron-adapter.ts` | `createView` / `createMaskView` / `createBrowserWindow` 三处 `webPreferences` 加 `backgroundThrottling: false`；`BrowserWindow` 由 `show: true` 改 **`show: false`**；`createRealElectronAdapter(electronModule?)` 支持注入 Electron 以便单测（生产路径仍懒 `require('electron')`） |
 | `packages/host/browser/src/runtime.ts` | `ensureWindow(origin?, show = false)` —— 只有显式 `show` 才显示窗口；`createTabReal` 传 `actor === 'user'`（用户建的标签才弹窗）；`showWindow()` 传 `true`；新增 `prewarm()`（建窗+物化恢复标签+CDP，永不显示） |
-| `packages/host/browser/src/index.ts` | 插件 apply 末尾 `runtime.prewarm()`（启动即起、隐藏）；`pico/session-changed` 在 `closeAll` → 换 partition/store 后再次 `prewarm()` |
+| `packages/host/browser/src/index.ts` | 插件 apply 末尾 `runtime.prewarm()`（启动即起、隐藏）；`zeokeel/session-changed` 在 `closeAll` → 换 partition/store 后再次 `prewarm()` |
 | `packages/host/browser/src/client/BrowserTrigger.tsx` | 注释同步为"启动即创建、隐藏；按钮显示；关窗仅隐藏" |
 | `packages/host/browser/tests/runtime.spec.ts` | 3 个生命周期用例：agent open 不弹窗 / 用户 open 弹窗且 hide 保留 / prewarm 隐藏且恢复标签不弹窗 |
 | `packages/host/browser/tests/electron-adapter.spec.ts`（新增） | 3 个用例：三个视图/窗口 `backgroundThrottling === false`、窗口 `show === false`、用户 close 被拦成 hide |

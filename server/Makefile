@@ -1,7 +1,7 @@
-BIN := bin/picoaide-server
+BIN := bin/zeokeel-server
 
 # 服务端镜像名(GHCR,与仓库同名);TAG 默认 latest
-IMAGE ?= ghcr.io/picoaide/picoaide-harness-server
+IMAGE ?= ghcr.io/zeokeel/zeokeel-harness-server
 TAG ?= latest
 # 渠道(镜像内容的一部分):Dockerfile 的 channelassets 上下文取
 # channels-context/<CHANNEL>/(CI 从私有渠道仓检出;本地为空目录 = 不带渠道内容)。
@@ -14,8 +14,8 @@ VERSION ?= $(shell git describe --tags --always 2>/dev/null | sed 's/^v//')
 #
 # 2026-09-10 性能:测试临时库改为从模板库克隆(internal/serverstore/dbtest.go 的
 # NewTestDB)→ 每个 DB 用例不再重放 52 个迁移,单用例固定开销从 ~1.5s 降到 ~0.1s。
-# 模板库叫 picoaide_tmpl_<迁移哈希>(按迁移内容/分区窗口自动换名),由首个用例
-# 建一次并留在 PG 实例里;要强制重建就手工 DROP DATABASE picoaide_tmpl_*。
+# 模板库叫 zeokeel_tmpl_<迁移哈希>(按迁移内容/分区窗口自动换名),由首个用例
+# 建一次并留在 PG 实例里;要强制重建就手工 DROP DATABASE zeokeel_tmpl_*。
 # 另:go test 结果会被缓存,`make test-server-fast` 在无改动时整轮秒级返回;
 # `make check` 仍带 -count=1(发布门禁,永远真跑)。
 .PHONY: test test-server test-server-fast build-server webadmin webadmin-check-features webadmin-variant-tests docker-image check check-fast check-tags
@@ -151,7 +151,7 @@ test-server-fast:
 build-server: webadmin
 	go build $(GO_TAG_FLAG) -o $(BIN) ./cmd/server
 	@# WASM 应用平台的编译子进程：必须与 server 同目录（compile 按自身路径解析）。
-	go build $(GO_TAG_FLAG) -o $(dir $(BIN))picoaide-app-compile ./cmd/picoaide-app-compile
+	go build $(GO_TAG_FLAG) -o $(dir $(BIN))zeokeel-app-compile ./cmd/zeokeel-app-compile
 
 # 两段式构建(2026-09): 先构建前端 dist, 再 go build 嵌入真实产物。
 # vite build 会清空 dist 目录, build 后恢复 .gitkeep 占位(go:embed dist/*
@@ -190,7 +190,7 @@ webadmin-variant-tests:
 	cd webadmin && npm run check:variant-tests
 
 # 服务端 Docker 镜像(计划 Task 4.6):本地构建单平台,带版本注入(--version 输出 VERSION)
-# 用法:make docker-image 或 make docker-image IMAGE=ghcr.io/picoaide/picoaide-harness-server TAG=v0.4.0
+# 用法:make docker-image 或 make docker-image IMAGE=ghcr.io/zeokeel/zeokeel-harness-server TAG=v0.4.0
 #      CHANNEL=<渠道 id>(缺省 official;渠道内容取 channels-context/<id>/)
 #
 # **两个命名构建上下文是必需的**(2026-09-23 审计 K-05):Dockerfile 里
@@ -203,7 +203,7 @@ webadmin-variant-tests:
 # 的目录直接构建失败。
 docker-image:
 	@echo "  构建镜像 $(IMAGE):$(TAG) (VERSION=$(VERSION) CHANNEL=$(CHANNEL))"
-	@# 内置技能资产（镜像内 /opt/picoaide/skills）就在本构建上下文里：
+	@# 内置技能资产（镜像内 /opt/zeokeel/skills）就在本构建上下文里：
 	@# server/skills/<name>/ —— 随镜像分发，客户端在能力中心按需安装。
 	@# 曾经用 --build-context skillassets=../packages/vendor/memory-evolve 从
 	@# 客户端 vendored 插件包取，2026-09-19 起源头归位服务端，不再需要该上下文。

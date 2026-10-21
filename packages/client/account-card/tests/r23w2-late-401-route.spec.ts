@@ -34,7 +34,7 @@
  *
  * ## 变异验证（拆掉修复 ⇒ 本文件红）
  *
- *  - `ctx.picoSession.clearIfCurrent(s.token)` 改回 `clear()` ⇒ 第 1 组红
+ *  - `ctx.zeokeelSession.clearIfCurrent(s.token)` 改回 `clear()` ⇒ 第 1 组红
  *    （会话变 null、令牌文件消失）。
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -43,8 +43,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import SessionService from '@picoaide/dsh-enterprise/session-service'
-import type { Session } from '@picoaide/dsh-enterprise/server-connector/config'
+import SessionService from '@zeokeel/dsh-enterprise/session-service'
+import type { Session } from '@zeokeel/dsh-enterprise/server-connector/config'
 import { apply } from '../src/index.ts'
 
 const SERVER = 'https://harness.example.com'
@@ -135,13 +135,13 @@ async function harness(): Promise<{ service: SessionService, tokenFile: string, 
     on: vi.fn(() => () => {}),
     webServer: {
       register: (route: RouteEntry) => {
-        if (route.path === '/api/pico/account/usage') registered = route
+        if (route.path === '/api/zeokeel/account/usage') registered = route
         return () => { registered = undefined }
       },
     },
   } as unknown as Context
   const service = new SessionService(ctx, { tokenFile })
-  ;(ctx as unknown as { picoSession: SessionService }).picoSession = service
+  ;(ctx as unknown as { zeokeelSession: SessionService }).zeokeelSession = service
   apply(ctx)
   return { service, tokenFile, route: () => registered! }
 }
@@ -177,7 +177,7 @@ describe('R23-W2-03：?refresh=1 往返期间同账号重登 ⇒ 迟到 401 不�
     vi.stubGlobal('fetch', fetchMock)
 
     const res = response()
-    await route().handler(request('/api/pico/account/usage?refresh=1'), res)
+    await route().handler(request('/api/zeokeel/account/usage?refresh=1'), res)
 
     expect(relogged, '重登必须发生在这次刷新往返之内（窗口成立）').toBe(true)
     expect(fetchMock).toHaveBeenCalled()
@@ -196,7 +196,7 @@ describe('R23-W2-03：?refresh=1 往返期间同账号重登 ⇒ 迟到 401 不�
     vi.stubGlobal('fetch', vi.fn(async () => unauthorized()))
 
     const res = response()
-    await route().handler(request('/api/pico/account/usage?refresh=1'), res)
+    await route().handler(request('/api/zeokeel/account/usage?refresh=1'), res)
 
     expect(res.statusCode).toBe(401)
     expect(JSON.parse(res.body)).toEqual({ error: 'auth expired' })
@@ -212,7 +212,7 @@ describe('R23-W2-03 判据来源：这一处调用点不得退回无条件 clear
       const trimmed = line.trimStart()
       return !trimmed.startsWith('*') && !trimmed.startsWith('//')
     }).join('\n')
-    expect(code, '本文件的会话清空必须带令牌').toContain('ctx.picoSession.clearIfCurrent(s.token)')
-    expect(code, '不得再出现无条件 picoSession.clear()').not.toContain('picoSession.clear()')
+    expect(code, '本文件的会话清空必须带令牌').toContain('ctx.zeokeelSession.clearIfCurrent(s.token)')
+    expect(code, '不得再出现无条件 zeokeelSession.clear()').not.toContain('zeokeelSession.clear()')
   })
 })

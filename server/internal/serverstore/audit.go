@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // ---- FIX-12(审计 2026-09-12,P1):审计丢失必须可观测 + 不变式必须有执行者 ----
@@ -317,7 +317,7 @@ type AuditLogEntry struct {
 // any row breaks every subsequent chain link.
 // auditChainLockKey 审计哈希链写入的 PG advisory lock key(固定常量,
 // 同一数据库内的所有实例共享):串行化「读最后一行 → 计算 → 插入」。
-const auditChainLockKey = int64(0x5069636F) // "Pico"
+const auditChainLockKey = int64(0x5069636F) // "ZeoKeel"
 
 // AuditLog appends an audit entry with a tamper-evident hash chain
 // (0048): the entry's hash = sha256(prev_hash | username | action | detail

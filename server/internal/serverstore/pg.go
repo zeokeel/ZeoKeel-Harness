@@ -28,7 +28,7 @@ func newPGConnector(dsn string) (driver.Connector, error) {
 	// application_name 便于管理端 pg_stat_activity 识别本服务连接。
 	// 连接池由 openPG 配置 SetMaxOpenConns/Idle/Lifetime。
 	cfg.RuntimeParams["TimeZone"] = "Asia/Shanghai"
-	cfg.RuntimeParams["application_name"] = "picoaide-server"
+	cfg.RuntimeParams["application_name"] = "zeokeel-server"
 	// PG 的 NOTICE/WARNING 默认**无人接收**（pgconn 只在你给了非 nil 回调时才转发），
 	// 于是迁移里那些 `RAISE WARNING '跳过 N 行…'` 一个字都到不了服务端日志 ——
 	// 数据不丢，但"跳过了多少行"这件事完全静默（独立审计 2026-09-18 P2-2）。

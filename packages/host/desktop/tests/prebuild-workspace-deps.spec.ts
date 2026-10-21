@@ -7,7 +7,7 @@
  * 的包任务会并发跑 tsdown（`clean: true` ⇒ 日志里能看到 `Cleaning N files`）。
  * 当 `lib/` 被并发清空时，`outputFiles()` 只会列出**残留**文件，mtime 判定照样
  * 通过 ⇒ 本函数跳过重建 ⇒ 下游 tsc 报
- * `TS7016: Could not find a declaration file for module '@picoaide/dsh-wasm-apps-host'`
+ * `TS7016: Could not find a declaration file for module '@zeokeel/dsh-wasm-apps-host'`
  * （实测 dsh-plugin-desktop 因此红 458s，并级联跳过 enterprise/cron/account-card）。
  *
  * 这里钉住三件事：
@@ -157,7 +157,7 @@ function mtimeSaysUpToDate(packageRoot: string): boolean {
 describe('prebuild 增量判定：声明的产物必须真的存在', () => {
   it('产物齐全且比输入新 ⇒ up-to-date（增量化不退化）', () => {
     const { root, pkg, registry } = fixture([
-      { dir: 'packages/host/fixture-a', workspace: '@picoaide/fixture-a', exports: COMPLETE_EXPORTS, tsdown: COMPLETE_TSDOWN, artifacts: COMPLETE_ARTIFACTS },
+      { dir: 'packages/host/fixture-a', workspace: '@zeokeel/fixture-a', exports: COMPLETE_EXPORTS, tsdown: COMPLETE_TSDOWN, artifacts: COMPLETE_ARTIFACTS },
     ])
     const a = pkg('packages/host/fixture-a')
     expect(missingDeclaredArtifacts(root, a)).toEqual([])
@@ -167,7 +167,7 @@ describe('prebuild 增量判定：声明的产物必须真的存在', () => {
 
   it('删掉一个必需产物（lib/types/index.d.ts）⇒ 必须判需要重建，绝不静默跳过', () => {
     const { root, pkg, registry } = fixture([
-      { dir: 'packages/host/fixture-a', workspace: '@picoaide/fixture-a', exports: COMPLETE_EXPORTS, tsdown: COMPLETE_TSDOWN, artifacts: COMPLETE_ARTIFACTS },
+      { dir: 'packages/host/fixture-a', workspace: '@zeokeel/fixture-a', exports: COMPLETE_EXPORTS, tsdown: COMPLETE_TSDOWN, artifacts: COMPLETE_ARTIFACTS },
     ])
     const a = pkg('packages/host/fixture-a')
     const packageRoot = join(root, a.dir)
@@ -185,7 +185,7 @@ describe('prebuild 增量判定：声明的产物必须真的存在', () => {
 
   it('整目录被清空（残留文件全没）仍然判需要重建', () => {
     const { root, pkg, registry } = fixture([
-      { dir: 'packages/host/fixture-a', workspace: '@picoaide/fixture-a', exports: COMPLETE_EXPORTS, tsdown: COMPLETE_TSDOWN, artifacts: COMPLETE_ARTIFACTS },
+      { dir: 'packages/host/fixture-a', workspace: '@zeokeel/fixture-a', exports: COMPLETE_EXPORTS, tsdown: COMPLETE_TSDOWN, artifacts: COMPLETE_ARTIFACTS },
     ])
     const a = pkg('packages/host/fixture-a')
     rmSync(join(root, a.dir, 'lib'), { recursive: true, force: true })
@@ -197,14 +197,14 @@ describe('prebuild 增量判定：声明的产物必须真的存在', () => {
     const { root, pkg, registry } = fixture([
       {
         dir: 'packages/host/fixture-a',
-        workspace: '@picoaide/fixture-a',
+        workspace: '@zeokeel/fixture-a',
         exports: COMPLETE_EXPORTS,
         tsdown: COMPLETE_TSDOWN,
         artifacts: COMPLETE_ARTIFACTS,
       },
       {
         dir: 'packages/host/fixture-b',
-        workspace: '@picoaide/fixture-b',
+        workspace: '@zeokeel/fixture-b',
         exports: COMPLETE_EXPORTS,
         tsdown: COMPLETE_TSDOWN,
         artifacts: COMPLETE_ARTIFACTS,
@@ -230,7 +230,7 @@ describe('prebuild 声明面解析：哪些目标算产物', () => {
     const { root, pkg, registry } = fixture([
       {
         dir: 'packages/host/fixture-a',
-        workspace: '@picoaide/fixture-a',
+        workspace: '@zeokeel/fixture-a',
         exports: {
           '.': {
             import: { types: './lib/types/index.d.ts', default: './lib/index.js' },
@@ -260,7 +260,7 @@ describe('prebuild 声明面解析：哪些目标算产物', () => {
     const { root, pkg } = fixture([
       {
         dir: 'packages/host/fixture-a',
-        workspace: '@picoaide/fixture-a',
+        workspace: '@zeokeel/fixture-a',
         exports: {
           '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
           './package.json': './package.json',
@@ -282,7 +282,7 @@ describe('prebuild 声明面解析：哪些目标算产物', () => {
     const { root, pkg, registry } = fixture([
       {
         dir: 'packages/host/fixture-a',
-        workspace: '@picoaide/fixture-a',
+        workspace: '@zeokeel/fixture-a',
         exports: { '.': { types: './lib/types/index.d.ts', default: './lib/index.js' } },
         tsdown: `import { defineConfig } from 'tsdown'
 // entry 里出现花括号与逗号（注释/字符串）不能影响扫描：{ a: 1, b: 2 }
@@ -316,7 +316,7 @@ export default defineConfig({
     const { root, pkg } = fixture([
       {
         dir: 'packages/host/fixture-a',
-        workspace: '@picoaide/fixture-a',
+        workspace: '@zeokeel/fixture-a',
         exports: COMPLETE_EXPORTS,
         tsdown: null,
         artifacts: [],
@@ -334,7 +334,7 @@ export default defineConfig({
     const { root, pkg, registry } = fixture([
       {
         dir: 'packages/host/fixture-a',
-        workspace: '@picoaide/fixture-a',
+        workspace: '@zeokeel/fixture-a',
         tsdown: null,
         artifacts: ['lib/index.js'],
       },
@@ -349,9 +349,9 @@ export default defineConfig({
 
 describe('真实工作区的声明面对拍（静态读取，不扫 lib/）', () => {
   it('每个 workspace 包都能读出声明产物（否则该包会静默退回纯 mtime 判定）', () => {
-    // 2026-10-13：13 → 14（能力中心的客户端面搬进 `@picoaide/dsh-capability-center`）。
+    // 2026-10-13：13 → 14（能力中心的客户端面搬进 `@zeokeel/dsh-capability-center`）。
     // 同日 P0-b：14 → 15（该包 host 面搬入并把包移到 `packages/host/`，另加宿主侧
-    // 网关客户端叶子包 `@picoaide/dsh-gateway-client`）。
+    // 网关客户端叶子包 `@zeokeel/dsh-gateway-client`）。
     // 棘轮只允许上调：这条下限的用途是"表被整段掏空 / 删行"时立刻红，贴着真值最有效。
     expect(WORKSPACE_PACKAGES.length).toBeGreaterThanOrEqual(15)
     for (const pkg of WORKSPACE_PACKAGES) {
@@ -380,7 +380,7 @@ describe('真实工作区的声明面对拍（静态读取，不扫 lib/）', ()
     expect(entries).toContain('preload/renderer-error')
     expect(entries).toContain('client')
     // 单行对象字面量的 entry（host-locale 的 index/loopback/session-events）同样要读出来。
-    // 2026-09-24：新增 `session-events`（`pico/session-changed` 订阅契约的唯一实现），
+    // 2026-09-24：新增 `session-events`（`zeokeel/session-changed` 订阅契约的唯一实现），
     // 它**必须**同时出现在 exports 子路径与 tsdown entry 里（"声明了的入口就必须构建"）。
     expect(tsdownEntryKeys(join(repoRoot, 'packages/host/host-locale'))).toEqual(['index', 'loopback', 'session-events'])
   })
@@ -400,7 +400,7 @@ describe('真实工作区的声明面对拍（静态读取，不扫 lib/）', ()
     const { root, pkg, registry } = fixture([
       {
         dir,
-        workspace: '@picoaide/dsh-wasm-apps-host',
+        workspace: '@zeokeel/dsh-wasm-apps-host',
         exports: JSON.parse(readFileSync(join(source, 'package.json'), 'utf8')).exports,
         tsdown: readFileSync(join(source, 'tsdown.config.ts'), 'utf8'),
         sources: ['src/index.ts'],

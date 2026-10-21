@@ -21,18 +21,18 @@
 
 | # | 模块 | 主要文件 | 设计条款 |
 |---|---|---|---|
-| 1 | 数值单一真源 | `internal/wasmapp/limits/{limits,limitsspec}.go`、`limits.json`、`limits.md`、`cmd/picoaide-limits-gen` | §4 全表、§5.5「数值单一真源」 |
+| 1 | 数值单一真源 | `internal/wasmapp/limits/{limits,limitsspec}.go`、`limits.json`、`limits.md`、`cmd/zeokeel-limits-gen` | §4 全表、§5.5「数值单一真源」 |
 | 2 | 错误码与失败语义 | `internal/wasmapp/apperr/apperr.go` | §7.4、§8 |
 | 3 | 应用契约（帧协议） | `internal/wasmapp/abi/abi.go` | §7.1、§7.2、§5.1 |
 | 4 | 模块间接口契约 | `internal/wasmapp/capapi/capapi.go` | §5.1、§4.9 |
-| 5 | wasm 静态校验 + 导入白名单 | `internal/wasmapp/wasmmod/*`、`cmd/picoaide-wasm-imports-gen` | §4.2、§5.5「导入面生成」 |
+| 5 | wasm 静态校验 + 导入白名单 | `internal/wasmapp/wasmmod/*`、`cmd/zeokeel-wasm-imports-gen` | §4.2、§5.5「导入面生成」 |
 | 6 | 参考实现（教学样例） | `internal/wasmapp/refapp/*` | §9.1、§9.3 |
 | 7 | 应用数据库与 SQL 闸门 | `internal/wasmapp/appdb/*` | §4.5、§5.2、§6.3、§10.1 |
 | 8 | wazero 运行时（沙箱） | `internal/wasmapp/runtime/*` | §4.3、§4.4、§7、§10.2、§10.3 |
 | 9 | 宿主能力面（封闭清单） | `internal/wasmapp/hostcap/*` | §5.1、§5.5、§10.6 |
 | ~~10~~ | ~~AI 调用（身份注入）~~ **2026-09-19 删除** | ~~`internal/wasmapp/aichat/*`~~（整包删除，总纲 §21.3） | ~~§4.7、R36、D3.1~~ |
 | 11 | 包内资源与配置 | `internal/wasmapp/{assets,appcfg}/*` | §4.2、§5.1 |
-| 12 | 编译进程与隔离 | `internal/wasmapp/compile/*`、`cmd/picoaide-app-compile` | R19/R31、§4.3、§15.1 第 14 条 |
+| 12 | 编译进程与隔离 | `internal/wasmapp/compile/*`、`cmd/zeokeel-app-compile` | R19/R31、§4.3、§15.1 第 14 条 |
 | 13 | 请求准入与排队 | `internal/wasmapp/queue/*` | §4.6、§10.3 第 32–34 项 |
 | ~~14~~ | ~~匿名限流与可信代理自检~~ **2026-09-19 删除** | ~~`internal/wasmapp/anonlimit/*`~~（随匿名面一并删除，总纲 §8.4） | ~~R35、§4.6~~ |
 | ~~15~~ | ~~主机名门控与安全头~~ **2026-09-19 删除** | ~~`internal/wasmapp/edge/*`~~（HostGate 子域门控删除；安全头改由调用方传入 selfOrigin，总纲 §8.4） | ~~§4.8、§15.1 第 2/3/13 条、§10.1 13a–13d~~ |
@@ -44,10 +44,10 @@
 | 22 | 标识与版本规则 | `internal/wasmapp/registry/*` | §4.1、§10.5、§5.3 |
 | 23 | 数据模型与审计 app 维度 | `serverstore/wasmapps.go` + 迁移 `0069` + `audit.go`（追加） | §4.9、§5.3、§13 |
 | 24 | 路由与装配 | `internal/router/router.go`（追加）、`cmd/server/{main,wasmapp}.go` | §8、§6.1 |
-| 25 | AI 操作手册与作者文档 | `server/skills/app-builder/*`（2026-09-19 从 `packages/vendor/memory-evolve/skills/picoaide-app-builder/*` 迁入并改名）、`docs/wasm-app-authoring.md` | §9.3、§9.4、R40/R42 |
+| 25 | AI 操作手册与作者文档 | `server/skills/app-builder/*`（2026-09-19 从 `packages/vendor/memory-evolve/skills/zeokeel-app-builder/*` 迁入并改名）、`docs/wasm-app-authoring.md` | §9.3、§9.4、R40/R42 |
 
 > 🗑️ **浏览器链路条目已删除（2026-09-19）**：原模块 17「员工浏览器会话与换票」（`internal/wasmapp/session/*` + 迁移 `0070`）与模块 16 的「应用子域」措辞已随「客户端专属」改造整体删除。
-> 现行口径：应用只在桌面客户端内经 `<渠道 app 源 scheme>://<app_id>/` 打开（渠道参数化：§10/F15；official/beta 取值才是 `picoaide-app`），请求统一走 `POST /api/client/v2/apps/wasm/:app_id/request`（`BearerAuth` 必需）后复用同一 `serveApp`。
+> 现行口径：应用只在桌面客户端内经 `<渠道 app 源 scheme>://<app_id>/` 打开（渠道参数化：§10/F15；official/beta 取值才是 `zeokeel-app`），请求统一走 `POST /api/client/v2/apps/wasm/:app_id/request`（`BearerAuth` 必需）后复用同一 `serveApp`。
 > 冻结契约见 `docs/decisions/2026-09-19-wasm-client-internal-origin.md`。
 
 ---
@@ -193,7 +193,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 | 项 | 状态 | 说明 |
 |---|---|---|
 | 1 导入白名单由参考实现生成 | **COVERED** | 生成器真编译 `refapp` ∪ `refapp/wasiprobe`（30 条）；并修正了"白名单恰好等于最小样例"的 P0（D9） |
-| 2 帧格式 + 应用配置文件落到示例 | **COVERED** | `abi` + SKILL `examples/go`（真编译、真跑通帧协议）+ `picoaide.app.json` schema |
+| 2 帧格式 + 应用配置文件落到示例 | **COVERED** | `abi` + SKILL `examples/go`（真编译、真跑通帧协议）+ `zeokeel.app.json` schema |
 | 3 迁移一件 | **COVERED** | `0069_wasm_apps.sql`（kind/channel 放开 + 状态投影列 + 审计 app_id/哈希链版本化 + `wasm_call_events`） |
 | 4 `kind` 影响面审计 | **COVERED** | `appstore/admin.go` 白名单放开（§11 明确点名）+ **两个未知值回落点都加了 wasm 分支**（`channelLabel` / `kindLabelOf`） |
 | 8 编译进程隔离 | **PARTIAL** | bwrap 读白名单 + 私有 netns + RLIMIT_AS/CPU + env 白名单**已落地并有正反用例**；**seccomp 未做**（bwrap 未暴露该能力；建议部署面叠加 cgroup） |
@@ -284,7 +284,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 
 **`identity`（身份与凭证）**
 - **P1-1 `edge.SelfOrigin` 把端口剥掉**（浏览器链路专有：该判据已随该链路删除）。**教训保留**：源判据的归一化必须与请求里实际出现的 `Origin` 逐字符相等（默认端口省略、非默认端口保留），不能"截到源再比"、也不能自作主张剥掉或补上端口 —— 现行 Origin 判据见契约 §4.3（`Origin: <渠道 app 源 scheme>://<app_id>`，渠道参数化：§10/F15，由 handler 合成，服务端按 `app_id` 推导自源）。
-- **P1-2 平台保留资源被静态面公开直出**：`GET /picoaide.app.json` **无需任何应用侧授权即可 200**，body 含完整 `whitelist` —— 与 §10.5 第 56d 项"平台不校验名单以免变成账号枚举接口"、R24（准入由应用判）与 R26（不提供员工目录）的意图冲突，且作者文档零提示。
+- **P1-2 平台保留资源被静态面公开直出**：`GET /zeokeel.app.json` **无需任何应用侧授权即可 200**，body 含完整 `whitelist` —— 与 §10.5 第 56d 项"平台不校验名单以免变成账号枚举接口"、R24（准入由应用判）与 R26（不提供员工目录）的意图冲突，且作者文档零提示。
 - **红线 3 其余各条全部实测通过（每条带反向对照）**：帧内 `user` 宿主构造（guest 伪造被拒）、~~ai.chat 令牌不进帧/响应体/响应头/平台日志、ai.chat 错误映射~~（**已废弃：对象随 W4 删除**，总纲 §21）、~~登出吊销链端到端~~（**已废弃：`session` 随 W4 删除**）、15 条跨应用写 Origin 表（**现行：Origin 由协议 handler 合成，见总纲 §8.3**）。
 - **登录失败预算两入口共享**已被独立验证（双向各打满 3 次后另一端立刻 429）⇒ 集成期补的那条修复**有效**。
 
@@ -303,7 +303,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 **`resource`（资源边界）**
 - **P1-1** `readyz.AllowPublish` **零生产调用方** ⇒ §4.9「低水位拒绝发布（fail-closed）」只写在注释里。
 - **P1-2** `events.Sink.Cleanup` **零生产调用方** ⇒ §4.9/§5.3 的「7 天保留」未生效，`wasm_call_events` 是平台**唯一的无界磁盘增长路径**。
-- **P2**：`PICOAI_COMPILE_ISOLATION=require` 与三处文档"拒绝启动"不符（实际只禁用发布链路）；编译器缺失时 `/readyz` 与健康态**逐字段同形**（降级不可见）；`queue` 的 app 表只增不减 + 每次 Release 全表遍历（20000 应用时 **516–811 µs/请求且持全局锁**）；匿名桶满后每个新 IP 做两次 O(8192) 扫描（**865 µs/次**）~~匿名桶满后每个新 IP 做两次 O(8192) 扫描（**865 µs/次**）~~（**已废弃：匿名桶随 W4 删除**）；`main.go` 硬编码 `ReadTimeout 60s`（未用 `limits.ServerReadTimeout`）；内存四笔账自检**无条件**执行（原要求 MemAvailable ≥ 3.56 GiB ⇒ 4 GiB 容器起不来；与子域无关，子域已删除）；调用事件计数无出口。
+- **P2**：`ZEOKEEL_COMPILE_ISOLATION=require` 与三处文档"拒绝启动"不符（实际只禁用发布链路）；编译器缺失时 `/readyz` 与健康态**逐字段同形**（降级不可见）；`queue` 的 app 表只增不减 + 每次 Release 全表遍历（20000 应用时 **516–811 µs/请求且持全局锁**）；匿名桶满后每个新 IP 做两次 O(8192) 扫描（**865 µs/次**）~~匿名桶满后每个新 IP 做两次 O(8192) 扫描（**865 µs/次**）~~（**已废弃：匿名桶随 W4 删除**）；`main.go` 硬编码 `ReadTimeout 60s`（未用 `limits.ServerReadTimeout`）；内存四笔账自检**无条件**执行（原要求 MemAvailable ≥ 3.56 GiB ⇒ 4 GiB 容器起不来；与子域无关，子域已删除）；调用事件计数无出口。
 - **已核实为真**：跨应用唤醒成立、等待者不泄漏（取消 1000 个后计数归零且占位额度真的归还）、bwrap 隔离**真的生效**（差分对照：唯一可写面写成功 / 只读绑定 EROFS / 数据根 `master.key` 不可读 / netns inode 变化 / PID=2）、编译缓存**跨进程命中 41×**。
 - **压力复跑（4 核 ×3 轮 ×4 lane，峰值 12 个测试二进制）**：queue 12/12、readyz 12/12、events **9/12** —— 唯一失败 `TestFlushPersistsBatchFields` 判定为**测试不稳**（`waitRows` 写死 5s 而批次预算只有 50ms；确定性探针证明产品行为是"丢批但计数可见"，**非静默失败**）。
 - **§11 第 12 项补充**：本仓造不出合法 32 MiB 模块（自定义段上限 4 MiB），实测 2.20 MiB 冷编译 2451 ms（空载）；按代码体积线性外推 **32 MiB ≈ 36 s（空载）～59 s（负载）** ⇒ 60 s 编译预算在负载下余量接近 0。
@@ -376,7 +376,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 | 路径 | 判定 |
 |---|---|
 | ① AI 直接 curl 服务端 `/api/client/v2/apps/wasm/*` | **不可行**：需要 Bearer 令牌，而设计 D3.1 明确令牌只在宿主内存、不进浏览器/不进帧（红线 3） |
-| ② AI 直接 curl 本地 `/api/pico/apps/wasm/publish` | **不可行**：过不了持有性证明（这是**有意**的围栏，不是缺陷） |
+| ② AI 直接 curl 本地 `/api/zeokeel/apps/wasm/publish` | **不可行**：过不了持有性证明（这是**有意**的围栏，不是缺陷） |
 | ③ **AI 走宿主侧工具（host tool）** | **选它**。与产品里既有的 `browser_*` / `cron_*` / 连接器工具面同构：工具在宿主进程内执行，直接调用与本地路由**同一个**内部函数，不经 HTTP ⇒ 不需要持有性证明，也不需要把令牌交出去 |
 
 **为什么 ③ 不削弱安全模型**：围栏保护的是"浏览器侧 CSRF / DNS-rebinding / 伪造 Origin 的本机裸 curl"；
@@ -387,7 +387,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 **当前状态（2026-09-18 更新）**：**已落地**。本节原先如实认账的"未落地"已由第三轮工作流 N 关闭 —— 见 §6.8「N（AI 发布工具面）」。下面保留当时的候选判定与最小实现范围作为决策留痕（历史原文，不再代表现状）。
 
 > 第二轮结束时的状态（历史）：**未落地**。
-- 已落地：本地 HTTP 写面（`/api/pico/apps/wasm/*`，浏览器/UI 路径）+ 服务端分片上传与续传。
+- 已落地：本地 HTTP 写面（`/api/zeokeel/apps/wasm/*`，浏览器/UI 路径）+ 服务端分片上传与续传。
 - 未落地：宿主侧工具面（`wasm_app_*`）。在此之前，AI 只能把"编译 + 准备载荷"做完，
   由**员工在应用中心点发布**，或由员工把令牌/持有性证明交给 AI —— 两条都不理想。
 - 最小实现范围（下一轮）：在 `packages/host/enterprise` 注册 3 个工具
@@ -417,7 +417,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 | 身份 | 结论 | 最有价值的发现 |
 |---|---|---|
 | `chunkupload`（K1） | **P0=0 / P1=1（审计期间已修）/ P2=3** | **每用户磁盘配额闸门算术上永不可达**（`N×32 MiB < N×48 MiB` 对任何 N 成立 ⇒ 换任何数字都不行，必须改公式）；并发重复 `complete` 不回放（得 429 而非 201）；`POST /uploads` 的 413 提示语错用了 base64 直传模板 |
-| `clientchain`（L1） | **P0=1 / P1=1 / P2=4** | **发布链路无人可达**：面板没有发布入口、`wasm_app_*` 工具零实现、skill 却指向"在应用中心发布"⇒ `/api/pico/apps/wasm/publish` **0 个调用方**，那段被反复验证的 90 s/分片/续传编排**在产品里不可达**；`wasm_path` 允许面覆盖整个数据根 ⇒ 可把 `session.json`（明文令牌）当上传源 |
+| `clientchain`（L1） | **P0=1 / P1=1 / P2=4** | **发布链路无人可达**：面板没有发布入口、`wasm_app_*` 工具零实现、skill 却指向"在应用中心发布"⇒ `/api/zeokeel/apps/wasm/publish` **0 个调用方**，那段被反复验证的 90 s/分片/续传编排**在产品里不可达**；`wasm_path` 允许面覆盖整个数据根 ⇒ 可把 `session.json`（明文令牌）当上传源 |
 
 **两条审计都独立复现为"正确"的部分**（带反向变异）：写面围栏（10 种非 GET 组合缺证明全 403、`connection` 缺席时 503 fail-closed）、错误信封逐字节透传、90 s 行为级断言（30 s 不 abort / 90 s 才 abort）、8 MiB 边界与**实际发出的每一片都落在服务端 `[64 KiB, 8 MiB]` 内**、续传只补缺失片（PUT 序列 `[0,1,1,2,3]`）、`wasm_path` 越界矩阵全拒、红线 3 无令牌泄漏；服务端侧：**增量总量闸门**（33 MiB 在越界那一片被拒且不落盘）、**先查头再读体**（413 读 0 字节）、26 种非法 `upload_id` 同一个 404 体、32 goroutine 并发 PUT 不丢 meta、**分片与一次性上传的行为等价性成立**（release 行 / apps 行 / 磁盘 assets sha256 / 审计序列全等）。
 
@@ -425,7 +425,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 
 | 批次 | 范围 | 结果 |
 |---|---|---|
-| **H6** | 客户端链路（`wasm-apps.ts` + `packages/client/wasm-apps`） | FIX-38（**P0：面板加发布入口**，页面上下文直发 `/api/pico/apps/wasm/publish` ⇒ 那段 90 s/分片/续传编排终于可达）、FIX-39（`wasm_path` 允许面收敛到工作区 + `<数据根>/apps`，不再能把 `session.json` 明文令牌当上传源）、FIX-40/41（畸形百分号转义与目录路径 ⇒ 结构化 400 而不是空 body）、FIX-42（取数链路用例并入产品测试 —— 原面板单测走 `renderToStaticMarkup` 不跑 `useEffect`，取数从未被执行）、FIX-43（分片字段契约跨端对拍） |
+| **H6** | 客户端链路（`wasm-apps.ts` + `packages/client/wasm-apps`） | FIX-38（**P0：面板加发布入口**，页面上下文直发 `/api/zeokeel/apps/wasm/publish` ⇒ 那段 90 s/分片/续传编排终于可达）、FIX-39（`wasm_path` 允许面收敛到工作区 + `<数据根>/apps`，不再能把 `session.json` 明文令牌当上传源）、FIX-40/41（畸形百分号转义与目录路径 ⇒ 结构化 400 而不是空 body）、FIX-42（取数链路用例并入产品测试 —— 原面板单测走 `renderToStaticMarkup` 不跑 `useEffect`，取数从未被执行）、FIX-43（分片字段契约跨端对拍） |
 | **H7** | 服务端分片上传（`upload` + `api/upload.go`） | FIX-44（**每用户磁盘配额闸门算术上永不可达** → 改为按未过期会话的**声明总量（预留）**判定，新增 `limits.UploadDiskQuotaPerUserBytes`；预留恒 ≥ 实际 ⇒ 真空上界，且两条闸门都活）、FIX-45（并发/交错重复 `complete` 改为**在会话锁内**先查重放 ⇒ 逐字回放 201，不再 429）、FIX-46（`POST /uploads` 的 413 提示语不再错用 base64 直传模板）、FIX-47（`CleanupScheduler.Running()` + `cmd/server` 装配级断言，防"构造了但没 Start"静默回归） |
 
 **H6 的真机证据（打包版、无注入）**：`temp/fix-h6/probe-real6.txt` —— 真包（宿主路由与客户端插件都在包里）下 12 项全绿：
@@ -441,8 +441,8 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 | `gofmt` / `go vet` / `go build ./...`（服务端） | 空 / exit 0 / exit 0 |
 | `go test ./internal/... ./cmd/...` | **零 FAIL** |
 | 根守卫 7 个 | **全部 OK**（其中 `verify-inventories.mjs` 在第二轮**实测拦下**了 CI 归档清单漏带新包 lib 的问题） |
-| `@picoaide/dsh-wasm-apps` check（build+typecheck+test） | **63/63 PASS** |
-| `@picoaide/dsh-enterprise` test | **435/435 PASS** |
+| `@zeokeel/dsh-wasm-apps` check（build+typecheck+test） | **63/63 PASS** |
+| `@zeokeel/dsh-enterprise` test | **435/435 PASS** |
 | ~~端到端验收 `temp/wasm-e2e-run.sh`~~ | ~~**61/61 PASS**~~ **已废弃（对象已删除，W4）：该脚本断言的是 https 子域 + 换票 + 匿名链路，现行判据见总纲 §13**（同桌 `gofmt`/`go test`/根守卫/包 check 各行**仍然有效，不受影响**） |
 | 审计员复跑脚本 | `chunkupload` 的两条独立发现双双转绿；`clientchain` 的 3 条 CONFIRMED 转绿 |
 
@@ -463,7 +463,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 |---|---|---|---|
 | 1 | §10.2 第 14/15 项与多处注释写"零 preopen 下 `path_open` 拿到 `ENOSYS`/`ENOTCAPABLE`" | 零 preopen 的真实 errno：Go `os.Open/Stat/ReadDir/...` → **`EBADF(8)`**（Go 的 wasip1 syscall 层先 `fd_prestat_get` 找 preopen）；原生 `path_open(fd, "/etc/passwd")` → **`EPERM(63)`**（wazero `atPath` 里 `fs.ValidPath` 先否决前导 `/`）；相对路径 → **`EBADF(8)`**；stdio fd（0/1/2）→ **`ENOTDIR(54)`**；`fd_prestat_get(3..12)` → `EBADF(8)`。**`ENOSYS(52)` / `ENOTCAPABLE(76)` 一次都没出现** | 结论不变（一律 DENIED）；**判据改写成**"DENIED（errno 视调用层与路径形态为 EBADF/EPERM/ENOTDIR）"。已改：`wasmmod.go`、生成器模板 + 重生成的 `imports_gen.go`、`refapp/wasiprobe`、`runtime/runtime.go` 的注释，以及作业指导书 `temp/wasm-brief/AUDIT-CHECKLIST.md` §3-A 第 4 条 |
 | 2 | §3.3 / §10.2 第 16 项表述为"白名单不含 `sock_*` + preview1 无 `sock_open`" | preview1 宿主模块**导出 46 个函数，其中含 `sock_accept` / `sock_recv` / `sock_send` / `sock_shutdown`**（**没有** `sock_open` / `sock_bind` / `sock_listen` / `sock_connect`）；且 Go 运行时**会真的发出**其中两个 —— 经 `text/template` / `html/template` 的 **`Execute`（渲染）** 可达（审计 P0-1） | 红线 4 真正的理由是"**没有任何途径得到一个 socket fd**"（`syscall.Socket` → "Not implemented on wasip1"；`sock_accept(0..10)`、`sock_shutdown(3)` 全 `EBADF(8)`）+"白名单只放行不造 fd 的 socket 符号 + 拒绝非 preview1 模块"。已改：四处生产注释 + 生成产物模板 + `imports_gen_test.go` 的安全边界判据（由"禁一切 `sock_*` 前缀"改为"禁造 fd 的 `sock_open`/`sock_bind`/`sock_listen`/`sock_connect`，socket 面精确到 `sock_accept`/`sock_shutdown` 两条"） |
-| 3 | §4.3.1-a/b 的隐含前提与 `limits.CompileCacheRevision` 的长注释写"`GetWazeroVersion()` 在依赖方返回 `dev` ⇒ 目录分片与条目版本戳都区分不了 wazero 版本，所以升级必须手工 +1" | **"返回 dev" 只对 `go test` 二进制成立**：`go build` 出来的 main 二进制（服务端进程与 `cmd/picoaide-app-compile` 子进程都是这种形态）`debug.ReadBuildInfo().Deps` 里有 wazero ⇒ 分代名就是 `v1.12.0`（本次新增探针实测：test 二进制 `r1` / 生产形态 `v1.12.0`，两侧一致） | 分代改为"**优先用 wazero 真实版本，拿不到版本（test 二进制）才回落到手写常量**"（`runtime.CompileCacheDir` 与 `compile.CompileCacheDir` 同算法，配交叉断言用例 + 生产装配点校验）。§4.3.1-b 的"同 wazero 版本"因此**自动满足**，`CompileCacheRevision` 降级为"版本不可知构建"的回落位（不再是"必须记得改"的人肉约束） |
+| 3 | §4.3.1-a/b 的隐含前提与 `limits.CompileCacheRevision` 的长注释写"`GetWazeroVersion()` 在依赖方返回 `dev` ⇒ 目录分片与条目版本戳都区分不了 wazero 版本，所以升级必须手工 +1" | **"返回 dev" 只对 `go test` 二进制成立**：`go build` 出来的 main 二进制（服务端进程与 `cmd/zeokeel-app-compile` 子进程都是这种形态）`debug.ReadBuildInfo().Deps` 里有 wazero ⇒ 分代名就是 `v1.12.0`（本次新增探针实测：test 二进制 `r1` / 生产形态 `v1.12.0`，两侧一致） | 分代改为"**优先用 wazero 真实版本，拿不到版本（test 二进制）才回落到手写常量**"（`runtime.CompileCacheDir` 与 `compile.CompileCacheDir` 同算法，配交叉断言用例 + 生产装配点校验）。§4.3.1-b 的"同 wazero 版本"因此**自动满足**，`CompileCacheRevision` 降级为"版本不可知构建"的回落位（不再是"必须记得改"的人肉约束） |
 
 **三条都不影响红线成立**，改的是"为什么成立"与"用什么判据"。两条方法论结论值得留下：
 
@@ -489,7 +489,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 | # | 口径 | 落地要点 |
 |---|---|---|
 | 1 | 权限**收敛成单一 `access` 枚举**：`login`（缺省，登录后全员）/ `whitelist`；**删掉 `visible`**。⚠️ **2026-09-19 订正（I6）**：本行原把 `public` 也列为枚举取值之一，现已**废止** —— 写侧只接受 `login` / `whitelist` 两值；历史配置里的 `public` 只在**读取侧按 `login`** 处理（迁移期 shim，不是第三种模式，总纲 §8.4 / 迁移 0074） | `appcfg.Config` 去掉 `Visible`/`LoginRequired`；迁移 **0071** 删列 + 就地改写两个 `config_json`；后续迁移 **0074** 把存量 `access='public'` 改写为 `login` |
-| 2 | **准入仍由应用判定**（R24 不动）：平台只注入身份 + 访问模式 | 平台**不比对名单**；帧内 `auth.mode` 取值（⚠️ **2026-09-19 订正**：此处原写"**三取值**"，现为 `login` / `whitelist` **两值** —— `public` 已作废，见总纲 §6 / §13.1 I6），名单由应用自己 `assets.read("picoaide.app.json")` 读 |
+| 2 | **准入仍由应用判定**（R24 不动）：平台只注入身份 + 访问模式 | 平台**不比对名单**；帧内 `auth.mode` 取值（⚠️ **2026-09-19 订正**：此处原写"**三取值**"，现为 `login` / `whitelist` **两值** —— `public` 已作废，见总纲 §6 / §13.1 I6），名单由应用自己 `assets.read("zeokeel.app.json")` 读 |
 | 3 | **应用中心展示全部应用** | catalog 去掉可见性过滤；行 `visible` → `access` + 新增 `enabled` |
 | 4 | **AI 能编译、能发布**；表单字段**AI 知道该填什么** | 3 个宿主工具；字段规格做成机器可读单一真源，工具参数/UI/SKILL 三处对拍 |
 
@@ -499,7 +499,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 |---|---|---|
 | **M** | 服务端访问模型 + 迁移 + 字段规格真源 | `appcfg` **两模式**（`login` / `whitelist`；⚠️ **2026-09-19 订正**：本行原写"三模式"并把 `public` 算作一种，已废止；历史 `public` 只是读取侧按 `login` 的迁移期 shim）+ **旧 schema 兼容 shim**（`login_required=false`→public；`true`+有名单→whitelist；`true`+空名单→login；`visible` 忽略；旧字段不报 unknown，canonical 只写新 schema）；`abi.AuthMode` 三取值；`RequiresLogin()` 取代旧布尔；迁移 **0071**（DROP COLUMN `visible` + 改写 `apps.config_json`/`app_releases.config_json`，幂等可重放，坏 JSON 跳过并 WARNING，自检段 fail-loud）；`appcfgspec.go` → 生成器新增 `appcfg.json` 与 SKILL `references/app-config.md` |
 | **N** | 发布编排解耦 + 宿主工具面 | `wasm-apps.ts` 把编排从 `ServerResponse` 解耦成可复用函数（`publishApp`/`validateApp`/`listCatalog`），HTTP 路由退化成薄壳；新增 `wasm-app-tools.ts` 的 `wasm_app_list`/`wasm_app_validate`/`wasm_app_publish` |
-| **O** | 技能内置到服务端 + 客户端按需安装 | 技能进版本控制；`skillseed` 包把镜像内 `/opt/picoaide/skills` 打包下发（`GET /api/client/v2/skills/builtin[/:name/archive]`，确定性 tar.gz + sha256 头）；客户端两条代理分支 → `installSkillArchive()` → `<dshHome>/skills/<name>`；能力中心「平台内置技能」区 + 一键安装 |
+| **O** | 技能内置到服务端 + 客户端按需安装 | 技能进版本控制；`skillseed` 包把镜像内 `/opt/zeokeel/skills` 打包下发（`GET /api/client/v2/skills/builtin[/:name/archive]`，确定性 tar.gz + sha256 头）；客户端两条代理分支 → `installSkillArchive()` → `<dshHome>/skills/<name>`；能力中心「平台内置技能」区 + 一键安装 |
 | **P** | 客户端 UI（发布表单 + 应用中心） | 三选一 `access` 选择器（缺省 `login`，选 `whitelist` 才出名单且必填）；提交体**不发** `visible`/`login_required`；catalog **不二次过滤**（下架项也展示并标"已下架"）；11 条本地预校验 |
 
 **两处「本可以静默出错」的收口（parent 在四个模块交付后补）**
@@ -516,7 +516,7 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 
 **`abi.ABIVersion` 的有意决定（不是漏改）**：帧内 `auth.mode` 的**取值集合**变了
 （`login_required` → `login`/`whitelist`），但帧形状、方法名集合、导入面、错误码集合一个都没动；
-且平台尚未发布、线上零个已编译产物。因此**保持 `picoaide-app/1`**，并把"什么时候必须 bump 到 /2"
+且平台尚未发布、线上零个已编译产物。因此**保持 `zeokeel-app/1`**，并把"什么时候必须 bump 到 /2"
 写进 `abi.ABIVersion` 的注释（帧头/方法名/导入面/错误码取值等结构性变化）。
 
 > **"零个已编译产物"的取证**（`access` 审计把这条记为 UNVERIFIED：它无法访问部署环境，
@@ -536,10 +536,10 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 | 项 | 结果 |
 |---|---|
 | `gofmt` / `go vet` / `go build ./...` | 空 / exit 0 / exit 0 |
-| `picoaide-limits-gen -check`（5 个生成产物逐字节） | 一致（103 条目 / 配置 5 字段 / 发布 6 字段） |
+| `zeokeel-limits-gen -check`（5 个生成产物逐字节） | 一致（103 条目 / 配置 5 字段 / 发布 6 字段） |
 | 服务端 `go test ./internal/... ./cmd/...` | 见 §6.9 的门禁表（第三轮结束时的实测） |
-| `@picoaide/dsh-wasm-apps` check | **100/100 PASS**（63 → 100） |
-| `@picoaide/dsh-enterprise` test | **509 passed / 1 skipped**（H9 之后） |
+| `@zeokeel/dsh-wasm-apps` check | **100/100 PASS**（63 → 100） |
+| `@zeokeel/dsh-enterprise` test | **509 passed / 1 skipped**（H9 之后） |
 | 根守卫（layout/workflows/ci-scripts/patches/patch-resolutions/inventories/check-workspaces） | **全部 OK** |
 | 变异验证 | M 七种、N 六种、O 六种、P 十二种，全部实跑变红后复原；H8 修复批另有 12 组变异（见 §6.9 表内逐条） |
 
@@ -584,8 +584,8 @@ PARTIAL：56e（目录侧覆盖）、58（服务端不变量覆盖；客户端�
 | 14 | `access` P2-4 / P2-5 | 变异指南引用了 5 个已改名的用例；`wasm_app_access_change` 审计**零回归网** | 指南按实际用例名更新并补一条对拍命令；新增"改访问模式才记、不改不记、明细带旧值→新值与版本号"的用例；变异：关掉审计写入 ⇒ 红 |
 | 18 | `skilldist` P2-5 | 内置技能区用**一个全局** `failed` 字符串：任意一行安装失败后，**所有**未安装/可更新的行都被替换成同一句错误文案、连按钮都没了 —— 一次网络抖动把整块区域变成死墙，用户看不出是哪一行失败、也无法重试 | 失败态改为**按行**（`{name, message}`）：失败行就地显示原因 + 「重试」按钮，其余行不受影响；把"哪一行显示什么"抽成纯函数 `builtinRowState` 并加三条用例（**不依赖 jsdom**：该包没有 jsdom，这也正是审计把渲染态记为 UNVERIFIED 的原因）；变异：把判定改回"只要有人失败就全是 failed" ⇒ 1 红 |
 | 17 | 门禁实测（本轮 `yarn check`） | 新增 UI 引用了 **3 个不存在的主题 token**（`--dsw-alias-separator-secondary` / `--dsw-alias-bg-invert` / `--dsw-alias-label-invert`）—— 带字面量兜底的 `var()` 不会报错，但那些颜色**不跟随明暗主题**（`check-theme-tokens` 守卫拦住） | 换成上游真实 token：分隔线 `--dsw-alias-border-l2`；主按钮 `--dsw-alias-button-primary-fill` + `--dsw-alias-label-primary-foreground`（与同仓其它主按钮一致）。守卫复跑：517 文件 / 0 提示 / 0 阻断 |
-| 16 | 门禁实测（本轮 `yarn check`） | `@picoaide/dsh-wasm-apps` 的「1 MiB 载荷不爆栈」用例在空载 ~2.4s、并发下 4s+，撞上 vitest 默认 5s `testTimeout` ⇒ **门禁随机红灯**（"慢"被判成"失败"） | 该包 `vitest.config.ts` 加 `testTimeout: 30_000`（与 `@picoaide/dsh-connectors` 的同名取舍一致：只影响"真挂了要等多久才报"，不影响断言强度） |
-| 15 | parent（模块交付后自查） | 技能没装时 `wasm_app_*` 失败不指路；宿主 `wasm-apps.spec.ts` 夹具仍是旧 `visible`/`login_required` 形状（契约半失效）；三处作者提示仍写 `login_required`；`THIRD_PARTY_NOTICES.md` 过期 | 见 §6.8「两处收口」+ 三处提示改写 + `verify:notices:write` 重新生成（新增 `@picoaide/dsh-wasm-apps` 条目） |
+| 16 | 门禁实测（本轮 `yarn check`） | `@zeokeel/dsh-wasm-apps` 的「1 MiB 载荷不爆栈」用例在空载 ~2.4s、并发下 4s+，撞上 vitest 默认 5s `testTimeout` ⇒ **门禁随机红灯**（"慢"被判成"失败"） | 该包 `vitest.config.ts` 加 `testTimeout: 30_000`（与 `@zeokeel/dsh-connectors` 的同名取舍一致：只影响"真挂了要等多久才报"，不影响断言强度） |
+| 15 | parent（模块交付后自查） | 技能没装时 `wasm_app_*` 失败不指路；宿主 `wasm-apps.spec.ts` 夹具仍是旧 `visible`/`login_required` 形状（契约半失效）；三处作者提示仍写 `login_required`；`THIRD_PARTY_NOTICES.md` 过期 | 见 §6.8「两处收口」+ 三处提示改写 + `verify:notices:write` 重新生成（新增 `@zeokeel/dsh-wasm-apps` 条目） |
 
 ### 6.10 修复批的**独立验证**（H9）：验证发现了什么，以及门禁红过一次
 
@@ -633,10 +633,10 @@ Windows/macOS 的 realpath 与符号链接语义（本机 Linux）；`access` �
 | 项 | 结果 |
 |---|---|
 | `gofmt` / `go vet` / `go build ./...` | 空 / exit 0 / exit 0 |
-| `picoaide-limits-gen -check`（5 个生成产物逐字节） | 一致 |
+| `zeokeel-limits-gen -check`（5 个生成产物逐字节） | 一致 |
 | 服务端 `go test ./internal/... ./cmd/...`（PG_DSN_TEST） | **零 FAIL** |
-| `@picoaide/dsh-wasm-apps` check | **100/100 PASS** |
-| `@picoaide/dsh-enterprise` test | **509 passed / 1 skipped** |
+| `@zeokeel/dsh-wasm-apps` check | **100/100 PASS** |
+| `@zeokeel/dsh-enterprise` test | **509 passed / 1 skipped** |
 | 根守卫（layout/workflows/ci-scripts/patches/patch-resolutions/inventories/check-workspaces + `check-theme-tokens`） | **全部 OK** |
 | ~~端到端验收 `temp/wasm-e2e-run.sh`（真 PG + 真服务端 + 真 wasm + 真 https 子域）~~ | ~~**68/68 PASS**（较第二轮 +7：A2 目录契约、A4 空名单正反例、A5 旧 schema 端到端 + 落库 canonical 改写）~~ **已废弃（对象已删除，W4）；现行判据见总纲 §13** |
 | **`corepack yarn check`（全仓 19 个任务）** | **19 通过 / 0 失败 / 0 跳过**（含 desktop 打包门禁、connectors 真实 socket 套件、`verify-licenses/notices`） |
@@ -645,10 +645,10 @@ Windows/macOS 的 realpath 与符号链接语义（本机 Linux）；`access` �
 
 | 项 | 结果 |
 |---|---|
-| `gofmt` / `go vet` / `picoaide-limits-gen -check` | 空 / 空 / 一致（103 条目 / 配置 5 字段 / 发布 6 字段） |
+| `gofmt` / `go vet` / `zeokeel-limits-gen -check` | 空 / 空 / 一致（103 条目 / 配置 5 字段 / 发布 6 字段） |
 | 服务端 `go test ./internal/... ./cmd/...`（PG_DSN_TEST，`-p 2`） | **零 FAIL**（含被验证指出的 `TestSkillDiscipline`——H9 #19 修好后复绿） |
 | `corepack yarn check` | **19 通过 / 0 失败 / 0 跳过**（205 s） |
-| `@picoaide/dsh-enterprise` / `@picoaide/dsh-wasm-apps` | **509+1skip / 100** |
+| `@zeokeel/dsh-enterprise` / `@zeokeel/dsh-wasm-apps` | **509+1skip / 100** |
 | memory-evolve（coi + decoupled + plugin） | **110/110**（+1：纵深防御用例） |
 | desktop 技能门禁（rank + packaged-runtime） | **48/48** |
 | ~~端到端 `temp/wasm-e2e-run.sh`（真 PG + 真 wasm + 真 https 子域）~~ | ~~**68/68 PASS**~~ **已废弃（对象已删除，W4）；现行判据见总纲 §13** |

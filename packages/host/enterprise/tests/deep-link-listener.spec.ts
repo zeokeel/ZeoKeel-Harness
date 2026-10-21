@@ -3,13 +3,13 @@ import { installDeepLinkListener } from '../src/deep-link.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '../src/server-connector/config.ts'
 
-/** Minimal Cordis-context stub capturing the 'pico/deep-link' listener. */
+/** Minimal Cordis-context stub capturing the 'zeokeel/deep-link' listener. */
 function stubCtx() {
   const warns: string[] = []
   let listener: ((url: unknown) => void) | null = null
   const ctx = {
     on: (event: string, cb: (url: unknown) => void) => {
-      if (event === 'pico/deep-link') listener = cb
+      if (event === 'zeokeel/deep-link') listener = cb
       return () => {}
     },
     logger: {
@@ -145,7 +145,7 @@ describe('深链按 scheme/host 分流（P2-4）', () => {
     installDeepLinkListener(ctx, (s) => applied.push(s), () => A, SCHEME)
 
     // 现场形态：员工点同事分享的链接（宿主日志曾出现
-    // `pico-deep-link: ignored malformed deep link` ⇒ 被读成"分享链接是坏的"）。
+    // `zeokeel-deep-link: ignored malformed deep link` ⇒ 被读成"分享链接是坏的"）。
     fire(`${SCHEME}://app/shared-notes`)
     // 带 ?path= 的形态（契约 §5.3）同样不归 auth 监听器。
     fire(`${SCHEME}://app/shared-notes?path=%2Fdetail`)

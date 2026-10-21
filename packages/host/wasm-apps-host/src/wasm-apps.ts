@@ -4,8 +4,8 @@
  *
  * 这一层解决三个问题，缺任何一个"发布"都跑不通：
  *
- *  1. **凭据不出客户端**：员工令牌只存在于 Host（`ctx.picoSession`），浏览器页面与
- *     应用都拿不到它 —— 因此 `/api/pico/apps/wasm/*` 是本机唯一入口，由 Host 持票
+ *  1. **凭据不出客户端**：员工令牌只存在于 Host（`ctx.zeokeelSession`），浏览器页面与
+ *     应用都拿不到它 —— 因此 `/api/zeokeel/apps/wasm/*` 是本机唯一入口，由 Host 持票
  *     转发到 `/api/client/v2/apps/wasm/*`。
  *  2. **90 s 超时**（§4.2/§10.5 第 58 项）：服务端 `ReadTimeout` 是 60 s，客户端
  *     必须比它长（`CLIENT_UPLOAD_TIMEOUT_MS`）；沿用既有技能上传的 `timeoutMs: 30000`
@@ -28,7 +28,7 @@
  * （`docs/planning/2026-09-17-wasm-app-platform-implementation.md` §6.5b 明写）。
  * `tests/wasm-app-tools.spec.ts` 有一条"路由与工具命中同一个实现"的结构断言守着它。
  *
- * 纪律（与 auth-gate 的 `/api/pico/skills` 同口径，不另立一套）：
+ * 纪律（与 auth-gate 的 `/api/zeokeel/skills` 同口径，不另立一套）：
  *  - 写面（非 GET）一律要**持有性证明**（`requireWriteProof`，fence 缺席 fail-closed）；
  *  - 服务端的**业务错误信封** `{error:{code,message,details,hints}}` 原样透传 ——
  *    第一消费者是 AI，丢掉 hints 等于让它自己猜（§8 原话）；
@@ -37,11 +37,11 @@
  * 本模块**不做**编译（R40/R42：工具链与本地编译是 skill/AI 的职责）、不做任何
  * 业务规则判定（`app_id`/版本号/配置文件合法性全部由服务端裁决）。
  *
- * @module @picoaide/dsh-enterprise/wasm-apps
+ * @module @zeokeel/dsh-enterprise/wasm-apps
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { dshHomeSafe } from '@picoaide/dsh-host-home'
+import { dshHomeSafe } from '@zeokeel/dsh-host-home'
 import { hostCopy, type HostLocale } from './locale.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { open, realpath, stat } from 'node:fs/promises'
@@ -49,14 +49,14 @@ import type { Stats } from 'node:fs'
 import type { FileHandle } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { gatewayFetch, normalizeServerURL } from '@picoaide/dsh-gateway-client/auth'
-import type { Session } from '@picoaide/dsh-gateway-client/config'
-import { picoSessionOf } from './session.ts'
+import { gatewayFetch, normalizeServerURL } from '@zeokeel/dsh-gateway-client/auth'
+import type { Session } from '@zeokeel/dsh-gateway-client/config'
+import { zeokeelSessionOf } from './session.ts'
 import type { AiRowsConsentStore } from './wasm-apps-ai-rows-consent.ts'
 import { isAiRowsConsentScopeError } from './wasm-apps-ai-rows-consent.ts'
 
 /** 本地路由前缀（唯一入口；管理面只在主站，§4.7 的 F-52e）。 */
-export const WASM_APPS_PREFIX = '/api/pico/apps/wasm'
+export const WASM_APPS_PREFIX = '/api/zeokeel/apps/wasm'
 
 /**
  * 「允许 AI 读取此应用的数据」的授权后缀（**跨端契约**：客户端 `app-lifecycle.ts`
@@ -159,7 +159,7 @@ export const CHUNKED_PUBLISH_BUDGET_MS = CLIENT_UPLOAD_TIMEOUT_MS
  * 值必须**逐字**等于这一跳真正会等的毫秒数（就是传给 {@link gatewayRequest} 的那个数）：
  * 声明得比实际等待大，等于让平台按一个客户端不会等待的额度安排工作 —— 序关系又断了。
  */
-export const CLIENT_BUDGET_HEADER = 'X-Pico-Client-Budget-Ms'
+export const CLIENT_BUDGET_HEADER = 'X-ZeoKeel-Client-Budget-Ms'
 
 /**
  * 单片 PUT 的失败是否**可重试**（P2-8 的唯一判据，独立成函数以便单测钉住）。
@@ -535,7 +535,7 @@ async function gatewayRequest(
 }
 
 /**
- * 传输层失败的统一出口（`gateway error` 系文案，与既有 `/api/pico/*` 一致）。
+ * 传输层失败的统一出口（`gateway error` 系文案，与既有 `/api/zeokeel/*` 一致）。
  *
  * 业务错误**不走这里**：它们带着服务端的 code/details/hints 原样回去。
  * @param cause - `fetch` 抛出的异常。
@@ -575,13 +575,13 @@ async function upstreamResponse(upstream: Response): Promise<WasmResponse> {
  * 一次**迟到**的 401（旧令牌的在途请求在用户重新登录之后才失败）不得把刚建立的
  * 新会话与刚写下的新令牌一起清掉。`session` 因此是**必填**参数（就是发起这次请求
  * 的那一份），漏传在类型上不成立。
- * @param ctx - Host 上下文（只用到 `picoSession`）。
+ * @param ctx - Host 上下文（只用到 `zeokeelSession`）。
  * @param upstream - 上游响应。
  * @param session - 发起这次请求用的会话（令牌 = "这次失败属于哪一代"的唯一身份）。
  * @returns 信封。
  */
 async function forwardAuthAware(ctx: Context, upstream: Response, session: Session): Promise<WasmResponse> {
-  if (upstream.status === 401) picoSessionOf(ctx)?.clearIfCurrent?.(session.token)
+  if (upstream.status === 401) zeokeelSessionOf(ctx)?.clearIfCurrent?.(session.token)
   return await upstreamResponse(upstream)
 }
 
@@ -970,7 +970,7 @@ export interface PublishInput {
   title?: unknown
   /** 更新说明（非首版必填）。 */
   changelog?: unknown
-  /** `picoaide.app.json` 的配置对象（字段由服务端 appcfg 裁决）。 */
+  /** `zeokeel.app.json` 的配置对象（字段由服务端 appcfg 裁决）。 */
   config?: unknown
   /** 续传用的分片会话 id（缺省=新开一次上传会话）。 */
   uploadId?: string
@@ -1339,7 +1339,7 @@ async function publishChunked(
     }
     if (upstream.ok || upstream.status === 204) return null
     const detail = await readUpstreamError(upstream)
-    if (upstream.status === 401) picoSessionOf(ctx)?.clearIfCurrent?.(session.token)
+    if (upstream.status === 401) zeokeelSessionOf(ctx)?.clearIfCurrent?.(session.token)
     return { kind: 'upstream', status: detail.status, text: detail.text }
   }
 
@@ -1720,10 +1720,10 @@ export async function proxyApp(ctx: Context, session: Session, input: ProxyInput
 // ---------------------------------------------------------------------------
 
 /**
- * 构造 `/api/pico/apps/wasm` 的本地路由。
+ * 构造 `/api/zeokeel/apps/wasm` 的本地路由。
  *
  * 方法分发全部在**一个 handler** 内（路由表没有 per-method 匹配，与
- * `/api/pico/skills` 一致）：
+ * `/api/zeokeel/skills` 一致）：
  *
  * | method | path | 语义 |
  * |---|---|---|
@@ -1738,7 +1738,7 @@ export async function proxyApp(ctx: Context, session: Session, input: ProxyInput
  * 这个函数只做**四件 HTTP 层的事**：围栏（guard/持有性证明/auditor）、路径分发、
  * 请求体收集、把编排返回的信封逐字节写出。业务编排一律在模块级函数里
  * （见文件头"一份编排，两个调用面"）。
- * @param ctx - Host 上下文（只用到 `picoSession` 与 `logger`）。
+ * @param ctx - Host 上下文（只用到 `zeokeelSession` 与 `logger`）。
  * @param fence - auth-gate 的信任原语与助手。
  * @returns 交给 `ctx.webServer.register` 的前缀路由。
  */
@@ -1790,7 +1790,7 @@ export function createWasmAppsRoute(ctx: Context, fence: WasmAppsFence): WasmApp
     } catch {
       return fail(res, { code: 'NOT_FOUND', message: 'not found', status: 404 })
     }
-    // 前缀路由会把 `/api/pico/apps/wasmx` 这类**同前缀但不同路径**也送进来：
+    // 前缀路由会把 `/api/zeokeel/apps/wasmx` 这类**同前缀但不同路径**也送进来：
     // 必须按段边界判定，否则 `/wasmfoo` 会被当成 `:app_id` 而回 405（误导）。
     if (pathname !== WASM_APPS_PREFIX && !pathname.startsWith(`${WASM_APPS_PREFIX}/`)) {
       return fail(res, { code: 'NOT_FOUND', message: 'not found', status: 404 })
@@ -1927,7 +1927,7 @@ export function createWasmAppsRoute(ctx: Context, fence: WasmAppsFence): WasmApp
         }
         // 写失败**必须**让用户看见：静默成功会让面板显示"已允许"而工具仍然拒绝
         //（下一次调用回 AI_ROWS_NOT_AUTHORIZED），而那看起来像 AI 坏了。
-        ctx.logger?.warn?.(`pico-wasm-apps: persisting the AI rows consent failed (${cause instanceof Error ? cause.message : String(cause)})`)
+        ctx.logger?.warn?.(`zeokeel-wasm-apps: persisting the AI rows consent failed (${cause instanceof Error ? cause.message : String(cause)})`)
         return fail(res, {
           code: 'AI_ROWS_CONSENT_NOT_PERSISTED',
           message: hostCopy(locale, '授权未能保存', 'the consent could not be saved'),

@@ -74,11 +74,11 @@ function def(origin: string, declared: string, stdio = false): ConnectorDef {
 
 /** Connect + authorize through the plugin's own routes; returns the captured registration. */
 async function connectAndAuthorize(h: ReturnType<typeof createHarness>, expected: number): Promise<Record<string, unknown>> {
-  await callRoute(h, '/api/pico/connectors/probe-mcp/connect', 'POST')
+  await callRoute(h, '/api/zeokeel/connectors/probe-mcp/connect', 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline) {
-    const res = await callRoute(h, '/api/pico/connectors/probe-mcp/state', 'GET')
+    const res = await callRoute(h, '/api/zeokeel/connectors/probe-mcp/state', 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } }).request?.authorizeUrl
     if (url) break
     await new Promise(resolve => setTimeout(resolve, 25))
@@ -91,7 +91,7 @@ async function connectAndAuthorize(h: ReturnType<typeof createHarness>, expected
 
 /** The row as the panel sees it (the plugin's own state route). */
 async function row(h: ReturnType<typeof createHarness>): Promise<{ status?: string, error?: string }> {
-  const res = await callRoute(h, '/api/pico/connectors/probe-mcp/state', 'GET')
+  const res = await callRoute(h, '/api/zeokeel/connectors/probe-mcp/state', 'GET')
   return JSON.parse(res.body) as { status?: string, error?: string }
 }
 
@@ -158,7 +158,7 @@ describe('R10 N1: a credential file with "fields": null', () => {
       expect(server.stats.mcpUnauthorizedByMethod.POST ?? 0, '线上不得出现 401').toBe(0)
 
       // ② 面板刷新：旧行为是 HTTP 500 + 活头停在旧令牌。
-      const res = await callRoute(h, '/api/pico/connectors/probe-mcp/refresh', 'POST')
+      const res = await callRoute(h, '/api/zeokeel/connectors/probe-mcp/refresh', 'POST')
       expect(res.status, `刷新路由必须给出 200（实际 ${String(res.status)} ${res.body}）`).toBe(200)
       const after = await liveToken(config)
       expect(after, '前置：刷新必须真的换了令牌（否则"活头跟随"这条断言空转）').not.toBe(before)
@@ -192,7 +192,7 @@ describe('R10 N1: a credential file with "fields": null', () => {
       const store = new ConnectorStore({ baseDir: dir })
       await store.updateCredential('probe-mcp', { fields: null as never })
 
-      const res = await callRoute(h, '/api/pico/connectors/probe-mcp/refresh', 'POST')
+      const res = await callRoute(h, '/api/zeokeel/connectors/probe-mcp/refresh', 'POST')
       // ① 拆掉 try/catch（旧行为）：同步刷活头抛出 ⇒ 刷新 promise 拒绝 ⇒ 这里 500。
       expect(res.status, `刷新路由必须给出 200（实际 ${String(res.status)} ${res.body}）`).toBe(200)
       // ② 同一个异常若穿出 onRefreshed，`ctx.emit` 永不执行 ⇒ stdio 子进程拿不到新凭据

@@ -1,9 +1,9 @@
 /** Environment variable that overrides the product home. */
 export declare const DSH_HOME_ENV = "DSH_HOME";
 /** Directory name of the product default Harness home under the OS home. */
-export declare const PRODUCT_DSH_HOME_DIR = ".picoaide-harness";
+export declare const PRODUCT_DSH_HOME_DIR = ".zeokeel-harness";
 /** Stable user-facing display form for the default product home. */
-export declare const DEFAULT_DSH_HOME_DISPLAY = "~/.picoaide-harness";
+export declare const DEFAULT_DSH_HOME_DISPLAY = "~/.zeokeel-harness";
 /** 官方渠道 id（渠道化构建之外的默认渠道）。 */
 export declare const OFFICIAL_CHANNEL_ID = "official";
 /**
@@ -39,7 +39,7 @@ export declare function expandHomePath(path: string, home?: string): string;
  * Resolve the single-root product Harness home.
  *
  * Precedence, highest first: an explicit configured path, `$DSH_HOME`, then
- * `~/.picoaide-harness`. The product keeps all user data under one root. An
+ * `~/.zeokeel-harness`. The product keeps all user data under one root. An
  * empty or whitespace-only `$DSH_HOME` is treated as unset.
  *
  * 审计 2026-08-25 P2-3:DSH_HOME 是完全可注入的环境变量(同机进程可设置后
@@ -111,7 +111,7 @@ export declare function dshHomePath(...segments: string[]): string;
  *
  * 第三个理由更根本：`<数据根>/skills` 本来就是**基础**组合里
  * `@deepseek-ai/dsh-skill-filesystem` 行的扫描根（桌面 profile 的
- * `pico-skill-filesystem` 行，见 `enterprise/cordis.patch.yml` 的
+ * `zeokeel-skill-filesystem` 行，见 `enterprise/cordis.patch.yml` 的
  * "Local skill discovery" 段）—— 它是数据根布局的一部分，不是某个可选模块的
  * 私有知识。
  * @param env - environment used to resolve the data root (test seam).

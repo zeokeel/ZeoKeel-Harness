@@ -261,7 +261,7 @@ describe('环境受限判据的登记表：自跳不得是静默的一条路', (
       .toEqual({ mounted: true, required: true })
     // ② 能力不可用 + 未声明 ⇒ **无** hardFailure（调用方必须自己打覆盖声明）。
     expect(judgeMountGate(broken, {})).toEqual({ mounted: false, required: false })
-    // 其它取值不算声明（只有登记的那个取值算）—— 免得 `PICOAI_MOUNT_TESTS=0` 被当成"必须"。
+    // 其它取值不算声明（只有登记的那个取值算）—— 免得 `ZEOKEEL_MOUNT_TESTS=0` 被当成"必须"。
     expect(judgeMountGate(broken, { [MOUNT_REQUIRED_ENV]: 'optional' }).hardFailure).toBeUndefined()
     // ③ 能力不可用 + 声明必须提供 ⇒ 硬红，且理由里要有**真实原因**与前置条件（可排查）。
     const armed = judgeMountGate(broken, { [MOUNT_REQUIRED_ENV]: MOUNT_REQUIRED_VALUE })

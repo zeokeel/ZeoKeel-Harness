@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // gwcSetting 直读 settings（绕开缓存），ok=false 表示键不存在。

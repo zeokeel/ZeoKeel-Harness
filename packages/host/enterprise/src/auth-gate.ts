@@ -290,8 +290,8 @@ export function renderLoginPage(locale: HostLocale): string {
     document.getElementById('next-btn').textContent = T.connecting
     try {
       var results = await Promise.allSettled([
-        fetch('/api/pico/channel?server=' + encodeURIComponent(server)),
-        fetch('/api/pico/auth/methods?server=' + encodeURIComponent(server)),
+        fetch('/api/zeokeel/channel?server=' + encodeURIComponent(server)),
+        fetch('/api/zeokeel/auth/methods?server=' + encodeURIComponent(server)),
       ])
       var channelOk = results[0].status === 'fulfilled' && results[0].value.ok
       var methodsOk = results[1].status === 'fulfilled' && results[1].value.ok
@@ -484,7 +484,7 @@ export function renderLoginPage(locale: HostLocale): string {
     pollTimer = setInterval(async function () {
       pollAttempts++
       try {
-        var r = await fetch('/api/pico/auth/state')
+        var r = await fetch('/api/zeokeel/auth/state')
         if (!r.ok) return
         var d = await r.json().catch(function () { return {} })
         if (d.loggedIn === true) {
@@ -503,7 +503,7 @@ export function renderLoginPage(locale: HostLocale): string {
     // 服务端" —— 取消授权/轮询超时/返回上一步之后,迟到或伪造的回跳深链不再
     // 被接受。本页脚本跑在**渲染进程**(window-options.ts: contextIsolation=true、
     // nodeIntegration=false、sandbox=true),够不到宿主模块,只能走本地 HTTP 面。
-    try { fetch('/api/pico/auth/browser-login', { method: 'DELETE' }).catch(function () {}) } catch (e6) {}
+    try { fetch('/api/zeokeel/auth/browser-login', { method: 'DELETE' }).catch(function () {}) } catch (e6) {}
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
     pollAttempts = 0
     browserBtn.disabled = false
@@ -523,14 +523,14 @@ export function renderLoginPage(locale: HostLocale): string {
     // srvcore-1 客户端一半(审计 R7 F3-N1):window.open 打开的是**远端** SSO 地址,
     // 不经过本地路由;而回跳深链的守卫(deep-link.ts 的 noteBrowserLoginStarted)
     // 在宿主进程。所以必须先经本地 HTTP 面登记"本机登录页正在等待这台服务端",
-    // 否则守卫永远收不到登记(判定分支不可达),伪造的 picoaide://auth?…
+    // 否则守卫永远收不到登记(判定分支不可达),伪造的 zeokeel://auth?…
     // server=https://attacker.example 会把真 token 发给攻击者并采纳其会话。
     // 登记失败就不打开浏览器:否则员工在浏览器里授权成功后,回跳会因为"没有
     // 等待目标"被拒绝,表现为"授权完成却一直登不进去"。
     // 这里 await 一个同源本地请求(~毫秒级)不会让 window.open 被弹窗拦截:
     // Chromium 的 transient user activation 保留约 5 秒且 fetch 不消耗它。
     try {
-      var reg = await fetch('/api/pico/auth/browser-login', {
+      var reg = await fetch('/api/zeokeel/auth/browser-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ server: server }),
@@ -560,7 +560,7 @@ export function renderLoginPage(locale: HostLocale): string {
     var btnLabel = btn.textContent
     btn.textContent = T.signingIn
     try {
-      var res = await fetch('/api/pico/auth/login', {
+      var res = await fetch('/api/zeokeel/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -627,11 +627,11 @@ interface ResolvedBrand {
 const OFFICIAL_BRAND: ResolvedBrand = {
   // 文档/窗口标题用的是**产品名**(与 desktop-shell 的 windowTitle、内置
   // DEFAULT_CHANNEL.title 同值);登录页品牌区用的是 login.displayName
-  // (官方渠道为短名 'PicoAide')。两者不可混用 —— 混了官方构建的窗口标题
-  // 会从 "PicoAide Harness" 变成 "PicoAide"。
-  title: 'PicoAide Harness',
-  login: { displayName: 'PicoAide', shortName: 'PicoAide', tagline: 'Enterprise AI Gateway', welcome: '' },
-  client: { displayName: 'PicoAide Harness', shortName: 'PicoAide', tagline: '' },
+  // (官方渠道为短名 'ZeoKeel')。两者不可混用 —— 混了官方构建的窗口标题
+  // 会从 "ZeoKeel Harness" 变成 "ZeoKeel"。
+  title: 'ZeoKeel Harness',
+  login: { displayName: 'ZeoKeel', shortName: 'ZeoKeel', tagline: 'Enterprise AI Gateway', welcome: '' },
+  client: { displayName: 'ZeoKeel Harness', shortName: 'ZeoKeel', tagline: '' },
 }
 
 /** 未配置品牌时的中性名（与 desktop-channel.ts / 服务端同值）。 */
@@ -851,7 +851,7 @@ export function renderChangePasswordPage(locale: HostLocale): string {
     cb.disabled = true
     cb.textContent = ${scriptLiteral(c.submitting)}
     try {
-      var res = await fetch('/api/pico/auth/password', {
+      var res = await fetch('/api/zeokeel/auth/password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ old_password: oldpw, new_password: p1 }),
@@ -911,7 +911,7 @@ export const name = 'auth-gate'
 // `tools` 是 WASM 应用平台的宿主工具面（wasm_app_list / wasm_app_validate /
 // wasm_app_publish）所需的服务：不声明它，apply 可能在 tools 服务就位之前跑完，
 // 结果是工具静默缺席（模型只会说"没有这个工具"，日志里一条线索都没有）。
-export const inject = ['webServer', 'picoSession', 'tools']
+export const inject = ['webServer', 'zeokeelSession', 'tools']
 
 /**
  * 把渠道包预置的域名安全地放进 `value="…"` 属性。
@@ -950,7 +950,7 @@ interface ConnectionTrustFence {
  * 登录请求是否与**当前会话**冲突(审计 2026-09-12 P1-3/FIX-18)。
  *
  * 深链路径早已显式拒绝"已登录时静默换服务端"(`deep-link.ts:112-116`),
- * 而 `POST /api/pico/auth/login` 会**无条件** `setSession` —— 同一个动作在
+ * 而 `POST /api/zeokeel/auth/login` 会**无条件** `setSession` —— 同一个动作在
  * 两条路径上判定相反,这就是缺陷本身。单服务端产品语义下,切换服务器必须
  * 先显式登出;同一服务端上换账号(改密/换人)仍然允许。
  * @param current - 当前会话(未登录为 null)。
@@ -1020,24 +1020,24 @@ export function apply(ctx: Context, config: Config): void {
   if (configuredServer !== '') noteBrowserLoginStarted(configuredServer)
 
   // F13(审计 2026-09-11):接线 TLS 校验 —— 系统 CA 信任的证书直接放行;
-  // 自签名/私有 CA 只有在 PICOAI_TLS_PINS 预置或历史 pin 指纹匹配时才接受,
+  // 自签名/私有 CA 只有在 ZEOKEEL_TLS_PINS 预置或历史 pin 指纹匹配时才接受,
   // 未知/不匹配一律拒绝(此前该模块从未被调用,文档宣称的 TOFU 保护是死代码)。
   const tlsStore = defaultTlsStorePath()
   try {
     const pinned = applyPinnedFingerprintsFromEnv(tlsStore)
-    if (pinned > 0) ctx.logger?.info?.(`pico: applied ${pinned} pinned TLS fingerprint(s)`)
+    if (pinned > 0) ctx.logger?.info?.(`zeokeel: applied ${pinned} pinned TLS fingerprint(s)`)
   } catch (cause) {
-    ctx.logger?.warn?.(`pico: pinned TLS fingerprints ignored: ${cause instanceof Error ? cause.message : String(cause)}`)
+    ctx.logger?.warn?.(`zeokeel: pinned TLS fingerprints ignored: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
   void installCertificateVerification(tlsStore, {
     onUnknownFingerprint: (host, fingerprint) => {
-      ctx.logger?.warn?.(`pico: TLS certificate for ${JSON.stringify(host)} is not trusted and not pinned (sha256=${fingerprint}); set PICOAI_TLS_PINS to trust it`)
+      ctx.logger?.warn?.(`zeokeel: TLS certificate for ${JSON.stringify(host)} is not trusted and not pinned (sha256=${fingerprint}); set ZEOKEEL_TLS_PINS to trust it`)
     },
     onMismatchFingerprint: (host, fingerprint) => {
-      ctx.logger?.error?.(`pico: TLS certificate mismatch for ${JSON.stringify(host)} (sha256=${fingerprint}); connection refused`)
+      ctx.logger?.error?.(`zeokeel: TLS certificate mismatch for ${JSON.stringify(host)} (sha256=${fingerprint}); connection refused`)
     },
   }).catch((cause: unknown) => {
-    ctx.logger?.warn?.(`pico: TLS verification install failed: ${cause instanceof Error ? cause.message : String(cause)}`)
+    ctx.logger?.warn?.(`zeokeel: TLS verification install failed: ${cause instanceof Error ? cause.message : String(cause)}`)
   })
 
   // 预置域名来自渠道包(随包分发的 build/channel.json)或 profile 组装配置,
@@ -1202,10 +1202,10 @@ export function apply(ctx: Context, config: Config): void {
     return Buffer.concat(chunks)
   }
 
-  const session = (): Session | null => ctx.picoSession.getSession()
+  const session = (): Session | null => ctx.zeokeelSession.getSession()
 
   /**
-   * §4.5 双保险防御断言: /api/pico/* 写类操作禁止 auditor(理论不可达——
+   * §4.5 双保险防御断言: /api/zeokeel/* 写类操作禁止 auditor(理论不可达——
    * auditor 员工面登录已被服务端拒绝; 若未来边界放开, 此处拦截)。
    */
   const writeGuard = (): boolean => {
@@ -1236,7 +1236,7 @@ export function apply(ctx: Context, config: Config): void {
    * `guard()` 的注释已经自述其边界(`loopback.ts:60-64`):"a bare curl sends
    * neither header and is refused, but a curl with a forged Origin passes this
    * too"。也就是说:**本机任意进程**只要伪造 `Origin` 就能 `POST
-   * /api/pico/auth/login` 把整个会话换到攻击者服务端(员工后续的对话与工具
+   * /api/zeokeel/auth/login` 把整个会话换到攻击者服务端(员工后续的对话与工具
    * 调用都会打到那台机器)。会话变更必须再要求一项只有"由本进程服务、经
    * launch token 换过票的浏览器页面"才持有的东西——即上游 `connection` 服务的
    * BrowserAuth cookie(`dsh-auth-<authority>`: HttpOnly + SameSite=Strict +
@@ -1265,7 +1265,7 @@ export function apply(ctx: Context, config: Config): void {
     const fence = (ctx as unknown as { get?: (name: string) => unknown }).get?.('connection') as ConnectionTrustFence | undefined
     if (fence === undefined || typeof fence.requestRejection !== 'function') {
       if (level === 'required') {
-        ctx.logger?.warn?.('pico: connection service unavailable; refusing a high-risk session change (fail-closed)')
+        ctx.logger?.warn?.('zeokeel: connection service unavailable; refusing a high-risk session change (fail-closed)')
         json(res, 503, {
           error: 'browser session proof unavailable',
           hint: 'reopen the application window from its launch URL before changing the session',
@@ -1274,7 +1274,7 @@ export function apply(ctx: Context, config: Config): void {
       }
       if (!warnedMissingProofFence) {
         warnedMissingProofFence = true
-        ctx.logger?.warn?.('pico: connection service unavailable; session-changing routes fall back to the loopback fence')
+        ctx.logger?.warn?.('zeokeel: connection service unavailable; session-changing routes fall back to the loopback fence')
       }
       return true
     }
@@ -1283,11 +1283,11 @@ export function apply(ctx: Context, config: Config): void {
       rejection = fence.requestRejection({ headers: req.headers })
     } catch (err) {
       // 校验器自身抛错 = 无法证明 ⇒ 按拒绝处理(不把异常泄漏成 500)。
-      ctx.logger?.warn?.(`pico: browser proof check failed (${err instanceof Error ? err.message : String(err)})`)
+      ctx.logger?.warn?.(`zeokeel: browser proof check failed (${err instanceof Error ? err.message : String(err)})`)
       rejection = 403
     }
     if (rejection === undefined) return true
-    ctx.logger?.warn?.(`pico: refused a session-changing request without browser proof (${String(rejection)})`)
+    ctx.logger?.warn?.(`zeokeel: refused a session-changing request without browser proof (${String(rejection)})`)
     json(res, 403, {
       error: 'browser session proof required',
       hint: 'reopen the application window from its launch URL',
@@ -1332,15 +1332,15 @@ export function apply(ctx: Context, config: Config): void {
    *     丢回登录页、再撞同一堵墙（令牌并未失效）；
    *  3. **把标记落回会话**（`mustChangePassword`）：索引渲染本来就按这个标记进强制
    *     改密页，于是下一次文档重载就是那条可操作路径 —— 注入页面的看门狗看到
-   *     `/api/pico/auth/state` 的 `must_change_password` 后重载（见 sessionWatchScript）。
+   *     `/api/zeokeel/auth/state` 的 `must_change_password` 后重载（见 sessionWatchScript）。
    * @param res - 本地响应对象。
    * @param message - 服务端原文（用户可见，原样透出）。
    */
   const passwordChangeRequired = (res: ServerResponse, message: string): void => {
     const current = session()
     if (current !== null && current.mustChangePassword !== true) {
-      ctx.picoSession.setSession({ ...current, mustChangePassword: true })
-      ctx.logger?.warn?.('pico: the gateway requires a password change for this session; routing the app page to /change-password on the next reload')
+      ctx.zeokeelSession.setSession({ ...current, mustChangePassword: true })
+      ctx.logger?.warn?.('zeokeel: the gateway requires a password change for this session; routing the app page to /change-password on the next reload')
     }
     json(res, 403, {
       error: message,
@@ -1377,7 +1377,7 @@ export function apply(ctx: Context, config: Config): void {
 (function () {
   var known = ${JSON.stringify(identity)}
   setInterval(function () {
-    fetch('/api/pico/auth/state').then(function (r) { return r.json() }).then(function (d) {
+    fetch('/api/zeokeel/auth/state').then(function (r) { return r.json() }).then(function (d) {
       if (d.loggedIn === false) { location.reload(); return }
       if (d.must_change_password === true) { location.reload(); return }
       if (String(d.identity || '') !== known) { location.reload() }
@@ -1407,10 +1407,10 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   /**
-   * 本机 API 的**共用围栏与出口**（服务名 `picoLocalRoutes`）—— 唯一实现。
+   * 本机 API 的**共用围栏与出口**（服务名 `zeokeelLocalRoutes`）—— 唯一实现。
    *
    * 2026-10-13（P0-b）：技能商店与 WASM 应用中心的本机路由随各自的模块包搬出了本包
-   * （`@picoaide/dsh-capability-center/host/skill-routes`、`@picoaide/dsh-wasm-apps-host`
+   * （`@zeokeel/dsh-capability-center/host/skill-routes`、`@zeokeel/dsh-wasm-apps-host`
    * 的 `src/app-routes.ts`）—— 否则"关掉某个模块"时它的 host 面照样随必需包进产物。
    * 那些路由要用的**判定**（回环 + 同源 + 持有性证明、审计只读、网关失败分支、按请求
    * 解析的宿主语言）留在这里，经这个服务交出去：
@@ -1419,13 +1419,13 @@ export function apply(ctx: Context, config: Config): void {
    *    逐字不变，也不存在"一处收紧、另一处不跟"的信任边界漂移；
    *  - 模块包**不 import** 本包（那会闭合出
    *    `desktop → wasm-apps-host → enterprise → desktop` 这个构建环），只按结构探测
-   *    这个服务，与 `wasm-apps-host/src/session.ts` 探测 `picoSession` 同形；
+   *    这个服务，与 `wasm-apps-host/src/session.ts` 探测 `zeokeelSession` 同形；
    *  - 模块被裁掉的变体里它零成本：没有任何消费者，它只是一个对象。
    *
    * **不要**把上面的任何判定复制到模块包里 —— 这里判的是信任边界，复制一份就是第二
    * 真源（本仓已记录过同族的 `loopback.ts` 四份分裂）。
    */
-  ctx.provide('picoLocalRoutes', {
+  ctx.provide('zeokeelLocalRoutes', {
     guard,
     requireWriteProof,
     proofOfPossession,
@@ -1437,7 +1437,7 @@ export function apply(ctx: Context, config: Config): void {
     hostLocale,
     gatewayError,
     passwordChangeRequired,
-    clearSessionIfCurrent: (token: string): void => { ctx.picoSession.clearIfCurrent(token) },
+    clearSessionIfCurrent: (token: string): void => { ctx.zeokeelSession.clearIfCurrent(token) },
   })
 
   ctx.effect(() => {
@@ -1453,12 +1453,12 @@ export function apply(ctx: Context, config: Config): void {
       // 这里的语言按**每次渲染**解析：tapIndex 没有请求对象，取 desktopRuntime
       // 的当前值（用户刚在设置里切了语言时，下一次索引渲染立刻就变）。
       const locale = hostLocale()
-      if (!ctx.picoSession.isRestored()) return restoringPage(locale)
-      const restored = ctx.picoSession.getSession()
+      if (!ctx.zeokeelSession.isRestored()) return restoringPage(locale)
+      const restored = ctx.zeokeelSession.getSession()
       // 0057: 会话带强制改密标记(管理员重置密码) → 一律回强制改密页,
       // 即使应用重启后仍在(业务 API 在改密完成前也被服务端 403)。
       if (restored !== null && restored.mustChangePassword === true) return renderChangePasswordPage(locale)
-      if (!ctx.picoSession.isLoggedIn()) {
+      if (!ctx.zeokeelSession.isLoggedIn()) {
         // 未登录 ⇒ 这一页就是登录页:顺手用预置服务端武装深链守卫(见上)。
         armPendingBrowserLoginFromLoginPage()
         return loginPage(locale)
@@ -1485,7 +1485,7 @@ export function apply(ctx: Context, config: Config): void {
       }),
 
       ctx.webServer.register({
-        kind: 'exact', path: '/api/pico/auth/login',
+        kind: 'exact', path: '/api/zeokeel/auth/login',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
           if (!guard(req, res)) return
@@ -1506,7 +1506,7 @@ export function apply(ctx: Context, config: Config): void {
           // 把整个会话换到攻击者服务端。切换必须先显式登出;同服务端换账号照常。
           const existing = session()
           if (loginServerSwitchConflict(existing, body.server)) {
-            ctx.logger?.warn?.('pico: refused a server switch while signed in; sign out first')
+            ctx.logger?.warn?.('zeokeel: refused a server switch while signed in; sign out first')
             return json(res, 409, {
               error: 'already signed in to another server',
               hint: 'sign out before switching servers',
@@ -1519,9 +1519,9 @@ export function apply(ctx: Context, config: Config): void {
             // 看门狗按同一身份口径把已加载的应用页重载掉（否则四个整页面板与账号卡
             // 会继续以旧账号的渲染状态跑在新账号的令牌下）。这里只记录，不改判定。
             if (sessionIdentityChanged(existing, sess)) {
-              ctx.logger?.warn?.('pico: session identity changed on this server; the loaded app page will reload (the previous account render state must not survive)')
+              ctx.logger?.warn?.('zeokeel: session identity changed on this server; the loaded app page will reload (the previous account render state must not survive)')
             }
-            ctx.picoSession.setSession(sess)
+            ctx.zeokeelSession.setSession(sess)
             // 0057: 强制改密标记 → 登录页跳转强制改密页(而非直接进应用)。
             json(res, 200, { ok: true, must_change_password: sess.mustChangePassword === true })
           } catch (err) {
@@ -1533,7 +1533,7 @@ export function apply(ctx: Context, config: Config): void {
       }),
 
       ctx.webServer.register({
-        kind: 'exact', path: '/api/pico/auth/password',
+        kind: 'exact', path: '/api/zeokeel/auth/password',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
           if (!guard(req, res)) return
@@ -1553,7 +1553,7 @@ export function apply(ctx: Context, config: Config): void {
           try {
             await changePassword(s.serverURL, s.token, body.old_password, body.new_password)
             // 服务端已吊销该用户全部令牌(含当前): 清除本地会话 → 客户端回登录页。
-            ctx.picoSession.clear()
+            ctx.zeokeelSession.clear()
             json(res, 200, { ok: true })
           } catch (err) {
             const status = err instanceof AuthError
@@ -1579,13 +1579,13 @@ export function apply(ctx: Context, config: Config): void {
       }),
 
       ctx.webServer.register({
-        kind: 'exact', path: '/api/pico/auth/state',
+        kind: 'exact', path: '/api/zeokeel/auth/state',
         handler: (req: IncomingMessage, res: ServerResponse) => {
           if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
           if (!guard(req, res)) return
           // 单次读取会话快照(旧实现取 s 后又两次 getSession(),并发登出
           // 会给出 loggedIn:true 但 username/role 缺失的不一致响应)。
-          const current = ctx.picoSession.getSession()
+          const current = ctx.zeokeelSession.getSession()
           json(res, 200, current === null
             ? { loggedIn: false }
             : {
@@ -1605,7 +1605,7 @@ export function apply(ctx: Context, config: Config): void {
       }),
 
       ctx.webServer.register({
-        kind: 'exact', path: '/api/pico/auth/logout',
+        kind: 'exact', path: '/api/zeokeel/auth/logout',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
           if (!guard(req, res)) return
@@ -1625,13 +1625,13 @@ export function apply(ctx: Context, config: Config): void {
               // unreachable; the token expires via its own TTL.
             }
           }
-          ctx.picoSession.clear()
+          ctx.zeokeelSession.clear()
           json(res, 200, { ok: true })
         },
       }),
 
       ctx.webServer.register({
-        kind: 'exact', path: '/api/pico/auth/methods',
+        kind: 'exact', path: '/api/zeokeel/auth/methods',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
           if (!guard(req, res)) return
@@ -1670,7 +1670,7 @@ export function apply(ctx: Context, config: Config): void {
       // 域名再触发深链,守卫反而成了帮凶。真页面(登录表单同口径)持有 dsh-auth-*
       // cookie,产品内调用方只有登录页。
       ctx.webServer.register({
-        kind: 'exact', path: '/api/pico/auth/browser-login',
+        kind: 'exact', path: '/api/zeokeel/auth/browser-login',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (req.method !== 'POST' && req.method !== 'DELETE') return json(res, 405, { error: 'method not allowed' })
           if (!guard(req, res)) return
@@ -1705,7 +1705,7 @@ export function apply(ctx: Context, config: Config): void {
       // (builtInChannel()) —— 登录页与客户端界面在服务端不可达时也得显示
       // 渠道自己的名字,而不是厂商名。
       ctx.webServer.register({
-        kind: 'exact', path: '/api/pico/channel',
+        kind: 'exact', path: '/api/zeokeel/channel',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
           if (!guard(req, res)) return
@@ -1729,7 +1729,7 @@ export function apply(ctx: Context, config: Config): void {
             //     渲染层会打到本地 webServer 而 404,界面上就是裂图(2026-09-10 实测)。
             //  2) **逐字段叠加随包品牌**(mergeChannel,与 channel-sync 同一口径):
             //     服务端**不下发** `client.short_name`(侧边栏要的正是它),只透传服务端
-            //     载荷会让这个字段整条丢失,侧边栏回落到显示名 "PicoAide Harness"
+            //     载荷会让这个字段整条丢失,侧边栏回落到显示名 "ZeoKeel Harness"
             //     在 184px 的行里换行成两行(2026-09-11 实测)。
             json(res, 200, payload === undefined
               ? builtInChannel(config.brand)
@@ -1744,5 +1744,5 @@ export function apply(ctx: Context, config: Config): void {
 
     ]
     return () => { for (const dispose of disposers) dispose() }
-  }, 'pico auth-gate routes')
+  }, 'zeokeel auth-gate routes')
 }

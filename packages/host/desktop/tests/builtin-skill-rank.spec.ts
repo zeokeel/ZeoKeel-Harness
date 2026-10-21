@@ -90,7 +90,7 @@ let dshHome: string
 let agentsHome: string
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'pico-skill-rank-'))
+  root = await mkdtemp(join(tmpdir(), 'zeokeel-skill-rank-'))
   dshHome = join(root, 'harness-home')      // DSH_HOME（渠道数据根）
   agentsHome = join(root, 'agents-home')    // ~/.agents
   await mkdir(dshHome, { recursive: true })

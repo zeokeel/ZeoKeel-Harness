@@ -62,7 +62,7 @@
 | OPS-6 | P1 | 可观测性整块缺失（准入失败不落 event） | L1 / W1 | 文档已修（§12 可观测性增量）；代码待改 |
 | OPS-7 | P2 | run-gates 名不副实/不可 CI 跑 | L4 / W6 | 代码待改 |
 | OPS-8 | P2 | 三项前置零残留无部署面断言 | L4 / W4 | 代码待改 |
-| OPS-9 | P2 | 存量 .env/settings 基域配置静默失效 | L1+L5 / W5 | **已闭合（第一轮独立审计 C5 PASS）**：`docs/deploy/AI-DEPLOY.md` 新增 **§2.5「存量部署清理」**（通配 DNS/证书/Caddy 块清理清单 + `curl --resolve x.<DOMAIN>:443:<IP>` 判据 + `.env` 残留 `sed -i '/^PICOAI_APPS_BASE_DOMAIN=/d'` + 启动 warn 查法 + 控制台 `wasm.apps_base_domain` 清理）；`.env.example`/compose/Caddyfile 零旧配置、Caddyfile 零通配 ✓ |
+| OPS-9 | P2 | 存量 .env/settings 基域配置静默失效 | L1+L5 / W5 | **已闭合（第一轮独立审计 C5 PASS）**：`docs/deploy/AI-DEPLOY.md` 新增 **§2.5「存量部署清理」**（通配 DNS/证书/Caddy 块清理清单 + `curl --resolve x.<DOMAIN>:443:<IP>` 判据 + `.env` 残留 `sed -i '/^ZEOKEEL_APPS_BASE_DOMAIN=/d'` + 启动 warn 查法 + 控制台 `wasm.apps_base_domain` 清理）；`.env.example`/compose/Caddyfile 零旧配置、Caddyfile 零通配 ✓ |
 | UX-1 | P0 | 打开路由两端不一致（同 TST-5） | L2 / W2 | **已闭合**（同上） |
 | UX-2 | P0 | 渠道 scheme 全线硬编码（8 处） | L1+L2+L3 / W3 | **部分闭合（主控实测）**：控制面/宿主侧已参数化（`open-app.ts` 运行期取 `appOriginScheme`、`registerAppScheme(scheme)` 校验形状、`handler.ts` 持 `appOriginScheme`）；**剩余**：browser 包内几处文案/判定仍含官方字面量、保留名单三方口径（CTL-5）待收敛；待审计复验 |
 | UX-3 | P0 | 窗口事件零消费者 + 无 kind:'app' 注册 | L2+L3 / W2 | **代码已落（主控实测）**：`index.ts:303/:321` 注册窗口面闸门 + `windows.ts` 的 `kind:'app'` 注册（`windows.spec.ts:270` 断言把 webContents id 报给请求闸门、关闭后移除）；**待 A2-L2 复验**（含 AI 工具寻址 `app_id` 与默认寻址只指浏览器当前标签） |
@@ -90,7 +90,7 @@
 | DAT-9 | P1 | 回滚口径错误且已抄进发布说明 | L4+L5 / W7 | **已闭合（第一轮独立审计 PASS）**：同 OPS-1 —— 回滚口径已从"回滚不需要数据变换"改为"停服 + 恢复升级前 pg_dump + 回退镜像 + 客户端重装/回退"，并写明只回退镜像会让旧二进制逐请求 `42P01`；发布说明与总纲 §12 一致 |
 | DAT-10 | P1 | 缓存路径无用户维度/无切换清理 | L2 / W2 | 文档已修（双作用域）；代码待改 |
 | DAT-11 | P1 | 本地 304 成绕过准入第二入口 | L2 / W2 | 文档已修（仅静态子资源）；代码待改 |
-| DAT-12 | P1 | 缓存键 version 无来源 | L1+L2 / W1+W2 | 文档已修（X-PicoAide-App-Version）；代码待改 |
+| DAT-12 | P1 | 缓存键 version 无来源 | L1+L2 / W1+W2 | 文档已修（X-ZeoKeel-App-Version）；代码待改 |
 | DAT-13 | P2 | aichat 会话维度被带走未认账 | L1 / W4 | 文档已修（§21 删除 + §17 认账） |
 | DAT-14 | P2 | 0700/容量/状态文件未到可写代码 | L2 / W2 | 文档已修（§16.1）；代码待改 |
 | DAT-15 | P2 | "无存量数据"表述错误 | L1+L5 / W4 | 文档已修 |
@@ -102,7 +102,7 @@
 | CHN-6 | P1 | fail-loud 与既有兜底冲突 | L1 / W1 | 同 OPS-4 |
 | CHN-7 | P1 | "全部渠道必填"的流水线后果与顺序未写 | L4+L5 / W3 | 文档已修（§16 W3）；文档待改（部署说明） |
 | CHN-8 | P1 | 跨渠道唯一性无实现地点 | L4 / W3 | 文档已修（只看字段名的比对 pass）；代码待改 |
-| CHN-9 | P1 | official/beta 取值未定 | L4+L5 / W3 | 文档已修（= picoaide-app 共用命名空间）；代码待改 |
+| CHN-9 | P1 | official/beta 取值未定 | L4+L5 / W3 | 文档已修（= zeokeel-app 共用命名空间）；代码待改 |
 | CHN-10 | P1 | 渠道仓不 pin ⇒ 两端 scheme 可漂移 | L4 / W3 | 文档已修（pin 或写产物 + 对账）；代码待改 |
 | CHN-11 | P1 | CI 夹具同步缺口会让 yarn check 自身变红 | L4 / W3 | 代码待改 |
 | CHN-12 | P1 | 缺升级期协议/分区 API 复核规则 | L4+L5 / W5 | 文档已修（§22）；文档待改 |
@@ -123,7 +123,7 @@
 | SEC-11 | P2 | §11.1 证据不可复核 | L4+L5 / W6 | 文档已修（**主控回写**：§11.1 增加证据强度标注 + proof 两行边界）；标注要求已落正文 |
 | SEC-12 | P2 | §10 自相矛盾 + 401 码不符 | L1+L5 / W1 | 文档已修 |
 | SEC-13 | P2 | 面板登录拦截不可施工 | L2+L3 / W2 | 文档已修（§16.1 宿主闸门）；代码待改 |
-| CLI-1 | P0 | 跨包接线通道不存在（kind:'app' 无落点） | L2+L3 / W2 | **代码已落（主控实测）**：W-C 的 surface 抽象落在 `packages/host/wasm-apps-host/src/{windows,index}.ts` + browser 侧导出 seam（`@picoaide/dsh-browser/guard` 的 `ensureSessionGuard`/`installAppSchemeRequestGate`），`index.ts:303/:321` 在默认 session 与各分区都装闸门；`windows.spec.ts` 覆盖单应用单窗口/聚焦/尺寸记忆/账本丢弃。**待第二轮审计复验**（A2-L2） |
+| CLI-1 | P0 | 跨包接线通道不存在（kind:'app' 无落点） | L2+L3 / W2 | **代码已落（主控实测）**：W-C 的 surface 抽象落在 `packages/host/wasm-apps-host/src/{windows,index}.ts` + browser 侧导出 seam（`@zeokeel/dsh-browser/guard` 的 `ensureSessionGuard`/`installAppSchemeRequestGate`），`index.ts:303/:321` 在默认 session 与各分区都装闸门；`windows.spec.ts` 覆盖单应用单窗口/聚焦/尺寸记忆/账本丢弃。**待第二轮审计复验**（A2-L2） |
 | CLI-2 | P0 | 应用窗口分区无权限守卫 | L2+L3 / W2 | **代码已落（主控实测）**：`ensureSessionGuard`（`browser/src/guard.ts:359`）**两个 handler 都装**，调用点从 per-tab 提升到分区级（`runtime.ts:876` 改为调用它 + `:3355` 另一初始化点），`wasm-apps-host` 经 `electron-adapter.ts:57` 调用；`windows.spec.ts:210/247` 断言「未开过浏览器标签时创建应用窗口 ⇒ 两个 handler 都被调用」+ 守卫调用顺序。**剩余**：R1-L2-1（闸门过滤器真机验证）与 A2-L2 复验 |
 | CLI-3 | P0 | §18.1 声称订正但正文缺失 | — | **已闭合**（已逐条回写正文并抽查 11 关键词） |
 | CLI-4 | P0 | 打开路由错位（同 TST-5） | L2 / W2 | **已闭合** |
@@ -186,7 +186,7 @@
 | R2C-4 | P0 | §21 删 aichat 与保留清单冲突 | — | **已闭合**（§8.1/§4/§8.2 已改；§8.2 措辞仍待复核） |
 | R2C-5 | P1 | §5.1b 缺 proof | — | **已闭合** |
 | R2C-6 | P1 | §11.1/§13.1 未覆盖 proof | L5 / W5 | 文档已修（**主控 2026-09-19 回写正文**：§11.1 加 proof 行、§13.1 I2 行补 proof 判据与变异、§5.1 传输层补 `PROOF_*` 401；待审计复验） |
-| R2C-7 | P1 | 渠道 scheme 四处口径不一 | L5 / W3 | 文档已修（**主控回写**：F15 改"显式配置 + official/beta=`picoaide-app` 共用命名空间"、§10 正则统一为 `^[a-z][a-z0-9+.-]{1,31}$`、负例三条对齐 §8.3；待审计复验） |
+| R2C-7 | P1 | 渠道 scheme 四处口径不一 | L5 / W3 | 文档已修（**主控回写**：F15 改"显式配置 + official/beta=`zeokeel-app` 共用命名空间"、§10 正则统一为 `^[a-z][a-z0-9+.-]{1,31}$`、负例三条对齐 §8.3；待审计复验） |
 | R2C-8 | P1 | 硬/软闸门被写成"失败即错误页" | L5 / W2 | 文档已修（**主控回写**：§5.1b 闸门强度 + §7.5 + §13.3 判据行三处统一"新建=硬/聚焦=软"，软闸门不得打成错误页；待审计复验） |
 | R2C-9 | P1 | 冻结呈现无落点、与 F1 冲突 | L1+L3+L5 / W2+W5 | 文档已修（**主控回写**：F1 不列冻结、§5.1b 失败行补 `reason=app_frozen`、§7.7 新增冻结/下架/删除三档呈现；待审计复验） |
 | R2C-10 | P1 | §15 状态句与 R2 小节互斥 | — | **已闭合**（R2 行已登记） |
@@ -208,7 +208,7 @@
 | R2I-4 | P1 | AI 工具寻址 schema | L2+L3 / W2 | 文档已修（§16.1）；代码待改 |
 | R2I-5 | P1 | 守卫与 will-navigate 归属 | L2+L3 / W2 | 文档已修（§16.1）；代码待改 |
 | R2I-6 | P0 | app-proof 无波次归属 | L1+L2 / W1+W2 | **已收编（§16 W1/W2）且代码已落**：`appproof/**`（Ed25519 KeyRing + TOFU 注册表 + ReplayGuard）+ `POST …/wasm/proof` + `requireProof` 挂 `request`/`open` 两端；判据 `api/proof_open_test.go` 四条**主控实跑绿**（`ok 6.490s`）。**待 L1 变异 + A2-L1 复验** |
-| R2I-7 | P0 | F16 无波次归属 + 事务口径矛盾 | L1+L2 / W1+W2 | **已收编（§16 W1/W2）且代码已落**：`open` 端点 + `opens.today.{pv,uv}`（读明细以保证含本次）+ `X-PicoAide-App-Version` + 迁移 0075/0076 + Go 定时器（先汇总后清理）+ 管理端出口；宿主 `index.ts:516` 透传、客户端半块/缺省一律不渲染；判据含 `TestOpenAppResponseCarriesTodayOpens`/`TestOpenAppOmitsOpensWhenCountingFails`（主控实跑绿）。**待 A2-L1 复验** |
+| R2I-7 | P0 | F16 无波次归属 + 事务口径矛盾 | L1+L2 / W1+W2 | **已收编（§16 W1/W2）且代码已落**：`open` 端点 + `opens.today.{pv,uv}`（读明细以保证含本次）+ `X-ZeoKeel-App-Version` + 迁移 0075/0076 + Go 定时器（先汇总后清理）+ 管理端出口；宿主 `index.ts:516` 透传、客户端半块/缺省一律不渲染；判据含 `TestOpenAppResponseCarriesTodayOpens`/`TestOpenAppOmitsOpensWhenCountingFails`（主控实跑绿）。**待 A2-L1 复验** |
 | R2I-8 | P1 | 0075 只有 DDL 没有维护者 | L1 / W1 | 文档已修（Go 定时器 + 先汇总后清理）；代码待改 |
 | R2I-9 | P1 | api 拿不到 *Server / 漏两处 scheme 常量 / fail-loud 边界 | L1 / W1 | 文档已修（Options.AppOrigin）；代码待改 |
 | R2I-10 | P1 | 会话键与吊销回调接缝 | L1 / W1 | 文档已修（§16.1）；代码待改 |
@@ -216,7 +216,7 @@
 | R2I-12 | P1 | 磁盘资产 A/B 未拍板 | — | **已闭合**（选 A） |
 | R2I-13 | P1 | official/beta 取值与 §8.3 矛盾 | L4+L5 / W3 | 文档已修（**主控回写**：§8.3 fail-loud 边界改为"official/beta 不豁免字段，仅豁免跨渠道唯一性"）；代码侧渠道必填/唯一性仍待 L4 |
 | R2I-14 | P1 | 跨渠道唯一性无落点 | L4 / W3 | 文档已修；代码待改 |
-| R2I-15 | P1 | 渲染进程 scheme 注入不存在 | **L2+L3** / W3 | **代码已落（主控实测）**：本机只读路由 `GET /api/pico/wasm-apps/channel`（`index.ts:78` 常量、`:523` 处理器）返回 `{appOriginScheme, deepLinkScheme, productName}`，**未注入 scheme ⇒ fail-closed 503**，且声明 `proof` 为 required（§22.2 R2）；客户端 `open-app.ts` 改为运行期读取、拿不到时给可辨 reason 且**不发请求**。待审计复验 |
+| R2I-15 | P1 | 渲染进程 scheme 注入不存在 | **L2+L3** / W3 | **代码已落（主控实测）**：本机只读路由 `GET /api/zeokeel/wasm-apps/channel`（`index.ts:78` 常量、`:523` 处理器）返回 `{appOriginScheme, deepLinkScheme, productName}`，**未注入 scheme ⇒ fail-closed 503**，且声明 `proof` 为 required（§22.2 R2）；客户端 `open-app.ts` 改为运行期读取、拿不到时给可辨 reason 且**不发请求**。待审计复验 |
 | R2I-16 | P1 | 渠道仓不 pin ⇒ 功能性中断 | L4 / W3 | 文档已修；代码待改 |
 | R2I-17 | P1 | 波次表缺输入/产出/判据 | — | **已闭合**（§16 重写） |
 | R2I-18 | P1 | §16 与 §18.2 归属冲突 | — | **已闭合**（§16 为唯一权威 + 冲突消解说明） |
@@ -236,9 +236,9 @@
 | C5 | `.env.example`/compose/Caddyfile/`docs/deploy/**` | 已清；复核 |
 | C6 | 根 `README`/`AGENTS.md`/`.agents/notes/**` | 若提及旧访问模型 ⇒ 更新 |
 | C7 | CI/脚本/测试夹具中的旧路径与旧字符串 | 随 W4 零残留断言 |
-| C8 | `docs/planning/2026-09-17-wasm-app-platform.md`（旧基线，**保留**非访问模型内容） | **主控 2026-09-19 复核：C1「已删正文」不成立** —— 删除公告基本到位，但仍有 **4 处"现行处方型"残留**（照它做会做回旧形态）：①R3 行把访问标识写成硬编码 `picoaide-app://<app_id>/`（应 = `<渠道 app 源 scheme>://<app_id>/`，F15）；②R34 行 `落到 picoaide-app://…`；③第 11 条 `app_id → picoaide-app://<app_id>/`；④**限流行右列仍是"全局匿名桶 + 每 IP 桶 + 启动自检"且无删除标注**（应改为"不存在（`anonlimit` 随 W4 删除）"） |
+| C8 | `docs/planning/2026-09-17-wasm-app-platform.md`（旧基线，**保留**非访问模型内容） | **主控 2026-09-19 复核：C1「已删正文」不成立** —— 删除公告基本到位，但仍有 **4 处"现行处方型"残留**（照它做会做回旧形态）：①R3 行把访问标识写成硬编码 `zeokeel-app://<app_id>/`（应 = `<渠道 app 源 scheme>://<app_id>/`，F15）；②R34 行 `落到 zeokeel-app://…`；③第 11 条 `app_id → zeokeel-app://<app_id>/`；④**限流行右列仍是"全局匿名桶 + 每 IP 桶 + 启动自检"且无删除标注**（应改为"不存在（`anonlimit` 随 W4 删除）"） |
 | C9 | `docs/planning/2026-09-17-wasm-app-platform-implementation.md`（实施/一致性报告，**保留**历史审计结论） | **主控复核：6 处现行处方型残留**：①模块 14「匿名限流与可信代理自检 / `internal/wasmapp/anonlimit/*`」无删除标注；②`13a–13d 子域主站路由不可达 \| COVERED \| internal/router/subdomain_test.go` —— 以**将被 W4 删除的测试**作为覆盖证据；③第 481 行仍把 **`public` 列为 `access` 枚举取值之一**（与 I6 直接冲突）；④第 490 行「`appcfg` **三模式**」（含 public）；⑤`anonlimit` 出现在 H3 修复清单与审计条目（需标"随 W4 删除"）；⑥**四条「端到端验收 `temp/wasm-e2e-run.sh`（真 https 子域）61/61 / 68/68 PASS」以已删除链路为对象，却作为验证证据呈现**（需标注已废弃，否则会被引用为"已验证"） |
-| C10 | 两份旧文档中的 `picoaide-app://` 字面量 | 渠道化后**唯一正确写法** = `<渠道 app 源 scheme>://<app_id>`（official/beta 取值 `picoaide-app`）；保留字面量必须紧跟"（渠道参数化：§10/F15）"标注 |
+| C10 | 两份旧文档中的 `zeokeel-app://` 字面量 | 渠道化后**唯一正确写法** = `<渠道 app 源 scheme>://<app_id>`（official/beta 取值 `zeokeel-app`）；保留字面量必须紧跟"（渠道参数化：§10/F15）"标注 |
 | C11 | 旧文档"验证证据"类表述 | 凡以已删除链路（https 子域 / 换票 / 匿名 / `anonlimit`）为对象的 PASS 记录，必须**就地标注「已废弃（对象已删除，W4）」**，不得作为现行判据被引用 |
 
 ## D. W4 删除波次清单（**L7 专项，第二轮启动；此前无泳道承接，主控补登**）
@@ -285,7 +285,7 @@
 
 | ID | 严重度 | 一句话 | 泳道/波次 | 状态 |
 | --- | --- | --- | --- | --- |
-| DOC-C1 | **P1** | **设计总纲内部路径漂移**：§21.2 冻结保留路径为 `POST /__picoaide/ai/chat`（双下划线），而 §22.1 表格写成单下划线 `/_picoaide/ai/*` —— 两处都是"冻结"措辞，实现者按哪一处都能自证合规 | 主控 / 全 | **已闭合**（主控统一为 `/__picoaide/ai/chat`，并在 §21.2 增补保留前缀三条规则：本地处理不转发 / 应用不得定义同前缀 / 其余 `__picoaide/*` 一律 404） |
+| DOC-C1 | **P1** | **设计总纲内部路径漂移**：§21.2 冻结保留路径为 `POST /__zeokeel/ai/chat`（双下划线），而 §22.1 表格写成单下划线 `/_zeokeel/ai/*` —— 两处都是"冻结"措辞，实现者按哪一处都能自证合规 | 主控 / 全 | **已闭合**（主控统一为 `/__zeokeel/ai/chat`，并在 §21.2 增补保留前缀三条规则：本地处理不转发 / 应用不得定义同前缀 / 其余 `__zeokeel/*` 一律 404） |
 | DOC-C2 | P2 | §17 认账 7 的"不做设备绑定（§20.3）"与 §23.1 A′（安装密钥绑定）表述冲突，会让实现者以为 proof 无需密钥 | 主控 / 全 | **已闭合**（主控改写认账 7 + 新增认账 12：无钥匙串时私钥退化为 0600 文件） |
 | DOC-C3 | P2 | §8.4 删除清单**没有 `aichat` 整包行**，而 §21.3 明确要删 —— L7 按 §8.4 施工会漏删 | 主控 / W4 | **已闭合**（主控补 §8.4 "整包（AI，§21.3 同批）"行） |
 | DOC-C4 | P2 | §9 迁移表**没有 0076 行**（只在 §16 W1 提了一句），迁移清单不完整 | 主控 / W1 | **已闭合**（主控补 `0076_usage_app_dimension` 行，含分区表递归加列口径） |
@@ -293,15 +293,15 @@
 | DOC-C6 | P2 | §19 十五条产品决定中**九条在正文无落点**（可发现性/空态/异渠道 toast/分享入口/外链提示条/存储生命周期/员工可见计数/骨架屏/不加分类），只有审计者读 §19 才知道要做 | 主控 / W2+W5 | **已闭合**（主控把九条逐条回写进 F1/F2/F6/F12/F13/F16/§5.3/§5.1b） |
 | DOC-C7 | P2 | §10 的 scheme 正则 `^[a-z][a-z0-9+.-]*$`（无上界）与 §8.3 的 `{1,31}` 不一致；F15 写"派生 `<深链 scheme>-app`"而 §10 写"显式必填" | 主控 / W3 | **已闭合**（主控统一 F15/§10/§8.3 三处口径与正则） |
 
-| DOC-C8 | **P1** | **任务书 DoD 与总纲冲突**：DoD①写"**内置浏览器**加载 `picoaide-app://<app_id>/`"，与 §16.1 的 **W-C 裁决（独立应用窗口）** 和渠道 scheme 参数化（F15）直接冲突；DoD③把 **`edge/**`** 列入"彻底删除"，与 §8.4/任务书 E.2（edge 保留为 HTTP 面原语，只删主机名门控）冲突 —— 照 DoD 做会做错窗口载体并把要保留的包删掉 | 主控 / W2+W4 | **已闭合**（主控改 DoD①为独立窗口 + `<渠道 app 源 scheme>`；DoD③移除 `edge/**` 并加"不整包删"说明与 §21 的 `ai.chat` 删除） |
+| DOC-C8 | **P1** | **任务书 DoD 与总纲冲突**：DoD①写"**内置浏览器**加载 `zeokeel-app://<app_id>/`"，与 §16.1 的 **W-C 裁决（独立应用窗口）** 和渠道 scheme 参数化（F15）直接冲突；DoD③把 **`edge/**`** 列入"彻底删除"，与 §8.4/任务书 E.2（edge 保留为 HTTP 面原语，只删主机名门控）冲突 —— 照 DoD 做会做错窗口载体并把要保留的包删掉 | 主控 / W2+W4 | **已闭合**（主控改 DoD①为独立窗口 + `<渠道 app 源 scheme>`；DoD③移除 `edge/**` 并加"不整包删"说明与 §21 的 `ai.chat` 删除） |
 | DOC-C9 | **P1** | **两套权威并存**：任务书 §3 的 D/C/V 分工表与总纲 §16 波次表**并列且无优先级声明**（L7 删除波次在两处都没有），施工者按哪套都能自证合规 | 主控 / 全 | **已闭合**（主控在 §3 顶部加"唯一权威波次表 = §16 / 唯一闭环凭据 = 台账"，并补 **L1–L7 → 波次映射表**） |
-| DOC-C10 | P2 | **判据命令被表格打断**：任务书两条零残留判据的正则含**未转义 `|`**（D3 的 `git grep -nE 'PICOAI_APPS_BASE_DOMAIN\|通配证书\|wildcard'`、C2 的 `'app-ticket\|/login\|…'`）⇒ 渲染后照抄会得到**残缺正则**（少一半分支仍"绿"） | 主控 / W5+W6 | **已闭合**（主控转义；四份权威文档表格列数复检**零不一致**） |
+| DOC-C10 | P2 | **判据命令被表格打断**：任务书两条零残留判据的正则含**未转义 `|`**（D3 的 `git grep -nE 'ZEOKEEL_APPS_BASE_DOMAIN\|通配证书\|wildcard'`、C2 的 `'app-ticket\|/login\|…'`）⇒ 渲染后照抄会得到**残缺正则**（少一半分支仍"绿"） | 主控 / W5+W6 | **已闭合**（主控转义；四份权威文档表格列数复检**零不一致**） |
 | DOC-C11 | P2 | 任务书**缺四块交付**：F16 打开校验/计数、A′ app-proof、§21 应用 AI（删 `ai.chat`）、§22 零端口就绪，DoD 里一条都没有 | 主控 / W1+W2 | **已闭合**（主控补 DoD 6–9 + 门禁命令加 `scripts/verify-wasm-client-only.sh`） |
 | DOC-C12 | P2 | 任务书附录 E 是**一次性行号快照**，并行施工期间已漂移（主控实测：`D1:722` 的"限流"行已不在 722） | 主控 / W4 | **已闭合**（主控在附录 E 顶部加时效声明：范围以 §8.4 逐调用点表为准） |
 | CTL-1 | **P1** | **W0-D 探针当前产出"零证据"**（主控 2026-09-19 实测复核 `temp/wasm-client-only/probe-browser-storage.json`）：12 项必需断言 **0 PASS / 3 FAIL / 9 UNKNOWN**、`exitCode=1`；根因是 **9 次页面加载全部 `ERR_FAILED (-2)`** ⇒ **没有任何页面执行过 JS**，所以所有存储类结论（可用性/按 origin 隔离/同源往返/跨分区隔离）既没被证实也没被证伪。**更关键的是缺正向对照**：三个窗口（control / X / Y）**全都在 `persist:` 分区里**，探针从未验证"默认 session 下同一 scheme 能加载成功"，因此**无法区分"探针/环境坏了"与"分区内自定义协议页面根本不可加载"** —— 后者是**设计级 P0**（W-C 要求应用跑在按用户分区里，见 §7.2/§16.1）。另外控制组结果只 `console.log`、**未落进 JSON 产物**（无 `control` 段），结论不可复核 | L2 / W0-D | **待修**（正对照 + 控制组落盘 + 通过后再回写 §7.5/F13 口径） |
 | CTL-2 | P1 | §16 W0-D 要求"结论写回 §7.5/F13（不可用则改口径）"，而 F13 现在的"允许（探针先验证可用性与隔离）"**仍是无证据状态**：在探针至少一次全绿（含正向对照）之前，**不得**在任何文档/汇报里声称 F13 已验证存储可用性与隔离 | 主控+L2 / W0-D | **待修**（探针通过后由主控回写 §7.5/F13） |
-| CTL-3 | **P1** | **`Cache Storage` 在自定义协议 origin 上不可用**（主控最小复现，Linux/Electron 43.4.0）：`caches.open()` **成功**，但 `cache.put(new Request('picoaide-app://…'), …)` 抛 **`TypeError: Failed to execute 'put' on 'Cache': Request scheme 'picoaide-app' is unsupported`**（Chromium 只对 http/https 请求 scheme 支持 Cache）；`new Request('/p')` 反而能正确解析成 `picoaide-app://demo-a/p`（**不是** URL 解析问题 —— 已逐步拆开排除）。⇒ F13 与 §19 Q10 的存储对照表**必须写明"禁止依赖 Cache Storage"** | 主控 / W0-D+W5 | **已闭合（文档侧）**：主控已回写 F13 与 §19 Q10；作者文档/技能对照表由 L5 落地 |
-| CTL-4 | **P1** | **W0-D 探针自身三处缺陷**（主控根因定位）：①`new BrowserWindow({ session })` **不是有效选项**（Electron 只认 `webPreferences.session`/`partition`）⇒ 三个窗口（control/X/Y）**全部跑在默认 session**，`sesX/sesY` 上的 handler 注册形同虚设 ⇒ **分区隔离根本没被测量**；②因此控制组的结论"分区-only 注册 ⇒ 需默认 session 注册"**是错的**（真实原因是窗口没用上分区，导航走了外部协议路径 → `xdg-open`）；③**缺正向对照**（默认 session 成功加载从未被断言）且控制组结果只 `console.log`、**未落进 JSON**。实测反证：同环境最小复现 `load=ok`、`origin=picoaide-app://demo-a`、`isSecureContext=true`、`localStorage`/`IndexedDB` 均可用（`temp/w0d-rootcause/{min,minq,storage}.cjs`，<300ms 完成 ⇒ **不是"存储慢"导致超时**） | L2 / W0-D | **待修**（改 `webPreferences.session` + 加正对照 + 控制组落盘 + 重跑） |
+| CTL-3 | **P1** | **`Cache Storage` 在自定义协议 origin 上不可用**（主控最小复现，Linux/Electron 43.4.0）：`caches.open()` **成功**，但 `cache.put(new Request('zeokeel-app://…'), …)` 抛 **`TypeError: Failed to execute 'put' on 'Cache': Request scheme 'zeokeel-app' is unsupported`**（Chromium 只对 http/https 请求 scheme 支持 Cache）；`new Request('/p')` 反而能正确解析成 `zeokeel-app://demo-a/p`（**不是** URL 解析问题 —— 已逐步拆开排除）。⇒ F13 与 §19 Q10 的存储对照表**必须写明"禁止依赖 Cache Storage"** | 主控 / W0-D+W5 | **已闭合（文档侧）**：主控已回写 F13 与 §19 Q10；作者文档/技能对照表由 L5 落地 |
+| CTL-4 | **P1** | **W0-D 探针自身三处缺陷**（主控根因定位）：①`new BrowserWindow({ session })` **不是有效选项**（Electron 只认 `webPreferences.session`/`partition`）⇒ 三个窗口（control/X/Y）**全部跑在默认 session**，`sesX/sesY` 上的 handler 注册形同虚设 ⇒ **分区隔离根本没被测量**；②因此控制组的结论"分区-only 注册 ⇒ 需默认 session 注册"**是错的**（真实原因是窗口没用上分区，导航走了外部协议路径 → `xdg-open`）；③**缺正向对照**（默认 session 成功加载从未被断言）且控制组结果只 `console.log`、**未落进 JSON**。实测反证：同环境最小复现 `load=ok`、`origin=zeokeel-app://demo-a`、`isSecureContext=true`、`localStorage`/`IndexedDB` 均可用（`temp/w0d-rootcause/{min,minq,storage}.cjs`，<300ms 完成 ⇒ **不是"存储慢"导致超时**） | L2 / W0-D | **待修**（改 `webPreferences.session` + 加正对照 + 控制组落盘 + 重跑） |
 | CTL-5 | P2 | **保留 scheme 名单三处不一致且无对拍**（L4 施工中发现）：CI `ci-channels.sh` 6 个（§10 冻结名单）/ 客户端 `packages/host/enterprise/src/desktop-channel.ts:55` 10 个（+`blob`/`ws`/`wss`/`ftp`）/ 服务端 `internal/channel/channel.go:117` 14 个（+`chrome`/`chrome-extension`/`mailto`/`tel`）。差额 = **能过 CI 但启动期 fail-loud**（不是可绕过洞，但少一道构建期拦截）；R2C-7 的"四处口径不一"因此仍未闭合。修法：§10 的冻结名单为唯一真源，两端从真源生成或加对拍用例；**在修好前 CI 侧只 WARN 不拦**（L4 已如此） | L1+L2+L4 / W3 | **门禁侧已修（L4 实跑 exit 0，主控 2026-09-20 落笔）**：第 5 组改为「从**设计总纲 §10 原文**解析契约六项 → CI/客户端断言契约子集 → 服务端 `ReservedAppOriginSchemes`（channel.go:122）**逐字含顺序**相等 → 客户端 10 项/服务端 `ExtraReservedAppOriginSchemes` 8 项**仅 WARN 并列差集** → **解析不到=FAIL 且点名文件+符号**」；**剩余**：客户端 `desktop-channel.ts` 的额外加固项是否要与服务端加固集合同步（只需 WARN 无需相等，非阻塞）。原始状态：**部分闭合**（L1 已把服务端拆成 `ReservedAppOriginSchemes`=§10 契约六项 + `ExtraReservedAppOriginSchemes`=服务端额外加固，并加 `TestReservedAppOriginSchemeContract` 做契约对拍 —— 口径比"三处逐字相等"更正确）；**剩余**：①门禁第 5 组仍是旧的"三处逐字相等"口径，解析不到新形态而 FAIL（门禁本身行为正确，需 L4 改为"契约六项三方对拍 + 额外加固仅 WARN"）；②客户端 `desktop-channel.ts` 的 10 项需与契约子集对齐（L2） |
 | CTL-6 | P2 | **L5 的 C11 声明与实物不符（主控抽查发现）**：L5 报告"四条约 e2e PASS 逐条标废弃"，实测 `2026-09-17-wasm-app-platform-implementation.md` 的 **第 446 行 `\| 端到端验收 temp/wasm-e2e-run.sh \| **61/61 PASS** \|` 仍未标记**（该行没有"真 https 子域"字样，所以 L5 的关键词扫描漏了它）——它出现在一张"验收结果"表里，会被读成**现行验证证据** | L5 / W5 | **已交回 L5 修**（要求做**类级清扫**而非补一行：凡为已删除对象（`wasm-e2e-run.sh`/子域/换票/匿名/`anonlimit`/`hostgate`/`subdomain_test`）出具 PASS/COVERED 的行，一律就地标注废弃） |
 | CTL-7 | **P1** | **主控自己写进文档的过度声明（已自查自纠）**：§11.1 与 §17-7 曾写"**bearer 被盗也不能自助签发**"，而实现 `server/internal/wasmapp/appproof/appproof.go:18-22` 明确认账"注册是 **TOFU** 语义 —— 任何持有效 bearer 的调用方都能为尚未注册的 install_id 注册自己的公钥"。二者矛盾：TOFU 下持 bearer 者**可以**注册新安装并签发（多一次往返）。**这不是实现缺陷**（TOFU 是本期务实选择，且代码注释与设计意图一致），**是文档过度声明**，会让审计与客户误判安全边界 | 主控 / W1 | **已闭合**：§11.1 proof 行与 §17 认账 7 已改写为 TOFU 口径 —— 明确"R2-P0-3 的闭合口径 = proof 不再是 bearer 的等价物（绑 app_id/install_id + 一次性 nonce + jti 去重），而'bearer 泄露即可用任意应用'在注册新安装后仍成立"；要真正抬高需用户级第二因子（本期不做） |
@@ -321,32 +321,32 @@
 | 4 | official/beta 缺 `app_origin_scheme` 时是否豁免 | **不豁免**（与 §10/§8.3 一致：全部渠道必填）；代价 = 私有仓必须先补字段并 push，见 §H1 | §H1 |
 | 5 | 保留 scheme 名单三处不一致 | **保持现方向**：契约 = §10 六项（`ReservedAppOriginSchemes`），服务端**额外加固**不进契约（`ExtraReservedAppOriginSchemes`）；L4 的门禁按"契约六项三方对拍 + 加固仅 WARN"（已发） | CTL-5 / J11 |
 | 6 | `wasm-app-headers.json` 的入库路径 | **确认**：`server/internal/wasmapp/api/wasm-app-headers.json` + `go generate ./internal/wasmapp/api`；L2 的对拍与 L4 的守卫都按此路径（已在给 L2/L4 的要求里写明） | J5 / CLI-5 |
-| 7 | `usage.app_id` 有写入方、暂无流量 | **预期的中间态**：等 L2/L3 的客户端 AI loop 产出 `X-Pico-App-Id` 后自然有值；不得为此加默认值或伪造归因 | §21.4 |
+| 7 | `usage.app_id` 有写入方、暂无流量 | **预期的中间态**：等 L2/L3 的客户端 AI loop 产出 `X-ZeoKeel-App-Id` 后自然有值；不得为此加默认值或伪造归因 | §21.4 |
 | 8 | `skillseed` 摘要会在 W4 再变一次 | **确认**：W1 登记 1.2.0，W4 第二次重生成后**再提一级并登记**（不要就地改写） | W4-11 |
 | 9 | **L2**：`@deepseek-ai/dsh-atomic-write` 不在本包 node_modules，是否加依赖 | **本版接受包内单一 `atomicWriteFile` 助手**（多泳道并行期间不动依赖图）；条件：**只允许一处实现** + 实现处标注"待切换" + 覆盖"写失败不留半个文件 / 权限位正确"的单测；**W6/W7 全部静默后切换**到上游包。已回写总纲 §16.1 | 已闭合（主控回写 + L2 实施） |
-| 10 | **L2**：`cache.securityHeaders()` 的 CSP 写死 `picoaide-app:` | **必须去掉字面量**：改用 **`connect-src 'self'`**（在应用 origin 下 `'self'` 即该应用自己的 origin/协议 handler，语义等价且渠道无关）。已回写总纲 §7.5 | 已闭合（主控回写 + L2 改） |
-| 11 | **L2**：应用窗口的 AI 执行面（`POST /__picoaide/ai/chat` 本地处理 + 隐藏会话 + `ctx.agentLoop` + 首次授权闸门）归谁 | **归 L2**（§16.1：协议 handler 在宿主包，`agentLoop` 是宿主能力；L3 只做前端调用与 SSE 渲染，已完成）。若该包拿不到 `ctx.agentLoop` 注入口，**报告而不是自造通道** | L2 / W2 |
+| 10 | **L2**：`cache.securityHeaders()` 的 CSP 写死 `zeokeel-app:` | **必须去掉字面量**：改用 **`connect-src 'self'`**（在应用 origin 下 `'self'` 即该应用自己的 origin/协议 handler，语义等价且渠道无关）。已回写总纲 §7.5 | 已闭合（主控回写 + L2 改） |
+| 11 | **L2**：应用窗口的 AI 执行面（`POST /__zeokeel/ai/chat` 本地处理 + 隐藏会话 + `ctx.agentLoop` + 首次授权闸门）归谁 | **归 L2**（§16.1：协议 handler 在宿主包，`agentLoop` 是宿主能力；L3 只做前端调用与 SSE 渲染，已完成）。若该包拿不到 `ctx.agentLoop` 注入口，**报告而不是自造通道** | L2 / W2 |
 | 12 | **L2**：渠道仓补 `desktop.app_origin_scheme` | 已知，**不属 L2 范围**：已登记台账 **§H1**（含四渠道取值建议与 push 要求），由发布人在私有仓执行 | §H1 |
 
 | CTL-11 | **P2** | **L6 内部规则自相矛盾（主控只读预审计 2026-09-20 发现）**：`opens-contract.ts:437` 明写"页面里不要再写 `x ?? 0`（那正是把'读不到'显示成'没人用过'的写法）"、`:434` 规定"`null`/非有限 ⇒ `—`（不是 0）"，但同一屏的**明细字段**仍用 `?? 0` 兜底：`AppAiUsageSection.tsx:122`（输入/输出 tokens）、`:125`（费用）、`:143/144/145`（按日表的 calls/tokens/cost）、`AppOpensSection.tsx:169-170`（按部门 pv/uv）、`OpensBoard.tsx:122-123`（趋势点 pv/uv）。**定性**：这些 `?? 0` 位于"`aiUsageIsEmpty`/失败/加载 三分支之后"的**有数据分支**，所以只在**形状漂移**（字段缺失）时把"读不到"渲染成 0 —— 同屏 headline（`countText`/`fmtY`）却显示 `—` ⇒ **两套缺失语义**，且违反模块自己定的规则。**修法**：明细字段一律走同一套 null-aware 格式化（`null`/非有限 ⇒ `—`），并补一条**形状漂移**用例（缺 `prompt_tokens`/缺 `pv` 的行 ⇒ 该单元格必须是 `—` 而非 0）——现有 M10 变异只覆盖"整块缺后端"，覆盖不到这条路径。另：`AppAiUsageSection.tsx:122` 的 `data?.` 在有数据分支里是多余的防御，可一并去掉 | L6 / W5 | **已闭合（主控独立复核 2026-09-20）**：三处组件的 `?? 0` 全部消失，改用**同一套 null-aware 格式化**（`AppAiUsageSection.tsx:131` 用 `tokensText(data.prompt_tokens)`、`:134/:154` 用 `fmtY(data.cost)`），并**新增形状漂移用例**（`AppOpensAi.test.tsx:267-269` 断言缺字段时渲染 `输入 —`）；多余的可选链也已去掉。仍待 L6 静默后的**独立审计**（带实跑与变异） |
 | CTL-12 | **P2** | **四桶规则的 B 桶资格过窄（主控预审计 2026-09-20 实测）**：B 桶（契约型保留）资格原限定 `packages/client/wasm-apps/src/**`，但 `server/webadmin/src/**` 有 **7 处同类合法保留**，会被永远留在 A 桶（A 必须为 0 ⇒ W4 永远无法达标）：①`pages/Audit.tsx:166` 的 `wasm_apps_base_domain_change: '应用域名变更'`（**历史审计行的动作标签映射**，删了旧审计记录会显示原始码）；②`AppCenterLayout.tsx:11`（说明基域配置面已删除的注释）；③`Apps.tsx:54`（说明 `entry_url` 已取消的注释）；④⑤⑥`Apps.tsx:318/326/991` + ⑦`access-level.ts:110`（旧书签 `?access=public` 的**显式拒绝路径**与说明 —— 正是 L6 报的"不静默当成全部"行为，删了就是缺陷）。**裁定**：B 桶资格扩展到 `server/webadmin/src/**`（同一套"必须带显式标识"规则），**预算 13 → 20**（13 客户端 + 7 webadmin），脚本按 scope 打印 B 桶构成 | L4 + L6 / W5 | **已交回 L4/L6**（见 §F4） |
-| R1-L1-1 | **P0** | **`request` 端点未校验持有性证明（主控预审计 2026-09-20 实测）**：`requireProof` 的**唯一调用点是 `server/internal/wasmapp/api/open.go:51`**；全 `server/internal/wasmapp/**` + `server/internal/router/**` 再没有任何 `Proof.Verify` / `ConsumeJTI` 调用点。`clientreq.go:22-25` **只在注释里**列出 `proof_required`/`proof_expired`/`proof_mismatch`/`proof_replayed` 四个码，**代码里从不执行**。⇒ **真正的应用请求路径（带 bearer、执行 wasm、可读写应用库、可调平台）完全不要求安装密钥签名** ⇒ **仅被盗 bearer 即可驱动任意应用**，正是 A′（§23.1）要拦的那条；proof 只保护了"版本校验"这一个端点，机制被架空。契约依据：§5.1「认证 = Bearer ＋ `X-Pico-App-Proof`（**必需**）」、§11.1/§13.1 I2 的行为级判据、§23.1。**修法**：在 request 处理链解析出 user 之后、进入信封/管线之前调用同一个 `h.requireProof(c, appID, user)`（与 `open.go:51` 同款、同一实现），错误码与顺序按 `clientreq.go` 注释；补用例「request 缺 proof ⇒ 401 `proof_required`」「跨应用 proof ⇒ 401 `proof_mismatch`」「非幂等请求 jti 重放 ⇒ 401 `proof_replayed`」+ **变异**（把该调用删掉 ⇒ 三条必红） | L1 / W1 | **代码已落（主控独立核过 2026-09-20）**：`server/internal/wasmapp/api/clientreq.go:169` 调用 `h.requireProof(c, appID, user)`，与 `open.go:51` **同一实现**（`:151` 注释写明「不存在两份判据」）；appID 解析/校验上提到 `clientRequest`（理由：proof 绑定输入与管线执行的 app_id 不得有两套归一化路径）；401 四码 `proof_required`/`proof_expired`/`proof_mismatch`/`proof_replayed` 保持，无「无 proof 放行」分支。**判据已绿（主控独立实跑 2026-09-20，不采信自述）**：`PG_DSN_TEST=… go test ./internal/wasmapp/api/ -run 'TestClientRequestRequiresProof|TestOpenAppRequiresProof|TestOpenAppRejectsCrossUserAndCrossAppProof|TestOpenAppRejectsExpiredProof|TestOpenAppResponseCarriesTodayOpens' -count=1` ⇒ **ok 6.490s**；四条判据在 `api/proof_open_test.go:505` 起（①缺头⇒`proof_required` 且断言「没走到应用管线」②跨应用⇒`proof_mismatch` ③POST 同 jti 二次⇒`proof_replayed` ④**GET 幂等连用两次⇒放行** 正对照 + 变异注释）。**剩余**：L1 自己的变异（删 `requireProof` 调用 ⇒ 前三条必红）与冻结声明，随后由第二轮审计复验 |## G. 跨泳道接缝登记（主控维护；**审计必须逐条查两端**）|
+| R1-L1-1 | **P0** | **`request` 端点未校验持有性证明（主控预审计 2026-09-20 实测）**：`requireProof` 的**唯一调用点是 `server/internal/wasmapp/api/open.go:51`**；全 `server/internal/wasmapp/**` + `server/internal/router/**` 再没有任何 `Proof.Verify` / `ConsumeJTI` 调用点。`clientreq.go:22-25` **只在注释里**列出 `proof_required`/`proof_expired`/`proof_mismatch`/`proof_replayed` 四个码，**代码里从不执行**。⇒ **真正的应用请求路径（带 bearer、执行 wasm、可读写应用库、可调平台）完全不要求安装密钥签名** ⇒ **仅被盗 bearer 即可驱动任意应用**，正是 A′（§23.1）要拦的那条；proof 只保护了"版本校验"这一个端点，机制被架空。契约依据：§5.1「认证 = Bearer ＋ `X-ZeoKeel-App-Proof`（**必需**）」、§11.1/§13.1 I2 的行为级判据、§23.1。**修法**：在 request 处理链解析出 user 之后、进入信封/管线之前调用同一个 `h.requireProof(c, appID, user)`（与 `open.go:51` 同款、同一实现），错误码与顺序按 `clientreq.go` 注释；补用例「request 缺 proof ⇒ 401 `proof_required`」「跨应用 proof ⇒ 401 `proof_mismatch`」「非幂等请求 jti 重放 ⇒ 401 `proof_replayed`」+ **变异**（把该调用删掉 ⇒ 三条必红） | L1 / W1 | **代码已落（主控独立核过 2026-09-20）**：`server/internal/wasmapp/api/clientreq.go:169` 调用 `h.requireProof(c, appID, user)`，与 `open.go:51` **同一实现**（`:151` 注释写明「不存在两份判据」）；appID 解析/校验上提到 `clientRequest`（理由：proof 绑定输入与管线执行的 app_id 不得有两套归一化路径）；401 四码 `proof_required`/`proof_expired`/`proof_mismatch`/`proof_replayed` 保持，无「无 proof 放行」分支。**判据已绿（主控独立实跑 2026-09-20，不采信自述）**：`PG_DSN_TEST=… go test ./internal/wasmapp/api/ -run 'TestClientRequestRequiresProof|TestOpenAppRequiresProof|TestOpenAppRejectsCrossUserAndCrossAppProof|TestOpenAppRejectsExpiredProof|TestOpenAppResponseCarriesTodayOpens' -count=1` ⇒ **ok 6.490s**；四条判据在 `api/proof_open_test.go:505` 起（①缺头⇒`proof_required` 且断言「没走到应用管线」②跨应用⇒`proof_mismatch` ③POST 同 jti 二次⇒`proof_replayed` ④**GET 幂等连用两次⇒放行** 正对照 + 变异注释）。**剩余**：L1 自己的变异（删 `requireProof` 调用 ⇒ 前三条必红）与冻结声明，随后由第二轮审计复验 |## G. 跨泳道接缝登记（主控维护；**审计必须逐条查两端**）|
 
 历史事实：本项目**全部 5 个 P0 都出在接缝上**（两端各钉自己的字面量、A 产出的常量 B 没消费、两层闸门只做了一层）。因此每条接缝都必须有"两端都查"的判据。
 
 | # | 接缝 | 生产方 → 消费方 | 判据（两端） | 风险 |
 | --- | --- | --- | --- | --- |
 | J1 | 本机打开路由路径 | L3 `open-app.ts` 的 `OPEN_APP_PATH` → L2 `index.ts` 的 `WASM_APPS_LOCAL_PREFIX` | 三方对拍用例（含总纲 §5.2 原文）**必须保持可匹配**：L3 不得把该常量改成运行期表达式 | 已预判并纠偏（主控 2026-09-19）；改坏即"点打开必 404"复发 |
-| J2 | 应用源 scheme（三个终点） | 渠道包 `desktop.app_origin_scheme` → ①`main.ts` 模块作用域（特权注册）②profile 行 config ③本机只读路由 `/api/pico/wasm-apps/channel` | 断言 ①=②=③ 同源；①必须在 `app.whenReady()` 之前；客户端不得出现 `'picoaide-app:'` 字面量 | 特权注册时序是硬约束；写死官方值 ⇒ 渠道包全线失效 |
+| J2 | 应用源 scheme（三个终点） | 渠道包 `desktop.app_origin_scheme` → ①`main.ts` 模块作用域（特权注册）②profile 行 config ③本机只读路由 `/api/zeokeel/wasm-apps/channel` | 断言 ①=②=③ 同源；①必须在 `app.whenReady()` 之前；客户端不得出现 `'zeokeel-app:'` 字面量 | 特权注册时序是硬约束；写死官方值 ⇒ 渠道包全线失效 |
 | J3 | app-proof | L2 签发/携带（安装密钥+惰性签发）→ L1 校验（`request` **与** `open` 两端点） | 两端点都要校验；绑定 `(user_id, bearer hash, install_id, serverURL, app_id, exp, jti)`；非幂等做 jti 去重；401 码分层一致 | 只挂一个端点 ⇒ 被盗 bearer 可刷 open/探版本（R2S-6 原缺陷） |
-| J4 | 版本头 | L1 写 `X-PicoAide-App-Version` → L2 读（缓存键）/ L3 UI（打开次数与版本提示） | 头名逐字一致；缓存键 = `<session-scope>+app_id+version+path`；**不得自行推断版本** | 缓存键无来源 ⇒ 版本切换失效（DAT-12 原缺陷） |
+| J4 | 版本头 | L1 写 `X-ZeoKeel-App-Version` → L2 读（缓存键）/ L3 UI（打开次数与版本提示） | 头名逐字一致；缓存键 = `<session-scope>+app_id+version+path`；**不得自行推断版本** | 缓存键无来源 ⇒ 版本切换失效（DAT-12 原缺陷） |
 | J5 | 头白名单单一真源 | L1 的 Go 常量 + 生成 `wasm-app-headers.json` → L2 转发同一份 | 跨包对拍：L2 不得维护第二份名单；生成物与 Go 常量逐字节一致 | 两端不同构 ⇒ 整次导航 400（CLI-5 原缺陷） |
-| J6 | 应用 AI 保留路径 | L2 协议 handler 本地处理 `POST /__picoaide/ai/chat` → L3 前端调用与 SSE 渲染 | 路径逐字一致（**双下划线**，DOC-C1）；未授权 403 `app_ai_denied`；非该前缀的 `__picoaide/*` 一律 404 | 路径漂移 ⇒ 请求被当普通应用路由转发到平台 |
+| J6 | 应用 AI 保留路径 | L2 协议 handler 本地处理 `POST /__zeokeel/ai/chat` → L3 前端调用与 SSE 渲染 | 路径逐字一致（**双下划线**，DOC-C1）；未授权 403 `app_ai_denied`；非该前缀的 `__zeokeel/*` 一律 404 | 路径漂移 ⇒ 请求被当普通应用路由转发到平台 |
 | J7 | F16 打开计数 | L1 `open` 端点与 0075/0076 → L6 看板（PV/UV/趋势/TOP N）+ L3 应用页"今日已被打开 N 次" | 计数口径（每次 +1 不去重 / UV 按 user 去重）两端一致；管理端出口 `GET /api/server/admin/wasm-apps/:app_id/opens` 的 `granularity`/`from`/`to` 参数逐字一致 | 口径不一致 ⇒ 看板与明细永久对不上 |
 | J7b | F16 计数回传（**主控 2026-09-19 补齐**） | L1 `open` 响应 `opens.today.{pv,uv}` → L2 宿主转发 → L3 应用页「今日已被打开 N 次」 | §5.1b 已冻结该字段；**计数 best-effort ⇒ 字段缺省时客户端不渲染该行（不得显示 0）**；判据见 §13.3 新增行 | 曾无字段承载（L3-status 提出）⇒ 三端可能各造一套端点或显示 0 |
 | J8 | 访问级别两值 | L1 写侧拒绝 `public` → L6 webadmin 选项/历史值渲染 → L3 客户端文案 | 三端只认 `login\|whitelist`；历史 `public` **显示为已退役**而不得静默丢失或可再选 | 任一端保留 `public` ⇒ I6 不成立 |
 | J9 | 冻结三档呈现 | L1 内层 404 `reason=app_frozen` → L2 错误页 → L3 文案 | 冻结 ≠ 不存在 ÷ 下架 ≠ 删除；三档文案不得塌缩 | 塌缩 ⇒ 员工看到"应用不存在"（无法排障） |
-| J13 | **异渠道深链 toast 事件名**（L3 2026-09-20 新增，源自 R1-L3-3） | L2 宿主（深链闸门发现"属于另一家企业的客户端"时）→ **`ctx.emit('pico/wasm-app-deep-link-foreign')`** → L3 的 `app-toast.tsx` + `client/index.ts` 订阅并弹出**逐字**文案「这个链接属于另一家企业的客户端，请让对方用你们客户端的『复制链接』重发」 | 事件名**两端逐字一致**；未订阅/未 emit 时**不得**静默（L3 侧已有用例 `订阅宿主广播的异渠道深链事件，并据此弹出 toast`）；文案 zh/en 各一条逐字断言 | 若 L2 用了别的名字，toast **永远不会出现**（且两端各自的测试都不会红） |
+| J13 | **异渠道深链 toast 事件名**（L3 2026-09-20 新增，源自 R1-L3-3） | L2 宿主（深链闸门发现"属于另一家企业的客户端"时）→ **`ctx.emit('zeokeel/wasm-app-deep-link-foreign')`** → L3 的 `app-toast.tsx` + `client/index.ts` 订阅并弹出**逐字**文案「这个链接属于另一家企业的客户端，请让对方用你们客户端的『复制链接』重发」 | 事件名**两端逐字一致**；未订阅/未 emit 时**不得**静默（L3 侧已有用例 `订阅宿主广播的异渠道深链事件，并据此弹出 toast`）；文案 zh/en 各一条逐字断言 | 若 L2 用了别的名字，toast **永远不会出现**（且两端各自的测试都不会红） |
 | J12 | **应用窗口 chrome 文案的归属**（主控 2026-09-19 裁定，L3 提出"跨 bundle 无法 import，文案真源在我包里"） | 设计总纲 §3/§16.1 的**冻结文案**（唯一真源）→ ①**客户端 UI**（应用中心、分享、空态…）由 L3 的包持有并在其 spec 里逐字断言；②**应用窗口 chrome**（外链提示条、下载反馈、错误页、骨架屏）由 **L2 的宿主包**持有（它已有 `pages.ts`/`locale.ts`，与宿主可读页同一套 zh/en 机制），**不得**跨 bundle import 客户端的文案模块 | 同一句冻结文案在两侧各有一份**独立**的逐字断言（任一侧被改写即红）；两侧文本必须逐字等于文档 | 曾想"共享一份" ⇒ 跨 bundle import 在 tsdown 后会指向不存在路径（本项目已踩过同类坑） |
 | J11 | 保留 scheme 名单 | §10 冻结名单（真源）→ CI `ci-channels.sh` 6 项 / 客户端 `desktop-channel.ts` 10 项 / 服务端 `channel.go` 14 项 | 三处逐字相等（或由真源生成）；负例：名单外 scheme 必须被拒绝 | 三处不一致 ⇒ 能过 CI 但在运行期 fail-loud（CTL-5） |
 | J10 | 删除面枚举 | L7 按 §8.4 删 → L4 零残留扫描 → 编译与生成物 | 每删一项必须同时删测试/注释/文档引用/CI 断言；`edge` **不整包删**；`ai.chat` 整包删 | 只删实现 ⇒ 编译红；整包删 `edge` ⇒ 误删安全头原语 |
@@ -390,14 +390,14 @@
 
 **审计的正面结论（记录在案，避免重复劳动）**：C2 ✓（三份决策记录 `superseded` 横幅到位）、C3 ✓（站点中英同构、无旧模型处方、无客户域名；按域名守卫口径复扫，唯一命中是"禁止规则本身"）、SKILL.md 硬约束 **11 条**成立 ✓、CTL-10-②（`:58` 竖线转义）✓、CTL-10-③（`AGENTS.md` 迁移区间）✓、生成物 `references/*.md` 归 W4-9 不记 L5 缺陷 ✓、`docs/AUDIT-2026-09-19-SERVERAUTH-TEST-ISOLATION.md:291` 等 9 处属台账 **W4-12** 的"W4 之后"待标注项 ✓。
 
-| R1-L3-5 | **P2** | **判据弱点（由 L3 审计代理的变异 M14 暴露，主控定位机制；与审计报告 `audit-round1/L3.md` 的 R1-L3-5 同一条）**：`packages/client/wasm-apps/src/client/app-center.spec.tsx:555` 用 `expect(source).not.toContain('X-Pico-App-Proof:')` 判"客户端不自己拼 proof 头"。但**最自然的写法抓不到**：JS/TS 对象字面量写 `{ 'X-Pico-App-Proof': value }` 时，原文是 `'X-Pico-App-Proof':` —— `Proof` 与 `:` 之间夹着引号 ⇒ `not.toContain('X-Pico-App-Proof:')` **恒不命中**。审计代理的 M14 变异（往 `open-app.ts` 加字面量头）因此**只触发通用的"产物不旧于源码"守卫，没有任何语义断言变红**（日志 `audit-round1/R1L3-M14.log`）—— 这是章程 §3"只钉字符串不钉能力"的教科书案例 | L3 / W3 | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
+| R1-L3-5 | **P2** | **判据弱点（由 L3 审计代理的变异 M14 暴露，主控定位机制；与审计报告 `audit-round1/L3.md` 的 R1-L3-5 同一条）**：`packages/client/wasm-apps/src/client/app-center.spec.tsx:555` 用 `expect(source).not.toContain('X-ZeoKeel-App-Proof:')` 判"客户端不自己拼 proof 头"。但**最自然的写法抓不到**：JS/TS 对象字面量写 `{ 'X-ZeoKeel-App-Proof': value }` 时，原文是 `'X-ZeoKeel-App-Proof':` —— `Proof` 与 `:` 之间夹着引号 ⇒ `not.toContain('X-ZeoKeel-App-Proof:')` **恒不命中**。审计代理的 M14 变异（往 `open-app.ts` 加字面量头）因此**只触发通用的"产物不旧于源码"守卫，没有任何语义断言变红**（日志 `audit-round1/R1L3-M14.log`）—— 这是章程 §3"只钉字符串不钉能力"的教科书案例 | L3 / W3 | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
 | R1-L5-14 | **P1** | **权威文档自相矛盾："已下架"到底列不列（主控 2026-09-20 定位并订正）**：§7.7① 原写"冻结**与已下架**都不列"，而 **F1** 明写目录展示"**上下架状态**"（不列就没状态可展示）、**§19 Q2②**（我上一轮的裁定）明写"全部下架 = 列表**非空但全为下架**"、服务端 `read.go:468` 也**确实列下架行**（`:478` 只排除冻结）。⇒ §7.7① 是我上一轮把"冻结不列"（§19 Q3）**错误扩大到下架**。**订正**：目录**不列冻结**、**下架仍列并带标记**。**连带影响**：L5 在 R1-L5-12 整改时按（错误的）§7.7① 把作者文档改成了"不列下架" ⇒ **必须回改**（见 §F7） | 主控 + L5 | **已闭合（A2-L5 第二轮独立审计 2026-09-20，14/14 PASS；新增 P0=0/P1=0）**|
 | R1-L2-3 | **P1** | **§13.2① 的"超时预算序关系"没有判据（主控覆盖度审计 2026-09-20）**：总纲 §13.2 把它列为**同等强制**的判据（"客户端出站超时 > `GuestBudget`(10s) > `SQLStatementBudget`(5s) > `AppDBBusyTimeout`(3s)"，变异 = "把客户端超时改成 5 s ⇒ 对应用例/探针必红"），但我在 `packages/host/**` 全树**找不到任何序关系断言**：只有客户端常量 `app-protocol.ts:102 APP_REQUEST_TIMEOUT_MS = 30_000` 与服务端生成物 `server/internal/wasmapp/limits/limits.json` 的 `guest_budget=10s` / `sql_statement_budget=5s` / `app_db_busy_timeout`（三者在代码里互不引用）。**判据完全可判**（本仓已有先例：`header-spec-parity.spec.ts` 就是宿主 spec 读服务端生成物做跨包对拍）。§1 的"客户端出站超时"若不严格大于平台侧全部预算，**员工只会看到"网络错误"而拿不到带 code/hints 的可读错误**（§5.1 的理由原文） | L2 / W2 | **已交回 L2**（要求加跨包序关系断言 + 变异） |
 ## K. 第一轮独立审计 findings · L3（客户端；报告 `temp/wasm-client-only/audit-round1/L3.md`，310 行）
 
 > 审计代理用 43 个文件的**自算 sha256 清单**绑定 revision（`audit-round1/l3-revision-manifest.txt`），做了 **M1–M14** 变异（每条记 `sha256 before / after-edit / after-restore` + `restored=True`）。**它同时报告了一条并发告警**：审计期间被审包仍被写入（`publish-app.ts` 内容在其两次采样间变化而 mtime 不变）⇒ **其 PASS 只对 manifest 那一版成立**，冻结后须复跑。
 
-**PASS 的关键项**（记录在案）：文案逐字 10 组全中（含 `/__picoaide/ai/chat` 双下划线、`今日已被打开 {n} 次`、`无法确认最新版本`、五个 AI 错误码）✓；scheme 参数化（运行期取 + 并发去重 + fail-closed + `OPEN_APP_PATH` 保持字面量）✓；F16 消费端（半块不渲染）✓；AI 桥前端（SSE/本地闸/授权/错误分层/卸载 abort）✓；I6 两值 + 跨包对拍 ✓；B 桶 13 处正当性 ✓；自做 M-A/M-J/M-L 三条变异 ✓；`test` 253 例 + `check` 全绿 ✓。
+**PASS 的关键项**（记录在案）：文案逐字 10 组全中（含 `/__zeokeel/ai/chat` 双下划线、`今日已被打开 {n} 次`、`无法确认最新版本`、五个 AI 错误码）✓；scheme 参数化（运行期取 + 并发去重 + fail-closed + `OPEN_APP_PATH` 保持字面量）✓；F16 消费端（半块不渲染）✓；AI 桥前端（SSE/本地闸/授权/错误分层/卸载 abort）✓；I6 两值 + 跨包对拍 ✓；B 桶 13 处正当性 ✓；自做 M-A/M-J/M-L 三条变异 ✓；`test` 253 例 + `check` 全绿 ✓。
 
 | ID | 严重度 | 一句话 | 泳道 | 状态 |
 | --- | --- | --- | --- | --- |
@@ -405,7 +405,7 @@
 | R1-L3-2 | **P1** | 「未登录 ⇒ 弹客户端登录 ⇒ **登录后自动继续**」只做了"状态可辨"，**自动继续的链路没实现** | L2（宿主闸门/队列）+ L3（面板 UX） | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
 | R1-L3-3 | **P1** | §5.3/§19 Q5 的**异渠道深链 toast 文案全仓零落点**（连文案都没有） | L2（事件）+ L3（文案/渲染） | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
 | R1-L3-4 | **P1（流程）** | 被审包在审计期间仍被写入 ⇒ **判据未绑定冻结 revision**（其 PASS 只对 manifest 版成立） | 主控 / 全 | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
-| R1-L3-5 | P2 | 「客户端不拼 `X-Pico-App-Proof`」的判据**可被引号键绕过**（`{ 'X-Pico-App-Proof': … }`）⇒ 假绿 | L3 / W3 | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
+| R1-L3-5 | P2 | 「客户端不拼 `X-ZeoKeel-App-Proof`」的判据**可被引号键绕过**（`{ 'X-ZeoKeel-App-Proof': … }`）⇒ 假绿 | L3 / W3 | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
 | R1-L3-6 | P2 | `external-link.tsx` 的提示条组件**零消费者**（冻结文案两侧各一份）⇒ 死代码或漏接线 | L3（+J12 裁定） | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
 | R1-L3-7 | P2 | 四处注释/注释性声称**仍描述已被推翻的旧语义**（有"照注释改回去"的风险；含 `locales.ts:70` 把实现自拟文案说成"逐字取自总纲"）。审计代理给全了位置：`deep-link.ts:54`（"回落官方值"）、`shipped-bundle.spec.ts:97`（"缺省官方值"）、`appcfg-contract.ts:306`（"三个取值"）、`locales.ts:379`（`pick one of three`） | L3 / W2 | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
 | R1-L3-8 | P2 | UX-14 的客户端半边未做：**不消费 `window` 字段**、无「正在打开」可见反馈 | L3 | **已整改（L3 2026-09-20；`check` = 15 files / 287 tests / exit 0，25 条新增用例）；待第二轮审计复验（A2-L3）** |
@@ -414,7 +414,7 @@
 
 ## J. 主控对 L2 的第三轮预审计（2026-09-20，只读）
 
-> 背景：L2 已按我的 P1 升级落地三条整改（`ensureSessionGuard`（`browser/src/guard.ts:359`，`runtime.ts:876` 由 per-tab 改为调用它 + `:3355` 另一个初始化点）、`installAppSchemeRequestGate`（`guard.ts:406`，`webRequest.onBeforeRequest` 在 `:410`）、AI 桥（`wasm-apps-host/src/ai-chat.ts`，保留路径 `/__picoaide/ai/chat` 双下划线 ✓、隐藏会话前缀 `app:` ✓、取消语义 ✓））。以下是我读代码后**无法用读代码判定**的部分 —— 必须真机验。
+> 背景：L2 已按我的 P1 升级落地三条整改（`ensureSessionGuard`（`browser/src/guard.ts:359`，`runtime.ts:876` 由 per-tab 改为调用它 + `:3355` 另一个初始化点）、`installAppSchemeRequestGate`（`guard.ts:406`，`webRequest.onBeforeRequest` 在 `:410`）、AI 桥（`wasm-apps-host/src/ai-chat.ts`，保留路径 `/__zeokeel/ai/chat` 双下划线 ✓、隐藏会话前缀 `app:` ✓、取消语义 ✓））。以下是我读代码后**无法用读代码判定**的部分 —— 必须真机验。
 
 | ID | 严重度 | 问题 | 判据要求 | 状态 |
 | --- | --- | --- | --- | --- |
@@ -423,15 +423,15 @@
 
 ## F5. 主控对 L3 的判据整改要求（2026-09-20，源自审计 M14）
 
-**问题**：见 **R1-L3-1** —— 现有负向断言 `not.toContain('X-Pico-App-Proof:')` 抓不到 `{ 'X-Pico-App-Proof': … }` 这种（带引号的）对象字面量写法，等于该规则**没有判据**。
+**问题**：见 **R1-L3-1** —— 现有负向断言 `not.toContain('X-ZeoKeel-App-Proof:')` 抓不到 `{ 'X-ZeoKeel-App-Proof': … }` 这种（带引号的）对象字面量写法，等于该规则**没有判据**。
 
 **要求（二选一，推荐做法 1）**：
 1. **"只允许出现一次"型**（最稳，不依赖引号形态）：在 `app-center.spec.tsx` 的源码级用例里断言
    - `expect((source.match(/APP_PROOF_HEADER/gu) ?? []).length).toBe(1)` —— 只允许**声明**那一处；任何"用它拼头"的写法必然再引用一次 ⇒ 必红；
-   - 同时把负向断言换成能覆盖两种形态的正则：`expect(source).not.toMatch(/X-Pico-App-Proof['"]?\s*:/u)`。
-2. 或**行为型**：断言客户端发出的本机打开请求**不含** `X-Pico-App-Proof` 头（在 `open-app` 的单测里对 fetch 的 headers 做断言），这比源码 grep 更强。
+   - 同时把负向断言换成能覆盖两种形态的正则：`expect(source).not.toMatch(/X-ZeoKeel-App-Proof['"]?\s*:/u)`。
+2. 或**行为型**：断言客户端发出的本机打开请求**不含** `X-ZeoKeel-App-Proof` 头（在 `open-app` 的单测里对 fetch 的 headers 做断言），这比源码 grep 更强。
 
-**验收**：把审计代理 M14 的**同一处变异**重做一次（往 `open-app.ts` 加 `{ 'X-Pico-App-Proof': 'x' }`）⇒ 必须**有语义用例变红**（不能只靠"产物不旧于源码"那条通用守卫），并贴 sha256 前后。
+**验收**：把审计代理 M14 的**同一处变异**重做一次（往 `open-app.ts` 加 `{ 'X-ZeoKeel-App-Proof': 'x' }`）⇒ 必须**有语义用例变红**（不能只靠"产物不旧于源码"那条通用守卫），并贴 sha256 前后。
 
 ## F6. 主控裁定：`external-link.tsx` 的归属（R1-L3-6，与 J12 一致）
 
@@ -450,7 +450,7 @@
 
 ## L. 施工期实测红点与并发仲裁（2026-09-20，主控裁定；由 L7 停下报告触发）
 
-> **背景**：L7 在实施 W4 时按任务书要求"发现并发编辑就停下报告"，实测 **L1 正在改同一批文件**（`api/{open,proof,clientreq,read}.go`、`appcfg/*`、`cmd/picoaide-limits-gen`，并在 00:41:22 跑过 `go generate`）。**这是一次正确的止损**：L7 的 W4-9/W4-11 要对同一批生成物做第二次重生成，若与 L1 的生成并发 ⇒ **两次 `go generate` 互相覆盖、`skillseed` 摘要算错**。
+> **背景**：L7 在实施 W4 时按任务书要求"发现并发编辑就停下报告"，实测 **L1 正在改同一批文件**（`api/{open,proof,clientreq,read}.go`、`appcfg/*`、`cmd/zeokeel-limits-gen`，并在 00:41:22 跑过 `go generate`）。**这是一次正确的止损**：L7 的 W4-9/W4-11 要对同一批生成物做第二次重生成，若与 L1 的生成并发 ⇒ **两次 `go generate` 互相覆盖、`skillseed` 摘要算错**。
 
 | ID | 严重度 | 问题（实测） | 裁定 / 要求 | 状态 |
 | --- | --- | --- | --- | --- |
@@ -514,9 +514,9 @@
 
 | ID | 严重度 | 问题 | 修法 / 判据 | 泳道 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| **R2-X-1** | **P0** | **本机持有性证明两端机制不同 ⇒ 真实客户端「点打开」必 401**。宿主要求**请求头** `x-pico-host-proof`（`host-request.ts:37` 常量、`:330-337` 缺则 401 `proof_required`；两条路由 `index.ts:440/538` 均 `proof:'required'`；引导端点 `/api/pico/wasm-apps/host-proof` 在 `host-request.ts:257`）。**客户端从不带也不引导**：`grep -rn 'host-proof' packages/client packages/host/desktop/src scripts` **零命中**；`open-app.ts:333-341` 只发 `Content-Type` + `credentials:'same-origin'`（注释还写"证明随同源 cookie 发出"），`channel-seam.ts:176-181` 同。⇒ `channel` 401 ⇒ **拿不到 scheme ⇒ 分享入口永不渲染**；即便拿到 scheme，`open` 也 401。**为什么全绿**：宿主 54 条用例**手工注入**证明头（`index.spec.ts:246`），客户端把 fetch **mock 掉** ⇒ 两侧各钉自己一半（本项目 P0 的典型形态）。**根因**：同一客户端里两族本机路由用两套机制（老的 `/api/pico/apps/wasm/*` 走 cookie `fence.requireWriteProof`，新的走请求头），换了机制没换消费端 | **修**：客户端挂载期 `GET /api/pico/wasm-apps/host-proof`（该端点需过 connection 的 cookie 围栏）→ 两条本机调用都带 `X-Pico-Host-Proof` → 遇 401 `proof_expired` **重取一次**。**判据**：删掉 `index.spec.ts:246` 的手工注入后，**端到端**（真客户端 → 宿主 → 平台）仍能拿到 scheme 并打开；变异：不带头 ⇒ 401 | **L2（宿主端点/围栏）+ L3（客户端 fetch）** | **L3 半边已完成（2026-09-20，台账 §R）**：`host-proof.ts`（挂载期引导 + 缓存 + 提前 30s 视为过期 + 并发去重；令牌**只在内存**，源码级断言无 localStorage/sessionStorage/console）+ `fetchWithHostProof()` 被 `channel-seam`/`open-app` 共用 + 401 `proof_*` **强制重取一次并重放一次**（`AUTH_REQUIRED` **不**重试）+ 旧注释整段改写 + **失败分档**（`host-proof-unavailable｜host-proof-rejected｜scheme-not-configured｜malformed｜transport`，两档文案分别指"本机服务/会话"与"渠道配置"）+ **非 mock 自证**判据（实际 headers 键集合、引导失败不发业务请求、重放恰好两次）+ **6 条变异各自变红** ⇒ `check` = 16 files / **308 tests** / exit 0。**L2 半边**（宿主端点可用性 + 端到端判据 + R2-X-3/4/5）待完成 |
+| **R2-X-1** | **P0** | **本机持有性证明两端机制不同 ⇒ 真实客户端「点打开」必 401**。宿主要求**请求头** `x-zeokeel-host-proof`（`host-request.ts:37` 常量、`:330-337` 缺则 401 `proof_required`；两条路由 `index.ts:440/538` 均 `proof:'required'`；引导端点 `/api/zeokeel/wasm-apps/host-proof` 在 `host-request.ts:257`）。**客户端从不带也不引导**：`grep -rn 'host-proof' packages/client packages/host/desktop/src scripts` **零命中**；`open-app.ts:333-341` 只发 `Content-Type` + `credentials:'same-origin'`（注释还写"证明随同源 cookie 发出"），`channel-seam.ts:176-181` 同。⇒ `channel` 401 ⇒ **拿不到 scheme ⇒ 分享入口永不渲染**；即便拿到 scheme，`open` 也 401。**为什么全绿**：宿主 54 条用例**手工注入**证明头（`index.spec.ts:246`），客户端把 fetch **mock 掉** ⇒ 两侧各钉自己一半（本项目 P0 的典型形态）。**根因**：同一客户端里两族本机路由用两套机制（老的 `/api/zeokeel/apps/wasm/*` 走 cookie `fence.requireWriteProof`，新的走请求头），换了机制没换消费端 | **修**：客户端挂载期 `GET /api/zeokeel/wasm-apps/host-proof`（该端点需过 connection 的 cookie 围栏）→ 两条本机调用都带 `X-ZeoKeel-Host-Proof` → 遇 401 `proof_expired` **重取一次**。**判据**：删掉 `index.spec.ts:246` 的手工注入后，**端到端**（真客户端 → 宿主 → 平台）仍能拿到 scheme 并打开；变异：不带头 ⇒ 401 | **L2（宿主端点/围栏）+ L3（客户端 fetch）** | **L3 半边已完成（2026-09-20，台账 §R）**：`host-proof.ts`（挂载期引导 + 缓存 + 提前 30s 视为过期 + 并发去重；令牌**只在内存**，源码级断言无 localStorage/sessionStorage/console）+ `fetchWithHostProof()` 被 `channel-seam`/`open-app` 共用 + 401 `proof_*` **强制重取一次并重放一次**（`AUTH_REQUIRED` **不**重试）+ 旧注释整段改写 + **失败分档**（`host-proof-unavailable｜host-proof-rejected｜scheme-not-configured｜malformed｜transport`，两档文案分别指"本机服务/会话"与"渠道配置"）+ **非 mock 自证**判据（实际 headers 键集合、引导失败不发业务请求、重放恰好两次）+ **6 条变异各自变红** ⇒ `check` = 16 files / **308 tests** / exit 0。**L2 半边**（宿主端点可用性 + 端到端判据 + R2-X-3/4/5）待完成 |
 | R2-X-2 | P1 | **冻结三档塌缩**：`api/open.go:85-89` 与 `appserver/serve.go:75-78` 把**冻结/软删/不存在**合成同一个 404「应用不存在」，**无 `reason=app_frozen`**（该字段只在目录 `read.go:98`）；宿主 `app-window-copy.ts:41/46/56/60` 的三档文案**零消费者**（`handler.ts:354-362` 只回平台 message）。目录侧正确（`read.go:478` 冻结不列、下架仍列） | 服务端 404 带 `reason=app_frozen`（§5.1b/§7.7③）；宿主按 reason 选文案并**有用例**；三档不得塌缩 | L1（服务端）+ L2（宿主消费） | **已转** |
-| R2-X-3 | P1 | **§21.2 保留前缀规则②③未实现**：`handler.ts:184` 只做 `path === '/__picoaide/ai/chat'` **等值判断**，其余 `__picoaide/*` 会被当普通应用请求**转发平台**（应 404）；`server/internal/**` 无任何 `__picoaide/` 的发布校验（应拒绝应用定义该前缀） | 宿主：非该路径的 `__picoaide/*` 一律 404（不通配转发）；服务端：发布校验拒绝应用定义 `__picoaide/` 路由；各一条用例 | L2 + L1 | **已转** |
+| R2-X-3 | P1 | **§21.2 保留前缀规则②③未实现**：`handler.ts:184` 只做 `path === '/__zeokeel/ai/chat'` **等值判断**，其余 `__zeokeel/*` 会被当普通应用请求**转发平台**（应 404）；`server/internal/**` 无任何 `__zeokeel/` 的发布校验（应拒绝应用定义该前缀） | 宿主：非该路径的 `__zeokeel/*` 一律 404（不通配转发）；服务端：发布校验拒绝应用定义 `__zeokeel/` 路由；各一条用例 | L2 + L1 | **已转** |
 | R2-X-4 | P1 | **app-proof 客户端侧零行为判据**：`handler.spec.ts:56-70` 的 harness **不注入 `appProof`**、`index.spec.ts` 无 installKey ⇒ 头拼装（`handler.ts:267-268`）与 401 重签是**测试里的死分支**；只有两处**常量**断言（`app-proof.spec.ts:246`、`header-spec-parity.spec.ts:86`）＝章程 §3「只钉字符串不钉能力」 | harness 必须注入 `appProof`（含"签发失败/401 重签一次/重签后仍 401 上抛"三条），并断言**实际发出的 headers 含该头** | L2 | **已转** |
 | R2-X-5 | P2 | 401 重签条件是"**任意 401**"而非 `proof_*` 前缀（`handler.ts:285`、`open-gate.ts:183`）—— 与 §20/§23.1 的"只有 proof 失效才重签"不符（会话失效的 401 不该触发重签） | 改成按 `code.startsWith('proof_')` 分流 | L2 | **已转** |
 | R2-X-6 | P2 | J4 宿主 `APP_VERSION_HEADER` 是**死导出**；缓存键的 version **未接线**（`cache.put` 无生产调用点；`L2-status:228` 已自认） | 接线或在 status 认账并降级为"未接线"的显式说明 | L2 | **已转** |
@@ -525,7 +525,7 @@
 
 **R2-X-2 精度订正与闭合（2026-09-20，主控）**：本行原写「三档不得塌缩」易被读成「三个 reason 码」。裁决 (b) 的准确口径 = **呈现三档**（冻结「已被管理员停用」/ 下架「已下架」/ 删除「应用不存在」——§7.7② 的用户可见文案，三档语义确实不同、不得塌缩），**reason 码两档**（`app_frozen` 独立；软删与未登记同为 `app_not_found`；下架由 **410** 状态码承载）；不可达的 `app_deleted` 分支已删。F4 已补「取值逐个钉死」的断言（含两档相等的显式断言）与 7/7 变异。**闭合**。
 
-**PASS 项（可直接引用）**：**J1**（三端逐字 `/api/pico/wasm-apps/open`，对拍 spec 7 passed，客户端常量仍是字面量）｜**J5**（8 项白名单逐字同序 + 禁止头正负对照，4 passed；服务端生成物守卫三件套在位）｜**J7/J7b**（`{version,release_id,title,changed,opens:{today:{pv,uv}}}` 三端一致；缺省一律省略且不显示 0；管理端 `from/to/granularity` 与 webadmin 逐字一致）｜**J8**（四端只认 `login\|whitelist`，读侧 `public→login`、webadmin legacy 不可选、客户端与生成物对拍）｜**§22.2 R1**（`ctx.webServer` 仅 `host-request.ts`）｜**R3**、**R4**（unit 级）。
+**PASS 项（可直接引用）**：**J1**（三端逐字 `/api/zeokeel/wasm-apps/open`，对拍 spec 7 passed，客户端常量仍是字面量）｜**J5**（8 项白名单逐字同序 + 禁止头正负对照，4 passed；服务端生成物守卫三件套在位）｜**J7/J7b**（`{version,release_id,title,changed,opens:{today:{pv,uv}}}` 三端一致；缺省一律省略且不显示 0；管理端 `from/to/granularity` 与 webadmin 逐字一致）｜**J8**（四端只认 `login\|whitelist`，读侧 `public→login`、webadmin legacy 不可选、客户端与生成物对拍）｜**§22.2 R1**（`ctx.webServer` 仅 `host-request.ts`）｜**R3**、**R4**（unit 级）。
 **PARTIAL**：**J2**（①由 `main.ts` 模块作用域读值 ⇒ 仅能源码级断言；缺单条"①=②=③"端到端探针）｜**J4**｜**J12**（宿主 chrome 文案零消费者，与 R2-X-2 同根因）。
 **未判定**：J10（属 L4/L7 判据面）、R4 的真机 `onBeforeRequest` 探针（台账 §J 的 **R1-L2-1** 仍开）。
 
@@ -549,24 +549,24 @@ func IsLegacyPublicAccess(s string) bool { return Access(s) == AccessPublic }
 
 ## R. P0（R2-X-1）客户端半边交付细节（L3，2026-09-20）
 
-**接口对齐（按源码，不自造）**：头名 `x-pico-host-proof`（客户端写 `X-Pico-Host-Proof`）；引导路径 `${WASM_APPS_LOCAL_PREFIX}/host-proof`；响应 `{proof, expires_at}`、TTL 5 min；**拒绝体是字符串** `{"error":"proof_required"|"proof_expired"}`，而业务面未登录是**对象** `{"error":{"code":"AUTH_REQUIRED"}}` —— 两者都是 401，客户端按 `error` 形态分流（`readHostErrorCode`）。**已加跨端对拍用例**（头名 + 路径逐字比 `host-request.ts`/`index.ts`）。
+**接口对齐（按源码，不自造）**：头名 `x-zeokeel-host-proof`（客户端写 `X-ZeoKeel-Host-Proof`）；引导路径 `${WASM_APPS_LOCAL_PREFIX}/host-proof`；响应 `{proof, expires_at}`、TTL 5 min；**拒绝体是字符串** `{"error":"proof_required"|"proof_expired"}`，而业务面未登录是**对象** `{"error":{"code":"AUTH_REQUIRED"}}` —— 两者都是 401，客户端按 `error` 形态分流（`readHostErrorCode`）。**已加跨端对拍用例**（头名 + 路径逐字比 `host-request.ts`/`index.ts`）。
 
 **判据与变异（`mut/mutations-p0.log`，每条恢复原文）**：P1 去掉请求头 ⇒ **4 红**；P2b 令牌拿不到也照发 ⇒ 1 红；P2c 拆掉 `open-app` 前置闸（**单拆任一处仍 fail-closed = 刻意纵深防御**）⇒ 2 红；P3 去掉重放 ⇒ 2 红；P4 把 401 证明失败塌缩成配置问题 ⇒ 1 红；P5 头名打错一个字母 ⇒ 1 红。
 
 **待 L2 确认（L3 提出）**：引导端点当日**仍要求 connection 围栏**（403 `browser session proof required` / 503 `…unavailable`）；客户端只在**引导这一步**带 `credentials:'same-origin'`（业务调用一律只看请求头）。若 L2 改了这一步的准入形态，L3 只需改 `ensureHostProof` 一处。
 
-| R2-L3-11 | **P2** | **"跨端对拍"名不副实（主控复核 2026-09-20）**：L3 的 P0 交付里称"已加**跨端对拍用例**（头名 + 路径逐字比 `host-request.ts` / `index.ts`）"，但实测 `packages/client/wasm-apps/src/client/host-proof.spec.ts` **只读自己的源码**（`:153` `readFileSync(new URL('./host-proof.ts', ...))`，用于"不得落盘/打印"的断言），其"头名与路径（跨端契约）"一节的断言是**本地常量 vs 字面量**（`:38 expect(HOST_PROOF_HEADER).toBe('X-Pico-Host-Proof')`、`:39` 路径同）⇒ **宿主若改名/改路径，客户端这条断言照旧绿，宿主自己的断言也照旧绿**（两侧各钉自己的字面量）—— 正是 R2-X-1 的漂移模式，也正是作业章程 §3 记的反模式 | 改为**真跨包对拍**：读 `packages/host/wasm-apps-host/src/host-request.ts` 抽出 `HOST_PROOF_HEADER`、读 `index.ts`/`host-request.ts` 抽出引导路径，与客户端常量**逐字比**（本仓先例：`header-spec-parity.spec.ts`、`wasm-app-open-route-parity.spec.ts`）；变异：把宿主常量改一个字母 ⇒ 必红 | L3 | **已闭合（主控复核 2026-09-20）**：`host-proof.spec.ts:77` 新增 `hostProofParity(hostRequestSource, hostIndexSource)` —— 从 `host-request.ts` 抽 `HOST_PROOF_HEADER` **字面量**、从 `index.ts` 抽 `WASM_APPS_LOCAL_PREFIX` + 从 `host-request.ts` 抽 `proofRoute` 的**后缀**（不在用例里写死），断言 `<前缀><后缀>` 与客户端常量一致；**抽不到记 `problems`（不静默跳过）**；大小写口径写进注释（比前统一 `toLowerCase()` + 额外断言宿主侧声明为小写）；标题改为「跨端对拍：…vs 宿主 seam 源码（R2-L3-11）」，本地常量断言独立成条；从 `app-center.spec.tsx` 删除重复那份（同一件事不留两份）。**变异真改宿主源码**（`x-pico-host-prooof`）⇒ **2 红**、sha256 前后 `e672e4ad…` 一致、`RESTORED=True`、`CONCURRENT_WRITE=no`；另加**不碰磁盘**的内存自证（三条负例必须报错，避免打断正在改宿主的 L2）⇒ `check` = 16 files / **309 tests** / exit 0 |
+| R2-L3-11 | **P2** | **"跨端对拍"名不副实（主控复核 2026-09-20）**：L3 的 P0 交付里称"已加**跨端对拍用例**（头名 + 路径逐字比 `host-request.ts` / `index.ts`）"，但实测 `packages/client/wasm-apps/src/client/host-proof.spec.ts` **只读自己的源码**（`:153` `readFileSync(new URL('./host-proof.ts', ...))`，用于"不得落盘/打印"的断言），其"头名与路径（跨端契约）"一节的断言是**本地常量 vs 字面量**（`:38 expect(HOST_PROOF_HEADER).toBe('X-ZeoKeel-Host-Proof')`、`:39` 路径同）⇒ **宿主若改名/改路径，客户端这条断言照旧绿，宿主自己的断言也照旧绿**（两侧各钉自己的字面量）—— 正是 R2-X-1 的漂移模式，也正是作业章程 §3 记的反模式 | 改为**真跨包对拍**：读 `packages/host/wasm-apps-host/src/host-request.ts` 抽出 `HOST_PROOF_HEADER`、读 `index.ts`/`host-request.ts` 抽出引导路径，与客户端常量**逐字比**（本仓先例：`header-spec-parity.spec.ts`、`wasm-app-open-route-parity.spec.ts`）；变异：把宿主常量改一个字母 ⇒ 必红 | L3 | **已闭合（主控复核 2026-09-20）**：`host-proof.spec.ts:77` 新增 `hostProofParity(hostRequestSource, hostIndexSource)` —— 从 `host-request.ts` 抽 `HOST_PROOF_HEADER` **字面量**、从 `index.ts` 抽 `WASM_APPS_LOCAL_PREFIX` + 从 `host-request.ts` 抽 `proofRoute` 的**后缀**（不在用例里写死），断言 `<前缀><后缀>` 与客户端常量一致；**抽不到记 `problems`（不静默跳过）**；大小写口径写进注释（比前统一 `toLowerCase()` + 额外断言宿主侧声明为小写）；标题改为「跨端对拍：…vs 宿主 seam 源码（R2-L3-11）」，本地常量断言独立成条；从 `app-center.spec.tsx` 删除重复那份（同一件事不留两份）。**变异真改宿主源码**（`x-zeokeel-host-prooof`）⇒ **2 红**、sha256 前后 `e672e4ad…` 一致、`RESTORED=True`、`CONCURRENT_WRITE=no`；另加**不碰磁盘**的内存自证（三条负例必须报错，避免打断正在改宿主的 L2）⇒ `check` = 16 files / **309 tests** / exit 0 |
 ## S. 冻结前门禁实测（L4 跑 `corepack yarn check`，2026-09-20 01:04–01:12，19 任务 474.5s）
 
 `✓ check:wasm-client-only 23.1s`（**guard 已转阻塞且通过**）；4 个包失败，主控逐条定性如下（**不是照抄 L4 的"别的泳道施工中"**）：
 
 | ID | 包/用例 | 主控定性 | 分派 |
 | --- | --- | --- | --- |
-| R2-S-1 | `@picoaide/dsh-wasm-apps`：`host-proof.spec.ts > 跨端对拍…头名（忽略大小写）与引导路径与宿主逐字一致`（报"宿主 `x-pico-host-prooof` vs 客户端 `X-Pico-Host-Proof`"） | **瞬时态（非缺陷）**：L3 的 R2-L3-11 变异**正好**改的就是宿主那一行；L4 这次 **474 秒的长跑**撞进变异窗口。主控核实：**现值正确**（`host-request.ts:37 = 'x-pico-host-proof'`、sha256 `e672e4ad…` 与 L3 记录的还原值一致、mtime 01:10:33） | **记录教训**（见下） |
-| R2-S-2 | `@picoaide/dsh-enterprise`：`wasm-app-tools.spec.ts > 字段集合与首版必填标志与常量一致`（`AssertionError: expected [access, data_sensitivity, …(4)] to deeply equal […(3)]`） | **真缺陷（跨泳道漂移）**：L1 按 §6 给 `appcfg.json` 加了 **`window`** ⇒ 生成物 **6** 字段，而 enterprise 的常量仍钉 **5** 字段 ⇒ "单一真源对拍"正确地红了（这正是它该干的事） | **L2**（`packages/host/enterprise` 属 `packages/host/**`） |
-| R2-S-3 | `@picoaide/dsh-enterprise`：`channel-content.spec.ts` ×3（`brandChannel` 的映射/短名回落/中性回落）+ `wasm-apps.spec.ts`（>8 MiB 走 uploads 端点） | **待查**（很可能是 L2 在途改动；也可能是渠道/发布面漂移） | **L2** |
-| R2-S-4 | `@picoaide/dsh-browser`：`audit-0908.spec.ts > P2-27 … re-stamping an existing URL persists the new title/actor`（`ENOENT … tests/.a9-store-bm-2fqow92c1pf/bookmarks.jsonl`） | **并发/负载 flake**：临时目录在用例期间消失（19 任务并发 + 变异跑）。与项目既有的 connectors flake 同类（预算过紧 / 临时目录未隔离） | **L2**（提预算或隔离临时目录） |
-| R2-S-5 | `@picoaide/dsh-cron`：`cron.spec.ts > AND 分支的扫描视野…真实命中在 10.5 年后`（`Test timed out in 5000ms`） | **负载 flake**：该用例是重扫描型，5s 预算在 19 任务并发下不够 | **L2**（给该用例显式预算） |
+| R2-S-1 | `@zeokeel/dsh-wasm-apps`：`host-proof.spec.ts > 跨端对拍…头名（忽略大小写）与引导路径与宿主逐字一致`（报"宿主 `x-zeokeel-host-prooof` vs 客户端 `X-ZeoKeel-Host-Proof`"） | **瞬时态（非缺陷）**：L3 的 R2-L3-11 变异**正好**改的就是宿主那一行；L4 这次 **474 秒的长跑**撞进变异窗口。主控核实：**现值正确**（`host-request.ts:37 = 'x-zeokeel-host-proof'`、sha256 `e672e4ad…` 与 L3 记录的还原值一致、mtime 01:10:33） | **记录教训**（见下） |
+| R2-S-2 | `@zeokeel/dsh-enterprise`：`wasm-app-tools.spec.ts > 字段集合与首版必填标志与常量一致`（`AssertionError: expected [access, data_sensitivity, …(4)] to deeply equal […(3)]`） | **真缺陷（跨泳道漂移）**：L1 按 §6 给 `appcfg.json` 加了 **`window`** ⇒ 生成物 **6** 字段，而 enterprise 的常量仍钉 **5** 字段 ⇒ "单一真源对拍"正确地红了（这正是它该干的事） | **L2**（`packages/host/enterprise` 属 `packages/host/**`） |
+| R2-S-3 | `@zeokeel/dsh-enterprise`：`channel-content.spec.ts` ×3（`brandChannel` 的映射/短名回落/中性回落）+ `wasm-apps.spec.ts`（>8 MiB 走 uploads 端点） | **待查**（很可能是 L2 在途改动；也可能是渠道/发布面漂移） | **L2** |
+| R2-S-4 | `@zeokeel/dsh-browser`：`audit-0908.spec.ts > P2-27 … re-stamping an existing URL persists the new title/actor`（`ENOENT … tests/.a9-store-bm-2fqow92c1pf/bookmarks.jsonl`） | **并发/负载 flake**：临时目录在用例期间消失（19 任务并发 + 变异跑）。与项目既有的 connectors flake 同类（预算过紧 / 临时目录未隔离） | **L2**（提预算或隔离临时目录） |
+| R2-S-5 | `@zeokeel/dsh-cron`：`cron.spec.ts > AND 分支的扫描视野…真实命中在 10.5 年后`（`Test timed out in 5000ms`） | **负载 flake**：该用例是重扫描型，5s 预算在 19 任务并发下不够 | **L2**（给该用例显式预算） |
 
 **方法论追加（与 CTL-9 同族，但这次是反方向）**：**长跑全量门禁不得与泳道变异并发**。变异脚本的协议是"改一处 → 跑目标 spec → 立即还原"，而全量 `yarn check` 要 8 分钟 ⇒ 它一定会读到别人的变异窗口，产出**假红**（本次 R2-S-1）。**冻结期跑全量门禁前必须确认无变异脚本在跑**（`FREEZE-PROTOCOL.md` §0.2 已有该检查，本次是它生效前的实例）。
 
@@ -574,7 +574,7 @@ func IsLegacyPublicAccess(s string) bool { return Access(s) == AccessPublic }
 
 **判据（全绿，实跑）**：`corepack yarn check` = **21 任务 / 21 通过 / 0 失败 / 0 跳过 / 333 s / EXIT=0**（`temp/wasm-client-only/L2-check-final4.log`）⇒ **全仓门禁绿**（含 enterprise/browser/cron/wasm-apps，即 §S 的 R2-S-2..S-5 已一并解决）。单包：host 17 文件/187 例、browser 37/585、desktop 86/929+2skip、cron 174、enterprise 533+1skip。**探针**：`probe-custom-scheme.cjs` exit 0、`probe-v2.cjs` exit 0、**W0-D `probe-browser-storage.cjs` required=15 / pass=15 / fail=0 / unknown=0 / exit 0**（W0D-14 已按裁定改反向期望）、**新 `probe-app-scheme-gate.cjs` exit 0**（pattern `probe-app://*/*` **触发 6 次**；装闸门后 http 页/应用 B 页请求 **handler 增量 0**、对照阶段各 1、应用窗口自身 **+2**）。
 
-**点名项全部交付（含变异）**：**R2-X-1** —— ①**准入形态确认＝保持**（引导端点今天过 connection 围栏 = 引导路径的当日授权，`credentials:'same-origin'` 成立；零端口时换帧管道握手）；令牌 TTL 5 min、**TTL 内可复用**、LRU 32、缺/错 `{"error":"proof_required"}`、过期 `{"error":"proof_expired"}`。②**端到端用例**：**只经引导端点取令牌** → `/channel` → `/open` 全 200，**无手工注入**；反向对照无令牌 401 ⇒ **R2-X-1 两端闭合**。｜**R1-L2-1**（真机探针，见上）｜**R1-L2-2**（未开浏览器标签建窗 ⇒ 两个 handler 都被调用 + `ensureSessionGuard` 在 `createAppWindow` 之前）｜**R1-L2-3**（`budget-parity.spec.ts` 读 `limits.json` 断言 30>10>5>3；变异 guest→60 红、客户端→5s 红，sha256 前后一致）｜**J13**（`ctx.emit('pico/wasm-app-deep-link-foreign')` + 两端逐字对拍）｜**R2-X-2/3/4/5**（三档文案接消费者且不塌缩、`__picoaide/*` 非 AI 路径 **404 且零出站**、harness 默认注入 appProof + 5 条含"实际 headers 含该头"、重签只在 `code.startsWith('proof_')`）｜**R2-X-6/X-7/X-8**（X-6 **明确认账**；X-7 判据排除范围写成"生产代码，spec 夹具除外"；X-8 **选"重签一次"**并写明理由）｜**R2-S-2..S-5**（appcfg 补 `window` 52/52；enterprise channel-content 三例是**在途夹具中间态**、已补齐 33/33；browser flake 改**目录登记 + 精确清理**（并发 3 份同跑 17/17×3）；cron `testTimeout: 30_000` 174/174）。
+**点名项全部交付（含变异）**：**R2-X-1** —— ①**准入形态确认＝保持**（引导端点今天过 connection 围栏 = 引导路径的当日授权，`credentials:'same-origin'` 成立；零端口时换帧管道握手）；令牌 TTL 5 min、**TTL 内可复用**、LRU 32、缺/错 `{"error":"proof_required"}`、过期 `{"error":"proof_expired"}`。②**端到端用例**：**只经引导端点取令牌** → `/channel` → `/open` 全 200，**无手工注入**；反向对照无令牌 401 ⇒ **R2-X-1 两端闭合**。｜**R1-L2-1**（真机探针，见上）｜**R1-L2-2**（未开浏览器标签建窗 ⇒ 两个 handler 都被调用 + `ensureSessionGuard` 在 `createAppWindow` 之前）｜**R1-L2-3**（`budget-parity.spec.ts` 读 `limits.json` 断言 30>10>5>3；变异 guest→60 红、客户端→5s 红，sha256 前后一致）｜**J13**（`ctx.emit('zeokeel/wasm-app-deep-link-foreign')` + 两端逐字对拍）｜**R2-X-2/3/4/5**（三档文案接消费者且不塌缩、`__zeokeel/*` 非 AI 路径 **404 且零出站**、harness 默认注入 appProof + 5 条含"实际 headers 含该头"、重签只在 `code.startsWith('proof_')`）｜**R2-X-6/X-7/X-8**（X-6 **明确认账**；X-7 判据排除范围写成"生产代码，spec 夹具除外"；X-8 **选"重签一次"**并写明理由）｜**R2-S-2..S-5**（appcfg 补 `window` 52/52；enterprise channel-content 三例是**在途夹具中间态**、已补齐 33/33；browser flake 改**目录登记 + 精确清理**（并发 3 份同跑 17/17×3）；cron `testTimeout: 30_000` 174/174）。
 
 **主控裁决**：
 1. **客户端出站超时是否纳入 `limits.json`** ⇒ **不纳入**。理由：`limits.json` 是**服务端**平台上限的单一真源；客户端出站超时是**客户端本地配置**（UX 取向），把它塞进服务端生成物会让"服务端 dictating 客户端"且把客户端耦合到服务端产物。**§5.1 的序关系靠 `budget-parity.spec.ts` 的跨包对拍保证**（已落地、已变异验证）—— 这正是"契约是序关系，不是同一份常量"的正确形态。已回写 §5.1 说明该值属客户端常量 + 对拍判据。
@@ -630,7 +630,7 @@ GET /api/server/admin/wasm-apps/opens/summary
 **门禁纪律（本轮定案，写入 `FREEZE-PROTOCOL.md`）**：终局全量判据的**前置条件**是「冻结声明 + 前后哈希一致」，不是「没人说自己在改」。
 
 **⑤ 交付基线提交（主控）**：工作树在冻结期实际是 **199 改 / 72 未跟踪 / 29 删除**（整个「客户端专属」改造一直未提交 ⇒ 一旦机器出事全丢，这是当时**第一风险**）。主控做了机械门禁（`gofmt -l internal cmd` 空、`go build ./...` 0）后提交为 **`d3fe68de61`**（350 文件、+39103/−17620）。提交前的三次清理（都属"防止污染公开仓"，值得复用）：
-- **`server/appdemo` 3.1 MB 原生 ELF**：`go build -o` 手误留下的构建产物（`file` 判定 ELF x86-64，**非** wasm；全仓零引用）。演示应用的真实资产是**构建期**产出 `/opt/picoaide/demo-apps/app.wasm`，入库的只有 `server/demoapps/{appdemo/main.go,demos.json}` ⇒ 删除。**规则：提交前对所有新增文件做二进制特征扫描**（`file -b --mime-encoding` ⇒ `binary*`）。
+- **`server/appdemo` 3.1 MB 原生 ELF**：`go build -o` 手误留下的构建产物（`file` 判定 ELF x86-64，**非** wasm；全仓零引用）。演示应用的真实资产是**构建期**产出 `/opt/zeokeel/demo-apps/app.wasm`，入库的只有 `server/demoapps/{appdemo/main.go,demos.json}` ⇒ 删除。**规则：提交前对所有新增文件做二进制特征扫描**（`file -b --mime-encoding` ⇒ `binary*`）。
 - **`H` / `S` 两个根目录垃圾文件**（00:23 误重定向：一个是 `git grep` 输出 276 行、一个是文件清单 357 行）⇒ 删除。**规则：`git add -A` 前逐个看未跟踪条目，仓库根出现单字母/无扩展名文件一律先查。**
 - **`.git/index.lock` 残留**：0 字节、95 分钟无变化、无任何 git 进程 ⇒ 判定残留锁后删除（与 2026-09-17 `.git/HEAD.lock` 同族，取证三连=大小/时间/git 进程）。
 
@@ -699,7 +699,7 @@ GET /api/server/admin/wasm-apps/opens/summary
 
 **② F4 泳道（新派）**：R2-L1-1（P1，上述裁定）+ R2-L1-2（软删档与"未登记"的 reason 塌缩 + `app_deleted` 死分支：**二选一**并写明理由）+ R2-L1-3（`localZoneName()` 把 `TZ=:/usr/share/zoneinfo/...` 的**路径**交给 PG ⇒ ai-usage **500**，C1/C2 正常）+ R2-L1-4（`dbpool_test.go:256-260` 注释谎称"4 个员工"，实为 1 员工 + 放宽 `PerUser*`）+ R2-L1-5（OPS-6 的 `admissionFailed`/`Events.Record` **实现有、判据无**）+ **核实** W4-12（属 L5，只报告不改）。
 
-**③ F2 泳道追加范围**（A2-L2 的 4 条 P2，都在它正在写的包里，别人不便改）：R2-L2-3（**`/__picoaide` 无尾斜杠**不在保留前缀闸门内 ⇒ 会被转发平台；两端一致地漏）+ R2-L2-1（`dropAppSchemeLedgerEntries` 零生产消费者）+ R2-L2-2（「冻结/下架/删除 ⇒ 关窗清缓存」无实现路径）+ R2-L2-5（**session 闸门的生产接线无判据**：真机探针自己重实现闸门、`createRealElectronAdapter()` 的转发无 spec ⇒ scheme/partition 传错时探针与单测**都会绿**）。
+**③ F2 泳道追加范围**（A2-L2 的 4 条 P2，都在它正在写的包里，别人不便改）：R2-L2-3（**`/__zeokeel` 无尾斜杠**不在保留前缀闸门内 ⇒ 会被转发平台；两端一致地漏）+ R2-L2-1（`dropAppSchemeLedgerEntries` 零生产消费者）+ R2-L2-2（「冻结/下架/删除 ⇒ 关窗清缓存」无实现路径）+ R2-L2-5（**session 闸门的生产接线无判据**：真机探针自己重实现闸门、`createRealElectronAdapter()` 的转发无 spec ⇒ scheme/partition 传错时探针与单测**都会绿**）。
 
 **④ A2-L4 的三条 P2（已闭环）**：R2-L4-1 ⇒ 主控裁决**保留 ANN 块级语义**（收窄成"逐行自带标注词"会强迫补 19 行人工标注，是"用假精度换假绿"），但量具改**自描述**：每条标 `[self]`/`[blk]`，口径写明"注释块级（±25 行）"，删掉"65 条显式标注"这类与实现不符的措辞；预算仍 65。现状 **ANN=64 = self 46 + blk 18**。R2-L4-2 ⇒ **主控已修**（`handler.go:60` 删掉已删除的 `limits.AITokenTTL`，改写成"该在手令牌已随服务端 AI 能力删除 ⇒ 本钩子暂无消费者，属 §8.2 冻结契约"，与 `ServeClientRequest(sessionKey)` 同批认账）；`grep AITokenTTL server --include='*.go'`=**0**。R2-L4-3 ⇒ L4 已把 status 的自相矛盾改成单一结论（W0-D **4/4 PASS**、C=**462**）。
 
@@ -709,7 +709,7 @@ GET /api/server/admin/wasm-apps/opens/summary
 - 冻结态实测 `corepack yarn check` = **12/12 根守卫全绿**（含 `check:no-leftover-mutants 6.9s`、`check:migration-range 3.6s`、`check:wasm-client-only 17.1s`）。
 - **L4 已声明停写** `scripts/**` 与根 `package.json`（未提交变更 8 个路径）。
 
-**⑥ W6/W7 到期项：`atomic-write` 切换（F3 泳道）**：设计 §16.1 允许的"包内临时助手"**已按约删除**，`packages/host/wasm-apps-host` 改用上游 `@deepseek-ai/dsh-atomic-write`（`writeFileAtomic`，权限位保持 `{mode:0o600, dirMode:0o700}`）。**并发冲突已发生并已最小改动处置**：F2 在该窗口新建的 `ai-authorization.ts:22` 引入了第三个调用点指向已删助手 ⇒ F3 把那一处也切到上游（只改 import 行与该行调用）。**给 F2 的复发警告已转达**：若用旧内容覆盖该文件会把坏 import 带回来。F3 实跑 `workspace @picoaide/dsh-wasm-apps-host check` = exit 0（18 文件 / 196 用例）。
+**⑥ W6/W7 到期项：`atomic-write` 切换（F3 泳道）**：设计 §16.1 允许的"包内临时助手"**已按约删除**，`packages/host/wasm-apps-host` 改用上游 `@deepseek-ai/dsh-atomic-write`（`writeFileAtomic`，权限位保持 `{mode:0o600, dirMode:0o700}`）。**并发冲突已发生并已最小改动处置**：F2 在该窗口新建的 `ai-authorization.ts:22` 引入了第三个调用点指向已删助手 ⇒ F3 把那一处也切到上游（只改 import 行与该行调用）。**给 F2 的复发警告已转达**：若用旧内容覆盖该文件会把坏 import 带回来。F3 实跑 `workspace @zeokeel/dsh-wasm-apps-host check` = exit 0（18 文件 / 196 用例）。
 
 **⑦ 冻结纪律的两处文档修正（主控）**：`FREEZE-PROTOCOL.md` §1 的零残留期望值原写「B≤31」是**旧预算**（现 **B≤34**、ANN≤65、且 ANN 允许块级继承）⇒ 已改，否则冻结期照字面读会把 B=34 误判为超限；同时把已 gitignore 的 `l5-acceptance.sh` 换成**门禁组 8**（5 条文案判据已机器化），并补入两道新守卫。
 
@@ -748,9 +748,9 @@ GET /api/server/admin/wasm-apps/opens/summary
 ### AA.3 仍未闭环（**不得说成已完工**；每条都有证据与责任面）
 
 **A. 本版认账（已写入设计 §21.7 ⑤–⑨ 与发布说明「已知限制」，客户面已如实披露）**
-- ⑤ **应用维度 AI 用量不出数**：`X-Pico-App-Id` 在出站头唯一构造点（上游 `llm-deepseek` 适配器）**没有 header 通道**，且服务端 `app_attribution.go` 只读头、不校验会话链路。**替代路径已定**（隐藏会话 id 即 `app:<app_id>`，出站 `x-deepseek-harness-session-id` 天然带身份 ⇒ 服务端按前缀派生，**不需要新头**），**待实施**（改 `server/**`）。
+- ⑤ **应用维度 AI 用量不出数**：`X-ZeoKeel-App-Id` 在出站头唯一构造点（上游 `llm-deepseek` 适配器）**没有 header 通道**，且服务端 `app_attribution.go` 只读头、不校验会话链路。**替代路径已定**（隐藏会话 id 即 `app:<app_id>`，出站 `x-deepseek-harness-session-id` 天然带身份 ⇒ 服务端按前缀派生，**不需要新头**），**待实施**（改 `server/**`）。
 - ⑥ **隐藏会话"元数据含 `app_id`"做不到**（`SessionHeader` 字段集封闭 + jsonl 头白名单）⇒ §21.6 判据 5 应改为"会话 id 前缀可判定"。
-- ⑦ **客户端 UI 侧的应用 AI 面板聊天不通**（面板在客户端页面源，`/__picoaide/ai/chat` 只有协议 handler 一处）⇒ 待拍板：给它补本机 HTTP 路由，或改成只做授权/用量说明。
+- ⑦ **客户端 UI 侧的应用 AI 面板聊天不通**（面板在客户端页面源，`/__zeokeel/ai/chat` 只有协议 handler 一处）⇒ 待拍板：给它补本机 HTTP 路由，或改成只做授权/用量说明。
 - ⑧ **R2-L2-2 只做一半**（`open` 响应触发已实现；"客户端按目录对比"未做）。
 - ⑨ **原子写无 fsync**（本地助手与上游包都没有）⇒ 掉电窗口自 W2 起存在。
 
@@ -763,11 +763,11 @@ GET /api/server/admin/wasm-apps/opens/summary
 
 **发版链**：PR **#101** → 五个必需检查全绿（Gate / Go server / Desktop Linux·Windows·macOS）→ squash 合并 master **`9c291df82c`**（版本 2.7.6-beta.5 已同步 root + desktop；拓扑检查：v2.7.6-beta.4 是祖先、无分叉）→ annotated tag **`v2.7.6-beta.5`** → tag CI **success**（含 Release 镜像归档）→ GitHub Release（zip 507,004,819 B + SHA256SUMS）+ R2 `beta/latest.json` 指向 2.7.6-beta.5（sha256 `b22a4197…`）。
 
-**部署**：`scp` → 远端 `sha256sum -c` 通过 → `/root/upgrade-beta.sh … beta /opt/picoaide 2.7.6-beta.5 …`（备份 → load → **按渠道重打 `beta-2.7.6-beta.5`** → 切 `.env` → 重建 → **healthy** → 自检），`UPGRADE_EXIT=0`。**回滚点**：`SERVER_IMAGE=picoaide-harness-server:beta-2.7.6-beta.4` 写回 `/opt/picoaide/.env` + `docker compose up -d server`。
+**部署**：`scp` → 远端 `sha256sum -c` 通过 → `/root/upgrade-beta.sh … beta /opt/zeokeel 2.7.6-beta.5 …`（备份 → load → **按渠道重打 `beta-2.7.6-beta.5`** → 切 `.env` → 重建 → **healthy** → 自检），`UPGRADE_EXIT=0`。**回滚点**：`SERVER_IMAGE=zeokeel-harness-server:beta-2.7.6-beta.4` 写回 `/opt/zeokeel/.env` + `docker compose up -d server`。
 
-**端到端验证（从部署后的域名实拉）**：`/healthz`=`{"ok":true}`；manifest server/client 均 **2.7.6-beta.5**；实拉 AppImage size **153,643,408** 与 **sha256 与清单逐字一致**；解包 `app.asar` 的 `build/channel.json` = `channel_id=beta`、**`home_dir=.picoaide-harness`**（数据根未回归）、**`app_origin_scheme=picoaide-app`**（本期新字段真的进了随包配置）；asar 内含 `@picoaide/dsh-host-locale` 9 条、`dsh-host-home` 9 条、`wasm-apps-host/lib/app-proof.js` ✓。
+**端到端验证（从部署后的域名实拉）**：`/healthz`=`{"ok":true}`；manifest server/client 均 **2.7.6-beta.5**；实拉 AppImage size **153,643,408** 与 **sha256 与清单逐字一致**；解包 `app.asar` 的 `build/channel.json` = `channel_id=beta`、**`home_dir=.zeokeel-harness`**（数据根未回归）、**`app_origin_scheme=zeokeel-app`**（本期新字段真的进了随包配置）；asar 内含 `@zeokeel/dsh-host-locale` 9 条、`dsh-host-home` 9 条、`wasm-apps-host/lib/app-proof.js` ✓。
 
-**发版途中修掉的三个真缺陷（都带判据/变异）**：① **构建期依赖环**（Gate 必红根因，且不存在任何构建顺序能产出全部产物）⇒ 抽出两个**零依赖叶子包** + desktop 保留 re-export 兼容面，边表按实测改写，`cycle-check.mjs` 断言「声明无环 ∧ 实测无环 ∧ 声明==实测」；干净态 `yarn check` 连续两次 25/25，强制全量 prebuild 后第三次同样绿（决策记录 `docs/decisions/2026-09-20-host-leaf-packages-build-graph.md`）。② **打包版 P0**：插件包声明 8 个 `exports` 却只构建 3 个 ⇒ `lib/app-proof.js` 从未产出，而 `desktop/lib/main.js` 值导入它 ⇒ 真实 asar 启动即 `ERR_MODULE_NOT_FOUND`（症状＝Linux e2e「app did not expose CDP within 30s」），**且 afterPack 清单不完整导致断言放过坏包** ⇒ 补齐 tsdown 四个 entry + 必需条目 + 新增判据「desktop 产物 import 的每个 `@picoaide/*` 子路径都必须在必需清单里」（变异验证过）。③ **守卫与环境耦合**：submodule 校验把 describe 段必须是 tag 当目标断言 ⇒ CI 浅检出恒红 ⇒ 降为 WARN（章程 §4.2）。
+**发版途中修掉的三个真缺陷（都带判据/变异）**：① **构建期依赖环**（Gate 必红根因，且不存在任何构建顺序能产出全部产物）⇒ 抽出两个**零依赖叶子包** + desktop 保留 re-export 兼容面，边表按实测改写，`cycle-check.mjs` 断言「声明无环 ∧ 实测无环 ∧ 声明==实测」；干净态 `yarn check` 连续两次 25/25，强制全量 prebuild 后第三次同样绿（决策记录 `docs/decisions/2026-09-20-host-leaf-packages-build-graph.md`）。② **打包版 P0**：插件包声明 8 个 `exports` 却只构建 3 个 ⇒ `lib/app-proof.js` 从未产出，而 `desktop/lib/main.js` 值导入它 ⇒ 真实 asar 启动即 `ERR_MODULE_NOT_FOUND`（症状＝Linux e2e「app did not expose CDP within 30s」），**且 afterPack 清单不完整导致断言放过坏包** ⇒ 补齐 tsdown 四个 entry + 必需条目 + 新增判据「desktop 产物 import 的每个 `@zeokeel/*` 子路径都必须在必需清单里」（变异验证过）。③ **守卫与环境耦合**：submodule 校验把 describe 段必须是 tag 当目标断言 ⇒ CI 浅检出恒红 ⇒ 降为 WARN（章程 §4.2）。
 **CodeQL**（非必需检查，不阻塞合并）：10 条中 2 条实缺陷已修（`check-workflows.mjs` 的 **ReDoS** 正则 → `[ \t]+`；`admin_opens.go` 用请求参数当 slice 容量 → 按实际行数），其余 7 条经核实为误报（`app_id` 经 `limits.AppIDPattern+MaxAppIDLen` 校验、`DataRoot` 为运维根、另有 `filepath.Dir` 越界断言）并逐条入库处置理由。
 
 **本次未带上**：Windows/macOS 探针（§H3）；应用维度 AI 用量归因（替代路径待实施）；客户端 UI 侧 AI 面板聊天（待拍板）；`atomic-write` 无 fsync；W4-12（L5 三文件七行）；**两个品牌渠道栈未升级**（预发 tag 只构建 beta）。
@@ -776,7 +776,7 @@ GET /api/server/admin/wasm-apps/opens/summary
 
 | # | 前置 | 为什么必须做 | 完成判据 | 责任 |
 | --- | --- | --- | --- | --- |
-| H1 | **私有仓 `picoaide/channels` 四个渠道补 `desktop.app_origin_scheme` 并 push** | §10/§16 W3：该字段**全部渠道必填**（含 official/beta），CI 缺失即 fail-loud；每次 tag 构建 CI 都从 **origin/main** 克隆渠道仓 ⇒ 不 push 等于没配 | 取值：`official`=`picoaide-app`、`beta`=`picoaide-app`（公共渠道共用命名空间）、品牌渠道 A=`example-harness-app`、品牌渠道 B=`sample-harness-app`（惯例 `<深链 scheme>-app`，正则 `^[a-z][a-z0-9+.-]{1,31}$`、须 ≠ 深链 scheme、跨渠道唯一）。判据：`GITHUB_REF_NAME=v2.7.6-beta.5 CI_CHANNELS_SOURCE=<克隆> bash scripts/ci-channels.sh --dest <tmp> --list <tmp.list>` EXIT=0；正式 tag 名 dry-run 四渠道全过 | 发布人（私有仓） |
+| H1 | **私有仓 `zeokeel/channels` 四个渠道补 `desktop.app_origin_scheme` 并 push** | §10/§16 W3：该字段**全部渠道必填**（含 official/beta），CI 缺失即 fail-loud；每次 tag 构建 CI 都从 **origin/main** 克隆渠道仓 ⇒ 不 push 等于没配 | 取值：`official`=`zeokeel-app`、`beta`=`zeokeel-app`（公共渠道共用命名空间）、品牌渠道 A=`example-harness-app`、品牌渠道 B=`sample-harness-app`（惯例 `<深链 scheme>-app`，正则 `^[a-z][a-z0-9+.-]{1,31}$`、须 ≠ 深链 scheme、跨渠道唯一）。判据：`GITHUB_REF_NAME=v2.7.6-beta.5 CI_CHANNELS_SOURCE=<克隆> bash scripts/ci-channels.sh --dest <tmp> --list <tmp.list>` EXIT=0；正式 tag 名 dry-run 四渠道全过 | 发布人（私有仓） |
 | H2 | **渠道仓 pin 或把 commit 写进产物/发布说明** | CHN-10/R2I-16：`scripts/ci-channels.sh:98` 每次 `git clone --depth 1` **不 pin commit** ⇒ 同一源码 tag 可产出数据根/品牌/scheme 不同的客户端（2026-09-12 已因此出过一次数据根漂移事故） | 二者之一：①pin commit；②把解析出的 commit 写进产物（如 `build/channel.json` 附带 `sourceCommit`）与发布说明。判据：同一 tag 重复构建产物中该字段一致 | 发布人 + L4 |
 | H3 | **三平台协议探针（Windows / macOS）** | §17 认账 1：`registerSchemesAsPrivileged`、分区注册、无 Origin/无 Cookie 四条**只在 Linux 实测过**；F13 的存储结论同样只有 Linux | 在 Windows/macOS 上跑 `scripts/wasm/probes/probe-custom-scheme*.cjs` 与 `probe-web-storage.cjs`，产出 `PROBE-RESULTS.md`（§16 W6）；不一致 ⇒ 按总纲回退备选形态并修订文档 | 需要真机（发布前） |
 | H4 | **把 `check:wasm-client-only` 从 `advisory:true` 转为阻塞式 + 接入 CI** | L4 现状：W1–W5 未落地时残留断言会如实报出数百处存量命中，故暂为 advisory；**W6 前必须转阻塞**，否则门禁形同虚设 | `scripts/check-workspaces.mjs` 的 GUARDS 里该条去掉 `advisory`；本地 `corepack yarn check` 与 CI gate job 都跑该脚本（PG 相关 `go test` 归 server job） | L4（W6）+ 主控复核 |
@@ -787,19 +787,19 @@ GET /api/server/admin/wasm-apps/opens/summary
 
 **动因**：用户要求「你自己本机实际启动一个服务端和客户端进行测试一下，整个功能是否完整可用，包括上架下架、发布应用、审批、拒绝、运营看板、限制项目所有的操作都尝试一遍」。
 
-**环境**（可复用）：服务端 `server/bin/picoaide-server`（**用当前源码重新构建**）监听 `:18090`，PG 容器 `pg-test` 的独立库 `picoaide_e2e`，渠道目录 `PICOAI_CHANNEL_DIR=temp/e2e-func/channel`，`PICOAI_WASM_MEMORY_PROFILE=small`；管理端助手 `BASE=… bash temp/e2e-func/admin.sh`。矩阵与原始输出：`temp/wasm-client-only/e2e-functional-local.md`（21 行：**PASS 17 / FAIL 1 / BLOCKED 3**，三条 BLOCKED 全部同因 P0-1，非环境缺失）。
+**环境**（可复用）：服务端 `server/bin/zeokeel-server`（**用当前源码重新构建**）监听 `:18090`，PG 容器 `pg-test` 的独立库 `zeokeel_e2e`，渠道目录 `ZEOKEEL_CHANNEL_DIR=temp/e2e-func/channel`，`ZEOKEEL_WASM_MEMORY_PROFILE=small`；管理端助手 `BASE=… bash temp/e2e-func/admin.sh`。矩阵与原始输出：`temp/wasm-client-only/e2e-functional-local.md`（21 行：**PASS 17 / FAIL 1 / BLOCKED 3**，三条 BLOCKED 全部同因 P0-1，非环境缺失）。
 
 | # | finding | 层次 | 现状 | 我的独立复核（本轮） |
 | --- | --- | --- | --- | --- |
 | — | **客户端侧四条（B12/B13/B14）与 P2-3 的真机复判** | — | 见 **§AC.1** | **11/11 PASS**（打包客户端 + 真实服务端，主控独立探针） |
 | **P0-1** | 应用打开链路整体不可用（app-proof 三方契约不一致：多 `server_url` 字段 + SPKI 44B 公钥 + 签 JSON 而非 `appproof-install-v1` 五段消息） ⇒ `open` 恒 `401 proof_required`，UI 显示 `OPEN_PROOF_REQUIRED`（与**本机** proof 闸的错误码撞名 ⇒ 误归因） | 宿主为主 + 服务端严格解码为触发点 | **已修**：`app-proof.ts` 按服务端真源重写（`installMessageBytes`/`proofServerURL`/`rawPublicKeyOf`/秒级 ts/per-app LRU + 单飞）；判据**读 Go 源码**对拍（`app-proof.spec.ts` 读 `appproof/proof.go` 与 `api/proof.go`，钉死前缀+五段顺序+解码结构体 tag 集合+32 字节公钥） | 真机 `open` **401→200**、宿主日志 0×400（交付方）；判据质量已抽查：**跨端读源码**而非各钉自己的字面量（旧版只断言"签名是 base64"，属已登记的假绿模式） |
-| **P0-2** | 「打开」返回 `opened` 但屏幕上没有任何窗口 | 宿主 + 桌面壳 | **已修**（三缺同时成立）：真实 Electron 窗口适配器**压根未实现**（只有接口声明 + 测试替身）+ 桌面壳**没 provide** + `profile.ts` **没注入 `userDataDir`** ⇒ 走 `windows === undefined` 分支只 emit 零消费者事件 | 真机（打包版 + 真实服务端）：CDP 目标出现 `picoaide-app://shared-notes/`，窗内渲染平台里的真实应用「团队共享便签墙」+ 身份 `zhangwei`；`opened → focused →（关窗）→ opened` 三态 PASS；**13 条变异全部实跑变红且 sha256 还原一致** |
+| **P0-2** | 「打开」返回 `opened` 但屏幕上没有任何窗口 | 宿主 + 桌面壳 | **已修**（三缺同时成立）：真实 Electron 窗口适配器**压根未实现**（只有接口声明 + 测试替身）+ 桌面壳**没 provide** + `profile.ts` **没注入 `userDataDir`** ⇒ 走 `windows === undefined` 分支只 emit 零消费者事件 | 真机（打包版 + 真实服务端）：CDP 目标出现 `zeokeel-app://shared-notes/`，窗内渲染平台里的真实应用「团队共享便签墙」+ 身份 `zhangwei`；`opened → focused →（关窗）→ opened` 三态 PASS；**13 条变异全部实跑变红且 sha256 还原一致** |
 | **P0-3**（新发现） | 窗口开了但应用页恒显示"暂时连不上服务端"：handler 按契约合成 `Origin: <scheme>://<app_id>`，而 `session.fetch` 带 Origin 会**先发 CORS 预检** ⇒ 平台无 OPTIONS 路由 ⇒ `404` ⇒ `net::ERR_FAILED`（服务端日志只有 `OPTIONS … 404`） | 宿主 | **已修**：平台出站改 `net.request`（**显式传 session** ⇒ 证书 pin/代理策略仍走该 session；`content-encoding`/`content-length` 等逐跳头丢弃，因 `net.request` 交出的是**已解压**体） | 交付方 A/C/D/E 四组探针 + 变异"出站退回 `session.fetch`"变红 |
 | **P1-1** | 运营看板 `trend[].uv` 是各应用日汇总 UV 之和（`SUM(uv)`），与同页 `today.uv`/`totals.uv` 自相矛盾 | 服务端 | **已修**：`trend` 的 **PV 仍读日汇总**（曲线不断档）、**UV 改读明细** `count(DISTINCT user_id)`；日边界由 Go 单源算好后一次性传 SQL（`width_bucket(floor(extract(epoch))::bigint, ?::bigint[])`），**不写** `opened_at::date`/`AT TIME ZONE`（否则"日"有第二份实现且 DST 错位） | **我在修后二进制上实测闭合**：同一份数据 `SUM(uv)`（旧口径基准）=**6**、`count(DISTINCT user_id)`（真值）=**2**、API `trend[0].uv`=**2** 且与 `today.uv`/`totals.uv` 一致；PV 两口径均 25。设计 §5.1c A 已同步订正 |
 | **P2-1** | `PUT …/limits` 顶层信封不校验：扁平 body（缺 `limits` 键）**静默**回落部署档位且 `200` + 无审计 | 服务端 | **已修**：未知顶层键/缺 `limits` 键一律 `400 VALIDATION`（`allowed:["limits"]` + 中文 hint），闸门在落库**之前** ⇒ 误用零副作用；回落档位改为**显式** `{"limits":null}` | **我实测**：扁平 body → `400`（`field=app_db_readers`）；未知顶层键 `bogus` → `400`；`{"limits":null}` → `200`（显式回落）。**修前**该形态是 `200` 静默回落 |
 | **P2-2** | webadmin 来源标签重复：`来源：控制台保存（wasm.limits）（wasm.limits）` | webadmin | **已修**：界面只显示服务端 `source_label`（设置键已由服务端拼好），回落分支也不再自拼 | **我实测**：源码唯一真源（`Limits.tsx:516-522`）；**构建产物**（`server/webadmin/dist/assets/*.js`）里 `setting_key` 字面量 **0 处** ⇒ 前端确实不再拼 |
 | **P2-3** | 冻结 / 不存在在 `open` 上同为 `404`，客户端只按 `status` 判断 ⇒ 冻结（只读快照、数据保留）被当成"应用没了" | 服务端 + 宿主 + 客户端 | **服务端半边 = 既定裁决 (b)、非缺陷**（两档 `reason`：`app_frozen` / `app_not_found`；下架由 410 承载）—— 已核对逐字一致；**宿主半边已修**（按 `error.details.reason` 分流：`app_frozen` ⇒ **不关窗/不清缓存** + 冻结文案；`app_not_found`/410 ⇒ 关窗清缓存）；**客户端半边在修**（`readHostPlatformRefusal` 原本只读 `platform_code`，须同时读 `platform_reason`，否则冻结在页面上仍塌回"应用不存在"） | 宿主两档真机验过（冻结窗口仍在、软删窗口消失）；客户端半边判据 + 变异待该泳道交付后复核 |
-| **P2-4** | 应用深链触发 auth 解析器的误导告警 `pico-deep-link: ignored malformed deep link`（两条监听器共用事件、都打 warn） | 客户端宿主 | **已修**：新增 `routeDeepLink()` 按 **scheme/host 分流** —— 自定义 scheme + `host=app` ⇒ 静默让行；其余保留 warn 但带**可判别原因**（`host=auth without token` / `not an auth callback: host=settings` / `not our scheme (scheme=…)` / `malformed url`）；scheme **仍取注入参数**（未新增读随包 `channel.json` 的路径 ⇒ 避开 tsdown 内联回落坑） | 交付方变异"去掉分流"变红（4 例）；跨渠道文案无回归 |
+| **P2-4** | 应用深链触发 auth 解析器的误导告警 `zeokeel-deep-link: ignored malformed deep link`（两条监听器共用事件、都打 warn） | 客户端宿主 | **已修**：新增 `routeDeepLink()` 按 **scheme/host 分流** —— 自定义 scheme + `host=app` ⇒ 静默让行；其余保留 warn 但带**可判别原因**（`host=auth without token` / `not an auth callback: host=settings` / `not our scheme (scheme=…)` / `malformed url`）；scheme **仍取注入参数**（未新增读随包 `channel.json` 的路径 ⇒ 避开 tsdown 内联回落坑） | 交付方变异"去掉分流"变红（4 例）；跨渠道文案无回归 |
 | **P2-5** | 「拒绝」允许不带理由（作者拿不到可执行反馈） | 服务端 + webadmin | **已修**：`reason` **必填**（归一后空/纯空白都拒），闸门在**状态检查之前**；webadmin 提交按钮 `trim()===''` 时禁用、Label 标「必填」 | **我实测**：`{}` → `400`（`field=reason`）；`"   "` → `400`；**正向未误伤**：带合法理由 → `200` 且理由落库并回给作者 |
 | **相邻** | `proofIssueError()` 把解码类失败也报成 `signature_invalid` | 服务端 | **已修（第三轮审计后加严）**：公钥 44 字节（SPKI/DER）⇒ `invalid_public_key`、签名空/纯空白/非法 base64/长度不符 ⇒ `signature_malformed`、`ts` 缺失或 `<=0` ⇒ `invalid_timestamp`（**死分支已消除** —— 审计实测原实现把空签名先折叠成大条件，新增分支不可达）；外层码仍 `401 proof_mismatch`（客户端"按码重签"策略不变） | 交付方 6/6 变异全 RED；**认账残留**：`install_id`/`nonce` 的**形状**失败仍落 `signature_invalid` ⇒ 该码是"最后兜底档"，**不能**读成"验签一定不过"（已在 `server/docs/03-api-reference.md` 写明，不再作过度声明） |
 
@@ -807,18 +807,18 @@ GET /api/server/admin/wasm-apps/opens/summary
 
 **动因**：§AC 的表里 B12 判 FAIL、B13/B14/B15b 判 BLOCKED，全部同因 P0-1/P0-2；两条 P0 修完后必须**在真机重新判**，不能靠交付方自述。
 
-**环境**：`server/bin/picoaide-server`（当前源码重建）`:18090` + PG `picoaide_e2e`；打包客户端 `packages/host/desktop/dist/linux-unpacked`（`yarn prebuild` + `package-dir.mjs` 重建，**asar 内已实测含本期新字面量** `app_frozen` / `PLATFORM_` / `app-frozen`，且**不含**尚未实现的 `will-redirect`——证明产物确实是这一版）；假上游 `mock-upstream` `:18081`（**必须是受管后台作业**：`( … & )` 子壳会随 bash 调用结束被杀，本节实测踩到一次）；探针 `temp/e2e-matrix/probe-matrix.mjs`，原始输出 `temp/e2e-matrix/MATRIX-RESULT.json`。
+**环境**：`server/bin/zeokeel-server`（当前源码重建）`:18090` + PG `zeokeel_e2e`；打包客户端 `packages/host/desktop/dist/linux-unpacked`（`yarn prebuild` + `package-dir.mjs` 重建，**asar 内已实测含本期新字面量** `app_frozen` / `PLATFORM_` / `app-frozen`，且**不含**尚未实现的 `will-redirect`——证明产物确实是这一版）；假上游 `mock-upstream` `:18081`（**必须是受管后台作业**：`( … & )` 子壳会随 bash 调用结束被杀，本节实测踩到一次）；探针 `temp/e2e-matrix/probe-matrix.mjs`，原始输出 `temp/e2e-matrix/MATRIX-RESULT.json`。
 
 | # | 断言 | 结果 |
 | --- | --- | --- |
-| 1 | 渠道：本机只读路由给出应用 origin scheme（宿主注入，非前端写死） | PASS（`picoaide-app`） |
+| 1 | 渠道：本机只读路由给出应用 origin scheme（宿主注入，非前端写死） | PASS（`zeokeel-app`） |
 | 2 | B12 本机 `open` 路由 **200**（P0-1 现场是 `401 proof_required`） | PASS |
 | 3 | B12 `window ∈ {opened,focused}` 且 `opens.today.pv` **含本次调用** | PASS |
-| 4 | B13 应用窗口**真的出现**（CDP 出现应用 origin 的 target；P0-2 现场是 0 个） | PASS（`picoaide-app://shared-notes/`） |
+| 4 | B13 应用窗口**真的出现**（CDP 出现应用 origin 的 target；P0-2 现场是 0 个） | PASS（`zeokeel-app://shared-notes/`） |
 | 5 | B13 应用页渲染的是**应用内容**（不是宿主错误页），应用自己的 `fetch('/')` = 200 | PASS（标题「团队共享便签墙」、正文含身份 `zhangwei` 与历史便签、5520 字节） |
 | 6 | B13 应用页 `origin` = 应用协议 origin 且 `isSecureContext` | PASS |
 | 7 | B13 应用页 `localStorage` 可用 | PASS |
-| 8 | B14 应用内 AI：`POST /__picoaide/ai/chat` 200 + 非空回复 | PASS（经假上游回 `mock upstream echo: …`，`usage.promptTokens=11`） |
+| 8 | B14 应用内 AI：`POST /__zeokeel/ai/chat` 200 + 非空回复 | PASS（经假上游回 `mock upstream echo: …`，`usage.promptTokens=11`） |
 | 9 | P2-3 冻结档：宿主**透出** `platform_reason=app_frozen`（不合流成"不存在"） | PASS |
 | 10 | P2-3 冻结档：文案可辨（「应用已被管理员停用」+「数据仍保留」），**不是**「应用不存在」 | PASS |
 | 11 | P2-3 冻结档：**已有窗口被保留**（冻结是只读快照，不关窗不清缓存） | PASS |
@@ -829,19 +829,19 @@ GET /api/server/admin/wasm-apps/opens/summary
 
 **审计对象与结论**：`temp/wasm-client-only/audit-server-p1p2.md`（服务端面，312 行）与 `audit-app-window.md`（宿主面，33KB）。两份都只读、探针落 `temp/`、被审文件 sha256 进场==收场、域名守卫零命中。
 - **服务端面**：六条主修法**全部真实存在且有效、零虚报**；P0 **0** / P1 **0** / P2 **4**（下面 AUD-1..4）。4 条抽跑变异全 RED，与交付方一致。
-- **宿主面**：交付方 6 条声称**全部独立复现成立**（含真机 CDP 目标与窗口内渲染真实应用内容）；**P0 = 0**（H1 的每条凭据触达路径都打不通：`document.cookie` 空、`SameSite=Strict` 下 cookie 不随行、本机 `/api/pico/**` 读不到、`webPreferences` 最小面）；**P1 2 条 + P2 4 条**（见下）——13 条变异抽验 6 条全红、还原 sha256 逐条相等。
+- **宿主面**：交付方 6 条声称**全部独立复现成立**（含真机 CDP 目标与窗口内渲染真实应用内容）；**P0 = 0**（H1 的每条凭据触达路径都打不通：`document.cookie` 空、`SameSite=Strict` 下 cookie 不随行、本机 `/api/zeokeel/**` 读不到、`webPreferences` 最小面）；**P1 2 条 + P2 4 条**（见下）——13 条变异抽验 6 条全红、还原 sha256 逐条相等。
 
 **服务端四条（已修，主控在修后二进制上活体复验）**：
 
 | # | 审计发现 | 修法 | **我的活体复验（`:18090` + 真 PG）** |
 | --- | --- | --- | --- |
 | AUD-1 | **第一版 P1-1 修复自身引入的不变量回归**：`trend.pv` 读 5 min 陈旧的日汇总、`trend.uv` 读实时明细 ⇒ 同一响应出现 `uv>pv`（活体 `{pv:26,uv:27}`），且 tick 前曲线漏掉"今天" | 趋势**按天同源**：明细覆盖到的天 PV/UV 都取明细（一次聚合同时得 `count(*)` 与 `count(DISTINCT user_id)`），只有明细已不在的天 PV 回落日汇总；日期集合 = 明细天 ∪ 日汇总天 | `trend[0] = {day:2026-09-20, pv:33, uv:2}` 与 `today` **逐值一致**；`uv>pv` 的点 **0 个**；曲线**含今天** ✅ |
-| AUD-2 | `{"limits":null}` 号称"回落部署档位"**在生产装配上不成立**（`Apply("")` 把档位值又写回 settings、`source` 恒 `setting`）；且原判据只由**测试替身**支撑（"mock 掩盖契约"类假绿） | 选 (a) **真回落**：新增 `serverstore.DeleteSetting`（含缓存失效），清 `settings.wasm.limits` 行 + 回到 `profile`/`default` + 日志；审计条件加"来源变化"；**补生产装配判据**（`cmd/server` 真 holder + 真 PG + 生产 `AdminRoute` 路由，7 段断言） | 改前 `source=setting`、label「控制台保存（wasm.limits）」、settings 行 **1**；`{"limits":null}` → 200；改后 `source=profile`、label「部署档位 small（PICOAI_WASM_MEMORY_PROFILE）」、settings 行 **0**；审计有留痕 ✅ |
+| AUD-2 | `{"limits":null}` 号称"回落部署档位"**在生产装配上不成立**（`Apply("")` 把档位值又写回 settings、`source` 恒 `setting`）；且原判据只由**测试替身**支撑（"mock 掩盖契约"类假绿） | 选 (a) **真回落**：新增 `serverstore.DeleteSetting`（含缓存失效），清 `settings.wasm.limits` 行 + 回到 `profile`/`default` + 日志；审计条件加"来源变化"；**补生产装配判据**（`cmd/server` 真 holder + 真 PG + 生产 `AdminRoute` 路由，7 段断言） | 改前 `source=setting`、label「控制台保存（wasm.limits）」、settings 行 **1**；`{"limits":null}` → 200；改后 `source=profile`、label「部署档位 small（ZEOKEEL_WASM_MEMORY_PROFILE）」、settings 行 **0**；审计有留痕 ✅ |
 | AUD-3 | 新增的 `ErrSignatureMalformed` 分支是**死代码**（空签名先被折叠成大条件），`signature:""`/`" "`/`ts:0` 仍报 `signature_invalid` | 空/纯空白签名 ⇒ `signature_malformed`；`ts<=0` ⇒ 新增 `ErrTimestampMalformed` → `invalid_timestamp`（仍 `Unwrap` 到 `ErrMalformed`，外层码不变） | 空签名/纯空白 ⇒ `signature_malformed`；`ts=0`/负数 ⇒ `invalid_timestamp`；SPKI 44B ⇒ `invalid_public_key`；**64 字节翻转一位**（真验签不过）⇒ `signature_invalid`；合法 ⇒ 200。**外层码全部仍是 `401 proof_mismatch`** ✅ |
 | AUD-4 | `days` 被钳到 90 且与库内 `maxStart` 恰好相等 ⇒ `capped` **恒 false**、`days=365` 静默变 90（调用方无从判断） | 端点记 `requestedDays`，`capped = sum.Capped || requestedDays > days`（未加新响应键，避免动冻结键集） | `days=7/90` ⇒ `capped=false`；`days=91/365` ⇒ **`capped=true`** 且 `from/to` 是保留期内 90 天 ✅ |
 
 **宿主面两条 P1 + 四条 P2（已修，报告 `temp/wasm-client-only/fix-audit-app-window-round2.md`）**：
-- **HOST-P1-1 导航闸门不覆盖重定向 ⇒ 已修**：`installAppWindowGuards` 增 `will-redirect`，与 `will-navigate`/`will-frame-navigate` **共用同一个 `refuse` 闭包**（唯一 origin 判据，无第二份逻辑）。真机（真实 Electron + 真实适配器 + 真实 302）：外站 302 与"另一个 app origin"302 ⇒ **窗口 URL 不变** + 宿主记 `refused a … navigation`；同 app 302 仍放行。变异（删监听器）真机**精确复现审计原发现**（`redirect:external=https://example.com/`、`redirect:otherapp=picoaide-app://appb/`）⇒ RED。
+- **HOST-P1-1 导航闸门不覆盖重定向 ⇒ 已修**：`installAppWindowGuards` 增 `will-redirect`，与 `will-navigate`/`will-frame-navigate` **共用同一个 `refuse` 闭包**（唯一 origin 判据，无第二份逻辑）。真机（真实 Electron + 真实适配器 + 真实 302）：外站 302 与"另一个 app origin"302 ⇒ **窗口 URL 不变** + 宿主记 `refused a … navigation`；同 app 302 仍放行。变异（删监听器）真机**精确复现审计原发现**（`redirect:external=https://example.com/`、`redirect:otherapp=zeokeel-app://appb/`）⇒ RED。
 - **HOST-P1-2 应用窗口跑默认 session ⇒ 已修（按 §7.2/R2S-8 改为按用户分区）**：契约层把 partition 做成**显式必填**（`createAppWindow({partition})`、`ensureSessionGuard(partition)`、`WasmAppsWindowsOptions.partition: () => string` **每次 open 求值**），分区非法/缺席**构造期 fail-loud**；插件侧 `currentPartition()` 唯一实现，三个消费者（协议 handler 注册 / 守卫 / 建窗）同源。真机三条如实回答：①应用页真的在分区上（`isDefaultSession:false/isTargetPartition:true/storagePathMatches:true`，默认 session 的 cookie 读不到）；②`ensurePartition`/`ensureSessionGuard` **不再是死路径**（协议 handler 真渲染、应用窗 `clipboard-read=denied`、同分区普通窗口请求应用 scheme ⇒ handler 零调用）；③last-wins 耦合**构造性消除**（应用窗口路径完全不碰默认 session，主窗口 granted / 应用窗 denied，且灵敏度对照能被打坏）。**顺带纠正审计一处推断**：`ensureSessionGuard` 是 WeakSet 幂等的、`registerDefault()` 在 boot 期已标记默认 session ⇒ 旧代码那次 `ensureSessionGuard(defaultSession)` 其实是 **no-op**，真实后果是"守卫装在错 session ⇒ 保护不到应用窗口"，而非"随时会炸的 last-wins"（变异因此必须绕过幂等才红）。
 - **P2 三条修 + 一条订正**：`createPlatformFetch` 先构造 Response 再置 settled（真机 `status700 ⇒ REJECTED`，abort 也有结论）；**跨源 302 出站改 fail-closed**（`redirect:'manual'` + `redirect` 事件同步判源，跨源/解析失败/超 5 跳 ⇒ abort+reject；真机目标 host **零请求**，同源 302 仍跟随）；**子框架**经真机定标确认钩子本就会触发（缺口在判据不在钩子）⇒ 判据放宽到子框架（跨 app 仍拒、同 app 与 http(s) 放行、非 http(s) 外链仍拒），并新增 `platform-frame-fence.spec.ts` **对拍服务端源码**钉住平台侧依赖（CSP `default-src 'none'` + `frame-ancestors 'none'`、XFO DENY 且宿主独占）；报告用例数口径订正为「21 文件 / 259 用例」并标注测量时刻。
 - **宿主面变异**：**12/12 全红**且产品文件 sha256 前后一致；harness 新增**证据门槛**（探针无 JSON/fatal/watchdog ⇒ 判 INCONCLUSIVE 不算红）——第一版曾因副本缺 `node_modules` 把一条误记成红，已修。
@@ -880,24 +880,24 @@ GET /api/server/admin/wasm-apps/opens/summary
 
 ## AE. v2.7.6-beta.6 发布与部署（2026-09-20）—— **已上线测试环境并端到端核验**
 
-**发版链**：PR **#103**（`fix/wasm-open-window-audit`）→ 全检查绿（Gate / Go server / Desktop Linux·Windows·macOS / CodeQL×4 / Cloudflare Pages）→ squash 合并 master **`d3e7f77f18`**（版本 2.7.6-beta.6 已同步 root + desktop；发布说明 `docs/releases/v2.7.6-beta.6.md` 随同一 PR 落地，**刻意避开"预发 tag 回退自动 PR 列表"**——那正是 §AD 里两处 Release 正文泄漏的产生路径）→ annotated tag **`v2.7.6-beta.6`**（`7d4ad71d88`）→ tag CI **success**（全部 job：Gate / Go server / 三平台 / **Release (server image archive)**）→ GitHub **Pre-release**（名 = tag 本身，附件 `picoaide-server-2.7.6-beta.6-amd64.zip` 507,203,492 B + `SHA256SUMS`）。
+**发版链**：PR **#103**（`fix/wasm-open-window-audit`）→ 全检查绿（Gate / Go server / Desktop Linux·Windows·macOS / CodeQL×4 / Cloudflare Pages）→ squash 合并 master **`d3e7f77f18`**（版本 2.7.6-beta.6 已同步 root + desktop；发布说明 `docs/releases/v2.7.6-beta.6.md` 随同一 PR 落地，**刻意避开"预发 tag 回退自动 PR 列表"**——那正是 §AD 里两处 Release 正文泄漏的产生路径）→ annotated tag **`v2.7.6-beta.6`**（`7d4ad71d88`）→ tag CI **success**（全部 job：Gate / Go server / 三平台 / **Release (server image archive)**）→ GitHub **Pre-release**（名 = tag 本身，附件 `zeokeel-server-2.7.6-beta.6-amd64.zip` 507,203,492 B + `SHA256SUMS`）。
 
-**部署**：实拉 R2 `beta/releases/2.7.6-beta.6/` 的 zip（sha256 `b24ecfc14551b813…` 对 `SHA256SUMS` **校验通过**）→ `scp` 到测试机 → 远端 `sha256sum -c` → `bash /root/upgrade-beta.sh … beta /opt/picoaide 2.7.6-beta.6 …`（备份 → load → **按渠道重打 `beta-2.7.6-beta.6`** → 切 `.env` → 重建 → healthy），`UPGRADE_EXIT=0`。**回滚点**：`SERVER_IMAGE=picoaide-harness-server:beta-2.7.6-beta.5` 写回 `/opt/picoaide/.env` + `docker compose up -d server`（本版**无新增迁移**）。两个品牌渠道栈未动（预发 tag 只构建 beta）。
+**部署**：实拉 R2 `beta/releases/2.7.6-beta.6/` 的 zip（sha256 `b24ecfc14551b813…` 对 `SHA256SUMS` **校验通过**）→ `scp` 到测试机 → 远端 `sha256sum -c` → `bash /root/upgrade-beta.sh … beta /opt/zeokeel 2.7.6-beta.6 …`（备份 → load → **按渠道重打 `beta-2.7.6-beta.6`** → 切 `.env` → 重建 → healthy），`UPGRADE_EXIT=0`。**回滚点**：`SERVER_IMAGE=zeokeel-harness-server:beta-2.7.6-beta.5` 写回 `/opt/zeokeel/.env` + `docker compose up -d server`（本版**无新增迁移**）。两个品牌渠道栈未动（预发 tag 只构建 beta）。
 
 **端到端核验（全部从部署后的域名实拉，落盘 `temp/verify-276b6/`）**：
-- `/healthz` = `{"ok":true}`；`/api/client/v2/updates/manifest` → **server 2.7.6-beta.6 / client 2.7.6-beta.6**，三平台资产 sha256 齐全；`/api/client/v2/channel` → `channel_id=beta`；容器镜像 `picoaide-harness-server:beta-2.7.6-beta.6`（渠道专属 tag，未复用裸版本 tag）。
-- 实拉 `PicoAide-Harness-2.7.6-beta.6-x86_64.AppImage`（153,717,057 B）→ **sha256 与 manifest 逐字一致**（`fc3fef2c923c017e…`）。
-- `--appimage-extract` → `@electron/asar` 读 `resources/app.asar`：`channel_id=beta`、**`home_dir=.picoaide-harness`**（beta 与正式版共用数据根，未回归）、`app_origin_scheme=picoaide-app`；且**本期修复的五个字面量全部在产物内**：`will-redirect`（HOST-P1-1）、`platform_reason`/`app_frozen`（P2-3 宿主半边）、`PLATFORM_`/`app-frozen`（客户端冻结文案）⇒ **交付给客户的包确实是这一版**，不是"本地绿、线上旧"。
+- `/healthz` = `{"ok":true}`；`/api/client/v2/updates/manifest` → **server 2.7.6-beta.6 / client 2.7.6-beta.6**，三平台资产 sha256 齐全；`/api/client/v2/channel` → `channel_id=beta`；容器镜像 `zeokeel-harness-server:beta-2.7.6-beta.6`（渠道专属 tag，未复用裸版本 tag）。
+- 实拉 `ZeoKeel-Harness-2.7.6-beta.6-x86_64.AppImage`（153,717,057 B）→ **sha256 与 manifest 逐字一致**（`fc3fef2c923c017e…`）。
+- `--appimage-extract` → `@electron/asar` 读 `resources/app.asar`：`channel_id=beta`、**`home_dir=.zeokeel-harness`**（beta 与正式版共用数据根，未回归）、`app_origin_scheme=zeokeel-app`；且**本期修复的五个字面量全部在产物内**：`will-redirect`（HOST-P1-1）、`platform_reason`/`app_frozen`（P2-3 宿主半边）、`PLATFORM_`/`app-frozen`（客户端冻结文案）⇒ **交付给客户的包确实是这一版**，不是"本地绿、线上旧"。
 
 **本版仍未闭环**（逐条与 §AC/§AC.2 一致，不重复展开）：应用窗口外链落点未接线（安全半边已实现）；应用内 AI 控制权交互属下一批；`trend[].uv` 早于 90 天明细保留期如实给 0（长期保留需迁移）；三平台只实测 Linux/Xvfb；`install_id`/`nonce` 形状失败仍落 `signature_invalid`（文档已按实际收窄声明）；`origin/master` 上 11 条历史提交信息含真实域名（**已认账，建议不重写历史**，见 §AD ④）。
 
 ## AF. v2.7.6-beta.7 发布与部署（2026-09-20）
 
-**发版链**：分支 `chore/release-2.7.6-beta.7`（3 提交：功能 `40e6b3e281` + 版本与说明 `dd8fc1f5b5` + 技能摘要修正 `4191e2c50c`）→ PR **#106** → 全检查绿（Gate / Go server / Desktop Linux·Windows·macOS / CodeQL×4）→ squash 合并 master **`ece6a32577`**（版本 2.7.6-beta.7 同步 root + desktop）→ annotated tag **`v2.7.6-beta.7`** → tag CI **success** → GitHub **Pre-release**（名 = tag；`picoaide-server-2.7.6-beta.7-amd64.zip` 510,080,125 B + `SHA256SUMS`）+ R2 `beta/latest.json` → 2.7.6-beta.7（`published 07:12:20Z`）。
+**发版链**：分支 `chore/release-2.7.6-beta.7`（3 提交：功能 `40e6b3e281` + 版本与说明 `dd8fc1f5b5` + 技能摘要修正 `4191e2c50c`）→ PR **#106** → 全检查绿（Gate / Go server / Desktop Linux·Windows·macOS / CodeQL×4）→ squash 合并 master **`ece6a32577`**（版本 2.7.6-beta.7 同步 root + desktop）→ annotated tag **`v2.7.6-beta.7`** → tag CI **success** → GitHub **Pre-release**（名 = tag；`zeokeel-server-2.7.6-beta.7-amd64.zip` 510,080,125 B + `SHA256SUMS`）+ R2 `beta/latest.json` → 2.7.6-beta.7（`published 07:12:20Z`）。
 
 **发布说明**：`docs/releases/v2.7.6-beta.7.md` 随同一 PR 落地（**预发 tag 也走策展说明**，避开"回退自动 PR 列表"那条曾泄漏真实域名的路径）。
 
-**部署**：R2 实拉 zip → sha256 对 `SHA256SUMS` 一致 → scp → 远端 `sha256sum -c` OK → `bash /root/upgrade-beta.sh … beta /opt/picoaide 2.7.6-beta.7 …`（备份 → load → **按渠道重打 `beta-2.7.6-beta.7`** → 切 `.env` → 重建 → healthy）。**回滚点** = `SERVER_IMAGE=picoaide-harness-server:beta-2.7.6-beta.6`（本版无迁移）。核验：`/healthz` ok、manifest `server=client=2.7.6-beta.7`、`channel_id=beta`、实拉 AppImage 153,782,642 B 且 sha256 与 manifest 逐字一致。
+**部署**：R2 实拉 zip → sha256 对 `SHA256SUMS` 一致 → scp → 远端 `sha256sum -c` OK → `bash /root/upgrade-beta.sh … beta /opt/zeokeel 2.7.6-beta.7 …`（备份 → load → **按渠道重打 `beta-2.7.6-beta.7`** → 切 `.env` → 重建 → healthy）。**回滚点** = `SERVER_IMAGE=zeokeel-harness-server:beta-2.7.6-beta.6`（本版无迁移）。核验：`/healthz` ok、manifest `server=client=2.7.6-beta.7`、`channel_id=beta`、实拉 AppImage 153,782,642 B 且 sha256 与 manifest 逐字一致。
 
 **发布途中两件事（都值得记住）**：
 1. **`corepack yarn check` 不含 Go 测试** ⇒ 本地 27/27 全绿时 `internal/wasmapp/skillseed` 的
@@ -910,7 +910,7 @@ GET /api/server/admin/wasm-apps/opens/summary
 **触发**：beta.7 上线后用户实测**三个内置演示应用全部打不开** —— 入口页
 「资源不存在：index.html」500。根因不是"漏写一行"，而是"资源必须抽到宿主磁盘"这套机制的
 结构性后果：演示不走发布链路（`appseed` 直接落库），于是它**也得自己抽段落盘**，而它只写了
-配置 ⇒ 页面与静态资源从未落盘（线上实测资源目录里只有 `picoaide.app.json`）。
+配置 ⇒ 页面与静态资源从未落盘（线上实测资源目录里只有 `zeokeel.app.json`）。
 
 **用户定案**：「不要抽取出来放到宿主盘，宿主盘只能保存 wasm 文件，应该从内存里直接响应。」
 权威口径：`docs/decisions/2026-09-20-wasm-assets-in-memory.md`。
@@ -943,7 +943,7 @@ GET /api/server/admin/wasm-apps/opens/summary
   逐字节一致，且**没有**读到磁盘上那份"历史资源"（真源是内存）；③播种后数据根里**不存在**
   `apps/<app>/assets`；④历史资源目录被清理后服务照常。
 - `api`：`assertNoAssetsDir` 负向断言（happy path / 非法资源名 / inherit / 分片上传四处）、
-  上限与重名段双入口用例、反向控制（工具链段与 `picoaide.app.json` 重复**不**误伤）。
+  上限与重名段双入口用例、反向控制（工具链段与 `zeokeel.app.json` 重复**不**误伤）。
 - `appseed`：`TestSeedWritesNoAssetsToDisk`（整个 `<dataRoot>` 零条目）。
 - `appserver`：`TestStatic_NoAssetDirectoryOnDisk`、`TestStatic_AssetsReadUsesMemorySet`、
   `TestCleanupLegacyAssetDirs`（含符号链接不跟随）等。
@@ -955,19 +955,19 @@ GET /api/server/admin/wasm-apps/opens/summary
 
 **发版与部署（2026-09-20）**：PR **#107** → 全检查绿（Gate / **Go server 12m36s** / Desktop Linux·Windows·macOS / CodeQL×4）
 → squash 合并 master **`f197692079`**（版本 2.7.6-beta.8 同步 root + desktop）→ annotated tag **`v2.7.6-beta.8`**
-→ tag CI **success** → GitHub **Pre-release**（`picoaide-server-2.7.6-beta.8-amd64.zip` 510,087,834 B + `SHA256SUMS`）
+→ tag CI **success** → GitHub **Pre-release**（`zeokeel-server-2.7.6-beta.8-amd64.zip` 510,087,834 B + `SHA256SUMS`）
 → R2 `beta/latest.json` → 2.7.6-beta.8（`published 08:33:50Z`）。
 
 测试环境（beta 栈）：R2 实拉 zip → sha256 `8dddd1ec…` 对 `SHA256SUMS` 一致 → scp → 远端复核
-→ `bash /root/upgrade-beta.sh … beta /opt/picoaide 2.7.6-beta.8 …` → 容器 healthy、镜像 **`beta-2.7.6-beta.8`**、`--version` 一致。
-**回滚点 = `SERVER_IMAGE=picoaide-harness-server:beta-2.7.6-beta.7`**（但见下方认账）。
+→ `bash /root/upgrade-beta.sh … beta /opt/zeokeel 2.7.6-beta.8 …` → 容器 healthy、镜像 **`beta-2.7.6-beta.8`**、`--version` 一致。
+**回滚点 = `SERVER_IMAGE=zeokeel-harness-server:beta-2.7.6-beta.7`**（但见下方认账）。
 端到端核验：`/healthz` ok；manifest `server=client=2.7.6-beta.8`；`channel_id=beta`；
-实拉 `PicoAide-Harness-2.7.6-beta.8-x86_64.AppImage`（153,782,643 B）sha256 与 manifest **逐字一致**；
-解 `resources/app.asar` → `channel_id=beta`、**`home_dir=.picoaide-harness`**、`app_origin_scheme=picoaide-app`，
+实拉 `ZeoKeel-Harness-2.7.6-beta.8-x86_64.AppImage`（153,782,643 B）sha256 与 manifest **逐字一致**；
+解 `resources/app.asar` → `channel_id=beta`、**`home_dir=.zeokeel-harness`**、`app_origin_scheme=zeokeel-app`，
 且 beta.7 的五个面板字面量全部在产物内（交付的客户端确实是含新面板的那一版）。
 
 **线上实测（这一版真正要证的事）**：容器启动日志
-`appserver: 已清理历史资源目录 /data/apps/hello-picoaide/assets（190 字节）——随包资源已改为内存直出` +
+`appserver: 已清理历史资源目录 /data/apps/hello-zeokeel/assets（190 字节）——随包资源已改为内存直出` +
 `wasm: 已清理 8 个历史资源目录（释放 190406 字节）`；数据根 `find apps -maxdepth 2 -name assets` **为空**；
 六个 demo 应用行与生效版本号原样在线（`demo-showcase/25`、`demo-forum/26`、`demo-board/27` 均 enabled）。
 另：部署前先核对过**线上那份演示制品的自定义段**（把容器里的 `showcase.wasm` 取回本地解析）=
@@ -982,7 +982,7 @@ GET /api/server/admin/wasm-apps/opens/summary
 strict 保护拦下（`5 of 5 required status checks are expected`）→ `gh pr update-branch` 后重跑检查 →
 squash 合并 master **`26cb259458`**（版本 2.7.6 同步 root + desktop）→ annotated tag **`v2.7.6`**
 → tag CI **success**（**全 4 渠道**，品牌渠道 mac 走签名+公证）→ GitHub Release **正式版**
-（`picoaide-server-2.7.6-amd64.zip` 510,067,571 B + `SHA256SUMS`）→ R2 四渠道 `latest.json` 全部 2.7.6。
+（`zeokeel-server-2.7.6-amd64.zip` 510,067,571 B + `SHA256SUMS`）→ R2 四渠道 `latest.json` 全部 2.7.6。
 
 **部署顺序（用户指定：先生产品牌渠道，其余次之）**：
 
@@ -990,21 +990,21 @@ squash 合并 master **`26cb259458`**（版本 2.7.6 同步 root + desktop）→
 | --- | --- | --- | --- |
 | 1 | **品牌渠道 A**（生产机） | 渠道镜像 healthy、迁移到 **0076**、域名核验通过 | 上一版渠道镜像 |
 | 2 | **品牌渠道 B**（测试机同机第二栈） | 渠道镜像 healthy、域名核验通过 | 上一版渠道镜像 |
-| 3 | **beta**（同机 `/opt/picoaide`） | `beta-2.7.6` healthy、域名核验通过 | `beta-2.7.6-beta.8` |
+| 3 | **beta**（同机 `/opt/zeokeel`） | `beta-2.7.6` healthy、域名核验通过 | `beta-2.7.6-beta.8` |
 
 三环境域名核验口径一致：`/healthz` ok + `/api/client/v2/updates/manifest` 的 `server=client=2.7.6` +
 `channel_id` 与渠道一致 + **从该域名实拉 AppImage 并比对 manifest 的 sha256 逐字一致**
 （品牌渠道 A 153,782,627 B / 品牌渠道 B 153,893,535 B / beta 153,782,353 B）。生产备份在
-`deploy-backup/{env-20260920-094625.bak,pg-data-20260920-094625.dump,picoaide-data-20260920-094625.tar.gz}`。
+`deploy-backup/{env-20260920-094625.bak,pg-data-20260920-094625.dump,zeokeel-data-20260920-094625.tar.gz}`。
 
 **本次唯一的阻塞（撞了两次）：内存档位自检拒绝启动。** 症状 = 容器反复重启，日志
 `WASM 应用平台启动自检失败：INTERNAL: 理论内存峰值超过可用内存的安全水位，拒绝启动`。
 根因 = 默认档 `default` 的理论峰值 ≈2.7 GiB，而自检按 `MemAvailable × 70%` 判水位：生产机 3.9 GiB
 （可用 3.1 GiB ⇒ 水位 2.16 GiB）与品牌渠道 B 栈都不达标；beta 栈之所以没事，是因为它早先已被设成 `small`。
-处置 = 在**渠道栈**里显式 `PICOAI_WASM_MEMORY_PROFILE=small`（生产还要把该变量补进 compose 的
+处置 = 在**渠道栈**里显式 `ZEOKEEL_WASM_MEMORY_PROFILE=small`（生产还要把该变量补进 compose 的
 `server.environment` —— 2.7.6 的部署模板此前**没有透传**它）。
 
-**产品侧跟进（同批提交）**：`server/docker-compose.yml` 增加 `PICOAI_WASM_MEMORY_PROFILE` 透传与说明；
+**产品侧跟进（同批提交）**：`server/docker-compose.yml` 增加 `ZEOKEEL_WASM_MEMORY_PROFILE` 透传与说明；
 `server/.env.example` 补三档对照与"<4 GiB 必须选 small"的判据；`docs/deploy/AI-DEPLOY.md` 新增 **§2.4.1**
 （症状原文、三档表、处置命令）。**建议的后续改进（未实施）**：把启动自检从"拒绝启动"改成
 "自动降到能装下的最大档位 + 大声告警"（与"已保存设置超水位时回落档位不拒绝启动"的既有口径一致）——

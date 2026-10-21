@@ -48,7 +48,7 @@ function job(overrides: Partial<JobRecord> = {}): JobRecord {
 
 const homes: string[] = []
 function home(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pico-cron-tz-'))
+  const dir = mkdtempSync(join(tmpdir(), 'zeokeel-cron-tz-'))
   homes.push(dir)
   return dir
 }

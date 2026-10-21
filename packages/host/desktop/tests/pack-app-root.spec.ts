@@ -3,7 +3,7 @@
  *
  * 为什么这些用例必须存在（2026-09-22 泄漏事故）：
  * 11 个已发布的正式/预发包都夹带了桌面包自身的 `src/tests/scripts`、各
- * `@picoaide/dsh-*` 的源码目录、33 个内嵌原始 TypeScript 的 sourcemap、
+ * `@zeokeel/dsh-*` 的源码目录、33 个内嵌原始 TypeScript 的 sourcemap、
  * 以及 263 MiB 的 `temp/`（含两个 156/119 MiB 的 squashfs 试验件）。根因是
  * **electron-builder 26 不把 `build.files` 用在应用根目录内容上**，所以
  * `files` 里那些排除规则全是声明而非证据。修复改成"进包前先把应用根暂存成
@@ -367,7 +367,7 @@ describe('五个打包脚本的缺省路径就是真暂存（能力级接线判�
           platform: 'darwin',
           desktopRoot,
           outputDir: join(desktopRoot, 'dist', 'mac-release'),
-          productName: 'PicoAide Harness',
+          productName: 'ZeoKeel Harness',
           channelConfigArgs: () => [],
           resetOutput: () => undefined,
           listCodeSigningIdentities: () => '  1) 0123456789ABCDEF "Developer ID Application: Release Signer (TEAM123456)"\n',

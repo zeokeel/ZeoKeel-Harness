@@ -1,7 +1,7 @@
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from '../../../scripts/platform-modules.mjs'
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-foot-menu'
+const PACKAGE_NAME = '@zeokeel/dsh-foot-menu'
 
 export default defineConfig([
   {
@@ -32,8 +32,8 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: false,
-    // `@picoaide/dsh-panel-surface` 必须**内联**进本客户端产物（因此它在
-    // package.json 里登记为 devDependency，理由与 `@picoaide/dsh-wasm-apps` 同）：
+    // `@zeokeel/dsh-panel-surface` 必须**内联**进本客户端产物（因此它在
+    // package.json 里登记为 devDependency，理由与 `@zeokeel/dsh-wasm-apps` 同）：
     // 本包只向它借两个纯函数/常量（`activePanelId` / `PANEL_ACTIVE_ATTR`），
     // 跨插件共享的状态仍然只有 `document.documentElement` 上的激活态属性。
     sourcemap: true,

@@ -3,8 +3,8 @@ package wasmmod
 import (
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // SignatureFormatDoc 是**规范化类型签名**的稳定格式说明（写进生成产物头部、SKILL 与错误文案）。
@@ -133,7 +133,7 @@ func ValidateWithWhitelist(data []byte, whitelist []ImportSpec) (*ModuleInfo, er
 			WithDetail("size", len(data)).
 			WithDetail("limit", limits.WasmMaxBytes).
 			WithHint("平台上限是 32 MiB：请内联资源是必要的，但不要把大块二进制塞进自定义段",
-				"静态资源应走 picoaide.app.json 声明的 assets（≤ 4 MiB 自定义段），而不是重复内嵌")
+				"静态资源应走 zeokeel.app.json 声明的 assets（≤ 4 MiB 自定义段），而不是重复内嵌")
 	}
 	info, err := Parse(data)
 	if err != nil {

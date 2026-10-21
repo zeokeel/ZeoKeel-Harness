@@ -13,8 +13,8 @@ const spec: DesktopShellSpec = {
   minWidth: 900,
   minHeight: 640,
   url: 'http://127.0.0.1:43120/',
-  productName: 'PicoAide Harness',
-  windowTitle: 'PicoAide Harness',
+  productName: 'ZeoKeel Harness',
+  windowTitle: 'ZeoKeel Harness',
   iconPath: '/tmp/app-icon.png',
   trayIcons: {
     templatePath: '/tmp/tray-iconTemplate.png',
@@ -78,7 +78,7 @@ describe('advanced BrowserWindow options', () => {
     const options = advancedWindowOptions(spec, {} as NativeImage, 'win32')
 
     expect(options).toEqual(expect.objectContaining({
-      title: 'PicoAide Harness',
+      title: 'ZeoKeel Harness',
       autoHideMenuBar: true,
       titleBarStyle: 'hidden',
       titleBarOverlay: {

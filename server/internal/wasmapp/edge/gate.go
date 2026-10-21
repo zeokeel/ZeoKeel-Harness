@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // WriteAppNotFound 是应用请求的统一 404。

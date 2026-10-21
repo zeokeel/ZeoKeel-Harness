@@ -1,15 +1,15 @@
 ---
-title: PicoAide Harness 2.2.1 发布
+title: ZeoKeel Harness 2.2.1 发布
 description: 修复升级下载静默失败，新增会话右上角升级提示徽章。
 pubDate: 2026-08-25
 version: 2.2.1
-author: PicoAide Team
+author: ZeoKeel Team
 tags:
   - 发布
   - 产品
 ---
 
-PicoAide Harness 2.2.1 正式发布。本版本带来以下变化：
+ZeoKeel Harness 2.2.1 正式发布。本版本带来以下变化：
 
 ## 修复升级下载静默失败
 
@@ -24,4 +24,4 @@ PicoAide Harness 2.2.1 正式发布。本版本带来以下变化：
 - 升级状态桥与手动检查触发路由（同源校验）
 - 完整门禁（build / typecheck / 全部测试）通过
 
-完整变更请查看 [GitHub Releases](https://github.com/picoaide/picoaide-harness/releases)。
+完整变更请查看 [GitHub Releases](https://github.com/zeokeel/ZeoKeel-Harness/releases)。

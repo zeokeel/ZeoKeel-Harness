@@ -31,7 +31,7 @@
     · `:77-82` 断言的是 2026-09-10 已被渠道配置取代的旧 brand 契约
       (`"enabled":true` / `"Acme AI"`)⇒ `/channel` 响应里根本没有这两个键,
       该用例**必然**走 else 分支并判失败(不可达的 PASS)。
-    · `:70-75` 的"auditor 写面被拒(非 200)"用**伪造** cookie(`picoaide_session=x`)
+    · `:70-75` 的"auditor 写面被拒(非 200)"用**伪造** cookie(`zeokeel_session=x`)
       ⇒ 恒 401 ⇒ `st != 200` 恒真:验证的是"伪造会话被拒",不是"auditor 无写权限",
       且真出现 RBAC fall-open(200/400)时也测不出。现在用真会话 + 真 CSRF 断言 403。
 

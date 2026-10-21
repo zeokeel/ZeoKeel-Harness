@@ -49,7 +49,7 @@ const SHOTS = join(OUT, 'shots')
 const RUN_DIR = mkdtempSync(join(tmpdir(), 'dsh-e2e-terminal-'))
 const HOME_DIR = join(RUN_DIR, 'home')
 const DISPLAY = process.env.DISPLAY ?? ':99'
-const MARKER = 'PICO_TERMINAL_OK_2026'
+const MARKER = 'ZEOKEEL_TERMINAL_OK_2026'
 
 if (!existsSync(APP)) { console.error(`[probe] app not found: ${APP}`); process.exit(2) }
 rmSync(OUT, { recursive: true, force: true })
@@ -78,7 +78,7 @@ try {
 const child = spawn(APP, ['--no-sandbox', '--lang=zh-CN', `--remote-debugging-port=${String(PORT)}`], {
   env: {
     ...process.env,
-    PICOAI_ALLOW_DEBUG_SWITCHES: '1',
+    ZEOKEEL_ALLOW_DEBUG_SWITCHES: '1',
     HOME: HOME_DIR,
     DSH_HOME: HOME_DIR,
     XDG_CONFIG_HOME: join(RUN_DIR, 'cfg'),
@@ -290,7 +290,7 @@ try {
 } catch (error) {
   check(`探针执行未抛异常（${String(error instanceof Error ? error.message : error)}）`, false)
   try {
-    const logDir = join(RUN_DIR, 'cfg', 'PicoAide Harness', 'logs')
+    const logDir = join(RUN_DIR, 'cfg', 'ZeoKeel Harness', 'logs')
     if (existsSync(logDir)) {
       const files = readdirSync(logDir).sort()
       const latest = files[files.length - 1]

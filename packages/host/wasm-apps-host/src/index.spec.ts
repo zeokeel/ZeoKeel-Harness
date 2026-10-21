@@ -29,7 +29,7 @@ import { AI_CHAT_PATH } from './ai-chat.ts'
 import { AI_CONSENT_FILE_NAME } from './ai-authorization.ts'
 import type { AppSchemeRequestHandler, WasmAppsHostAdapter } from './electron-adapter.ts'
 import { serverPartitionHash } from './partition.ts'
-import type { AppSession, PicoSessionLike } from './session.ts'
+import type { AppSession, ZeoKeelSessionLike } from './session.ts'
 
 /** 记录注册面与事件的假 Cordis 上下文（只实现本插件真正用到的成员）。 */
 function fakeContext(options: {
@@ -85,11 +85,11 @@ function fakeContext(options: {
   }
   const services = new Map<string, unknown>([
     [WASM_APPS_HOST_ADAPTER_SERVICE, adapter],
-    ['picoSession', {
+    ['zeokeelSession', {
       getSession: () => session,
       isRestored: () => options.restored ?? true,
       clear: vi.fn(),
-    } satisfies PicoSessionLike],
+    } satisfies ZeoKeelSessionLike],
     ['desktopRuntime', { locale: options.locale ?? 'zh' }],
     ['connection', options.fence === null ? undefined : (options.fence ?? { requestRejection: () => undefined })],
     [WASM_APPS_AI_RUNNER_SERVICE, options.aiRunner],
@@ -157,10 +157,10 @@ function fakeContext(options: {
       }
     },
     fireSessionChanged: () => {
-      for (const handler of listeners.get('pico/session-changed') ?? []) handler(session)
+      for (const handler of listeners.get('zeokeel/session-changed') ?? []) handler(session)
     },
     fireDeepLink: (url: string) => {
-      for (const handler of listeners.get('pico/deep-link') ?? []) handler(url)
+      for (const handler of listeners.get('zeokeel/deep-link') ?? []) handler(url)
     },
   }
 }
@@ -311,7 +311,7 @@ describe('deep links', () => {
     await flush()
     expect(h.emitted).toContainEqual({
       event: WASM_APP_OPEN_EVENT,
-      payload: { app_id: 'my-notes', url: 'picoaide-app://my-notes/' },
+      payload: { app_id: 'my-notes', url: 'zeokeel-app://my-notes/' },
     })
   })
 
@@ -319,13 +319,13 @@ describe('deep links', () => {
     const h = fakeContext({ session: ALICE })
     apply(h.ctx, { deepLinkScheme: 'acmeai' })
     h.fireDeepLink('acmeai://auth?token=t')
-    h.fireDeepLink('picoaide://app/my-notes')
+    h.fireDeepLink('zeokeel://app/my-notes')
     h.fireDeepLink('acmeai://app/my-notes/extra')
     // 等待闸门往返落地：这条断言是**否定**的，"还没开始处理"与"处理完没打开"必须区分
     // （否则异步化之后它会恒真）。
     await flush()
     expect(h.emitted.filter(entry => entry.event === WASM_APP_OPEN_EVENT)).toEqual([])
-    // `picoaide://app/my-notes` 是**异渠道**链接（J13）⇒ 一条事件 + 一条 scheme 不符 warn；
+    // `zeokeel://app/my-notes` 是**异渠道**链接（J13）⇒ 一条事件 + 一条 scheme 不符 warn；
     // 另外两条是"不是 app 深链"，各记一条。三条都**不回落**任何默认动作。
     expect(h.warnings.filter(message => message.includes('not an app link')).length).toBe(2)
     expect(h.warnings.filter(message => message.includes('another channel')).length).toBe(1)
@@ -346,7 +346,7 @@ describe('deep links', () => {
  *
  * 修复前 `openGate.check` 只有本机打开路由调：深链（与登录后的队列消费）直接建窗
  * ⇒ ① 拿不到 `changed`，不清版本缓存，而 `handler.ts` 会把宿主的旧版本写进
- * `X-PicoAide-App-Version` **覆盖平台下发的版本头**；② 不产生打开计数；
+ * `X-ZeoKeel-App-Version` **覆盖平台下发的版本头**；② 不产生打开计数；
  * ③ 404/410 的生命周期反应（关窗 + 清缓存）与"版本无法确认则不打开"的硬闸门都不执行。
  *
  * 判据（都能咬到实现）：深链必须产生**恰好一次** `/open`；本机路由同样**恰好一次**
@@ -375,7 +375,7 @@ describe('R4-B-16 深链同样过 F16 打开闸门', () => {
         return new Response('{}', { status: 200 })
       },
     })
-    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-r4b16-')), appOriginScheme: 'acme-app', deepLinkScheme: 'acmeai' })
+    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-r4b16-')), appOriginScheme: 'acme-app', deepLinkScheme: 'acmeai' })
     h.fireDeepLink('acmeai://app/demo?path=%2Fnotes')
     // 等**事件**落地（`createAppWindow` 在 `windows.open()` 内部，早于 emit）。
     for (let i = 0; i < 200 && !h.emitted.some(entry => entry.event === WASM_APP_OPEN_EVENT); i++) await flush()
@@ -407,7 +407,7 @@ describe('R4-B-16 深链同样过 F16 打开闸门', () => {
         ? new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'gone', details: { reason: 'app_not_found' } } }), { status: 404 })
         : new Response('{}', { status: 200 }),
     })
-    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-r4b16-404-')), appOriginScheme: 'acme-app', deepLinkScheme: 'acmeai' })
+    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-r4b16-404-')), appOriginScheme: 'acme-app', deepLinkScheme: 'acmeai' })
     h.fireDeepLink('acmeai://app/demo')
     for (let i = 0; i < 200 && !h.warnings.some(message => message.includes('as unavailable')); i++) await flush()
 
@@ -431,7 +431,7 @@ describe('local open route', () => {
     await flush()
     expect(state.status).toBe(200)
     const proof = (JSON.parse(state.body) as { proof: string }).proof
-    return { 'x-pico-host-proof': proof }
+    return { 'x-zeokeel-host-proof': proof }
   }
 
   /**
@@ -460,7 +460,7 @@ describe('local open route', () => {
     // ② 渲染层用同一枚令牌取渠道信息（分享入口据此渲染）。
     const channel = fakeResponse()
     routeOf(h).handler(
-      fakeRequest('GET', undefined, { 'x-pico-host-proof': issued.proof }, WASM_APP_CHANNEL_ROUTE),
+      fakeRequest('GET', undefined, { 'x-zeokeel-host-proof': issued.proof }, WASM_APP_CHANNEL_ROUTE),
       channel.res,
     )
     await flush()
@@ -474,7 +474,7 @@ describe('local open route', () => {
     // ③ 同一枚令牌打开应用。
     const opened = fakeResponse()
     routeOf(h).handler(
-      fakeRequest('POST', '{"app_id":"my-notes"}', { 'x-pico-host-proof': issued.proof }),
+      fakeRequest('POST', '{"app_id":"my-notes"}', { 'x-zeokeel-host-proof': issued.proof }),
       opened.res,
     )
     await flush()
@@ -572,10 +572,10 @@ describe('local open route', () => {
     routeOf(h).handler(fakeRequest('POST', '{"app_id":"my-notes"}', headers), res)
     await flush()
     expect(state.status).toBe(200)
-    expect(JSON.parse(state.body)).toEqual({ window: 'opened', app_id: 'my-notes', url: 'picoaide-app://my-notes/' })
+    expect(JSON.parse(state.body)).toEqual({ window: 'opened', app_id: 'my-notes', url: 'zeokeel-app://my-notes/' })
     expect(h.emitted).toContainEqual({
       event: WASM_APP_OPEN_EVENT,
-      payload: { app_id: 'my-notes', url: 'picoaide-app://my-notes/' },
+      payload: { app_id: 'my-notes', url: 'zeokeel-app://my-notes/' },
     })
   })
 
@@ -604,8 +604,8 @@ describe('local open route', () => {
 
   it('queues a deep link while signed out and opens it after login (§7.6 / §23.2 N8)', async () => {
     const h = fakeContext({ session: null })
-    apply(h.ctx, { deepLinkScheme: 'picoaide' })
-    h.fireDeepLink('picoaide://app/my-notes?path=/notes')
+    apply(h.ctx, { deepLinkScheme: 'zeokeel' })
+    h.fireDeepLink('zeokeel://app/my-notes?path=/notes')
     await flush()
     expect(h.emitted.filter(entry => entry.event === WASM_APP_OPEN_EVENT)).toHaveLength(0)
     h.setSession(ALICE)
@@ -613,7 +613,7 @@ describe('local open route', () => {
     await flush()
     expect(h.emitted).toContainEqual({
       event: WASM_APP_OPEN_EVENT,
-      payload: { app_id: 'my-notes', url: 'picoaide-app://my-notes/notes' },
+      payload: { app_id: 'my-notes', url: 'zeokeel-app://my-notes/notes' },
     })
   })
 
@@ -637,12 +637,12 @@ describe('local open route', () => {
 
   it('drops a deep link whose path tries to escape the app origin (§23.2 N8 净化)', async () => {
     const h = fakeContext({ session: ALICE })
-    apply(h.ctx, { deepLinkScheme: 'picoaide' })
-    h.fireDeepLink('picoaide://app/my-notes?path=//evil.example/x')
+    apply(h.ctx, { deepLinkScheme: 'zeokeel' })
+    h.fireDeepLink('zeokeel://app/my-notes?path=//evil.example/x')
     await flush()
     expect(h.emitted).toContainEqual({
       event: WASM_APP_OPEN_EVENT,
-      payload: { app_id: 'my-notes', url: 'picoaide-app://my-notes/' },
+      payload: { app_id: 'my-notes', url: 'zeokeel-app://my-notes/' },
     })
   })
 
@@ -663,7 +663,7 @@ describe('local open route', () => {
     expect(JSON.parse(state.body)).toEqual({
       window: 'opened',
       app_id: 'my-notes',
-      url: 'picoaide-app://my-notes/',
+      url: 'zeokeel-app://my-notes/',
       opens: { today: { pv: 7, uv: 3 } },
     })
   })
@@ -736,7 +736,7 @@ describe('local open route', () => {
     })
     // `userDataDir` 是**配置**（窗口几何/缓存的落点），窗口适配器是**服务**（适配器注入）：
     // 两者都在，`windows` 才存在（缺一 ⇒ 退回"只发事件"的纯 Node 形态）。
-    const userDataDir = mkdtempSync(join(tmpdir(), 'pico-wasm-apps-lifecycle-'))
+    const userDataDir = mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-lifecycle-'))
     apply(h.ctx as unknown as Parameters<typeof apply>[0], { userDataDir })
     const proof = await proofHeaderOf(h)
 
@@ -869,7 +869,7 @@ describe('local open route', () => {
       windowAdapter,
       fetch: async url => (url.endsWith('/open') ? answer() : new Response('{}', { status: 200 })),
     })
-    apply(h.ctx as unknown as Parameters<typeof apply>[0], { userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-partition-')) })
+    apply(h.ctx as unknown as Parameters<typeof apply>[0], { userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-partition-')) })
     const proof = await proofHeaderOf(h)
 
     const openOnce = async (appId: string): Promise<void> => {
@@ -908,7 +908,7 @@ describe('local open route', () => {
       },
     })
     apply(h2.ctx as unknown as Parameters<typeof apply>[0], {
-      userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-partition-')),
+      userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-partition-')),
       partition: 'persist:agent-browser-custom',
     })
     const proof2 = await proofHeaderOf(h2)
@@ -968,7 +968,7 @@ describe('local open route', () => {
   })
 
   it('builds the app URL from the parsed app id only', () => {
-    expect(wasmAppUrl('picoaide-app', 'my-notes')).toBe('picoaide-app://my-notes/')
+    expect(wasmAppUrl('zeokeel-app', 'my-notes')).toBe('zeokeel-app://my-notes/')
     // 渠道参数化（§7.8/§10）：URL 由注入的 scheme 决定，不写死官方值。
     expect(wasmAppUrl('example-harness-app', 'my-notes', '/notes?page=2')).toBe('example-harness-app://my-notes/notes?page=2')
   })
@@ -1015,7 +1015,7 @@ describe('应用 AI 桥（§21）：授权路由 → 闸门 → SSE，且不转�
     routeOf(h).handler(fakeRequest('GET', undefined, {}, `${WASM_APPS_LOCAL_PREFIX}/host-proof`), res)
     await flush()
     expect(state.status).toBe(200)
-    return { 'x-pico-host-proof': (JSON.parse(state.body) as { proof: string }).proof }
+    return { 'x-zeokeel-host-proof': (JSON.parse(state.body) as { proof: string }).proof }
   }
 
   const consent = async (
@@ -1041,7 +1041,7 @@ describe('应用 AI 桥（§21）：授权路由 → 闸门 → SSE，且不转�
     body: unknown,
   ): Promise<Response> => {
     expect(h.handler, 'the app protocol handler must be registered').toBeDefined()
-    return await h.handler!(new Request(`picoaide-app://demo${AI_CHAT_PATH}`, {
+    return await h.handler!(new Request(`zeokeel-app://demo${AI_CHAT_PATH}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -1108,7 +1108,7 @@ describe('应用 AI 桥（§21）：授权路由 → 闸门 → SSE，且不转�
   })
 
   it('授权落盘（给了 userDataDir）：允许写进宿主文件，重新装配的实例仍然放行（判据 3）', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-wasm-apps-consent-route-'))
+    const dir = mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-consent-route-'))
     const { calls, runner } = runnerOf()
 
     // ① 第一个实例：经授权路由"允许"。
@@ -1129,7 +1129,7 @@ describe('应用 AI 桥（§21）：授权路由 → 闸门 → SSE，且不转�
   })
 
   it('记录文件损坏 ⇒ 授权路由回 500 CONSENT_NOT_PERSISTED，且原文件一字不动（FIX-17）', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-wasm-apps-consent-corrupt-'))
+    const dir = mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-consent-corrupt-'))
     const file = join(dir, AI_CONSENT_FILE_NAME)
     // 一条合法记录 + 一条坏记录：修前这一次 grant 会以"空集合 + 本次一条"整份覆盖，
     // 把 alice 的那条静默销毁，而路由回 200（面板显示"已允许"）。
@@ -1205,7 +1205,7 @@ describe('应用 AI 桥（§21）：授权路由 → 闸门 → SSE，且不转�
    * 账号的 token（403 变 200）；修后必须 403，且在 B 上重新授权后 A 的记录仍在。
    */
   it('授权按服务端分域（B2-R21-01）：同名账号换租户 ⇒ 403，重新授权后两条记录并存', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-wasm-apps-consent-scope-'))
+    const dir = mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-consent-scope-'))
     const { calls, runner } = runnerOf()
     const h = fakeContext({ session: ALICE, aiRunner: runner })
     apply(h.ctx, { userDataDir: dir })
@@ -1235,7 +1235,7 @@ describe('应用 AI 桥（§21）：授权路由 → 闸门 → SSE，且不转�
   })
 
   it('写面拿不到用户名 ⇒ 401 AUTH_REQUIRED 且一个字都不落盘（fail-closed）', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-wasm-apps-consent-nouser-'))
+    const dir = mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-consent-nouser-'))
     const h = fakeContext({ session: { serverURL: ALICE.serverURL, token: 'tok' } })
     apply(h.ctx, { userDataDir: dir })
     const proof = await proofHeaderOf(h)
@@ -1292,7 +1292,7 @@ describe('应用 AI 桥（§21）：授权路由 → 闸门 → SSE，且不转�
     await consent(h, proof, { app_id: 'demo', granted: true })
     const served = await chat(h, { messages: [{ role: 'user', content: 'hi' }], stream: false })
     expect(served.status).toBe(200)
-    // 变异：把 `__picoaide/ai/chat` 落进"普通应用请求"分支 ⇒ 这里会多出一条平台 URL。
+    // 变异：把 `__zeokeel/ai/chat` 落进"普通应用请求"分支 ⇒ 这里会多出一条平台 URL。
     expect(fetched).toEqual([])
   })
 })
@@ -1324,7 +1324,7 @@ describe('接线缺口回归（B1 surface / B2 窗口几何 / B3 内容缓存）
     proof: string,
   ): Promise<{ status: number, body: string }> => {
     const { res, state } = fakeResponse()
-    routeOf(h).handler(fakeRequest('POST', body, { 'x-pico-host-proof': proof }), res)
+    routeOf(h).handler(fakeRequest('POST', body, { 'x-zeokeel-host-proof': proof }), res)
     for (let i = 0; i < 300; i++) {
       if (state.status !== 0 && state.body !== '') return state
       await flush()
@@ -1390,7 +1390,7 @@ describe('接线缺口回归（B1 surface / B2 窗口几何 / B3 内容缓存）
       browserSurface: surfaceRegistry,
       fetch: async url => (url.endsWith('/open') ? openAnswer('2.0.0') : new Response('{}', { status: 200 })),
     })
-    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-surface-')), appOriginScheme: 'acme-app' })
+    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-surface-')), appOriginScheme: 'acme-app' })
     const proof = await proofOf(h)
 
     const opened = await openViaRoute(h, '{"app_id":"demo"}', proof)
@@ -1419,7 +1419,7 @@ describe('接线缺口回归（B1 surface / B2 窗口几何 / B3 内容缓存）
       // 刻意不给 browserSurface：模拟 browser 行还没加载。
       fetch: async url => (url.endsWith('/open') ? openAnswer('2.0.0') : new Response('{}', { status: 200 })),
     })
-    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-surface-late-')), appOriginScheme: 'acme-app' })
+    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-surface-late-')), appOriginScheme: 'acme-app' })
     const proof = await proofOf(h)
     expect((await openViaRoute(h, '{"app_id":"demo"}', proof)).status).toBe(200)
     expect(registered).toHaveLength(0)
@@ -1445,7 +1445,7 @@ describe('接线缺口回归（B1 surface / B2 窗口几何 / B3 内容缓存）
       windowAdapter: adapter,
       fetch: async url => (url.endsWith('/open') ? openAnswer('2.0.0') : new Response('{}', { status: 200 })),
     })
-    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-geometry-')), appOriginScheme: 'acme-app' })
+    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-geometry-')), appOriginScheme: 'acme-app' })
     const proof = await proofOf(h)
 
     const opened = await openViaRoute(h, '{"app_id":"demo","window":{"ratio":1.7778,"width":1600}}', proof)
@@ -1471,7 +1471,7 @@ describe('接线缺口回归（B1 surface / B2 窗口几何 / B3 内容缓存）
         return new Response('{}', { status: 200 })
       },
     })
-    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-geometry-cat-')), appOriginScheme: 'acme-app' })
+    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-geometry-cat-')), appOriginScheme: 'acme-app' })
     const proof = await proofOf(h)
 
     expect((await openViaRoute(h, '{"app_id":"demo"}', proof)).status).toBe(200)
@@ -1499,7 +1499,7 @@ describe('接线缺口回归（B1 surface / B2 窗口几何 / B3 内容缓存）
         return new Response('{}', { status: 200 })
       },
     })
-    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'pico-wasm-apps-geometry-link-')), appOriginScheme: 'acme-app', deepLinkScheme: 'acmeai' })
+    apply(h.ctx, { userDataDir: mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-geometry-link-')), appOriginScheme: 'acme-app', deepLinkScheme: 'acmeai' })
     h.fireDeepLink('acmeai://app/demo?path=%2Fnotes')
     await until(() => created.length === 1)
     expect(created[0]).toMatchObject({ width: 1280, height: 960 })
@@ -1517,7 +1517,7 @@ describe('接线缺口回归（B1 surface / B2 窗口几何 / B3 内容缓存）
    */
   it('B3 打开校验的版本进缓存键：第二次取同一静态资源零出网', async () => {
     const { adapter } = windowStub()
-    const userDataDir = mkdtempSync(join(tmpdir(), 'pico-wasm-apps-cache-wire-'))
+    const userDataDir = mkdtempSync(join(tmpdir(), 'zeokeel-wasm-apps-cache-wire-'))
     let requestCalls = 0
     const h = fakeContext({
       session: ALICE,
@@ -1549,7 +1549,7 @@ describe('接线缺口回归（B1 surface / B2 窗口几何 / B3 内容缓存）
     expect(await second.text()).toBe('payload-1')
     // 缓存命中 ⇒ 一次都不回源（F11 的性能承诺）。
     expect(requestCalls).toBe(1)
-    expect(second.headers.get('x-picoaide-app-version')).toBe('3.1.4')
+    expect(second.headers.get('x-zeokeel-app-version')).toBe('3.1.4')
     // 落盘位置在 `<userData>/wasm-apps-cache`（诊断/清理口径）。
     expect(existsSync(join(userDataDir, 'wasm-apps-cache'))).toBe(true)
 

@@ -20,9 +20,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/agentshare"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/agentshare"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 const agentEnabledName = "ppt-gen"
@@ -31,8 +31,8 @@ const agentEnabledName = "ppt-gen"
 // 组织智能体管理端点 + 员工智能体面。
 func setupAgentEnabled(t *testing.T) (*gin.Engine, *sql.DB, map[string]string, map[string]string, map[string]string) {
 	t.Helper()
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "1000")
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "1000")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
 
@@ -80,7 +80,7 @@ func setupAgentEnabled(t *testing.T) (*gin.Engine, *sql.DB, map[string]string, m
 	csrf, _ := out["csrf_token"].(string)
 	sess := ""
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "picoaide_session" {
+		if ck.Name == "zeokeel_session" {
 			sess = ck.Value
 		}
 	}
@@ -88,7 +88,7 @@ func setupAgentEnabled(t *testing.T) (*gin.Engine, *sql.DB, map[string]string, m
 		t.Fatalf("admin session/csrf missing: %v", w.Result().Cookies())
 	}
 	return r, db,
-		map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf},
+		map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf},
 		map[string]string{"Authorization": "Bearer " + tokens["alice"]},
 		map[string]string{"Authorization": "Bearer " + tokens["bob"]}
 }

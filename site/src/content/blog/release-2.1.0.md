@@ -1,9 +1,9 @@
 ---
-title: PicoAide Harness 2.1.0 发布
+title: ZeoKeel Harness 2.1.0 发布
 description: 桌面客户端升级源切换至 GitHub Releases，新增 Linux 支持与自动化发布流水线。
 pubDate: 2026-08-23
 version: 2.1.0
-author: PicoAide Team
+author: ZeoKeel Team
 tags:
   - 发布
   - 产品
@@ -12,7 +12,7 @@ tags:
 > 注：本发布说明为历史快照。文中「客户端升级源 = GitHub Releases」的链路已于 2026-09 被替换 ——
 > 客户端现在只从**它登录的那台服务端**取更新。当前交付方式见[交付方式说明](/blog/delivery-model/)。
 
-PicoAide Harness 2.1.0 正式发布。本版本带来以下变化：
+ZeoKeel Harness 2.1.0 正式发布。本版本带来以下变化：
 
 ## 升级源切换至 GitHub Releases
 
@@ -32,4 +32,4 @@ PicoAide Harness 2.1.0 正式发布。本版本带来以下变化：
 - 桌面端 smoke 验证器从配置读取真实产品名
 - 多用户会话隔离、连接器安全加固等持续改进
 
-完整变更请查看 [GitHub Releases](https://github.com/picoaide/picoaide-harness/releases)。
+完整变更请查看 [GitHub Releases](https://github.com/zeokeel/ZeoKeel-Harness/releases)。

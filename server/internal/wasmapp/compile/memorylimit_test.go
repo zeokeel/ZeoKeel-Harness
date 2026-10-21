@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 本文件是 **R1-rt-7b** 的护栏：编译子进程必须按**生效的** instance_memory_mb 跑（双向）。
@@ -162,7 +162,7 @@ func TestCompileChildEffectiveMemoryPagesDownDirection(t *testing.T) {
 // TestCompileChildEnvCarriesEffectiveMemoryPages：子进程环境里必须带生效页数，且父环境的
 // **同名冒充值**不得生效（env 白名单是安全边界，不能因为要传这个参数就开个口子）。
 func TestCompileChildEnvCarriesEffectiveMemoryPages(t *testing.T) {
-	const spoof = "PICOAI_COMPILE_MEMORY_PAGES=9999"
+	const spoof = "ZEOKEEL_COMPILE_MEMORY_PAGES=9999"
 	parent := []string{"PATH=/usr/bin", spoof, "PG_DSN=postgres://secret"}
 
 	env := CompileChildEnv(parent, 2048)

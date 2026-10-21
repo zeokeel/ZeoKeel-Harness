@@ -3,12 +3,12 @@
  *
  * ## 为什么必须有这一层（CHN-2 / R2I-15 / UX-2）
  *
- * 应用 origin 的 scheme 是**渠道变量**（设计总纲 F15/§10）：官方是 `picoaide-app`，
+ * 应用 origin 的 scheme 是**渠道变量**（设计总纲 F15/§10）：官方是 `zeokeel-app`，
  * 品牌渠道随 `channel.json` 的 `desktop.app_origin_scheme` 各不同。客户端 bundle 是
- * **一份代码多份渠道**构建，读不到渠道包，所以任何写死的 `picoaide-app:` 都会让品牌渠道
+ * **一份代码多份渠道**构建，读不到渠道包，所以任何写死的 `zeokeel-app:` 都会让品牌渠道
  * 全线失配：拿到的 URL 认不出来（打开失败）、分享出去的链接指向别的安装（打不开）。
  *
- * 真源 = 宿主的**本机只读路由** `GET /api/pico/wasm-apps/channel`
+ * 真源 = 宿主的**本机只读路由** `GET /api/zeokeel/wasm-apps/channel`
  * （§16.1 冻结：返回 `{appOriginScheme, deepLinkScheme, productName}`）。本模块只做四件事：
  *
  *  1. 取一次（挂载时 / 首次需要时；并发去重，避免每个消费者各发一次）；
@@ -24,7 +24,7 @@
  * **未注入渠道 scheme 时分享入口不渲染**；打开链路同样停下并给可读原因
  * （`open-app.ts` 的 `scheme-unavailable`）。
  *
- * @module @picoaide/dsh-wasm-apps/client/channel-seam
+ * @module @zeokeel/dsh-wasm-apps/client/channel-seam
  */
 
 import { setAppShareScheme } from './deep-link.ts'
@@ -42,7 +42,7 @@ import {
  * 宿主本机只读路由（§16.1 冻结路径；宿主侧前缀注册在
  * `packages/host/wasm-apps-host/src/index.ts` 的 `WASM_APPS_LOCAL_PREFIX` 之下）。
  */
-export const APP_CHANNEL_PATH = '/api/pico/wasm-apps/channel'
+export const APP_CHANNEL_PATH = '/api/zeokeel/wasm-apps/channel'
 
 /**
  * **官方渠道**的应用 origin scheme（`channel.json` 对 official/beta 的声明值）。
@@ -52,7 +52,7 @@ export const APP_CHANNEL_PATH = '/api/pico/wasm-apps/channel'
  * `app-center.spec.tsx` 会把它与 `packages/host/desktop/src/desktop-channel.ts` 的
  * `DEFAULT_APP_ORIGIN_SCHEME` 逐字对拍（两处都声明官方值 ⇒ 必须一致）。
  */
-export const OFFICIAL_APP_ORIGIN_SCHEME = 'picoaide-app'
+export const OFFICIAL_APP_ORIGIN_SCHEME = 'zeokeel-app'
 
 /**
  * scheme 形状（与设计总纲 §8.3 冻结的正则**逐字一致**：`^[a-z][a-z0-9+.-]{1,31}$`）。
@@ -215,7 +215,7 @@ export interface AppChannelResult {
 export function loadAppChannel(deps: AppChannelDeps = {}): Promise<AppChannelResult> {
   if (inFlight !== null) return inFlight
   const task = (async (): Promise<AppChannelResult> => {
-    // 证明走请求头（`X-Pico-Host-Proof`，宿主 seam 冻结）：拿不到令牌就**不发**业务
+    // 证明走请求头（`X-ZeoKeel-Host-Proof`，宿主 seam 冻结）：拿不到令牌就**不发**业务
     // 请求（发出去必然 401，还会把"证明没拿到"掩盖成"渠道接口拒绝"）。
     let response: Response | null
     try {

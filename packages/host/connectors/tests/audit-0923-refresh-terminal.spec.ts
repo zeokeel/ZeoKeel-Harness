@@ -111,7 +111,7 @@ interface Row {
 }
 
 async function rowOf(h: Harness): Promise<Row> {
-  const list = JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as { connectors: Row[] }
+  const list = JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as { connectors: Row[] }
   return list.connectors[0] as Row
 }
 
@@ -244,7 +244,7 @@ describe('R4-B-10: the panel refresh button arms the same terminal state as the 
     idp.setAnswer({ status: 400, body: { error: 'invalid_grant', error_description: 'refresh token already used' } })
     await new ConnectorStore({ baseDir: dir }).updateCredential('example-mcp', { expiresAt: Date.now() - 1_000 })
 
-    const manual = await callRoute(harness, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const manual = await callRoute(harness, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(manual.status).toBe(409)
     expect((JSON.parse(manual.body) as { reason?: string }).reason).toBe('reauthorize')
     const afterManual = idp.tokenPosts.length
@@ -272,7 +272,7 @@ describe('R4-B-10: the panel refresh button arms the same terminal state as the 
     await waitForRow(harness, entry => entry.status === 'connected')
 
     idp.setAnswer({ status: 503, body: { error: 'temporarily_unavailable' } })
-    const manual = await callRoute(harness, '/api/pico/connectors/example-mcp/refresh', 'POST')
+    const manual = await callRoute(harness, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
     expect(manual.status).toBe(409)
     expect((JSON.parse(manual.body) as { reason?: string }).reason).toBe('transient')
     const row = await rowOf(harness)

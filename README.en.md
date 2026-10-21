@@ -1,4 +1,4 @@
-<h1 align="center">PicoAide Harness</h1>
+<h1 align="center">ZeoKeel Harness</h1>
 
 <p align="center">
   <strong>Enterprise-grade DeepSeek Harness platform.</strong><br>
@@ -7,18 +7,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/picoaide/picoaide-harness/releases/latest"><img src="https://img.shields.io/github/v/release/picoaide/picoaide-harness?style=flat&amp;label=release&amp;color=4D6BFE" alt="Latest release"></a>
-  <a href="https://github.com/picoaide/picoaide-harness/releases"><img src="https://img.shields.io/github/downloads/picoaide/picoaide-harness/total?style=flat&amp;label=downloads&amp;color=4D6BFE" alt="Total downloads"></a>
-  <a href="https://github.com/picoaide/picoaide-harness"><img src="https://img.shields.io/github/stars/picoaide/picoaide-harness?style=flat&amp;label=stars&amp;color=08C" alt="GitHub stars"></a>
+  <a href="https://github.com/zeokeel/ZeoKeel-Harness/releases/latest"><img src="https://img.shields.io/github/v/release/zeokeel/ZeoKeel-Harness?style=flat&amp;label=release&amp;color=4D6BFE" alt="Latest release"></a>
+  <a href="https://github.com/zeokeel/ZeoKeel-Harness/releases"><img src="https://img.shields.io/github/downloads/zeokeel/ZeoKeel-Harness/total?style=flat&amp;label=downloads&amp;color=4D6BFE" alt="Total downloads"></a>
+  <a href="https://github.com/zeokeel/ZeoKeel-Harness"><img src="https://img.shields.io/github/stars/zeokeel/ZeoKeel-Harness?style=flat&amp;label=stars&amp;color=08C" alt="GitHub stars"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  <a href="assets/community-qr.png"><img src="assets/community-qr.png" alt="Scan the QR code to join the official PicoAide Harness community" width="220"></a><br>
-  <strong>Scan the QR code to join the official PicoAide Harness community</strong>
+  <a href="assets/community-qr.png"><img src="assets/community-qr.png" alt="Scan the QR code to join the official ZeoKeel Harness community" width="220"></a><br>
+  <strong>Scan the QR code to join the official ZeoKeel Harness community</strong>
 </p>
 
-PicoAide Harness packages DeepSeek Harness local agents, the Host service, its plugin system, and enterprise-grade administration into one platform:
+ZeoKeel Harness packages DeepSeek Harness local agents, the Host service, its plugin system, and enterprise-grade administration into one platform:
 
 - **Desktop client**: native windows, system tray, automatic updates, no Node.js or command-line setup required;
 - **Local service**: automatically starts, stops, and restores the local Harness service while keeping data on your machine;
@@ -57,30 +57,30 @@ Client installers **ship inside the server image** (they are not posted to a sep
 
 | Platform | Installer | Installation |
 | --- | --- | --- |
-| Windows x64 | `PicoAide-Harness-<version>-x64-Setup.exe` | Run the NSIS installer and follow its prompts |
-| macOS (Apple Silicon) | `PicoAide-Harness-<version>-mac.dmg` | Open the DMG and drag PicoAide Harness into Applications |
-| Linux x64 | `PicoAide-Harness-<version>-x86_64.AppImage` | Grant execute permission and run |
+| Windows x64 | `ZeoKeel-Harness-<version>-x64-Setup.exe` | Run the NSIS installer and follow its prompts |
+| macOS (Apple Silicon) | `ZeoKeel-Harness-<version>-mac.dmg` | Open the DMG and drag ZeoKeel Harness into Applications |
+| Linux x64 | `ZeoKeel-Harness-<version>-x86_64.AppImage` | Grant execute permission and run |
 
 There are only two ways to obtain them:
 
 1. **Your enterprise server** (recommended): once deployed, employees open `https://<your-domain>/` and the portal lists all three platforms for download;
-2. **The official image package** (trial / single machine): take the **server image package** from the update server or from the [GitHub Release](https://github.com/picoaide/picoaide-harness/releases), then unpack the installers from that image:
+2. **The official image package** (trial / single machine): take the **server image package** from the update server or from the [GitHub Release](https://github.com/zeokeel/ZeoKeel-Harness/releases), then unpack the installers from that image:
 
 ```bash
 VER=<version, from server.version in latest.json>   # for a prerelease channel, use beta instead of official
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/picoaide-server-${VER}-amd64.zip"
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/SHA256SUMS"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/SHA256SUMS"
 sha256sum -c SHA256SUMS                            # <- verify the downloaded image package with SHA256SUMS
-unzip -p "picoaide-server-${VER}-amd64.zip" image.tar | docker load
-mkdir -p ./picoaide-stack
-docker run --rm -v "$PWD/picoaide-stack:/out" -e PICOAI_UNPACK_STACK=/out \
-  "picoaide-harness-server:${VER}"
-ls -1 ./picoaide-stack/client                       # installers for all three platforms + CLIENT-RELEASE.json
+unzip -p "zeokeel-server-${VER}-amd64.zip" image.tar | docker load
+mkdir -p ./zeokeel-stack
+docker run --rm -v "$PWD/zeokeel-stack:/out" -e ZEOKEEL_UNPACK_STACK=/out \
+  "zeokeel-harness-server:${VER}"
+ls -1 ./zeokeel-stack/client                       # installers for all three platforms + CLIENT-RELEASE.json
 ```
 
-> The GitHub Release attachments are the **server image package** (`picoaide-server-<version>-amd64.zip`) and the checksum file `SHA256SUMS` — the client installers live inside that image, not in the Release attachments, and the checksum file has no `.txt` suffix.
+> The GitHub Release attachments are the **server image package** (`zeokeel-server-<version>-amd64.zip`) and the checksum file `SHA256SUMS` — the client installers live inside that image, not in the Release attachments, and the checksum file has no `.txt` suffix.
 
-Client upgrades and first-time installs can also fetch packages straight from **the server the client signs in to** (`GET /api/client/v2/updates/manifest`), so employee machines need no outbound internet at all in an enterprise deployment. The first launch creates the default `desktop` profile and starts the official DSH Web interface locally. Full steps (taking packages from the image, air-gapped deployment, channel delivery) are in [Getting started](https://www.picoaide.com/en/getting-started/) and [Client delivery and upgrades](https://www.picoaide.com/en/deployment/client-delivery/); plugin commands and troubleshooting are in the [Desktop Client](https://www.picoaide.com/en/docs/desktop/) and [FAQ](https://www.picoaide.com/en/docs/faq/) pages.
+Client upgrades and first-time installs can also fetch packages straight from **the server the client signs in to** (`GET /api/client/v2/updates/manifest`), so employee machines need no outbound internet at all in an enterprise deployment. The first launch creates the default `desktop` profile and starts the official DSH Web interface locally. Full steps (taking packages from the image, air-gapped deployment, channel delivery) are in [Getting started](https://www.zeokeel.com/en/getting-started/) and [Client delivery and upgrades](https://www.zeokeel.com/en/deployment/client-delivery/); plugin commands and troubleshooting are in the [Desktop Client](https://www.zeokeel.com/en/docs/desktop/) and [FAQ](https://www.zeokeel.com/en/docs/faq/) pages.
 
 > Note: the Windows installer and Linux packages published automatically by CI are not code-signed yet (the macOS release builds are signed/notarized). Windows SmartScreen may show an "unknown publisher" warning on first run — verify the image package with the `SHA256SUMS` sitting next to it (the installers are unpacked from that image) before running; the same applies to the Linux packages.
 
@@ -117,22 +117,22 @@ Client upgrades and first-time installs can also fetch packages straight from **
 
 ## Documentation
 
-Ordinary users should start at the [official wiki](https://www.picoaide.com/en/docs/); developer docs are only needed for extension or maintenance.
+Ordinary users should start at the [official wiki](https://www.zeokeel.com/en/docs/); developer docs are only needed for extension or maintenance.
 
 ### User documentation (official wiki)
 
 | Goal | Entry |
 | --- | --- |
-| Installation and daily use | [Desktop Client](https://www.picoaide.com/en/docs/desktop/) · [Getting Started](https://www.picoaide.com/en/docs/getting-started/) |
-| Platform, environment, and usage boundaries | [FAQ](https://www.picoaide.com/en/docs/faq/) |
-| Why this project exists | [Product Philosophy](https://www.picoaide.com/en/docs/philosophy/) |
-| System architecture and API | [System Architecture](https://www.picoaide.com/en/docs/architecture/) · [API Reference](https://www.picoaide.com/en/docs/api-reference/) |
+| Installation and daily use | [Desktop Client](https://www.zeokeel.com/en/docs/desktop/) · [Getting Started](https://www.zeokeel.com/en/docs/getting-started/) |
+| Platform, environment, and usage boundaries | [FAQ](https://www.zeokeel.com/en/docs/faq/) |
+| Why this project exists | [Product Philosophy](https://www.zeokeel.com/en/docs/philosophy/) |
+| System architecture and API | [System Architecture](https://www.zeokeel.com/en/docs/architecture/) · [API Reference](https://www.zeokeel.com/en/docs/api-reference/) |
 
 ### Developer and maintainer documentation (repo)
 
 | Goal | Entry |
 | --- | --- |
-| Write plain or Desktop plugins | [Plugin development (wiki)](https://www.picoaide.com/en/docs/plugin-development/) |
+| Write plain or Desktop plugins | [Plugin development (wiki)](https://www.zeokeel.com/en/docs/plugin-development/) |
 | Unified plugin contract discussion | [DSH Community Fabric Draft](community/fabric/README.md) |
 | Desktop plugin capabilities | [Desktop plugin services contract](packages/host/desktop/docs/plugin-services.md) |
 | How the desktop application works | [Architecture](docs/architecture.en.md) (maintainer view) |
@@ -143,7 +143,7 @@ Ordinary users should start at the [official wiki](https://www.picoaide.com/en/d
 
 Plugins are extension packages that add abilities to DSH — models, tools, interfaces, and workflows can all be plugins, composed like building blocks.
 
-PicoAide Harness does not fork upstream source or hard-code a fixed shell. The official DeepSeek Harness runs unchanged at a pinned version; the desktop shell — windows, tray, updates, workspaces — is itself a legitimate DSH plugin composed into the same runtime through the official plugin mechanism. From the core agent to the desktop shell, the whole product follows one rule: "everything is a plugin". Official ecosystem plugins work as-is, and desktop abilities are composed, replaced, and evolved the same way.
+ZeoKeel Harness does not fork upstream source or hard-code a fixed shell. The official DeepSeek Harness runs unchanged at a pinned version; the desktop shell — windows, tray, updates, workspaces — is itself a legitimate DSH plugin composed into the same runtime through the official plugin mechanism. From the core agent to the desktop shell, the whole product follows one rule: "everything is a plugin". Official ecosystem plugins work as-is, and desktop abilities are composed, replaced, and evolved the same way.
 
 ## Relationship with the official project
 
@@ -190,7 +190,7 @@ Headless checks use `corepack yarn check`; full build, test, and release boundar
 
 ## Community
 
-For issues or support, please [submit an issue](https://github.com/picoaide/picoaide-harness/issues).
+For issues or support, please [submit an issue](https://github.com/zeokeel/ZeoKeel-Harness/issues).
 
 ## License
 
@@ -200,14 +200,14 @@ This project is licensed under the [MIT License](LICENSE).
 
 > This project is completely open source and free. If anyone tries to sell this software to you in any form, please refuse the transaction.
 
-> DeepSeek is a trademark of DeepSeek AI. PicoAide Harness is an independent community project with no affiliation to or endorsement from DeepSeek.
+> DeepSeek is a trademark of DeepSeek AI. ZeoKeel Harness is an independent community project with no affiliation to or endorsement from DeepSeek.
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=picoaide%2Fpicoaide-harness&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=zeokeel%2Fzeokeel-harness&type=date&legend=top-left">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=picoaide/picoaide-harness&type=date&theme=dark&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=picoaide/picoaide-harness&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
-    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=picoaide/picoaide-harness&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=zeokeel/ZeoKeel-Harness&type=date&theme=dark&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=zeokeel/ZeoKeel-Harness&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
+    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=zeokeel/ZeoKeel-Harness&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
   </picture>
 </a>

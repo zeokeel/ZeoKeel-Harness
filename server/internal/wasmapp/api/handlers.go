@@ -27,16 +27,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/appproof"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	"github.com/picoaide/picoaide/internal/wasmapp/events"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appproof"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/events"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ type Options struct {
 	//
 	// 生产装配注入 `appserver.Server.AppOrigin`（scheme 来自渠道包
 	// `desktop.app_origin_scheme`，见 channel.AppOriginScheme）。nil ⇒ 回落
-	// `appserver.PicoaideAppOrigin`（官方 scheme，未注入时的等价行为）。
+	// `appserver.ZeoKeelAppOrigin`（官方 scheme，未注入时的等价行为）。
 	//
 	// 为什么是函数而不是常量（R2I-9）：`api` 层拿不到 `*Server`，而服务端认的
 	// scheme 与客户端注册的 scheme 必须同源；把构造函数注入进来是唯一能同时满足
@@ -209,7 +209,7 @@ type Handlers struct {
 
 	// ---- 客户端专属访问模型（2026-09-19）：应用请求的唯一执行入口 ----
 	//
-	// 客户端注册的协议 handler 把 `picoaide-app://<app_id>/…` 上的请求包成信封
+	// 客户端注册的协议 handler 把 `zeokeel-app://<app_id>/…` 上的请求包成信封
 	// 送进来，平台用**与旧应用子域路径共用**的管线执行，再把响应编码回去。
 	// 认证由路由中间件强制（BearerAuth 必需）—— **没有匿名入口**（契约 §4.1/§4.4）。
 	ClientRequest gin.HandlerFunc // POST /apps/wasm/:app_id/request （员工 bearer + app-proof，唯一入口）
@@ -396,8 +396,8 @@ func (h *Handlers) artifactUsed(ctx context.Context, username string) (int64, er
 // fail-closed：缺依赖就报 INTERNAL，绝不静默跳过检查。
 //
 // R17C-01（审计 2026-09-25，P1）：此前这里**还**把 `h.opt.Compiler == nil` 判成
-// "平台未就绪"，于是编译器缺席（compose 缺省 `PICOAI_COMPILE_ISOLATION=auto` 下
-// bwrap 不可用、或镜像里少一个 picoaide-app-compile 二进制）时，**33 个调用点全体**
+// "平台未就绪"，于是编译器缺席（compose 缺省 `ZEOKEEL_COMPILE_ISOLATION=auto` 下
+// bwrap 不可用、或镜像里少一个 zeokeel-app-compile 二进制）时，**33 个调用点全体**
 // 500：员工的应用目录/可用性/自省，以及管理端的列表 / freeze / unpublish / delete /
 // review / limits 全部不可用 —— 降级态下管理员失去"下架一个行为异常应用"的处置能力，
 // 而同进程的执行面（open/request）与 `/readyz {ok:true, compile_available:false}`

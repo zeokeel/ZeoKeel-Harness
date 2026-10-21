@@ -46,7 +46,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // validateRaw 发一次真实预检，回**原始响应**（判定要的是逐字节，不是 DTO）。
@@ -249,7 +249,7 @@ func (e *testEnv) compileJobs() int64 {
 //	A 编译计数·正控：一次非终态预检必须**恰好**推进 1 个编译任务 —— 没有这条，B 的
 //	  `delta == 0` 在"计数器没接线 / 编译入口被换掉 / 走不到 Compiler"时恒真；
 //	B 编译计数·主判据：冻结/退役预检推进 **0** 个编译任务（"闸门在编译前"的直接观测）；
-//	C 失败形态·正控 + 主判据：载荷 = 参考实现 + 一个 `__picoaide/` 前缀的自定义段。
+//	C 失败形态·正控 + 主判据：载荷 = 参考实现 + 一个 `__zeokeel/` 前缀的自定义段。
 //	  `wasmmod` 静态校验不看段名（`checkReservedPathPrefix` 只住在 api 包的 prepare 里，
 //	  位置在**真编译之后**），所以这个载荷的失败点天然在编译之后。
 //	  正控：它在**非终态**应用上必须"先真的编译过一次、再被 ASSET_DENIED 拒"——若哪天
@@ -325,7 +325,7 @@ func TestValidateTerminalAppsNeverReachCompile(t *testing.T) {
 	}
 
 	// ---- C 失败形态：失败点在**编译之后**的载荷，在终态应用上必须先回终态错误 ----
-	reserved := withCustomSections(t, guest, map[string][]byte{"__picoaide/hijack.txt": []byte("x")})
+	reserved := withCustomSections(t, guest, map[string][]byte{"__zeokeel/hijack.txt": []byte("x")})
 	beforeC := e.compileJobs()
 	cw := e.validateRaw(e.tokens["alice"], "live-seq", "2.0.0", reserved, goodConfig())
 	if got := e.compileJobs() - beforeC; got != 1 {

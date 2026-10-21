@@ -1,22 +1,22 @@
-# PicoAide Harness 文档
+# ZeoKeel Harness 文档
 
 [English documentation](README.en.md)
 
-这里是 PicoAide Harness 的产品与开发文档入口。**用户文档已迁移到官网 Wiki**（[桌面客户端](https://www.picoaide.com/docs/desktop/) · [产品哲学](https://www.picoaide.com/docs/philosophy/) · [常见问题](https://www.picoaide.com/docs/faq/)）；本目录保留维护者视角的文档。想参与贡献？见[参与贡献](../CONTRIBUTING.md)。
+这里是 ZeoKeel Harness 的产品与开发文档入口。**用户文档已迁移到官网 Wiki**（[桌面客户端](https://www.zeokeel.com/docs/desktop/) · [产品哲学](https://www.zeokeel.com/docs/philosophy/) · [常见问题](https://www.zeokeel.com/docs/faq/)）；本目录保留维护者视角的文档。想参与贡献？见[参与贡献](../CONTRIBUTING.md)。
 
 ## 按目标阅读
 
-普通用户直接从官网 Wiki 开始即可（[快速开始](https://www.picoaide.com/docs/getting-started/)），不需要阅读开发者文档。
+普通用户直接从官网 Wiki 开始即可（[快速开始](https://www.zeokeel.com/docs/getting-started/)），不需要阅读开发者文档。
 
 ### 用户内容（官网 Wiki 单源）
 
 | 内容 | 官网页面 |
 | --- | --- |
-| 安装 / 使用 / 排障 | [桌面客户端](https://www.picoaide.com/docs/desktop/) · [快速开始](https://www.picoaide.com/docs/getting-started/) |
-| 常见问题 | [FAQ](https://www.picoaide.com/docs/faq/) |
-| 产品定位与设计哲学 | [产品哲学](https://www.picoaide.com/docs/philosophy/) |
-| 插件开发 / 生态 | [插件开发](https://www.picoaide.com/docs/plugin-development/) · [插件生态](https://www.picoaide.com/docs/plugin-ecosystem/) |
-| 系统架构 / API | [系统架构](https://www.picoaide.com/docs/architecture/) · [API 参考](https://www.picoaide.com/docs/api-reference/) |
+| 安装 / 使用 / 排障 | [桌面客户端](https://www.zeokeel.com/docs/desktop/) · [快速开始](https://www.zeokeel.com/docs/getting-started/) |
+| 常见问题 | [FAQ](https://www.zeokeel.com/docs/faq/) |
+| 产品定位与设计哲学 | [产品哲学](https://www.zeokeel.com/docs/philosophy/) |
+| 插件开发 / 生态 | [插件开发](https://www.zeokeel.com/docs/plugin-development/) · [插件生态](https://www.zeokeel.com/docs/plugin-ecosystem/) |
+| 系统架构 / API | [系统架构](https://www.zeokeel.com/docs/architecture/) · [API 参考](https://www.zeokeel.com/docs/api-reference/) |
 
 > 仓库内对应文件（`user-guide*`、`faq*`、`why-desktop*`、`plugin-ecosystem*`、`plugin-development*`）已改为指向官网的指引页，不再维护独立内容。
 

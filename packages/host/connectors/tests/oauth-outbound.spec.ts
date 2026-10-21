@@ -66,7 +66,7 @@ vi.mock('../src/pinned-http.ts', async (importOriginal) => {
 
 /** Variables the ROUTE depends on: an ambient proxy must not decide this suite. */
 const PROXY_ENV_NAMES: readonly string[] = [
-  'PICOAI_ALLOW_SYSTEM_PROXY', 'NODE_USE_ENV_PROXY',
+  'ZEOKEEL_ALLOW_SYSTEM_PROXY', 'NODE_USE_ENV_PROXY',
   'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy',
   'ALL_PROXY', 'all_proxy', 'NO_PROXY', 'no_proxy',
 ]

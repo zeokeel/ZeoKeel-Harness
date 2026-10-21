@@ -6,7 +6,7 @@
  * native 文案（托盘/通知/弹窗/失败页）一律经 `this.productName`，渠道构建下
  * 那里是渠道自己的名字。
  */
-const OFFICIAL_PRODUCT_NAME = 'PicoAide Harness'
+const OFFICIAL_PRODUCT_NAME = 'ZeoKeel Harness'
 
 import {
   app,
@@ -150,7 +150,7 @@ export interface NavigationAttempt {
  * 主窗口的 origin 判据：只允许停留在本次 shell 自己的 origin（外源/畸形 URL 一律拒）。
  *
  * **一份闭包挂三个事件**（`will-navigate` / `will-frame-navigate` / `will-redirect`）：
- * 这是本仓已冻结的安全不变量（应用窗口 `@picoaide/dsh-wasm-apps-host` 的
+ * 这是本仓已冻结的安全不变量（应用窗口 `@zeokeel/dsh-wasm-apps-host` 的
  * `electron-adapter` 同款，且那边有判据）。只挂 `will-frame-navigate` 时，一次 302 就能
  * 把窗口换到外站 —— 重定向是**独立事件**，不经过 `will-frame-navigate` 的语义保证。
  * 2026-09-25 审计 B1-04：删掉主窗口的 `will-redirect` 注册后 `electron-runtime.spec.ts`
@@ -197,7 +197,7 @@ interface DesktopUpdateFailureNotice {
   readonly backupPath: string
 }
 
-/** Native adapter used by the PicoAide Harness launcher and owned by its Cordis shell plugin. */
+/** Native adapter used by the ZeoKeel Harness launcher and owned by its Cordis shell plugin. */
 export class ElectronDesktopRuntime implements DesktopRuntime {
   readonly platform: DesktopPlatform
   /**
@@ -528,7 +528,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   }
 
   /**
-   * Receive a `picoaide://` deep link: validate it against the allow-list
+   * Receive a `zeokeel://` deep link: validate it against the allow-list
    * (P2-62), then deliver to the installed handler — or queue it when the
    * profile tree has not mounted yet.
    */

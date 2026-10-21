@@ -435,7 +435,7 @@ describe('loadAppAiIdentity：授权作用域与宿主同源（R21 FIX-7 ①）'
     expect(await loadAppAiIdentity({ fetch: respond({ loggedIn: true, username: 'alice', serverURL: 'https://harness.example.com\u0000x' }) })).toBeNull()
   })
 
-  it('读身份的路由是本机只读的 /api/pico/auth/state', async () => {
+  it('读身份的路由是本机只读的 /api/zeokeel/auth/state', async () => {
     let seen = ''
     const spy = (async (input: unknown) => {
       seen = String(input)

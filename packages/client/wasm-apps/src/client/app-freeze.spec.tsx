@@ -30,8 +30,8 @@ import { APP_AI_IDENTITY_PATH } from './app-ai.ts'
 import { HOST_PROOF_PATH, setHostProofToken } from './host-proof.ts'
 import { en, setActiveLocale, zh } from './locales.ts'
 
-const APP_SCHEME = 'picoaide-app'
-const OFFICIAL_CHANNEL: AppChannel = { appOriginScheme: APP_SCHEME, deepLinkScheme: 'picoaide', productName: 'PicoAide' }
+const APP_SCHEME = 'zeokeel-app'
+const OFFICIAL_CHANNEL: AppChannel = { appOriginScheme: APP_SCHEME, deepLinkScheme: 'zeokeel', productName: 'ZeoKeel' }
 
 interface Call { url: string, init: RequestInit }
 let container: HTMLDivElement
@@ -99,9 +99,9 @@ afterEach(async () => {
 describe('R5-B-7 纯逻辑：冻结点位与解析（只认服务端的 frozen）', () => {
   it('路径与宿主路由逐字一致，两个方向共用同一个端点（后缀是 freeze）', () => {
     expect(SET_FROZEN_SUFFIX).toBe('freeze')
-    expect(setFrozenPath('roster')).toBe('/api/pico/apps/wasm/roster/freeze')
+    expect(setFrozenPath('roster')).toBe('/api/zeokeel/apps/wasm/roster/freeze')
     // app_id 是路径段：必须编码（与上下架同一条口径）。
-    expect(setFrozenPath('a/b?c')).toBe('/api/pico/apps/wasm/a%2Fb%3Fc/freeze')
+    expect(setFrozenPath('a/b?c')).toBe('/api/zeokeel/apps/wasm/a%2Fb%3Fc/freeze')
   })
 
   it('读服务端返回值（frozen / enabled / note），不回落成"我请求的那个值"', () => {
@@ -138,7 +138,7 @@ describe('R5-B-7 纯逻辑：冻结点位与解析（只认服务端的 frozen�
     }) as unknown as typeof fetch
     const result = await setAppFrozen('frozen-tool', false, { fetch: fake })
     expect(result.ok).toBe(true)
-    expect(seen[0]!.url).toBe('/api/pico/apps/wasm/frozen-tool/freeze')
+    expect(seen[0]!.url).toBe('/api/zeokeel/apps/wasm/frozen-tool/freeze')
     expect(seen[0]!.init.method).toBe('POST')
     expect(JSON.parse(String(seen[0]!.init.body))).toEqual({ frozen: false })
   })
@@ -163,7 +163,7 @@ describe('R5-B-7 面板：冻结态可见，解冻入口可达', () => {
     // 说明要能回答"为什么打不开、下一步做什么"。
     expect(container.querySelector('[data-role="app-frozen-reason"]')?.textContent).toContain('解冻')
     // 冻结 = 停止服务：打开按钮必须禁用（点它只会得到一次注定失败的请求）。
-    const open = container.querySelector<HTMLButtonElement>('.pico-app-center-open')
+    const open = container.querySelector<HTMLButtonElement>('.zeokeel-app-center-open')
     expect(open?.disabled).toBe(true)
     // 发布者本人看得到解冻入口；正常行不是「解冻」而是「冻结」。
     expect(container.querySelector('[data-action="unfreeze"]')).not.toBeNull()
@@ -172,14 +172,14 @@ describe('R5-B-7 面板：冻结态可见，解冻入口可达', () => {
 
   it('点「解冻」真的发 POST …/freeze {"frozen":false}，并按服务端回包更新行', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm/frozen-tool/freeze') {
+      if (url === '/api/zeokeel/apps/wasm/frozen-tool/freeze') {
         return jsonResponse(200, { app: { app_id: 'frozen-tool', frozen: false, changed: true, enabled: false, note: '解冻不会自动上架：请显式调用 publish' } })
       }
       return jsonResponse(200, CATALOG)
     })
     await mount()
     await click('[data-action="unfreeze"]')
-    const posts = businessCalls().filter(call => call.url === '/api/pico/apps/wasm/frozen-tool/freeze')
+    const posts = businessCalls().filter(call => call.url === '/api/zeokeel/apps/wasm/frozen-tool/freeze')
     expect(posts).toHaveLength(1)
     expect(JSON.parse(String(posts[0]!.init.body))).toEqual({ frozen: false })
     // 徽章跟着服务端的 frozen=false 消失（不是乐观更新：值来自响应体）。
@@ -192,19 +192,19 @@ describe('R5-B-7 面板：冻结态可见，解冻入口可达', () => {
 
   it('冻结是停服动作：先出确认块（此刻 0 请求），确认后才发 POST {"frozen":true}', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm/live-tool/freeze') {
+      if (url === '/api/zeokeel/apps/wasm/live-tool/freeze') {
         return jsonResponse(200, { app: { app_id: 'live-tool', frozen: true, changed: true, enabled: false } })
       }
       return jsonResponse(200, CATALOG)
     })
     await mount()
-    await click('.pico-app-center-freeze')
+    await click('.zeokeel-app-center-freeze')
     const strip = container.querySelector('[data-role="confirm-freeze"]')
     expect(strip, '冻结前必须有确认块（它会停服并顺带下架）').not.toBeNull()
     expect(strip!.textContent).toContain('停止服务')
     expect(businessCalls().filter(call => call.url.endsWith('/freeze'))).toHaveLength(0)
-    await click('.pico-app-center-confirm-freeze')
-    const posts = businessCalls().filter(call => call.url === '/api/pico/apps/wasm/live-tool/freeze')
+    await click('.zeokeel-app-center-confirm-freeze')
+    const posts = businessCalls().filter(call => call.url === '/api/zeokeel/apps/wasm/live-tool/freeze')
     expect(posts).toHaveLength(1)
     expect(JSON.parse(String(posts[0]!.init.body))).toEqual({ frozen: true })
     // 行**不消失**：冻结可逆，而唯一能解开它的是发布者本人（把行抹掉就收回了入口）。
@@ -214,14 +214,14 @@ describe('R5-B-7 面板：冻结态可见，解冻入口可达', () => {
 
   it('服务端说没冻结（changed:false）时行也不假装冻结 —— 只认回包', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm/live-tool/freeze') {
+      if (url === '/api/zeokeel/apps/wasm/live-tool/freeze') {
         return jsonResponse(200, { app: { app_id: 'live-tool', frozen: false, changed: false, enabled: true } })
       }
       return jsonResponse(200, CATALOG)
     })
     await mount()
-    await click('.pico-app-center-freeze')
-    await click('.pico-app-center-confirm-freeze')
+    await click('.zeokeel-app-center-freeze')
+    await click('.zeokeel-app-center-confirm-freeze')
     expect(container.querySelectorAll('[data-role="app-frozen"]')).toHaveLength(1) // 只有目录里那条
   })
 })

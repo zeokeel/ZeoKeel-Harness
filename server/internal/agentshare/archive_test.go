@@ -10,7 +10,7 @@ import (
 // 返回空串,而不是拼出可越出 cacheDir 的路径(纵深防御,与 sharedskills
 // 的姊妹实现对齐)。
 func TestSafeNameRejectsNonSegmentInput(t *testing.T) {
-	cacheDir := "/var/lib/picoaide/agents"
+	cacheDir := "/var/lib/zeokeel/agents"
 	bad := []struct{ name, version string }{
 		{"../../etc/passwd", "1.0.0"},
 		{"ok", "../../../etc/passwd"},

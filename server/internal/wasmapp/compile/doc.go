@@ -2,7 +2,7 @@
 //
 //   - 父侧：单进程串行（并发 1）+ 有界队列（满则 429）+ 磁盘编译缓存回收
 //   - 上传频率闸门 + OS 级隔离启动器（bwrap）；
-//   - 子侧：cmd/picoaide-app-compile（另一个二进制），只读一个模块文件、只写缓存目录，
+//   - 子侧：cmd/zeokeel-app-compile（另一个二进制），只读一个模块文件、只写缓存目录，
 //     不继承宿主 env，被父侧用 bwrap 隔离。
 //
 // 依赖方向（capapi.go 的包注释）：本包只依赖 limits/apperr/wasmmod 与 wazero，

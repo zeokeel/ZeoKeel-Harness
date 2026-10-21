@@ -4,7 +4,7 @@
  * permission checks (every call resolves its session group; cross-group tab
  * references are rejected) and semantic presentation; execution delegates to
  * the BrowserRuntime.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -605,7 +605,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
         active: false,
         // **如实上报**（R16B-19）：宿主在渲染进程崩溃 / 顶层文档加载失败时把它标成
         // `crashed`，并在一次成功的应用文档加载之后清回 false（唯一写入点是
-        // `@picoaide/dsh-wasm-apps-host` 的 windows.ts，经 surface 注册表投影到这里）。
+        // `@zeokeel/dsh-wasm-apps-host` 的 windows.ts，经 surface 注册表投影到这里）。
         //
         // 修这条之前这里是硬编码 `false`，注释自承"应用窗口没有崩溃自动重载"——
         // 那句话早就不是事实了，而后果是**窗口永久空白时模型看到的一切都正常**

@@ -1,21 +1,21 @@
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-gateway-client'
+const PACKAGE_NAME = '@zeokeel/dsh-gateway-client'
 
 /**
  * 宿主侧**网关客户端**的共享叶子包（`auth` / `config` / `electron` 三个子路径）。
  *
  * 实现自 `packages/host/enterprise/src/server-connector/{auth,config,electron}.ts`
- * 逐字迁入，`@picoaide/dsh-enterprise` 保留同名 re-export（对外子路径与导出面不变）
+ * 逐字迁入，`@zeokeel/dsh-enterprise` 保留同名 re-export（对外子路径与导出面不变）
  * —— 与 2026-09-23 的 `loopback.ts` 四份合一同一姿势。
  *
- * **为什么必须是叶子**：功能模块包（`@picoaide/dsh-capability-center`、
- * `@picoaide/dsh-wasm-apps-host`）的本机路由要真的调网关。它们**不能** import
- * `@picoaide/dsh-enterprise`：enterprise 的 tsc 读 `dsh-plugin-desktop/desktop-channel`
- * （⇒ 边 enterprise → desktop），而 desktop 的 tsdown 把 `@picoaide/*` 内联
+ * **为什么必须是叶子**：功能模块包（`@zeokeel/dsh-capability-center`、
+ * `@zeokeel/dsh-wasm-apps-host`）的本机路由要真的调网关。它们**不能** import
+ * `@zeokeel/dsh-enterprise`：enterprise 的 tsc 读 `dsh-plugin-desktop/desktop-channel`
+ * （⇒ 边 enterprise → desktop），而 desktop 的 tsdown 把 `@zeokeel/*` 内联
  * （⇒ 边 desktop → wasm-apps-host）—— 模块包指向 enterprise 就闭合出
  * `desktop → wasm-apps-host → enterprise → desktop` 这个环。让共享实现落在一个
- * **没有任何 `@picoaide/*` 出边通往功能模块**的叶子上，环才断得干净。
+ * **没有任何 `@zeokeel/*` 出边通往功能模块**的叶子上，环才断得干净。
  *
  * 与本包同样刻意**不是** Cordis 插件：没有 `cordis.patch.yml` / `dsh.bundle` /
  * `./invariant` 入口，不会出现在任何 profile 组合里。

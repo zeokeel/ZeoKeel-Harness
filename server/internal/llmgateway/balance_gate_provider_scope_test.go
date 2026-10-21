@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // s18AddProvider 追加一个 provider 行（models JSON 带指定模型名），返回 id。

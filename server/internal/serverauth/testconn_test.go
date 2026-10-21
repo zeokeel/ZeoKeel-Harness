@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-ldap/ldap/v3"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestAdminTestConnectionLDAP:测试连接 LDAP 必须:
@@ -24,7 +24,7 @@ func TestAdminTestConnectionLDAP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}
 
 	// 保存 ldap 配置(密码落盘)
 	for k, v := range map[string]string{
@@ -99,7 +99,7 @@ func TestAdminTestConnectionLDAPBadPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}
 
 	f := &fakeLDAPConn{} // 无 passwords → bind 拒绝
 	orig := ldapProbeDialHook

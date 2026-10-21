@@ -11,15 +11,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // auditTestRouter 建最小管理路由树(与生产 router 声明一致)。
 func auditTestRouter(t *testing.T) (http.Handler, *sql.DB, *http.Cookie, string) {
 	t.Helper()
 	// 密钥加密依赖 master key(与生产一致:env 注入)
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef")
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
 	uid, err := serverstore.CreateUser(db, &serverstore.User{
@@ -35,7 +35,7 @@ func auditTestRouter(t *testing.T) (http.Handler, *sql.DB, *http.Cookie, string)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	RegisterAdminRoutes(r, db)
-	return r, db, &http.Cookie{Name: "picoaide_session", Value: sess.ID}, csrf
+	return r, db, &http.Cookie{Name: "zeokeel_session", Value: sess.ID}, csrf
 }
 
 func doJSON2(t *testing.T, r http.Handler, method, path string, body any, cookie *http.Cookie, csrf string) (int, map[string]any) {

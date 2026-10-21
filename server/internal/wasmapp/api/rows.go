@@ -6,12 +6,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/appdb"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appdb"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // 本文件是**应用作者的数据面**：只读浏览自己应用库里的行（2026-09-21 新增）。
@@ -28,7 +28,7 @@ import (
 //   - 真正的新增面是"AI 读行内容 ⇒ 使用者 PII 进模型上下文"，因此：
 //     · 员工面鉴权 = `ownedApp`（**只有发布者本人**，他人一律 404 与"应用不存在"同形）；
 //     · 默认按列名启发式**脱敏**，显式 `unmask=1` 才给原值，且**该次调用单独审计**；
-//     · **作者可补充声明**（`picoaide.app.json` 的 `sensitive_columns`，§5.9 第 8 点后半）：
+//     · **作者可补充声明**（`zeokeel.app.json` 的 `sensitive_columns`，§5.9 第 8 点后半）：
 //     启发式覆盖不到的业务列名由作者声明，声明与启发式取**并集**（只增不减）；
 //     · 每次调用写审计（动作 `wasm_app_rows_view`），审计**只记表名/分页/行数与脱敏状态，
 //     不记行内容**（把行内容写进审计等于把 PII **再复制一份**到审计表，而审计的保留期
@@ -140,7 +140,7 @@ func (h *Handlers) adminRows(c *gin.Context) {
 // respondRows 是两条鉴权面共用的唯一实现（同 diagnosticsPayload 的分工）。
 //
 // appTitle 只用于审计明细（"查看了《团队便签》的表 notes"），不参与数据查询。
-// declared 是作者在 `picoaide.app.json` 里**声明**的额外敏感列（appcfg 的
+// declared 是作者在 `zeokeel.app.json` 里**声明**的额外敏感列（appcfg 的
 // `sensitive_columns`）：与默认启发式取**并集**（声明是加法）。
 func (h *Handlers) respondRows(c *gin.Context, appID, appTitle, operator string, declared []string) {
 	ctx := c.Request.Context()

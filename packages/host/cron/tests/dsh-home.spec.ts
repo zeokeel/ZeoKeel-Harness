@@ -8,9 +8,9 @@ import {
 } from '../src/dsh-home.ts'
 
 describe('resolveDshHome (product home, re-exported from dsh-plugin-desktop/desktop-home)', () => {
-  it('defaults to ~/.picoaide-harness (product home, not upstream ~/.dsh)', () => {
+  it('defaults to ~/.zeokeel-harness (product home, not upstream ~/.dsh)', () => {
     expect(resolveDshHome(undefined, {}, '/home/user')).toBe(join('/home/user', PRODUCT_DSH_HOME_DIR))
-    expect(PRODUCT_DSH_HOME_DIR).toBe('.picoaide-harness')
+    expect(PRODUCT_DSH_HOME_DIR).toBe('.zeokeel-harness')
   })
 
   it('prefers an explicit DSH_HOME environment variable', () => {

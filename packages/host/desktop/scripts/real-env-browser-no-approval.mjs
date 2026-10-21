@@ -59,7 +59,7 @@ mkdirSync(HOME_DIR, { recursive: true })
 const child = spawn(appBinary, ['--no-sandbox', `--remote-debugging-port=${String(PORT)}`], {
   env: {
     ...process.env,
-    PICOAI_ALLOW_DEBUG_SWITCHES: '1',
+    ZEOKEEL_ALLOW_DEBUG_SWITCHES: '1',
     HOME: HOME_DIR,
     DSH_HOME: HOME_DIR,
     XDG_CONFIG_HOME: join(workDir, 'cfg'),
@@ -124,13 +124,13 @@ async function clickLabel(label, waitMs = 2500) {
 /**
  * 点开「更多」浮层里的一个条目（2026-09-21 并道后浏览器入口在浮层里；它唤起的是
  * **独立浏览器窗口**，没有中列面板可断言，所以判据是"条目点得到、浮层收起"）。
- * @param label - 条目文案（`.pico-foot-menu-item` 的可见文本）。
+ * @param label - 条目文案（`.zeokeel-foot-menu-item` 的可见文本）。
  * @param waitMs - settle time after the click.
  * @returns `'CLICKED'` / `'NOT_FOUND'` / `'OPEN_FAILED'` / `'STILL_OPEN'`.
  */
 async function clickFootMenuItem(label, waitMs = 3000) {
   const clicked = await ev(`(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row === null || row.offsetParent === null) return 'NOT_FOUND'
     if (row.getAttribute('aria-expanded') !== 'true') row.click()
     return 'OPENED'
@@ -138,14 +138,14 @@ async function clickFootMenuItem(label, waitMs = 3000) {
   if (clicked === 'NOT_FOUND') return 'NOT_FOUND'
   await wait(700)
   const open = await ev(`(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row === null) return false
     const menu = document.getElementById(row.getAttribute('aria-controls') ?? '')
     return row.getAttribute('aria-expanded') === 'true' && menu !== null && getComputedStyle(menu).display !== 'none'
   })()`)
   if (open !== true) return 'OPEN_FAILED'
   const hit = await ev(`(() => {
-    const items = [...document.querySelectorAll('.pico-foot-menu-item')].filter(b => b.offsetParent)
+    const items = [...document.querySelectorAll('.zeokeel-foot-menu-item')].filter(b => b.offsetParent)
     const target = items.find(b => (b.textContent ?? '').trim() === ${esc(label)})
     if (target === undefined) return 'NOT_FOUND'
     target.click()
@@ -154,7 +154,7 @@ async function clickFootMenuItem(label, waitMs = 3000) {
   await wait(waitMs)
   if (hit !== 'CLICKED') return hit
   const closed = await ev(`(() => {
-    const row = document.querySelector('.pico-foot-menu-trigger')
+    const row = document.querySelector('.zeokeel-foot-menu-trigger')
     if (row === null) return false
     const menu = document.getElementById(row.getAttribute('aria-controls') ?? '')
     return row.getAttribute('aria-expanded') === 'false' && (menu === null || getComputedStyle(menu).display === 'none')
@@ -196,8 +196,8 @@ try {
   await wait(3000)
   await screenshot('b01-browser-panel')
 
-  // 4. A real browser tab: drive /api/pico/browser/open to a target page.
-  await ev(`fetch('/api/pico/browser/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://example.com' }) })`).catch(() => {})
+  // 4. A real browser tab: drive /api/zeokeel/browser/open to a target page.
+  await ev(`fetch('/api/zeokeel/browser/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://example.com' }) })`).catch(() => {})
   await wait(6000)
   await screenshot('b02-browser-tab')
 
@@ -223,7 +223,7 @@ try {
 
   // 7. Drive a browser_type against a password field on a login page
   //    (data URL not allowed; use a real public page with a form).
-  await ev(`fetch('/api/pico/browser/navigate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tab: 1, url: 'https://accounts.google.com/' }) })`).catch(() => {})
+  await ev(`fetch('/api/zeokeel/browser/navigate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tab: 1, url: 'https://accounts.google.com/' }) })`).catch(() => {})
   await wait(8000)
   await screenshot('b04-password-page')
   const probed = await ev(`(() => {
@@ -233,7 +233,7 @@ try {
   reportStep('密码页导航后无审批弹窗', (probed?.dialogs ?? 0) === 0, `dialogs=${probed?.dialogs}`)
 
   // 8. Snapshot from the panel state API: the tool path did not error on approval.
-  const stateRaw = await ev(`fetch('/api/pico/browser/state').then(r => r.json()).catch(() => null)`)
+  const stateRaw = await ev(`fetch('/api/zeokeel/browser/state').then(r => r.json()).catch(() => null)`)
   reportStep('浏览器状态 API 正常（无审批阻塞）', stateRaw !== null, `state=${JSON.stringify(stateRaw)?.slice(0, 200)}`)
 } catch (cause) {
   console.error('browser no-approval fatal:', cause instanceof Error ? cause.message : String(cause))
@@ -242,7 +242,7 @@ try {
 
 const failed = results.filter(r => !r.ok)
 const lines = [
-  '# PicoAide Harness 真实环境-浏览器无审批验证报告',
+  '# ZeoKeel Harness 真实环境-浏览器无审批验证报告',
   '',
   `- 服务器: ${SERVER}`,
   `- 账号: ${USER}`,

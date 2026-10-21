@@ -251,7 +251,7 @@ let home: string
 let previousHome: string | undefined
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'pico-browser-cred-fault-'))
+  home = mkdtempSync(join(tmpdir(), 'zeokeel-browser-cred-fault-'))
   previousHome = process.env['DSH_HOME']
   process.env['DSH_HOME'] = home
 })

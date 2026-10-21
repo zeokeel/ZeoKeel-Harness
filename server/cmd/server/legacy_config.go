@@ -3,7 +3,7 @@ package main
 // 已废除配置的**启动期提示**（R15C-R-03，审计 2026-09-25，P2）。
 //
 // 设计承诺（明文）：`docs/planning/2026-09-19-wasm-client-only-design.md` §12 ——
-// 「`.env`/`settings` 里残留的 `PICOAI_APPS_BASE_DOMAIN`/`wasm.apps_base_domain`
+// 「`.env`/`settings` 里残留的 `ZEOKEEL_APPS_BASE_DOMAIN`/`wasm.apps_base_domain`
 // 现在**静默失效**，**启动要 warn 并给清理命令**」；`docs/deploy/AI-DEPLOY.md`
 // 的"存量部署清理"节把这两条列成升级必做项，并写着「启动期会打一条 warn 提醒」。
 //
@@ -11,7 +11,7 @@ package main
 // 日志里相关关键词命中 **0** 次，服务照常启动。这正是"改了配置但没生效的静默降级"：
 // 老部署按旧文档配了通配 DNS/证书/反代通配块与限流键，升级后这些取值不再被读取，
 // 而运维看到的是"配置还在 `.env` 里、服务启动正常"。同一轮审计已把另外两条 env
-// （未知内存档位 / 非法 `PICOAI_TRUSTED_PROXIES`）改成 fail-loud，这里补上同一口径的
+// （未知内存档位 / 非法 `ZEOKEEL_TRUSTED_PROXIES`）改成 fail-loud，这里补上同一口径的
 // 第三个成员 —— 区别只是这三条**不阻断启动**（配置本身无害，只是无效），但必须
 // 每次都吵。
 //
@@ -27,7 +27,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // legacyConfigEntry 登记一条已废除的配置项。
@@ -54,11 +54,11 @@ type legacyConfigEntry struct {
 // 检测与日志渲染都按这张表走，不允许在别处再写一份键名清单）。
 var legacyConfigEntries = []legacyConfigEntry{
 	{
-		EnvKey:      "PICOAI_APPS_BASE_DOMAIN",
+		EnvKey:      "ZEOKEEL_APPS_BASE_DOMAIN",
 		Why:         "WASM 应用平台改为「客户端专属」后，对外应用子域与换票 Cookie 一并下线（2026-09-19 设计总纲 §12）",
-		Replacement: "无替代项；保留的是 PICOAI_APPS_EXTRA_RESERVED（应用名保留字）",
+		Replacement: "无替代项；保留的是 ZEOKEEL_APPS_EXTRA_RESERVED（应用名保留字）",
 		Doc:         "docs/planning/2026-09-19-wasm-client-only-design.md §12 / docs/deploy/AI-DEPLOY.md 存量部署清理",
-		Cleanup:     "sed -i '/^PICOAI_APPS_BASE_DOMAIN=/d' .env",
+		Cleanup:     "sed -i '/^ZEOKEEL_APPS_BASE_DOMAIN=/d' .env",
 	},
 	{
 		SettingKey:  "wasm.apps_base_domain",
@@ -68,11 +68,11 @@ var legacyConfigEntries = []legacyConfigEntry{
 		Cleanup:     `psql "$PG_DSN" -c "DELETE FROM settings WHERE key='wasm.apps_base_domain'"`,
 	},
 	{
-		EnvKey:      "PICOAI_TRUSTED_PROXIES_EXPLICIT",
-		Why:         "匿名限流键不再需要该开关；可信代理只由 PICOAI_TRUSTED_PROXIES 声明（2026-09-19 设计总纲 §12）",
-		Replacement: "PICOAI_TRUSTED_PROXIES（客户端 IP 归属，继续有效）",
+		EnvKey:      "ZEOKEEL_TRUSTED_PROXIES_EXPLICIT",
+		Why:         "匿名限流键不再需要该开关；可信代理只由 ZEOKEEL_TRUSTED_PROXIES 声明（2026-09-19 设计总纲 §12）",
+		Replacement: "ZEOKEEL_TRUSTED_PROXIES（客户端 IP 归属，继续有效）",
 		Doc:         "docs/planning/2026-09-19-wasm-client-only-design.md §12 / docs/deploy/AI-DEPLOY.md 存量部署清理",
-		Cleanup:     "sed -i '/^PICOAI_TRUSTED_PROXIES_EXPLICIT=/d' .env",
+		Cleanup:     "sed -i '/^ZEOKEEL_TRUSTED_PROXIES_EXPLICIT=/d' .env",
 	},
 }
 

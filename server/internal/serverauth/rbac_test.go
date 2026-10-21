@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // ---------------------------------------------------------------------------
@@ -131,7 +131,7 @@ func TestAuditorCannotWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	hdr := map[string]string{
-		"Cookie":       "picoaide_session=" + sess.ID,
+		"Cookie":       "zeokeel_session=" + sess.ID,
 		"X-CSRF-Token": csrf,
 	}
 	// auditor 可读

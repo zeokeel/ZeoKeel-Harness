@@ -13,7 +13,7 @@
  * W0-D — 自定义协议 origin 的浏览器存储隔离探针（真 Electron 主进程，不是 ELECTRON_RUN_AS_NODE）。
  *
  * 回答六个问题（设计文档 §7.5 / §17 认账 2 / §11.1 末行）：
- *   1. `picoaide-app://demo-a` 这类 standard+secure 自定义 scheme origin 里 localStorage 是否可用；
+ *   1. `zeokeel-app://demo-a` 这类 standard+secure 自定义 scheme origin 里 localStorage 是否可用；
  *   2. indexedDB 是否可用；
  *   3. caches（Cache Storage）是否可用（`caches.open` 能成功；另单独判 `cache.put` 写能力）；
  *   4. 三个存储面各自是否按 origin 隔离（demo-a 写的 demo-b 读不到）；
@@ -30,7 +30,7 @@
  *      并把该 API 的行为单独记为诊断项。
  *
  * 用法（必须与 xvfb-run 同一条命令，容器内 root 需 --no-sandbox）：
- *   cd /data/picoaide-harness && mkdir -p /tmp/probe-home/.config && \
+ *   cd /data/zeokeel-harness && mkdir -p /tmp/probe-home/.config && \
  *     HOME=/tmp/probe-home XDG_CONFIG_HOME=/tmp/probe-home/.config xvfb-run -a \
  *     packages/host/desktop/node_modules/electron/dist/electron --no-sandbox \
  *     temp/wasm-client-only/probe-browser-storage.cjs
@@ -68,7 +68,7 @@ if (!PROBE_COVERED) {
 // 常量
 // ---------------------------------------------------------------------------
 
-const SCHEME = 'picoaide-app'
+const SCHEME = 'zeokeel-app'
 const PARTITION_X = 'persist:probe-x'
 const PARTITION_Y = 'persist:probe-y'
 const PARTITION_CTL = 'persist:probe-ctl'
@@ -84,7 +84,7 @@ const OUT_PATH = path.join(
   'probe-browser-storage.json',
 )
 const RUN_ID = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`
-const USER_DATA_DIR = path.join(os.tmpdir(), `picoaide-w0d-probe-${RUN_ID}`)
+const USER_DATA_DIR = path.join(os.tmpdir(), `zeokeel-w0d-probe-${RUN_ID}`)
 const KEEP_USER_DATA = process.argv.includes('--keep-userdata')
 
 const POLL_TIMEOUT_MS = 8_000

@@ -14,12 +14,12 @@
 #
 # ## ⚠️ 待人工执行（当前**未闭环**）
 #
-# 下面的负责人是**占位团队** `@picoaide/gate-owners`：该团队不存在时，GitHub 视为
+# 下面的负责人是**占位团队** `@zeokeel/gate-owners`：该团队不存在时，GitHub 视为
 # "这些路径没有 code owner" ⇒ 本文件**不产生任何强制**（fail-safe：不会挡住合并）。
 # 要让本文件真的生效，需要仓库管理员：
 #
 #   1. 建团队并把真实的门禁负责人加进去；
-#   2. 把下面的 `@picoaide/gate-owners` 换成真实团队/账号（**这一步必须由人来拍**，
+#   2. 把下面的 `@zeokeel/gate-owners` 换成真实团队/账号（**这一步必须由人来拍**，
 #      代码里猜不出谁该负责）；
 #   3. 开 `require_code_owner_reviews`（或 ruleset 的 `required_reviewers`）。
 #      命令见决策文档 §4。
@@ -28,25 +28,25 @@
 # 任何改动这些路径的 PR 都会被列出来，评审者能一眼看到"这条 PR 动了判据的定义"。
 
 # 默认：全仓（保证任何 PR 都有一个可见的归属条目；不是"什么都要求审批"）。
-*                                   @picoaide/gate-owners
+*                                   @zeokeel/gate-owners
 
 # ---- 判据的「定义」：CI 的工作流与 composite action -------------------------
 # 改这里 = 改"哪些判据会被调用、以什么形态被调用"（R13-D-§8 的那条通道）。
-/.github/                           @picoaide/gate-owners
+/.github/                           @zeokeel/gate-owners
 
 # ---- 判据的「执行体」：所有在 CI / 门禁里真的被执行的脚本 -------------------
 # 与 `scripts/check-install-integrity.mjs` 的 `EXECUTION_FACE_REGISTRY` 同一张面。
-/scripts/                           @picoaide/gate-owners
-/packages/host/desktop/scripts/     @picoaide/gate-owners
-/packages/vendor/memory-evolve/scripts/ @picoaide/gate-owners
+/scripts/                           @zeokeel/gate-owners
+/packages/host/desktop/scripts/     @zeokeel/gate-owners
+/packages/vendor/memory-evolve/scripts/ @zeokeel/gate-owners
 
 # ---- 判据的「输入面」：install 期与依赖解析 ---------------------------------
-/.yarnrc.yml                        @picoaide/gate-owners
-/package.json                       @picoaide/gate-owners
-/yarn.lock                          @picoaide/gate-owners
-/patches/                           @picoaide/gate-owners
-/.yarn/patches/                     @picoaide/gate-owners
+/.yarnrc.yml                        @zeokeel/gate-owners
+/package.json                       @zeokeel/gate-owners
+/yarn.lock                          @zeokeel/gate-owners
+/patches/                           @zeokeel/gate-owners
+/.yarn/patches/                     @zeokeel/gate-owners
 
 # ---- 判据的「语料面」：打包后置判据与各包的验证脚本配置 ---------------------
-/packages/*/*/vitest.config.ts      @picoaide/gate-owners
-/packages/*/*/tsconfig*.json        @picoaide/gate-owners
+/packages/*/*/vitest.config.ts      @zeokeel/gate-owners
+/packages/*/*/tsconfig*.json        @zeokeel/gate-owners

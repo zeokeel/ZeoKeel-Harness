@@ -559,7 +559,7 @@ describe('app proof provider (lazy issuance, in-memory only)', () => {
   })
 
   it('keeps the frozen header name (cross-package contract)', () => {
-    expect(APP_PROOF_HEADER).toBe('X-Pico-App-Proof')
+    expect(APP_PROOF_HEADER).toBe('X-ZeoKeel-App-Proof')
     expect(APP_PROOF_PATH).toBe('/api/client/v2/apps/wasm/proof')
   })
 })

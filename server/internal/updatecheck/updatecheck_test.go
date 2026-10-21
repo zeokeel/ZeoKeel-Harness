@@ -16,7 +16,7 @@ const manifestBody = `{
   "schema": 1,
   "channel_id": "official",
   "server": {"version": "2.6.0", "image_tag": "v2.6.0",
-             "image_ref": "ghcr.io/picoaide/picoaide-harness-server:v2.6.0"},
+             "image_ref": "ghcr.io/zeokeel/zeokeel-harness-server:v2.6.0"},
   "client": {"version": "2.6.0"},
   "published_at": "2026-09-10T00:00:00Z"
 }`
@@ -175,10 +175,10 @@ func TestDevCurrentNeverUpdates(t *testing.T) {
 	}
 }
 
-// 端点解析:PICOAI_UPDATE_ENDPOINT 覆盖默认值;关闭值返回空(不启用检查)。
+// 端点解析:ZEOKEEL_UPDATE_ENDPOINT 覆盖默认值;关闭值返回空(不启用检查)。
 //
 // 2026-09-10 语义修正:**空串 = 未设置**,不是"关闭"。仓库自带的
-// docker-compose.yml 用 `${PICOAI_UPDATE_ENDPOINT:-}` 传值,未配置时容器里
+// docker-compose.yml 用 `${ZEOKEEL_UPDATE_ENDPOINT:-}` 传值,未配置时容器里
 // 就是空串;旧语义把空串当关闭,导致默认部署永远不检查更新(fail-silent)。
 // 要关闭必须显式写 off / none / - / disabled。
 func TestResolveEndpoint(t *testing.T) {
@@ -190,7 +190,7 @@ func TestResolveEndpoint(t *testing.T) {
 	}{
 		{"default when unset", false, "", DefaultEndpointFor("example-brand")},
 		{"default follows the resolved channel", false, "", DefaultEndpointFor("example-brand")},
-		{"channel override", true, "https://release.picoaide.com/example-brand/latest.json", "https://release.picoaide.com/example-brand/latest.json"},
+		{"channel override", true, "https://release.zeokeel.com/example-brand/latest.json", "https://release.zeokeel.com/example-brand/latest.json"},
 		{"empty means unset, not disabled", true, "", DefaultEndpointFor("example-brand")},
 		{"off disables", true, "off", ""},
 		{"dash disables", true, "-", ""},
@@ -221,7 +221,7 @@ func TestDefaultEndpointFor(t *testing.T) {
 	if got := DefaultEndpointFor(OfficialChannel); got != DefaultEndpoint {
 		t.Fatalf("DefaultEndpointFor(official) = %q, want %q", got, DefaultEndpoint)
 	}
-	if got := DefaultEndpointFor(BetaChannel); got != "https://release.picoaide.com/beta/latest.json" {
+	if got := DefaultEndpointFor(BetaChannel); got != "https://release.zeokeel.com/beta/latest.json" {
 		t.Fatalf("DefaultEndpointFor(beta) = %q", got)
 	}
 }
@@ -373,9 +373,9 @@ func TestResolveChannel(t *testing.T) {
 		want     string
 		wantOK   bool
 	}{
-		{"explicit channel wins", "example-brand", "https://release.picoaide.com/official/latest.json", "", "example-brand", true},
-		{"derive from endpoint path", "", "https://release.picoaide.com/example-brand/latest.json", "", "example-brand", true},
-		{"derive beta from path", "", "https://release.picoaide.com/beta/latest.json", "", "beta", true},
+		{"explicit channel wins", "example-brand", "https://release.zeokeel.com/official/latest.json", "", "example-brand", true},
+		{"derive from endpoint path", "", "https://release.zeokeel.com/example-brand/latest.json", "", "example-brand", true},
+		{"derive beta from path", "", "https://release.zeokeel.com/beta/latest.json", "", "beta", true},
 		{"no config defaults official", "", "", "", OfficialChannel, true},
 		{"endpoint without channel segment", "", "https://example.test/latest.json", "", OfficialChannel, true},
 		// 2026-09-10:显式设了非法值不再静默变官方 —— 那是"渠道部署被官方清单
@@ -386,7 +386,7 @@ func TestResolveChannel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(ChannelEnv, tc.channel)
 			t.Setenv(EndpointEnv, tc.endpoint)
-			// 标记文件走临时目录:测试机上不存在 /opt/picoaide/CHANNEL。
+			// 标记文件走临时目录:测试机上不存在 /opt/zeokeel/CHANNEL。
 			marker := filepath.Join(t.TempDir(), "CHANNEL")
 			if tc.marker != "" {
 				if err := os.WriteFile(marker, []byte(tc.marker), 0o644); err != nil {
@@ -414,7 +414,7 @@ func TestResolveChannel(t *testing.T) {
 // 隔离校验就形同虚设。
 func TestResolveChannelPrefersImageMarker(t *testing.T) {
 	t.Setenv(ChannelEnv, "")
-	t.Setenv(EndpointEnv, "https://release.picoaide.com/official/latest.json")
+	t.Setenv(EndpointEnv, "https://release.zeokeel.com/official/latest.json")
 	marker := filepath.Join(t.TempDir(), "CHANNEL")
 	if err := os.WriteFile(marker, []byte("example-brand\n"), 0o644); err != nil {
 		t.Fatalf("write marker: %v", err)

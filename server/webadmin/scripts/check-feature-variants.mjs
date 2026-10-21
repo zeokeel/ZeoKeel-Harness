@@ -38,7 +38,7 @@
  * 退出码：0 = 矩阵全部通过；1 = 有变体失败（**第一个失败的变体就停**：后续变体的失败信息会被
  * 前一个的噪音盖住，而修复者要的是"哪个变体、哪条断言"）。
  *
- * @module picoaide-webadmin/check-feature-variants
+ * @module zeokeel-webadmin/check-feature-variants
  */
 
 import { spawnSync } from 'node:child_process'

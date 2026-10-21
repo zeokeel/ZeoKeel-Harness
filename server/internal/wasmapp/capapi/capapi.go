@@ -17,7 +17,7 @@ package capapi
 import (
 	"context"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 )
 
 // DB 是应用数据库能力（§4.5/§5.1：db.define / db.query / db.exec / db.tx）。
@@ -66,7 +66,7 @@ type DBStats struct {
 // ⚠️ `AI` 接口已随 W4 **删除**（总纲 §21.3）：服务端 `ai.chat` 宿主能力彻底消失，
 // `internal/wasmapp/aichat/**` 整包删除，能力实现侧不再有任何 AI 依赖。
 // 应用要调模型必须走**客户端 AI loop**（§21.2：应用前端 JS → 宿主保留路径
-// `/__picoaide/ai/chat` → 结果回传 wasm 落库），计费走客户端既有 LLM 链路，
+// `/__zeokeel/ai/chat` → 结果回传 wasm 落库），计费走客户端既有 LLM 链路，
 // 应用维度归因由该链路的**会话 id 前缀**承担（`app:<app_id>…` ⇒ 出站头
 // `x-deepseek-harness-session-id` ⇒ 网关派生 `usage.app_id`，§21.4 / §21.7⑤）。
 

@@ -8,7 +8,7 @@ import { packagedProductName } from '../scripts/channel-build.ts'
 /**
  * 验证门禁不得把**厂商品牌**锁进发布链。
  *
- * 2026-09-10 审计:多处验证脚本断言 `document.title.includes('PicoAide')`
+ * 2026-09-10 审计:多处验证脚本断言 `document.title.includes('ZeoKeel')`
  * 或只读 `package.json build.productName` 去拼 `<productName>.app`。渠道构建下
  * 窗口标题与应用名是**客户的名字**,这些"门禁"于是要么让渠道矩阵永远红,
  * 要么更糟 —— 逼着人把渠道构建改成厂商名。断言应当对齐"本次构建声明了什么"
@@ -67,7 +67,7 @@ describe('verification gates are brand-agnostic', () => {
     // 用**空临时目录**而不是工作树的 `build/`（2026-09-26 复审 B-3 同族):那里可能躺着
     // 上一次渠道构建的残留（`.gitignore:32` 忽略、只有官方构建才清),断言会随工作树状态
     // 飘成"渠道构建后 mac 单测红一片",而真正的原因只是工作树脏。
-    expect(packagedProductName(mkdtempEmptyDir())).toBe('PicoAide Harness')
+    expect(packagedProductName(mkdtempEmptyDir())).toBe('ZeoKeel Harness')
   })
 
   it('lets a channel build declare its own product name', () => {
@@ -88,7 +88,7 @@ describe('verification gates are brand-agnostic', () => {
 
   it('falls back to the official name when the staged package has no name', () => {
     const dir = mkdtempChannelBuildDir({ channel_id: 'acme' })
-    expect(packagedProductName(dir)).toBe('PicoAide Harness')
+    expect(packagedProductName(dir)).toBe('ZeoKeel Harness')
   })
 
   it('refuses a malformed staged package instead of guessing', () => {

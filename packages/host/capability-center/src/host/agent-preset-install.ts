@@ -48,7 +48,7 @@ import {
   requiresRemoveConfirmation,
   writeProvenance,
 } from './skill-install.ts'
-import { dshHomeSafe } from '@picoaide/dsh-host-home'
+import { dshHomeSafe } from '@zeokeel/dsh-host-home'
 
 /**
  * Agent preset ids mirror the upstream `PRESET_ID`: lower-case id, directory name.
@@ -86,7 +86,7 @@ export function validatePresetId(id: string): string {
  * Resolve the local preset root: `$DSH_HOME/.agent-presets`（缺省=产品数据根）。
  *
  * 2026-09-11:缺省值走共享的 `dshHomeSafe()`(数据目录唯一权威) —— 数据根随渠道,
- * 自己抄一份 `~/.picoaide-harness` 会在改渠道目录时漏掉。
+ * 自己抄一份 `~/.zeokeel-harness` 会在改渠道目录时漏掉。
  */
 export function resolvePresetsDir(env: NodeJS.ProcessEnv = process.env): string {
   // 审计 2026-08-25 P2-3:DSH_HOME 不得指向系统关键目录(同机注入面)。

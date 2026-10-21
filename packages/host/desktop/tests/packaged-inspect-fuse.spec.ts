@@ -205,17 +205,17 @@ describe('打包版 inspect fuse 收口（FIX-33）', () => {
   it('候选 fuse 载体镜像 electron-builder 的平台映射', () => {
     const base = join(tmpdir(), 'dsh-fuse-candidates')
     // darwin：先 `.app`（@electron/fuses 内部再定位 framework 二进制），再真实 Mach-O。
-    expect(packagedFuseTargetCandidates(contextFor(base, 'darwin', 'PicoAide Harness'))).toEqual([
-      join(base, 'PicoAide Harness.app'),
-      join(base, 'PicoAide Harness.app', 'Contents', 'MacOS', 'PicoAide Harness'),
+    expect(packagedFuseTargetCandidates(contextFor(base, 'darwin', 'ZeoKeel Harness'))).toEqual([
+      join(base, 'ZeoKeel Harness.app'),
+      join(base, 'ZeoKeel Harness.app', 'Contents', 'MacOS', 'ZeoKeel Harness'),
     ])
     // win32：`<product>.exe`（不带目录扫描出的杂项）。
-    expect(packagedFuseTargetCandidates(contextFor(base, 'win32', 'PicoAide Harness')))
-      .toEqual([join(base, 'PicoAide Harness.exe')])
+    expect(packagedFuseTargetCandidates(contextFor(base, 'win32', 'ZeoKeel Harness')))
+      .toEqual([join(base, 'ZeoKeel Harness.exe')])
     // linux：executableName 优先（LinuxPackager 的 `dsh-plugin-desktop`）。
     expect(packagedFuseTargetCandidates({
-      ...contextFor(base, 'linux', 'PicoAide Harness'),
-      packager: { appInfo: { productFilename: 'PicoAide Harness', id: packagedAppId() }, executableName: LINUX_LAUNCHER },
+      ...contextFor(base, 'linux', 'ZeoKeel Harness'),
+      packager: { appInfo: { productFilename: 'ZeoKeel Harness', id: packagedAppId() }, executableName: LINUX_LAUNCHER },
     })[0]).toBe(join(base, LINUX_LAUNCHER))
   })
 

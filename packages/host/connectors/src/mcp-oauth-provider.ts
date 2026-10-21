@@ -217,7 +217,7 @@ export function isTerminalRefreshReason(reason: RefreshFailureReason): boolean {
 }
 
 /** Thrown internally when the SDK would redirect a background refresh to a browser. */
-const REAUTHORIZE_REQUIRED = 'PICO_CONNECTOR_REAUTHORIZE_REQUIRED'
+const REAUTHORIZE_REQUIRED = 'ZEOKEEL_CONNECTOR_REAUTHORIZE_REQUIRED'
 
 /** OAuth error codes that mean "this grant is dead" (SDK `OAuthError.code` values). */
 const DEAD_GRANT_CODES = new Set(['invalid_grant', 'invalid_client', 'unauthorized_client'])

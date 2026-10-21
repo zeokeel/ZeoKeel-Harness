@@ -317,7 +317,7 @@ type WasmAppAIUsage struct {
 	Days  []WasmAppAIUsageDay `json:"days"`
 	Total WasmAppAIUsageDay   `json:"total"`
 	// AttributionAvailable=false 表示**平台在这个窗口里还没有任何带应用归因的
-	// usage 行**（`X-Pico-App-Id` 尚未被客户端发送，见 §21.4 的落地顺序）。
+	// usage 行**（`X-ZeoKeel-App-Id` 尚未被客户端发送，见 §21.4 的落地顺序）。
 	//
 	// 为什么必须把它与"零调用"分开（W5 C4 的判据）：两者在数字上都是 0，
 	// 但含义完全相反 —— 前者是"统计还没上线"，后者是"这个应用确实没调过模型"。

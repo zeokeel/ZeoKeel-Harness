@@ -24,7 +24,7 @@ import (
 // # 判定：**设计如此**（不是漏做）
 //
 // 设计真源 `docs/planning/2026-09-17-wasm-app-platform.md`（§「发布链路的跨端预算头
-// （`X-Pico-Client-Budget-Ms`，2026-10-04 审计 FW-2）」）逐字写着：
+// （`X-ZeoKeel-Client-Budget-Ms`，2026-10-04 审计 FW-2）」）逐字写着：
 //
 //	「**三条发布入口**（`validate` / `:app_id/releases` / `uploads/:id/complete`）都接受这个
 //	 可选请求头，语义是"客户端在**这一跳**还会等多少毫秒"…分片链必须带它（`complete` 是唯一

@@ -1,4 +1,4 @@
-/** PicoAide Harness executable: minimal Electron bootstrap around the Host Cordis root. */
+/** ZeoKeel Harness executable: minimal Electron bootstrap around the Host Cordis root. */
 
 import { app, crashReporter, dialog, safeStorage, shell } from 'electron'
 import type { Context } from '@deepseek-ai/cordis'
@@ -36,13 +36,13 @@ import {
 } from './debug-switches.ts'
 // 客户端专属 WASM 应用 origin：协议特权注册（whenReady 之前）+ 交给插件的
 // Electron 适配器。子路径 `electron-adapter` 是唯一静态 import electron 的模块，
-// 插件主体（`@picoaide/dsh-wasm-apps-host`）保持纯 Node 可加载。
-import { createRealElectronAdapter, createRealElectronWindowAdapter, registerAppScheme } from '@picoaide/dsh-wasm-apps-host/electron-adapter'
+// 插件主体（`@zeokeel/dsh-wasm-apps-host`）保持纯 Node 可加载。
+import { createRealElectronAdapter, createRealElectronWindowAdapter, registerAppScheme } from '@zeokeel/dsh-wasm-apps-host/electron-adapter'
 import {
   WASM_APPS_HOST_ADAPTER_SERVICE,
   WASM_APPS_INSTALL_KEY_SERVICE,
-} from '@picoaide/dsh-wasm-apps-host'
-import { createInstallKeyStore } from '@picoaide/dsh-wasm-apps-host/app-proof'
+} from '@zeokeel/dsh-wasm-apps-host'
+import { createInstallKeyStore } from '@zeokeel/dsh-wasm-apps-host/app-proof'
 import { provideAppAiRunner } from './app-ai-runner.ts'
 import { assertRequiredClientEntries, assertRequiredRowsActive } from './startup-rows.ts'
 import { fatalBootIdentity, reportFatalBootFailure, type FatalBootChoice } from './fatal-boot.ts'
@@ -127,7 +127,7 @@ const PRODUCT_NAME = CHANNEL_PROFILE?.productName ?? OFFICIAL_PRODUCT_NAME
  * 本安装的深链 scheme(OIDC/OpenID 浏览器回调把 token 交回客户端用的那个)。
  *
  * 由渠道包决定:浏览器在跳回客户端时会弹"打开 <scheme>?"的确认框,渠道客户
- * 不该在这里看到厂商名。官方构建未配置时回落 `picoaide` —— 行为不变。
+ * 不该在这里看到厂商名。官方构建未配置时回落 `zeokeel` —— 行为不变。
  * **必须与 electron-builder 的 `protocols`(scripts/channel-build.ts)以及
  * 服务端 OIDC 回调拼出的 scheme 三者一致**,否则浏览器回调打不开客户端。
  */
@@ -152,7 +152,7 @@ const APP_ORIGIN_SCHEME = CHANNEL_PROFILE?.appOriginScheme ?? DEFAULT_APP_ORIGIN
  * 覆盖面是**全部** session：默认 session（gatewayFetch / net.fetch / 渲染进程）、
  * 内置浏览器分区、WASM 应用窗口 —— 逐 session `setProxy` 会漏掉后建分区（实测）。
  *
- * 取值来源：`PICOAI_ALLOW_SYSTEM_PROXY`（真实进程环境，排障）> 渠道包
+ * 取值来源：`ZEOKEEL_ALLOW_SYSTEM_PROXY`（真实进程环境，排障）> 渠道包
  * `desktop.allow_system_proxy`（部署）> 默认禁止。
  */
 const SYSTEM_PROXY_POLICY = resolveSystemProxyPolicy(process.env, CHANNEL_PROFILE)
@@ -172,7 +172,7 @@ applySystemProxyPolicy(app.commandLine, SYSTEM_PROXY_POLICY)
  *
  * 判定顺序、文案与副作用都在 `debug-switches.ts`（纯函数 + 可注入接缝，行为判据见
  * `tests/debug-switches.spec.ts`）：开发态（`!app.isPackaged`）一律放行；
- * 打包态可经真实进程环境里的 `PICOAI_ALLOW_DEBUG_SWITCHES=1` 显式放行**一次**
+ * 打包态可经真实进程环境里的 `ZEOKEEL_ALLOW_DEBUG_SWITCHES=1` 显式放行**一次**
  * （E2E/真机探针靠它驱动打包产物），放行会写进启动日志（下面 `start()` 里那行）。
  */
 const DEBUG_SWITCH_GATE = detectDebugSwitches({
@@ -395,7 +395,7 @@ async function start(): Promise<void> {
     logSink = undefined
   }
   const electronLogger = new ElectronStderrLogger(logSink)
-  // 逃生门留痕（2026-09-26 第二十五轮审计 Y4-01）：`PICOAI_ALLOW_DEBUG_SWITCHES`
+  // 逃生门留痕（2026-09-26 第二十五轮审计 Y4-01）：`ZEOKEEL_ALLOW_DEBUG_SWITCHES`
   // 放行的是"任何本机同用户进程都能控制本应用并读它的本地 API cookie"这件事，
   // 静默放行等于保护不存在 —— 每次靠它启动都在启动日志里写明。
   const debugSwitchEscape = debugSwitchEscapeLogLine(DEBUG_SWITCH_GATE)
@@ -467,7 +467,7 @@ async function start(): Promise<void> {
 
   try {
     removeChildProcessLogging = installDesktopChildProcessLogging(app, electronLogger)
-    // 客户端专属 WASM 应用 origin（`picoaide-app://`）：协议特权注册是**启动期**
+    // 客户端专属 WASM 应用 origin（`zeokeel-app://`）：协议特权注册是**启动期**
     // API，必须在 `app.whenReady()` 之前执行（晚于 ready 会静默无效/抛错），所以
     // 它在装配层接线，而不是由插件自己在 apply 里做。权限位与实测约束见契约
     // `docs/decisions/2026-09-19-wasm-client-internal-origin.md` §2/§3。
@@ -525,7 +525,7 @@ async function start(): Promise<void> {
   // Windows 的 AppUserModelId 决定通知身份(不弹/不归组多半是这里对不上快捷方式)。
   // 渠道构建必须用渠道自己的 app_id —— electron-builder 写进快捷方式的就是它,
   // 硬编码厂商值会让渠道客户端的通知在 Windows 上认不出自己。
-  if (process.platform === 'win32') app.setAppUserModelId(CHANNEL_PROFILE?.appId ?? 'ai.deepseek.dsh.desktop')
+  if (process.platform === 'win32') app.setAppUserModelId(CHANNEL_PROFILE?.appId ?? 'com.zeokeel.harness')
   // P2-34: a packaged app must never keep a filesystem root or a system
   // directory as its working directory (desktop-entry `Path=`, a shortcut with
   // a wrong "start in", a service manager). The old `=== '/'` check only saw
@@ -539,7 +539,7 @@ async function start(): Promise<void> {
     platform: process.platform,
   })
   for (const [name, value] of Object.entries(shellEnvironmentResolution.updates)) process.env[name] = value
-  // Product-owned home — 官方 `~/.picoaide-harness`，渠道客户端用**自己的**
+  // Product-owned home — 官方 `~/.zeokeel-harness`，渠道客户端用**自己的**
   // 目录（渠道包 `desktop.home_dir`，见 desktop-home.ts 的 channelDshHomeDir）；
   // 除非 DSH_HOME 被显式设置（e2e/便携安装，优先级最高）。写回环境变量让所有
   // 下游消费者（子进程、读 DSH_HOME 的兄弟插件）落在同一个位置。

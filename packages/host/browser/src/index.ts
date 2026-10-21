@@ -1,24 +1,24 @@
 /**
- * Embedded agent-driven browser for PicoAide Harness (v4.2 single pool):
+ * Embedded agent-driven browser for ZeoKeel Harness (v4.2 single pool):
  * owns the WebContentsView tab pool, the CDP sessions, the `browser_*` tool
  * suite, the loopback shell API + SSE push, the programmatic download path,
  * the AI interception mask page, and the local stores.
  *
  * HTTP API (loopback, same-origin fenced):
- *   GET  /api/pico/browser/state          -> tabs + window + busy + control
- *   GET  /api/pico/browser/ops            -> recent op log
- *   GET  /api/pico/browser/stream         -> SSE (state-change signals)
- *   POST /api/pico/browser/open           -> { url? } (user new tab)
- *   POST /api/pico/browser/navigate       -> { url } (user address bar)
- *   POST /api/pico/browser/reload|back|forward -> (active tab)
- *   POST /api/pico/browser/switch-tab     -> { tab }
- *   POST /api/pico/browser/close-tab      -> { tab }
- *   POST /api/pico/browser/show|hide|takeover|clear-data
- *   GET  /api/pico/browser/bookmarks [+ POST / DELETE ?id=]
- *   GET  /api/pico/browser/history        -> ?q=&limit=
- *   GET  /api/pico/browser/downloads      [DELETE ?id=]
+ *   GET  /api/zeokeel/browser/state          -> tabs + window + busy + control
+ *   GET  /api/zeokeel/browser/ops            -> recent op log
+ *   GET  /api/zeokeel/browser/stream         -> SSE (state-change signals)
+ *   POST /api/zeokeel/browser/open           -> { url? } (user new tab)
+ *   POST /api/zeokeel/browser/navigate       -> { url } (user address bar)
+ *   POST /api/zeokeel/browser/reload|back|forward -> (active tab)
+ *   POST /api/zeokeel/browser/switch-tab     -> { tab }
+ *   POST /api/zeokeel/browser/close-tab      -> { tab }
+ *   POST /api/zeokeel/browser/show|hide|takeover|clear-data
+ *   GET  /api/zeokeel/browser/bookmarks [+ POST / DELETE ?id=]
+ *   GET  /api/zeokeel/browser/history        -> ?q=&limit=
+ *   GET  /api/zeokeel/browser/downloads      [DELETE ?id=]
  *   GET  /browser-shell | /browser-overlay -> toolbar shell + AI UI overlay pages
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -30,7 +30,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 // 零依赖叶子包：数据根（`dshHomePath`）的唯一源。**不是**连接器包 —— 连接器包的
 // `user-scope.ts` 只是把它 re-export 出去，所以这里直连不改变任何解析结果。
-import { dshHomePath } from '@picoaide/dsh-host-home'
+import { dshHomePath } from '@zeokeel/dsh-host-home'
 import { connectorStoreContractViolation, connectorStoreCtorOf, type ConnectorStoreLike } from './connectors-contract.ts'
 import { credentialSiteOrigin } from './credential-site.ts'
 import { browserError, type BrowserError } from './errors.ts'
@@ -42,7 +42,7 @@ import { TabPool } from './pool.ts'
 import { BrowserStore } from './store.ts'
 import { DEFAULT_GROUPS, applyBrowserTools, parseToolGroups } from './tools.ts'
 import { browserOverlayHtml, browserShellHtml } from './shell-pages.ts'
-import { hostLocaleFrom, type HostLocale } from '@picoaide/dsh-host-locale'
+import { hostLocaleFrom, type HostLocale } from '@zeokeel/dsh-host-locale'
 import type { CredentialResolver } from './types.ts'
 import type { DownloadEntry } from './store.ts'
 type DownloadEntryStatus = DownloadEntry['status']
@@ -50,7 +50,7 @@ type DownloadEntryStatus = DownloadEntry['status']
 // Type-only: declare the enterprise session event so `ctx.on` resolves it.
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'pico/session-changed'(session: { username?: string; token?: string; serverURL?: string } | null): void
+    'zeokeel/session-changed'(session: { username?: string; token?: string; serverURL?: string } | null): void
     /**
      * The launcher's user-visible language changed (the in-app locale setting).
      *
@@ -58,12 +58,12 @@ declare module '@deepseek-ai/cordis' {
      * REQUEST, so a window that is already open keeps the language it was
      * loaded with — the listener re-serves them (2026-09-16 R9 audit).
      */
-    'pico/locale-changed'(locale: 'zh' | 'en'): void
+    'zeokeel/locale-changed'(locale: 'zh' | 'en'): void
   }
 }
 
 /** Cordis plugin name used by loader diagnostics. */
-export const name = 'pico-browser'
+export const name = 'zeokeel-browser'
 
 /**
  * 上游 `connection` 服务（BrowserAuth 持有性检查）在本包内需要的**最小结构**。
@@ -93,7 +93,7 @@ export interface Config {
    * 是否允许 `browser_eval`（**缺省 `true` = 允许**）。
    *
    * **当前没有生产者**（2026-09-26 R21 F-02 实测）：全仓唯一的装配点
-   * `packages/host/desktop/src/profile.ts` 给 `pico-browser` 行注入的 config **只**有
+   * `packages/host/desktop/src/profile.ts` 给 `zeokeel-browser` 行注入的 config **只**有
    * `appOriginScheme`，而 patch 的 `config` 是整键替换 ⇒ 其余键一律走插件缺省。想关掉
    * 只能手改装配后的 profile，或由渠道包接上生产者（那是一条尚未实施的路线）。
    *
@@ -111,7 +111,7 @@ export interface Config {
    * 启用的工具组白名单（**键缺席 = 七组全开**）。
    *
    * **当前没有生产者**（同 {@link Config.evalEnabled}）：全仓唯一的装配点
-   * `packages/host/desktop/src/profile.ts` 给 `pico-browser` 行注入的 config **只**有
+   * `packages/host/desktop/src/profile.ts` 给 `zeokeel-browser` 行注入的 config **只**有
    * `appOriginScheme`，而 patch 的 `config` 是整键替换 ⇒ 本键在生产形态里**一律缺席**。
    * 语义见 `tools.ts` 的 `parseToolGroups`：键缺席 ⇒ 七组全开；**显式空数组 = 全关**。
    *
@@ -145,7 +145,7 @@ export interface Config {
 /**
  * 凭据读失败的**浏览器侧分类**（2026-09-27 FIX-34，唯一实现）。
  *
- * 第二十六轮 FIX-31 把 `@picoaide/dsh-connectors` 的 `readCredential` 语义改成
+ * 第二十六轮 FIX-31 把 `@zeokeel/dsh-connectors` 的 `readCredential` 语义改成
  * 「只有 ENOENT 返回 `null`，其余读失败抛 `CredentialReadError`」—— 本包因此必须把
  * "读不出来"和"没有凭据"**分开**（旧行为把前者降级成后者：`fill_credentials` 拿到
  * 裸错、`credentials_list` 说"没有凭据"、站点闸门说"这条记录没有站点 URL"）。
@@ -211,7 +211,7 @@ async function assertScopeListable(dir: string): Promise<void> {
  * 构造 `browser_fill_credentials` 用的凭据解析器（导出以便单测：站点绑定基准
  * 必须与工具侧闸门同源，2026-09-15 审计 BUG-03）。
  *
- * `@picoaide/dsh-connectors` 用 `createRequire` 惰性解析，并且**不 import 它的
+ * `@zeokeel/dsh-connectors` 用 `createRequire` 惰性解析，并且**不 import 它的
  * 类型**：连接器模块是可选的（关掉它之后本插件仍要能编译、能启动），需求侧的
  * 契约声明在 `./connectors-contract.ts`。包不在时返回 `undefined`，工具侧对
  * fill_credentials 一律 fail-closed 拒绝。
@@ -253,14 +253,14 @@ export function createCredentialResolver(options: {
   let loadedModule: unknown
   try {
     const require = createRequire(import.meta.url)
-    loadedModule = require('@picoaide/dsh-connectors/store')
+    loadedModule = require('@zeokeel/dsh-connectors/store')
   } catch {
     return undefined
   }
   const ConnectorStore = connectorStoreCtorOf(loadedModule)
   if (ConnectorStore === undefined) {
     options.onContractViolation?.(
-      `pico-browser: the installed connector package does not match the credential contract `
+      `zeokeel-browser: the installed connector package does not match the credential contract `
       + `(${connectorStoreContractViolation(loadedModule) ?? 'unknown shape'}) — browser_fill_credentials and `
       + `browser_credentials_list stay refused until the connector package and this plugin agree again`,
     )
@@ -467,13 +467,13 @@ export async function runSessionSwitch(steps: SessionSwitchSteps): Promise<void>
   // silently deleting the new account's saved tabs before prewarm can restore
   // them (2026-09-15 audit regression).
   //
-  // 本函数**没有**并发守卫：两个 `pico/session-changed` 事件背靠背到达时两次切换会
+  // 本函数**没有**并发守卫：两个 `zeokeel/session-changed` 事件背靠背到达时两次切换会
   // 交错（已在 2026-09-27 FIX-34 报告里登记为交接项，不属本次修复面）。
   try {
     await steps.closeAll()
   } catch (cause) {
     // One failed teardown must not skip the identity/scope switch below.
-    steps.warn('pico-browser: closing tabs during the user switch failed', cause)
+    steps.warn('zeokeel-browser: closing tabs during the user switch failed', cause)
   }
   steps.applyUserScope()
   steps.clearOps()
@@ -487,8 +487,8 @@ export function apply(ctx: Context, config: Config = {}): void {
 
   const currentUser = (): string | null => {
     try {
-      const pico = ctx.get('picoSession') as { getSession?: () => { username?: string } | null } | undefined
-      return pico?.getSession?.()?.username ?? null
+      const zeokeel = ctx.get('zeokeelSession') as { getSession?: () => { username?: string } | null } | undefined
+      return zeokeel?.getSession?.()?.username ?? null
     } catch {
       return null
     }
@@ -506,8 +506,8 @@ export function apply(ctx: Context, config: Config = {}): void {
    */
   const currentServerURL = (): string | null => {
     try {
-      const pico = ctx.get('picoSession') as { getSession?: () => { serverURL?: string } | null } | undefined
-      const serverURL = pico?.getSession?.()?.serverURL
+      const zeokeel = ctx.get('zeokeelSession') as { getSession?: () => { serverURL?: string } | null } | undefined
+      const serverURL = zeokeel?.getSession?.()?.serverURL
       return typeof serverURL === 'string' ? serverURL : null
     } catch {
       return null
@@ -522,8 +522,8 @@ export function apply(ctx: Context, config: Config = {}): void {
    * 测试/正式并存，真实可触发）会让新旧租户共用同一个持久分区 —— 同名站点/应用
    * origin 的 cookie 与 localStorage 于是跨租户串味（2026-09-21 审计 P1-10 证据②）。
    *
-   * **来源与宿主同源**：`picoSession.getSession().serverURL`，与
-   * `@picoaide/dsh-wasm-apps-host` 的 `readAppSession` 读的是同一个服务 —— 应用窗口
+   * **来源与宿主同源**：`zeokeelSession.getSession().serverURL`，与
+   * `@zeokeel/dsh-wasm-apps-host` 的 `readAppSession` 读的是同一个服务 —— 应用窗口
    * 与浏览器标签必须落在**同一个**分区上，两边各读一份就会漂移成两个 session。
    * 未登录 / 读不到 ⇒ `undefined`（匿名分区**不带**后缀，逐字节不变）。
    * @returns 32 位 hex 摘要，或 undefined。
@@ -566,11 +566,11 @@ export function apply(ctx: Context, config: Config = {}): void {
   // silently writes untracked files into whatever directory the process
   // started in. Use the product DSH home instead (same source as downloadDir).
   //
-  // 2026-10-13（去连接器耦合）：这里原先 `require('@picoaide/dsh-connectors/user-scope')`
+  // 2026-10-13（去连接器耦合）：这里原先 `require('@zeokeel/dsh-connectors/user-scope')`
   // 取 `dshHomePath`（该模块只是把它从叶子包 re-export 出来）。连接器模块关掉之后
-  // 那个 require 必失败，于是落到下面那句**硬编码** `~/.picoaide-harness` —— 渠道
+  // 那个 require 必失败，于是落到下面那句**硬编码** `~/.zeokeel-harness` —— 渠道
   // 构建的数据根不是它（渠道包 `desktop.home_dir`），浏览器存储会写进另一个目录。
-  // 改为直接静态 import 零依赖叶子包 `@picoaide/dsh-host-home`：**同一份实现**
+  // 改为直接静态 import 零依赖叶子包 `@zeokeel/dsh-host-home`：**同一份实现**
   // （`user-scope.ts` 的 re-export 就是把这一份交出去的），数据根唯一源不变，
   // 连接器在不在都解析到同一个目录 ⇒ 硬编码兜底连同它的渠道盲区一起删掉。
   const fallbackDataRoot = (): string => dshHomePath()
@@ -586,7 +586,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   })
   /**
    * Surface 注册表（§16.1）：本插件是**唯一**的 surface 提供者，`provide` 出去给
-   * 应用窗口宿主（`@picoaide/dsh-wasm-apps-host` 经 `@picoaide/dsh-browser/surface`
+   * 应用窗口宿主（`@zeokeel/dsh-wasm-apps-host` 经 `@zeokeel/dsh-browser/surface`
    * 的 `BROWSER_SURFACE_SERVICE` 取得它）。浏览器标签这一半由 runtime 镜像，
    * 应用窗口那一半由宿主注册 —— 两者共用同一套工具实现与胶囊/遮罩。
    */
@@ -607,7 +607,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     try {
       provide.call(ctx, BROWSER_SURFACE_SERVICE, surfaces)
     } catch (cause) {
-      ctx.logger?.warn?.(`pico-browser: providing the surface registry failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      ctx.logger?.warn?.(`zeokeel-browser: providing the surface registry failed (${cause instanceof Error ? cause.message : String(cause)})`)
     }
   }
   const runtime = new BrowserRuntime(
@@ -672,7 +672,7 @@ export function apply(ctx: Context, config: Config = {}): void {
    * 把"当前用户作用域"切到 `user`：分区 + 书签/历史/下载 store + 分区权限守卫。
    *
    * 幂等、可从任意路径重复调用（`setPartition` 同值短路、守卫安装本身幂等），因此
-   * 它同时服务两个入口：`pico/session-changed` 与启动期安装。
+   * 它同时服务两个入口：`zeokeel/session-changed` 与启动期安装。
    *
    * 交接表已删除（§7b 方案 A）：用户切换只需要换标签分区与 store —— 蒙版在默认
    * session 里，它的写证明（应用自己的 `dsh-auth-*` cookie）由新登录直接替换，
@@ -688,17 +688,17 @@ export function apply(ctx: Context, config: Config = {}): void {
   // already-open window keeps the old language until it is re-served. Reload
   // ONLY the chrome pages — the tab webContents (the user's browsing session)
   // are separate views and must not be touched.
-  ctx.on('pico/locale-changed', () => { runtime.reloadChromePages() })
+  ctx.on('zeokeel/locale-changed', () => { runtime.reloadChromePages() })
 
   // User switch: point new tabs at the new user's partition and swap the
   // per-user browser store (bookmarks/history/downloads/ledger), then close the
   // previous account's tabs and prewarm HIDDEN so the agent keeps a live CDP
   // surface without any user action.
-  ctx.on('pico/session-changed', (next) => {
+  ctx.on('zeokeel/session-changed', (next) => {
     const username = (next as { username?: string } | null)?.username ?? null
     const user = username !== null && username !== undefined && username.length > 0 ? username : null
     // 分区名带**服务端哈希**（§7.2/R2S-8）：同一个用户在两个服务端上是两个租户，
-    // 持久分区必须分开。哈希从 `picoSession` 现取（事件载荷只当兜底）—— 应用窗口
+    // 持久分区必须分开。哈希从 `zeokeelSession` 现取（事件载荷只当兜底）—— 应用窗口
     // 那边读的是同一个服务，两边必须落在同一个分区上。
     const eventServerURL = (next as { serverURL?: string } | null)?.serverURL
     const serverHash = currentServerHash() ?? serverPartitionHash(eventServerURL ?? null)
@@ -713,14 +713,14 @@ export function apply(ctx: Context, config: Config = {}): void {
       prewarm: async () => { await runtime.prewarm() },
       warn: (message, cause) => { ctx.logger?.warn?.(message, cause) },
     }).catch((cause: unknown) => {
-      ctx.logger?.error('pico-browser: session change handling failed', cause)
+      ctx.logger?.error('zeokeel-browser: session change handling failed', cause)
     })
   })
 
   // P2-29: the tool registrations are released with the plugin fiber.
   ctx.effect(
     () => applyBrowserTools(ctx, runtime, parseToolGroups(config.toolGroups)),
-    'pico-browser: tool suite',
+    'zeokeel-browser: tool suite',
   )
 
   // 分区初始化即装权限守卫（§16.1 冻结：归属 = 分区初始化，不是建 tab 时）。
@@ -730,7 +730,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   ctx.effect(() => {
     ensureBrowserPartitionGuard(currentUser(), currentServerHash())
     return () => {}
-  }, 'pico browser: browser partition permission guard')
+  }, 'zeokeel browser: browser partition permission guard')
 
   ctx.effect(() => {
     /**
@@ -738,7 +738,7 @@ export function apply(ctx: Context, config: Config = {}): void {
      * `auth-gate.ts` 的 r7c-6 同一口径、同一机制）。
      *
      * `loopback.ts:60-64` 自述的边界就是"伪造 Origin 的 curl 也能过"：本机任意
-     * 进程伪造 `Origin`/`Host`/`Sec-Fetch-Site` 就能 `POST /api/pico/browser/eval`
+     * 进程伪造 `Origin`/`Host`/`Sec-Fetch-Site` 就能 `POST /api/zeokeel/browser/eval`
      * 以用户已登录身份操作任意站点、`clear-data` 抹掉用户浏览器数据。证明 =
      * 上游 `connection` 服务的 BrowserAuth cookie（`dsh-auth-<authority>`：
      * HttpOnly + SameSite=Strict + HMAC，只能由本进程服务、经 launch token 换票
@@ -752,7 +752,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (!connectionFenceReady(fence)) {
         // 与 401/403 分支同口径带上路由（2026-09-15 审计 F5）：现场若 fence 缺席，
         // 只有一句 "connection service unavailable" 同样指不到是哪个页面的哪个请求。
-        ctx.logger?.warn?.(`pico-browser: connection service unavailable; refusing a local write (fail-closed) [${req.method ?? 'POST'} ${(req.url ?? '').split('?')[0] ?? ''}]`)
+        ctx.logger?.warn?.(`zeokeel-browser: connection service unavailable; refusing a local write (fail-closed) [${req.method ?? 'POST'} ${(req.url ?? '').split('?')[0] ?? ''}]`)
         json(res, 503, {
           error: 'browser session proof unavailable',
           hint: 'reopen the application window from its launch URL',
@@ -764,7 +764,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         rejection = fence.requestRejection({ headers: req.headers })
       } catch (err) {
         // 校验器自身抛错 = 无法证明 ⇒ 按拒绝处理（不把异常泄漏成 500）。
-        ctx.logger?.warn?.(`pico-browser: browser proof check failed (${err instanceof Error ? err.message : String(err)})`)
+        ctx.logger?.warn?.(`zeokeel-browser: browser proof check failed (${err instanceof Error ? err.message : String(err)})`)
         rejection = 403
       }
       if (rejection === undefined) return true
@@ -772,7 +772,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       // 现场只看到 "refused a local write without browser proof (401)" 时，无法
       // 区分 shell 页（默认 session，天然持票）与 overlay 蒙版页（浏览器分区，
       // 靠 cookie 交接）。只记 pathname，丢掉 query（可能带用户数据）。
-      ctx.logger?.warn?.(`pico-browser: refused a local write without browser proof (${String(rejection)}) [${req.method ?? 'POST'} ${(req.url ?? '').split('?')[0] ?? ''}]`)
+      ctx.logger?.warn?.(`zeokeel-browser: refused a local write without browser proof (${String(rejection)}) [${req.method ?? 'POST'} ${(req.url ?? '').split('?')[0] ?? ''}]`)
       json(res, 403, {
         error: 'browser session proof required',
         hint: 'reopen the application window from its launch URL',
@@ -1017,11 +1017,11 @@ export function apply(ctx: Context, config: Config = {}): void {
     }
 
     const disposers = [
-      ctx.webServer.register({ kind: 'exact', path: '/api/pico/browser/state', handler: state }),
-      ctx.webServer.register({ kind: 'exact', path: '/api/pico/browser/ops', handler: ops }),
-      ctx.webServer.register({ kind: 'exact', path: '/api/pico/browser/stream', handler: stream }),
-      ctx.webServer.register({ kind: 'prefix', path: '/api/pico/browser', handler: action }),
-      ctx.webServer.register({ kind: 'exact', path: '/api/pico/browser/bookmarks', handler: (req, res) => {
+      ctx.webServer.register({ kind: 'exact', path: '/api/zeokeel/browser/state', handler: state }),
+      ctx.webServer.register({ kind: 'exact', path: '/api/zeokeel/browser/ops', handler: ops }),
+      ctx.webServer.register({ kind: 'exact', path: '/api/zeokeel/browser/stream', handler: stream }),
+      ctx.webServer.register({ kind: 'prefix', path: '/api/zeokeel/browser', handler: action }),
+      ctx.webServer.register({ kind: 'exact', path: '/api/zeokeel/browser/bookmarks', handler: (req, res) => {
         void (async () => {
           if (req.method === 'GET') return bookmarksGet(req, res)
           if (req.method === 'POST') return await bookmarksPost(req, res)
@@ -1029,13 +1029,13 @@ export function apply(ctx: Context, config: Config = {}): void {
           json(res, 405, { error: 'method not allowed' })
         })().catch((cause: unknown) => json(res, 400, { error: cause instanceof Error ? cause.message : String(cause) }))
       } }),
-      ctx.webServer.register({ kind: 'exact', path: '/api/pico/browser/history', handler: historyGet }),
-      ctx.webServer.register({ kind: 'exact', path: '/api/pico/browser/downloads', handler: (req, res) => {
+      ctx.webServer.register({ kind: 'exact', path: '/api/zeokeel/browser/history', handler: historyGet }),
+      ctx.webServer.register({ kind: 'exact', path: '/api/zeokeel/browser/downloads', handler: (req, res) => {
         if (req.method === 'GET') return downloadsGet(req, res)
         if (req.method === 'DELETE') return downloadsDelete(req, res)
         json(res, 405, { error: 'method not allowed' })
       } }),
-      ctx.webServer.register({ kind: 'exact', path: '/api/pico/browser/downloads/open', handler: (req, res) => {
+      ctx.webServer.register({ kind: 'exact', path: '/api/zeokeel/browser/downloads/open', handler: (req, res) => {
         void (async () => {
           if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
           if (!guard(req, res)) return
@@ -1056,7 +1056,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     return () => {
       for (const dispose of disposers) dispose()
     }
-  }, 'pico browser: panel api')
+  }, 'zeokeel browser: panel api')
 
   /**
    * 等"持久会话已恢复"再建浏览器窗口（2026-09-15 审计 F1 的保守修法）。
@@ -1066,16 +1066,16 @@ export function apply(ctx: Context, config: Config = {}): void {
    * **恢复还没回来**的那段时间里：`currentUser()` 为 null ⇒ 分区与书签/历史 store
    * 先落在匿名桶上，登录态慢（例如要等一次服务端校验）时这个窗口能到秒级。
    * 修法就是**别急着建**：`isRestored()` 一到就建（正常路径只多等一次 token 文件
-   * 读取，毫秒级）；超时（缺 picoSession 的宿主 / 恢复卡住）照常建，行为与旧版一致。
+   * 读取，毫秒级）；超时（缺 zeokeelSession 的宿主 / 恢复卡住）照常建，行为与旧版一致。
    */
   const waitForSessionRestored = async (budgetMs = 15_000): Promise<boolean> => {
-    const pico = ctx.get('picoSession') as { isRestored?: () => boolean } | undefined
-    if (typeof pico?.isRestored !== 'function') return true
+    const zeokeel = ctx.get('zeokeelSession') as { isRestored?: () => boolean } | undefined
+    if (typeof zeokeel?.isRestored !== 'function') return true
     const deadline = Date.now() + budgetMs
-    while (pico.isRestored() !== true && Date.now() < deadline) {
+    while (zeokeel.isRestored() !== true && Date.now() < deadline) {
       await new Promise((resolve) => { setTimeout(resolve, 50) })
     }
-    return pico.isRestored() === true
+    return zeokeel.isRestored() === true
   }
 
   // Boot prewarm (2026-09-08 product decision): the browser window, the
@@ -1086,19 +1086,19 @@ export function apply(ctx: Context, config: Config = {}): void {
     let cancelled = false
     void (async () => {
       const restored = await waitForSessionRestored()
-      if (!restored) ctx.logger?.warn?.('pico-browser: session restore did not finish in 15s; prewarming with the current scope')
+      if (!restored) ctx.logger?.warn?.('zeokeel-browser: session restore did not finish in 15s; prewarming with the current scope')
       if (!cancelled) await runtime.prewarm()
     })().catch((cause: unknown) => {
-      ctx.logger?.warn('pico-browser: prewarm failed', cause)
+      ctx.logger?.warn('zeokeel-browser: prewarm failed', cause)
     })
     return () => { cancelled = true }
-  }, 'pico browser: boot prewarm')
+  }, 'zeokeel browser: boot prewarm')
 
   ctx.effect(() => {
     return () => {
       runtime.dispose()
     }
-  }, 'pico browser: teardown')
+  }, 'zeokeel browser: teardown')
 }
 
 /** Read a number from a string with a fallback. */

@@ -531,7 +531,7 @@ describe('audit fixes: op-log actor + store switching', () => {
 
   it('closeAll(user) 之后控制权必须交还（2026-09-15 审计 P1-1）', async () => {
     // 用户正拿着控制权（「我来操作」）时来一次会话切换（token 过期 → auth-gate
-    // clear、登出、改密都会发 pico/session-changed）⇒ 旧实现用 already 短路，
+    // clear、登出、改密都会发 zeokeel/session-changed）⇒ 旧实现用 already 短路，
     // controlled 永久为 true：蒙版不再上锁、用户闸对 agent 失效、胶囊显示「交给 AI」。
     const { runtime, cleanup } = makeRuntime()
     runtime.setUserControl(true, 'user')

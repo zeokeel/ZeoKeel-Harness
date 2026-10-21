@@ -24,11 +24,11 @@ export const NO_PROXY_SWITCH = 'no-proxy-server'
 /**
  * 允许使用宿主机代理的排障开关。
  *
- * 只认**真实进程环境**（`PICOAI_ALLOW_SYSTEM_PROXY=1`）：Chromium 的开关必须在
+ * 只认**真实进程环境**（`ZEOKEEL_ALLOW_SYSTEM_PROXY=1`）：Chromium 的开关必须在
  * `app.whenReady()` 之前 append，而 Harness home 的 `.env` 分层要到 `start()` 里才加载，
  * 结构上赶不上；部署级的"允许代理"请用渠道包字段。
  */
-export const ALLOW_SYSTEM_PROXY_ENV = 'PICOAI_ALLOW_SYSTEM_PROXY'
+export const ALLOW_SYSTEM_PROXY_ENV = 'ZEOKEEL_ALLOW_SYSTEM_PROXY'
 
 /**
  * 进程环境里会改变出站路由的代理名。
@@ -67,7 +67,7 @@ export interface SystemProxyChannelInput {
  * 解析"是否允许使用宿主机代理"。
  *
  * 判定顺序（先到先得）：
- *  1. 进程环境变量 `PICOAI_ALLOW_SYSTEM_PROXY`（显式 `0`/`false` 也生效 —— 它是**双向**开关）；
+ *  1. 进程环境变量 `ZEOKEEL_ALLOW_SYSTEM_PROXY`（显式 `0`/`false` 也生效 —— 它是**双向**开关）；
  *  2. 渠道包 `desktop.allow_system_proxy: true`；
  *  3. 默认：禁止。
  * @param env - 进程环境（只读）。
@@ -144,7 +144,7 @@ export function stripProxyEnvironment(env: Record<string, string | undefined>): 
  * 环境分层（Harness home 的 `.env`）里配了排障开关、但**已经太晚**时给出可诊断的一行。
  *
  * 判定的时机是模块作用域（Chromium 开关必须早于 ready），而 `.env` 分层要到 `start()`
- * 才加载 —— 所以写在 `.env` 里的 `PICOAI_ALLOW_SYSTEM_PROXY` 结构上不生效。静默无效
+ * 才加载 —— 所以写在 `.env` 里的 `ZEOKEEL_ALLOW_SYSTEM_PROXY` 结构上不生效。静默无效
  * 是这类"看起来装了闸门"的典型坑，这里把它变成启动日志里的一行。
  * @param env - `loadLayeredEnv()` 之后的 `process.env`。
  * @param policy - 启动时定下的策略。

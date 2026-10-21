@@ -1,8 +1,8 @@
 /**
- * 应用配置的**字段规格**（`picoaide.app.json` 的 access 三模式契约）。
+ * 应用配置的**字段规格**（`zeokeel.app.json` 的 access 三模式契约）。
  *
  * 为什么单独立一个模块：这套常量有**两份消费者** —— 发布表单的前端预校验
- * （`validatePublishDraft`）与 `/api/pico/apps/wasm` 的目录解析（`AppCenterPanel`）。
+ * （`validatePublishDraft`）与 `/api/zeokeel/apps/wasm` 的目录解析（`AppCenterPanel`）。
  * 两份各写一遍就会漂移出"表单放行、服务端拒"或"面板认不出服务端字段"的分叉。
  *
  * ## 单一真源与它的过渡态
@@ -23,7 +23,7 @@
  * 企业既有主机名、版本号未严格递增、wasm 校验…），因此预校验**只做加法**：
  * 它拦下的必然是服务端也会拒的，绝不拦下服务端会接受的。
  *
- * @module @picoaide/dsh-wasm-apps/client/appcfg-contract
+ * @module @zeokeel/dsh-wasm-apps/client/appcfg-contract
  */
 
 /**
@@ -88,7 +88,7 @@ export const WHITELIST_MAX = 2000
  */
 export const WASM_MAX_BYTES = 32 * 1024 * 1024
 
-/** 首版必填的声明字段（`title` 是请求体字段，其余在 `picoaide.app.json` 里）。 */
+/** 首版必填的声明字段（`title` 是请求体字段，其余在 `zeokeel.app.json` 里）。 */
 export const FIRST_RELEASE_REQUIRED_FIELDS = ['title', 'purpose', 'data_sensitivity', 'owner'] as const
 
 // ---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ function isPixelSize(value: unknown): value is number {
 }
 
 
-/** `picoaide.app.json` 的字段名集合（`access` 取代了 `visible` + `login_required`）。 */
+/** `zeokeel.app.json` 的字段名集合（`access` 取代了 `visible` + `login_required`）。 */
 export const APP_CONFIG_FIELDS = ['access', 'whitelist', 'purpose', 'data_sensitivity', 'owner', 'window', 'sensitive_columns'] as const
 
 /**
@@ -216,7 +216,7 @@ export const PUBLISH_PAYLOAD_FIELDS = ['app_id', 'version', 'wasm_base64', 'conf
  * {@link CATALOG_ROW_AUTHOR_FIELDS}。
  *
  * 2026-09-19：`entry_url` **已从两侧删除**（冻结契约 §4.5：应用只在客户端内以
- * `picoaide-app://<app_id>/` 打开，服务端不再下发入口链接；可分享形态 = 深链
+ * `zeokeel-app://<app_id>/` 打开，服务端不再下发入口链接；可分享形态 = 深链
  * `<渠道 scheme>://app/<app_id>`）。客户端不再认识这个字段 —— 它出现也只是被忽略
  * （{@link ./AppCenterPanel.parseCatalog} 不映射）。
  *
@@ -333,7 +333,7 @@ export interface AppcfgComparison {
 
 /** 候选路径：字段表可能把这些值放在哪（先按候选路径找，找不到再深扫兜底）。 */
 const ACCESS_MODES_PATHS = [
-  // 服务端 appcfg.json 的实际写法（schema `picoaide-app-config/1`）。
+  // 服务端 appcfg.json 的实际写法（schema `zeokeel-app-config/1`）。
   'access_values', 'config_fields.access.values', 'publish_fields.access.values',
   'access', 'access.values', 'access.enum', 'access.allowed', 'access.modes',
   'access_modes', 'access_modes.values', 'access_modes.enum',

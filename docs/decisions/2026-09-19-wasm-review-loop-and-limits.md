@@ -61,7 +61,7 @@
   （`wasmLimitsHolder.ApplyStartup`）：重启后 `restart_pending` 为空是"被断言过的
   事实"，不为空则如实显示（不再被静默抹平）。
 - `/wasm-apps/limits` 视图如实反映来源：`source_label`（"控制台保存（wasm.limits）" /
-  "部署档位 small（PICOAI_WASM_MEMORY_PROFILE）"）、`profile`（档位名），
+  "部署档位 small（ZEOKEEL_WASM_MEMORY_PROFILE）"）、`profile`（档位名），
   四笔账的 `budget.profile` 由硬写的 `"settings"` 改为
   `limits/setting` 或 `limits/profile:<name>`（与启动自检日志同一形态）。
 

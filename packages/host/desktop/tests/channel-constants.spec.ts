@@ -3,12 +3,12 @@
  *
  * 为什么（2026-09-28 一次真实 tag 事故）：`CLIENT_PLATFORM_ASSETS` 与
  * `CHANNEL_ASSET_FILES` 原先写在 `channel-build.ts` 里，而那个模块顶端 import
- * `../src/desktop-home.ts`（后者 `export * from '@picoaide/dsh-host-home'`）⇒
+ * `../src/desktop-home.ts`（后者 `export * from '@zeokeel/dsh-host-home'`）⇒
  * 用 `import(file://…/channel-build.ts)` 读常量的三个探针只能在
  * "装了 node_modules 且工作区已构建"的环境里跑。Gate 与三个打包 job 都是那种环境，
  * 所以分支/PR CI 全绿；**release job 只 checkout、不 install 也不 build**
  * ⇒ `v2.8.2-beta.2` 的 tag 流水线红在 "Fetch channel packages"：
- * `Cannot find package '@picoaide/dsh-host-home' imported from …/src/desktop-home.ts`。
+ * `Cannot find package '@zeokeel/dsh-host-home' imported from …/src/desktop-home.ts`。
  * tag 之前没有任何 CI 能看到这一格（release job 只在 tag 上跑）。
  *
  * 本文件钉住两件事（缺任一条，同一个事故会以同样方式复发）：
@@ -125,7 +125,7 @@ describe('渠道功能模块清单与规范化（features 的唯一真源）', (
 
   it('哨兵串命名从模块清单派生，且官方模板键逐模块列出 features.<module>', () => {
     for (const module of FEATURE_MODULES) {
-      expect(featureSentinel(module)).toBe(`picoaide.feature.${module}.v1`)
+      expect(featureSentinel(module)).toBe(`zeokeel.feature.${module}.v1`)
       expect(FEATURE_SENTINELS[module]).toBe(featureSentinel(module))
       // 官方渠道 = 新增渠道的模板：少一行，拷贝模板的渠道就看不到有哪几个模块可关。
       expect(CHANNEL_TEMPLATE_KEYS).toContain(`features.${module}`)

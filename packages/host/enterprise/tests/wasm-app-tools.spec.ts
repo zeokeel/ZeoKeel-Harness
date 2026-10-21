@@ -34,7 +34,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { inject as authGateInject, type Config as AuthGateConfig } from '../src/auth-gate.ts'
 import { applyFullComposition as apply } from './helpers/apply-full-composition.ts'
-import * as authConnector from '@picoaide/dsh-gateway-client/auth'
+import * as authConnector from '@zeokeel/dsh-gateway-client/auth'
 import * as wasmApps from '../../wasm-apps-host/src/wasm-apps.ts'
 import { CLIENT_UPLOAD_TIMEOUT_MS, WASM_APPS_PREFIX } from '../../wasm-apps-host/src/wasm-apps.ts'
 import {
@@ -67,11 +67,11 @@ vi.mock('../../wasm-apps-host/src/wasm-apps.ts', async (importOriginal) => {
 
 // 出站原语也换成计数 spy：它是**跨模块**导入（wasm-apps.ts ← server-connector/auth.ts），
 // 因此路由与工具两条路径都会命中它 —— 这是"两条路径共用同一条出站链路"的直接计数器。
-// 2026-10-13（P0-b）：`gatewayFetch` 的实现搬到叶子包 `@picoaide/dsh-gateway-client`
+// 2026-10-13（P0-b）：`gatewayFetch` 的实现搬到叶子包 `@zeokeel/dsh-gateway-client`
 // （enterprise 保留同名 re-export）。mock 必须打在**实现模块**的 id 上 —— 打在
 // re-export 上拦不到被测方（它们 import 的是叶子包），计数会恒 0。
-vi.mock('@picoaide/dsh-gateway-client/auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@picoaide/dsh-gateway-client/auth')>()
+vi.mock('@zeokeel/dsh-gateway-client/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@zeokeel/dsh-gateway-client/auth')>()
   return { ...actual, gatewayFetch: vi.fn(actual.gatewayFetch) }
 })
 
@@ -187,7 +187,7 @@ function harness(
       warn: (message: string) => { loggedWarnings.push(message) },
       error: (message: string) => { loggedErrors.push(message) },
     },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -261,8 +261,8 @@ let home: string
 let workspace: string
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-wasm-tools-home-'))
-  workspace = await mkdtemp(join(tmpdir(), 'pico-wasm-tools-ws-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-wasm-tools-home-'))
+  workspace = await mkdtemp(join(tmpdir(), 'zeokeel-wasm-tools-ws-'))
   vi.stubEnv('DSH_HOME', home)
   vi.mocked(wasmApps.publishApp).mockClear()
 })
@@ -312,7 +312,7 @@ describe('装配：inject、注册、预算序关系', () => {
     expect(authGateInject).toContain('tools')
     // 既有依赖不能被这次改动挤掉。
     expect(authGateInject).toContain('webServer')
-    expect(authGateInject).toContain('picoSession')
+    expect(authGateInject).toContain('zeokeelSession')
   })
 
   it('三个工具都经真实装配注册，名字与常量一致', () => {
@@ -553,11 +553,11 @@ describe('配置字段与 appcfg.json 对拍（单一真源缺席即红，不再
     'required_first_release', 'first_release_required', 'required_on_first_release',
     'requiredForFirstRelease', 'required',
   ]
-  /** 载荷/元数据键：它们在字段表里出现不算配置字段（发布载荷不是 picoaide.app.json）。 */
+  /** 载荷/元数据键：它们在字段表里出现不算配置字段（发布载荷不是 zeokeel.app.json）。 */
   /**
    * 发布载荷字段集合（服务端 `publish_fields` 的期望值）。
    *
-   * 与客户端 `@picoaide/dsh-wasm-apps` 的 `PUBLISH_PAYLOAD_FIELDS` 是**同一个契约**
+   * 与客户端 `@zeokeel/dsh-wasm-apps` 的 `PUBLISH_PAYLOAD_FIELDS` 是**同一个契约**
    * 的两端镜像；第三方（服务端）改名时两边必须一起改 —— 两处各自对拍同一份
    * `appcfg.json`，所以漏改哪一边都会红。
    */

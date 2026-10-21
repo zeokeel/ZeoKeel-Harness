@@ -22,17 +22,17 @@ interface AppFixture {
 function fixture(overrides: { readonly identifier?: string } = {}): AppFixture {
   const root = mkdtempSync(join(tmpdir(), 'dsh-mac-smoke-'))
   temporaryRoots.push(root)
-  const contents = join(root, 'PicoAide Harness.app', 'Contents')
+  const contents = join(root, 'ZeoKeel Harness.app', 'Contents')
   const macos = join(contents, 'MacOS')
   const resources = join(contents, 'Resources')
   const infoPlist = join(contents, 'Info.plist')
-  const executable = join(macos, 'PicoAide Harness')
+  const executable = join(macos, 'ZeoKeel Harness')
   const appAsar = join(resources, 'app.asar')
   const modeOverrides = new Map<string, number>()
   // 包内一致性判据要求图标键指向真实 icns、且 ElectronAsarIntegrity 与 asar 头部一致，
   // 所以夹具用共享的 mac-bundle-fixture 写一份自洽的最小包。`identifier` 缺省 = 官方
   // 身份（= 未做渠道构建时 `packagedAppId()` 的取值），传别的值用于身份判据的反向用例。
-  writeValidMacBundle(join(root, 'PicoAide Harness.app'), 'PicoAide Harness', overrides)
+  writeValidMacBundle(join(root, 'ZeoKeel Harness.app'), 'ZeoKeel Harness', overrides)
   modeOverrides.set(executable, 0o755)
   for (const entry of MACOS_ARM64_NATIVE_ENTRIES) {
     const path = join(`${appAsar}.unpacked`, entry.path)
@@ -54,12 +54,12 @@ function options(
   const removeMountPoint = vi.fn()
   const value: MacSmokeVerificationOptions = {
     distDir: '/release/dist',
-    productName: 'PicoAide Harness',
+    productName: 'ZeoKeel Harness',
     // 期望身份**显式注入**（B-3）：不注入时缺省会去读工作树里那份 gitignored 的
     // `build/channel.json`，一次渠道构建残留就让本文件红一片，且被说成"产物声称了另一个
     // 身份"。取值就是夹具写入的缺省身份，所以正向用例仍然自洽。
     expectedIdentifier: MAC_BUNDLE_FIXTURE_IDENTIFIER,
-    listDmgs: () => ['/release/dist/PicoAide Harness-2.0.1.dmg'],
+    listDmgs: () => ['/release/dist/ZeoKeel Harness-2.0.1.dmg'],
     makeMountPoint: () => '/private/tmp/dsh-desktop-dmg-smoke-test',
     run: (command, args) => { calls.push({ command, args: [...args] }) },
     removeMountPoint,
@@ -101,18 +101,18 @@ describe('macOS DMG smoke artifact verification', () => {
   it('mounts one DMG and accepts a well-formed unsigned application bundle', () => {
     const value = fixture()
     const harness = options({ makeMountPoint: () => value.root }, value.modeOverrides)
-    const appPath = join(value.root, 'PicoAide Harness.app')
+    const appPath = join(value.root, 'ZeoKeel Harness.app')
 
     expect(verifyMacSmoke(harness.value)).toEqual({
       appPath,
-      dmgPath: '/release/dist/PicoAide Harness-2.0.1.dmg',
+      dmgPath: '/release/dist/ZeoKeel Harness-2.0.1.dmg',
     })
 
     expect(harness.calls).toEqual([
       {
         command: 'hdiutil',
         args: [
-          'attach', '/release/dist/PicoAide Harness-2.0.1.dmg',
+          'attach', '/release/dist/ZeoKeel Harness-2.0.1.dmg',
           '-mountpoint', value.root, '-nobrowse', '-readonly',
         ],
       },
@@ -144,7 +144,7 @@ describe('macOS DMG smoke artifact verification', () => {
     expect(harness.calls).toEqual([
       {
         command: 'hdiutil',
-        args: ['attach', '/release/dist/PicoAide Harness-2.0.1.dmg', '-mountpoint', value.root, '-nobrowse', '-readonly'],
+        args: ['attach', '/release/dist/ZeoKeel Harness-2.0.1.dmg', '-mountpoint', value.root, '-nobrowse', '-readonly'],
       },
       { command: 'hdiutil', args: ['detach', value.root] },
     ])
@@ -235,12 +235,12 @@ describe('macOS DMG smoke artifact verification', () => {
 function fixtureWithLinkedAsar(): AppFixture {
   const root = mkdtempSync(join(tmpdir(), 'dsh-mac-smoke-linked-'))
   temporaryRoots.push(root)
-  const appPath = join(root, 'PicoAide Harness.app')
-  writeValidMacBundle(appPath, 'PicoAide Harness', {
+  const appPath = join(root, 'ZeoKeel Harness.app')
+  writeValidMacBundle(appPath, 'ZeoKeel Harness', {
     asar: minimalAsar(Buffer.from('{}'), { links: [['link', 'package.json']] }),
   })
   const contents = join(appPath, 'Contents')
-  const executable = join(contents, 'MacOS', 'PicoAide Harness')
+  const executable = join(contents, 'MacOS', 'ZeoKeel Harness')
   const appAsar = join(contents, 'Resources', 'app.asar')
   const modeOverrides = new Map<string, number>()
   modeOverrides.set(executable, 0o755)

@@ -78,13 +78,13 @@
  * {@link aiRowsConsentKey} 在**构造期**对含 NUL 的段回 `null`（= 写面拒绝、读面 false），
  * {@link serializeAiRowsConsent} 遇到无法解析的键**抛错**而不是丢弃（序列化期兜底）。
  *
- * @module @picoaide/dsh-enterprise/wasm-apps-ai-rows-consent
+ * @module @zeokeel/dsh-enterprise/wasm-apps-ai-rows-consent
  */
 
 import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { dshHomeSafe } from '@picoaide/dsh-host-home'
+import { dshHomeSafe } from '@zeokeel/dsh-host-home'
 
 /** 授权状态文件名（落在数据根 `$DSH_HOME` 下；0600）。 */
 export const AI_ROWS_CONSENT_FILE_NAME = 'wasm-apps-ai-rows-consent.json'
@@ -359,7 +359,7 @@ export function serializeAiRowsConsent(keys: ReadonlySet<string>): string {
     // 丢弃是**静默成功**：`setEnabled` 会照常 resolve，而文件里没有这条记录 ⇒
     // 面板显示"已允许"、闸门仍拒绝。所以这里抛（写面据此报 500），不 continue。
     if (rest.length > 0 || user === undefined || server === undefined || app === undefined) {
-      throw new Error('pico-wasm-apps: refusing to serialize an AI rows consent key that is not <user>\\0<server>\\0<app>')
+      throw new Error('zeokeel-wasm-apps: refusing to serialize an AI rows consent key that is not <user>\\0<server>\\0<app>')
     }
     grants.push({ user, server, app })
   }
@@ -465,7 +465,7 @@ export function createAiRowsConsentStore(options: AiRowsConsentStoreOptions = {}
     try {
       return options.scope() ?? null
     } catch (cause) {
-      warn(`pico-wasm-apps: resolving the AI rows consent scope failed (${cause instanceof Error ? cause.message : String(cause)}); treating every app as unauthorized`)
+      warn(`zeokeel-wasm-apps: resolving the AI rows consent scope failed (${cause instanceof Error ? cause.message : String(cause)}); treating every app as unauthorized`)
       return null
     }
   }
@@ -489,11 +489,11 @@ export function createAiRowsConsentStore(options: AiRowsConsentStoreOptions = {}
       // 读失败（权限/EIO）⇒ fail-closed 到"无授权"，但必须留痕：静默会让"磁盘坏了"
       // 与"没人授权"长得一样。**同时把写面也关掉**：读不动的文件不得被整份覆盖
       // （见 {@link AiRowsConsentReadError}）。
-      warn(`pico-wasm-apps: reading the AI rows consent file failed (${cause instanceof Error ? cause.message : String(cause)}); treating every app as unauthorized and refusing writes`)
+      warn(`zeokeel-wasm-apps: reading the AI rows consent file failed (${cause instanceof Error ? cause.message : String(cause)}); treating every app as unauthorized and refusing writes`)
       return {
         keys: new Set(),
         writable: false,
-        blocked: `pico-wasm-apps: the AI rows consent file at ${String(options.file)} could not be read; refusing to overwrite it`,
+        blocked: `zeokeel-wasm-apps: the AI rows consent file at ${String(options.file)} could not be read; refusing to overwrite it`,
       }
     }
     const verdict = classifyAiRowsConsent(text)
@@ -502,17 +502,17 @@ export function createAiRowsConsentStore(options: AiRowsConsentStoreOptions = {}
       // 与"读不动"同等对待：读面 fail-closed，写面拒绝。**绝不能走升级路径** ——
       // 那会让下一次 setEnabled 以"空集合 + 本次一条"整份覆盖，把文件里其它账号/应用的
       // 记录静默销毁（FIX-17 / V6 F3）；这一份内容本来也不被当成任何授权。
-      warn(`pico-wasm-apps: the AI rows consent file at ${options.file} is not a usable record (${verdict.reason}); treating every app as unauthorized and refusing writes`)
+      warn(`zeokeel-wasm-apps: the AI rows consent file at ${options.file} is not a usable record (${verdict.reason}); treating every app as unauthorized and refusing writes`)
       return {
         keys: new Set(),
         writable: false,
-        blocked: `pico-wasm-apps: the AI rows consent file at ${String(options.file)} is not a usable record (${verdict.reason}); refusing to overwrite it`,
+        blocked: `zeokeel-wasm-apps: the AI rows consent file at ${String(options.file)} is not a usable record (${verdict.reason}); refusing to overwrite it`,
       }
     }
     if (verdict.kind === 'legacy') {
       // **可识别的旧格式**（v1 机器级）⇒ 允许就地改写成当前版本，否则 v1 用户升级后
       // 永远无法重新授权。方向安全：这一份内容本来就不被当成任何授权。
-      warn(`pico-wasm-apps: the AI rows consent file at ${options.file} is a version ${String(verdict.version)} record; treating every app as unauthorized (the next write rewrites it as version ${String(AI_ROWS_CONSENT_FORMAT_VERSION)})`)
+      warn(`zeokeel-wasm-apps: the AI rows consent file at ${options.file} is a version ${String(verdict.version)} record; treating every app as unauthorized (the next write rewrites it as version ${String(AI_ROWS_CONSENT_FORMAT_VERSION)})`)
       return { keys: new Set(), writable: true }
     }
     return { keys: verdict.keys, writable: true }
@@ -567,7 +567,7 @@ export function createAiRowsConsentStore(options: AiRowsConsentStoreOptions = {}
       if (key === null) {
         // fail-closed：写一条"谁都不是"的记录比拒绝更糟（下一个账号可能正好撞上它）。
         return Promise.reject(new AiRowsConsentScopeError(
-          'pico-wasm-apps: an AI rows consent needs the current user, server address and app id; this session does not provide all three',
+          'zeokeel-wasm-apps: an AI rows consent needs the current user, server address and app id; this session does not provide all three',
         ))
       }
       return mutate((keys) => {

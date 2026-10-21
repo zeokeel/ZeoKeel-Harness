@@ -87,7 +87,7 @@ func TestEnvelopeWhitelistHasNoSecondDefinition(t *testing.T) {
 	// 几张"绝不该在里面"的头：实测自定义协议下浏览器不发它们（契约 §3），
 	// 放进来只会给伪造留面。变异：把 cookie/referer 加回白名单 ⇒ 红。
 	for _, banned := range []string{"cookie", "referer", "sec-fetch-site", "sec-fetch-mode",
-		"host", "authorization", "x-pico-app-proof"} {
+		"host", "authorization", "x-zeokeel-app-proof"} {
 		if _, ok := clientRequestHeaders[banned]; ok {
 			t.Errorf("白名单不得包含 %q（平台/浏览器语义头，见 headerspec.go 的注释）", banned)
 		}

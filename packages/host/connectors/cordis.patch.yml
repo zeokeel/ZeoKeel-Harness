@@ -2,5 +2,5 @@
 # registry, auth orchestration and MCP registration; its client half provides
 # the settings「连接器」section.
 - insert:
-    - id: pico-connectors
-      name: '@picoaide/dsh-connectors'
+    - id: zeokeel-connectors
+      name: '@zeokeel/dsh-connectors'

@@ -81,7 +81,7 @@ const LOADING_LABEL: React.CSSProperties = { fontSize: 13, margin: 0, color: 'va
  * 一条 400 `"新密码不能与原密码相同"`（`server/internal/serverauth/handler.go`）
  * 也含这串 ⇒ 会被显示成"原密码不正确"。文案耦合的判据一改服务端措辞就静默退化。
  *
- * 现在判据是宿主下发的**稳定错误码**（`POST /api/pico/auth/password` 的
+ * 现在判据是宿主下发的**稳定错误码**（`POST /api/zeokeel/auth/password` 的
  * `{error, code}`，见 auth-gate 该分支的注释）：
  *   - `AUTH_FAILED`（401）= 服务端拒绝了本次提交的凭据，对本端点即"原密码错误"；
  *   - 其它码（`NETWORK` / `HTTP_400` / `INTERNAL` …）逐字沿用原行为：显示服务端
@@ -132,7 +132,7 @@ export function AccountSection(_props: PropsRuntime<'settings.section'>) {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/pico/auth/state')
+    fetch('/api/zeokeel/auth/state')
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
         const data = (await res.json()) as AuthState
@@ -158,7 +158,7 @@ export function AccountSection(_props: PropsRuntime<'settings.section'>) {
     setLoggingOut(true)
     setLogoutError('')
     try {
-      const response = await fetch('/api/pico/auth/logout', { method: 'POST' })
+      const response = await fetch('/api/zeokeel/auth/logout', { method: 'POST' })
       if (!response.ok) {
         setLogoutError(t('account.logoutFailed', { error: `HTTP ${String(response.status)}` }))
         setLoggingOut(false)
@@ -183,7 +183,7 @@ export function AccountSection(_props: PropsRuntime<'settings.section'>) {
     if (newPassword === oldPassword) { setPwErr(t('account.password.errSame')); return }
     setPwBusy(true)
     try {
-      const res = await fetch('/api/pico/auth/password', {
+      const res = await fetch('/api/zeokeel/auth/password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),

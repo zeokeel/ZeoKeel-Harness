@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/llmgateway/channels"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway/channels"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // SyncResult 描述一个 provider 的同步结果。

@@ -30,7 +30,7 @@ function toolHarness(): {
   dispose: () => void
   home: string
 } {
-  const home = mkdtempSync(join(tmpdir(), 'pico-cron-i18n-'))
+  const home = mkdtempSync(join(tmpdir(), 'zeokeel-cron-i18n-'))
   let locale: 'zh' | 'en' = 'zh'
   const tools = new Map<string, ToolDefinition>()
   const disposers: Array<() => void> = []

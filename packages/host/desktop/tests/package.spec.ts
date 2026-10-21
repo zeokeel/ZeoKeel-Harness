@@ -55,12 +55,12 @@ const ciWorkflow = readFileSync(new URL('.github/workflows/ci.yml', workspaceRoo
 describe('published package surface', () => {
   it('runs desktop and enterprise typechecks from the root command', () => {
     expect(workspaceManifest.scripts?.typecheck)
-      .toBe('yarn workspace @picoaide/dsh-enterprise typecheck && yarn workspace dsh-plugin-desktop typecheck')
+      .toBe('yarn workspace @zeokeel/dsh-enterprise typecheck && yarn workspace dsh-plugin-desktop typecheck')
   })
 
   it('runs desktop and enterprise tests from the root command', () => {
     expect(workspaceManifest.scripts?.test)
-      .toBe('yarn workspace @picoaide/dsh-enterprise test && yarn workspace dsh-plugin-desktop test')
+      .toBe('yarn workspace @zeokeel/dsh-enterprise test && yarn workspace dsh-plugin-desktop test')
   })
 
   it('registers both npm launcher names', () => {
@@ -269,8 +269,8 @@ describe('published package surface', () => {
 
   it('fixes the installed application identity', () => {
     expect(manifest.version).toBe(workspaceManifest.version)
-    expect(manifest.build?.productName).toBe('PicoAide Harness')
-    expect(manifest.build?.appId).toBe('ai.deepseek.dsh.desktop')
+    expect(manifest.build?.productName).toBe('ZeoKeel Harness')
+    expect(manifest.build?.appId).toBe('com.zeokeel.harness')
     expect(manifest.build?.asarUnpack).toEqual([
       '**/*.node',
       '**/*.dll',
@@ -323,7 +323,7 @@ describe('published package surface', () => {
       target: 'nsis',
       arch: ['x64'],
     }])
-    expect(manifest.build?.win?.artifactName).toBe('PicoAide-Harness-${version}-${arch}-Portable.${ext}')
+    expect(manifest.build?.win?.artifactName).toBe('ZeoKeel-Harness-${version}-${arch}-Portable.${ext}')
     expect(manifest.build?.nsis).toEqual({
       license: 'THIRD_PARTY_NOTICES.md',
       oneClick: false,
@@ -333,9 +333,9 @@ describe('published package surface', () => {
       createDesktopShortcut: true,
       createStartMenuShortcut: true,
       differentialPackage: false,
-      shortcutName: 'PicoAide Harness',
+      shortcutName: 'ZeoKeel Harness',
       useZip: true,
-      artifactName: 'PicoAide-Harness-${version}-${arch}-Setup.${ext}',
+      artifactName: 'ZeoKeel-Harness-${version}-${arch}-Setup.${ext}',
     })
     expect(manifest.build?.linux?.icon).toBe('build/app-icon.png')
     expect(manifest.build?.linux?.target).toEqual([{
@@ -352,7 +352,7 @@ describe('published package surface', () => {
 
     expect(manifest.scripts?.build).toContain('node scripts/brand-prepare.mjs')
     expect(manifest.scripts?.['package:dir'])
-      .toBe('yarn workspace @picoaide/dsh-enterprise build && yarn workspace @picoaide/dsh-account-card build && yarn run build && node scripts/package-dir.mjs')
+      .toBe('yarn workspace @zeokeel/dsh-enterprise build && yarn workspace @zeokeel/dsh-account-card build && yarn run build && node scripts/package-dir.mjs')
     expect(packageDir).toContain("CSC_IDENTITY_AUTO_DISCOVERY: 'false'")
     expect(manifest.scripts?.['dist:mac']).toBe('node scripts/release-mac.ts')
     expect(manifest.scripts?.['dist:mac-smoke']).toBe('node scripts/package-mac.ts')
@@ -388,7 +388,7 @@ describe('published package surface', () => {
       hardenedRuntime: true,
       notarize: true,
       target: [{ target: 'dmg', arch: ['arm64'] }],
-      artifactName: 'PicoAide-Harness-${version}-mac.${ext}',
+      artifactName: 'ZeoKeel-Harness-${version}-mac.${ext}',
       // 2026-09-29 语音输入默认开启 ⇒ macOS 必须有麦克风用途说明 + 签名 entitlement
       // （缺任一项，getUserMedia({audio}) 连系统弹窗都不会出现）。
       entitlements: 'scripts/macos-entitlements.plist',

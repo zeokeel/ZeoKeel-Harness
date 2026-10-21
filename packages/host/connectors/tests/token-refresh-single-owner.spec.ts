@@ -53,11 +53,11 @@ function def(origin: string): ConnectorDef {
 /** 完成一次交互式授权，让磁盘上有一份带 refresh token 的凭据。 */
 async function authorizeOnce(dir: string, server: RealMcpServer): Promise<void> {
   const first = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
-  await callRoute(first, '/api/pico/connectors/example-mcp/connect', 'POST')
+  await callRoute(first, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline && url === undefined) {
-    const res = await callRoute(first, '/api/pico/connectors/example-mcp/state', 'GET')
+    const res = await callRoute(first, '/api/zeokeel/connectors/example-mcp/state', 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request?.authorizeUrl
     if (url === undefined) await new Promise(r => setTimeout(r, 25))
   }
@@ -217,7 +217,7 @@ describe('SDK 的 tokens() 与我们的刷新共用一个单飞（不允许二�
     const before = refreshGrants(server)
     const [, res] = await Promise.all([
       provider!.tokens(),
-      callRoute(h, '/api/pico/connectors/example-mcp/refresh', 'POST'),
+      callRoute(h, '/api/zeokeel/connectors/example-mcp/refresh', 'POST'),
     ])
     expect(res.status).toBe(200)
     // 面板刷新自己就是一次续期；tokens() 若也自己刷一次，这里会是 2。

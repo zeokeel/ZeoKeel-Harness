@@ -34,7 +34,7 @@
  *    `settled()` 永远挂住，此后每一次打开应用都要等它（把偶发 IO 失败升级成不可自愈的
  *    卡死，本仓已判过 P0 的同形事故）。
  *
- * @module @picoaide/dsh-wasm-apps-host/scope-reset
+ * @module @zeokeel/dsh-wasm-apps-host/scope-reset
  */
 
 /** 清理链的三件事（全部注入：本模块不 import electron、不做 IO）。 */
@@ -70,7 +70,7 @@ export interface ScopeReset {
    * **11 条 `await-outside-guard`**（`requestOpen` 的 7 个 await + 本机路由 handler 3 +
    * ai-chat 包装 1），而那 11 条只能靠新增 `AWAIT_EXEMPTIONS` 行豁免 —— 判据用"名字像"
    * 冒充"是同一个协议"。现在判据改按**符号来源**识别（认从
-   * `@picoaide/dsh-host-locale/session-events` import 进来的
+   * `@zeokeel/dsh-host-locale/session-events` import 进来的
    * `createSessionEpoch`/`SessionEpoch`），所以**改回 `begin` 也不会再被误判**。
    * 保留这个名字是语义与可读性的选择，不再是判据的硬约束。
    * @param leaving - 离开的作用域标识（`null` = 之前是未登录 ⇒ 只关窗、不清缓存：
@@ -103,7 +103,7 @@ export function createScopeReset(targets: ScopeResetTargets): ScopeReset {
       try {
         closed = targets.closeWindows()
       } catch (cause) {
-        targets.warn(`pico-wasm-apps-host: closing application windows failed (${describe(cause)})`)
+        targets.warn(`zeokeel-wasm-apps-host: closing application windows failed (${describe(cause)})`)
         closed = undefined
       }
       // ② 清缓存串在链上（真异步）；新作用域的动作等的是它。
@@ -113,7 +113,7 @@ export function createScopeReset(targets: ScopeResetTargets): ScopeReset {
           await closed
           if (leaving !== null) await targets.clearCache()
         } catch (cause) {
-          targets.warn(`pico-wasm-apps-host: scope cleanup failed (${describe(cause)})`)
+          targets.warn(`zeokeel-wasm-apps-host: scope cleanup failed (${describe(cause)})`)
         }
       })
       chain = next

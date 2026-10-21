@@ -48,7 +48,7 @@ func TestUpsertErrorReportingStatusIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := UpsertErrorReportingStatus(db, uid, ErrorReportingStateFailed, "DSN 非法", "glitchtip.example.com", "error", "picoaide-desktop@2.4.0"); err != nil {
+	if err := UpsertErrorReportingStatus(db, uid, ErrorReportingStateFailed, "DSN 非法", "glitchtip.example.com", "error", "zeokeel-desktop@2.4.0"); err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
 	first := mustListErrorReportingStatuses(t, db)
@@ -60,7 +60,7 @@ func TestUpsertErrorReportingStatusIsIdempotent(t *testing.T) {
 	}
 
 	time.Sleep(2 * time.Millisecond) // 拉开 updated_at(now() 为事务时间戳,两次 Exec 必然前进)
-	if err := UpsertErrorReportingStatus(db, uid, ErrorReportingStateReady, "", "glitchtip.example.com", "warning", "picoaide-desktop@2.4.1"); err != nil {
+	if err := UpsertErrorReportingStatus(db, uid, ErrorReportingStateReady, "", "glitchtip.example.com", "warning", "zeokeel-desktop@2.4.1"); err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
 	rows := mustListErrorReportingStatuses(t, db)
@@ -68,7 +68,7 @@ func TestUpsertErrorReportingStatusIsIdempotent(t *testing.T) {
 		t.Fatalf("rows after second upsert = %d, want 1 (upsert must not insert)", len(rows))
 	}
 	got := rows[0]
-	if got.State != ErrorReportingStateReady || got.Reason != "" || got.Level != "warning" || got.Release != "picoaide-desktop@2.4.1" {
+	if got.State != ErrorReportingStateReady || got.Reason != "" || got.Level != "warning" || got.Release != "zeokeel-desktop@2.4.1" {
 		t.Fatalf("second upsert did not overwrite fields: %+v", got)
 	}
 	if got.UpdatedAt.Before(first[0].UpdatedAt) {

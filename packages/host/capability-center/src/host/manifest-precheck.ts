@@ -13,7 +13,7 @@
  * 取文案(`{ zh, en }` 两份, zh 是原文逐字保留), 语言由调用方**按请求**解析
  * 后传入(见 `dsh-plugin-desktop/host-locale`)—— 绝不在模块级捕获。
  */
-import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@picoaide/dsh-host-locale'
+import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 import { parse as parseYaml } from 'yaml'
 import { splitSkillFrontmatter } from './skill-frontmatter.ts'
 import { isWindowsReservedDeviceNameSegment, reservedDeviceNameInArchivePath } from './skill-name-rules.ts'
@@ -367,11 +367,11 @@ function precheckMessages(locale: HostLocale): PrecheckMessages {
       { what },
     ),
     provenanceForbidden: c(
-      'frontmatter 不得包含 metadata.picoaide:它由安装器写入,用于标记技能来源',
-      'frontmatter must not contain metadata.picoaide: the installer writes it to record the skill origin',
+      'frontmatter 不得包含 metadata.zeokeel:它由安装器写入,用于标记技能来源',
+      'frontmatter must not contain metadata.zeokeel: the installer writes it to record the skill origin',
     ),    provenanceDirForbidden: c(
-      '归档不得包含 .picoaide/ 目录:它由安装器写入,用于标记技能来源',
-      'The archive must not contain a .picoaide/ directory: the installer writes it to record the skill origin',
+      '归档不得包含 .zeokeel/ 目录:它由安装器写入,用于标记技能来源',
+      'The archive must not contain a .zeokeel/ directory: the installer writes it to record the skill origin',
     ),
     reservedDeviceName: (name) => fill(
       c(
@@ -618,10 +618,10 @@ export function precheckSkillPackage(
 
   const metadata = data.metadata
   if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)
-    && Object.hasOwn(metadata as Record<string, unknown>, 'picoaide')) {
-    out.push(issue(PrecheckCode.ProvenanceForbidden, m.provenanceForbidden, 'metadata.picoaide'))
+    && Object.hasOwn(metadata as Record<string, unknown>, 'zeokeel')) {
+    out.push(issue(PrecheckCode.ProvenanceForbidden, m.provenanceForbidden, 'metadata.zeokeel'))
   }
-  if (entries.some((e) => e.startsWith('.picoaide/'))) {
+  if (entries.some((e) => e.startsWith('.zeokeel/'))) {
     out.push(issue(PrecheckCode.ProvenanceForbidden, m.provenanceDirForbidden))
   }
   // R17B-05（归档条目面）：技能目录里放 `aux.txt` / `nul` 这类名字，在 Windows 上

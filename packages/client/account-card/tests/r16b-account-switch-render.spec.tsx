@@ -4,12 +4,12 @@
  * **取它的那个会话身份**下渲染。
  *
  * 宿主路由已经把"跨账号交付"堵在出口（见 `r16b-account-switch-route.spec.ts`），
- * 但客户端不能只依赖对端：`/api/pico/auth/state` 与 `/api/pico/account/usage` 是
+ * 但客户端不能只依赖对端：`/api/zeokeel/auth/state` 与 `/api/zeokeel/account/usage` 是
  * **两次独立请求**，可能落在换号点的两侧；而检测到"换号"需要**先观察过旧身份**
  * （刚挂载就撞上切换的那一跳没有旧身份可比）。所以路由在每一份快照上盖了身份章
  * （`sessionIdentity`），本组件的判据是：
  *
- *   快照章 ≠ `/api/pico/auth/state` 的 `identity`  ⇒ **整份作废**（余额与用量一起），
+ *   快照章 ≠ `/api/zeokeel/auth/state` 的 `identity`  ⇒ **整份作废**（余额与用量一起），
  *   刷新按钮同时禁用（此刻它没有可刷的对象）。
  *
  * ---- 变异验证（实跑过，逐条单独一次调用）----
@@ -29,8 +29,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const AUTH_PATH = '/api/pico/auth/state'
-const USAGE_PATH = '/api/pico/account/usage'
+const AUTH_PATH = '/api/zeokeel/auth/state'
+const USAGE_PATH = '/api/zeokeel/account/usage'
 const SERVER = 'https://gw.example'
 
 /** 会话身份串（与 enterprise `session-identity.ts` 同形：`[serverURL, username]`）。 */
@@ -58,7 +58,7 @@ function snapshot(overrides: Record<string, unknown> = {}): Record<string, unkno
   }
 }
 
-/** `/api/pico/account/usage` 的 200：`data` 是快照，`identity` 是**宿主盖的章**。 */
+/** `/api/zeokeel/account/usage` 的 200：`data` 是快照，`identity` 是**宿主盖的章**。 */
 function usageReply(balance: number, owner: string, extra: Record<string, unknown> = {}): Reply {
   return {
     body: {

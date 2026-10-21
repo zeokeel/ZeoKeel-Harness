@@ -52,9 +52,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // errorReportingTestTimeout 是测试事件出站请求的总超时。包级变量以便测试
@@ -199,8 +199,8 @@ func sendErrorReportingTestEvent(ctx context.Context, inspection ErrorReportingD
 		"level":     "error",
 		"platform":  "other",
 		"release":   release,
-		"message":   "PicoAide 管理端连通性自检",
-		"tags":      map[string]string{"picoaide.source": "webadmin-test-event"},
+		"message":   "ZeoKeel 管理端连通性自检",
+		"tags":      map[string]string{"zeokeel.source": "webadmin-test-event"},
 	})
 	if err != nil {
 		return errorReportingTestResult{Kind: ErrorReportingKindUnknown, Message: "构造测试事件失败", Detail: err.Error(), Endpoint: inspection.StoreEndpoint}
@@ -214,7 +214,7 @@ func sendErrorReportingTestEvent(ctx context.Context, inspection ErrorReportingD
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Sentry-Auth", fmt.Sprintf(
-		"Sentry sentry_version=7, sentry_key=%s, sentry_client=picoaide-server/%s",
+		"Sentry sentry_version=7, sentry_key=%s, sentry_client=zeokeel-server/%s",
 		inspection.PublicKey, release,
 	))
 

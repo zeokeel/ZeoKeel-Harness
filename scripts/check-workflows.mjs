@@ -1581,7 +1581,7 @@ const VERDICT_ASSERTION_STEPS = [
       // 值是它读到的 `$GITHUB_SHA`）—— 于是「HEAD == 平台值」这件事进凭据、进汇总，
       // 可被这一步逐字断言（判据侧不等就退出码 2，凭据根本打印不出来）。
       '--expect github-sha "$GITHUB_SHA"',
-      'picoaide-verdict: PASS nonce=',
+      'zeokeel-verdict: PASS nonce=',
       '[ "$verdict_lines" -ne 1 ]',
       'exit 1',
     ],
@@ -1605,7 +1605,7 @@ const VERDICT_ASSERTION_STEPS = [
       // 值是它读到的 `$GITHUB_SHA`）—— 于是「HEAD == 平台值」这件事进凭据、进汇总，
       // 可被这一步逐字断言（判据侧不等就退出码 2，凭据根本打印不出来）。
       '--expect github-sha "$GITHUB_SHA"',
-      'picoaide-verdict: PASS nonce=',
+      'zeokeel-verdict: PASS nonce=',
       '[ "$verdict_lines" -ne 1 ]',
       'exit 1',
     ],
@@ -1625,7 +1625,7 @@ const VERDICT_ASSERTION_STEPS = [
       '--dir "$verdict_dir" --nonce-file "$verdict_dir/nonce" --status "$status"',
       "'^check-root-guards: VERDICT PASS guards=[1-9][0-9]*'",
       '--min guards 1',
-      'picoaide-verdict: PASS nonce=',
+      'zeokeel-verdict: PASS nonce=',
       '[ "$verdict_lines" -ne 1 ]',
       'exit 1',
     ],
@@ -1645,7 +1645,7 @@ const VERDICT_ASSERTION_STEPS = [
       'scripts/check-verdict-credential.mjs',
       '--dir "$verdict_dir" --nonce-file "$verdict_dir/nonce" --status "$status"',
       "'^check-guard-parser-integrity: OK — [0-9]+ 条守卫脚本'",
-      'picoaide-verdict: PASS nonce=',
+      'zeokeel-verdict: PASS nonce=',
       '[ "$verdict_lines" -ne 1 ]',
       'exit 1',
     ],
@@ -1666,7 +1666,7 @@ const VERDICT_ASSERTION_STEPS = [
       '--dir "$verdict_dir" --nonce-file "$verdict_dir/nonce" --status "$status"',
       "'^check-workspaces: VERDICT PASS planned=[0-9]+ executed=[0-9]+'",
       '--min planned 1 --equal planned executed',
-      'picoaide-verdict: PASS nonce=',
+      'zeokeel-verdict: PASS nonce=',
       '[ "$verdict_lines" -ne 1 ]',
       'exit 1',
     ],
@@ -3879,7 +3879,7 @@ const PINNED_ENV_ALLOWED_KEYS = [
   { key: 'APPLE_API_ISSUER', why: '同上,issuer' },
   { key: 'MAC_CERT_P12_BASE64', why: 'Developer ID 证书(P12 base64),签名用' },
   {
-    key: 'PICOAI_RUNTIME_CACHE',
+    key: 'ZEOKEEL_RUNTIME_CACHE',
     why: 'desktop-macos 的 job 级 env:随包 agent 运行时的制品缓存落点(`fetch-bundled-runtimes.mjs`'
       + ' 读它)。它只影响"运行时从哪来",不换解释器、不改 argv/cwd —— 被钉的'
       + ' `macos-inplace-helper-tests` 步骤不读它(它跑的是仓内 spec + 系统自带的 sh/ditto/codesign)。',
@@ -8836,7 +8836,7 @@ const ADVISORY_FLAG_WORD = /(?:^|[\s"'=;|&(){}<>$,])--allow-advisory(?=$|[\s"';|
  *
  * `requireFlagVector`(env 取值专用):还要求这段取值是"**旗标向量**"—— 每个空白分隔的
  * token 都以 `-` 开头。这一半是给 FP-3 的**说明文本**用的:workflow 顶层写
- * `env: {PICO_NOTE: "do not pass --allow-advisory anywhere"}` 时,那段话里有整词的
+ * `env: {ZEOKEEL_NOTE: "do not pass --allow-advisory anywhere"}` 时,那段话里有整词的
  * `--allow-advisory` 却显然不是"把开关注入 argv";而真正的用法(`ROOT_GUARD_FLAGS:
  * --allow-advisory` / `--allow-advisory --verbose`)每个 token 都是旗标。
  *
@@ -11849,7 +11849,7 @@ function checkReleaseSurface(file, document, text, notes) {
   //    把关键行注释掉仍 EXIT=0;等价的 `--title "$TAG"` 反而被判红)。
   //
   //    **R26 FIX-X-01**:取值必须**恰好**是 tag 引用 —— 修前这里是**无锚**正则的 `.test()`,
-  //    于是 `--title "PicoAide Harness ${TAG}"`(正是 2026-09-11 定案要消灭的前缀回归)
+  //    于是 `--title "ZeoKeel Harness ${TAG}"`(正是 2026-09-11 定案要消灭的前缀回归)
   //    静默通过(审计 D 泳道实测:两处 create/edit 都改掉仍 EXIT=0)。v2.8.1 的同一处是
   //    **字面量**判定(`!step.run.includes('--title "${TAG}"')`),那时的前缀形态是红的
   //    ⇒ 这是本段引入的 IN-RANGE 回归:修好了"注释里写一行就绿",顺手放进了"值里加前缀"。
@@ -11904,10 +11904,10 @@ function checkReleaseSurface(file, document, text, notes) {
             line: 0,
             detail: `[SK-11] job ${jobId} 的 step「${stepName(step, index)}」里 \`gh release ${match[1]}\` 的 Release 名不是 tag 本身`
               + `(实际 --title 取值:${titleValue === undefined ? '缺失' : titleValue})`
-              + '\n  ⇒ Releases 页左侧列表宽度固定,长名会被截断成 "PicoAide Harness v2.6…",同页版本号全部不可见。'
+              + '\n  ⇒ Releases 页左侧列表宽度固定,长名会被截断成 "ZeoKeel Harness v2.6…",同页版本号全部不可见。'
               + '必须 `--title` 且取值**恰好**是 tag 变量本身(`${TAG}` / `$TAG` / '
               + '`${GITHUB_REF_NAME}` / `$GITHUB_REF_NAME`;前后不得有别的内容 —— '
-              + '`"PicoAide Harness ${TAG}"` 这种前缀形态在旧实现下会静默通过,R26 FIX-X-01 收口)。',
+              + '`"ZeoKeel Harness ${TAG}"` 这种前缀形态在旧实现下会静默通过,R26 FIX-X-01 收口)。',
           })
         }
         if (!/exit\s+[1-9]/u.test(script)) {
@@ -14322,9 +14322,9 @@ export function selfTestPolicies() {
   })
   // **R26 FIX-X-01**:Release 名的取值必须**恰好**是 tag 引用 —— 前缀/后缀形态必红。
   // 修前这一格是白的:无锚 `TAG_REF.test(titleValue)` 只要取值里**出现** tag 变量就放行,
-  // 而 `"PicoAide Harness ${TAG}"` 正是 2026-09-11 定案要消灭的那条前缀回归
-  // (Releases 页左侧列表被截断成 `PicoAide Harness v2.6…`)。
-  releaseSample('p20-title-product-prefix', '[SK-11]', { titleFlag: '--title "PicoAide Harness ${TAG}"' })
+  // 而 `"ZeoKeel Harness ${TAG}"` 正是 2026-09-11 定案要消灭的那条前缀回归
+  // (Releases 页左侧列表被截断成 `ZeoKeel Harness v2.6…`)。
+  releaseSample('p20-title-product-prefix', '[SK-11]', { titleFlag: '--title "ZeoKeel Harness ${TAG}"' })
   // 同族补格:后缀、只加空格、以及"引用套引用"的取值都不是"tag 本身"。
   releaseSample('p21-title-suffix', '[SK-11]', { titleFlag: '--title "${TAG} (curated)"' })
   releaseSample('p22-title-padded', '[SK-11]', { titleFlag: '--title " ${TAG}"' })

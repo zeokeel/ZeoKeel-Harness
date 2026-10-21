@@ -125,14 +125,14 @@ import 都能让"源码看着对、chunk 照样产出"）。**变异证据**（2
 | 变异 | 落在哪一层 | `npx vitest run src/lib/features.test.ts` | `npm run check:features` |
 | --- | --- | --- | --- |
 | ① 守卫写法：`src/App.tsx` 的 `__FEATURE_CONNECTORS__ ? lazy(…) : DisabledPage` → `__FEATURES__.includes('connectors') ? …`（语义仍正确，只是折不掉） | **源码形态** | 红（`3 failed \| 4 passed`：`每个模块页的 import() 都必须写在 __FEATURE_<MODULE>__ ? lazy(…) : … 里` / `App.tsx 里被守卫的 import() ⟺ 本判据的模块页表` / `模块页只能经 __FEATURE_<MODULE>__ 守卫的 import() 进入产物`） | **EXIT=2** —— 5 次构建**一次都没启动**，只打印 `模块 connectors 的页表列了 src/pages/Connectors.tsx，但 src/App.tsx 里没有对应的 __FEATURE_CONNECTORS__ ? lazy(() => import('…')) 守卫` |
-| ② 打包期折叠：源码守卫一字不改，只在 `features.mjs` 的 `featureDefines()` 里把 connectors 的 define 换成打包器折不掉的表达式（`globalThis.__AUDIT_PROBE__`） | **产物字节** | 红（`2 failed \| 5 passed`：`开关表三个键全在…` / `变体标识 ⟺ 逐模块布尔…`） | **EXIT=1** —— `关 connectors` / `全关` 两行各 ✗ 2 项（哨兵串 `picoaide.feature.connectors.v1` **与** `Connectors-*.js` 两条通道都点名），`全开` / `关 skills` / `关 apps` 三行照旧 ✓，收尾 `check-feature-chunks: 4 项不符合预期` |
+| ② 打包期折叠：源码守卫一字不改，只在 `features.mjs` 的 `featureDefines()` 里把 connectors 的 define 换成打包器折不掉的表达式（`globalThis.__AUDIT_PROBE__`） | **产物字节** | 红（`2 failed \| 5 passed`：`开关表三个键全在…` / `变体标识 ⟺ 逐模块布尔…`） | **EXIT=1** —— `关 connectors` / `全关` 两行各 ✗ 2 项（哨兵串 `zeokeel.feature.connectors.v1` **与** `Connectors-*.js` 两条通道都点名），`全开` / `关 skills` / `关 apps` 三行照旧 ✓，收尾 `check-feature-chunks: 4 项不符合预期` |
 
 两行的差别就是**判据分层**的价值：形态类变异（①）在毫秒级的源码图上先红，成本最低、定位最准；
 只有绕过形态层的变异（②）才走到分钟级的产物面，而那时**内容面（哨兵串）与结构面（chunk 名）
 同时点名**，逐模块矩阵能定位到"哪一个模块漏了"，不是一刀切。②里的 `关 connectors`/`全关` 两行
 红而 `skills`/`apps` 两行绿，就是这一点。
 
-**哨兵串**（P0 §6 的三条纪律在这里同样适用）：`picoaide.feature.<module>.v1`，写在**该模块
+**哨兵串**（P0 §6 的三条纪律在这里同样适用）：`zeokeel.feature.<module>.v1`，写在**该模块
 每一个页面文件**里（页面根元素的 `data-feature-sentinel`，落点表 = 本片 §3 的模块边界表与
 `check-feature-chunks.mjs` 的 `MODULE_EXPECTATIONS[*].pages`，并由
 `scripts/verify-ci-scripts.mjs` 第 19 节登记对拍），不是躺在常量模块里 —— 没被引用的字符串会被

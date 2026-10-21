@@ -62,7 +62,7 @@
  * 符号来源之后，改不改名都不再影响判据，见 `scope-reset.ts` 的 `start()` 注释）。
  *
  * 这正是"判据取值域"教训的**第 5 个变体**：判据不得靠**命名约定**认协议，要认**符号来源**。
- * 现在：接收者必须绑定到 `@picoaide/dsh-host-locale/session-events`（或其 re-export
+ * 现在：接收者必须绑定到 `@zeokeel/dsh-host-locale/session-events`（或其 re-export
  * `enterprise/src/session-epoch.ts`）导出的 `createSessionEpoch()` 返回值 / `SessionEpoch`
  * 类型；识别链 = import 说明符 → 模块路径（相对导入按导入方解析 + re-export 传递）→
  * 工厂返回值/类型标注绑定 → 该接收者上的 `begin()`/`isCurrent()`。因此：
@@ -80,7 +80,7 @@
  *   跳转）必须紧跟一次代际比对 `if (!<guard>.isCurrent(<epoch>)) return` /
  *   `if (!<predicate>()) return`；
  * - **B（仓库级）**：**每一个会话入口**（`subscribeSession(s)(…)` /
- *   `subscribePicoSession(…)` / `ctx.on(SESSION_CHANGED_EVENT|'pico/session-changed'|
+ *   `subscribeZeoKeelSession(…)` / `ctx.on(SESSION_CHANGED_EVENT|'zeokeel/session-changed'|
  *   'session/event', cb)`）都必须抵达一个被守卫的函数；做不到就得登记 ——
  *   `ENTRY_EXEMPTIONS`（有别的判据，写明理由）或 `KNOWN_UNGUARDED_ENTRIES`
  *   （**已知未收口**，写明缺陷编号）。**两张表都双向陈旧检测**：登记项必须仍然存在、
@@ -171,11 +171,11 @@ const ENTRY_EXEMPTIONS: Readonly<Record<string, EntryExemption>> = {
     witness: 'subscribeSessionChanges',
   },
   'packages/host/wasm-apps-host/src/session.ts': {
-    reason: '`subscribePicoSession(ctx, resolve, listener)` 是包内转发层（把调用方的 listener 包一层会话归一化），不投影状态；真正的入口在 `index.ts`（同批已按"排序而非代际"登记豁免）。',
+    reason: '`subscribeZeoKeelSession(ctx, resolve, listener)` 是包内转发层（把调用方的 listener 包一层会话归一化），不投影状态；真正的入口在 `index.ts`（同批已按"排序而非代际"登记豁免）。',
     witness: 'readAppSession',
   },
   'packages/host/cron/src/index.ts': {
-    reason: 'FIX-31 已核干净：`pico/session-changed` 的回调是**纯同步**的，没有任何 await ⇒ 没有可乱序的续体。',
+    reason: 'FIX-31 已核干净：`zeokeel/session-changed` 的回调是**纯同步**的，没有任何 await ⇒ 没有可乱序的续体。',
     witness: 'setUsername',
   },
   'packages/host/connectors/src/index.ts': {
@@ -203,9 +203,9 @@ const ENTRY_EXEMPTIONS: Readonly<Record<string, EntryExemption>> = {
   // ── 第三十三轮 FIX-49 ④：`wasm-apps-host/src/index.ts` **收口代际守卫**，于是
   //    FIX-44 ② 那条"整文件豁免"按双向陈旧检测自行退场（见下面的 AWAIT_EXEMPTIONS）。
   'packages/host/capability-center/src/host/skill-telemetry.ts': {
-    reason: 'FIX-40 ③ 收口、FIX-44 ② 复核为**等价机制**：上报是**事件归属**，不是"当前会话的投影" —— 事件发生在哪一代就记在哪一代名下，代际守卫会把换代窗口里的真实调用**整份丢掉**（既错记 vs 丢记，前者可修、后者不可观测）。机制 = **作用域在观察点、第一个 await 之前同步取**：两个观察点都先 `const session = ctx.picoSession.getSession()` 再 `void installedVersion(...)`，而 `reportSkillCall` 的去重键 `reportKey(session, …)` 自带账号 + 服务端地址 + 令牌 ⇒ 每条上报自带归属身份。判据 `tests/skill-telemetry-session-capture.spec.ts`（3 例；读文件由用例控闸，会话在读取期间从 ALICE 切到 BOB，断言这一笔仍记在 ALICE）。**负控**：把取用挪到 `installedVersion` 的续体里（修前形状）⇒ 同一份 spec 当场红（2026-09-23 实跑，日志 temp/r21/fix-44/probe/logs/nc-b-skill-telemetry.log）。**装代际是错的**：实测装上会让规则 C 对 `reportSkillCall`（`await fetchJSON`）与 `installedVersion`（`await readFile`）报红，而这两处 await 之后只返回值 / 只写"自带作用域身份的已报键集合"，没有跨代落地路径。',
+    reason: 'FIX-40 ③ 收口、FIX-44 ② 复核为**等价机制**：上报是**事件归属**，不是"当前会话的投影" —— 事件发生在哪一代就记在哪一代名下，代际守卫会把换代窗口里的真实调用**整份丢掉**（既错记 vs 丢记，前者可修、后者不可观测）。机制 = **作用域在观察点、第一个 await 之前同步取**：两个观察点都先 `const session = ctx.zeokeelSession.getSession()` 再 `void installedVersion(...)`，而 `reportSkillCall` 的去重键 `reportKey(session, …)` 自带账号 + 服务端地址 + 令牌 ⇒ 每条上报自带归属身份。判据 `tests/skill-telemetry-session-capture.spec.ts`（3 例；读文件由用例控闸，会话在读取期间从 ALICE 切到 BOB，断言这一笔仍记在 ALICE）。**负控**：把取用挪到 `installedVersion` 的续体里（修前形状）⇒ 同一份 spec 当场红（2026-09-23 实跑，日志 temp/r21/fix-44/probe/logs/nc-b-skill-telemetry.log）。**装代际是错的**：实测装上会让规则 C 对 `reportSkillCall`（`await fetchJSON`）与 `installedVersion`（`await readFile`）报红，而这两处 await 之后只返回值 / 只写"自带作用域身份的已报键集合"，没有跨代落地路径。',
     // 2026-10-13（P0-b）：观察点仍是在第一个 await **之前**同步取会话，但取值面从
-    // `ctx.picoSession.getSession()` 改成结构探测（`currentSession(ctx)`）—— 那两处
+    // `ctx.zeokeelSession.getSession()` 改成结构探测（`currentSession(ctx)`）—— 那两处
     // `const session = ...` 的**位置与语义都没变**，变的是它怎么拿到服务（本包不能再
     // 依赖 provider 的 `declare module`）。见证字面量跟着改。
     witness: 'const session = currentSession(ctx)',
@@ -303,7 +303,7 @@ const DEFERRED_CALLBACK_EXEMPTIONS: Readonly<Record<string, string>> = {
     '上报失败分支的 `pendingStatusKeys.delete(key)` 摘的是**在飞键**，而该键 = 服务端地址 + `sessionIdentity(session)` + state/reason/dsn_host/level（`statusReportKey` 逐字）—— **自带去重身份**，不投影到"当前会话"。与同函数在 `AWAIT_EXEMPTIONS` 里的登记同源（那里记的是同一个"已报集合"）。',
   // 第三十三轮 FIX-49 ④（`wasm-apps-host/src/index.ts` 装代际之后新增的唯一一条）：
   'packages/host/wasm-apps-host/src/index.ts#apply$4':
-    '深链事件订阅回调（`ctx.on(\'pico/deep-link\', …)`）：它只做 scheme 归属判定并把打开动作交给 `requestOpen`（**自身带代际**），回调里唯一的"落地"是 `ctx.emit(WASM_APP_DEEP_LINK_FOREIGN_EVENT, …)`（异渠道提示，不带任何会话身份）。',
+    '深链事件订阅回调（`ctx.on(\'zeokeel/deep-link\', …)`）：它只做 scheme 归属判定并把打开动作交给 `requestOpen`（**自身带代际**），回调里唯一的"落地"是 `ctx.emit(WASM_APP_DEEP_LINK_FOREIGN_EVENT, …)`（异渠道提示，不带任何会话身份）。',
 }
 
 /** 一条判据违规。 */
@@ -395,14 +395,14 @@ function functionLabels(source: ts.SourceFile): Map<ts.FunctionLikeDeclaration, 
 // （现已改名 `start`）。这正是"判据取值域"教训的第 5 个变体：**判据不得靠命名约定认
 // 协议**，应认符号来源（import 关系）。
 //
-// 新口径：接收者必须**绑定到** `@picoaide/dsh-host-locale/session-events` 导出的
+// 新口径：接收者必须**绑定到** `@zeokeel/dsh-host-locale/session-events` 导出的
 // `createSessionEpoch()` 返回值（或标注为它导出的 `SessionEpoch` 类型）。识别链是：
 //   ① import 说明符 → 模块文件路径（`./session-epoch.ts` 相对**导入方**解析）；
 //   ② 该模块是不是代际协议模块 —— 是 `session-events.ts` 本身，**或**（可传递地）
 //      从它 re-export 的模块（enterprise 的 `session-epoch.ts` 就是这一层）；
 //   ③ 文件里绑定该工厂返回值 / 该类型的本地名 = 代际接收者；
 //   ④ 只有**代际接收者**上的 `begin()` / `isCurrent()` 才算守卫。
-// 远端包说明符（`@picoaide/dsh-host-locale/session-events`）按出口解析，不读 node_modules。
+// 远端包说明符（`@zeokeel/dsh-host-locale/session-events`）按出口解析，不读 node_modules。
 //
 // **刻意不改** `predicateNames()`（`StillCurrent` 型谓词）：那是**另一条**机制 ——
 // "还算不算最新"作为**参数传进被调方**（`session-events.ts` 规则 3），接收者是谁在
@@ -413,7 +413,7 @@ function functionLabels(source: ts.SourceFile): Map<ts.FunctionLikeDeclaration, 
 const EPOCH_PROTOCOL_MODULE = 'packages/host/host-locale/src/session-events.ts'
 
 /** 代际包的公开子路径（出口见 `packages/host/host-locale/package.json`）。 */
-const EPOCH_PACKAGE_SUBPATH = '@picoaide/dsh-host-locale/session-events'
+const EPOCH_PACKAGE_SUBPATH = '@zeokeel/dsh-host-locale/session-events'
 
 /** `import` 说明符 → 仓库相对模块路径（只认相对路径与代际包的公开子路径）。 */
 function resolveModulePath(specifier: string, fromFile: string): string | undefined {
@@ -967,18 +967,18 @@ function hasGuardCheckIn(
   return found
 }
 
-/** 收集 `subscribeSession*` / `subscribePicoSession` / `ctx.on(<会话事件>, cb)` 的回调。 */
+/** 收集 `subscribeSession*` / `subscribeZeoKeelSession` / `ctx.on(<会话事件>, cb)` 的回调。 */
 function sessionEntries(source: ts.SourceFile): ts.Expression[] {
   const entries: ts.Expression[] = []
-  const SUBSCRIBERS = new Set(['subscribeSession', 'subscribeSessionChanges', 'subscribePicoSession'])
-  const EVENTS = ['SESSION_CHANGED_EVENT', 'pico/session-changed', 'session/event']
+  const SUBSCRIBERS = new Set(['subscribeSession', 'subscribeSessionChanges', 'subscribeZeoKeelSession'])
+  const EVENTS = ['SESSION_CHANGED_EVENT', 'zeokeel/session-changed', 'session/event']
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const callee = node.expression
       if (ts.isIdentifier(callee) && SUBSCRIBERS.has(callee.text) && node.arguments.length >= 2) {
         // `subscribeSession(ctx, cb)` / `subscribeSessionChanges(ctx, cb[, probe])` 的回调
-        // 是第 2 个实参；`subscribePicoSession(ctx, resolve, cb)` 的是最后一个。
-        entries.push(callee.text === 'subscribePicoSession'
+        // 是第 2 个实参；`subscribeZeoKeelSession(ctx, resolve, cb)` 的是最后一个。
+        entries.push(callee.text === 'subscribeZeoKeelSession'
           ? node.arguments[node.arguments.length - 1]!
           : node.arguments[1]!)
       }
@@ -1568,7 +1568,7 @@ describe('接线判据：会话代际守卫（AST，仓库级扫描根）', () =
         } catch {
           channel = null
         }
-        ctx.emit('pico/channel-changed', channel ?? builtIn)
+        ctx.emit('zeokeel/channel-changed', channel ?? builtIn)
       }
       subscribeSession(ctx, (session) => { void sync(session) })
     `

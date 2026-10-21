@@ -18,7 +18,7 @@
 | R4 | 管理员 MFA（TOTP） | 可选开/关；容差 ±1 步；**二维码 + secret 文本都显示**；无恢复码 |
 | R4a | 关闭自己 MFA | **主密码 + 动态码双验** |
 | R4b | 开启自己 MFA | **先验主密码**；开启后**踢掉其他已登录 webadmin 会话**（当前保留） |
-| R4c | 兜底（无恢复码） | ① 其他 super_admin 在用户列表「重置 MFA」（不能对自己，可对 auditor/其他超管）→ **吊销其全部会话**；② **运维 CLI 兜底**（唯一超管丢失验证器场景）：`picoaide-server` 新增命令 |
+| R4c | 兜底（无恢复码） | ① 其他 super_admin 在用户列表「重置 MFA」（不能对自己，可对 auditor/其他超管）→ **吊销其全部会话**；② **运维 CLI 兜底**（唯一超管丢失验证器场景）：`zeokeel-server` 新增命令 |
 | R4d | 启用超管数量 | **允许唯一超管开 MFA**（不阻止），靠 CLI 兜底 |
 | R5 | 密码规则 | 维持 ≥10 位仅长度（三处校验统一复用 minPasswordLength） |
 | R6 | 改密时间 | users 加 `password_changed_at`，webadmin 用户列表「上次改密」列展示；审计日志同步记录 |
@@ -85,7 +85,7 @@ CREATE INDEX idx_mfa_challenges_user ON admin_mfa_challenges(user_id);
 
 **运维 CLI 兜底（cmd/server 入口新增）：**
 ```bash
-picoaide-server --reset-mfa <username>   # 或子命令：mfa reset <username>
+zeokeel-server --reset-mfa <username>   # 或子命令：mfa reset <username>
 # 行为：读取 master key → 解密判断 → 清空该用户 totp_secret/totp_enabled + 吊销其全部会话 + 审计 admin_mfa_reset(cli)
 # 无 DB 连接失败即报错退出；该命令走本地 DB 直连（PG DSN），不暴露任何远端接口
 ```
@@ -144,7 +144,7 @@ picoaide-server --reset-mfa <username>   # 或子命令：mfa reset <username>
 | `src/auth-gate.ts` | 登录响应 `must_change_password` → 渲染**强制改密态**（改密表单 stage，成功后 setSession）；登录后持久化 `user.source/password_changeable` |
 | `src/session-service.ts`（视实现） | 会话状态扩展 source 字段 |
 | `src/client/locales.ts` | 中英 key：改密全套 + 强制改密态文案 |
-| host 侧（desktop） | `/api/pico/auth/state` 透传 source 字段 |
+| host 侧（desktop） | `/api/zeokeel/auth/state` 透传 source 字段 |
 | 测试 | 既有模式 + e2e fixture 网关加 `/auth/password` 路径 |
 
 **不改**：员工登录页不加 MFA（仅 webadmin，已定案）。

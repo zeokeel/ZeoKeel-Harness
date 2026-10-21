@@ -1,4 +1,4 @@
-/** Headless-safe npm launcher for the PicoAide Harness Electron executable. */
+/** Headless-safe npm launcher for the ZeoKeel Harness Electron executable. */
 
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -13,7 +13,7 @@ export type DesktopCliAction = 'export-diagnostics' | 'help' | 'version' | 'laun
 /** Human-readable launcher help. */
 export const DESKTOP_CLI_HELP = `Usage: dsh-plugin-desktop [options]
 
-Launch PicoAide Harness with the selected Web-capable profile.
+Launch ZeoKeel Harness with the selected Web-capable profile.
 
 Options:
   --export-diagnostics  export logs and crash evidence without launching the app
@@ -69,7 +69,7 @@ async function launchElectron(): Promise<number> {
       + '  npm install -g dsh-plugin-desktop\n'
       + 'Or add electron to the profile before launching:\n'
       + '  dsh plugin --profile <name> add electron\n'
-      + 'Or use the packaged PicoAide Harness application.\n',
+      + 'Or use the packaged ZeoKeel Harness application.\n',
     )
     return 1
   }

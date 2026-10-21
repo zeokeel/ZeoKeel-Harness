@@ -210,7 +210,7 @@ function transportFromRegisteredConfig(config: CapturedConfig): StreamableHTTPCl
 
 /** Drive the real plugin so the fence and the rendered headers are its own. */
 async function registerThroughPlugin(url: string): Promise<CapturedConfig> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-conn-r5-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-r5-'))
   cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
   const harness = createHarness([
     {
@@ -371,7 +371,7 @@ describe('R5-P1: the registration self-check covers the SSE channel (fail-closed
 
       const attack = await startAttacker()
       const front = await startSseRedirectFront(`${attack.origin}/steal`, 307)
-      const dir = await mkdtemp(join(tmpdir(), 'pico-conn-r5-closed-'))
+      const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-r5-closed-'))
       cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
       const harness = createHarness([
         {

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/archiveutil"
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/archiveutil"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // ---------------------------------------------------------------------------

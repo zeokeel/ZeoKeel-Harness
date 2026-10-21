@@ -1,4 +1,4 @@
-<h1 align="center">PicoAide Harness</h1>
+<h1 align="center">ZeoKeel Harness</h1>
 
 <p align="center">
   <strong>企业级 DeepSeek Harness 一体化平台。</strong><br>
@@ -7,18 +7,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/picoaide/picoaide-harness/releases/latest"><img src="https://img.shields.io/github/v/release/picoaide/picoaide-harness?style=flat&amp;label=release&amp;color=4D6BFE" alt="Latest release"></a>
-  <a href="https://github.com/picoaide/picoaide-harness/releases"><img src="https://img.shields.io/github/downloads/picoaide/picoaide-harness/total?style=flat&amp;label=downloads&amp;color=4D6BFE" alt="Total downloads"></a>
-  <a href="https://github.com/picoaide/picoaide-harness"><img src="https://img.shields.io/github/stars/picoaide/picoaide-harness?style=flat&amp;label=stars&amp;color=08C" alt="GitHub stars"></a>
+  <a href="https://github.com/zeokeel/ZeoKeel-Harness/releases/latest"><img src="https://img.shields.io/github/v/release/zeokeel/ZeoKeel-Harness?style=flat&amp;label=release&amp;color=4D6BFE" alt="Latest release"></a>
+  <a href="https://github.com/zeokeel/ZeoKeel-Harness/releases"><img src="https://img.shields.io/github/downloads/zeokeel/ZeoKeel-Harness/total?style=flat&amp;label=downloads&amp;color=4D6BFE" alt="Total downloads"></a>
+  <a href="https://github.com/zeokeel/ZeoKeel-Harness"><img src="https://img.shields.io/github/stars/zeokeel/ZeoKeel-Harness?style=flat&amp;label=stars&amp;color=08C" alt="GitHub stars"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  <a href="assets/community-qr.png"><img src="assets/community-qr.png" alt="PicoAide Harness 官方交流群二维码" width="220"></a><br>
-  <strong>扫码加入 PicoAide Harness 官方交流群</strong>
+  <a href="assets/community-qr.png"><img src="assets/community-qr.png" alt="ZeoKeel Harness 官方交流群二维码" width="220"></a><br>
+  <strong>扫码加入 ZeoKeel Harness 官方交流群</strong>
 </p>
 
-PicoAide Harness 把 DeepSeek Harness 的本地智能体、Host 服务、插件系统与企业级管理能力装进一个平台：
+ZeoKeel Harness 把 DeepSeek Harness 的本地智能体、Host 服务、插件系统与企业级管理能力装进一个平台：
 
 - **桌面客户端**：原生窗口、系统托盘、自动更新，无需安装 Node.js 或执行命令；
 - **本地服务**：自动启动、停止与恢复本地 Harness 服务，数据留在本机；
@@ -57,30 +57,30 @@ PicoAide Harness 把 DeepSeek Harness 的本地智能体、Host 服务、插件�
 
 | 平台 | 安装包 | 安装方式 |
 | --- | --- | --- |
-| Windows x64 | `PicoAide-Harness-<版本>-x64-Setup.exe` | 运行 NSIS 安装程序并按提示完成安装 |
-| macOS（Apple Silicon） | `PicoAide-Harness-<版本>-mac.dmg` | 打开 DMG，将 PicoAide Harness 拖入 Applications |
-| Linux x64 | `PicoAide-Harness-<版本>-x86_64.AppImage` | 授予执行权限后运行 |
+| Windows x64 | `ZeoKeel-Harness-<版本>-x64-Setup.exe` | 运行 NSIS 安装程序并按提示完成安装 |
+| macOS（Apple Silicon） | `ZeoKeel-Harness-<版本>-mac.dmg` | 打开 DMG，将 ZeoKeel Harness 拖入 Applications |
+| Linux x64 | `ZeoKeel-Harness-<版本>-x86_64.AppImage` | 授予执行权限后运行 |
 
 拿到这些安装包只有两条路：
 
 1. **企业服务器**（推荐）：管理员部署完成后，员工打开 `https://<企业域名>/`，门户页直接列出三平台下载入口；
-2. **官方镜像包**（试用 / 单机）：从更新服务器或 [GitHub Release](https://github.com/picoaide/picoaide-harness/releases) 取**服务端镜像包**，再从镜像里解出安装包：
+2. **官方镜像包**（试用 / 单机）：从更新服务器或 [GitHub Release](https://github.com/zeokeel/ZeoKeel-Harness/releases) 取**服务端镜像包**，再从镜像里解出安装包：
 
 ```bash
 VER=<版本，取自 latest.json 的 server.version>      # 预发布渠道把 official 换成 beta
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/picoaide-server-${VER}-amd64.zip"
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/SHA256SUMS"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/SHA256SUMS"
 sha256sum -c SHA256SUMS                            # ← 用 SHA256SUMS 校验下载到的镜像包
-unzip -p "picoaide-server-${VER}-amd64.zip" image.tar | docker load
-mkdir -p ./picoaide-stack
-docker run --rm -v "$PWD/picoaide-stack:/out" -e PICOAI_UNPACK_STACK=/out \
-  "picoaide-harness-server:${VER}"
-ls -1 ./picoaide-stack/client                       # 三平台安装包 + CLIENT-RELEASE.json
+unzip -p "zeokeel-server-${VER}-amd64.zip" image.tar | docker load
+mkdir -p ./zeokeel-stack
+docker run --rm -v "$PWD/zeokeel-stack:/out" -e ZEOKEEL_UNPACK_STACK=/out \
+  "zeokeel-harness-server:${VER}"
+ls -1 ./zeokeel-stack/client                       # 三平台安装包 + CLIENT-RELEASE.json
 ```
 
-> GitHub Release 的附件是**服务端镜像包**（`picoaide-server-<版本>-amd64.zip`）与校验文件 `SHA256SUMS` —— 客户端安装包在镜像里，不在 Release 附件里；校验文件名是 `SHA256SUMS`（没有 `.txt`）。
+> GitHub Release 的附件是**服务端镜像包**（`zeokeel-server-<版本>-amd64.zip`）与校验文件 `SHA256SUMS` —— 客户端安装包在镜像里，不在 Release 附件里；校验文件名是 `SHA256SUMS`（没有 `.txt`）。
 
-客户端升级与首次安装也可以直接问**它登录的那台服务端**要包（`GET /api/client/v2/updates/manifest`）——企业部署下员工机器因此不需要访问任何外网。首次启动会创建默认 `desktop` profile，并在本机启动官方 DSH Web 界面。完整步骤（含从镜像取包、离线部署与渠道交付）见官网[快速开始](https://www.picoaide.com/getting-started/)、[客户端分发与升级](https://www.picoaide.com/deployment/client-delivery/)，插件命令与故障排查见[桌面客户端](https://www.picoaide.com/docs/desktop/)与[常见问题](https://www.picoaide.com/docs/faq/)。
+客户端升级与首次安装也可以直接问**它登录的那台服务端**要包（`GET /api/client/v2/updates/manifest`）——企业部署下员工机器因此不需要访问任何外网。首次启动会创建默认 `desktop` profile，并在本机启动官方 DSH Web 界面。完整步骤（含从镜像取包、离线部署与渠道交付）见官网[快速开始](https://www.zeokeel.com/getting-started/)、[客户端分发与升级](https://www.zeokeel.com/deployment/client-delivery/)，插件命令与故障排查见[桌面客户端](https://www.zeokeel.com/docs/desktop/)与[常见问题](https://www.zeokeel.com/docs/faq/)。
 
 > 说明：Windows 安装程序与 Linux 安装包暂未签名（macOS 正式发布版经签名/公证）。首次运行 Windows 安装包时 SmartScreen 可能提示"未知发布者"—— 请先用镜像包同目录的 `SHA256SUMS` 校验镜像（安装包从中解出），Linux 安装包同理。
 
@@ -117,22 +117,22 @@ ls -1 ./picoaide-stack/client                       # 三平台安装包 + CLIEN
 
 ## 文档
 
-普通用户直接从[官网 Wiki](https://www.picoaide.com/docs/)开始即可；开发者文档只在需要扩展或维护时才需要阅读。
+普通用户直接从[官网 Wiki](https://www.zeokeel.com/docs/)开始即可；开发者文档只在需要扩展或维护时才需要阅读。
 
 ### 用户文档（官网）
 
 | 目标 | 入口 |
 | --- | --- |
-| 安装和日常使用 | [桌面客户端](https://www.picoaide.com/docs/desktop/) · [快速开始](https://www.picoaide.com/docs/getting-started/) |
-| 快速确认平台、环境和使用边界 | [常见问题](https://www.picoaide.com/docs/faq/) |
-| 了解项目为什么存在 | [产品哲学](https://www.picoaide.com/docs/philosophy/) |
-| 系统架构与 API | [系统架构](https://www.picoaide.com/docs/architecture/) · [API 参考](https://www.picoaide.com/docs/api-reference/) |
+| 安装和日常使用 | [桌面客户端](https://www.zeokeel.com/docs/desktop/) · [快速开始](https://www.zeokeel.com/docs/getting-started/) |
+| 快速确认平台、环境和使用边界 | [常见问题](https://www.zeokeel.com/docs/faq/) |
+| 了解项目为什么存在 | [产品哲学](https://www.zeokeel.com/docs/philosophy/) |
+| 系统架构与 API | [系统架构](https://www.zeokeel.com/docs/architecture/) · [API 参考](https://www.zeokeel.com/docs/api-reference/) |
 
 ### 开发者与维护者文档（仓库）
 
 | 目标 | 入口 |
 | --- | --- |
-| 编写普通或 Desktop 插件 | [插件开发（官网）](https://www.picoaide.com/docs/plugin-development/) |
+| 编写普通或 Desktop 插件 | [插件开发（官网）](https://www.zeokeel.com/docs/plugin-development/) |
 | 参与统一插件 contract 讨论 | [DSH Community Fabric Draft](community/fabric/README.zh.md) |
 | 了解桌面插件可以使用的能力 | [桌面插件服务 contract](packages/host/desktop/docs/plugin-services.zh.md) |
 | 了解桌面应用如何工作 | [架构说明](docs/architecture.md)（维护者视角） |
@@ -143,7 +143,7 @@ ls -1 ./picoaide-stack/client                       # 三平台安装包 + CLIEN
 
 插件是给 DSH 添加能力的扩展包——模型、工具、界面、工作流都可以做成插件，像搭积木一样自由组合。
 
-PicoAide Harness 没有魔改上游源码，也不是一个固定写死的外壳。官方 DeepSeek Harness 以固定版本原样运行；桌面壳本身——窗口、托盘、更新、工作配置——就是一个合法的 DSH 插件，通过官方插件机制与官方能力组合进同一个运行时。从核心 agent 到桌面外壳，整个产品遵守同一条"一切皆插件"的规则：官方生态里的插件可以直接用，桌面能力也按插件的方式组合、替换和演进。
+ZeoKeel Harness 没有魔改上游源码，也不是一个固定写死的外壳。官方 DeepSeek Harness 以固定版本原样运行；桌面壳本身——窗口、托盘、更新、工作配置——就是一个合法的 DSH 插件，通过官方插件机制与官方能力组合进同一个运行时。从核心 agent 到桌面外壳，整个产品遵守同一条"一切皆插件"的规则：官方生态里的插件可以直接用，桌面能力也按插件的方式组合、替换和演进。
 
 ## 与官方项目的关系
 
@@ -190,7 +190,7 @@ headless 检查使用 `corepack yarn check`；完整的构建、测试和发布�
 
 ## 社区交流
 
-遇到问题或需要支持，请前往 [提交 Issue](https://github.com/picoaide/picoaide-harness/issues)。
+遇到问题或需要支持，请前往 [提交 Issue](https://github.com/zeokeel/ZeoKeel-Harness/issues)。
 
 ## License
 
@@ -200,14 +200,14 @@ headless 检查使用 `corepack yarn check`；完整的构建、测试和发布�
 
 > 本项目完全开源免费。如果有人向您以任何形式出售此软件，请拒绝交易。
 
-> DeepSeek 是 DeepSeek AI 的商标。PicoAide Harness 是独立的社区项目，与 DeepSeek 官方没有隶属关系，也未获得其背书。
+> DeepSeek 是 DeepSeek AI 的商标。ZeoKeel Harness 是独立的社区项目，与 DeepSeek 官方没有隶属关系，也未获得其背书。
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=picoaide%2Fpicoaide-harness&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=zeokeel%2Fzeokeel-harness&type=date&legend=top-left">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=picoaide/picoaide-harness&type=date&theme=dark&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=picoaide/picoaide-harness&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
-    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=picoaide/picoaide-harness&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=zeokeel/ZeoKeel-Harness&type=date&theme=dark&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=zeokeel/ZeoKeel-Harness&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
+    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=zeokeel/ZeoKeel-Harness&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
   </picture>
 </a>

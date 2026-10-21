@@ -124,16 +124,16 @@ describe('official channel is a no-op', () => {
   it('expands the official artifact names as before', () => {
     const context = resolveChannelBuildContext({ env: {}, repoRoot })
     expect(channelArtifactName(context, 'mac', { version: '2.7.0', arch: 'arm64', ext: 'dmg' }))
-      .toBe('PicoAide-Harness-2.7.0-mac.dmg')
+      .toBe('ZeoKeel-Harness-2.7.0-mac.dmg')
     expect(channelArtifactName(context, 'nsis', { version: '2.7.0', arch: 'x64', ext: 'exe' }))
-      .toBe('PicoAide-Harness-2.7.0-x64-Setup.exe')
+      .toBe('ZeoKeel-Harness-2.7.0-x64-Setup.exe')
   })
 })
 
 describe('channel build context', () => {
   it('derives a channel-only data directory when the package omits one', () => {
     // 渠道包没写 desktop.home_dir（CI 对品牌渠道硬性要求，这里是本地/漏配路径）：
-    // 由 slug 小写派生；没有 slug（如 beta）则退到 `.picoaide-harness-<渠道 id>`。
+    // 由 slug 小写派生；没有 slug（如 beta）则退到 `.zeokeel-harness-<渠道 id>`。
     // 两种都**不回落官方目录** —— 共用数据根会跨渠道共享登录态/会话。
     const withSlug = resolveChannelBuildContext({
       env: { [CHANNEL_ENV]: 'acme' },
@@ -234,7 +234,7 @@ describe('channel build context', () => {
 describe('deep link scheme', () => {
   it('defaults to the official scheme and emits no override at all for official', () => {
     const context = resolveChannelBuildContext({ env: {}, repoRoot })
-    expect(context.deepLinkScheme).toBe('picoaide')
+    expect(context.deepLinkScheme).toBe('zeokeel')
     // 官方渠道连配置文件都不生成 —— 产物与改造前一致。
     expect(prepareChannelBuilderOverrides(context, tempOverridePaths('dsh-none-'))).toEqual([])
   })
@@ -257,7 +257,7 @@ describe('deep link scheme', () => {
   })
 
   it('rejects a malformed official default (template drift guard)', () => {
-    expect(OFFICIAL_BUILD_DEFAULTS.deepLinkScheme).toBe('picoaide')
+    expect(OFFICIAL_BUILD_DEFAULTS.deepLinkScheme).toBe('zeokeel')
   })
 })
 
@@ -286,7 +286,7 @@ describe('packagedAppId：产物身份判据的真源（B1-02）', () => {
   })
 
   it('渠道包没写 app_id 时回落官方值（beta 这类公共渠道的设计，不判红）', () => {
-    const dir = stagedDir({ channel_id: 'beta', desktop: { home_dir: '.picoaide-harness' } })
+    const dir = stagedDir({ channel_id: 'beta', desktop: { home_dir: '.zeokeel-harness' } })
     expect(packagedAppId(dir)).toBe(build.appId)
   })
 })

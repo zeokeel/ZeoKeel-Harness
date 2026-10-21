@@ -5,7 +5,7 @@
 // 设计要点（三条都来自那句话）：
 //
 //  1. **装在镜像里、装完即用**：演示制品由 Dockerfile 构建进
-//     `/opt/picoaide/demo-apps/`（若干 `*.wasm` + `demos.json` 清单，逐条指明用哪一份），
+//     `/opt/zeokeel/demo-apps/`（若干 `*.wasm` + `demos.json` 清单，逐条指明用哪一份），
 //     服务端启动时播种；
 //     没有目录 ⇒ 静默跳过（源码构建/自定义镜像可以不带演示）。
 //  2. **各种权限模式**：同一份 wasm 按清单播种成 public / login / whitelist 三个应用
@@ -22,7 +22,7 @@
 // **内存直出**（决策文档 docs/decisions/2026-09-20-wasm-assets-in-memory.md），本包
 // **不再**往 `<data_root>/<AppsDirName>/<app_id>/<AssetsDirName>/<release_id>/` 抽资源
 // 目录、也不在盘上留应用配置副本 —— 应用配置的唯一权威是库内 `app_releases.config_json`
-// （运行期由应用平台注入内存资源集，仍以保留资源名 `picoaide.app.json` 供应用自读）。
+// （运行期由应用平台注入内存资源集，仍以保留资源名 `zeokeel.app.json` 供应用自读）。
 // 历史遗留的资源目录由 appserver.CleanupLegacyAssetDirs 在启动期一次性清理。
 package appseed
 
@@ -40,9 +40,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // ManifestFileName 是演示清单文件名（与各演示制品同在演示目录）。
@@ -570,7 +570,7 @@ type AssetRewriteResult struct {
 //
 // 为什么改（§9 事实订正 ②，2026-09-20 口径更新）：随包资源改为**内存直出**后，应用
 // `assets.read` 读到的配置就是运行期用 `app_releases.config_json` **注入内存资源集**的
-// 那一份（保留资源名 picoaide.app.json），盘上不再有配置副本。而读侧早已把历史 public
+// 那一份（保留资源名 zeokeel.app.json），盘上不再有配置副本。而读侧早已把历史 public
 // 映射成 login（appcfg.AuthMode）⇒ 改写的真实意义**不是"改权限"**（权限早已不生效），
 // 而是让应用自读配置时**不再看到 public**、口径彻底退场 —— 否则应用可能照着配置自行
 // 实现一套"匿名可用"行为。

@@ -88,9 +88,9 @@ import (
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/capapi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
 )
 
 // DB 实现 capapi.DB：一个 *DB 对应**一个应用的一个库文件**。
@@ -128,7 +128,7 @@ const appDBFileName = "app.db"
 const dbFileMode = 0o600
 
 // canaryDBName 是金丝雀 ATTACH 用的库名（只出现在宿主内部，绝不落到磁盘）。
-const canaryDBName = "picoaide_canary"
+const canaryDBName = "zeokeel_canary"
 
 // canaryAttachErrFragment 是 LIMIT_ATTACHED=0 时引擎给出的原始错误片段
 // （实测：`SQL logic error: too many attached databases - max 0 (1)`）。
@@ -892,7 +892,7 @@ func (d *DB) inTx() bool {
 // 让**不可能是全套限额的连接根本开不出来**，并在每条语句前复检实际使用的那条连接。
 //
 // 三条规则：
-//  1. DSN 带本包私有的一次性令牌（`_picoaide_appdb=<随机>`，驱动忽略未知查询参数、
+//  1. DSN 带本包私有的一次性令牌（`_zeokeel_appdb=<随机>`，驱动忽略未知查询参数、
 //     但钩子能读到 dsn 原文）且令牌仍在有效窗口内 ⇒ 放行，并兜底设 max_page_count；
 //  2. 不带令牌 / 令牌已回收 ⇒ 只有**引擎层只读**（`PRAGMA query_only` 读回 1）的连接
 //     才放行（平台自省路径 `internal/wasmapp/api/read.go` 的
@@ -910,7 +910,7 @@ func (d *DB) inTx() bool {
 const (
 	// dsnConnTokenParam 是本包私有 DSN 令牌的参数名。用 `_` 前缀与驱动的
 	// `_pragma` / `_txlock` 同风格；驱动对未知参数直接忽略（v1.55.0 实测）。
-	dsnConnTokenParam = "_picoaide_appdb"
+	dsnConnTokenParam = "_zeokeel_appdb"
 	// connTokenBytes 是一次性令牌的随机字节数（hex 编码后 32 字符，不可猜）。
 	connTokenBytes = 16
 )

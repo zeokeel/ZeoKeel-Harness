@@ -2,18 +2,18 @@
  * 「应用中心」整页面板的装载点。
  *
  * 面板的切换语义（中列整页接管、与能力中心/连接器/定时任务互斥、点侧边栏行让位、
- * Esc 返回）全部由 `@picoaide/dsh-panel-surface` 提供；本文件只负责把装载器接上，
+ * Esc 返回）全部由 `@zeokeel/dsh-panel-surface` 提供；本文件只负责把装载器接上，
  * 并给触发按钮一个 `openAppCenterPanel()`。
  *
  * 历史：这里原来是 `position:fixed` 的模态浮层（`OVERLAY`/`MASK`/`PANEL`）。
  * 2026-09-20 与另外三个面板一起改成中列整页 —— 同一产品里两种切换语义是这次改造
  * 要解决的原始问题。
  *
- * @module @picoaide/dsh-wasm-apps/client/app-center-surface
+ * @module @zeokeel/dsh-wasm-apps/client/app-center-surface
  */
 
 import { createElement } from 'react'
-import { mountPanelSurface, type PanelSurfaceHandle } from '@picoaide/dsh-panel-surface/client'
+import { mountPanelSurface, type PanelSurfaceHandle } from '@zeokeel/dsh-panel-surface/client'
 import { AppCenterPanel } from './AppCenterPanel.tsx'
 import { resumeOpenIntent } from './open-intent-resume.ts'
 

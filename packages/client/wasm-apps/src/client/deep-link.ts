@@ -2,22 +2,22 @@
  * 应用的可分享形态 = **渠道深链** `<channel scheme>://app/<app_id>`
  * （冻结契约 `2026-09-19-wasm-client-internal-origin.md` §4.5）。
  *
- * 应用没有 web 地址（它只在客户端内以 `picoaide-app://<app_id>/` 打开），能发给同事
+ * 应用没有 web 地址（它只在客户端内以 `zeokeel-app://<app_id>/` 打开），能发给同事
  * 的就是这条深链：对方客户端（同渠道）收到后走自己的链接解析 → 确认协议与分区就绪
  * → 该应用的独立窗口加载它。未知 app_id 由客户端给可读错误，**不回落登录页**。
  *
  * ## scheme 从哪来（**不得写死**）
  *
  * scheme 的真源是随渠道构建的 `channel.json` 的 `desktop.deep_link_scheme`
- * （官方 = `picoaide`，品牌渠道各自不同，例如渠道自己的产品前缀）。客户端 bundle 读不到
+ * （官方 = `zeokeel`，品牌渠道各自不同，例如渠道自己的产品前缀）。客户端 bundle 读不到
  * 渠道包，所以这里把它做成**注入点**：{@link setAppShareScheme} 由
- * `channel-seam.ts` 在取到宿主只读路由 `GET /api/pico/wasm-apps/channel` 的响应后调用
+ * `channel-seam.ts` 在取到宿主只读路由 `GET /api/zeokeel/wasm-apps/channel` 的响应后调用
  * （应用中心挂载时 / 首次需要时）；本模块只负责拼串与形状校验。
  *
  * ## fail-closed：未注入 ⇒ **不产出链接**（§19 Q6 冻结）
  *
  * 旧实现把 {@link OFFICIAL_APP_SHARE_SCHEME} 当回落值：品牌渠道一旦漏注入，界面照样
- * 渲染一条 `picoaide://app/…` —— 一条在**本安装里根本打不开**的链接。产品口径已改为
+ * 渲染一条 `zeokeel://app/…` —— 一条在**本安装里根本打不开**的链接。产品口径已改为
  * "未注入渠道 scheme 时分享入口不渲染"：宁可少一行，也不给一条错的链接。
  * 因此 {@link appShareScheme} 返回 `null` 而不是官方值，{@link appShareLink} 随之为
  * `null`（调用方据此不渲染）。
@@ -25,7 +25,7 @@
  * {@link OFFICIAL_APP_SHARE_SCHEME} 仍然保留为**官方渠道的声明值**（跨端对拍用：
  * 渠道包 official/beta 的 `deep_link_scheme` 就是它），但它不再是一条自动回落。
  *
- * @module @picoaide/dsh-wasm-apps/client/deep-link
+ * @module @zeokeel/dsh-wasm-apps/client/deep-link
  */
 
 import { APP_ID_MAX_LENGTH, APP_ID_PATTERN } from './appcfg-contract.ts'
@@ -41,7 +41,7 @@ export const APP_DEEP_LINK_HOST = 'app'
  * 逐字比），**不是**运行期回落：品牌渠道必须经 {@link setAppShareScheme} 注入自己的
  * scheme，注入缺席时 {@link appShareScheme} 返回 `null`（fail-closed，见模块注释）。
  */
-export const OFFICIAL_APP_SHARE_SCHEME = 'picoaide'
+export const OFFICIAL_APP_SHARE_SCHEME = 'zeokeel'
 
 /** RFC 3986 scheme 形状（与 `packages/host/desktop/src/desktop-channel.ts` 同一判据）。 */
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*$/u

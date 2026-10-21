@@ -21,7 +21,7 @@
  *   1. 同步落下来的技能带基准且 `dirty=false`；用户改动后 `dirty=true`（面板徽章的
  *      唯一事实源，`CapabilityCenterPanel` 的 `capability.dirty` 徽章吃这一个字段）；
  *   2. 升版时同步器拒收、用户字节一个不少（自动路径的"不静默替换"）；
- *   3. 宿主聚合面（`/api/pico/capabilities?source=local`）对这份技能下发
+ *   3. 宿主聚合面（`/api/zeokeel/capabilities?source=local`）对这份技能下发
  *      `dirty:true` + `installedOrigin:'store'` —— 即"面板/状态面复用既有 dirty 口径"，
  *      没有第二套状态。
  *
@@ -79,7 +79,7 @@ function entryFor(results: Array<{ name: string, action: string, code?: string }
 }
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'pico-bundled-dirty-'))
+  root = await mkdtemp(join(tmpdir(), 'zeokeel-bundled-dirty-'))
   skillsDir = join(root, 'skills')
   pluginSkills = join(root, 'plugin-skills')
   await mkdir(skillsDir, { recursive: true })
@@ -146,7 +146,7 @@ function harness(): { call: (url: string) => Promise<{ code: number, body: any }
       ? { requestRejection: (r: { headers: Record<string, unknown> }) => (r.headers['cookie'] === undefined ? (401 as const) : undefined) }
       : undefined),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => true,
       getSession: () => SESSION,
@@ -244,7 +244,7 @@ describe('N1 面板/状态面复用既有 dirty 口径（auth-gate 聚合面的�
       headers: { 'content-type': 'application/json' },
     })))
 
-    const res = await harness().call('/api/pico/capabilities?source=local')
+    const res = await harness().call('/api/zeokeel/capabilities?source=local')
     expect(res.code).toBe(200)
     const rows = (res.body.items as Array<Record<string, unknown>>).filter(i => i.source === 'local' && i.name === NAME)
     expect(rows.length, '随包技能必须出现在「我的」本机行里').toBe(1)
@@ -274,7 +274,7 @@ describe('N1b 禁用开关 ≠ 本地修改（复审 R5-B-4）', () => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })))
-    const res = await harness().call('/api/pico/capabilities?source=local')
+    const res = await harness().call('/api/zeokeel/capabilities?source=local')
     const row = (res.body.items as Array<Record<string, unknown>>).find(i => i.source === 'local' && i.name === NAME)
     expect(row?.dirty, '禁用不是"本地修改"').toBe(false)
     expect(row?.installedOrigin).toBe('store')

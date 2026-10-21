@@ -1,15 +1,15 @@
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from '../../../scripts/platform-modules.mjs'
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-capability-center'
+const PACKAGE_NAME = '@zeokeel/dsh-capability-center'
 
 export default defineConfig([
   {
     name: PACKAGE_NAME,
     entry: {
       index: 'src/index.ts',
-      // 技能库变更的匿名计数插件（2026-10-13 自 `@picoaide/dsh-enterprise`
-      // 搬入）：它是**独立的一行**（`cordis.patch.yml` 的 `picoaide-skill-telemetry`），
+      // 技能库变更的匿名计数插件（2026-10-13 自 `@zeokeel/dsh-enterprise`
+      // 搬入）：它是**独立的一行**（`cordis.patch.yml` 的 `zeokeel-skill-telemetry`），
       // 因此必须是自己的入口 —— 与搬出前 enterprise 的 `skill-telemetry` 入口同形。
       // 声明了的入口就必须真的构建（本仓已踩过"声明了 ./app-proof 却没构建 ⇒
       // 打包版启动即挂"的坑）。
@@ -41,8 +41,8 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: false,
-    // `@picoaide/dsh-panel-surface` 必须**内联**进本客户端产物，因此它在
-    // package.json 里登记为 **devDependency**（与搬出前的 `@picoaide/dsh-enterprise`
+    // `@zeokeel/dsh-panel-surface` 必须**内联**进本客户端产物，因此它在
+    // package.json 里登记为 **devDependency**（与搬出前的 `@zeokeel/dsh-enterprise`
     // 同一姿势）：tsdown 会把 `dependencies` 自动当 external，而它不在平台模块表里
     // —— 外置会让浏览器里的模块加载器 `require()` 一个不存在的模块，整页挂不上。
     // 内联是预期语义：它只提供中列装载器与共享视觉语言，跨插件共享的状态只有

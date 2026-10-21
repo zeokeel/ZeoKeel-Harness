@@ -20,7 +20,7 @@ const defaultSessionFetch = vi.fn(async () => new Response('ok', { status: 200 }
  * 为什么用替身而不是真 Electron：这里要钉的是"原生动作有没有按契约发生"
  * （几何进了构造参数、导航闸门按 app origin 判、标题不可被页面改写、关窗后
  * `isAlive` 变假），不是 Electron 自己的行为。真正的"窗口真的开了"由真机判据
- * （CDP 目标列表出现 `picoaide-app://<app_id>/`）承担。
+ * （CDP 目标列表出现 `zeokeel-app://<app_id>/`）承担。
  */
 class FakeWebContents {
   static nextId = 100
@@ -264,7 +264,7 @@ vi.mock('electron', () => ({
  */
 const guardEnsureSession = vi.fn()
 const guardInstallGate = vi.fn()
-vi.mock('@picoaide/dsh-browser/guard', () => ({
+vi.mock('@zeokeel/dsh-browser/guard', () => ({
   ensureSessionGuard: guardEnsureSession,
   installAppSchemeRequestGate: guardInstallGate,
 }))
@@ -378,9 +378,9 @@ describe('createRealElectronAdapter', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Origin: 'picoaide-app://demo',
+        Origin: 'zeokeel-app://demo',
         Authorization: 'Bearer token',
-        'X-Pico-App-Proof': 'proof',
+        'X-ZeoKeel-App-Proof': 'proof',
       },
       body: JSON.stringify({ hello: 'world' }),
     })
@@ -398,9 +398,9 @@ describe('createRealElectronAdapter', () => {
     expect(request.redirect).toBe('manual')
     // Origin 与自定义头逐字送达 —— 这条是本次缺陷的回归判据。
     // （`Headers` 迭代把名字小写化，HTTP 头名本就大小写不敏感。）
-    expect(request.headers['origin']).toBe('picoaide-app://demo')
+    expect(request.headers['origin']).toBe('zeokeel-app://demo')
     expect(request.headers['authorization']).toBe('Bearer token')
-    expect(request.headers['x-pico-app-proof']).toBe('proof')
+    expect(request.headers['x-zeokeel-app-proof']).toBe('proof')
     expect(Buffer.concat(request.body).toString('utf8')).toBe(JSON.stringify({ hello: 'world' }))
     expect(request.ended).toBe(true)
   })
@@ -476,7 +476,7 @@ describe('createRealElectronAdapter', () => {
   /**
    * P2-2：跨源 302 **不带凭据出去**（fail-closed）。
    *
-   * 这条出站通道每次都带 `Authorization: Bearer <员工令牌>` 与 `X-Pico-App-Proof`，
+   * 这条出站通道每次都带 `Authorization: Bearer <员工令牌>` 与 `X-ZeoKeel-App-Proof`，
    * 平台 API 没有任何合法的跨源重定向用途。审计实测旧实现（`redirect: 'follow'`）会把
    * 两件凭据原样送到新 host（`net.request` 与 `session.fetch` 两代都如此）。
    *
@@ -493,7 +493,7 @@ describe('createRealElectronAdapter', () => {
     netScript = { redirectTo: 'https://evil.example/steal' }
     await expect(adapter.fetch!('https://harness.example.com/x', {
       method: 'POST',
-      headers: { Authorization: 'Bearer SECRET-TOKEN', 'X-Pico-App-Proof': 'PROOF-JTI' },
+      headers: { Authorization: 'Bearer SECRET-TOKEN', 'X-ZeoKeel-App-Proof': 'PROOF-JTI' },
       body: '{}',
     })).rejects.toThrow(/cross-origin redirect/)
     expect(netRequests[0]?.followed).toBe(false)
@@ -551,7 +551,7 @@ describe('createRealElectronWindowAdapter', () => {
     const handle = adapter.createAppWindow({
       appId,
       url: `${APP_SCHEME}://${appId}/`,
-      title: '演示应用 · PicoAide Harness',
+      title: '演示应用 · ZeoKeel Harness',
       partition: PARTITION,
       width: 1280,
       height: 720,
@@ -614,7 +614,7 @@ describe('createRealElectronWindowAdapter', () => {
       y: 20,
       minWidth: 320,
       minHeight: 240,
-      title: '演示应用 · PicoAide Harness',
+      title: '演示应用 · ZeoKeel Harness',
       show: true,
       autoHideMenuBar: true,
     })
@@ -716,7 +716,7 @@ describe('createRealElectronWindowAdapter', () => {
    *
    * 只挂 `will-navigate`/`will-frame-navigate` 时，一次 302 就能把窗口换到外站或
    * **另一个应用的 origin**（换壳）—— 真机探针实测过（`temp/appwin-audit/probe-h1-h2.mjs`：
-   * `nav:redirect-external = https://example.com/`、`nav:redirect-otherapp = picoaide-app://appb/`）。
+   * `nav:redirect-external = https://example.com/`、`nav:redirect-otherapp = zeokeel-app://appb/`）。
    *
    * 变异：删掉 `contents.on('will-redirect', …)` 那一行 ⇒ 本用例的 302 断言全红
    * （真机版本见 `temp/fix-appwin-r2/probe-appwin.mjs`，用真实 302 打）。
@@ -777,7 +777,7 @@ describe('createRealElectronWindowAdapter', () => {
     const handle = adapter.createAppWindow({
       appId: 'demo',
       url: `${APP_SCHEME}://demo/`,
-      title: '演示应用 · PicoAide Harness',
+      title: '演示应用 · ZeoKeel Harness',
       partition: PARTITION,
       width: 1280,
       height: 720,
@@ -788,7 +788,7 @@ describe('createRealElectronWindowAdapter', () => {
     })
     const win = FakeBrowserWindow.created[FakeBrowserWindow.created.length - 1]!
     // 聚焦导航顶掉上一次加载：真机实测的 ERR_ABORTED (-3)。
-    win.webContents.failNextLoad(Object.assign(new Error("ERR_ABORTED (-3) loading 'picoaide-app://demo/notes'"), { code: 'ERR_ABORTED', errno: -3 }))
+    win.webContents.failNextLoad(Object.assign(new Error("ERR_ABORTED (-3) loading 'zeokeel-app://demo/notes'"), { code: 'ERR_ABORTED', errno: -3 }))
     adapter.focusAppWindow(handle, `${APP_SCHEME}://demo/notes`)
     await Promise.resolve()
     await Promise.resolve()
@@ -802,7 +802,7 @@ describe('createRealElectronWindowAdapter', () => {
   })
 
   it('非法应用源 scheme 一律构造期抛（fail-loud，别等窗口打开后每个导航都被拒）', () => {
-    for (const bad of ['', 'App', 'https', 'picoaide_app']) {
+    for (const bad of ['', 'App', 'https', 'zeokeel_app']) {
       expect(() => createRealElectronWindowAdapter({ appScheme: bad }), bad).toThrow()
     }
   })
@@ -844,7 +844,7 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
     const handle = adapter.createAppWindow({
       appId,
       url: `${APP_SCHEME}://${appId}/`,
-      title: '演示应用 · PicoAide Harness',
+      title: '演示应用 · ZeoKeel Harness',
       partition: PARTITION,
       width: 1280,
       height: 720,

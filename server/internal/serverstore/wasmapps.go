@@ -430,7 +430,7 @@ func SoftDeleteWasmApp(ctx context.Context, db *sql.DB, appID string) error {
 	return tx.Commit()
 }
 
-// SetWasmAppConfig 写入**当前生效**的应用配置(§4.2 的 picoaide.app.json 投影)。
+// SetWasmAppConfig 写入**当前生效**的应用配置(§4.2 的 zeokeel.app.json 投影)。
 //
 // 投影列只有 config_json / purpose / data_sensitivity:访问模式(access)不再单列
 // (0071 删掉了 apps.visible),要显示时由调用方从 configJSON 现解

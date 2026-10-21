@@ -15,7 +15,7 @@
  *
  * 因此：闸门等待必须**显著短于**工具预算，剩下的余量留给闸门打开后真正要跑的
  * 那一段（attach / loadURL / CDP / 截图回落）。任何一侧改数都要保持这个不等式。
- * @module @picoaide/dsh-browser/budgets
+ * @module @zeokeel/dsh-browser/budgets
  */
 
 /**

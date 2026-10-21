@@ -72,7 +72,7 @@ import {
 } from '../../wasm-apps-host/src/wasm-apps.ts'
 import type { Session } from '../src/server-connector/config.ts'
 
-const WASM_APPS_PREFIX = '/api/pico/apps/wasm'
+const WASM_APPS_PREFIX = '/api/zeokeel/apps/wasm'
 
 const SESSION: Session = {
   serverURL: 'https://harness.example',
@@ -203,7 +203,7 @@ function harness(
     tools: {
       register: (definition: { name: string, timeoutMs?: number }) => { tools.push(definition); return () => {} },
     },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => state.current !== null,
       getSession: () => state.current,
@@ -282,8 +282,8 @@ let home: string
 let workspace: string
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'pico-wasm-apps-home-'))
-  workspace = await mkdtemp(join(tmpdir(), 'pico-wasm-apps-ws-'))
+  home = await mkdtemp(join(tmpdir(), 'zeokeel-wasm-apps-home-'))
+  workspace = await mkdtemp(join(tmpdir(), 'zeokeel-wasm-apps-ws-'))
   vi.stubEnv('DSH_HOME', home)
 })
 
@@ -439,7 +439,7 @@ describe('客户端上限常量与设计基线同源（§4.2 / §10.5 第 58 项
 // ---------------------------------------------------------------------------
 
 describe('本地路由：装配、方法分发、写面持有性证明', () => {
-  it('auth-gate 注册了 /api/pico/apps/wasm 前缀路由（方法分发在 handler 内）', () => {
+  it('auth-gate 注册了 /api/zeokeel/apps/wasm 前缀路由（方法分发在 handler 内）', () => {
     const h = harness(() => json(200, {}))
     const registered = h.routes.filter(r => r.path === WASM_APPS_PREFIX)
     expect(registered).toHaveLength(1)
@@ -470,8 +470,8 @@ describe('本地路由：装配、方法分发、写面持有性证明', () => {
     expect((await h.call(`${WASM_APPS_PREFIX}/nope`)).code).toBe(405)
     expect((await h.call(`${WASM_APPS_PREFIX}/demo-tool/bogus`)).code).toBe(404)
     // 同前缀但不同路径（`/wasmfoo`）必须按段边界判 404，不能当成 `:app_id` 回 405。
-    expect((await h.call('/api/pico/apps/wasmx')).code).toBe(404)
-    expect((await h.call('/api/pico/apps/wasmx/diagnostics')).code).toBe(404)
+    expect((await h.call('/api/zeokeel/apps/wasmx')).code).toBe(404)
+    expect((await h.call('/api/zeokeel/apps/wasmx/diagnostics')).code).toBe(404)
     expect((await h.call(`${WASM_APPS_PREFIX}/demo-tool/diagnostics`, 'POST')).code).toBe(405)
     expect((await h.call(`${WASM_APPS_PREFIX}/demo-tool`, 'GET')).code).toBe(405)
     expect((await h.call(WASM_APPS_PREFIX, 'POST')).code).toBe(405)
@@ -1077,7 +1077,7 @@ describe('wasm_path：只允许会话工作区与 <数据根>/apps（FIX-39）',
         return undefined
       },
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-      picoSession: {
+      zeokeelSession: {
         isRestored: () => true,
         isLoggedIn: () => true,
         getSession: () => SESSION,
@@ -1191,7 +1191,7 @@ describe('wasm_path：只允许会话工作区与 <数据根>/apps（FIX-39）',
   })
 
   it('越界路径被拒，并把"哪条根"写清（AI 需要可直接照做的原因）', async () => {
-    const outside = await mkdtemp(join(tmpdir(), 'pico-wasm-outside-'))
+    const outside = await mkdtemp(join(tmpdir(), 'zeokeel-wasm-outside-'))
     const file = join(outside, 'evil.wasm')
     await writeFile(file, Buffer.from('x'))
     const h = harnessWithWorkspace(() => json(200, {}), workspace)
@@ -1205,7 +1205,7 @@ describe('wasm_path：只允许会话工作区与 <数据根>/apps（FIX-39）',
   })
 
   it('符号链接逃逸被拒（先 realpath 再判包含）', async () => {
-    const outside = await mkdtemp(join(tmpdir(), 'pico-wasm-link-'))
+    const outside = await mkdtemp(join(tmpdir(), 'zeokeel-wasm-link-'))
     const secret = join(outside, 'secret.wasm')
     await writeFile(secret, Buffer.from('secret'))
     const link = join(workspace, 'link.wasm')
@@ -1243,7 +1243,7 @@ describe('wasm_path：只允许会话工作区与 <数据根>/apps（FIX-39）',
   })
 
   it('审计 P1-1 形态②：工作区是数据根的**祖先**时同样不放行', async () => {
-    const outer = await mkdtemp(join(tmpdir(), 'pico-wasm-ancestor-'))
+    const outer = await mkdtemp(join(tmpdir(), 'zeokeel-wasm-ancestor-'))
     const innerHome = join(outer, 'dsh-home')
     await mkdir(innerHome, { recursive: true })
     vi.stubEnv('DSH_HOME', innerHome)
@@ -1265,7 +1265,7 @@ describe('wasm_path：只允许会话工作区与 <数据根>/apps（FIX-39）',
   })
 
   it('审计 P1-1 形态③：工作区是指向数据根的**软链**时同样不放行', async () => {
-    const linkRoot = await mkdtemp(join(tmpdir(), 'pico-wasm-linkroot-'))
+    const linkRoot = await mkdtemp(join(tmpdir(), 'zeokeel-wasm-linkroot-'))
     const linkWs = join(linkRoot, 'ws-link')
     await symlink(home, linkWs)
     const tokenFile = join(home, '.credentials.yaml')
@@ -1734,7 +1734,7 @@ describe('分片链每跳预算：complete 跳声明剩余额度（FW-2）', () 
     }
   }
 
-  it('1. complete 跳带 x-pico-client-budget-ms = 这一跳的剩余额度（不是整条链的 90 s）', async () => {
+  it('1. complete 跳带 x-zeokeel-client-budget-ms = 这一跳的剩余额度（不是整条链的 90 s）', async () => {
     // 上传阶段 5 s + 3×10 s = 35 s（弱网量级：17 MiB 二进制 ≈ 23 MiB base64，5 Mbps ≈ 37 s）。
     const { harness: h, result, hops } = await runChain({ create: 5_000, puts: [10_000, 10_000, 10_000] })
     expect(result.code).toBe(201)

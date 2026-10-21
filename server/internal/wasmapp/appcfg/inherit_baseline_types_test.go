@@ -36,7 +36,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // baselineFixture 是"上一版给过值"的字段 → 该字段的合法取值（JSON 片段）。

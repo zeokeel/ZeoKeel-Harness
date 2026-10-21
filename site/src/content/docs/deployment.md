@@ -1,14 +1,14 @@
 ---
 title: 部署总览
-description: PicoAide Harness 私有化部署总览：为什么交付物只有一个镜像、数据为什么只能落 bind mount、证书模式怎么选，以及四条数据安全铁律。
+description: ZeoKeel Harness 私有化部署总览：为什么交付物只有一个镜像、数据为什么只能落 bind mount、证书模式怎么选，以及四条数据安全铁律。
 ---
 
-PicoAide Harness 面向**企业内网**交付：一台服务器跑企业服务端，员工在自己机器上装桌面客户端，
+ZeoKeel Harness 面向**企业内网**交付：一台服务器跑企业服务端，员工在自己机器上装桌面客户端，
 会话、文件与沙箱留在员工机器，账号、模型网关、计量计费与审批留在企业自己的服务器上。
 本页说明部署形态、交付物与贯穿全篇的设计取舍；具体操作在[容器化部署](/deployment/compose/)、
 [升级、备份与回滚](/deployment/upgrade/)等页面。
 
-> 仓库里的 [`docs/deploy/AI-DEPLOY.md`](https://github.com/picoaide/picoaide-harness/blob/master/docs/deploy/AI-DEPLOY.md)
+> 仓库里的 [`docs/deploy/AI-DEPLOY.md`](https://github.com/zeokeel/ZeoKeel-Harness/blob/master/docs/deploy/AI-DEPLOY.md)
 > 是**唯一权威的部署说明**（首次部署 / 升级 / 回滚 / 排障），可以直接交给 AI 代理执行。
 > 本 Wiki 是面向人的同一套流程；两者出现偏差时，以仓库文档与代码为准。
 
@@ -55,7 +55,7 @@ PicoAide Harness 面向**企业内网**交付：一台服务器跑企业服务�
 "从 HTTPS 目录取 zip" 是唯一在每个环境都成立的分发方式。
 代价是客户要自己校验哈希 —— 所以每个版本目录里都有 `SHA256SUMS`（见[取镜像](#从哪里取镜像)）。
 
-**③ 数据只能落 bind mount，不能用命名卷。** `picoaide-data/`、`pg-data/`、`caddy-data/`、`certs/`
+**③ 数据只能落 bind mount，不能用命名卷。** `zeokeel-data/`、`pg-data/`、`caddy-data/`、`certs/`
 全部是部署目录下的**宿主机目录**（bind mount）。因为：备份要能"打包一个目录就完事"，
 审计要能指着宿主机文件说清数据在哪，迁移机器要能整体拷贝，而命名卷的生命周期挂在 Docker 上
 （`docker compose down -v`、`docker volume prune` 会连数据一起删）。
@@ -66,10 +66,10 @@ PicoAide Harness 面向**企业内网**交付：一台服务器跑企业服务�
 一律用具体版本 tag；同机多栈时还要用**渠道专属** tag（见[升级、备份与回滚](/deployment/upgrade/)）。
 
 **⑤ 升级前必须备份，而且必须校验备份非空。** 数据库迁移是**不可逆**的（新版本会把库结构
-往前推），所以回滚的退路只有升级前的那份 `pg_dump` 与 `picoaide-data/` 快照。
+往前推），所以回滚的退路只有升级前的那份 `pg_dump` 与 `zeokeel-data/` 快照。
 "文件存在"不等于"内容有效"：空文件、被截断的 tar 与失败的 `pg_dump` 都会留下一个同名文件，
 因此流程里比对的是 `[ -s … ]`（非空），不是 `ls`。
-其中 `picoaide-data/master.key` 尤其致命 —— 它丢了，库里所有加密的上游 API Key
+其中 `zeokeel-data/master.key` 尤其致命 —— 它丢了，库里所有加密的上游 API Key
 （AES-GCM 密文）**永久无法解密**，只能重新录入。
 
 ## 交付物：一个镜像
@@ -84,27 +84,27 @@ PicoAide Harness 面向**企业内网**交付：一台服务器跑企业服务�
   └─ skills/                                    ← 内置技能（能力中心按需安装）
 ```
 
-一条命令把部署文件导出到部署目录（镜像自带的 `PICOAI_UNPACK_STACK` 入口）：
+一条命令把部署文件导出到部署目录（镜像自带的 `ZEOKEEL_UNPACK_STACK` 入口）：
 
 ```sh
-mkdir -p /opt/picoaide
-docker run --rm -v /opt/picoaide:/out -e PICOAI_UNPACK_STACK=/out \
-  picoaide-harness-server:<版本>
-ls -1 /opt/picoaide   # docker-compose.yml / Caddyfile.* / .env.example / VERSION / client/
+mkdir -p /opt/zeokeel
+docker run --rm -v /opt/zeokeel:/out -e ZEOKEEL_UNPACK_STACK=/out \
+  zeokeel-harness-server:<版本>
+ls -1 /opt/zeokeel   # docker-compose.yml / Caddyfile.* / .env.example / VERSION / client/
 ```
 
 导出是**替换语义**：`docker-compose.yml`、`Caddyfile.*`、`.env.example`、`client/`、`VERSION`
 会先清掉旧的再写入（否则升级后 `client/` 里会同时留着两个版本的安装器，员工可能下到旧包）；
-`.env`、`picoaide-data/`、`pg-data/`、`caddy-data/`、`certs/` **一律不动**。
+`.env`、`zeokeel-data/`、`pg-data/`、`caddy-data/`、`certs/` **一律不动**。
 导出**不需要**停机，也不改变当前运行的容器 —— 它只写文件，切换版本发生在改 `.env` 与
 `docker compose up -d` 之后。
 
 ## 从哪里取镜像
 
 ```
-https://release.picoaide.com/<渠道>/latest.json                          ← 版本清单（服务端升级检查也读它）
-https://release.picoaide.com/<渠道>/releases/<版本>/picoaide-server-<版本>-amd64.zip
-https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ← 下载后务必校验
+https://release.zeokeel.com/<渠道>/latest.json                          ← 版本清单（服务端升级检查也读它）
+https://release.zeokeel.com/<渠道>/releases/<版本>/zeokeel-server-<版本>-amd64.zip
+https://release.zeokeel.com/<渠道>/releases/<版本>/SHA256SUMS           ← 下载后务必校验
 ```
 
 `latest.json` 的关键字段：
@@ -120,7 +120,7 @@ https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ←
 | `published_at` | 该版本的发布时间（UTC） |
 
 - 更新服务器每个渠道**只保留最近 2 个版本**（最新 + 上一个）；更早的版本从
-  [GitHub Release](https://github.com/picoaide/picoaide-harness/releases) 取（公开渠道的历史归档）；
+  [GitHub Release](https://github.com/zeokeel/ZeoKeel-Harness/releases) 取（公开渠道的历史归档）；
 - GitHub Release **只发公开渠道**（官方 / 预发布）的镜像包与 `SHA256SUMS`；品牌渠道是客户定制交付，
   不进公开 Release；
 - 服务器不能出网时见[离线部署](/deployment/offline/)。
@@ -131,7 +131,7 @@ https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ←
 |---|---|
 | 服务器 | Linux x64；Docker ≥ 24 与 Compose v2（`docker compose`，不是 `docker-compose`）、`openssl`、`curl`、`unzip` |
 | 资源 | 建议 ≥ 4 核 / 8GB 内存 / 50GB 可用磁盘（`pg-data/` 会持续增长）；**可用内存 < 4GiB 的机器必须显式选 `small` 档**，否则服务端启动自检会拒绝启动 |
-| 网络 | 服务器需要能访问 `https://release.picoaide.com`（检查更新 + 下载镜像）；**员工电脑不需要访问任何外网** |
+| 网络 | 服务器需要能访问 `https://release.zeokeel.com`（检查更新 + 下载镜像）；**员工电脑不需要访问任何外网** |
 | 端口 | Caddy 占用宿主机 80/443（可用 `CADDY_HTTP_PORT` / `CADDY_HTTPS_PORT` 改，改完要同步改 Caddyfile） |
 | 客户端 | Windows x64 / macOS（Apple 芯片）/ Linux x64；员工机器无需 Node.js、pnpm 或 DSH |
 
@@ -144,7 +144,7 @@ https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ←
    Caddy 2（反代 + TLS 终结，固定 IP 172.28.0.2）
       │ HTTP:8080（仅 compose 私有网段）
       ▼
-   Go 服务端（entrypoint 以 root 修正挂载卷属主后降权到 picoaide 用户运行，固定 IP 172.28.0.3）
+   Go 服务端（entrypoint 以 root 修正挂载卷属主后降权到 zeokeel 用户运行，固定 IP 172.28.0.3）
       │
       ▼
    PostgreSQL 18（内置容器，固定 IP 172.28.0.4，数据 ./pg-data）
@@ -159,7 +159,7 @@ https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ←
 
 | 目录 | 内容 | 丢了会怎样 |
 |---|---|---|
-| `picoaide-data/` | 应用数据 + **`master.key`** | 数据库中加密的上游密钥**永久无法解密** |
+| `zeokeel-data/` | 应用数据 + **`master.key`** | 数据库中加密的上游密钥**永久无法解密** |
 | `pg-data/` | PostgreSQL 18 数据 | 账号、用量、审批、审计全部丢失 |
 | `caddy-data/` `caddy-config/` | Caddy 证书库与配置 | `auto` 模式需重新签发证书 |
 | `certs/` | 手动证书（`manual` 模式） | 需要重新放置证书 |
@@ -171,7 +171,7 @@ https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ←
 ## 应用访问模型：应用不需要公网入口
 
 员工自建的 WASM 应用**只在桌面客户端内**打开：客户端为应用开一个独立窗口，加载自定义协议地址
-`<渠道 app 源 scheme>://<app_id>/`（scheme 由渠道配置决定，官方与预发渠道为 `picoaide-app`），
+`<渠道 app 源 scheme>://<app_id>/`（scheme 由渠道配置决定，官方与预发渠道为 `zeokeel-app`），
 由客户端的协议处理器转发到服务端唯一入口 `POST /api/client/v2/apps/wasm/:app_id/request`
 （携带员工令牌）执行。
 
@@ -200,7 +200,7 @@ https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ←
 |---|---|---|
 | 1 | **绝不执行** `docker compose down -v`、`docker volume prune`、`docker system prune --volumes` | 这类命令会删数据卷与镜像层；数据虽然都在 bind mount 里，但这类命令常与"顺手清理"一起出现，是现场最常见的不可恢复事故 |
 | 2 | **绝不用 `latest` 标签** | 不可复现、无法回滚锚定；一律用具体版本 tag |
-| 3 | **升级前必须备份**，且确认备份文件**非空** | `picoaide-data/`（含 `master.key`）+ `pg_dump`；`master.key` 丢了，库里所有加密的上游密钥永久无法解密 |
+| 3 | **升级前必须备份**，且确认备份文件**非空** | `zeokeel-data/`（含 `master.key`）+ `pg_dump`；`master.key` 丢了，库里所有加密的上游密钥永久无法解密 |
 | 4 | **不得用 `.env` 覆盖已有部署目录** | 部署目录已有 `.env` 说明部署过，那是**升级**场景，走升级流程而不是重装 |
 
 补充：
@@ -217,10 +217,10 @@ https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ←
 |---|---|---|
 | 1 | 三个容器都是 Up（postgres 为 healthy） | `docker compose ps` |
 | 2 | 健康探针返回 200 | `curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/healthz"` |
-| 3 | 运行版本 == 目标版本 | `docker exec picoaide-server /app/picoaide-server --version` |
-| 4 | `master.key` 存在 | `ls -1 /opt/picoaide/picoaide-data/master.key` |
+| 3 | 运行版本 == 目标版本 | `docker exec zeokeel-server /app/zeokeel-server --version` |
+| 4 | `master.key` 存在 | `ls -1 /opt/zeokeel/zeokeel-data/master.key` |
 | 5 | 客户端清单里有 `client.assets`，地址是**绝对 https** | `curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/updates/manifest"` |
-| 6 | 本栈渠道与镜像一致 | `docker exec picoaide-server cat /opt/picoaide/CHANNEL` 与 `GET /api/client/v2/channel` 的 `channel_id` 相同 |
+| 6 | 本栈渠道与镜像一致 | `docker exec zeokeel-server cat /opt/zeokeel/CHANNEL` 与 `GET /api/client/v2/channel` 的 `channel_id` 相同 |
 
 **怎么算失败**：第 2 条 120 秒仍非 200、第 3 条版本不符、第 5 条出现 `client_unavailable`、
 第 6 条两个渠道不一致 —— 任何一条不成立都**不要**报"部署完成"，按[边界与失败行为](#边界与失败行为)
@@ -233,10 +233,10 @@ https://release.picoaide.com/<渠道>/releases/<版本>/SHA256SUMS           ←
 | 服务端起来但员工连不上 | `internal` 模式下客户端提示证书不受信任 | 属预期：把 Caddy 本地 CA 分发给员工机器导入信任库，或改用 `manual` 挂企业证书 |
 | `auto` 模式证书一直签不下来 | Caddy 日志里是 ACME 校验失败 | 域名必须**直连**本机且 80/443 对公网开放；经 CDN / 只有 IP ⇒ 改用 `manual` / `internal` |
 | caddy 容器创建失败，报 `not a directory` | 挂载源 `Caddyfile.<mode>` 不存在 | `TLS_MODE` 拼写错误（只有 `internal` / `auto` / `manual` 三个取值） |
-| 容器反复重启 | `docker compose logs --tail=100 server` | 常见两种：PG 密码与 `pg-data` 不一致；可用内存 < 4GiB 而档位仍是 `default`（日志里是"WASM 应用平台启动自检失败…拒绝启动"）⇒ 在 `.env` 写 `PICOAI_WASM_MEMORY_PROFILE=small` |
+| 容器反复重启 | `docker compose logs --tail=100 server` | 常见两种：PG 密码与 `pg-data` 不一致；可用内存 < 4GiB 而档位仍是 `default`（日志里是"WASM 应用平台启动自检失败…拒绝启动"）⇒ 在 `.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` |
 | healthz 一直非 200 | `docker compose ps` 看 postgres 是否 healthy | 首次启动要跑全部数据库迁移，需要 1–2 分钟；超过仍不通看服务端日志 |
-| `docker compose up` 报端口/网段冲突 | `ss -tlnp`、`docker network inspect` | 改端口要**同步改 Caddyfile**；网段冲突改 `NETWORK_SUBNET` 与三个固定 IP；已有 `picoaide-net` 且子网不一致时**停下来确认**，不要 `docker network rm` |
-| 员工端"检查更新永远说已是最新" | 清单里出现 `client_unavailable` | 服务端给不出绝对 https 下载地址：在 `.env` 配 `PICOAI_PUBLIC_BASE_URL=https://<域名>` 后 `docker compose up -d server` |
+| `docker compose up` 报端口/网段冲突 | `ss -tlnp`、`docker network inspect` | 改端口要**同步改 Caddyfile**；网段冲突改 `NETWORK_SUBNET` 与三个固定 IP；已有 `zeokeel-net` 且子网不一致时**停下来确认**，不要 `docker network rm` |
+| 员工端"检查更新永远说已是最新" | 清单里出现 `client_unavailable` | 服务端给不出绝对 https 下载地址：在 `.env` 配 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 后 `docker compose up -d server` |
 | 应用打不开 / 提示不可用 | 客户端版本低于服务端 | 应用只在桌面客户端内打开且要求两端同版本：把客户端升到配套版本；旧客户端打不开是预期行为，不是故障 |
 | 80/443 已被同机别的服务占用 | `ss -tlnp \| grep -E ':(80\|443)\b'` | 不要抢端口：只起 `server + postgres` 并入现有反代，见[运维与排障](/deployment/operations/) |
 

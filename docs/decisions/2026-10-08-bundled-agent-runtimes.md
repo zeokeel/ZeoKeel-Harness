@@ -29,7 +29,7 @@
 packages/host/desktop/runtimes.json          # 钉死清单：版本/制品名/字节/sha256（唯一真源）
 packages/host/desktop/scripts/fetch-bundled-runtimes.mjs   # 下载→校验→解包→裁剪→shim→清单
 packages/host/desktop/build/runtimes/        # 打包输入（gitignored；展开 180–240 MiB / 3840–5792 文件，见第三节）
-packages/host/desktop/build/runtimes-cache/  # 制品缓存（gitignored；CI 用 PICOAI_RUNTIME_CACHE 外移）
+packages/host/desktop/build/runtimes-cache/  # 制品缓存（gitignored；CI 用 ZEOKEEL_RUNTIME_CACHE 外移）
    ↓ electron-builder extraResources
 <app>/resources/runtimes/                    # **不进 asar**：裸 node/python 没有扩展名，
                                              # asarUnpack 的显式 glob 匹配不到 ⇒ 进了归档就不可执行

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // S12-01(审计 2026-09-17)回归:库里存着「开关已打开 + DSN 为空」时,

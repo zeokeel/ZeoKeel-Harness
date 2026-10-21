@@ -49,7 +49,7 @@ advanced 组合图断言中追加否定断言：`@deepseek-ai/dsh-client-ui-sett
 
 ## 数据流（不变，仅记录闭环）
 
-1. 登录成功 → `picoSession` 事件 → `bootstrap.ts` 拉取
+1. 登录成功 → `zeokeelSession` 事件 → `bootstrap.ts` 拉取
    `GET /api/config/bootstrap`（Bearer token）。
 2. `settings.update(llm-deepseek, { models: catalog.map(id+name) })` +
    `settings.replace(agent-default-model, { provider: 'deepseek-official', model: default })`。
@@ -63,7 +63,7 @@ advanced 组合图断言中追加否定断言：`@deepseek-ai/dsh-client-ui-sett
 
 ## 验证
 
-1. `yarn workspace @picoaide/dsh-enterprise check`（build + typecheck + 单测）。
+1. `yarn workspace @zeokeel/dsh-enterprise check`（build + typecheck + 单测）。
 2. `yarn workspace dsh-plugin-desktop run verify:profile`（含新增否定断言）。
 3. `yarn workspace dsh-plugin-desktop run verify:loader`。
 4. 完整 `yarn check`。

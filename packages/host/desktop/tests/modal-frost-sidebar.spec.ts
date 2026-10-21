@@ -54,7 +54,7 @@ const CAPABILITY_PANEL_TSX = join(
 
 /** 修复规则的选择器：只用 html:has() + 我们自己的稳定类名。 */
 const MODAL_SELECTOR = 'html:has([role="dialog"][aria-modal="true"]) .dshDesktopSidebarSurface'
-/** 触发条件与装载器（@picoaide/dsh-panel-surface）的模态判据同形。 */
+/** 触发条件与装载器（@zeokeel/dsh-panel-surface）的模态判据同形。 */
 const MODAL_TRIGGER = '[role="dialog"][aria-modal="true"]'
 
 /** 真实上游样式表（去注释：注释里的 `--x:` 会污染 token 解析）。 */

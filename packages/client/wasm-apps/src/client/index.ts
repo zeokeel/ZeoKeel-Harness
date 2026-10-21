@@ -4,13 +4,13 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: declares the sidebar foot action slot contract
 // (`sidebar.footer.action`) and its `wide` runtime prop. The App Center's own
-// navigation entry lives in the `picoFootMenu` popover now — what still occupies
+// navigation entry lives in the `zeokeelFootMenu` popover now — what still occupies
 // the foot slot is the always-mounted toast host.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-// Type-only: the foot-lane registry contract (`ctx.picoFootMenu`). The single
-// sidebar foot row belongs to `@picoaide/dsh-foot-menu` and reaches this bundle
+// Type-only: the foot-lane registry contract (`ctx.zeokeelFootMenu`). The single
+// sidebar foot row belongs to `@zeokeel/dsh-foot-menu` and reaches this bundle
 // as a Cordis service — never as a module import.
-import type {} from '@picoaide/dsh-foot-menu/client'
+import type {} from '@zeokeel/dsh-foot-menu/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { AppToastHostMount } from './AppToastHostMount.tsx'
 import { mountAppCenterPanel, openAppCenterPanel } from './app-center-surface.tsx'
@@ -25,19 +25,19 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Stable Cordis plugin name for the App Center client half. */
-export const name = 'picoaide-wasm-apps-client'
+export const name = 'zeokeel-wasm-apps-client'
 
 /** Locale namespace owning the App Center copy. */
 const LOCALE_NS = 'app-center'
 
-/** Services required: the slot registry (the toast mount) and locale. `picoFootMenu` is waited on from a child scope. */
+/** Services required: the slot registry (the toast mount) and locale. `zeokeelFootMenu` is waited on from a child scope. */
 export const inject = ['slots', 'locale']
 
 /**
  * Register the App Center surfaces: the foot-lane entry that opens the catalog
  * panel (plus the always-mounted toast host in the sidebar foot slot). All data
- * comes from the local `/api/pico/apps/wasm` route owned by
- * `@picoaide/dsh-enterprise` — this half never talks to the gateway directly
+ * comes from the local `/api/zeokeel/apps/wasm` route owned by
+ * `@zeokeel/dsh-enterprise` — this half never talks to the gateway directly
  * (the employee token lives in the host).
  * @param ctx - browser Cordis context.
  */
@@ -75,17 +75,17 @@ export function apply(ctx: ClientContext): void {
     'wasm-apps: foreign deep-link toast',
   )
 
-  // Foot-lane entry: the one `⋯ 更多` row owned by `@picoaide/dsh-foot-menu`
+  // Foot-lane entry: the one `⋯ 更多` row owned by `@zeokeel/dsh-foot-menu`
   // collects it. `id: 'apps'` is the panel-surface PanelId (so the row renders
   // `更多 · 应用中心` while the catalog is active) and `order: 2` keeps the app
   // center last, as it was when each plugin owned a full-width row.
   //
-  // 登记放在**子 fiber** 里等服务到位，而不是把 `picoFootMenu` 写进 `inject`：
+  // 登记放在**子 fiber** 里等服务到位，而不是把 `zeokeelFootMenu` 写进 `inject`：
   // 提供它的那一行可以被渠道覆盖层 / `$DSH_HOME/cordis.patch.yml` 禁用，硬 inject
   // 会让整条 fiber 永久 pending（无报错），把应用中心面板与**异渠道深链 toast 的
   // 常驻挂载点**一起带走（P1-7 教训）。只有"登记这一个条目"等它。
-  ctx.inject(['picoFootMenu'], (scope: ClientContext) => {
-    scope.effect(() => scope.picoFootMenu.add({
+  ctx.inject(['zeokeelFootMenu'], (scope: ClientContext) => {
+    scope.effect(() => scope.zeokeelFootMenu.add({
       id: 'apps',
       order: 2,
       title: () => t('appCenter.title'),
@@ -109,6 +109,6 @@ export function apply(ctx: ClientContext): void {
   // Center-column page: mounted once at plugin boot (the container lives in the
   // conversation column, outside React's tree), so the panel survives sidebar
   // re-layouts. Switching semantics are shared with cron / capability center /
-  // connectors — see `@picoaide/dsh-panel-surface`.
+  // connectors — see `@zeokeel/dsh-panel-surface`.
   ctx.effect(() => mountAppCenterPanel(), 'wasm-apps: app center surface')
 }

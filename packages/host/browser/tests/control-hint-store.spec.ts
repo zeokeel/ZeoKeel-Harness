@@ -21,7 +21,7 @@ async function freshStore(): Promise<typeof import('../src/client/control-hint-s
   return import('../src/client/control-hint-store.ts')
 }
 
-/** `/api/pico/browser/state` 的一个成功响应。 */
+/** `/api/zeokeel/browser/state` 的一个成功响应。 */
 function stateResponse(payload: Record<string, unknown>): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } })
 }
@@ -52,7 +52,7 @@ describe('浏览器控制权提示 store', () => {
     store.subscribe(() => { seen.push(store.current()) })
     store.start()
     await settle()
-    expect(fetchMock).toHaveBeenCalledWith('/api/pico/browser/state')
+    expect(fetchMock).toHaveBeenCalledWith('/api/zeokeel/browser/state')
     expect(store.current()).toEqual({ controlled: true, awaiting: true })
     expect(seen).toEqual([{ controlled: true, awaiting: true }])
     store.dispose()

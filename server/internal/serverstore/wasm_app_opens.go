@@ -326,7 +326,7 @@ var usageAppIDRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 // usageAppIDMinLen / usageAppIDMaxLen 与 registry 的长度边界一致（见上）。
 const usageAppIDMinLen = 2
 
-// SanitizeUsageAppID 规范化 `X-Pico-App-Id`（0076 的归因标签）。
+// SanitizeUsageAppID 规范化 `X-ZeoKeel-App-Id`（0076 的归因标签）。
 //
 // 返回空串 = **无归因**（header 缺失/非法），此时 usage.app_id 记空串 ——
 // 详见迁移 0076 的注释：归因是 best-effort，绝不影响计费。

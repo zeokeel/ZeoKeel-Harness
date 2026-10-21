@@ -38,7 +38,7 @@ func testInfo(t *testing.T, version string, assets map[string]any) map[string]an
 func withReleaseDir(t *testing.T, info map[string]any, files map[string]string) {
 	t.Helper()
 	Dir = t.TempDir()
-	t.Cleanup(func() { Dir = "/opt/picoaide/client" })
+	t.Cleanup(func() { Dir = "/opt/zeokeel/client" })
 	if info != nil {
 		raw, err := json.Marshal(info)
 		if err != nil {
@@ -128,7 +128,7 @@ func TestManifestWithoutAssets(t *testing.T) {
 // 旧实现按 X-Forwarded-Proto 推 proto,非 "https" 一律回落 http;而客户端
 // (packages/host/desktop/src/desktop-release.ts)只接受**绝对 https** URL,
 // 一个 http 地址就让整份清单被判空 → 客户端静默显示"已是最新"。修法:
-//   - PICOAI_PUBLIC_BASE_URL 配了就是唯一权威来源;
+//   - ZEOKEEL_PUBLIC_BASE_URL 配了就是唯一权威来源;
 //   - 未配时只有 XFP:https / TLS / 回环 Host 三种情况能给出安全地址;
 //   - 其它情况不下发 client 段,改下发 client_unavailable 并在服务端告警一次。
 
@@ -187,7 +187,7 @@ func captureOriginWarnings(t *testing.T) *int {
 	return &n
 }
 
-// PICOAI_PUBLIC_BASE_URL 是唯一权威来源:去掉尾斜杠、保留子路径、压过请求头推断。
+// ZEOKEEL_PUBLIC_BASE_URL 是唯一权威来源:去掉尾斜杠、保留子路径、压过请求头推断。
 func TestManifestUsesPublicBaseURLAsAuthority(t *testing.T) {
 	withReleaseDir(t, oneAsset(t), nil)
 	r := newRouter("2.7.0")
@@ -198,7 +198,7 @@ func TestManifestUsesPublicBaseURLAsAuthority(t *testing.T) {
 		want string
 	}{
 		{"根地址", "https://ai.example.com/", "https://ai.example.com/updates/client/Setup.exe"},
-		{"子路径", "https://ai.example.com/picoaide/", "https://ai.example.com/picoaide/updates/client/Setup.exe"},
+		{"子路径", "https://ai.example.com/zeokeel/", "https://ai.example.com/zeokeel/updates/client/Setup.exe"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -339,7 +339,7 @@ func TestResolveOrigin(t *testing.T) {
 		{"未配 TLS", "", originInput{TLS: true, Host: "ai.example.com:8443"}, "https://ai.example.com:8443"},
 		{"未配回环", "", originInput{Host: "127.0.0.1"}, "http://127.0.0.1"},
 		{"配置 https", "https://ai.example.com/", originInput{Host: "ai.example.com"}, "https://ai.example.com"},
-		{"配置子路径", "https://ai.example.com/picoaide", originInput{Host: "x"}, "https://ai.example.com/picoaide"},
+		{"配置子路径", "https://ai.example.com/zeokeel", originInput{Host: "x"}, "https://ai.example.com/zeokeel"},
 		{"配置回环 http", "http://127.0.0.1:9000", originInput{ForwardedProto: "https", Host: "ai.example.com"}, "http://127.0.0.1:9000"},
 		{"配置非回环 http", "http://ai.example.com", originInput{Host: "ai.example.com"}, ""},
 		{"配置带 query", "https://ai.example.com/?a=1", originInput{Host: "ai.example.com"}, ""},
@@ -374,13 +374,13 @@ func TestResolveOrigin(t *testing.T) {
 
 func TestFileServesOnlyWhitelistedRegularFiles(t *testing.T) {
 	withReleaseDir(t, testInfo(t, "2.7.0", nil), map[string]string{
-		"PicoAide-2.7.0.dmg": "dmg",
-		"PicoAide-2.7.0.DMG": "DMG",
+		"ZeoKeel-2.7.0.dmg": "dmg",
+		"ZeoKeel-2.7.0.DMG": "DMG",
 		"Setup-2.7.0.exe":    "exe",
-		"PicoAide-2.7.0.msi": "msi",
+		"ZeoKeel-2.7.0.msi": "msi",
 		"app.AppImage":       "appimage",
 		"pkg.tar.gz":         "targz",
-		"picoaide.deb":       "deb",
+		"zeokeel.deb":       "deb",
 		"mac.pkg":            "pkg",
 		"win.zip":            "zip",
 		"notes.txt":          "txt",
@@ -406,13 +406,13 @@ func TestFileServesOnlyWhitelistedRegularFiles(t *testing.T) {
 		{"清单文件", "/updates/client/CLIENT-RELEASE.json", http.StatusNotFound},
 		{"目录名", "/updates/client/downloads", http.StatusNotFound},
 		{"不存在", "/updates/client/nope.dmg", http.StatusNotFound},
-		{"合法 dmg", "/updates/client/PicoAide-2.7.0.dmg", http.StatusOK},
-		{"扩展名大小写不敏感", "/updates/client/PicoAide-2.7.0.DMG", http.StatusOK},
+		{"合法 dmg", "/updates/client/ZeoKeel-2.7.0.dmg", http.StatusOK},
+		{"扩展名大小写不敏感", "/updates/client/ZeoKeel-2.7.0.DMG", http.StatusOK},
 		{"合法 exe", "/updates/client/Setup-2.7.0.exe", http.StatusOK},
-		{"合法 msi", "/updates/client/PicoAide-2.7.0.msi", http.StatusOK},
+		{"合法 msi", "/updates/client/ZeoKeel-2.7.0.msi", http.StatusOK},
 		{"合法 AppImage", "/updates/client/app.AppImage", http.StatusOK},
 		{"合法 tar.gz", "/updates/client/pkg.tar.gz", http.StatusOK},
-		{"合法 deb", "/updates/client/picoaide.deb", http.StatusOK},
+		{"合法 deb", "/updates/client/zeokeel.deb", http.StatusOK},
 		{"合法 pkg", "/updates/client/mac.pkg", http.StatusOK},
 		{"合法 zip", "/updates/client/win.zip", http.StatusOK},
 	}

@@ -50,7 +50,7 @@ const CATEGORIES = [
     // 标识符一律加词边界：`SessionMax`/`TicketTTL` 这类短标识符不加边界会命中
     // 无关的复合名（实测 `TicketTTL` 命中 `mfaTicketTTL` —— 那是**管理员 MFA 挑战
     // 票据**，与应用换票毫无关系；R1-L4-2）。
-    source: '\\bPICOAI_APPS_BASE_DOMAIN\\b|\\bAPPS_BASE_DOMAIN\\b|\\bapps_base_domain\\b|\\bwasm_apps_base_domain_change\\b|\\bAppsBaseDomain\\b|\\bAppBaseDomain\\b|\\bbaseDomainHolder\\b|\\bBaseDomain\\b|\\bParseBaseDomain\\b|\\bInspectAppBaseDomain\\b|\\bHostGate\\b|\\bhostgate\\b|\\bMatchHost\\b|\\bIsProbePath\\b|\\bSelfOrigin\\b|\\bCheckOrigin\\b',
+    source: '\\bZEOKEEL_APPS_BASE_DOMAIN\\b|\\bAPPS_BASE_DOMAIN\\b|\\bapps_base_domain\\b|\\bwasm_apps_base_domain_change\\b|\\bAppsBaseDomain\\b|\\bAppBaseDomain\\b|\\bbaseDomainHolder\\b|\\bBaseDomain\\b|\\bParseBaseDomain\\b|\\bInspectAppBaseDomain\\b|\\bHostGate\\b|\\bhostgate\\b|\\bMatchHost\\b|\\bIsProbePath\\b|\\bSelfOrigin\\b|\\bCheckOrigin\\b',
   },
   {
     key: 'ticket',
@@ -414,7 +414,7 @@ const CONTRACT_MODULES = [
     label: 'legacy-config',
     // 预算 4 的真源 = scripts/wasm/wasm-gate-inventory.json 的 budgets.contractModules['legacy-config']
     budget: BUDGETS.modules['legacy-config'],
-    reason: 'R15C-R-03 的已废除配置登记表：`PICOAI_APPS_BASE_DOMAIN`（env）与 `wasm.apps_base_domain`（settings）两个已废除键名必须逐字存在，检测与清理命令都以它们为准',
+    reason: 'R15C-R-03 的已废除配置登记表：`ZEOKEEL_APPS_BASE_DOMAIN`（env）与 `wasm.apps_base_domain`（settings）两个已废除键名必须逐字存在，检测与清理命令都以它们为准',
   },
 ]
 

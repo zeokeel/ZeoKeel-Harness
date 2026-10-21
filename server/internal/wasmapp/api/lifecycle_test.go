@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // ===========================================================================
@@ -257,7 +257,7 @@ func TestExportContentsAndBoundaries(t *testing.T) {
 		} `json:"export"`
 	}
 	e.decodeJSON(w, http.StatusOK, &doc)
-	if doc.Export.Format != "picoaide.wasm-app-export/1" {
+	if doc.Export.Format != "zeokeel.wasm-app-export/1" {
 		t.Fatalf("format = %q", doc.Export.Format)
 	}
 	if doc.Export.App.AppID != "exp-tool" || doc.Export.App.Owner != "alice" || doc.Export.App.CurrentVersion != "1.0.0" {

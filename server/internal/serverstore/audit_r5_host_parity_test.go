@@ -192,7 +192,7 @@ func TestR5ConnectorEnvKeyEqualsSignRejected(t *testing.T) {
 	// 单元:任意位置(含尾随/中缀/仅等号/受保护前缀)都拒。
 	for _, key := range []string{
 		"NODE_OPTIONS=", "=", "=NODE_OPTIONS", "NODE_OPTIONS=--require /tmp/evil.js",
-		"PATH=", "HOME=", "DSH_HOME=", "ELECTRON_RUN_AS_NODE=", "PICOAIDE_X=",
+		"PATH=", "HOME=", "DSH_HOME=", "ELECTRON_RUN_AS_NODE=", "ZEOKEEL_X=",
 		"SAFE=", "A=B", "NODE_OPTIONS\u200B=", "NODE_OPTIONS =\t",
 	} {
 		if connectorEnvKeyAllowed(key) {

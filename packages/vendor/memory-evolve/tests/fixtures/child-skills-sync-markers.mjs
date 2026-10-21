@@ -3,7 +3,7 @@
  * (tests/coi-skills-sync-provenance-and-staging.test.js).
  *
  * Builds a plugin skill (x-version 2) and an already-installed copy that the plugin
- * itself wrote earlier (`.picoaide/release.json` with channel 'plugin' + `.install-version`
+ * itself wrote earlier (`.zeokeel/release.json` with channel 'plugin' + `.install-version`
  * '9.9.9' + a user-added notes.md), then runs one `syncBuiltinSkills` pass and prints the
  * resulting directory state.
  *
@@ -36,10 +36,10 @@ mkdirSync(join(pluginSkills, NAME), { recursive: true })
 writeFileSync(join(pluginSkills, NAME, 'SKILL.md'), `---\nname: ${NAME}\ndescription: d\nx-version: 2\n---\n# NEW-SOURCE\n`)
 
 // 已装副本 = 本插件先前同步落下的形态（channel: 'plugin' ⇒ 允许整树换入）
-mkdirSync(join(userSkills, NAME, '.picoaide'), { recursive: true })
+mkdirSync(join(userSkills, NAME, '.zeokeel'), { recursive: true })
 writeFileSync(join(userSkills, NAME, 'SKILL.md'), `---\nname: ${NAME}\ndescription: d\nx-version: 1\n---\n# OLD-INSTALLED\n`)
 writeFileSync(
-  join(userSkills, NAME, '.picoaide', 'release.json'),
+  join(userSkills, NAME, '.zeokeel', 'release.json'),
   `${JSON.stringify({ appId: NAME, version: '9.9.9', channel: 'plugin', installedAt: '2026-09-01T00:00:00.000Z' }, null, 2)}\n`,
 )
 writeFileSync(join(userSkills, NAME, '.install-version'), '9.9.9')
@@ -65,7 +65,7 @@ const swapLeftovers = () => {
 console.log(JSON.stringify({
   entry: results.find((r) => r.name === NAME),
   destSkill: readIf(join(dest, 'SKILL.md')),
-  provenance: readIf(join(dest, '.picoaide', 'release.json')),
+  provenance: readIf(join(dest, '.zeokeel', 'release.json')),
   installVersion: readIf(join(dest, '.install-version')),
   leftovers: swapLeftovers(),
 }))

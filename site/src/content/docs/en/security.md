@@ -25,7 +25,7 @@ One trade-off runs through all of it: **deny by default, and make the failure di
 ### Server keys and secrets
 
 - Upstream API keys, MFA secrets and secret fields in settings are all stored **AES-GCM** encrypted, with the ciphertext prefix `enc:v1:` and the form `enc:v1:<base64(nonce‖ciphertext)>`; **every encryption uses a fresh random nonce**;
-- The master key comes from the `PICOAI_MASTER_KEY` environment variable, otherwise from `master.key` in the data root: 32 random bytes, mode **0600**, created with `O_EXCL` so that a concurrent first start has exactly one winner (the loser re-reads), in a data directory of mode **0700**, and it is **never written into the database**;
+- The master key comes from the `ZEOKEEL_MASTER_KEY` environment variable, otherwise from `master.key` in the data root: 32 random bytes, mode **0600**, created with `O_EXCL` so that a concurrent first start has exactly one winner (the loser re-reads), in a data directory of mode **0700**, and it is **never written into the database**;
 - A ciphertext that cannot be decrypted (master key replaced, tampered value, foreign value) returns an error; it never degrades into "treat it as empty".
 
 > Lose `master.key` and the encrypted upstream keys in the database are **unrecoverable**. That is exactly why [Upgrade, backup & rollback](/en/deployment/upgrade/) makes "the backup must include the data directory and must be non-empty" an iron rule.
@@ -83,7 +83,7 @@ Three details that are easy to get wrong:
 - **The decision key, the recording key and the clearing key must come from one construction point**: miss one of the three and the bucket never fills, so rate limiting fails **silently**;
 - "Count failures only" must be atomic rather than "decide first, record after the failure" — the latter lets a concurrent burst straight through.
 
-A newly saved **LDAP** configuration using a non-loopback plaintext `ldap://` URL is **refused by default** (the bind password would cross the network in clear); allowing it requires an explicit `PICOAI_LDAP_ALLOW_PLAINTEXT=1`, and every such save writes a log line.
+A newly saved **LDAP** configuration using a non-loopback plaintext `ldap://` URL is **refused by default** (the bind password would cross the network in clear); allowing it requires an explicit `ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1`, and every such save writes a log line.
 
 ## Sandbox and permissions
 
@@ -119,7 +119,7 @@ The writable surface comes from a single root-derivation function: `workspace ro
 - The one effective measure is the **module-scope** startup switch `no-proxy-server`, appended before `app.whenReady()`: it covers the default session and **every partition created later** (built-in browser, app windows, platform outbound requests) and overrides a proxy passed explicitly on the host command line;
 - Calling `setProxy({mode:'direct'})` on a single session is **not enough**: partitions still resolve to the proxy;
 - The main-process Node stack is forced onto a direct dispatcher, and proxy environment variables are stripped from spawned children — and that stripping must happen **after** the layered `.env` is loaded, or `.env` puts them back;
-- **Escape hatches** for deployments where the only route to the internet is a proxy: the channel field `desktop.allow_system_proxy: true`, or the real process environment variable `PICOAI_ALLOW_SYSTEM_PROXY=1`. Precedence is "real process environment > channel package > deny by default"; a switch written in the layered `.env` is structurally too late, and the startup log says it was ignored.
+- **Escape hatches** for deployments where the only route to the internet is a proxy: the channel field `desktop.allow_system_proxy: true`, or the real process environment variable `ZEOKEEL_ALLOW_SYSTEM_PROXY=1`. Precedence is "real process environment > channel package > deny by default"; a switch written in the layered `.env` is structurally too late, and the startup log says it was ignored.
 
 ### Updates: a single source
 

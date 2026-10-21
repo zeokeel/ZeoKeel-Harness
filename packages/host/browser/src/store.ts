@@ -18,7 +18,7 @@
  * 3. **脱敏分档**（见 sensitive.ts）：`url` 字段与 URL/查询串形态的文本保持键名级强度；
  *    标题/摘要的**散文**段只对强凭据键打码——此前 `搜索 “key=value” 的含义` 会被写成
  *    `搜索 “key=**** 的含义`，落盘即不可逆。
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, renameSync, statSync } from 'node:fs'

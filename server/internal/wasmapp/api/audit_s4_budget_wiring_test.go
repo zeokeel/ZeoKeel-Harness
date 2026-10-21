@@ -75,9 +75,9 @@ import (
 
 const (
 	// wasmRuntimeImportPath 是 `runtime.Request` / `runtime.InstanceLimits` 的类型来源。
-	wasmRuntimeImportPath = "github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	wasmRuntimeImportPath = "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 	// wasmModuleImportPrefix 用来把跨包调用映射回仓内目录（只跟本仓实现，外部包 fail-loud）。
-	wasmModuleImportPrefix = "github.com/picoaide/picoaide/"
+	wasmModuleImportPrefix = "github.com/zeokeel/zeokeel-harness/server/"
 	// maxBudgetCallDepth 是"预算来源"允许的包装层数（helper → helper → 字面量）。
 	maxBudgetCallDepth = 3
 )
@@ -612,8 +612,8 @@ func TestAuditS4BudgetWiringSelfCheck(t *testing.T) {
 import (
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 )
 
 func use(l applimits.Limits) {

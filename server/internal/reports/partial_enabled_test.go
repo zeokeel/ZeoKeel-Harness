@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // A-11（2026-09-23 R3-A 审计，P2）：**部分更新省略 `enabled` = 保持现值**。

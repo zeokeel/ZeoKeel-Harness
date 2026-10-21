@@ -6,7 +6,7 @@ import {
   PANEL_TOOLBAR,
   PanelButton,
   icons,
-} from '@picoaide/dsh-panel-surface/client'
+} from '@zeokeel/dsh-panel-surface/client'
 import { connectorErrorCodeOf, withConnectorErrorCode, type ConnectorErrorCode } from '../connector-error.ts'
 import { friendlyConnectorError } from './friendly-error.ts'
 import { t } from './locales.ts'
@@ -161,7 +161,7 @@ const INPUT: React.CSSProperties = {
 
 const LABEL: React.CSSProperties = { fontSize: 12, margin: 0, color: 'var(--dsw-alias-label-caption)' }
 
-/** 工具条几何（颜色与悬停反馈见共享样式表的 `.pico-chipbtn`）。 */
+/** 工具条几何（颜色与悬停反馈见共享样式表的 `.zeokeel-chipbtn`）。 */
 const TOOLBAR: React.CSSProperties = { ...PANEL_TOOLBAR, marginBottom: 16 }
 
 const FILTER_BUTTON: React.CSSProperties = {
@@ -271,11 +271,11 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
     if (!url) return
     let lastOpened: string | null = null
     try {
-      lastOpened = window.sessionStorage.getItem(`pico-connector-opened:${entry.id}`)
+      lastOpened = window.sessionStorage.getItem(`zeokeel-connector-opened:${entry.id}`)
     } catch { /* storage unavailable (private mode) — fall back to per-mount ref below */ }
     if (lastOpened === url) return
     try {
-      window.sessionStorage.setItem(`pico-connector-opened:${entry.id}`, url)
+      window.sessionStorage.setItem(`zeokeel-connector-opened:${entry.id}`, url)
     } catch { /* storage unavailable */ }
     const popup = window.open(url, '_blank')
     activePopup.current = popup
@@ -284,7 +284,7 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
         if (popup.closed) {
           window.clearInterval(timer)
           activePopup.current = null
-          void fetchJson(`/api/pico/connectors/${encodeURIComponent(entry.id)}/cancel`, { method: 'POST' })
+          void fetchJson(`/api/zeokeel/connectors/${encodeURIComponent(entry.id)}/cancel`, { method: 'POST' })
             .then(() => onChanged())
             .catch(() => {})
         }
@@ -307,7 +307,7 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
     setBusy('connect')
     try {
       await fetchJson<{ ok: boolean }>(
-        `/api/pico/connectors/${encodeURIComponent(entry.id)}/connect`,
+        `/api/zeokeel/connectors/${encodeURIComponent(entry.id)}/connect`,
         { method: 'POST' },
       )
       if (entry.request?.fields && entry.request.fields.length > 0) {
@@ -331,7 +331,7 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
     setError(null)
     setBusy('submit')
     try {
-      await fetchJson(`/api/pico/connectors/${encodeURIComponent(entry.id)}/auth-submit`, {
+      await fetchJson(`/api/zeokeel/connectors/${encodeURIComponent(entry.id)}/auth-submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: formValues }),
@@ -351,7 +351,7 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
     setError(null)
     setBusy('submit')
     try {
-      await fetchJson(`/api/pico/connectors/${encodeURIComponent(entry.id)}/${allow ? 'approve' : 'deny'}`, { method: 'POST' })
+      await fetchJson(`/api/zeokeel/connectors/${encodeURIComponent(entry.id)}/${allow ? 'approve' : 'deny'}`, { method: 'POST' })
       onChanged()
     } catch (e) {
       setError(friendlyFromError(e))
@@ -369,7 +369,7 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
     setError(null)
     setBusy('refresh')
     try {
-      await fetchJson(`/api/pico/connectors/${encodeURIComponent(entry.id)}/refresh`, { method: 'POST' })
+      await fetchJson(`/api/zeokeel/connectors/${encodeURIComponent(entry.id)}/refresh`, { method: 'POST' })
       onChanged()
     } catch (e) {
       setError(t('token.refreshFailed', { message: friendlyFromError(e) }))
@@ -383,7 +383,7 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
     setError(null)
     setBusy('disconnect')
     try {
-      await fetchJson(`/api/pico/connectors/${encodeURIComponent(entry.id)}/disconnect`, { method: 'POST' })
+      await fetchJson(`/api/zeokeel/connectors/${encodeURIComponent(entry.id)}/disconnect`, { method: 'POST' })
       onChanged()
     } catch (e) {
       setError(friendlyFromError(e))
@@ -401,7 +401,7 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
     setError(null)
     setBusy('disconnect')
     try {
-      await fetchJson(`/api/pico/connectors/${encodeURIComponent(entry.id)}/cancel`, { method: 'POST' })
+      await fetchJson(`/api/zeokeel/connectors/${encodeURIComponent(entry.id)}/cancel`, { method: 'POST' })
       onChanged()
     } catch (e) {
       setError(friendlyFromError(e))
@@ -418,13 +418,13 @@ function ConnectorCard({ entry, onChanged }: { entry: ConnectorEntry; onChanged:
   return (
     <Card interactive style={CARD}>
       <div style={HEAD}>
-        <span className="pico-tile" aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 11, color: statusColor[entry.status] ?? 'var(--dsw-alias-label-tertiary)', background: `color-mix(in srgb, ${statusColor[entry.status] ?? 'var(--dsw-alias-label-tertiary)'} 14%, transparent)`, fontSize: 15 }}>
+        <span className="zeokeel-tile" aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 11, color: statusColor[entry.status] ?? 'var(--dsw-alias-label-tertiary)', background: `color-mix(in srgb, ${statusColor[entry.status] ?? 'var(--dsw-alias-label-tertiary)'} 14%, transparent)`, fontSize: 15 }}>
           {entry.name.slice(0, 1)}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={TITLE} title={entry.name}>{entry.name}</p>
-          <span className="pico-chip" style={{ marginTop: 3, color: statusColor[entry.status] ?? 'var(--dsw-alias-label-secondary)' }}>
-            <span className="pico-tile" style={{ width: 6, height: 6, borderRadius: 999, background: 'currentColor' }} />
+          <span className="zeokeel-chip" style={{ marginTop: 3, color: statusColor[entry.status] ?? 'var(--dsw-alias-label-secondary)' }}>
+            <span className="zeokeel-tile" style={{ width: 6, height: 6, borderRadius: 999, background: 'currentColor' }} />
             {statusLabel(entry.status)}
           </span>
         </div>
@@ -618,7 +618,7 @@ export function ConnectorsList() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   const refresh = useCallback((): void => {
-    fetchJson<{ connectors: ConnectorEntry[] }>('/api/pico/connectors')
+    fetchJson<{ connectors: ConnectorEntry[] }>('/api/zeokeel/connectors')
       .then((data) => { setConnectors(data.connectors); setLoadError(false) })
       // 瞬时失败保留旧列表(不置空——旧实现把已连接卡片刷成「无连接器」
       // 空态误导用户),仅标错误态;首载失败(connectors===null)仍显示连接中。
@@ -665,7 +665,7 @@ export function ConnectorsList() {
             <button
               key={value}
               type="button"
-              className="pico-chipbtn"
+              className="zeokeel-chipbtn"
               data-active={statusFilter === value ? 'true' : 'false'}
               style={FILTER_BUTTON}
               onClick={() => setStatusFilter(value)}

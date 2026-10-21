@@ -1,14 +1,14 @@
 {
   "name": "dsh-plugin-desktop",
   "version": "2.8.3-beta.4",
-  "description": "PicoAide Harness: an Electron shell composed as a DeepSeek Harness Cordis plugin",
+  "description": "ZeoKeel Harness: an Electron shell composed as a DeepSeek Harness Cordis plugin",
   "license": "MIT",
   "publishConfig": {
     "registry": "https://registry.npmjs.org"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/picoaide/picoaide-harness.git",
+    "url": "git+https://github.com/zeokeel/ZeoKeel-Harness.git",
     "directory": "packages/host/desktop"
   },
   "type": "module",
@@ -136,7 +136,7 @@
     "prebuild": "node scripts/prebuild-workspace-deps.ts",
     "start": "node lib/bin.js",
     "dev": "yarn run build && node lib/bin.js",
-    "package:dir": "yarn workspace @picoaide/dsh-enterprise build && yarn workspace @picoaide/dsh-account-card build && yarn run build && node scripts/package-dir.mjs",
+    "package:dir": "yarn workspace @zeokeel/dsh-enterprise build && yarn workspace @zeokeel/dsh-account-card build && yarn run build && node scripts/package-dir.mjs",
     "dist:linux": "node scripts/package-linux.mjs",
     "dist:mac": "node scripts/release-mac.ts",
     "dist:mac-smoke": "node scripts/package-mac.ts",
@@ -314,17 +314,17 @@
     "@deepseek-ai/dsh-working-directory": "0.2.1-rc.2",
     "@deepseek-ai/dsh-workspace": "0.2.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.4",
-    "@picoaide/dsh-account-card": "workspace:*",
-    "@picoaide/dsh-browser": "workspace:*",
-    "@picoaide/dsh-capability-center": "workspace:*",
-    "@picoaide/dsh-connectors": "workspace:*",
-    "@picoaide/dsh-enterprise": "workspace:*",
-    "@picoaide/dsh-foot-menu": "workspace:*",
-    "@picoaide/dsh-gateway-client": "workspace:*",
-    "@picoaide/dsh-host-home": "workspace:*",
-    "@picoaide/dsh-host-locale": "workspace:*",
-    "@picoaide/dsh-wasm-apps": "workspace:*",
-    "@picoaide/dsh-wasm-apps-host": "workspace:*",
+    "@zeokeel/dsh-account-card": "workspace:*",
+    "@zeokeel/dsh-browser": "workspace:*",
+    "@zeokeel/dsh-capability-center": "workspace:*",
+    "@zeokeel/dsh-connectors": "workspace:*",
+    "@zeokeel/dsh-enterprise": "workspace:*",
+    "@zeokeel/dsh-foot-menu": "workspace:*",
+    "@zeokeel/dsh-gateway-client": "workspace:*",
+    "@zeokeel/dsh-host-home": "workspace:*",
+    "@zeokeel/dsh-host-locale": "workspace:*",
+    "@zeokeel/dsh-wasm-apps": "workspace:*",
+    "@zeokeel/dsh-wasm-apps-host": "workspace:*",
     "adm-zip": "^0.6.0",
     "dsh-memory-evolve": "workspace:*",
     "koffi": "3.1.5",
@@ -358,8 +358,8 @@
     "ws": "^8.21.3"
   },
   "build": {
-    "appId": "ai.deepseek.dsh.desktop",
-    "productName": "PicoAide Harness",
+    "appId": "com.zeokeel.harness",
+    "productName": "ZeoKeel Harness",
     "electronLanguages": [
       "zh-CN",
       "zh_CN",
@@ -367,9 +367,9 @@
     ],
     "protocols": [
       {
-        "name": "PicoAide Harness Deep Link",
+        "name": "ZeoKeel Harness Deep Link",
         "schemes": [
-          "picoaide"
+          "zeokeel"
         ]
       }
     ],
@@ -441,10 +441,10 @@
       "!*.tsx",
       "!**/*.ts",
       "!**/*.tsx",
-      "!**/node_modules/@picoaide/*/src/**",
-      "!**/node_modules/@picoaide/*/tests/**",
-      "!**/node_modules/@picoaide/*/docs/**",
-      "!**/node_modules/@picoaide/*/*.ts",
+      "!**/node_modules/@zeokeel/*/src/**",
+      "!**/node_modules/@zeokeel/*/tests/**",
+      "!**/node_modules/@zeokeel/*/docs/**",
+      "!**/node_modules/@zeokeel/*/*.ts",
       "!**/node_modules/dsh-memory-evolve/src/**",
       "!**/node_modules/dsh-memory-evolve/docs/**",
       "!**/node_modules/dsh-memory-evolve/tests/**",
@@ -512,12 +512,12 @@
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true,
       "icon": "build/app-icon-mac.png",
-      "artifactName": "PicoAide-Harness-${version}-mac.${ext}",
+      "artifactName": "ZeoKeel-Harness-${version}-mac.${ext}",
       "notarize": true,
       "entitlements": "scripts/macos-entitlements.plist",
       "entitlementsInherit": "scripts/macos-entitlements.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "PicoAide Harness 使用麦克风把你的语音转写为输入框里的文字；录音只在本机识别，不会上传。"
+        "NSMicrophoneUsageDescription": "ZeoKeel Harness 使用麦克风把你的语音转写为输入框里的文字；录音只在本机识别，不会上传。"
       }
     },
     "win": {
@@ -529,7 +529,7 @@
           ]
         }
       ],
-      "artifactName": "PicoAide-Harness-${version}-${arch}-Portable.${ext}",
+      "artifactName": "ZeoKeel-Harness-${version}-${arch}-Portable.${ext}",
       "icon": "build/app-icon.png"
     },
     "nsis": {
@@ -542,8 +542,8 @@
       "createStartMenuShortcut": true,
       "differentialPackage": false,
       "useZip": true,
-      "shortcutName": "PicoAide Harness",
-      "artifactName": "PicoAide-Harness-${version}-${arch}-Setup.${ext}"
+      "shortcutName": "ZeoKeel Harness",
+      "artifactName": "ZeoKeel-Harness-${version}-${arch}-Setup.${ext}"
     },
     "linux": {
       "target": [
@@ -561,10 +561,10 @@
         }
       ],
       "icon": "build/app-icon.png",
-      "artifactName": "PicoAide-Harness-${version}-${arch}.${ext}",
+      "artifactName": "ZeoKeel-Harness-${version}-${arch}.${ext}",
       "category": "Development",
-      "maintainer": "picoaide",
-      "synopsis": "PicoAide Harness",
+      "maintainer": "zeokeel",
+      "synopsis": "ZeoKeel Harness",
       "files": [
         "!**/node_modules/@img/sharp-linux-arm64/**",
         "!**/node_modules/@img/sharp-linux-arm/**",

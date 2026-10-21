@@ -20,13 +20,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/updatecheck"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/updatecheck"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
-const sessionCookieName = "picoaide_session"
+const sessionCookieName = "zeokeel_session"
 
 // adminMaxBodyBytes bounds admin JSON request bodies (审计 2026-08-25 F-06).
 const adminMaxBodyBytes = 1 << 20 // 1MB
@@ -59,7 +59,7 @@ func secureCookieFor(c *gin.Context, db *sql.DB) bool {
 // adminLoginLimiter bounds admin login attempts (ip+username) so the
 // password is not brute-forceable without rate limiting.
 // 延迟到首次登录调用时创建(惰性单例):newLoginLimiter 在包 init 时读
-// PICOAI_LOGIN_MAX_ATTEMPTS,若包级立即初始化,测试 t.Setenv 来不及生效,
+// ZEOKEEL_LOGIN_MAX_ATTEMPTS,若包级立即初始化,测试 t.Setenv 来不及生效,
 func adminLoginLimiter() *loginLimiter {
 	// F17(复核修正):与客户端面共享同一个限流器 —— 此前两个入口各持一份
 	// 失败预算,同一账号实际可尝试 2 倍次数(且可交替入口规避 429)。
@@ -164,7 +164,7 @@ func issuerHostBlocked(host string) bool {
 //
 // 出站 IP 复检在 ldap.go 的连接层强制(所有入口生效);这里额外在**保存时**
 // 拒绝明文 ldap:// 的非回环地址 —— bind 密码会以明文过网。为兼容存量内网
-// 未启 TLS 的目录,显式设置 PICOAI_LDAP_ALLOW_PLAINTEXT=1 可放行(仅影响
+// 未启 TLS 的目录,显式设置 ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1 可放行(仅影响
 // 新保存/修改的配置,存量配置不因升级而失效)。
 func validateLDAPServerURL(raw string) error {
 	raw = strings.TrimSpace(raw)
@@ -182,11 +182,11 @@ func validateLDAPServerURL(raw string) error {
 		if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1" {
 			return nil
 		}
-		if v := strings.TrimSpace(os.Getenv("PICOAI_LDAP_ALLOW_PLAINTEXT")); v == "1" || strings.EqualFold(v, "true") {
-			log.Printf("auth config: 允许明文 ldap://(PICOAI_LDAP_ALLOW_PLAINTEXT 已开启)host=%s —— bind 密码将明文过网", u.Hostname())
+		if v := strings.TrimSpace(os.Getenv("ZEOKEEL_LDAP_ALLOW_PLAINTEXT")); v == "1" || strings.EqualFold(v, "true") {
+			log.Printf("auth config: 允许明文 ldap://(ZEOKEEL_LDAP_ALLOW_PLAINTEXT 已开启)host=%s —— bind 密码将明文过网", u.Hostname())
 			return nil
 		}
-		return errors.New("明文 ldap:// 会以明文传输 bind 密码;请改用 ldaps://,或显式设置 PICOAI_LDAP_ALLOW_PLAINTEXT=1 后重试")
+		return errors.New("明文 ldap:// 会以明文传输 bind 密码;请改用 ldaps://,或显式设置 ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1 后重试")
 	default:
 		return errors.New("仅支持 ldap:// 或 ldaps://")
 	}

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { repairAsarLinkPath } from '../src/asar-file-system.ts'
 
-const ASAR_DIR = '/opt/PicoAide Harness/resources/app.asar/node_modules/@deepseek-ai/dsh-agent-presets'
-const LINK_DIR = 'C:/Users/lost/.picoaide-harness/profiles/node_modules/@deepseek-ai/dsh-agent-presets'
+const ASAR_DIR = '/opt/ZeoKeel Harness/resources/app.asar/node_modules/@deepseek-ai/dsh-agent-presets'
+const LINK_DIR = 'C:/Users/lost/.zeokeel-harness/profiles/node_modules/@deepseek-ai/dsh-agent-presets'
 
 /** Build an lstat/readlink pair over a map of symlink paths. */
 function linkWalk(links: Record<string, string>, existent: string[] = []) {
@@ -31,7 +31,7 @@ describe('repairAsarLinkPath', () => {
   })
 
   it('repairs a POSIX-style path through an asar-pointing symlink', () => {
-    const linkDir = '/home/u/.picoaide-harness/profiles/node_modules/@deepseek-ai/dsh-agent-presets'
+    const linkDir = '/home/u/.zeokeel-harness/profiles/node_modules/@deepseek-ai/dsh-agent-presets'
     const asarDir = '/opt/app/resources/app.asar/node_modules/@deepseek-ai/dsh-agent-presets'
     const { lstat, readlink } = linkWalk({ [linkDir]: asarDir })
     expect(repairAsarLinkPath(`${linkDir}/package.json`, lstat, readlink)).toBe(`${asarDir}/package.json`)
@@ -45,8 +45,8 @@ describe('repairAsarLinkPath', () => {
   })
 
   it('repairs a Windows-only path with Windows separators end to end', () => {
-    const linkDir = 'C:\\Users\\lost\\.picoaide-harness\\profiles\\node_modules\\@deepseek-ai\\dsh-agent-presets'
-    const asarDir = 'C:\\Program Files\\PicoAide Harness\\resources\\app.asar\\node_modules\\@deepseek-ai\\dsh-agent-presets'
+    const linkDir = 'C:\\Users\\lost\\.zeokeel-harness\\profiles\\node_modules\\@deepseek-ai\\dsh-agent-presets'
+    const asarDir = 'C:\\Program Files\\ZeoKeel Harness\\resources\\app.asar\\node_modules\\@deepseek-ai\\dsh-agent-presets'
     const { lstat, readlink } = linkWalk({ [linkDir]: asarDir })
     expect(repairAsarLinkPath(`${linkDir}\\agent.cordis.yml`, lstat, readlink)).toBe(`${asarDir}\\agent.cordis.yml`)
     expect(repairAsarLinkPath(`${linkDir}\\lib\\index.js`, lstat, readlink)).toBe(`${asarDir}\\lib\\index.js`)
@@ -61,7 +61,7 @@ describe('repairAsarLinkPath', () => {
 
   it('returns the path unchanged when every component lstat fails (missing file)', () => {
     const { lstat, readlink } = linkWalk({}, [])
-    const input = '/home/u/.picoaide-harness/profiles/node_modules/@deepseek-ai/dsh-agent-presets/agent.cordis.yml'
+    const input = '/home/u/.zeokeel-harness/profiles/node_modules/@deepseek-ai/dsh-agent-presets/agent.cordis.yml'
     expect(repairAsarLinkPath(input, lstat, readlink)).toBe(input)
   })
 

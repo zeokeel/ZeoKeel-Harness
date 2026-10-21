@@ -7,7 +7,7 @@
  * 修复前的同一份探针（`temp/r16/B/probes/open-intent-consumer.spec.tsx` 的旧形态）是**绿**的：
  * 它断言"挂载但未激活 ⇒ 0 次 open、意图仍在存储；**激活后** ⇒ 1 次 open"。而那个绿
  * 恰恰就是缺陷本身 —— 只有面板的挂载 effect 读意图，可面板在**非激活**态被渲染成
- * `null`（`@picoaide/dsh-panel-surface`），客户端登录又是**整文档导航**
+ * `null`（`@zeokeel/dsh-panel-surface`），客户端登录又是**整文档导航**
  * （`auth-gate` 登录成功后 `location.replace('/')`）⇒"登录成功"那一刻没有任何代码在
  * 读那个意图。它于是活到用户**下一次**打开应用中心才被兑现：用户当初点的"登录后自动
  * 打开"没发生，而一次**与它无关**地打开应用中心会自己弹出一个应用窗口。
@@ -32,7 +32,7 @@
  */
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PANEL_ACTIVE_ATTR } from '@picoaide/dsh-panel-surface'
+import { PANEL_ACTIVE_ATTR } from '@zeokeel/dsh-panel-surface'
 import { mountAppCenterPanel, openAppCenterPanel } from './app-center-surface.tsx'
 import { setAppChannel, type AppChannel } from './channel-seam.ts'
 import { HOST_PROOF_PATH } from './host-proof.ts'
@@ -121,7 +121,7 @@ async function mountPanel(options: {
 }
 
 /** 本机打开路由的请求（唯一判据：窗口是不是真的会被打开）。 */
-const openCalls = (): Call[] => calls.filter(call => call.url === '/api/pico/wasm-apps/open')
+const openCalls = (): Call[] => calls.filter(call => call.url === '/api/zeokeel/wasm-apps/open')
 
 beforeEach(() => {
   document.body.innerHTML = ''
@@ -137,13 +137,13 @@ beforeEach(() => {
     if (url === HOST_PROOF_PATH) {
       return jsonResponse(200, { proof: 'probe-proof', expires_at: Date.now() + 5 * 60_000 })
     }
-    if (url === '/api/pico/wasm-apps/channel') return jsonResponse(200, CHANNEL)
-    if (url === '/api/pico/wasm-apps/open') {
+    if (url === '/api/zeokeel/wasm-apps/channel') return jsonResponse(200, CHANNEL)
+    if (url === '/api/zeokeel/wasm-apps/open') {
       // 顺序判据的取样点：请求发出的**那一刻**意图还在不在存储里。
       intentPresentAtOpen.push(activeIntent !== null && activeIntent.values.has(OPEN_INTENT_STORAGE_KEY))
       return jsonResponse(200, { url: `${APP_SCHEME}://roster/`, window: 'opened' })
     }
-    if (url === '/api/pico/apps/wasm') return jsonResponse(200, CATALOG)
+    if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, CATALOG)
     return jsonResponse(200, { ok: true })
   }))
 })

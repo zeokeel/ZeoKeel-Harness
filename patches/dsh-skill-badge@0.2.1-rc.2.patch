@@ -45,7 +45,7 @@ diff --git a/lib/index.js b/lib/index.js
 -		};
 -	}
 -};
-+const FALLBACK_PRODUCT_NAME = "PicoAide Harness";
++const FALLBACK_PRODUCT_NAME = "ZeoKeel Harness";
 +/** Resolve the product/OEM name composed into the running desktop profile. */
 +function productName(ctx) {
 +	try {
@@ -53,7 +53,7 @@ diff --git a/lib/index.js b/lib/index.js
 +		const value = runtime?.productName;
 +		if (typeof value === "string" && value.trim() !== "") return cleanName(value);
 +	} catch {}
-+	const env = typeof process === "undefined" ? undefined : process.env.PICOAI_PRODUCT_NAME;
++	const env = typeof process === "undefined" ? undefined : process.env.ZEOKEEL_PRODUCT_NAME;
 +	return typeof env === "string" && env.trim() !== "" ? cleanName(env) : FALLBACK_PRODUCT_NAME;
 +}
 +/** Shields.io message segment for an arbitrary product name. */

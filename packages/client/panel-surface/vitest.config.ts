@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 
 /**
  * 默认 `node`（协议层用例足够）；**挂载类**用例在文件头用
- * `// @vitest-environment jsdom` 单独切换 —— 与 `@picoaide/dsh-wasm-apps` 同一取舍。
+ * `// @vitest-environment jsdom` 单独切换 —— 与 `@zeokeel/dsh-wasm-apps` 同一取舍。
  */
 export default defineConfig({
   test: {

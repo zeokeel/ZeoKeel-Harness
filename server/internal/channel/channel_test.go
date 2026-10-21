@@ -452,7 +452,7 @@ func TestAppOriginSchemeFailsLoudWhenFieldMissingOrInvalid(t *testing.T) {
 
 func TestValidAppOriginSchemeBoundaries(t *testing.T) {
 	// 形状边界逐条对拍：2 字符下界、32 字符上界、保留协议、大小写。
-	ok := []string{"ab", "picoaide-app", "a" + strings.Repeat("b", 31), "acme+app.v2"}
+	ok := []string{"ab", "zeokeel-app", "a" + strings.Repeat("b", 31), "acme+app.v2"}
 	for _, s := range ok {
 		if !ValidAppOriginScheme(s) {
 			t.Errorf("ValidAppOriginScheme(%q) = false, want true", s)

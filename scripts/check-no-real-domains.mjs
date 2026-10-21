@@ -41,7 +41,7 @@
  *
  * `ALLOWED_DOMAINS` 是**登记式**白名单，按分组写明理由（分组名即理由）。**新增外部域名
  * 必须显式登记理由**；客户自有域名、被投递/测试环境主机名**一律不得登记**——正确处置是
- * 把该域名从仓库里移除（渠道/客户身份属于私有仓 `picoaide/channels`）。
+ * 把该域名从仓库里移除（渠道/客户身份属于私有仓 `zeokeel/channels`）。
  *
  * 用法：node scripts/check-no-real-domains.mjs [--root <dir>] [--unmasked] [--json]
  *                                            [--selftest] [--no-commit-range]
@@ -88,7 +88,7 @@ import { fileURLToPath } from 'node:url'
 const ALLOWED_DOMAINS = {
   // 本产品公开面（官网、更新服务器、公开仓）。
   '本产品公开面': [
-    'picoaide.com',
+    'zeokeel.com',
   ],
   // 保留命名空间（RFC 2606/6761）：`example.com`、`.test`、`.invalid`、`.localhost`
   // 以及内网后缀 `.local` / `.internal` 由 SPECIAL_SUFFIXES 兜住，这里只列其余变体。
@@ -525,7 +525,7 @@ const SPECIAL_SUFFIXES = [
  *
  * 为什么不全扫：裸 token 的绝大多数命中是代码标识符/属性链/文件名，而不是主机名 ——
  * 本仓实测 `rect.top`、`logger.info`、`c.in`、`assets.store`、`d.auth.me`、`node.cy`、
- * `r.group`、`defaults.run`、`comment.id`、`ci-channels.sh`、`PicoAide Harness.app`
+ * `r.group`、`defaults.run`、`comment.id`、`ci-channels.sh`、`ZeoKeel Harness.app`
  * 分别把 `.top` `.info` `.in` `.store` `.me` `.cy` `.group` `.run` `.id` `.sh` `.app`
  * 这些真实 TLD 变成了假红（合计 200+ 处）。给每个冲突 token 开豁免等于把白名单养肥，
  * 那正是本仓已登记的"假绿"模式之一。
@@ -862,7 +862,7 @@ function selfTest() {
   expect(cnHits.some(hit => hit.host === cnHostBare), `多段后缀下的三段式主机名被误放过：${cnHostBare}`)
 
   // 正例：白名单域与保留命名空间必须绿（否则守卫会把合法改动拦下来）。
-  for (const host of ['harness.example.com', 'app.example.com', 'example.com', 'picoaide.com', 'release.picoaide.com', 'github.com', 'api.github.com', 'registry.npmjs.org', 'api.deepseek.com', 'a.test', 'metadata.google.internal', 'sub.localhost', 'doc.example']) {
+  for (const host of ['harness.example.com', 'app.example.com', 'example.com', 'zeokeel.com', 'release.zeokeel.com', 'github.com', 'api.github.com', 'registry.npmjs.org', 'api.deepseek.com', 'a.test', 'metadata.google.internal', 'sub.localhost', 'doc.example']) {
     expect(isAllowedHost(host), `白名单域被误判为违规：${host}`)
   }
   for (const ip of ['127.0.0.1', '10.0.0.5', '192.168.1.1', '169.254.169.254', '172.16.0.1', '203.0.113.7', '198.51.100.1', '192.0.2.1', '198.18.0.1', '224.0.0.1', '255.255.255.255', '8.8.8.8', '1.1.1.1']) {
@@ -882,7 +882,7 @@ function selfTest() {
     'hostcap.callAIChat 与 capapi.AI 接口',
     '${cfg.org}/${cfg.project}/keys/',
     'curl --resolve x.<DOMAIN>:443:<IP> https://x.<DOMAIN>/',
-    'PicoAide Harness.app/Contents/Resources/',
+    'ZeoKeel Harness.app/Contents/Resources/',
   ]) {
     const hits = candidatesInLine(line).filter(hit => !isAllowedCandidate(hit))
     expect(hits.length === 0, `代码属性链被误判为主机名：${line} ⇒ ${hits.map(hit => hit.host).join(',')}`)
@@ -1949,7 +1949,7 @@ if (findings.length > 0) {
   }
   if (findings.length > shown.length) console.error(`  … 另有 ${findings.length - shown.length} 处未打印`)
   console.error(`\n未登记的域名/主机名 ${findings.length} 处。处置：把该域名从仓库里移除（占位符用 \`example.com\`、`
-    + '环境变量、或私有仓 `picoaide/channels`）；确属第三方依赖/文档的公开域名，才在 '
+    + '环境变量、或私有仓 `zeokeel/channels`）；确属第三方依赖/文档的公开域名，才在 '
     + '`scripts/check-no-real-domains.mjs` 的 `ALLOWED_DOMAINS` 里**按分组登记理由**。'
     + '客户自有域名与被投递/测试环境主机名一律不得登记。')
 }

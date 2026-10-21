@@ -15,8 +15,8 @@ import type { Config as DesktopConfig, DesktopShellConfigDocument } from '../../
 
 /** Every plain (document) field of the desktop-shell config with its schema default. */
 export const DESKTOP_SHELL_DEFAULTS: DesktopShellConfigDocument = {
-  productName: 'PicoAide Harness',
-  windowTitle: 'PicoAide Harness',
+  productName: 'ZeoKeel Harness',
+  windowTitle: 'ZeoKeel Harness',
   port: 0,
   width: 1280,
   height: 840,

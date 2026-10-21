@@ -1,9 +1,9 @@
 ---
 title: 系统架构
-description: PicoAide Harness 的三层架构：桌面客户端、本地 Harness 服务与企业服务端的职责边界、装配方式、模型链路、数据落点与扩展点。
+description: ZeoKeel Harness 的三层架构：桌面客户端、本地 Harness 服务与企业服务端的职责边界、装配方式、模型链路、数据落点与扩展点。
 ---
 
-PicoAide Harness 是一个三层系统：**桌面客户端 / 本地 Harness 服务 / 企业服务端**。一句话概括职责划分——**体验与执行留在员工机器上，控制面与密钥留在服务端**。本页写给两类读者：判断「能不能部署、数据在哪、出事怎么定位」的管理员与运维，以及要知道契约边界的二次开发者。逐条端点见 [API 参考](/api-reference/)，部署形态见[私有化部署](/deployment/)。
+ZeoKeel Harness 是一个三层系统：**桌面客户端 / 本地 Harness 服务 / 企业服务端**。一句话概括职责划分——**体验与执行留在员工机器上，控制面与密钥留在服务端**。本页写给两类读者：判断「能不能部署、数据在哪、出事怎么定位」的管理员与运维，以及要知道契约边界的二次开发者。逐条端点见 [API 参考](/api-reference/)，部署形态见[私有化部署](/deployment/)。
 
 ## 设计目标
 
@@ -96,7 +96,7 @@ PicoAide Harness 是一个三层系统：**桌面客户端 / 本地 Harness 服�
 |---|---|---|
 | **上游行（原样）** | agent、session、tools、settings、webserver、sandbox、llm 适配器 | 固定版本、按上游语义运行 |
 | **我们新增的行** | `desktop-shell`、`desktop-diagnostics`、`desktop-updates`、`desktop-loop-notify`、`desktop-asar-fs`、`desktop-asar-guidance` | 由桌面层的组装补丁插入 |
-| **我们新增的 bundle 层** | 九个自有包：`@picoaide/dsh-enterprise`、`-capability-center`、`-account-card`、`-wasm-apps`、`-foot-menu`、`-wasm-apps-host`、`-connectors`、`-browser` 与 `dsh-memory-evolve`；另有上游的实验性语音输入等 bundle | 自有包各带一层组装补丁，加上桌面包自身的 `cordis.patch.yml`（由 `@picoaide/dsh-enterprise` 的 bundle 列表首项携带）合计十层，作为 profile 的 bundle 层进入组合，顺序固定 |
+| **我们新增的 bundle 层** | 九个自有包：`@zeokeel/dsh-enterprise`、`-capability-center`、`-account-card`、`-wasm-apps`、`-foot-menu`、`-wasm-apps-host`、`-connectors`、`-browser` 与 `dsh-memory-evolve`；另有上游的实验性语音输入等 bundle | 自有包各带一层组装补丁，加上桌面包自身的 `cordis.patch.yml`（由 `@zeokeel/dsh-enterprise` 的 bundle 列表首项携带）合计十层，作为 profile 的 bundle 层进入组合，顺序固定 |
 | **显式禁用的上游行** | 见下一节 | 关闭都有具体理由，不是「用不到就关」 |
 
 ### 被显式禁用的上游行
@@ -125,7 +125,7 @@ PicoAide Harness 是一个三层系统：**桌面客户端 / 本地 Harness 服�
 
 - 产品**只管理一个 profile**：没有 profile 选择器，也没有 Web 默认项；
 - 上游保留了这个名字：CLI 会拒绝 `dsh --profile desktop` 与 `dsh plugin --profile desktop`（提示该 profile 由 Electron 应用独占管理）；
-- 第三方插件因此**不通过 CLI 安装**，而是写进用户补丁层 `~/.picoaide-harness/cordis.patch.yml`（数据根随渠道而变，见[渠道与白标](/deployment/channels/)）。启动器每次启动都会合并这一层；
+- 第三方插件因此**不通过 CLI 安装**，而是写进用户补丁层 `~/.zeokeel-harness/cordis.patch.yml`（数据根随渠道而变，见[渠道与白标](/deployment/channels/)）。启动器每次启动都会合并这一层；
 - **插件变更需要重启客户端**才进入组合：桌面的插件写面是自有的 bundle 启停服务（状态落在用户数据目录的 `plugin-management/` 下），不依赖上游的 profile 热更新；
 - 本地服务只监听 `127.0.0.1`；端口默认由系统随机分配（避免冲突），需要稳定 origin 时可在设置里固定。
 
@@ -179,7 +179,7 @@ PicoAide Harness 是一个三层系统：**桌面客户端 / 本地 Harness 服�
 
 ## 客户端分发链路
 
-客户端安装包**随服务端镜像发布**（镜像内 `/opt/picoaide/client/`），由服务端自己对外提供。于是客户端从**它登录的那台服务端**取包：员工机器不需要访问外网，客户端版本天然跟随服务端版本——「客户端升了服务端没升」在结构上不可能发生。
+客户端安装包**随服务端镜像发布**（镜像内 `/opt/zeokeel/client/`），由服务端自己对外提供。于是客户端从**它登录的那台服务端**取包：员工机器不需要访问外网，客户端版本天然跟随服务端版本——「客户端升了服务端没升」在结构上不可能发生。
 
 清单来自 `GET /api/client/v2/updates/manifest`，形状是 `{schema, channel_id, server:{version}, client:{version, assets}}`；资产按平台键索引（`mac-universal` / `win-x64` / `linux-x64`），每项含 `url`、`sha256`、`size`。给不出**绝对 https** 下载地址时，清单明确返回「客户端不可用」的原因，而不是降级下发一个 http 链接。
 
@@ -204,7 +204,7 @@ PicoAide Harness 是一个三层系统：**桌面客户端 / 本地 Harness 服�
 | usage 明细 | 按 `created_at` 做**原生月分区**（`usage_YYYYMM`），保留 N 个月可配（默认 6），过期用 `DROP PARTITION` 秒删；删除明细不影响账本 |
 | usage 账本 | `usage_daily`（按年分区）/ `usage_monthly` **永久保留**，由账本任务从明细幂等重算，因此历史统计不会因为明细过期而丢 |
 | 审计 | `audit_logs` 带**哈希链**：每行的 `hash = sha256(prev_hash \| username \| action \| detail \| created_at)`，`prev_hash` 指向前一行；写入用 advisory lock 串行化，避免并发插入读到同一个 `prev_hash` 形成分叉。保留策略可配，裁剪时保留被删批次的最新一条作为锚，链仍可自证 |
-| `master.key` | 主密钥优先取环境变量 `PICOAI_MASTER_KEY`；未设置时在数据目录生成 32 字节随机密钥写入 `master.key`（权限 `0600`）。**它不入库**——这也是「备份必须包含数据目录」的原因：`master.key` 丢了，库里加密的上游密钥永久无法解密 |
+| `master.key` | 主密钥优先取环境变量 `ZEOKEEL_MASTER_KEY`；未设置时在数据目录生成 32 字节随机密钥写入 `master.key`（权限 `0600`）。**它不入库**——这也是「备份必须包含数据目录」的原因：`master.key` 丢了，库里加密的上游密钥永久无法解密 |
 
 ## 扩展点
 

@@ -2,5 +2,5 @@
 # WebContentsView tabs, CDP driving, tool registration and the loopback
 # panel API consumed by the client browser panel.
 - insert:
-    - id: pico-browser
-      name: '@picoaide/dsh-browser'
+    - id: zeokeel-browser
+      name: '@zeokeel/dsh-browser'

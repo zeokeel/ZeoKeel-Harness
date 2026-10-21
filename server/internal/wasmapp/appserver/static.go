@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/edge"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/edge"
 )
 
 // staticCacheMaxAge 是宿主直出的静态资源的浏览器缓存时长。
@@ -52,7 +52,7 @@ const staticCacheMaxAge = 5 * time.Minute
 //     子资源（JS/CSS/图片）与**非入口的普通文档**（如 `docs/readme.html`）仍然
 //     直出：它们是壳资源，且在 (app,version) 下不可变，正是 §4.6「资源响应缓存是
 //     P0 必配」要保护的部分。只有"入口文档"这一件事被交给应用。
-//  6. **平台保留资源（`picoaide.app.json`）永不直出**，见 isReservedAsset 的注释。
+//  6. **平台保留资源（`zeokeel.app.json`）永不直出**，见 isReservedAsset 的注释。
 //
 // # 缓存键
 //
@@ -152,7 +152,7 @@ func writeStaticHeaders(h http.Header, selfOrigin string, a assetEntry) {
 
 // isReservedAsset 判定一个包内逻辑路径是否是**平台保留资源**（不直出）。
 //
-// 只有 `picoaide.app.json` 一个（文件名常量取自 limits，不写字面量）：它是平台
+// 只有 `zeokeel.app.json` 一个（文件名常量取自 limits，不写字面量）：它是平台
 // 保留的**应用配置**（`access` / `whitelist[]` / `purpose` /
 // `data_sensitivity` / `owner`），而不是应用自己挑的静态资源。
 //
@@ -177,13 +177,13 @@ func writeStaticHeaders(h http.Header, selfOrigin string, a assetEntry) {
 //
 // # 判定覆盖面
 //
-//   - **任意目录层级**：`/picoaide.app.json`、`/assets/picoaide.app.json`、
-//     `/a/b/picoaide.app.json` 都算 —— 只看最后一段，因为抽取目录是作者可控的，
+//   - **任意目录层级**：`/zeokeel.app.json`、`/assets/zeokeel.app.json`、
+//     `/a/b/zeokeel.app.json` 都算 —— 只看最后一段，因为抽取目录是作者可控的，
 //     只挡根路径等于留一个搬家就能绕过的口子。
 //   - **大小写不敏感**：macOS/Windows 的文件系统就是大小写不敏感的，
-//     `PicoAide.App.JSON` 在那些部署上能读到同一个文件。
+//     `ZeoKeel.App.JSON` 在那些部署上能读到同一个文件。
 //   - **编码形态**：`r.URL.Path` 在到达 handler 之前已被 net/http 解码过一次
-//     （`/%70icoaide.app.json` ⇒ `/picoaide.app.json`），规则 4/5 的 `path.Clean`
+//     （`/%70icoaide.app.json` ⇒ `/zeokeel.app.json`），规则 4/5 的 `path.Clean`
 //     也把 `//`、`/./` 归一掉了。这里对**多层编码**做有限次（≤3）解码兜底，
 //     防止上游反代/网关的解码层数与 net/http 不同（`/%2570icoaide…` 在只解一次
 //     的链路上会以 `%70…` 形态出现）。解码后若出现新的 `/`、`\`、`..` 段则停止 ——

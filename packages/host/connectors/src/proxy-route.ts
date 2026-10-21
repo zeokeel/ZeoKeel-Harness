@@ -17,7 +17,7 @@
  * This module restores the routing decision by **reproducing the one undici made
  * before** (not by inventing a new switch):
  *
- *  1. `PICOAI_ALLOW_SYSTEM_PROXY` explicitly false ⇒ direct. It is the product's
+ *  1. `ZEOKEEL_ALLOW_SYSTEM_PROXY` explicitly false ⇒ direct. It is the product's
  *     own switch (the same one `network-policy.ts` reads) and it is
  *     **bidirectional**: `0`/`false` means "no proxy", whatever the environment
  *     also says.
@@ -54,7 +54,7 @@
  * `packages/host/desktop/src/network-policy.ts` and fails if the name or the
  * truthiness rule drifts.
  */
-export const ALLOW_SYSTEM_PROXY_ENV = 'PICOAI_ALLOW_SYSTEM_PROXY'
+export const ALLOW_SYSTEM_PROXY_ENV = 'ZEOKEEL_ALLOW_SYSTEM_PROXY'
 
 /** Node's "use the environment proxy" flag (name of `network-policy.ts`'s `NODE_ENV_PROXY_FLAG`). */
 export const NODE_ENV_PROXY_FLAG = 'NODE_USE_ENV_PROXY'
@@ -75,7 +75,7 @@ const PROXY_URL_NAMES: Readonly<Record<'http:' | 'https:', readonly string[]>> =
 export type DirectRouteReason =
   /** No proxy is in play: the default. */
   | 'default'
-  /** `PICOAI_ALLOW_SYSTEM_PROXY` is explicitly off. */
+  /** `ZEOKEEL_ALLOW_SYSTEM_PROXY` is explicitly off. */
   | 'policy-off'
   /** Proxy use is enabled but no proxy URL is configured for this scheme. */
   | 'no-proxy-configured'

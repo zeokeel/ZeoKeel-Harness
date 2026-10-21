@@ -1,8 +1,8 @@
 /**
- * Host plugin for `@picoaide/dsh-account-card`: keeps the gateway usage
+ * Host plugin for `@zeokeel/dsh-account-card`: keeps the gateway usage
  * snapshot fresh (on login/session change and after every completed agent
  * loop) and serves it to the client half through the loopback-only local
- * route `/api/pico/account/usage`.
+ * route `/api/zeokeel/account/usage`.
  *
  * 信任边界是**两级**（FIX-42②，AB1-04）：
  *  1. 回环 socket + 回环 Host + 浏览器同源标记（`guard()`）——本机任意进程伪造
@@ -11,7 +11,7 @@
  *     token 换过票的页面"持有的 `dsh-auth-*` cookie 才过。本路由的 `?refresh=1`
  *     与 `authExpired` 分支是写（往返网关 / 清会话），所以走第 2 级；纯读的缓存
  *     快照交付只走第 1 级（"GET 读面豁免"）。
- * @module @picoaide/dsh-account-card
+ * @module @zeokeel/dsh-account-card
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -20,20 +20,20 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 // Type-only: declares the `webServer` service (`webServer.register`).
 import type {} from '@deepseek-ai/dsh-host-webserver'
-// Type-only: declares the `picoSession` service and `pico/session-changed`.
-import type {} from '@picoaide/dsh-enterprise/session-service'
-import type { Session } from '@picoaide/dsh-enterprise/server-connector/config'
+// Type-only: declares the `zeokeelSession` service and `zeokeel/session-changed`.
+import type {} from '@zeokeel/dsh-enterprise/session-service'
+import type { Session } from '@zeokeel/dsh-enterprise/server-connector/config'
 // R16B-01：会话身份的**唯一实现**（serverURL + username）。交付给渲染层的每一份
-// 快照都带上它属于谁 —— 客户端只有在这一串与 `/api/pico/auth/state` 的 `identity`
+// 快照都带上它属于谁 —— 客户端只有在这一串与 `/api/zeokeel/auth/state` 的 `identity`
 // 相等时才许把金额画出来（同服务端换号后不得把上一个账号的余额渲染在新账号名下）。
-import { sessionIdentity } from '@picoaide/dsh-enterprise/session-identity'
+import { sessionIdentity } from '@zeokeel/dsh-enterprise/session-identity'
 import {
   acceptWriteProof,
   browserSameOriginMarker,
   isLoopbackRequest,
   type ConnectionTrustFence,
   type WriteProofDeps,
-} from '@picoaide/dsh-enterprise/loopback'
+} from '@zeokeel/dsh-enterprise/loopback'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { UsageService } from './usage-service.ts'
 
@@ -43,7 +43,7 @@ export interface Config {}
 export const name = 'dsh-account-card'
 
 /** Services required: the local web server (route) and the enterprise session. */
-export const inject = ['webServer', 'picoSession']
+export const inject = ['webServer', 'zeokeelSession']
 
 /** Loopback + same-origin trust fence, mirroring the enterprise auth-gate. */
 function guard(req: IncomingMessage, res: ServerResponse): boolean {
@@ -58,11 +58,11 @@ function guard(req: IncomingMessage, res: ServerResponse): boolean {
  * `?refresh=1` **消费**（立刻往返网关），`authExpired` 分支还会**清会话** —— 两条
  * 都是写，落在它的豁免面之外。闸门只读 `method` 与 `headers`，因此用一份非 GET 的
  * 方法视图复用同一份实现：状态码（403/503）、错误信封、hint 与 fail-closed 行为
- * 都只有一处定义（规范实现在零依赖叶子 `@picoaide/dsh-host-locale/loopback`，
- * 经 `@picoaide/dsh-enterprise/loopback` 这个**既有**子路径到达本包）。
+ * 都只有一处定义（规范实现在零依赖叶子 `@zeokeel/dsh-host-locale/loopback`，
+ * 经 `@zeokeel/dsh-enterprise/loopback` 这个**既有**子路径到达本包）。
  *
  * 为什么不能直接复用 desktop 那份：`dsh-plugin-desktop` 在
- * `scripts/check-workspaces.mjs` 里声明了 `needs: ['@picoaide/dsh-account-card']`
+ * `scripts/check-workspaces.mjs` 里声明了 `needs: ['@zeokeel/dsh-account-card']`
  * （desktop → account-card 是既有构建边），本包反向 import 会成环。
  * @param req - 进入闸门的请求（只读 headers）。
  * @param res - 拒绝时写出的响应。
@@ -86,11 +86,11 @@ function json(res: ServerResponse, code: number, body: unknown): void {
 /**
  * Register the account-card host half: refresh triggers (session change,
  * startup restore, every agent loop completion) and the local usage route.
- * @param ctx - Cordis context with webServer + picoSession.
+ * @param ctx - Cordis context with webServer + zeokeelSession.
  */
 export function apply(ctx: Context): void {
   const service = new UsageService()
-  const session = (): Session | null => ctx.picoSession.getSession()
+  const session = (): Session | null => ctx.zeokeelSession.getSession()
 
   // R4-RV3a 族的持有性证明依赖：fence 每请求求值（`connection` 可能晚于路由注册
   // 出现）；未接线/服务缺席一律 fail-closed，不退回 `guard()` 的同源标记。
@@ -104,7 +104,7 @@ export function apply(ctx: Context): void {
   // Login/logout and startup restore: refresh immediately after login so the
   // card never shows a stale balance; logout clears the cached snapshot so a
   // later login never flashes the previous account's usage.
-  ctx.on('pico/session-changed', (next) => {
+  ctx.on('zeokeel/session-changed', (next) => {
     if (next === null) service.clear()
     else service.refresh(next)
   })
@@ -119,7 +119,7 @@ export function apply(ctx: Context): void {
 
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
-    path: '/api/pico/account/usage',
+    path: '/api/zeokeel/account/usage',
     handler: async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
       if (!guard(req, res)) return
@@ -172,7 +172,7 @@ export function apply(ctx: Context): void {
       // `wasm-apps.ts:555/1249`)与 auth-gate 的 13 处在这之前已改成本形态,这一处是漏网
       // 的最后一处。反向语义不变:当前令牌**就是**那次请求用的令牌 ⇒ 真失效照样三件一起清。
       if (snapshot.authExpired) {
-        ctx.picoSession.clearIfCurrent(s.token)
+        ctx.zeokeelSession.clearIfCurrent(s.token)
         return json(res, 401, { error: 'auth expired' })
       }
       json(res, 200, {
@@ -182,7 +182,7 @@ export function apply(ctx: Context): void {
         error: snapshot.error,
         // R16B-01：这一份快照属于**哪个会话身份**。`s` 就是取这份快照的会话
         // （上面 `owns(s)` 已经确认），所以这里盖的是真归属而不是"当前是谁"。
-        // 客户端拿它与 `/api/pico/auth/state` 的 `identity` 比 —— 不等就整份作废。
+        // 客户端拿它与 `/api/zeokeel/auth/state` 的 `identity` 比 —— 不等就整份作废。
         identity: sessionIdentity(s),
       })
     },

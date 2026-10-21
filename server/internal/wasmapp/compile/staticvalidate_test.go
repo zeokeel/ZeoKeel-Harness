@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile/testdata/wasmtest"
-	"github.com/picoaide/picoaide/internal/wasmapp/wasmmod"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/wasmmod"
 )
 
 // 本文件覆盖**静态校验**（compile 侧对 wasmmod 的接线）。

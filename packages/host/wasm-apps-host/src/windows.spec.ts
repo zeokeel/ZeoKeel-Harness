@@ -141,13 +141,13 @@ async function writeFileJson(path: string, value: unknown): Promise<void> {
 }
 
 describe('window manager (single window per app)', () => {
-  const urlFor = (appId: string, path: string): string => `picoaide-app://${appId}${path}`
+  const urlFor = (appId: string, path: string): string => `zeokeel-app://${appId}${path}`
   const workArea = (): { x: number, y: number, width: number, height: number } => ({ x: 0, y: 0, width: 1920, height: 1080 })
 
   it('opens one window per app and focuses (not duplicates) on reopen', async () => {
     const dir = await tempDir()
     const adapter = fakeAdapter()
-    const windows = createWasmAppsWindows({ adapter, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    const windows = createWasmAppsWindows({ adapter, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
     const first = await windows.open('my-notes')
     expect(first.window).toBe('opened')
     expect(adapter.created).toHaveLength(1)
@@ -155,21 +155,21 @@ describe('window manager (single window per app)', () => {
     const again = await windows.open('my-notes', '/notes')
     expect(again.window).toBe('focused')
     expect(adapter.created).toHaveLength(1)
-    expect(adapter.focused[0]).toBe('picoaide-app://my-notes/notes')
+    expect(adapter.focused[0]).toBe('zeokeel-app://my-notes/notes')
     expect(windows.openApps()).toEqual(['my-notes'])
   })
 
   it('remembers the size and restores it corrected for the ratio', async () => {
     const dir = await tempDir()
     const first = fakeAdapter()
-    const windows = createWasmAppsWindows({ adapter: first, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    const windows = createWasmAppsWindows({ adapter: first, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
     await windows.open('my-notes', '/', { ratio: 2 })
     const created = first.created[0] as { width: number, height: number }
     expect(created.width / created.height).toBeCloseTo(2, 1)
     expect(first.ratios).toEqual([2])
     // 第二次（新实例，同一个 userData）恢复记忆尺寸。
     const second = fakeAdapter()
-    const reopened = createWasmAppsWindows({ adapter: second, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    const reopened = createWasmAppsWindows({ adapter: second, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
     await reopened.open('my-notes')
     expect(second.created[0]?.width).toBe(created.width)
     expect(second.created[0]?.height).toBe(created.height)
@@ -178,7 +178,7 @@ describe('window manager (single window per app)', () => {
   it('closes one app and closes all on account switch (§7.2)', async () => {
     const dir = await tempDir()
     const adapter = fakeAdapter()
-    const windows = createWasmAppsWindows({ adapter, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    const windows = createWasmAppsWindows({ adapter, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
     await windows.open('a')
     await windows.open('b')
     await windows.close('a')
@@ -210,7 +210,7 @@ describe('window manager (single window per app)', () => {
       setAspectRatio: () => {},
       isAlive: handle => live.has(handle),
     }
-    const windows = createWasmAppsWindows({ adapter, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    const windows = createWasmAppsWindows({ adapter, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
 
     const first = await windows.open('my-notes')
     expect(first.window).toBe('opened')
@@ -230,23 +230,23 @@ describe('window manager (single window per app)', () => {
 
 describe('navigation gate and legacy ledger (R2-P0-2 / R1-CLI-14)', () => {
   it('allows only the same app origin and refuses foreign apps / external URLs', () => {
-    expect(classifyAppWindowNavigation('picoaide-app://my-notes/notes', 'my-notes', 'picoaide-app')).toEqual({ verdict: 'allow' })
-    expect(classifyAppWindowNavigation('picoaide-app://other/', 'my-notes', 'picoaide-app')).toEqual({ verdict: 'deny', reason: 'foreign-app' })
-    expect(classifyAppWindowNavigation('https://evil.example/', 'my-notes', 'picoaide-app')).toEqual({ verdict: 'deny', reason: 'external' })
-    expect(classifyAppWindowNavigation('javascript:alert(1)', 'my-notes', 'picoaide-app')).toEqual({ verdict: 'deny', reason: 'external' })
-    expect(classifyAppWindowNavigation('not a url', 'my-notes', 'picoaide-app')).toEqual({ verdict: 'deny', reason: 'malformed' })
+    expect(classifyAppWindowNavigation('zeokeel-app://my-notes/notes', 'my-notes', 'zeokeel-app')).toEqual({ verdict: 'allow' })
+    expect(classifyAppWindowNavigation('zeokeel-app://other/', 'my-notes', 'zeokeel-app')).toEqual({ verdict: 'deny', reason: 'foreign-app' })
+    expect(classifyAppWindowNavigation('https://evil.example/', 'my-notes', 'zeokeel-app')).toEqual({ verdict: 'deny', reason: 'external' })
+    expect(classifyAppWindowNavigation('javascript:alert(1)', 'my-notes', 'zeokeel-app')).toEqual({ verdict: 'deny', reason: 'external' })
+    expect(classifyAppWindowNavigation('not a url', 'my-notes', 'zeokeel-app')).toEqual({ verdict: 'deny', reason: 'malformed' })
     // 渠道 scheme：别的渠道的 origin 也不认。
-    expect(classifyAppWindowNavigation('picoaide-app://my-notes/', 'my-notes', 'example-harness-app')).toEqual({ verdict: 'deny', reason: 'external' })
+    expect(classifyAppWindowNavigation('zeokeel-app://my-notes/', 'my-notes', 'example-harness-app')).toEqual({ verdict: 'deny', reason: 'external' })
   })
 
   it('drops browser-ledger entries that point at the app scheme (and counts them)', () => {
     const entries = [
       { url: 'https://example.com/' },
-      { url: 'picoaide-app://my-notes/' },
-      { url: 'PICOAIde-app://my-notes/' },
+      { url: 'zeokeel-app://my-notes/' },
+      { url: 'ZEOKEEL-app://my-notes/' },
       { url: undefined },
     ]
-    const { kept, dropped } = dropAppSchemeLedgerEntries(entries, 'picoaide-app')
+    const { kept, dropped } = dropAppSchemeLedgerEntries(entries, 'zeokeel-app')
     expect(dropped).toBe(2)
     expect(kept).toHaveLength(2)
   })
@@ -262,11 +262,11 @@ describe('navigation gate and legacy ledger (R2-P0-2 / R1-CLI-14)', () => {
  */
 describe('子框架导航：跨应用内嵌必须拒（换壳）', () => {
   it('跨 app 拒 / 同 app 与 http(s) 按子框架规则放行 / 非 http(s) 外链仍拒', () => {
-    const frame = (url: string): unknown => classifyAppWindowNavigation(url, 'my-notes', 'picoaide-app', false)
+    const frame = (url: string): unknown => classifyAppWindowNavigation(url, 'my-notes', 'zeokeel-app', false)
     // 跨 app 内嵌 = 换壳：与顶层导航到别的 app 同一个判据（唯一实现）。
-    expect(frame('picoaide-app://other/')).toEqual({ verdict: 'deny', reason: 'foreign-app' })
+    expect(frame('zeokeel-app://other/')).toEqual({ verdict: 'deny', reason: 'foreign-app' })
     // 同 app 的子框架（应用自己的页面/片段）放行。
-    expect(frame('picoaide-app://my-notes/embed')).toEqual({ verdict: 'allow' })
+    expect(frame('zeokeel-app://my-notes/embed')).toEqual({ verdict: 'allow' })
     // 子框架里的 http(s) 内容：放行，兜底是平台侧 CSP（`default-src 'none'` ⇒
     // `frame-src 'none'`）—— 那条依赖由 `platform-frame-fence.spec.ts` 对着服务端源码钉住。
     expect(frame('https://example.com/embed')).toEqual({ verdict: 'allow' })
@@ -275,7 +275,7 @@ describe('子框架导航：跨应用内嵌必须拒（换壳）', () => {
     expect(frame('javascript:alert(1)')).toEqual({ verdict: 'deny', reason: 'external' })
     expect(frame('not a url')).toEqual({ verdict: 'deny', reason: 'malformed' })
     // 顶层语义不因新增参数而放松。
-    expect(classifyAppWindowNavigation('https://example.com/', 'my-notes', 'picoaide-app')).toEqual({ verdict: 'deny', reason: 'external' })
+    expect(classifyAppWindowNavigation('https://example.com/', 'my-notes', 'zeokeel-app')).toEqual({ verdict: 'deny', reason: 'external' })
   })
 })
 
@@ -283,7 +283,7 @@ describe('权限守卫必须在建窗之前就位（CLI-2 / §16.1）', () => {
   it('从未开过浏览器标签时创建应用窗口 ⇒ 该 session 的两个 handler 都被调用（R1-L2-2）', async () => {
     const dir = await tempDir()
     // 真实守卫实现（浏览器包里的唯一一份），不是替身：断言的是"调用真的发生了"。
-    const { ensureSessionGuard } = await import('@picoaide/dsh-browser/guard')
+    const { ensureSessionGuard } = await import('@zeokeel/dsh-browser/guard')
     const requestHandlers: unknown[] = []
     let checkInstalls = 0
     const sessionLike = {
@@ -300,11 +300,11 @@ describe('权限守卫必须在建窗之前就位（CLI-2 / §16.1）', () => {
           ensureSessionGuard(sessionLike as never)
         },
       },
-      appScheme: 'picoaide-app',
+      appScheme: 'zeokeel-app',
       productName: 'Acme',
       userDataDir: dir,
       partition: () => TEST_PARTITION,
-      urlFor: (appId, path) => `picoaide-app://${appId}${path}`,
+      urlFor: (appId, path) => `zeokeel-app://${appId}${path}`,
       workArea: () => ({ x: 0, y: 0, width: 1920, height: 1080 }),
     })
     // 前置：这张 session 之前没有任何浏览器标签（没有任何别的安装路径）。
@@ -322,7 +322,7 @@ describe('权限守卫必须在建窗之前就位（CLI-2 / §16.1）', () => {
     expect(checkInstalls).toBe(1)
   })
 
-  const urlFor = (appId: string, path: string): string => `picoaide-app://${appId}${path}`
+  const urlFor = (appId: string, path: string): string => `zeokeel-app://${appId}${path}`
   const workArea = (): { x: number, y: number, width: number, height: number } => ({ x: 0, y: 0, width: 1920, height: 1080 })
 
   /**
@@ -350,7 +350,7 @@ describe('权限守卫必须在建窗之前就位（CLI-2 / §16.1）', () => {
     }
     const windows = createWasmAppsWindows({
       adapter,
-      appScheme: 'picoaide-app',
+      appScheme: 'zeokeel-app',
       productName: 'Acme',
       userDataDir: dir,
       partition: () => `persist:agent-browser-${currentUser}`,
@@ -375,7 +375,7 @@ describe('权限守卫必须在建窗之前就位（CLI-2 / §16.1）', () => {
     const adapter = fakeAdapter()
     const base = {
       adapter,
-      appScheme: 'picoaide-app',
+      appScheme: 'zeokeel-app',
       productName: 'Acme',
       userDataDir: '/tmp',
       urlFor,
@@ -398,7 +398,7 @@ describe('权限守卫必须在建窗之前就位（CLI-2 / §16.1）', () => {
         },
         ensureSessionGuard() { calls.push('guard') },
       },
-      appScheme: 'picoaide-app',
+      appScheme: 'zeokeel-app',
       productName: 'Acme',
       userDataDir: dir,
       partition: () => TEST_PARTITION,
@@ -414,7 +414,7 @@ describe('权限守卫必须在建窗之前就位（CLI-2 / §16.1）', () => {
     const adapter = fakeAdapter()
     const windows = createWasmAppsWindows({
       adapter: { ...adapter, webContentsId: handle => (handle as { id: number }).id },
-      appScheme: 'picoaide-app',
+      appScheme: 'zeokeel-app',
       productName: 'Acme',
       userDataDir: dir,
       partition: () => TEST_PARTITION,
@@ -431,7 +431,7 @@ describe('权限守卫必须在建窗之前就位（CLI-2 / §16.1）', () => {
     expect(windows.isAppSurfaceWebContents(1)).toBe(false)
     // 没有 id 信息时一律 false（应用窗口打不开好过任意网页借用员工令牌）。
     const blind = createWasmAppsWindows({
-      adapter, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea,
+      adapter, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea,
     })
     await blind.open('my-notes')
     expect(blind.isAppSurfaceWebContents(1)).toBe(false)
@@ -445,12 +445,12 @@ describe('state write failures never block opening a window', () => {
     const adapter = fakeAdapter()
     const windows = createWasmAppsWindows({
       adapter,
-      appScheme: 'picoaide-app',
+      appScheme: 'zeokeel-app',
       productName: 'Acme',
       // 一个不存在的父路径下的文件位置：写入必然失败（目录不可创建）。
       userDataDir: '/proc/self/mem/nope',
       partition: () => TEST_PARTITION,
-      urlFor: (appId, path) => `picoaide-app://${appId}${path}`,
+      urlFor: (appId, path) => `zeokeel-app://${appId}${path}`,
       workArea,
       warn,
     })
@@ -472,13 +472,13 @@ describe('state write failures never block opening a window', () => {
  * 改回 `remembered?.ratio`（忽略声明）⇒ "比例进 setAspectRatio" 必红。
  */
 describe('declared window geometry reaches window creation (F3/§6)', () => {
-  const urlFor = (appId: string, path: string): string => `picoaide-app://${appId}${path}`
+  const urlFor = (appId: string, path: string): string => `zeokeel-app://${appId}${path}`
   const workArea = (): { x: number, y: number, width: number, height: number } => ({ x: 0, y: 0, width: 1920, height: 1080 })
 
   it('首次开窗用作者声明的尺寸与比例（缺省仍是 1280×720）', async () => {
     const dir = await tempDir()
     const adapter = fakeAdapter()
-    const windows = createWasmAppsWindows({ adapter, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    const windows = createWasmAppsWindows({ adapter, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
     await windows.open('wide', '/', { ratio: 16 / 9, width: 1600 })
     expect(adapter.created[0]).toMatchObject({ width: 1600, height: 900, ratio: 16 / 9 })
     expect(adapter.ratios).toEqual([16 / 9])
@@ -493,14 +493,14 @@ describe('declared window geometry reaches window creation (F3/§6)', () => {
   it('改版后新比例必须生效（声明覆盖记忆里的旧比例），尺寸仍以记忆为准', async () => {
     const dir = await tempDir()
     const first = fakeAdapter()
-    const windows = createWasmAppsWindows({ adapter: first, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    const windows = createWasmAppsWindows({ adapter: first, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
     await windows.open('my-notes', '/', { ratio: 4 / 3, width: 1200 })
     expect(first.ratios).toEqual([4 / 3])
 
     // 同一个 userData 的新实例（模拟重启）：记忆里有 1200×900 + ratio 4/3，
     // 而声明改成了 16:9 ⇒ 比例用新的，尺寸仍是记忆的（按新比例校正）。
     const second = fakeAdapter()
-    const reopened = createWasmAppsWindows({ adapter: second, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    const reopened = createWasmAppsWindows({ adapter: second, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
     await reopened.open('my-notes', '/', { ratio: 16 / 9 })
     expect(second.ratios).toEqual([16 / 9])
     const created = second.created[0] as { width: number, height: number }
@@ -519,7 +519,7 @@ describe('declared window geometry reaches window creation (F3/§6)', () => {
  * `forget`/`close`/`closeAll` 里的 `unregisterSurface` ⇒ 对应的"注销"用例红。
  */
 describe('application windows register as browser surfaces (§16.1)', () => {
-  const urlFor = (appId: string, path: string): string => `picoaide-app://${appId}${path}`
+  const urlFor = (appId: string, path: string): string => `zeokeel-app://${appId}${path}`
   const workArea = (): { x: number, y: number, width: number, height: number } => ({ x: 0, y: 0, width: 1920, height: 1080 })
 
   /** surface 注册表替身（只实现本包用到的两个方法）。 */
@@ -592,7 +592,7 @@ describe('application windows register as browser surfaces (§16.1)', () => {
       isAlive() { return alive },
     }
     const windows = createWasmAppsWindows({
-      adapter, appScheme: 'picoaide-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, surfaces: () => surfaces.registry, urlFor, workArea,
+      adapter, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, surfaces: () => surfaces.registry, urlFor, workArea,
     })
     await windows.open('my-notes')
     expect(surfaces.registered).toHaveLength(1)
@@ -608,7 +608,7 @@ describe('application windows register as browser surfaces (§16.1)', () => {
     let registry: typeof surfaces.registry | undefined
     const windows = createWasmAppsWindows({
       adapter,
-      appScheme: 'picoaide-app',
+      appScheme: 'zeokeel-app',
       productName: 'Acme',
       userDataDir: dir,
       partition: () => TEST_PARTITION,
@@ -647,7 +647,7 @@ describe('application windows register as browser surfaces (§16.1)', () => {
  * 把 `forget` 的句柄同一性守卫删掉 ⇒ ③红；把 `crashedApps` 的写入去掉 ⇒ ④红。
  */
 describe('原生关窗/崩溃事件即时收口（R16B-20 / R16B-19）', () => {
-  const urlFor = (appId: string, path: string): string => `picoaide-app://${appId}${path}`
+  const urlFor = (appId: string, path: string): string => `zeokeel-app://${appId}${path}`
   const workArea = (): { x: number, y: number, width: number, height: number } => ({ x: 0, y: 0, width: 1920, height: 1080 })
 
   /** surface 注册表替身：多记一个 `crashed` 写入面（R16B-19 的模型面判据）。 */
@@ -746,7 +746,7 @@ describe('原生关窗/崩溃事件即时收口（R16B-20 / R16B-19）', () => {
     const native = eventfulAdapter()
     const windows = createWasmAppsWindows({
       adapter: native.adapter,
-      appScheme: 'picoaide-app',
+      appScheme: 'zeokeel-app',
       productName: 'Acme',
       userDataDir: dir,
       partition: () => TEST_PARTITION,

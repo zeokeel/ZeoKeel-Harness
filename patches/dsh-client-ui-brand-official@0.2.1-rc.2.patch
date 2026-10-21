@@ -11,7 +11,7 @@ diff --git a/lib/client.js b/lib/client.js
 -				yield ctx.slots.register({ name: "sidebar.brand.name" }, OfficialBrandName);
 -			}));
 +		function apply() {
-+			/* Desktop-owned branding (dsh-enterprise / picoaide-branding client) occupies
++			/* Desktop-owned branding (dsh-enterprise / zeokeel-branding client) occupies
 +			   the sidebar brand slots instead of the official mark. */
  		}
  		//#endregion

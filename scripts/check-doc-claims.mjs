@@ -155,7 +155,7 @@ export const PASS_LINE_CHILD_ENTRY = 'scripts/doc-claims-passline-child.mjs'
  * 两条路的默认值都是"我是主入口"：不确定时**多跑**判据（fail-closed），
  * 绝不在不确定时跳过"打印 + 出结论"这一段。
  */
-export const PASS_LINE_CHILD_MARK = Symbol.for('picoaide.check-doc-claims.passline-child')
+export const PASS_LINE_CHILD_MARK = Symbol.for('zeokeel.check-doc-claims.passline-child')
 
 /** 见 {@link PASS_LINE_CHILD_MARK}：本进程是不是被独立子入口 import 的。 */
 export const IS_PASS_LINE_CHILD = globalThis[PASS_LINE_CHILD_MARK] === true
@@ -621,8 +621,8 @@ function voiceBundleDefaultFrom(source) {
  *   ① 形状 + **行级发布语境**（本行命中 {@link RELEASE_CONTEXT_MARKERS} 之一 —— `latest.json`、
  *      `server.version|image_tag`、中文「发布版本」、`release version`、`tag`）；
  *   ② 形状 + **发布面的号邻接**（{@link RELEASE_NUMBER_AFFIXES} 之一**紧挨着这个号** ——
- *      `releases/<号>/…`、`picoaide-server-<号>`、`picoaide-harness-server:<号>`、
- *      `PicoAide-Harness-<号>`、`SERVER_IMAGE=<号>`）；
+ *      `releases/<号>/…`、`zeokeel-server-<号>`、`zeokeel-harness-server:<号>`、
+ *      `ZeoKeel-Harness-<号>`、`SERVER_IMAGE=<号>`）；
  *   ③ 形状 + **落在本项目发布线上**（major.minor 与 root `package.json` 的版本真源一致 ——
  *      真源读不到时这一条自动关闭）。
  * `Caddy 2.7.6`（无行级语境、号也不挨着发布面 token、不在本项目发布线上）⇒ **不再误伤**；
@@ -630,10 +630,10 @@ function voiceBundleDefaultFrom(source) {
  *
  * ## 收口轮②（2026-10-05，独立核验 V-P10P11 的 E7/E10）：语境内标记拆成两类
  *
- * 修前把 `releases/` / `picoaide-server-` 这类**发布面 token** 当成"行级标记" ⇒ 只要同一行
+ * 修前把 `releases/` / `zeokeel-server-` 这类**发布面 token** 当成"行级标记" ⇒ 只要同一行
  * 提到它们，行里**任何**裸号都红。实测两种散文被误伤：
  *   · `说明写在 releases/ 目录，内容涉及 Caddy 2.7.6 的升级。` ⇒ **假红**（号与发布面无关）。
- *     收口后：`releases/` 只按**号邻接**算（`releases/2.7.0/picoaide-server-2.7.0-…` 仍然红），
+ *     收口后：`releases/` 只按**号邻接**算（`releases/2.7.0/zeokeel-server-2.7.0-…` 仍然红），
  *     这一句 ⇒ **绿**（本轮修掉的假红）。
  *   · `自发布版本 2.7.0 起，镜像内已内置 Caddy。` ⇒ **仍然红** —— 判为**正当收紧**
  *     （行级语境 = 这句话讲的就是发布版本；本仓既有约定是历史版本一律写 `vX.Y.Z`，
@@ -657,7 +657,7 @@ const RELEASE_VERSION_LITERAL = /(?<![\w.])\d+\.\d+\.\d+(?![\w.])/gu
  *
  * 只收**语义上就在讲版本**的词：更新清单与其字段 / 中英"发布版本" / `tag`。
  * **刻意不收**「镜像」「版本」这类泛词（`需要 Caddy 2.7.6 及以上（官方镜像已内置）`
- * 正是被泛词误伤的现场形态），也**不再收** `releases/` / `picoaide-server-` 这类
+ * 正是被泛词误伤的现场形态），也**不再收** `releases/` / `zeokeel-server-` 这类
  * **发布面 token** —— 它们改成"必须紧挨着号"才作数（见 {@link RELEASE_NUMBER_AFFIXES}），
  * 否则 `说明写在 releases/ 目录，内容涉及 Caddy 2.7.6 的升级。` 这类散文会被误判（V-P10P11 的 E10）。
  */
@@ -673,14 +673,14 @@ const RELEASE_CONTEXT_MARKERS = [
  *
  * 这些 token 的语义正是"发布物/发布路径 + 版本号"：R2 对象路径 / 服务端镜像与归档名 /
  * 客户端安装包名 / `.env` 的镜像键。E-13 的现场形态
- * （`…/releases/2.7.0/picoaide-server-2.7.0-amd64.zip` 与 `picoaide-harness-server:2.7.0`）
+ * （`…/releases/2.7.0/zeokeel-server-2.7.0-amd64.zip` 与 `zeokeel-harness-server:2.7.0`）
  * 三条都在这一类里，故收紧后**真牙不变**。
  */
 const RELEASE_NUMBER_AFFIXES = [
   /releases?\//u,
-  /picoaide-server-/u,
-  /picoaide-harness-server[:/]/u,
-  /PicoAide-Harness-/u,
+  /zeokeel-server-/u,
+  /zeokeel-harness-server[:/]/u,
+  /ZeoKeel-Harness-/u,
   /\bSERVER_IMAGE[=:]?/u,
 ]
 /** 号周围"词"的字符集（用来把号扩成一个 token 再判发布面 token 是否邻接）。 */
@@ -1740,7 +1740,7 @@ function siteVersionSelftestCases() {
   }
   try {
     write('site/src/pages/index.astro', [
-      'curl -fL -O https://release.picoaide.com/official/releases/9.9.9/picoaide-server-9.9.9-amd64.zip',
+      'curl -fL -O https://release.zeokeel.com/official/releases/9.9.9/zeokeel-server-9.9.9-amd64.zip',
       '<p>当前发布版本 3.0.0</p>',
       '<p>需要 Caddy 2.7.6 及以上（官方镜像已内置）。</p>',
       '<p>上游自 0.1.5 起保留该 profile 名。</p>',
@@ -2414,7 +2414,7 @@ function siteVersionHitReports(scan) {
       file: entry.file,
       line: entry.line,
       reason: `官网源码里硬编码了发布版本号 \`${entry.literal}\`（真源是发布时的 `
-        + '`release.picoaide.com/<渠道>/latest.json` 的 `server.version`）\n'
+        + '`release.zeokeel.com/<渠道>/latest.json` 的 `server.version`）\n'
         + '          ⇒ 读者复制这段命令就会拿到已下架的版本（E-13 的现场）。'
         + '修法：换成站内既有占位符（zh `<版本>` / en `<version>`）；'
         + '**历史版本引用**写成 `v` 号（本仓既有约定，全站 28 处如此）；'

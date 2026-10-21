@@ -1,4 +1,4 @@
-// Command picoaide-limits-gen 从 limits 包与 appcfg 包生成**单一真源的提交产物**
+// Command zeokeel-limits-gen 从 limits 包与 appcfg 包生成**单一真源的提交产物**
 // （设计基线 §5.5「数值单一真源」：limits.go 是唯一数值来源；同一条纪律也适用于
 // §4.2 的**字段规格**：appcfgspec.go 是唯一字段来源。两者都由本程序生成，
 // 由同一条构建期门禁逐字节比对）。
@@ -16,8 +16,8 @@
 // 用法：
 //
 //	cd server && go generate ./internal/limits     # 重新生成（directive 在 limits_gen_test.go）
-//	cd server && go run ./cmd/picoaide-limits-gen          # 等价：写文件
-//	cd server && go run ./cmd/picoaide-limits-gen -check   # 只比对（CI 门禁；不一致非零退出）
+//	cd server && go run ./cmd/zeokeel-limits-gen          # 等价：写文件
+//	cd server && go run ./cmd/zeokeel-limits-gen -check   # 只比对（CI 门禁；不一致非零退出）
 //
 // ⚠️ 生成物里**不得出现时间戳/机器名/路径绝对化**：只要出现，每次生成都会产生 diff，
 // 门禁就会"假红"（§5.5 的原意是"文档与代码不一致即红灯"，不是"每天红一次"）。
@@ -38,13 +38,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
 )
 
 // modulePath 是服务端模块的 module 行（用于确认"向上找到的是本仓的 server/"，
 // 而不是某个无关的 go.mod）。
-const modulePath = "github.com/picoaide/picoaide"
+const modulePath = "github.com/zeokeel/zeokeel-harness/server"
 
 // 生成物相对**模块根**（server/）的路径。
 const (
@@ -77,7 +77,7 @@ func main() {
 	flag.Parse()
 
 	if err := run(*check, *root); err != nil {
-		fmt.Fprintf(os.Stderr, "picoaide-limits-gen: %v\n", err)
+		fmt.Fprintf(os.Stderr, "zeokeel-limits-gen: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -112,7 +112,7 @@ func run(check bool, rootFlag string) error {
 			committed, err := os.ReadFile(a.path)
 			switch {
 			case err != nil && os.IsNotExist(err) && a.optional:
-				fmt.Fprintf(os.Stderr, "picoaide-limits-gen: 跳过可选产物 %s（不存在）\n", rel)
+				fmt.Fprintf(os.Stderr, "zeokeel-limits-gen: 跳过可选产物 %s（不存在）\n", rel)
 				continue
 			case err != nil:
 				failed = append(failed, fmt.Sprintf("%s: 读取失败: %v", rel, err))
@@ -125,7 +125,7 @@ func run(check bool, rootFlag string) error {
 		}
 		if a.optional {
 			if _, err := os.Stat(filepath.Dir(a.path)); err != nil {
-				fmt.Fprintf(os.Stderr, "picoaide-limits-gen: 跳过可选产物 %s（目录不存在）\n", rel)
+				fmt.Fprintf(os.Stderr, "zeokeel-limits-gen: 跳过可选产物 %s（目录不存在）\n", rel)
 				continue
 			}
 		}
@@ -194,7 +194,7 @@ func renderJSON() []byte {
 	if err != nil {
 		// Doc() 只含字符串/整数，编码不会失败；真失败说明类型被改坏了，直接 panic
 		// 好过写出一份残缺的"真源"。
-		panic(fmt.Sprintf("picoaide-limits-gen: 编码 limits.json: %v", err))
+		panic(fmt.Sprintf("zeokeel-limits-gen: 编码 limits.json: %v", err))
 	}
 	return append(b, '\n')
 }
@@ -249,7 +249,7 @@ func renderAppcfgJSON() []byte {
 	if err := enc.Encode(appcfg.Doc()); err != nil {
 		// Doc() 只含字符串/整数/切片，编码不会失败；真失败说明类型被改坏了，
 		// 直接 panic 好过写出一份残缺的"真源"。
-		panic(fmt.Sprintf("picoaide-limits-gen: 编码 appcfg.json: %v", err))
+		panic(fmt.Sprintf("zeokeel-limits-gen: 编码 appcfg.json: %v", err))
 	}
 	return buf.Bytes()
 }

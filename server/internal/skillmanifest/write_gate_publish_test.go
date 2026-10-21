@@ -24,8 +24,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 func TestPublishRejectsWindowsReservedDeviceNames(t *testing.T) {

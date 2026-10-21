@@ -1,5 +1,5 @@
 # ============================================================
-# PicoAide 服务端 Caddyfile(默认模板:内部自签证书)
+# ZeoKeel 服务端 Caddyfile(默认模板:内部自签证书)
 # ============================================================
 # 证书模式:INTERNAL(自签,内网开箱即用)
 # 适用场景:纯内网/无公网域名/测试环境;客户端首次连接需信任 Caddy 本地 CA
@@ -9,14 +9,14 @@
 #   - Caddyfile.manual   → 手动证书(部署者提供 PEM,先自签占位)
 #   - 本文件              → 内部自签(tls internal,Caddy 本地 CA)
 # 切换:.env 改 TLS_MODE 后 docker compose up -d(compose 按模式挂载模板)
-# 应用(WASM)访问模型:应用只在桌面客户端内打开(自定义协议 picoaide-app://<app_id>/),
+# 应用(WASM)访问模型:应用只在桌面客户端内打开(自定义协议 zeokeel-app://<app_id>/),
 # 不经本反代 —— 无需为应用添加站点块或证书(2026-09-19 起)。
 # ============================================================
 {$DOMAIN} {
 	# INTERNAL 模式:Caddy 用本地 CA 生成自签名证书(域名/IP 均可)
 	tls internal
 
-	# 反代到后端 picoaide-server(compose 私有网段固定 IP 172.28.0.3 或服务名解析),
+	# 反代到后端 zeokeel-server(compose 私有网段固定 IP 172.28.0.3 或服务名解析),
 	# 保留原始 Host 与真实来源 IP;WebSocket 由 Caddy 自动支持
 	reverse_proxy server:8080 {
 		header_up Host {host}

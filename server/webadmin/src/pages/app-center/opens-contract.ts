@@ -62,7 +62,7 @@
  *    - 归因来自**会话链路**（`ATTRIBUTION_CHAIN_ANCHORS`）：隐藏会话 id 的前缀
  *      `app:<app_id>` ⇒ 上游出站头 `x-deepseek-harness-session-id` ⇒ 网关按前缀派生
  *      `usage.app_id`（读方在 `internal/llmgateway/app_session_id.go`）。§21.4 初版设计的
- *      自报头 `X-Pico-App-Id` **发不出来**（上游没有 header 通道），2026-09-24 起网关只
+ *      自报头 `X-ZeoKeel-App-Id` **发不出来**（上游没有 header 通道），2026-09-24 起网关只
  *      识别并忽略它（记一条 warn）—— 登记表仍在，用途是"冒出写方即红"。
  *    - **归因通道已接线（`AI_ATTRIBUTION_WIRING = 'wired'`，2026-09-24 R13-GB）**：
  *      三段锚点（客户端前缀 / 上游头名 / 服务端契约）齐备且由
@@ -119,7 +119,7 @@ export const AI_USAGE_WINDOW_DAYS = 30
  * ```
  *
  * 为什么不再由 `ATTRIBUTION_HEADER_WRITERS` 派生：那条派生说的是**已废弃的自报头**
- * `X-Pico-App-Id`（它没有可校验的链路，网关现在只识别并忽略它），而真实链路是**会话 id
+ * `X-ZeoKeel-App-Id`（它没有可校验的链路，网关现在只识别并忽略它），而真实链路是**会话 id
  * 本身**（出站头由上游无条件带上，不需要新的自报头）。发送方在 pinned 上游 submodule 里，
  * 不在本仓的扫描面内，所以"接线状态"这个值改为**手写 + 三段锚点机械对拍**：
  * `opens-contract-parity.spec.ts` 的"归因链路三段锚点"用例会读
@@ -168,7 +168,7 @@ export const ATTRIBUTION_CHAIN_ANCHORS = {
 } as const
 
 /**
- * 出站头 `X-Pico-App-Id` 的**发送方**登记表（仓库内相对路径）。
+ * 出站头 `X-ZeoKeel-App-Id` 的**发送方**登记表（仓库内相对路径）。
  *
  * **当前为空**：该头是 §21.4 的初版设计，实施期实测**发不出来**（出站头唯一构造点没有
  * header 通道），2026-09-24 起网关也**不再据此归因**（只识别并记一条 warn）⇒ 它既没有
@@ -177,7 +177,7 @@ export const ATTRIBUTION_CHAIN_ANCHORS = {
 export const ATTRIBUTION_HEADER_WRITERS: readonly string[] = []
 
 /**
- * 出站头 `X-Pico-App-Id` 的**读方**登记表（服务端网关/汇总侧）。
+ * 出站头 `X-ZeoKeel-App-Id` 的**读方**登记表（服务端网关/汇总侧）。
  *
  * 用途是"白名单式前向守卫"：仓库源码里出现该头名的文件必须全部登记（**双向**相等 ——
  * 登记了却搜不到、搜到了却没登记都判红），于是"某天冒出一个发送方"这件事无法静默发生。

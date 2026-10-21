@@ -15,7 +15,7 @@
  *    可用、`app.asar` 可读 ⇒ 主进程任意代码执行（主进程内存里就是企业会话 bearer）。
  *  - `--remote-debugging-port=9334` ⇒ `Network.getAllCookies`（CDP 内建，HttpOnly 无效）
  *    读出 `dsh-auth-*`；把它交给一个普通 node 进程重放，
- *    `POST /api/pico/desktop/update/check` 从 `403 browser session proof required`
+ *    `POST /api/zeokeel/desktop/update/check` 从 `403 browser session proof required`
  *    变成 **`202 {"accepted":true}`**。
  *
  * 前提只有"同机同用户能起一个进程 + 能按自己的 argv 启动本应用"
@@ -62,15 +62,15 @@
  * ## 逃生门（有意保留，且如实说明其能力边界）
  *
  * 本仓对"启动期策略"的既有惯例是留一个**显式环境变量逃生门**
- * （`PICOAI_ALLOW_SYSTEM_PROXY`，`network-policy.ts:26-31`），这里同形：
- * 真实进程环境里的 `PICOAI_ALLOW_DEBUG_SWITCHES=1` 放行本次运行，并在启动日志里
+ * （`ZEOKEEL_ALLOW_SYSTEM_PROXY`，`network-policy.ts:26-31`），这里同形：
+ * 真实进程环境里的 `ZEOKEEL_ALLOW_DEBUG_SWITCHES=1` 放行本次运行，并在启动日志里
  * 明示"本次运行的调试开关保护已关闭"。它存在的理由是我们的 E2E/真机探针
  * （`scripts/e2e-*.mjs`、`integration-tests/electron-shots/`）本来就靠
  * `--remote-debugging-port` 驱动**打包产物**。
  *
  * **能力边界（认账，不当作安全边界）**：在"同机同用户任意进程"这一威胁模型下，
  * 攻击者同时控制 argv **与环境**，所以逃生门对他不构成障碍 —— 他能拿到的主进程
- * RCE 不会因为多写一个 `PICOAI_ALLOW_DEBUG_SWITCHES=1` 而少。这条闸门因此拦的是
+ * RCE 不会因为多写一个 `ZEOKEEL_ALLOW_DEBUG_SWITCHES=1` 而少。这条闸门因此拦的是
  * **无意/遗留/被误导的调试开关**（快捷方式、IDE 启动配置、排障指引）与"静默暴露"，
  * 并把"本次真的绕过了保护"变成启动日志里的一行。真正闭合 cookie 窃取那一半需要
  * 结构性修法（持有性证明不再依赖 cookie 罐的保密性，见审计报告 Y4-01 修复方向②）。
@@ -83,10 +83,10 @@ import { isEnabledFlag } from './network-policy.ts'
 /**
  * 允许调试开关的显式逃生门（**只认真实进程环境**）。
  *
- * 与 `PICOAI_ALLOW_SYSTEM_PROXY` 同形：必须在 `app.whenReady()` 之前就能读到，
+ * 与 `ZEOKEEL_ALLOW_SYSTEM_PROXY` 同形：必须在 `app.whenReady()` 之前就能读到，
  * 所以不读 Harness home 的 `.env` 分层（那一层到 `start()` 才加载）。
  */
-export const ALLOW_DEBUG_SWITCHES_ENV = 'PICOAI_ALLOW_DEBUG_SWITCHES'
+export const ALLOW_DEBUG_SWITCHES_ENV = 'ZEOKEEL_ALLOW_DEBUG_SWITCHES'
 
 /**
  * 受管开关名（**唯一字面量出处**，不含前导横线）。
@@ -165,7 +165,7 @@ export interface DebugSwitchMatch {
 export interface DebugSwitchGate {
   /** 是否打包态（false ⇒ 开发态，一律放行，一个开关都不拦）。 */
   readonly packaged: boolean
-  /** 逃生门是否开启（真实进程环境里的 `PICOAI_ALLOW_DEBUG_SWITCHES`）。 */
+  /** 逃生门是否开启（真实进程环境里的 `ZEOKEEL_ALLOW_DEBUG_SWITCHES`）。 */
   readonly hatch: boolean
   /** 命中的开关（先 argv 后 execArgv，按出现顺序）。 */
   readonly matches: readonly DebugSwitchMatch[]

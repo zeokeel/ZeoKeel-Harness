@@ -6,7 +6,7 @@ import { BarChart3, Boxes, SlidersHorizontal } from 'lucide-react'
 // 限制项)并入本区成为「限制项」子页。
 //
 // 2026-09-19 WASM 客户端专属改造:原「设置」子页(应用访问域名/泛域名)整页删除 ——
-// 应用只在桌面客户端内以 `picoaide-app://<app_id>/` 打开(契约
+// 应用只在桌面客户端内以 `zeokeel-app://<app_id>/` 打开(契约
 // `docs/decisions/2026-09-19-wasm-client-internal-origin.md` §2/§4.4/§4.5),
 // 服务端的应用基域配置面(`wasm.apps_base_domain`、`/wasm-apps/domain`)随之删除,
 // 子导航项与路由入口一并去掉。**被删的配置不再有任何替代入口**(不是搬到了别处),
@@ -35,7 +35,7 @@ const TABS: AppCenterTab[] = [
 ]
 
 /**
- * 应用中心的**变体哨兵串**（P3；命名 = `picoaide.feature.<模块>.v1`，模块名 `apps`
+ * 应用中心的**变体哨兵串**（P3；命名 = `zeokeel.feature.<模块>.v1`，模块名 `apps`
  * 与 Go 侧 `-tags`、渠道配置 `features` 逐字一致）。
  *
  * 落点是分区布局（`/app-center/*` 任何一条子路由都会渲染的那一层），但**不是唯一落点**：
@@ -44,7 +44,7 @@ const TABS: AppCenterTab[] = [
  * 布局上就看不见。双侧判据与两条纪律见 `pages/CapabilityCenter.tsx` 的同名常量
  * （`scripts/check-feature-chunks.mjs`）。
  */
-export const FEATURE_SENTINEL = 'picoaide.feature.apps.v1'
+export const FEATURE_SENTINEL = 'zeokeel.feature.apps.v1'
 
 export default function AppCenterLayout() {
   return (

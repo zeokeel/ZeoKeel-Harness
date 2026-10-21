@@ -12,7 +12,7 @@ package api
 //   - 把 exp 判定删掉 ⇒ TestOpenAppRejectsExpiredProof 红；
 //   - 把 `changed: rel.Version != current` 改成恒 false ⇒ TestOpenAppVersionChanged 红；
 //   - 把计数挪出 open（或改成按请求计数）⇒ TestOpenAppCountsOncePerOpen 红；
-//   - 去掉 `X-PicoAide-App-Version` 响应头 ⇒ TestOpenAppSetsVersionHeader 红；
+//   - 去掉 `X-ZeoKeel-App-Version` 响应头 ⇒ TestOpenAppSetsVersionHeader 红；
 //   - 让计数失败冒泡成 5xx ⇒ TestOpenAppSurvivesCountingFailure 红；
 //   - 把 410 改回 404 ⇒ TestOpenAppGoneAndMissing 红；
 //   - 把 sessionKeyFor 改成空串 ⇒ TestClientRequestPassesSessionKey 红。
@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appproof"
-	"github.com/picoaide/picoaide/internal/wasmapp/edge"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appproof"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/edge"
 )
 
 // decodeErrCode 断言响应是错误信封且 code 恰好是指定值。
@@ -356,7 +356,7 @@ func TestClientRequestPassesSessionKey(t *testing.T) {
 //
 // 变异：把 clientreq.go 的 `u.Scheme = h.clientAppScheme()` 改回包级常量
 // （appserver.ClientScheme）⇒ 本用例红（渠道客户端注册的是 `acme-app`，
-// 服务端按 `picoaide-app` 组装自身源 ⇒ 所有非幂等请求 403）。
+// 服务端按 `zeokeel-app` 组装自身源 ⇒ 所有非幂等请求 403）。
 func TestClientRequestUsesInjectedAppScheme(t *testing.T) {
 	e := newClientEnv(t, true)
 	// 注入渠道 scheme（生产 = channel.AppOriginScheme() 的结果）。
@@ -375,7 +375,7 @@ func TestClientRequestUsesInjectedAppScheme(t *testing.T) {
 	}
 	// 官方 scheme 的 host 现在必须被拒（服务端只认本部署的 scheme）。
 	env2 := okEnvelope("demo")
-	env2.Host = "picoaide-app://demo"
+	env2.Host = "zeokeel-app://demo"
 	if rec := e.post("demo", env2); rec.Code != http.StatusBadRequest {
 		t.Fatalf("非本部署 scheme 的 host 必须 400，得到 %d body=%s", rec.Code, rec.Body.String())
 	}
@@ -489,13 +489,13 @@ func TestOpenAppOmitsOpensWhenCountingFails(t *testing.T) {
 }
 
 // ============================================================================
-// R1-L1-1（P0）：**`request` 路径必须校验 `X-Pico-App-Proof`**
+// R1-L1-1（P0）：**`request` 路径必须校验 `X-ZeoKeel-App-Proof`**
 // ============================================================================
 //
 // 缺口原文：`requireProof` 的唯一调用点曾是 `open.go`，而真正的应用请求路径
 // （带 bearer、执行 wasm、能读写应用库）完全不要求安装密钥签名 ⇒ 只拿到被盗 bearer
 // 就能驱动任意应用，A′（§23.1）被架空。契约依据：§5.1「认证 = Bearer ＋
-// X-Pico-App-Proof（必需）」、§13.1 I2、§23.1。
+// X-ZeoKeel-App-Proof（必需）」、§13.1 I2、§23.1。
 //
 // 四条用例（缺一不算闭合）：
 //
@@ -620,7 +620,7 @@ func TestOpenAppFrozenStatesDoNotCollapse(t *testing.T) {
 }
 
 // TestPublishRejectsReservedPathPrefix 钉住 §21.2 规则②（R2-X-3）：
-// 应用**不得**定义 `__picoaide/` 前缀的路由 —— 服务端能静态看到的"路由面"是随包资源
+// 应用**不得**定义 `__zeokeel/` 前缀的路由 —— 服务端能静态看到的"路由面"是随包资源
 // （自定义段）的名字，因此发布期拒占用该前缀的资源路径。
 //
 // 为什么必须拒而不是忽略：该前缀由宿主**本地**处理（规则①：这类请求绝不转发平台），
@@ -640,7 +640,7 @@ func TestPublishRejectsReservedPathPrefix(t *testing.T) {
 	}
 
 	// 反例：占用保留前缀 ⇒ 拒（不是"忽略并继续"）。
-	bad := withCustomSections(t, base, map[string][]byte{"__picoaide/ai/chat": []byte("{}")})
+	bad := withCustomSections(t, base, map[string][]byte{"__zeokeel/ai/chat": []byte("{}")})
 	w := e.req(http.MethodPost, "/api/client/v2/apps/wasm/validate", e.tokens["alice"],
 		e.payload("resv-bad", "1.0.0", bad, goodConfig()))
 	eb := e.decodeErr(w, http.StatusForbidden)

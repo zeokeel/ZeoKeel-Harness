@@ -49,9 +49,9 @@ describe('precheckSkillPackage（与服务端同码）', () => {
   it('空壳正文与自带溯源块被拒', () => {
     const shell = `---\nname: demo-skill\ntitle: 演示\nversion: 1.0.0\ndescription: 描述足够长可以通过。\nauthor: t\ncategory: c\n---\n\n短\n`
     expect(precheckSkillPackage(shell, 'demo-skill').some((i) => i.code === PrecheckCode.BodyEmpty)).toBe(true)
-    const forged = md().replace('---\n\n', 'metadata:\n  picoaide:\n    app_id: forged\n---\n\n')
+    const forged = md().replace('---\n\n', 'metadata:\n  zeokeel:\n    app_id: forged\n---\n\n')
     expect(precheckSkillPackage(forged, 'demo-skill').some((i) => i.code === PrecheckCode.ProvenanceForbidden)).toBe(true)
-    expect(precheckSkillPackage(md(), 'demo-skill', ['SKILL.md', '.picoaide/release.json'])
+    expect(precheckSkillPackage(md(), 'demo-skill', ['SKILL.md', '.zeokeel/release.json'])
       .some((i) => i.code === PrecheckCode.ProvenanceForbidden)).toBe(true)
   })
 

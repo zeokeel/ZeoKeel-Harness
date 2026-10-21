@@ -826,7 +826,7 @@ describe('传输预算与本地失败的分类（B-07/B-08）', () => {
 
   it('永不产出字节的响应体在停滞预算内失败，且按可重试的 network 归类', async () => {
     const userDataPath = await temporaryUserData()
-    const artifactURL = `${SERVER}/updates/client/2.9.0/PicoAide-Harness-2.9.0-x86_64.AppImage`
+    const artifactURL = `${SERVER}/updates/client/2.9.0/ZeoKeel-Harness-2.9.0-x86_64.AppImage`
     const started = Date.now()
     const failure = await attempt({
       manifestURL: MANIFEST_URL,
@@ -850,7 +850,7 @@ describe('传输预算与本地失败的分类（B-07/B-08）', () => {
   it('一直有进展的慢流不会被停滞预算误杀（判据是字节进展，不是总时长）', async () => {
     const userDataPath = await temporaryUserData()
     const artifact = appImageArtifact()
-    const artifactURL = `${SERVER}/updates/client/2.9.0/PicoAide-Harness-2.9.0-x86_64.AppImage`
+    const artifactURL = `${SERVER}/updates/client/2.9.0/ZeoKeel-Harness-2.9.0-x86_64.AppImage`
     // 每块间隔 20ms、块大小 64B:远慢于"总时长"直觉,但每块都在进展 ⇒ 必须成功。
     const path = await downloadDesktopUpdate({
       manifestURL: MANIFEST_URL,
@@ -870,7 +870,7 @@ describe('传输预算与本地失败的分类（B-07/B-08）', () => {
 
   it('总预算兜住"一直在慢慢发、永远发不完"的对端', async () => {
     const userDataPath = await temporaryUserData()
-    const artifactURL = `${SERVER}/updates/client/2.9.0/PicoAide-Harness-2.9.0-x86_64.AppImage`
+    const artifactURL = `${SERVER}/updates/client/2.9.0/ZeoKeel-Harness-2.9.0-x86_64.AppImage`
     const failure = await attempt({
       manifestURL: MANIFEST_URL,
       platform: 'linux',
@@ -895,7 +895,7 @@ describe('传输预算与本地失败的分类（B-07/B-08）', () => {
     // 本地永久失败(重试改变不了),此前被压成 network。
     await writeFile(join(userDataPath, 'updates'), 'not a directory')
     let artifactRequests = 0
-    const artifactURL = `${SERVER}/updates/client/2.9.0/PicoAide-Harness-2.9.0-x86_64.AppImage`
+    const artifactURL = `${SERVER}/updates/client/2.9.0/ZeoKeel-Harness-2.9.0-x86_64.AppImage`
     const failure = await attempt({
       manifestURL: MANIFEST_URL,
       platform: 'linux',

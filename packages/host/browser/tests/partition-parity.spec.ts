@@ -1,8 +1,8 @@
 /**
  * 分区名公式的**跨包对拍**（§7.2/R2S-8：`persist:agent-browser-<user>@<sha256(server)[:32]>`）。
  *
- * 为什么需要这个判据：公式在仓里被实现过两次（`@picoaide/dsh-browser/surface` 是权威，
- * `@picoaide/dsh-wasm-apps-host/partition` 是镜像 —— 该包不允许反向依赖 browser）。
+ * 为什么需要这个判据：公式在仓里被实现过两次（`@zeokeel/dsh-browser/surface` 是权威，
+ * `@zeokeel/dsh-wasm-apps-host/partition` 是镜像 —— 该包不允许反向依赖 browser）。
  * 两份实现发散的症状是"应用窗口的协议 handler 注册在一个没人用的分区上 ⇒ 应用页面
  * 空白"，而**两边各自的单测都能是绿的**（各钉自己的字面量）。所以这里用**真实 Node**
  * 跑那份镜像（`node:child_process` + 动态 import，绕开 vitest 的转换管线），把两份实现

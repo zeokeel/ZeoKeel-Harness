@@ -30,7 +30,7 @@ function baseOptions(
     platform: 'darwin',
     desktopRoot: '/repo/packages/host/desktop',
     outputDir: '/repo/packages/host/desktop/dist/mac-release',
-    productName: 'PicoAide Harness',
+    productName: 'ZeoKeel Harness',
     // 官方渠道:不做 electron-builder 覆盖(渠道化由 channel-build.ts 负责)
     channelConfigArgs: () => [],
     resetOutput: () => undefined,
@@ -109,7 +109,7 @@ describe('macOS release command boundary', () => {
     })
     expect(notarized).toHaveLength(1)
     expect(notarized[0]?.appPath).toBe(
-      '/repo/packages/host/desktop/dist/mac-release/mac-arm64/PicoAide Harness.app',
+      '/repo/packages/host/desktop/dist/mac-release/mac-arm64/ZeoKeel Harness.app',
     )
     expect(notarized[0]?.env.APPLE_ID).toBe('developer@example.test')
     // 第二步:用已公证 app 直接打 DMG(prepackaged,不再重新打包/签名 app)
@@ -117,7 +117,7 @@ describe('macOS release command boundary', () => {
       command: 'yarn',
       args: [
         'exec', 'electron-builder', '--mac', 'dmg', '--arm64',
-        '--prepackaged', '/repo/packages/host/desktop/dist/mac-release/mac-arm64/PicoAide Harness.app',
+        '--prepackaged', '/repo/packages/host/desktop/dist/mac-release/mac-arm64/ZeoKeel Harness.app',
         '--publish', 'never',
         '--config.forceCodeSigning=true', '--config.mac.notarize=false',
         '--config.npmRebuild=false',
@@ -207,7 +207,7 @@ describe('macOS release command boundary', () => {
     // 预发:signOnly=true 时 preflight 接受"无公证凭据"(notarization 'none')。
     const appPath = await packMacApp(options, { skipGates: true, signOnly: true })
     expect(appPath).toBe(
-      '/repo/packages/host/desktop/dist/mac-release/mac-arm64/PicoAide Harness.app',
+      '/repo/packages/host/desktop/dist/mac-release/mac-arm64/ZeoKeel Harness.app',
     )
     expect(logs[0]).toContain('signing via keychain; notarization via none')
 
@@ -217,7 +217,7 @@ describe('macOS release command boundary', () => {
     const dmgCall = calls.find(call => call.args.includes('--prepackaged'))
     expect(dmgCall?.args).toEqual([
       'exec', 'electron-builder', '--mac', 'dmg', '--arm64',
-      '--prepackaged', '/repo/packages/host/desktop/dist/mac-release/mac-arm64/PicoAide Harness.app',
+      '--prepackaged', '/repo/packages/host/desktop/dist/mac-release/mac-arm64/ZeoKeel Harness.app',
       '--publish', 'never',
       '--config.forceCodeSigning=true', '--config.mac.notarize=false',
       '--config.npmRebuild=false',

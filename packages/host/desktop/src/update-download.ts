@@ -1,4 +1,4 @@
-/** Headless, resumable, integrity-checked downloads for PicoAide Harness installers. */
+/** Headless, resumable, integrity-checked downloads for ZeoKeel Harness installers. */
 
 // 更新源 = **用户登录的那台服务端**(见 ./desktop-release.ts);客户端到任何
 // 分发面的直连路径已于 2026-09-10 移除。安装包地址与 SHA-256 均来自服务端

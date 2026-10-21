@@ -1,9 +1,9 @@
 ---
 title: System Architecture
-description: 'The three layers of PicoAide Harness — desktop client, local Harness service, enterprise server: responsibilities, assembly, model path, data layout, and extension points.'
+description: 'The three layers of ZeoKeel Harness — desktop client, local Harness service, enterprise server: responsibilities, assembly, model path, data layout, and extension points.'
 ---
 
-PicoAide Harness is a three-layer system: **desktop client / local Harness service / enterprise server**. In one sentence: **the experience and the execution stay on the employee machine, the control plane and the keys stay on the server**. This page is written for two audiences — administrators and operators deciding whether and how to deploy, where the data lives, and how to diagnose incidents; and developers who need to know the contract boundaries. Every endpoint is listed in [API Reference](/en/api-reference/); deployment forms are in [Private Deployment](/en/deployment/).
+ZeoKeel Harness is a three-layer system: **desktop client / local Harness service / enterprise server**. In one sentence: **the experience and the execution stay on the employee machine, the control plane and the keys stay on the server**. This page is written for two audiences — administrators and operators deciding whether and how to deploy, where the data lives, and how to diagnose incidents; and developers who need to know the contract boundaries. Every endpoint is listed in [API Reference](/en/api-reference/); deployment forms are in [Private Deployment](/en/deployment/).
 
 ## Design goals
 
@@ -96,7 +96,7 @@ So "what we add" and "what upstream provides" live on the same assembly surface 
 |---|---|---|
 | **Upstream rows (unchanged)** | agent, session, tools, settings, webserver, sandbox, llm adapters | Pinned version, upstream semantics |
 | **Rows we add** | `desktop-shell`, `desktop-diagnostics`, `desktop-updates`, `desktop-loop-notify`, `desktop-asar-fs`, `desktop-asar-guidance` | Inserted by the desktop layer's composition patch |
-| **Bundle layers we add** | Nine owned packages: `@picoaide/dsh-enterprise`, `-capability-center`, `-account-card`, `-wasm-apps`, `-foot-menu`, `-wasm-apps-host`, `-connectors`, `-browser` and `dsh-memory-evolve`; plus upstream experimental bundles such as voice input | Each owned package carries one composition patch layer; together with the desktop package's own `cordis.patch.yml` (carried as the first entry of `@picoaide/dsh-enterprise`'s bundle list) that is ten layers, entering the profile as bundle layers in a fixed order |
+| **Bundle layers we add** | Nine owned packages: `@zeokeel/dsh-enterprise`, `-capability-center`, `-account-card`, `-wasm-apps`, `-foot-menu`, `-wasm-apps-host`, `-connectors`, `-browser` and `dsh-memory-evolve`; plus upstream experimental bundles such as voice input | Each owned package carries one composition patch layer; together with the desktop package's own `cordis.patch.yml` (carried as the first entry of `@zeokeel/dsh-enterprise`'s bundle list) that is ten layers, entering the profile as bundle layers in a fixed order |
 | **Upstream rows we disable** | see the next section | Each has a concrete reason; these are not "we don't need it, so off" |
 
 ### Upstream rows we explicitly disable
@@ -125,7 +125,7 @@ The five owned bundle layers for connectors, the built-in browser, scheduled job
 
 - The product manages **exactly one profile**: there is no profile picker and no web default entry;
 - Upstream reserves the name: the CLI rejects `dsh --profile desktop` and `dsh plugin --profile desktop` (it reports that the profile is managed exclusively by the Electron application);
-- Third-party plugins therefore are **not installed through the CLI**; they are written into the user patch layer `~/.picoaide-harness/cordis.patch.yml` (the data root varies by channel, see [Channels & white-labelling](/en/deployment/channels/)). The launcher merges that layer on every start;
+- Third-party plugins therefore are **not installed through the CLI**; they are written into the user patch layer `~/.zeokeel-harness/cordis.patch.yml` (the data root varies by channel, see [Channels & white-labelling](/en/deployment/channels/)). The launcher merges that layer on every start;
 - **Plugin changes require a client restart** to enter the composition: the desktop's plugin surface is its own bundle enable/disable service (state under `plugin-management/` in the user data directory) and does not rely on upstream profile hot-reload;
 - The local service listens on `127.0.0.1` only; the port is randomly assigned by default (to avoid conflicts) and can be pinned in settings when a stable origin is needed.
 
@@ -179,7 +179,7 @@ Desktop client            Enterprise server                 Upstream vendor
 
 ## Client delivery path
 
-Client installers **ship with the server image** (inside the image at `/opt/picoaide/client/`) and are served by the server itself. The client therefore fetches packages from **the server it signed in to**: employee machines need no internet access, and the client version naturally follows the server version — "the client was upgraded but the server wasn't" is structurally impossible.
+Client installers **ship with the server image** (inside the image at `/opt/zeokeel/client/`) and are served by the server itself. The client therefore fetches packages from **the server it signed in to**: employee machines need no internet access, and the client version naturally follows the server version — "the client was upgraded but the server wasn't" is structurally impossible.
 
 The manifest comes from `GET /api/client/v2/updates/manifest` and has the shape `{schema, channel_id, server:{version}, client:{version, assets}}`; assets are keyed by platform (`mac-universal` / `win-x64` / `linux-x64`) and each entry carries `url`, `sha256` and `size`. When no **absolute https** download address can be produced, the manifest explicitly reports why the client is unavailable instead of falling back to an http link.
 
@@ -204,7 +204,7 @@ Failure always **keeps the current version**: no install, no downgrade, no switc
 | Usage detail | Natively **partitioned by month** on `created_at` (`usage_YYYYMM`), retention configurable in months (default 6), expired partitions dropped with `DROP PARTITION`; deleting detail does not affect the ledgers |
 | Usage ledgers | `usage_daily` (partitioned by year) and `usage_monthly` are **kept forever** and rebuilt idempotently from the detail, so expired detail never loses historical statistics |
 | Audit | `audit_logs` carries a **hash chain**: each row's `hash = sha256(prev_hash \| username \| action \| detail \| created_at)` and `prev_hash` points at the previous row; writes are serialized with an advisory lock so concurrent inserts cannot read the same `prev_hash` and fork the chain. Retention is configurable, and pruning keeps the newest row of a deleted batch as an anchor so the chain still proves itself |
-| `master.key` | The master key comes from the `PICOAI_MASTER_KEY` environment variable when set; otherwise a 32-byte random key is written to `master.key` in the data directory (mode `0600`). It is **never stored in the database** — which is exactly why the backup must include the data directory: lose `master.key` and the encrypted upstream keys in the database are unrecoverable |
+| `master.key` | The master key comes from the `ZEOKEEL_MASTER_KEY` environment variable when set; otherwise a 32-byte random key is written to `master.key` in the data directory (mode `0600`). It is **never stored in the database** — which is exactly why the backup must include the data directory: lose `master.key` and the encrypted upstream keys in the database are unrecoverable |
 
 ## Extension points
 

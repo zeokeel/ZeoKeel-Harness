@@ -22,7 +22,7 @@
  *
  * ## 量具（三个独立通道，互为交叉验证）
  *
- *   · **内容**：每个模块一个哨兵串 `picoaide.feature.<module>.v1`（命名从渠道契约的
+ *   · **内容**：每个模块一个哨兵串 `zeokeel.feature.<module>.v1`（命名从渠道契约的
  *     `FEATURE_MODULES` 派生），写在**该模块每一个页面文件**里（页面根元素的
  *     `data-feature-sentinel`，见 `MODULE_EXPECTATIONS[*].pages`）。关掉的模块 ⇒ 产物里
  *     找不到这个串。
@@ -93,7 +93,7 @@ import { fileURLToPath } from 'node:url'
 import { findCutProblems, findRegistryProblems, findSentinelProblems } from './feature-page-graph.mjs'
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const DIST_ROOT = join(PACKAGE_ROOT, 'node_modules', '.cache', 'picoaide-feature-dist')
+const DIST_ROOT = join(PACKAGE_ROOT, 'node_modules', '.cache', 'zeokeel-feature-dist')
 
 /**
  * 模块清单 —— **顺序是契约**（与 Go `internal/features`、渠道 `features`、
@@ -125,12 +125,12 @@ const NONE_VARIANT = 'none'
 const MODULE_EXPECTATIONS = [
   {
     module: 'skills',
-    sentinel: 'picoaide.feature.skills.v1',
+    sentinel: 'zeokeel.feature.skills.v1',
     pages: ['src/pages/CapabilityCenter.tsx'],
   },
   {
     module: 'apps',
-    sentinel: 'picoaide.feature.apps.v1',
+    sentinel: 'zeokeel.feature.apps.v1',
     pages: [
       'src/pages/app-center/AppCenterLayout.tsx',
       'src/pages/app-center/Apps.tsx',
@@ -140,7 +140,7 @@ const MODULE_EXPECTATIONS = [
   },
   {
     module: 'connectors',
-    sentinel: 'picoaide.feature.connectors.v1',
+    sentinel: 'zeokeel.feature.connectors.v1',
     pages: ['src/pages/Connectors.tsx'],
   },
 ]
@@ -330,7 +330,7 @@ function judge(matrixEntry, enabled, dist) {
         + 'chunk 命名规则变了（本判据的结构面口径要跟着改）',
     )
   }
-  if (enabled.size > 0 && !dist.text.includes('picoaide.feature.')) {
+  if (enabled.size > 0 && !dist.text.includes('zeokeel.feature.')) {
     // 只在"至少开着一个模块"时判：全关变体里**没有**哨兵串是预期状态（那正是被测行为），
     // 拿它当反空转证据会把正确结果判红。反空转的另一半（核心页 chunk）在每种变体下都判。
     problems.push('dist 里连一个哨兵串都没有（量具整体失效：哨兵被优化掉了？构建没产出？）')

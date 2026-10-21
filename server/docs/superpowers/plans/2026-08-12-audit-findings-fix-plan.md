@@ -12,7 +12,7 @@
 
 **Tech Stack:** Go 1.24 / TypeScript / Vitest(无新依赖)
 
-**设计文档:** docs/superpowers/specs/2026-08-01-picoaide-next-architecture-design.md(修订见批次 5)
+**设计文档:** docs/superpowers/specs/2026-08-01-zeokeel-next-architecture-design.md(修订见批次 5)
 
 ---
 
@@ -261,7 +261,7 @@
 
 ### Task B1.10:文档决策 D1/D2 修订(随批次 1 收尾)
 
-**Files:** `AGENTS.md`、`docs/superpowers/specs/2026-08-01-picoaide-next-architecture-design.md`
+**Files:** `AGENTS.md`、`docs/superpowers/specs/2026-08-01-zeokeel-next-architecture-design.md`
 
 - [ ] Step 1:AGENTS §2.4 增加:「审批经 AI SDK v7 原生 toolApproval 实现(2026-08-12 决策,替代引擎自管门控);`ai` 版本在 package.json 锁定,升级必须跑 `engine.test.ts` 审批用例;弹窗展示实际命令串(见 §7)」。
 - [ ] Step 2:spec §3.3.1a 同步;CDP 桥信任边界写入 spec §3.8(cdp_server.ts 头注释同步删除错误断言)。
@@ -615,7 +615,7 @@
 
 ### Task B5.11:文档同步(AGENTS.md + spec + 计划)
 
-**Files:** `AGENTS.md`、`docs/superpowers/specs/2026-08-01-picoaide-next-architecture-design.md`、`docs/superpowers/plans/2026-08-01-picoaide-next-full-implementation.md`
+**Files:** `AGENTS.md`、`docs/superpowers/specs/2026-08-01-zeokeel-next-architecture-design.md`、`docs/superpowers/plans/2026-08-01-zeokeel-next-full-implementation.md`
 
 - [ ] AGENTS §7:迁移 0001-0017、客户端 starred/archived/status 扩展、事件协议含 conversationId/tool_call_id/context_usage;§2.4 SDK 审批决策(D1);§2.8 单部门端点唯一、全员 seed 说明;§7 错误码确认(无 UPSTREAM_IDLE_TIMEOUT)。
 - [ ] spec:§3.4 pip 例外(D4);§3.6 stdio 白名单已实现、MCP 自动重启标范围外(C14);§3.8 CDP 信任边界(D2);§4.4/§3.6 商城授权制(C13);§5 TOFU 首信确认(B4.8);§3.3.3 事件协议补充。

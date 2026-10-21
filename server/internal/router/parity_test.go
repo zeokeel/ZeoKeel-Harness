@@ -14,21 +14,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/agentshare"
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/bootstrap"
-	"github.com/picoaide/picoaide/internal/capabilities"
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/connectors"
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/marketplace"
-	"github.com/picoaide/picoaide/internal/portal"
-	"github.com/picoaide/picoaide/internal/reports"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/sharedskills"
-	"github.com/picoaide/picoaide/internal/skillseed"
-	"github.com/picoaide/picoaide/internal/telemetry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/agentshare"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/capabilities"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/connectors"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/marketplace"
+	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
+	"github.com/zeokeel/zeokeel-harness/server/internal/reports"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/telemetry"
 )
 
 // adminRouteSet 枚举 engine 中**管理面命名空间**（/api/server）下的 (method, path)。
@@ -50,7 +50,7 @@ func adminRouteSet(e *gin.Engine) map[string]bool {
 // adminRouteHandlers 枚举管理面命名空间下每条路由**最终绑定的 handler 函数名**。
 //
 // gin 的 RouteInfo.Handler 是路由链末端 handler 的名字（例如
-// `github.com/picoaide/picoaide/internal/serverauth.(*AdminAPI).listUserTokensPaged-fm`），
+// `github.com/zeokeel/zeokeel-harness/server/internal/serverauth.(*AdminAPI).listUserTokensPaged-fm`），
 // 正是"这条路径到底挂了哪个实现"的运行时事实。
 func adminRouteHandlers(e *gin.Engine) map[string]string {
 	out := map[string]string{}

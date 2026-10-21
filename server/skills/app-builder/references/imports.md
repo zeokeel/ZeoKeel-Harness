@@ -2,8 +2,8 @@
 
 > **本文件是生成产物，不要手改**（改了平台行为不会变，只会让门禁变红）。
 >
-> 重新生成：`cd server && go run ./cmd/picoaide-wasm-imports-gen`
-> 比对模式（门禁，不一致即非零退出）：`cd server && go run ./cmd/picoaide-wasm-imports-gen -check`
+> 重新生成：`cd server && go run ./cmd/zeokeel-wasm-imports-gen`
+> 比对模式（门禁，不一致即非零退出）：`cd server && go run ./cmd/zeokeel-wasm-imports-gen -check`
 >
 > 平台侧真源：`server/internal/wasmapp/wasmmod/imports_gen.go`（同一生成器的另一份产物）。
 

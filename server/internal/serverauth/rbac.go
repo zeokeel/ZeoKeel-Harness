@@ -15,7 +15,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 权限点清单。命名规范: <域>:<动作>。

@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 第二轮审计 P1-4 / P1-5 回归(2026-09-12)。
@@ -28,7 +28,7 @@ func newReportTestRouter(t *testing.T) (*gin.Engine, *sql.DB, string, string) {
 	allowLocalWebhooks(t)
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef")
 
 	uid, _ := serverstore.CreateUser(db, &serverstore.User{Username: "boss", Source: "local", Status: 1, Role: serverstore.RoleSuperAdmin})
 	sess, csrf, err := serverauth.CreateAdminSession(db, uid)

@@ -15,7 +15,7 @@
  *    行 id 一改，两处写入会以 `No configurable plugin entry "…"` 失败（模型面全灭）。
  */
 /** Credential reference under which the gateway session token is stored and resolved. */
-export const TOKEN_ENV = 'PICOAI_GATEWAY_TOKEN'
+export const TOKEN_ENV = 'ZEOKEEL_GATEWAY_TOKEN'
 
 /** Profile row id (and therefore settings namespace) of the gateway model provider. */
-export const GATEWAY_LLM_ROW_ID = 'picoaide-gateway-llm'
+export const GATEWAY_LLM_ROW_ID = 'zeokeel-gateway-llm'

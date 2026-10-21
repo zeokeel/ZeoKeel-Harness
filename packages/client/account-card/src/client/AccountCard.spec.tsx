@@ -12,8 +12,8 @@
  *  ② 点行开浮层（`role="dialog"`、内容与原卡片逐字一致）→ 刷新保持打开；
  *  ③ Esc 关闭且焦点回到行；打开时焦点进浮层（审计 P2-a11y）；
  *  ④ 行/浮层之外的 pointerdown **与只有 click 的激活**都关闭，浮层内的不关；
- *  ⑤ 浮层里的刷新打到 `/api/pico/account/usage?refresh=1`、退出登录打到
- *     `POST /api/pico/auth/logout`，两者各有重入闸（连点两次只发一次）；
+ *  ⑤ 浮层里的刷新打到 `/api/zeokeel/account/usage?refresh=1`、退出登录打到
+ *     `POST /api/zeokeel/auth/logout`，两者各有重入闸（连点两次只发一次）；
  *  ⑥ 窄轨仍是头像圆按钮（`data-rail="true"` 自证）且能打开同一个浮层；
  *  ⑦ 未登录早退、挂载即轮询两个只读路由（语义回归）；
  *  ⑧ 字典 zh/en key 集合一致（新增 key 必须成对）；
@@ -65,10 +65,10 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
 // React 18.3 在非测试构建下要求这个全局标记才认 `act()`。
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const AUTH_PATH = '/api/pico/auth/state'
-const USAGE_PATH = '/api/pico/account/usage'
-const REFRESH_PATH = '/api/pico/account/usage?refresh=1'
-const LOGOUT_PATH = '/api/pico/auth/logout'
+const AUTH_PATH = '/api/zeokeel/auth/state'
+const USAGE_PATH = '/api/zeokeel/account/usage'
+const REFRESH_PATH = '/api/zeokeel/account/usage?refresh=1'
+const LOGOUT_PATH = '/api/zeokeel/auth/logout'
 
 /** 占位账号（不是任何真实渠道/客户身份）。 */
 const USERNAME = 'user001'
@@ -80,7 +80,7 @@ interface Reply {
   defer?: boolean
 }
 
-/** `/api/pico/auth/state` 的登录态响应。 */
+/** `/api/zeokeel/auth/state` 的登录态响应。 */
 const AUTH_LOGGED_IN: Reply = {
   body: { loggedIn: true, username: USERNAME, serverURL: 'https://gw.example' },
 }
@@ -106,7 +106,7 @@ function usageSnapshot(overrides: Record<string, unknown> = {}): Record<string, 
   }
 }
 
-/** `/api/pico/account/usage` 的成功响应（data 为快照）。 */
+/** `/api/zeokeel/account/usage` 的成功响应（data 为快照）。 */
 function usageReply(overrides: Record<string, unknown> = {}): Reply {
   return { body: { data: usageSnapshot(overrides), fetchedAt: 1, state: 'idle', error: null } }
 }
@@ -168,7 +168,7 @@ afterEach(async () => {
   footArea.remove()
   // 注入型样式表用例失败时也要清干净（head 是跨用例共享的）。
   for (const style of [...document.head.querySelectorAll('style')]) {
-    if (style.textContent?.includes('.pico-account-row') === true) style.remove()
+    if (style.textContent?.includes('.zeokeel-account-row') === true) style.remove()
   }
   vi.unstubAllGlobals()
 })
@@ -199,7 +199,7 @@ function clientFixture(): { ctx: ClientContext, disposers: Array<() => void> } {
 /** 注入的账户行样式表（按选择器找，避免依赖 head 里的顺序）。 */
 function injectedRowStyles(): HTMLStyleElement[] {
   return [...document.head.querySelectorAll('style')]
-    .filter((style) => style.textContent?.includes('.pico-account-row') === true)
+    .filter((style) => style.textContent?.includes('.zeokeel-account-row') === true)
 }
 
 function slotProps(wide: boolean): PropsRuntime<'sidebar.footer.action'> {
@@ -389,7 +389,7 @@ describe('浮层里的接口调用（行为不丢）', () => {
     expect(dialog()!.textContent).toContain('¥42.50')
   })
 
-  it('退出登录打到 POST /api/pico/auth/logout，失败就地显示错误', async () => {
+  it('退出登录打到 POST /api/zeokeel/auth/logout，失败就地显示错误', async () => {
     await renderCard()
     await press(rowButton())
     const panel = dialog()!
@@ -590,12 +590,12 @@ describe('注入样式（hover 真的生效）', () => {
     const styles = injectedRowStyles()
     expect(styles).toHaveLength(1)
     const css = styles[0]!.textContent ?? ''
-    expect(css).toContain('.pico-account-row { background: transparent; }')
-    expect(css).toContain('.pico-account-row:hover { background: var(--dsw-alias-interactive-bg-hover); }')
+    expect(css).toContain('.zeokeel-account-row { background: transparent; }')
+    expect(css).toContain('.zeokeel-account-row:hover { background: var(--dsw-alias-interactive-bg-hover); }')
 
     await renderCard()
     const row = rowButton()
-    expect(row.className).toBe('pico-account-row')
+    expect(row.className).toBe('zeokeel-account-row')
     // 关键回归：内联 `background` 会顶掉样式表里的 :hover（hover 变死规则）。
     expect(row.style.background).toBe('')
 

@@ -194,14 +194,14 @@ function stageFixture(options: {
   commands: FakeCommands
 } {
   const root = makeTempDirectory()
-  const current = join(root, 'Applications', 'PicoAide Harness.app')
-  const source = join(root, 'Volume', 'PicoAide Harness.app')
-  writeInfoPlist(current, 'ai.deepseek.dsh.desktop', options.currentVersion ?? '1.0.0')
-  writeInfoPlist(source, options.sourceIdentifier ?? 'ai.deepseek.dsh.desktop', options.nextVersion ?? '1.1.0')
+  const current = join(root, 'Applications', 'ZeoKeel Harness.app')
+  const source = join(root, 'Volume', 'ZeoKeel Harness.app')
+  writeInfoPlist(current, 'com.zeokeel.harness', options.currentVersion ?? '1.0.0')
+  writeInfoPlist(source, options.sourceIdentifier ?? 'com.zeokeel.harness', options.nextVersion ?? '1.1.0')
   const commands = fakeCommands()
   commands.onAttach = (mountPoint) => {
     mkdirSync(mountPoint, { recursive: true })
-    const mounted = join(mountPoint, 'PicoAide Harness.app')
+    const mounted = join(mountPoint, 'ZeoKeel Harness.app')
     rmSync(mounted, { recursive: true, force: true })
     mkdirSync(join(mounted, 'Contents'), { recursive: true })
     writeFileSync(join(mounted, 'Contents', 'Info.plist'), readFileSync(join(source, 'Contents', 'Info.plist')))
@@ -211,8 +211,8 @@ function stageFixture(options: {
 
 describe('macAppBundlePath', () => {
   it('takes the outermost .app so nested helpers are never the replacement target', () => {
-    expect(macAppBundlePath('/Applications/PicoAide Harness.app/Contents/MacOS/PicoAide Harness'))
-      .toBe('/Applications/PicoAide Harness.app')
+    expect(macAppBundlePath('/Applications/ZeoKeel Harness.app/Contents/MacOS/ZeoKeel Harness'))
+      .toBe('/Applications/ZeoKeel Harness.app')
     expect(macAppBundlePath(
       '/Applications/X.app/Contents/Frameworks/X Helper.app/Contents/MacOS/X Helper',
     )).toBe('/Applications/X.app')
@@ -319,12 +319,12 @@ describe('readMacAppIdentity', () => {
 describe('singleApplicationInImage', () => {
   it('finds the one bundle and ignores the /Applications symlink beside it', () => {
     const mount = makeTempDirectory()
-    mkdirSync(join(mount, 'PicoAide Harness.app'), { recursive: true })
+    mkdirSync(join(mount, 'ZeoKeel Harness.app'), { recursive: true })
     // electron-builder 的 DMG 卷根就是"应用 + 指向 /Applications 的符号链接"：
     // 用 statSync 判目录会把那个链接也算进来，于是"不止一个应用"。
     symlinkSync('/Applications', join(mount, 'Applications'))
     writeFileSync(join(mount, '.DS_Store'), '', 'utf8')
-    expect(singleApplicationInImage(mount)).toBe(join(mount, 'PicoAide Harness.app'))
+    expect(singleApplicationInImage(mount)).toBe(join(mount, 'ZeoKeel Harness.app'))
   })
 
   it('fails loudly when the image holds no application or more than one', () => {
@@ -339,7 +339,7 @@ describe('singleApplicationInImage', () => {
 
 describe('assertSameApplication', () => {
   const current: MacAppIdentity = {
-    identifier: 'ai.deepseek.dsh.desktop',
+    identifier: 'com.zeokeel.harness',
     version: '1.0.0',
     executable: 'App',
     teamIdentifier: 'TEAM123456',
@@ -351,7 +351,7 @@ describe('assertSameApplication', () => {
 
   it('refuses a different application, a different version, or a different signing team', () => {
     expect(() => assertSameApplication(current, { ...current, identifier: 'com.other.app' }, '1.1.0'))
-      .toThrow(/holds com.other.app, not ai.deepseek.dsh.desktop/u)
+      .toThrow(/holds com.other.app, not com.zeokeel.harness/u)
     expect(() => assertSameApplication(current, { ...current, version: '1.0.9' }, '1.1.0'))
       .toThrow(/holds 1.0.9, expected 1.1.0/u)
     expect(() => assertSameApplication(current, { ...current, version: '1.1.0', teamIdentifier: 'OTHERTEAM' }, '1.1.0'))
@@ -427,10 +427,10 @@ describe('prepareMacosInPlaceUpdate', () => {
     expect(preparation.plan).toEqual({
       bundlePath: current,
       mountPoint: paths.mountPoint,
-      sourcePath: join(paths.mountPoint, 'PicoAide Harness.app'),
-      stagingPath: join(root, 'Applications', '.PicoAide Harness.app.update-1.1.0.app'),
-      backupPath: join(root, 'Applications', '.PicoAide Harness.app.backup-1.1.0.app'),
-      bundleIdentifier: 'ai.deepseek.dsh.desktop',
+      sourcePath: join(paths.mountPoint, 'ZeoKeel Harness.app'),
+      stagingPath: join(root, 'Applications', '.ZeoKeel Harness.app.update-1.1.0.app'),
+      backupPath: join(root, 'Applications', '.ZeoKeel Harness.app.backup-1.1.0.app'),
+      bundleIdentifier: 'com.zeokeel.harness',
     })
     expect(commands.calls.map(call => call.command)).toContain('hdiutil')
     const attach = commands.calls.find(call => call.command === 'hdiutil' && call.args[0] === 'attach')
@@ -841,7 +841,7 @@ describe('update bookkeeping', () => {
 describe('macOS in-place update audit fixes (2026-10-12)', () => {
   /** 主程序位置：与 `writeInfoPlist` 的缺省 `CFBundleExecutable`（`App`）对齐。 */
   function stagedExecutablePath(mountPoint: string): string {
-    return join(mountPoint, 'PicoAide Harness.app', 'Contents', 'MacOS', 'App')
+    return join(mountPoint, 'ZeoKeel Harness.app', 'Contents', 'MacOS', 'App')
   }
 
   const THIN_ARM64 = [0xcf, 0xfa, 0xed, 0xfe, 0x0c, 0x00, 0x00, 0x01]

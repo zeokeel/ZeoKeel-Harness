@@ -6,7 +6,7 @@
  * `dsh-plugin-desktop/desktop-home`); this file is only a thin re-export so
  * the plugin never copies the default-directory constant. The contract
  * mirrors the official `@deepseek-ai/dsh-home-paths`: configured path >
- * `DSH_HOME` > product default (`~/.picoaide-harness`). The desktop launcher
+ * `DSH_HOME` > product default (`~/.zeokeel-harness`). The desktop launcher
  * also writes the product home back into `DSH_HOME` at startup, so in the
  * real product the environment path is what lands here anyway.
  */

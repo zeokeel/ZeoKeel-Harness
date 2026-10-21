@@ -11,7 +11,7 @@
  *
  * 它**不拥有**什么（刻意不做，避免成为第二真源）：
  *  - 不解析应用 URL、不判准入/下架/冻结、不认识员工令牌 —— 那些在 handler 与平台侧；
- *  - **不推断版本**：`version` 只能来自平台响应的 `X-PicoAide-App-Version` 头（§5.1，
+ *  - **不推断版本**：`version` 只能来自平台响应的 `X-ZeoKeel-App-Version` 头（§5.1，
  *    DAT-12/CLI-3），缓存只把调用方给的版本当键；版本变化 = 另一个键，旧版本自然读不到；
  *  - 不算 `session-scope` 哈希：调用方给 `serverHash`/`userHash`（R1-SEC-3 的双作用域
  *    语义在调用方成立），缓存只保证**不同 scope 绝不互相命中**；
@@ -25,7 +25,7 @@
  * 与 Chromium 自身 HTTP 缓存的取舍（§7.5）：以本缓存为唯一权威，应用协议页面的
  * 分区 HTTP 缓存不参与决策。
  *
- * @module @picoaide/dsh-wasm-apps-host/cache
+ * @module @zeokeel/dsh-wasm-apps-host/cache
  */
 
 import { createHash, randomBytes } from 'node:crypto'
@@ -152,7 +152,7 @@ export interface CacheScope {
 /** 一次写入请求（handler 从平台响应投影而来）。 */
 export interface CacheEntryInput {
   appId: string
-  /** **只来自** `X-PicoAide-App-Version` 响应头；缓存不推断版本。 */
+  /** **只来自** `X-ZeoKeel-App-Version` 响应头；缓存不推断版本。 */
   version: string
   /** 应用 URL 的 path + query（调用方已规范化的形态），是缓存键的一部分。 */
   path: string

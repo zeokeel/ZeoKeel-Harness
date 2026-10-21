@@ -32,7 +32,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // readyzBody 取一次 /readyz 的原始响应体与状态码。
@@ -147,12 +147,12 @@ func TestRegistryActionsForbidDeletingCacheDir(t *testing.T) {
 // 不用真连库：本条判的是"**任何**驱动错误都不许原样出去"，而 pgx 的文案形状由源码
 // 核对（pgconn/errors.go：`failed to connect to \`user=%s database=%s\`: %s (%s): …`）。
 func dbLeakError() error {
-	return errors.New("failed to connect to `user=picoaide_app database=prod_ledger`: " +
+	return errors.New("failed to connect to `user=zeokeel_app database=prod_ledger`: " +
 		"db.internal.example:5432 (db.internal.example): dial error: connection refused")
 }
 
 // sensitiveSubstrings 是绝不允许出现在对外响应里的子串。
-var sensitiveSubstrings = []string{"user=", "database=", "db.internal.example", "5432", "picoaide_app", "prod_ledger"}
+var sensitiveSubstrings = []string{"user=", "database=", "db.internal.example", "5432", "zeokeel_app", "prod_ledger"}
 
 // TestReadyzDoesNotLeakDriverErrors：R5-A-5 的判据本体。
 func TestReadyzDoesNotLeakDriverErrors(t *testing.T) {
@@ -190,7 +190,7 @@ func TestReadyzDoesNotLeakDriverErrors(t *testing.T) {
 
 	// ③ 原文必须进**服务端日志**（排障能力不降级）—— 这是"分类但可排障"的另一半。
 	all := strings.Join(logs, "\n")
-	if !strings.Contains(all, "db.internal.example") || !strings.Contains(all, "user=picoaide_app") {
+	if !strings.Contains(all, "db.internal.example") || !strings.Contains(all, "user=zeokeel_app") {
 		t.Fatalf("驱动错误原文必须进服务端日志（否则等于把排障线索删掉）：%v", logs)
 	}
 }

@@ -34,7 +34,7 @@ function headerSpec(): {
   const raw = readFileSync(join(REPO, 'server/internal/wasmapp/api/wasm-app-headers.json'), 'utf8')
   const parsed = JSON.parse(raw) as { schema?: unknown }
   // schema 不匹配 ⇒ 显式失败（生成物换了版本就说明契约变了，必须有人来对齐）。
-  expect(parsed.schema).toBe('picoaide-wasm-app-headers/1')
+  expect(parsed.schema).toBe('zeokeel-wasm-app-headers/1')
   return parsed as ReturnType<typeof headerSpec>
 }
 
@@ -94,8 +94,8 @@ describe('请求头白名单：与服务端生成物逐字对拍（CLI-5 / J5）
   it('平台头（app-proof / 版本头）由平台侧定义，不进应用请求头白名单', () => {
     const spec = headerSpec()
     // 这两个是**宿主→平台**的头（§5.1/§20），应用请求信封里绝不能出现。
-    expect(spec.platform_headers.proof_request).toBe('X-Pico-App-Proof')
-    expect(spec.platform_headers.app_version_response).toBe('X-PicoAide-App-Version')
+    expect(spec.platform_headers.proof_request).toBe('X-ZeoKeel-App-Proof')
+    expect(spec.platform_headers.app_version_response).toBe('X-ZeoKeel-App-Version')
     for (const platformHeader of Object.values(spec.platform_headers)) {
       expect(FORWARDED_REQUEST_HEADERS).not.toContain(platformHeader.toLowerCase())
     }

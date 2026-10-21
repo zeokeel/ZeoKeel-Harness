@@ -1,7 +1,7 @@
 {
-  "schema": "picoaide-app-config/1",
-  "abi_version": "picoaide-app/1",
-  "config_file": "picoaide.app.json",
+  "schema": "zeokeel-app-config/1",
+  "abi_version": "zeokeel-app/1",
+  "config_file": "zeokeel.app.json",
   "access_default": "login",
   "access_values": [
     "login",
@@ -191,7 +191,7 @@
       "type": "object",
       "required": true,
       "max": 65536,
-      "desc": "应用配置文件的内容（即 `picoaide.app.json` 的对象形态）：字段见 `config_fields`",
+      "desc": "应用配置文件的内容（即 `zeokeel.app.json` 的对象形态）：字段见 `config_fields`",
       "hints": [
         "平台存的是**解析并归一化之后**的配置（名单去空白/去重、access 缺省落定）",
         "**更新版本**时 config 里**缺席**的字段沿用上一版生效值（access/whitelist/purpose/data_sensitivity/owner/sensitive_columns 逐字段各自沿用）；显式给值——包括显式空串——以提交为准",

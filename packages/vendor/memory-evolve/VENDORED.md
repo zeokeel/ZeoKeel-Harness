@@ -181,17 +181,17 @@ node <repo>/scripts/verify-inventories.mjs && node <repo>/scripts/verify-layout.
 
 ### G. 平台内置技能已移出本目录（2026-09-19；升级合并时**不要**把它恢复回来）
 
-**`skills/picoaide-app-builder/` 已不在本包**：它是**本仓自己的产品内容**（本仓提交
-`b943a2e03d` 新增，不属于上游任何 tag），2026-09-19 随改名 `picoaide-app-builder` →
+**`skills/zeokeel-app-builder/` 已不在本包**：它是**本仓自己的产品内容**（本仓提交
+`b943a2e03d` 新增，不属于上游任何 tag），2026-09-19 随改名 `zeokeel-app-builder` →
 `app-builder` 一起搬到了服务端目录 **`server/skills/app-builder/`**（`git mv`，历史保留）。
 搬迁理由（用户口径）：「这个技能应该默认放在服务端的技能库里，而不是放在客户端里」。
 
-- **上游没有这个技能**（`git log --follow -- packages/vendor/memory-evolve/skills/picoaide-app-builder`
+- **上游没有这个技能**（`git log --follow -- packages/vendor/memory-evolve/skills/zeokeel-app-builder`
   只有本仓两个功能提交），所以三方合并不会把它带回来 —— 但合并前若看到
-  `/tmp/me-merge/skills/picoaide-app-builder/` 之类的残留，那是**本地旧副本**，删掉即可，
+  `/tmp/me-merge/skills/zeokeel-app-builder/` 之类的残留，那是**本地旧副本**，删掉即可，
   **不要**再落回本目录（两份真源漂移比缺文件更难查）。
 - 平台技能的分发路径改成：源在 `server/skills/app-builder/` → `server/Dockerfile` 直接
-  `COPY skills/app-builder/ /opt/picoaide/skills/app-builder/`（**已无** `--build-context
+  `COPY skills/app-builder/ /opt/zeokeel/skills/app-builder/`（**已无** `--build-context
   skillassets=<本包>`）→ 服务端 `GET /api/client/v2/skills/builtin` 下发 → 员工在能力中心
   按需安装。本包不再参与它的分发。
 - `lib/coi/skills-sync.js` 的 `PLATFORM_SKILLS` 保留为 `['app-builder']`（**不是**清空）：
@@ -203,7 +203,7 @@ node <repo>/scripts/verify-inventories.mjs && node <repo>/scripts/verify-layout.
   - 事实变化：打包器 `scripts/pack-assets.mjs` 的唯一实现搬到中性位置
     `server/demoapps/scripts/pack-assets.mjs`（演示应用打包阶段与随技能分发**必须是同一份
     实现**，两份会漂），`server/Dockerfile` 的**最终阶段**从那同一个源 `COPY` 进
-    `<PICOAI_SKILL_SEED_DIR>/app-builder/scripts/pack-assets.mjs`；注入关系登记在服务端
+    `<ZEOKEEL_SKILL_SEED_DIR>/app-builder/scripts/pack-assets.mjs`；注入关系登记在服务端
     `server/internal/skillseed/builtin_skills_test.go` 的 `skillFileInjections`。
     技能源树里**不再有**该文件的副本。
   - 用例改名并扩成「镜像下发树 = 磁盘树 + 构建期注入文件」，新增**三类**断言：
@@ -390,7 +390,7 @@ patch 持锁拒且内容一字未改、`approvePendingSkill` 持锁拒且待确�
 兼容路径另加 `isIdenticalTree` / `listEntriesRel` / `readFileOrNull`。
 
 **兼容路径（内容同一性采纳，同轮追加）**：写溯源的 A9 **不在任何已发布 tag 里** ⇒ 现场存在
-"旧版插件同步落下、没有 `.picoaide`"的目录。它们只有在**可验证的内容同一性**成立时才被采纳
+"旧版插件同步落下、没有 `.zeokeel`"的目录。它们只有在**可验证的内容同一性**成立时才被采纳
 （不是启发式）：①条目集合逐项相同（文件与目录都算，多一个/少一个/改名/文件↔目录都算不同）；
 ②每个普通文件**字节逐字相同**（`Buffer.equals`）；③全程无符号链接/FIFO/读取失败。
 成立 ⇒ 补写 `channel: 'plugin'` 溯源（写失败即 `refused`，绝不半写）⇒ 此后按 `x-version` 正常更新。

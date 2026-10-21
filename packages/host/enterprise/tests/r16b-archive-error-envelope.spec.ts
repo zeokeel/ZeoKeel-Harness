@@ -72,12 +72,12 @@ function fakeReq(url: string, method: string): IncomingMessage {
 
 /** 六条归档路径（本地路由 + 方法）。枚举自 `archiveUpstreamError` 的 6 个调用点。 */
 const ARCHIVE_ROUTES: Array<{ name: string, prefix: string, url: string, method: string }> = [
-  { name: '内置技能安装', prefix: '/api/pico/skills', url: '/api/pico/skills/builtin/codeql/install', method: 'POST' },
-  { name: '市场技能安装', prefix: '/api/pico/skills', url: '/api/pico/skills/codeql/install', method: 'POST' },
-  { name: '市场技能下载', prefix: '/api/pico/skills', url: '/api/pico/skills/codeql/archive', method: 'GET' },
-  { name: '智能体预设安装', prefix: '/api/pico/agent-presets', url: '/api/pico/agent-presets/reviewer/install', method: 'POST' },
-  { name: '智能体预设下载', prefix: '/api/pico/agent-presets', url: '/api/pico/agent-presets/reviewer/archive', method: 'GET' },
-  { name: '共享技能安装', prefix: '/api/pico/shared-skills', url: '/api/pico/shared-skills/codeql/1.0.0/install', method: 'POST' },
+  { name: '内置技能安装', prefix: '/api/zeokeel/skills', url: '/api/zeokeel/skills/builtin/codeql/install', method: 'POST' },
+  { name: '市场技能安装', prefix: '/api/zeokeel/skills', url: '/api/zeokeel/skills/codeql/install', method: 'POST' },
+  { name: '市场技能下载', prefix: '/api/zeokeel/skills', url: '/api/zeokeel/skills/codeql/archive', method: 'GET' },
+  { name: '智能体预设安装', prefix: '/api/zeokeel/agent-presets', url: '/api/zeokeel/agent-presets/reviewer/install', method: 'POST' },
+  { name: '智能体预设下载', prefix: '/api/zeokeel/agent-presets', url: '/api/zeokeel/agent-presets/reviewer/archive', method: 'GET' },
+  { name: '共享技能安装', prefix: '/api/zeokeel/shared-skills', url: '/api/zeokeel/shared-skills/codeql/1.0.0/install', method: 'POST' },
 ]
 
 interface Harness {
@@ -92,7 +92,7 @@ function harness(): Harness {
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? { requestRejection: () => undefined } : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => true,
       getSession: () => current,
@@ -150,7 +150,7 @@ describe('R16B-08 归档代理不得吞掉上游的 code / message', () => {
       { status: 403, headers: { 'content-type': 'application/json' } },
     )))
     const h = harness()
-    const res = await h.call('/api/pico/skills', '/api/pico/skills/codeql/archive', 'GET')
+    const res = await h.call('/api/zeokeel/skills', '/api/zeokeel/skills/codeql/archive', 'GET')
     expect(res.code).toBe(403)
     expect(res.body.code).toBe(PASSWORD_CHANGE_REQUIRED_CODE)
     expect(res.body.action).toBe('change-password')
@@ -161,7 +161,7 @@ describe('R16B-08 归档代理不得吞掉上游的 code / message', () => {
     const h = harness()
     // ① 网关 HTML 错误页（非 JSON）。
     vi.stubGlobal('fetch', vi.fn(async () => new Response('boom', { status: 500 })))
-    expect(await h.call('/api/pico/skills', '/api/pico/skills/codeql/archive', 'GET'))
+    expect(await h.call('/api/zeokeel/skills', '/api/zeokeel/skills/codeql/archive', 'GET'))
       .toEqual({ code: 500, body: { error: 'gateway error' } })
 
     // ② JSON 但没有可读 message（只有 code / 结构漂移）⇒ 没有东西可透传。
@@ -169,7 +169,7 @@ describe('R16B-08 归档代理不得吞掉上游的 code / message', () => {
       JSON.stringify({ error: { code: 'WEIRD' } }),
       { status: 418, headers: { 'content-type': 'application/json' } },
     )))
-    expect(await h.call('/api/pico/skills', '/api/pico/skills/codeql/archive', 'GET'))
+    expect(await h.call('/api/zeokeel/skills', '/api/zeokeel/skills/codeql/archive', 'GET'))
       .toEqual({ code: 418, body: { error: 'gateway error' } })
   })
 })

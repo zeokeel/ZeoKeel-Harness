@@ -47,7 +47,7 @@ const SCOPE: AiRowsConsentScope = { user: 'alice', server: 'https://harness.exam
 const homes: string[] = []
 
 function temporaryDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pico-ai-rows-failure-'))
+  const dir = mkdtempSync(join(tmpdir(), 'zeokeel-ai-rows-failure-'))
   homes.push(dir)
   return dir
 }

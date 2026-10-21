@@ -5,7 +5,7 @@
 开发循环里 `corepack yarn check`（JS 门禁）与 `cd server && make check`（服务端门禁）合计要等 **~10.5 分钟**，
 且大量时间是"一个核在跑、其余三个闲着"以及"同一份产物被重复构建"。目标是**在不降低任何一门检查覆盖面的前提下**把等待压到一个量级以内。
 
-所有数字都是 2026-09-10 在 4 核 / 11GB 开发机上实测（PG 18 容器 `pg-test`，`PG_DSN_TEST` 指向 `picoaide_test`）。
+所有数字都是 2026-09-10 在 4 核 / 11GB 开发机上实测（PG 18 容器 `pg-test`，`PG_DSN_TEST` 指向 `zeokeel_test`）。
 
 ## 诊断（改造前）
 
@@ -36,11 +36,11 @@
 
 ### 1) 测试库改为「模板库克隆」（`server/internal/serverstore/dbtest.go`）
 
-- 模板库名 = `picoaide_tmpl_<sha256(迁移内容 + 分区窗口)前12位>`，缓存在同一个 PG 实例里。
+- 模板库名 = `zeokeel_tmpl_<sha256(迁移内容 + 分区窗口)前12位>`，缓存在同一个 PG 实例里。
   迁移改动或跨月（分区窗口右移）会自动换名，旧模板不会被误用。
 - 首次构建模板用 `pg_advisory_lock` 串行化（跨包 `-p N` 也只建一次），建好后 **必须在释放锁前断开模板库连接**
   （否则并发 `CREATE DATABASE … TEMPLATE` 会报 `source database is being accessed`）。
-- 之后每个用例 = `CREATE DATABASE picoaide_test_<rand> TEMPLATE <模板>`，文件级克隆 ~0.1s。
+- 之后每个用例 = `CREATE DATABASE zeokeel_test_<rand> TEMPLATE <模板>`，文件级克隆 ~0.1s。
 - 任何一环失败（无权限、克隆失败、`testMigrationHook` 替换了迁移集合）**自动回落到原来的「空库 + 全量迁移」路径**，
   测试语义不变；模板构建失败会删掉半成品，避免后来的进程克隆到不完整 schema。
 - `ensureTestPartitions` 与新加的 `testPartitionWindow()` 共用同一窗口定义，防止"模板库分区"与"实际需要的分区"漂移。
@@ -123,4 +123,4 @@ fresh checkout 与 CI 行为与改造前完全一致；`DSH_PREBUILD=force` 强�
 - tsc 增量缓存（`--incremental --tsBuildInfoFile`）实测能把重复 typecheck 压到 ~2×，但**产物被删而 buildinfo 仍热时会漏产**
   （实测：删掉 `lib/types` 后带热 buildinfo 的 tsc 不再产出 `.d.ts`）——若引入，必须让每个 `clean`/`rm -rf lib` 同时清掉缓存目录，
   本轮未启用。
-- 9 个历史遗留测试库（`picoaide_test_<rand>`）来自更早被中断的测试进程，可在 PG 里手工清理。
+- 9 个历史遗留测试库（`zeokeel_test_<rand>`）来自更早被中断的测试进程，可在 PG 里手工清理。

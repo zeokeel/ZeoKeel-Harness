@@ -118,7 +118,7 @@ function undisclosed(childEnv: Record<string, string>, disclosed: string[]): str
 
 describe('R3-N1: one confirmation covers every stdio server and discloses each one', () => {
   it('shows both servers with their own command, args and env keys (headless hook)', async () => {
-    const base = await tempDir('pico-conn-n1-')
+    const base = await tempDir('zeokeel-conn-n1-')
     const harness = createHarness([twoServerDef(base)], base, { requestApproval: () => true })
     await seedCredential(base, 'multi', { accessToken: 'SECRET-AT', fields: { CONNECTOR_PROBE_TOKEN: 'field-token' } })
 
@@ -163,7 +163,7 @@ describe('R3-N1: one confirmation covers every stdio server and discloses each o
   })
 
   it('re-confirms when the SECOND server changes, and the new prompt describes that server', async () => {
-    const base = await tempDir('pico-conn-n1-change-')
+    const base = await tempDir('zeokeel-conn-n1-change-')
     const def = twoServerDef(base)
     const harness = createHarness([def], base, { requestApproval: () => true })
     await seedCredential(base, 'multi', { accessToken: 'SECRET-AT', fields: { CONNECTOR_PROBE_TOKEN: 'field-token' } })
@@ -197,7 +197,7 @@ describe('R3-N1: one confirmation covers every stdio server and discloses each o
   })
 
   it('discloses every server on the panel path too (what the desktop UI renders)', async () => {
-    const base = await tempDir('pico-conn-n1-panel-')
+    const base = await tempDir('zeokeel-conn-n1-panel-')
     const harness = createHarness([twoServerDef(base)], base)
     await seedCredential(base, 'multi', { accessToken: 'SECRET-AT', fields: { CONNECTOR_PROBE_TOKEN: 'field-token' } })
 
@@ -205,7 +205,7 @@ describe('R3-N1: one confirmation covers every stdio server and discloses each o
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(harness.configs).toEqual([])
 
-    const listed = await callRoute(harness, '/api/pico/connectors', 'GET')
+    const listed = await callRoute(harness, '/api/zeokeel/connectors', 'GET')
     const entry = (JSON.parse(listed.body) as {
       connectors: Array<{ id: string; request: { approval?: DisclosurePrompt } | null }>
     }).connectors.find(item => item.id === 'multi')
@@ -218,7 +218,7 @@ describe('R3-N1: one confirmation covers every stdio server and discloses each o
     expect(approval?.envKeys).toContain('DYLD_INSERT_LIBRARIES')
 
     // Answering the panel once approves both and spawns both.
-    const approved = await callRoute(harness, '/api/pico/connectors/multi/approve')
+    const approved = await callRoute(harness, '/api/zeokeel/connectors/multi/approve')
     expect(approved.status).toBe(200)
     await waitFor(() => harness.configs.length === 2)
   })
@@ -226,7 +226,7 @@ describe('R3-N1: one confirmation covers every stdio server and discloses each o
 
 describe('R3-N2: a declared-but-empty credential field is disclosed before it can be injected', () => {
   it('discloses the optional field up front, then injects its later value without a new prompt', async () => {
-    const base = await tempDir('pico-conn-n2-')
+    const base = await tempDir('zeokeel-conn-n2-')
     const envOut = join(base, 'late-env.json')
     const def: ConnectorDef = {
       id: 'late',
@@ -276,7 +276,7 @@ describe('R3-N2: a declared-but-empty credential field is disclosed before it ca
   })
 
   it('adds a newly declared field to the fingerprint, so it does re-confirm', async () => {
-    const base = await tempDir('pico-conn-n2-new-')
+    const base = await tempDir('zeokeel-conn-n2-new-')
     const def: ConnectorDef = {
       id: 'late2',
       name: 'late2',

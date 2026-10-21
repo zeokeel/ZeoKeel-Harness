@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-panel-surface",
+  "name": "@zeokeel/dsh-panel-surface",
   "version": "0.1.0",
-  "description": "Center-column panel surface + shared visual language for PicoAide Harness client panels (cron / capability center / connectors / app center)",
+  "description": "Center-column panel surface + shared visual language for ZeoKeel Harness client panels (cron / capability center / connectors / app center)",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",

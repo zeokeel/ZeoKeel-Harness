@@ -21,9 +21,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // FIX-01(P0):审核预览上限同时是 preset.yml 进 YAML 解析器的输入边界。
@@ -93,8 +93,8 @@ const testComposition = `- id: persona
 // setup builds the full test router with an admin account and one employee.
 func setup(t *testing.T) (http.Handler, *sql.DB, map[string]string, map[string]string, map[string]string) {
 	t.Helper()
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "1000")
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "1000")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
 	// alice + bob: two employees with direct bearer tokens.
@@ -142,7 +142,7 @@ func setup(t *testing.T) (http.Handler, *sql.DB, map[string]string, map[string]s
 		_ = json.Unmarshal(w.Body.Bytes(), &out)
 		csrf, _ = out["csrf_token"].(string)
 		for _, ck := range w.Result().Cookies() {
-			if ck.Name == "picoaide_session" {
+			if ck.Name == "zeokeel_session" {
 				sess = ck.Value
 			}
 		}
@@ -162,7 +162,7 @@ func setup(t *testing.T) (http.Handler, *sql.DB, map[string]string, map[string]s
 	if loginCode != http.StatusOK || sess == "" || csrf == "" {
 		t.Fatalf("测试夹具失败:管理员登录未建立会话 (code=%d body=%.200s)—— 与被测逻辑无关", loginCode, loginBody)
 	}
-	adminHdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	adminHdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 
 	return r, db, adminHdr,
 		map[string]string{"Authorization": "Bearer " + tokens["alice"]},

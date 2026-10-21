@@ -3,7 +3,7 @@ package llmgateway
 import (
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // concurrencySampleInterval 采样间隔(生产 15s;测试注入更短避免拖慢)。

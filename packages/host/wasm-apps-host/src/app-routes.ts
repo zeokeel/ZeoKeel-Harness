@@ -4,38 +4,38 @@
  * `wasm-apps.ts` / `wasm-app-tools.ts` 同批搬进本包）。
  *
  * 搬它的**唯一**目的：让"关掉应用中心 ⇒ 它的代码不进产物"在依赖图上成立。此前
- * 整条客户端创作链路（2,031 + 758 + 579 行）住在 `@picoaide/dsh-enterprise`
+ * 整条客户端创作链路（2,031 + 758 + 579 行）住在 `@zeokeel/dsh-enterprise`
  * （必需包）里，模块再怎么关，它照样进 app.asar。
  *
  * ## 行为零变化
  *
- * 路由路径（`/api/pico/apps/wasm*`）、方法分发、状态码、错误信封与 hints 逐字不变。
+ * 路由路径（`/api/zeokeel/apps/wasm*`）、方法分发、状态码、错误信封与 hints 逐字不变。
  * 围栏（回环 + 同源 + 持有性证明）、语言解析、`aiRowsConsent` 的作用域口径也都不在
- * 这里重新实现：auth-gate 经服务 `picoLocalRoutes` 交出**同一批闭包**，本模块只做
- * 结构探测后调用（与 `src/session.ts` 探测 `picoSession` 同形）。**不要**把任何
+ * 这里重新实现：auth-gate 经服务 `zeokeelLocalRoutes` 交出**同一批闭包**，本模块只做
+ * 结构探测后调用（与 `src/session.ts` 探测 `zeokeelSession` 同形）。**不要**把任何
  * 围栏判定复制一份进来：那是第二真源，而这里判的是信任边界。
  *
  * `aiRowsConsent` 的构造从 auth-gate 搬到本模块（它只服务应用面），语义不变：
  * 一个实例、两个消费方（本机路由与 `wasm_app_*` 工具面），作用域每次调用解析。
  *
- * @module @picoaide/dsh-wasm-apps-host/app-routes
+ * @module @zeokeel/dsh-wasm-apps-host/app-routes
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HostLocale } from './locale.ts'
-import type { Session } from '@picoaide/dsh-gateway-client/config'
+import type { Session } from '@zeokeel/dsh-gateway-client/config'
 import { createAiRowsConsentStore, defaultAiRowsConsentPath } from './wasm-apps-ai-rows-consent.ts'
 import { createWasmAppsRoute } from './wasm-apps.ts'
 import { registerWasmAppTools, WASM_APP_TOOL_NAMES } from './wasm-app-tools.ts'
 
 /**
- * 本机路由共用的**围栏与出口**：由 `@picoaide/dsh-enterprise/auth-gate` 的
- * `apply()` 经服务 `picoLocalRoutes` 交出（唯一实现，见模块头注释）。
+ * 本机路由共用的**围栏与出口**：由 `@zeokeel/dsh-enterprise/auth-gate` 的
+ * `apply()` 经服务 `zeokeelLocalRoutes` 交出（唯一实现，见模块头注释）。
  *
  * 结构类型而非 import：指向 auth-gate 会闭合出
  * `desktop → wasm-apps-host → enterprise → desktop` 这个构建环（desktop 的 tsdown 把
- * `@picoaide/*` 内联进自己的 `lib/`，而 enterprise 的 tsc 读 `dsh-plugin-desktop`）。
+ * `@zeokeel/*` 内联进自己的 `lib/`，而 enterprise 的 tsc 读 `dsh-plugin-desktop`）。
  */
 export interface HostLocalRouteFence {
   /** 回环 + 同源围栏（所有方法都要过）。 */
@@ -82,7 +82,7 @@ export function createAppAiRowsConsent(ctx: Context, session: () => Session | nu
     try {
       return defaultAiRowsConsentPath()
     } catch (cause) {
-      ctx.logger?.warn?.(`pico: resolving the data root for the AI rows consent failed (${cause instanceof Error ? cause.message : String(cause)}); the consent will not survive a restart`)
+      ctx.logger?.warn?.(`zeokeel: resolving the data root for the AI rows consent failed (${cause instanceof Error ? cause.message : String(cause)}); the consent will not survive a restart`)
       return undefined
     }
   })()
@@ -149,13 +149,13 @@ export function registerAppRoutes(ctx: Context, fence: HostLocalRouteFence): () 
   // 告警通道同款），把"缺席"重新变成可检索的一行。
   //
   // 为什么这里同步读 `ctx.get('tools')` 不会误报：本插件的插件行
-  // （`src/index.ts` 的 `inject = ['picoSession', 'webServer', 'picoLocalRoutes']`）不含
+  // （`src/index.ts` 的 `inject = ['zeokeelSession', 'webServer', 'zeokeelLocalRoutes']`）不含
   // `tools`，而桌面组合里 `tools` 行在 base bundle、早于本行就位 ⇒ 在场时不会打这条。
   // 真到了"缺席"那一档，它就是事实：工具不会注册，除非 `tools` 之后才出现（那时
   // `inject` 的回调会补跑 —— 这条提示说的是"组装那一刻缺席"）。
   if (ctx.get('tools') === undefined) {
     ctx.logger?.warn?.(
-      `pico: tools service is absent at composition time — ${WASM_APP_TOOL_NAMES.join('/')}`
+      `zeokeel: tools service is absent at composition time — ${WASM_APP_TOOL_NAMES.join('/')}`
       + ' were NOT registered (they will be registered if the tools service appears later)',
     )
   }

@@ -53,14 +53,14 @@ import {
   serializeAiConsent,
 } from './ai-authorization.ts'
 
-/** 宿主侧的作用域段（生产上来自同一个 `picoSession` 快照）。 */
+/** 宿主侧的作用域段（生产上来自同一个 `zeokeelSession` 快照）。 */
 const SERVER = 'https://harness.example'
 const OTHER_SERVER = 'https://second.example'
 
 const homes: string[] = []
 
 function temporaryDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pico-app-ai-consent-'))
+  const dir = mkdtempSync(join(tmpdir(), 'zeokeel-app-ai-consent-'))
   homes.push(dir)
   return dir
 }

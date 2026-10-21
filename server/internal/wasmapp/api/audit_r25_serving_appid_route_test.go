@@ -83,21 +83,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/bootstrap"
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/portal"
-	"github.com/picoaide/picoaide/internal/reports"
-	"github.com/picoaide/picoaide/internal/router"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/telemetry"
-	wasmapi "github.com/picoaide/picoaide/internal/wasmapp/api"
-	"github.com/picoaide/picoaide/internal/wasmapp/appproof"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	wasmregistry "github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
+	"github.com/zeokeel/zeokeel-harness/server/internal/reports"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/telemetry"
+	wasmapi "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/api"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appproof"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	wasmregistry "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // ---------------------------------------------------------------------------
@@ -133,13 +133,13 @@ func r25CompileChild(t *testing.T) string {
 			return
 		}
 		root := strings.TrimSpace(string(out))
-		dir, err := os.MkdirTemp("", "picoaide-r25-compile-child-")
+		dir, err := os.MkdirTemp("", "zeokeel-r25-compile-child-")
 		if err != nil {
 			r25ChildErr = err
 			return
 		}
 		bin := filepath.Join(dir, compile.ChildBinaryName)
-		cmd := exec.Command("go", "build", "-o", bin, "./cmd/picoaide-app-compile")
+		cmd := exec.Command("go", "build", "-o", bin, "./cmd/zeokeel-app-compile")
 		cmd.Dir = root
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if b, err := cmd.CombinedOutput(); err != nil {
@@ -237,7 +237,7 @@ func (e *r25RouteEnv) do(method, path, body string, admin bool) *httptest.Respon
 	req.Header.Set("Content-Type", "application/json")
 	if admin {
 		// cookie 名与 serverauth.sessionCookieName 同值（本仓各包既有测试同款字面量）。
-		req.Header.Set("Cookie", "picoaide_session="+e.adminCookie)
+		req.Header.Set("Cookie", "zeokeel_session="+e.adminCookie)
 	} else {
 		req.Header.Set("Authorization", "Bearer "+e.token)
 	}

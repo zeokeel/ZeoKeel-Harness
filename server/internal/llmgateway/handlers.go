@@ -10,9 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // ---------------------------------------------------------------------------
@@ -159,13 +159,13 @@ func newUpstreamTransport() *http.Transport {
 // 在正常高峰误伤全员,产品形态上不可取)。
 //
 // 上限取 32:远高于任何正常桌面客户端的并发(客户端同一时刻通常 1-3 条流),
-// 又足以把"单员工打满全站"变成不可能。PICOAI_GATEWAY_MAX_INFLIGHT_PER_USER
+// 又足以把"单员工打满全站"变成不可能。ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER
 // 可覆盖(压测/特殊集成场景)。
 
 const defaultMaxInflightPerUser = 32
 
 func maxInflightPerUser() int {
-	if v := os.Getenv("PICOAI_GATEWAY_MAX_INFLIGHT_PER_USER"); v != "" {
+	if v := os.Getenv("ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
 		}

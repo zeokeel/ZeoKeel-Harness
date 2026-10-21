@@ -1,15 +1,15 @@
 /**
- * 2026-09-17 审计 S03-02 回归：`pico/locale-changed` → `reloadChromePages()` 的
+ * 2026-09-17 审计 S03-02 回归：`zeokeel/locale-changed` → `reloadChromePages()` 的
  * **接线**此前零覆盖。
  *
- * 生产代码只有一句 `ctx.on('pico/locale-changed', () => { runtime.reloadChromePages() })`
+ * 生产代码只有一句 `ctx.on('zeokeel/locale-changed', () => { runtime.reloadChromePages() })`
  * （src/index.ts），而唯一的既有用例（audit-r9-chrome-locale.spec.ts）直接调方法 ——
  * 删掉这行注册，整包测试仍全绿，于是"用户在设置里切语言 → 已开着的浏览器窗口
  * 继续用旧语言"这个原始缺陷可以静默回归。
  *
  * 这里按真实路径跑：真的 `apply()` + 假 ctx（捕获事件监听器与注册的工具）+ mock 的
  * Electron 适配器（观察两个 chrome 视图的 loadURL）。断言：
- *   1. 插件确实注册了 `pico/locale-changed`；
+ *   1. 插件确实注册了 `zeokeel/locale-changed`；
  *   2. 事件真的让 shell 页与 overlay 页各重新 loadURL 一次（历史先清空，否则会被
  *      创建期那次同参数调用满足 —— 正是 S03-01 的恒真形态）；
  *   3. 标签页视图一个都不碰（用户的浏览会话必须活着）。
@@ -124,7 +124,7 @@ function harness(): Record<string, unknown> {
   holder.adapter = adapter
   return {
     get: (name: string) => {
-      if (name === 'picoSession') return { getSession: () => null }
+      if (name === 'zeokeelSession') return { getSession: () => null }
       if (name === 'desktopRuntime') return { locale: 'zh' }
       return undefined
     },
@@ -165,12 +165,12 @@ async function waitForWindow(): Promise<void> {
   expect(adapter.overlays).toHaveLength(1)
 }
 
-describe('pico/locale-changed 接线（2026-09-17 审计 S03-02）', () => {
+describe('zeokeel/locale-changed 接线（2026-09-17 审计 S03-02）', () => {
   it('事件真的重新服务两个 chrome 页，且不碰标签页视图', async () => {
     apply(harness() as never, {})
 
-    const reloads = listeners.get('pico/locale-changed') ?? []
-    expect(reloads, 'apply() 必须注册 pico/locale-changed 监听').toHaveLength(1)
+    const reloads = listeners.get('zeokeel/locale-changed') ?? []
+    expect(reloads, 'apply() 必须注册 zeokeel/locale-changed 监听').toHaveLength(1)
 
     await waitForWindow()
     // 开一个标签页：chrome 重载时它的视图一个字节都不能动。

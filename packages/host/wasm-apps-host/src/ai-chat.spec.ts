@@ -62,7 +62,7 @@ async function framesOf(outcome: Awaited<ReturnType<typeof handleAiChat>>): Prom
 
 describe('frozen wire contract (§21.2)', () => {
   it('keeps the reserved path and the hidden session id', () => {
-    expect(AI_CHAT_PATH).toBe('/__picoaide/ai/chat')
+    expect(AI_CHAT_PATH).toBe('/__zeokeel/ai/chat')
     expect(hiddenSessionId(ALICE, 'my-notes')).toBe('app:my-notes#alice@' + serverPartitionHash(ALICE_SERVER))
   })
 

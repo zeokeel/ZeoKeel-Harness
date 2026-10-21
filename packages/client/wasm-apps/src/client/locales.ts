@@ -10,7 +10,7 @@
  * 与「能力中心」/`Capability Hub` 平行但**不是**同一个面（能力中心 = 技能与
  * 智能体；应用中心 = 员工自建的 WASM 应用）。
  *
- * @module @picoaide/dsh-wasm-apps/client/locales
+ * @module @zeokeel/dsh-wasm-apps/client/locales
  */
 
 /** zh 是 key 真源；en 必须与它逐key 对齐（`locales.spec.ts` 钉住）。 */
@@ -303,7 +303,7 @@ export const zh = {
   // 地址，能发给同事的就是渠道深链 `<scheme>://app/<app_id>`。
   'appCenter.shareLink': '分享链接',
   // ---- "打开"失败的七种原因（各自可辨：未登录 / 应用不存在 / 协议未就绪 / …）----
-  // 打开走本机路由 POST /api/pico/wasm-apps/open；每一种失败都要给出下一步，
+  // 打开走本机路由 POST /api/zeokeel/wasm-apps/open；每一种失败都要给出下一步，
   // 不能混成一句"打开失败"。
   'appCenter.openNotSignedIn': '打开失败：客户端尚未登录，请先登录再打开应用',
   'appCenter.openNotSignedInHint': '登录后重试；应用只在已登录的客户端里可用（不再有浏览器访问方式）',

@@ -28,7 +28,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-ldap/ldap/v3"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // ---------------------------------------------------------------------------

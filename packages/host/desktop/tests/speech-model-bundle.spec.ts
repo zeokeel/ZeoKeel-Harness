@@ -101,7 +101,7 @@ describe('bundled speech model → upstream config', () => {
     writePayload()
     const resolved = resolveBundledSpeechModel({ resourcesPath: resources })!
     const config = {
-      dataRoot: '/home/probe/.picoaide-harness/speech-to-text/sensevoice',
+      dataRoot: '/home/probe/.zeokeel-harness/speech-to-text/sensevoice',
       modelDirectory: resolved.modelDirectory,
       vadModelPath: resolved.vadPath,
     }

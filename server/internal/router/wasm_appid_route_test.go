@@ -57,11 +57,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	wasmregistry "github.com/picoaide/picoaide/internal/wasmapp/registry"
+	wasmregistry "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // routeProbeHeader 携带"这一请求被哪条路由模板匹配"（未命中任何路由时为空）。
-const routeProbeHeader = "X-Picoaide-Route-Probe"
+const routeProbeHeader = "X-ZeoKeel-Route-Probe"
 
 // buildRouteProbeRouter 组装**真实生产路由树** + 真实 gin 匹配 + NoRoute 标记。
 //
@@ -388,7 +388,7 @@ func TestWasmStaticSegmentAppIDsRejectedOnWriteSide(t *testing.T) {
 		}
 	}
 	// 合法 app_id 不受影响（对照集）。
-	for _, ok := range []string{"myapp", "expense-note", "hello-picoaide", "app1"} {
+	for _, ok := range []string{"myapp", "expense-note", "hello-zeokeel", "app1"} {
 		if aerr := wasmregistry.ValidateAppID(ok, nil); aerr != nil {
 			t.Errorf("合法 app_id %q 被误拒：%v", ok, aerr)
 		}
@@ -414,7 +414,7 @@ func TestWasmAppIDRoutesAreReachableForAcceptedIDs(t *testing.T) {
 		candidates = append(candidates, seg)
 	}
 	sort.Strings(candidates)
-	candidates = append(candidates, "myapp", "expense-note", "app1", "hello-picoaide")
+	candidates = append(candidates, "myapp", "expense-note", "app1", "hello-zeokeel")
 
 	shadowed := 0
 	for _, id := range candidates {

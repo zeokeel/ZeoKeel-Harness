@@ -1,4 +1,4 @@
-# @picoaide/dsh-foot-menu
+# @zeokeel/dsh-foot-menu
 
 侧边栏底部的**并道行**：一个 `⋯ 更多` 行 + 向上浮层。它本身不拥有任何面板、路由或数据面，
 只拥有"底部功能区的一个座位"和一张**登记表**。
@@ -21,7 +21,7 @@
 
 ## 契约
 
-客户端半边提供 Cordis 服务 `picoFootMenu`（`ctx.provide('picoFootMenu', …)`）：
+客户端半边提供 Cordis 服务 `zeokeelFootMenu`（`ctx.provide('zeokeelFootMenu', …)`）：
 
 ```ts
 interface FootMenuEntry {
@@ -40,14 +40,14 @@ interface FootMenuService {
 }
 ```
 
-消费者：用 `import type {} from '@picoaide/dsh-foot-menu/client'` 取类型（**绝不**运行时
-import 本包），并且**不要**把 `'picoFootMenu'` 写进自己的 `inject`：提供它的这一行可以被
+消费者：用 `import type {} from '@zeokeel/dsh-foot-menu/client'` 取类型（**绝不**运行时
+import 本包），并且**不要**把 `'zeokeelFootMenu'` 写进自己的 `inject`：提供它的这一行可以被
 渠道覆盖层 / `$DSH_HOME/cordis.patch.yml` 禁用，硬 inject 会让整条 fiber 永久 pending
 （无报错）。条目从**子 fiber** 登记，只有它等服务到位：
 
 ```ts
-ctx.inject(['picoFootMenu'], (scope: ClientContext) => {
-  scope.effect(() => scope.picoFootMenu.add({ id, order, title, activate, attention, attentionTitle }),
+ctx.inject(['zeokeelFootMenu'], (scope: ClientContext) => {
+  scope.effect(() => scope.zeokeelFootMenu.add({ id, order, title, activate, attention, attentionTitle }),
     '<pkg>: foot menu entry')
 })
 ```
@@ -60,7 +60,7 @@ ctx.inject(['picoFootMenu'], (scope: ClientContext) => {
 
 槽位 list 能把多个占用者排成**多行**，却不能把它们合并进**一行** —— 而改造的诉求正是
 "一行 + 浮层"。条目还要跨 bundle 传递（每个插件是一个独立的客户端 bundle），
-客户端 Cordis 服务是跨 bundle 的**唯一**通道：`@picoaide/dsh-panel-surface` 会被内联进
+客户端 Cordis 服务是跨 bundle 的**唯一**通道：`@zeokeel/dsh-panel-surface` 会被内联进
 每个 bundle，模块级单例在浏览器里根本不是同一份。
 
 ReactNode 不过界：条目只带数据，图标由本包的 glyph 表按 `id` 提供（未登记的 id 走兜底图形）。
@@ -86,4 +86,4 @@ ReactNode 不过界：条目只带数据，图标由本包的 glyph 表按 `id` 
 | `src/client/FootMenuRow.tsx` | 「更多」行 + 向上浮层 |
 | `src/client/glyphs.tsx` | 面板图标（自被替换的 trigger 逐字搬来）+ 「更多」/✓/chevron/兜底；官方 schedule 无图标时用兜底 |
 | `src/client/locales.ts` | zh（key 源）+ en 镜像 |
-| `src/client/index.ts` | 字典 + 提供 `picoFootMenu` + 注册唯一槽位占用者 |
+| `src/client/index.ts` | 字典 + 提供 `zeokeelFootMenu` + 注册唯一槽位占用者 |

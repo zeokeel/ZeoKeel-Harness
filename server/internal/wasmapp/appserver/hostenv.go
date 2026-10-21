@@ -1,9 +1,9 @@
 package appserver
 
 import (
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
-	"github.com/picoaide/picoaide/internal/wasmapp/logbuf"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/logbuf"
 )
 
 // assetsAdapter 把内存资源集（assets.Set）适配成 capapi.Assets。

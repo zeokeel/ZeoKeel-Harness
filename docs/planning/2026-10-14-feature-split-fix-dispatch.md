@@ -5,7 +5,7 @@
 
 ## 0. 口径与纪律
 
-- **集成线**：`feat/p0-integration`（worktree `/data/picoaide-harness/temp/p0-integration/wt`），draft PR **#181**。
+- **集成线**：`feat/p0-integration`（worktree `/data/zeokeel-harness/temp/p0-integration/wt`），draft PR **#181**。
 - **四路修复分支**在各自 worktree，**均已提交、均未 push**（不要 push；回收由集成线统一做）。
 - **退出码口径**：本文件所有验收命令，未特别说明者都要求 **exit 0**；变异/反证项要求 **exit ≠ 0**（且必须是**新判据**变红，不是环境红）。
 - **提交纪律**：`git commit -m "..." -- <只列本次改的路径>`（部分提交，防卷进他人暂存）；不 `stash`/`reset` 他人改动；不 push。
@@ -44,9 +44,9 @@
 - **验收**（在 `temp/p1b-conditionalize/wt`）：
   ```bash
   yarn prebuild
-  yarn workspace @picoaide/dsh-wasm-apps-host test   # exit 0
-  yarn workspace @picoaide/dsh-wasm-apps test        # exit 0
-  yarn workspace @picoaide/dsh-enterprise test       # exit 0（依赖 D-03 的夹具修复）
+  yarn workspace @zeokeel/dsh-wasm-apps-host test   # exit 0
+  yarn workspace @zeokeel/dsh-wasm-apps test        # exit 0
+  yarn workspace @zeokeel/dsh-enterprise test       # exit 0（依赖 D-03 的夹具修复）
   ```
 - **反证**：把任一常量改回 `internal/wasmapp/limits` ⇒ 对应 spec 必须红（否则说明判据没真读那个常量）。
 
@@ -61,8 +61,8 @@
 - **验收**（在 `temp/p0-integration/wt`，串行）：
   ```bash
   yarn prebuild
-  yarn workspace @picoaide/dsh-enterprise build     # 先（account-card 依赖它的产物）
-  yarn workspace @picoaide/dsh-account-card check   # exit 0（build + vitest run）
+  yarn workspace @zeokeel/dsh-enterprise build     # 先（account-card 依赖它的产物）
+  yarn workspace @zeokeel/dsh-account-card check   # exit 0（build + vitest run）
   ```
 - **反证**：改回旧路径 ⇒ `Cannot find module .../packages/capability-center/...`（exit ≠ 0）。
 
@@ -73,7 +73,7 @@
 - **验收**（在 `temp/fix-mount-flake/wt`）：
   ```bash
   yarn prebuild
-  yarn workspace @picoaide/dsh-enterprise test      # exit 0，failed = 0
+  yarn workspace @zeokeel/dsh-enterprise test      # exit 0，failed = 0
   ```
 - **集成注意**：本项**只能靠合入 `fix-mount-flake` 进入集成线**；合入后必须在 `p0-integration` 上再跑一次 `yarn check` 复验。
 
@@ -109,7 +109,7 @@
 - **验收**：
   ```bash
   yarn prebuild
-  yarn workspace @picoaide/dsh-enterprise test      # exit 0
+  yarn workspace @zeokeel/dsh-enterprise test      # exit 0
   ```
 - **反证（两条，二选一即可复现）**：
   - 把 `capability-center/src/host/skill-install.ts` 的 `Math.max(0, now - st.mtimeMs)` 改回 `now - st.mtimeMs` ⇒ 新的边界判据必须红；
@@ -130,7 +130,7 @@
 1. 先在 `temp/p0-integration/wt` 落 D-02（基线红 1，独立小提交）。
 2. 依次合入四路（建议顺序：`p1b-conditionalize` → `fix-mount-flake` → `p3-webadmin-variant` → `p2-client-variant-pack`）：
    ```bash
-   cd /data/picoaide-harness/temp/p0-integration/wt
+   cd /data/zeokeel-harness/temp/p0-integration/wt
    git merge --no-ff <branch>       # 冲突按"保留判据在案"原则解，禁止弱化断言
    ```
    - 每合一路后跑**受影响包**的 `yarn check:fast`（exit 0）。
@@ -151,12 +151,12 @@
 
 ```bash
 # 1) node_modules：worktree 自带的 ../.yarn/cache 只有 185 个包（不全）⇒ 需先播种完整离线镜像
-cp -al /data/picoaide-harness/.yarn/cache/. <worktree>/.yarn/cache/      # 同盘硬链接，不占空间
+cp -al /data/zeokeel-harness/.yarn/cache/. <worktree>/.yarn/cache/      # 同盘硬链接，不占空间
 # 2) yarn 的全局目录在 /root 下不可写 ⇒ 必须给一个可写的 HOME
-cd <worktree> && HOME=/data/picoaide-harness/.yarn-home corepack yarn install --immutable   # exit 0
+cd <worktree> && HOME=/data/zeokeel-harness/.yarn-home corepack yarn install --immutable   # exit 0
 # 3) 子模块：worktree 默认未 init，且**不能**从 GitHub 拉 ⇒ 用本地检出克隆（并把 origin 改回权威 URL）
 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=submodule.deepseek-harness.url \
-  GIT_CONFIG_VALUE_0=/data/picoaide-harness/deepseek-harness \
+  GIT_CONFIG_VALUE_0=/data/zeokeel-harness/deepseek-harness \
   git -c protocol.file.allow=always submodule update --init --recursive
 git -C deepseek-harness remote set-url origin https://github.com/deepseek-ai/deepseek-harness.git
 ```
@@ -167,10 +167,10 @@ git -C deepseek-harness remote set-url origin https://github.com/deepseek-ai/dee
 
 | 项 | 判据（命令） | 结果 |
 |---|---|---|
-| D-01a | `yarn workspace @picoaide/dsh-wasm-apps-host test` | ✅ exit 0，30 files / **394 passed** |
-| D-01b | `yarn workspace @picoaide/dsh-wasm-apps test` | ✅ exit 0，27 files / **456 passed** |
-| D-02 | `yarn workspace @picoaide/dsh-account-card check` | ✅ exit 0，14 files / **87 passed**（build 也过） |
-| D-03/D-06 | `yarn workspace @picoaide/dsh-enterprise test` | ✅ exit 0，105 passed + 1 skipped / **1145 passed，0 failed**（222 条 ctx.inject 夹具红已消失） |
+| D-01a | `yarn workspace @zeokeel/dsh-wasm-apps-host test` | ✅ exit 0，30 files / **394 passed** |
+| D-01b | `yarn workspace @zeokeel/dsh-wasm-apps test` | ✅ exit 0，27 files / **456 passed** |
+| D-02 | `yarn workspace @zeokeel/dsh-account-card check` | ✅ exit 0，14 files / **87 passed**（build 也过） |
+| D-03/D-06 | `yarn workspace @zeokeel/dsh-enterprise test` | ✅ exit 0，105 passed + 1 skipped / **1145 passed，0 failed**（222 条 ctx.inject 夹具红已消失） |
 | D-01 反证 | 把 `appcfg-contract.ts:302` 的 `LIMITS_GO_REPO_PATH` 改回旧家 `server/internal/wasmapp/limits/limits.go` | ✅ **exit 1**（5 条 FAIL：limits.go 读不到 / app_id 形态 / 版本号形态 / 白名单上限 / .wasm 体积上限）；恢复后 exit 0（23 passed） |
 | 根守卫 | `node scripts/check-root-guards.mjs` | ✅ **17/17 PASS**（修好子模块 origin 之后） |
 | 域守卫 | `node scripts/check-no-real-domains.mjs` | ✅ exit 0（含 `origin/master..HEAD` 40 条提交信息零命中） |

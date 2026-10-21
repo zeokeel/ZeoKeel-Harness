@@ -3,7 +3,7 @@ package main
 // R15C-R-03（审计 2026-09-25，P2）的判据：已废除配置必须在**启动期**吵。
 //
 // 设计承诺（明文）：`docs/planning/2026-09-19-wasm-client-only-design.md` §12 ——
-// 「`.env`/`settings` 里残留的 `PICOAI_APPS_BASE_DOMAIN`/`wasm.apps_base_domain`
+// 「`.env`/`settings` 里残留的 `ZEOKEEL_APPS_BASE_DOMAIN`/`wasm.apps_base_domain`
 // 现在**静默失效**，**启动要 warn 并给清理命令**」；`docs/deploy/AI-DEPLOY.md`
 // 的"存量部署清理"节也写着「启动期会打一条 warn 提醒」。
 //
@@ -45,8 +45,8 @@ func stubSettingReader(t *testing.T, value string, ok bool, err error) {
 }
 
 func TestDeprecatedEnvIsWarnedWithCleanup(t *testing.T) {
-	t.Setenv("PICOAI_APPS_BASE_DOMAIN", "apps.example.com")
-	t.Setenv("PICOAI_TRUSTED_PROXIES_EXPLICIT", "1")
+	t.Setenv("ZEOKEEL_APPS_BASE_DOMAIN", "apps.example.com")
+	t.Setenv("ZEOKEEL_TRUSTED_PROXIES_EXPLICIT", "1")
 	stubSettingReader(t, "", false, nil) // settings 侧无残留
 	logs := captureLegacyLog(t)
 
@@ -56,11 +56,11 @@ func TestDeprecatedEnvIsWarnedWithCleanup(t *testing.T) {
 	out := logs.String()
 	for _, want := range []string{
 		"WARNING: deprecated configuration still set",
-		"PICOAI_APPS_BASE_DOMAIN",
-		"PICOAI_TRUSTED_PROXIES_EXPLICIT",
+		"ZEOKEEL_APPS_BASE_DOMAIN",
+		"ZEOKEEL_TRUSTED_PROXIES_EXPLICIT",
 		"no longer read",                             // 已废除
 		"Replacement:",                               // 替代项
-		"sed -i '/^PICOAI_APPS_BASE_DOMAIN=/d' .env", // 可执行清理命令
+		"sed -i '/^ZEOKEEL_APPS_BASE_DOMAIN=/d' .env", // 可执行清理命令
 		"docs/deploy/AI-DEPLOY.md",                   // 在哪份文档
 	} {
 		if !strings.Contains(out, want) {
@@ -93,11 +93,11 @@ func TestDeprecatedEnvAbsentIsQuiet(t *testing.T) {
 // `os.Getenv` 会把"显式设为空串"和"没设置"混为一谈，而**残留就是残留**（空值同样
 // 说明还有人按旧文档在配）—— 因此判定必须用 LookupEnv。
 func TestDeprecatedEnvEmptyValueStillWarns(t *testing.T) {
-	t.Setenv("PICOAI_TRUSTED_PROXIES_EXPLICIT", "")
+	t.Setenv("ZEOKEEL_TRUSTED_PROXIES_EXPLICIT", "")
 	stubSettingReader(t, "", false, nil)
 	logs := captureLegacyLog(t)
 	hits := warnLegacyConfig(nil)
-	if hits < 1 || !strings.Contains(logs.String(), "PICOAI_TRUSTED_PROXIES_EXPLICIT") {
+	if hits < 1 || !strings.Contains(logs.String(), "ZEOKEEL_TRUSTED_PROXIES_EXPLICIT") {
 		t.Fatalf("设为空串的废除 env 同样是残留（必须用 LookupEnv 判定）, hits=%d 日志:\n%s",
 			hits, logs.String())
 	}

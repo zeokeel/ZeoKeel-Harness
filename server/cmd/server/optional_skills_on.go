@@ -8,12 +8,12 @@ package main
 import (
 	"log"
 
-	"github.com/picoaide/picoaide/internal/agentshare"
-	"github.com/picoaide/picoaide/internal/capabilities"
-	"github.com/picoaide/picoaide/internal/marketplace"
-	"github.com/picoaide/picoaide/internal/router"
-	"github.com/picoaide/picoaide/internal/sharedskills"
-	"github.com/picoaide/picoaide/internal/skillseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/agentshare"
+	"github.com/zeokeel/zeokeel-harness/server/internal/capabilities"
+	"github.com/zeokeel/zeokeel-harness/server/internal/marketplace"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillseed"
 )
 
 // buildSkillSeedHandlers 加载镜像内置技能目录并构造下发 handler。

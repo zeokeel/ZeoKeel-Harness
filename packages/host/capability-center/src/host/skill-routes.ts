@@ -3,28 +3,28 @@
  * `packages/host/enterprise/src/auth-gate.ts` 的四处路由块逐字搬出。
  *
  * 搬它的**唯一**目的：让"关掉技能商店 ⇒ 它的代码不进产物"在依赖图上成立。此前
- * 四条本机路由住在 `@picoaide/dsh-enterprise`（必需包）里，模块再怎么关，
+ * 四条本机路由住在 `@zeokeel/dsh-enterprise`（必需包）里，模块再怎么关，
  * 这一整块（1,088 行 = auth-gate 的 34.6%）照样进 app.asar。
  *
  * ## 行为零变化
  *
  * 路由路径、方法分发、状态码、错误码、文案键**逐字不变** —— 搬的只是"谁来注册"。
  * 围栏（回环 + 同源 + 持有性证明）、网关客户端、语言解析都不在这里重新实现：它们
- * 由 auth-gate 经 `ctx.provide('picoLocalRoutes', …)` 交出**同一批闭包**，
+ * 由 auth-gate 经 `ctx.provide('zeokeelLocalRoutes', …)` 交出**同一批闭包**，
  * 本模块只做结构探测后调用（与 `wasm-apps-host/src/session.ts` 探测
- * `picoSession` 同形）。**不要**把任何围栏判定复制一份进来：那是第二真源，
+ * `zeokeelSession` 同形）。**不要**把任何围栏判定复制一份进来：那是第二真源，
  * 而这里判的是信任边界。
  *
- * @module @picoaide/dsh-capability-center/host/skill-routes
+ * @module @zeokeel/dsh-capability-center/host/skill-routes
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { hostCopy, type HostLocale } from '@picoaide/dsh-host-locale'
-import { ApiError, AuthError, fetchJSON, gatewayFetch, normalizeServerURL, PASSWORD_CHANGE_REQUIRED_CODE } from '@picoaide/dsh-gateway-client/auth'
-import type { Session } from '@picoaide/dsh-gateway-client/config'
+import { hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
+import { ApiError, AuthError, fetchJSON, gatewayFetch, normalizeServerURL, PASSWORD_CHANGE_REQUIRED_CODE } from '@zeokeel/dsh-gateway-client/auth'
+import type { Session } from '@zeokeel/dsh-gateway-client/config'
 import { MAX_ARCHIVE_BYTES } from './archive-util.ts'
 import {
   describeArchiveFailure,
@@ -70,7 +70,7 @@ const UPLOAD_BODY_BYTES = 24 * 1024 * 1024
  * 兜底"),于是本地已装 v1、远端已发布 v2 时也永不出现更新入口。
  *
  * 版本事实在磁盘上确实存在——`agent-preset-install.ts` 的安装器与技能走
- * 同一套落盘:`.picoaide/release.json`(provenance),旧安装回落
+ * 同一套落盘:`.zeokeel/release.json`(provenance),旧安装回落
  * `.install-version` 标记。preset.yml 没有 version 字段,故没有第三层兜底:
  * 读不到就返回 undefined,让客户端保守判 false(宁可不提示,不可误报)。
  * @param presetDir - 一个已安装 preset 的目录。
@@ -260,8 +260,8 @@ function skillInstallLogForHost(ctx: Context): SkillInstallLog {
 }
 
 /**
- * 本机路由共用的**围栏与出口**：由 `@picoaide/dsh-enterprise/auth-gate` 的
- * `apply()` 经服务 `picoLocalRoutes` 交出（唯一实现，见模块头注释）。
+ * 本机路由共用的**围栏与出口**：由 `@zeokeel/dsh-enterprise/auth-gate` 的
+ * `apply()` 经服务 `zeokeelLocalRoutes` 交出（唯一实现，见模块头注释）。
  *
  * 结构类型而非 import：指向 auth-gate 会闭合出
  * `desktop → wasm-apps-host → enterprise → desktop` 这个构建环，而这一批原语
@@ -307,7 +307,7 @@ export interface SkillRoute {
  *
  * 拆分"构造"与"注册"是为了让判据能直接拿到路由对象 —— 与
  * `wasm-apps.ts` 的 `createWasmAppsRoute()` 同一形状。
- * @param ctx - Host 上下文（用 logger 与 picoSession）。
+ * @param ctx - Host 上下文（用 logger 与 zeokeelSession）。
  * @param fence - 共用的围栏与出口（见 {@link HostLocalRouteFence}）。
  * @returns 四条 prefix 路由，顺序与搬出前一致。
  */
@@ -357,12 +357,12 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
     json(res, upstream.status, { error: 'gateway error' })
   }
   const registrations: SkillRoute[] = [
-      // Skill store proxy: /api/pico/skills (catalog), /archive (download),
+      // Skill store proxy: /api/zeokeel/skills (catalog), /archive (download),
       // and /install (verify + unpack into the user skill root), all
       // forwarded to the gateway. Method dispatch lives inside one handler:
       // the route table has no per-method matching.
     {
-        kind: 'prefix', path: '/api/pico/skills',
+        kind: 'prefix', path: '/api/zeokeel/skills',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (!guard(req, res)) return
           // r7c-6(P2):写面(install/upload/uninstall)要求持有性证明,与 login 同口径。
@@ -392,7 +392,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
            * 归属（`localOwnership`）是**本路由算不出来的**：技能库是机器作用域的
            * （`<DSH_HOME>/skills`，不按账号分目录），而"这一份算不算当前账号的"要靠
            * 聚合面那次 `/api/client/v2/capabilities?source=own` 的匹配（见
-           * `/api/pico/capabilities` 里 `localOwnership` 的注释）—— 卸载是纯本地操作，
+           * `/api/zeokeel/capabilities` 里 `localOwnership` 的注释）—— 卸载是纯本地操作，
            * 不出网，所以由面板把那个事实带过来（与 `?overwrite=1` 同一条既有模式：
            * 面板给"宿主单独判不出的那个事实"）。
            *
@@ -423,7 +423,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             })
           }
           const localOwnership = ownershipHint === 'unknown' ? 'unknown' as const : undefined
-          if (pathname === '/api/pico/skills' && req.method === 'GET') {
+          if (pathname === '/api/zeokeel/skills' && req.method === 'GET') {
             try {
               const data = await fetchJSON(s.serverURL, '/api/client/v2/marketplace/skills', { token: s.token, locale: hostLocale(req) })
               // Augment the gateway catalog with the locally installed skill
@@ -447,7 +447,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
           // 对照 → 整树安全解包 → <dshHome>/skills），只换下载地址与来源标记。
           // 默认**不自动安装**：员工在能力中心点一次；清单里带 installed，界面
           // 据此显示「安装 / 已安装 / 更新到 vX」。
-          if (pathname === '/api/pico/skills/builtin' && req.method === 'GET') {
+          if (pathname === '/api/zeokeel/skills/builtin' && req.method === 'GET') {
             try {
               const data = await fetchJSON(s.serverURL, '/api/client/v2/skills/builtin', { token: s.token, locale: hostLocale(req) })
               const installed = await listInstalledSkills(resolveSkillsDir())
@@ -469,7 +469,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
           const builtinInstallMatch = req.method === 'POST'
-            ? /^\/api\/pico\/skills\/builtin\/([^/]+)\/install$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/skills\/builtin\/([^/]+)\/install$/u.exec(pathname)
             : null
           if (builtinInstallMatch !== null) {
             const name = decodePathSegment(builtinInstallMatch[1])
@@ -535,12 +535,12 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             }
             return
           }
-          // POST /api/pico/skills/builtin/:name/uninstall -> local removal.
+          // POST /api/zeokeel/skills/builtin/:name/uninstall -> local removal.
           // 审计 2026-09-23 A6：内置技能此前**只能装不能卸**（没有这条路由），
           // 装完在「我的」里变成一张本地卡、只有「上传」按钮，产品内没有任何
           // 入口能移除它。与市场卸载同口径：本地删除 + 来源校验 + 显式确认。
           const builtinUninstallMatch = req.method === 'POST'
-            ? /^\/api\/pico\/skills\/builtin\/([^/]+)\/uninstall$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/skills\/builtin\/([^/]+)\/uninstall$/u.exec(pathname)
             : null
           if (builtinUninstallMatch !== null) {
             const name = decodePathSegment(builtinUninstallMatch[1])
@@ -572,7 +572,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
           const installMatch = req.method === 'POST'
-            ? /^\/api\/pico\/skills\/([^/]+)\/install$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/skills\/([^/]+)\/install$/u.exec(pathname)
             : null
           if (installMatch !== null) {
             const name = decodePathSegment(installMatch[1])
@@ -635,7 +635,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
           const uninstallMatch = req.method === 'POST'
-            ? /^\/api\/pico\/skills\/([^/]+)\/uninstall$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/skills\/([^/]+)\/uninstall$/u.exec(pathname)
             : null
           if (uninstallMatch !== null) {
             const name = decodePathSegment(uninstallMatch[1])
@@ -670,7 +670,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
           const archiveMatch = req.method === 'GET'
-            ? /^\/api\/pico\/skills\/([^/]+)\/archive$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/skills\/([^/]+)\/archive$/u.exec(pathname)
             : null
           if (archiveMatch === null) return json(res, 404, { error: 'not found' })
           const name = decodePathSegment(archiveMatch[1])
@@ -724,13 +724,13 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
         },
     },
 
-      // Shared-agent proxy: /api/pico/agent-presets (list + upload + install
+      // Shared-agent proxy: /api/zeokeel/agent-presets (list + upload + install
       // + uninstall + archive). Uploads pack a locally authored preset (the
       // 创造模式 roster's user root) and forward the archive to the gateway;
       // installs download an approved archive, verify it, and unpack it into
       // the same root so the upstream roster discovers it.
     {
-        kind: 'prefix', path: '/api/pico/agent-presets',
+        kind: 'prefix', path: '/api/zeokeel/agent-presets',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (!guard(req, res)) return
           // r7c-6(P2):写面(install/upload/uninstall)要求持有性证明,与 login 同口径。
@@ -745,7 +745,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
           /**
            * 覆盖/删除本机自制内容的显式确认标记（审计 2026-09-23 N2）。
            *
-           * 与技能侧**同一份契约**（`/api/pico/skills*`、`/api/pico/shared-skills*`）：
+           * 与技能侧**同一份契约**（`/api/zeokeel/skills*`、`/api/zeokeel/shared-skills*`）：
            * 面板只在用户点过确认条 / 卸载第二段确认之后才把 `?overwrite=1` 拼进 URL。
            * 此前这条路由**不读任何 query**，而 `installPresetArchive` 对已存在目录
            * 一律拒收 ⇒ 面板的「更新智能体」必然失败（`preset "x" already exists locally`），
@@ -753,8 +753,8 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
            */
           const overwrite = new URL(req.url ?? '/', 'http://localhost').searchParams.get('overwrite') === '1'
 
-          // GET /api/pico/agent-presets -> gateway catalog + installed + local.
-          if (pathname === '/api/pico/agent-presets' && req.method === 'GET') {
+          // GET /api/zeokeel/agent-presets -> gateway catalog + installed + local.
+          if (pathname === '/api/zeokeel/agent-presets' && req.method === 'GET') {
             try {
               const data = await fetchJSON(s.serverURL, '/api/client/v2/agent-presets', { token: s.token, locale: hostLocale(req) })
               const installed = await listInstalledPresets(presetsDir)
@@ -771,8 +771,8 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
 
-          // POST /api/pico/agent-presets/upload { name } -> pack + gateway.
-          if (pathname === '/api/pico/agent-presets/upload' && req.method === 'POST') {
+          // POST /api/zeokeel/agent-presets/upload { name } -> pack + gateway.
+          if (pathname === '/api/zeokeel/agent-presets/upload' && req.method === 'POST') {
             // 审计 2026-08-25 P2-2:body 上限(本地 body 仅元数据,24MB 兼容上限)。
             const raw = await collectBody(req, UPLOAD_BODY_BYTES).catch(() => null)
             if (raw === null) return json(res, 413, { error: 'body too large' })
@@ -831,9 +831,9 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
 
-          // POST /api/pico/agent-presets/:name/install -> download + verify + unpack.
+          // POST /api/zeokeel/agent-presets/:name/install -> download + verify + unpack.
           const installMatch = req.method === 'POST'
-            ? /^\/api\/pico\/agent-presets\/([^/]+)\/install$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/agent-presets\/([^/]+)\/install$/u.exec(pathname)
             : null
           if (installMatch !== null) {
             const name = decodePathSegment(installMatch[1])
@@ -884,9 +884,9 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
 
-          // POST /api/pico/agent-presets/:name/uninstall -> local removal.
+          // POST /api/zeokeel/agent-presets/:name/uninstall -> local removal.
           const uninstallMatch = req.method === 'POST'
-            ? /^\/api\/pico\/agent-presets\/([^/]+)\/uninstall$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/agent-presets\/([^/]+)\/uninstall$/u.exec(pathname)
             : null
           if (uninstallMatch !== null) {
             const name = decodePathSegment(uninstallMatch[1])
@@ -906,9 +906,9 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
 
-          // GET /api/pico/agent-presets/:name/archive -> passthrough download.
+          // GET /api/zeokeel/agent-presets/:name/archive -> passthrough download.
           const archiveMatch = req.method === 'GET'
-            ? /^\/api\/pico\/agent-presets\/([^/]+)\/archive$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/agent-presets\/([^/]+)\/archive$/u.exec(pathname)
             : null
           if (archiveMatch === null) return json(res, 404, { error: 'not found' })
           const name = decodePathSegment(archiveMatch[1])
@@ -957,13 +957,13 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
         },
     },
 
-      // Shared-skill proxy: /api/pico/shared-skills (list + upload + install
+      // Shared-skill proxy: /api/zeokeel/shared-skills (list + upload + install
       // + uninstall). Lists the gateway's shared store (approved versions),
       // the local skill root (disk), and the installed set; uploads pack a
       // locally authored skill directory and forward it; installs download an
       // approved archive, verify it, and unpack it into the user skill root.
     {
-        kind: 'prefix', path: '/api/pico/shared-skills',
+        kind: 'prefix', path: '/api/zeokeel/shared-skills',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (!guard(req, res)) return
           // r7c-6(P2):写面(install/upload/uninstall)要求持有性证明,与 login 同口径。
@@ -975,11 +975,11 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
           }
           const sharedUrl = new URL(req.url ?? '/', 'http://localhost')
           const pathname = sharedUrl.pathname
-          // 显式覆盖确认标记：审计 A2/A3/A15 的两端契约，见 /api/pico/skills 分支的注释。
+          // 显式覆盖确认标记：审计 A2/A3/A15 的两端契约，见 /api/zeokeel/skills 分支的注释。
           const overwrite = sharedUrl.searchParams.get('overwrite') === '1'
           const skillsDir = resolveSkillsDir()
 
-          if (pathname === '/api/pico/shared-skills' && req.method === 'GET') {
+          if (pathname === '/api/zeokeel/shared-skills' && req.method === 'GET') {
             try {
               const data = await fetchJSON(s.serverURL, '/api/client/v2/shared-skills', { token: s.token, locale: hostLocale(req) })
               const installed = await listInstalledSkills(skillsDir)
@@ -996,7 +996,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
 
-          if (pathname === '/api/pico/shared-skills/upload' && req.method === 'POST') {
+          if (pathname === '/api/zeokeel/shared-skills/upload' && req.method === 'POST') {
             // 审计 2026-08-25 P2-2:body 上限(本地 body 仅元数据,24MB 兼容上限)。
             const raw = await collectBody(req, UPLOAD_BODY_BYTES).catch(() => null)
             if (raw === null) return json(res, 413, { error: 'body too large' })
@@ -1055,9 +1055,9 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
 
-          // POST /api/pico/shared-skills/:name/:version/install -> download + verify + unpack.
+          // POST /api/zeokeel/shared-skills/:name/:version/install -> download + verify + unpack.
           const installMatch = req.method === 'POST'
-            ? /^\/api\/pico\/shared-skills\/([^/]+)\/([^/]+)\/install$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/shared-skills\/([^/]+)\/([^/]+)\/install$/u.exec(pathname)
             : null
           if (installMatch !== null) {
             const name = decodePathSegment(installMatch[1])
@@ -1118,16 +1118,16 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return
           }
 
-          // POST /api/pico/shared-skills/:name/:version/uninstall -> local removal.
+          // POST /api/zeokeel/shared-skills/:name/:version/uninstall -> local removal.
           const uninstallMatch = req.method === 'POST'
-            ? /^\/api\/pico\/shared-skills\/([^/]+)\/([^/]+)\/uninstall$/u.exec(pathname)
+            ? /^\/api\/zeokeel\/shared-skills\/([^/]+)\/([^/]+)\/uninstall$/u.exec(pathname)
             : null
           if (uninstallMatch !== null) {
             const name = decodePathSegment(uninstallMatch[1])
             if (name === null) return json(res, 400, { error: 'invalid path encoding', code: 'INVALID_PATH' })
             // 名字先于安装器校验（R4-B-6）：另外三条写面
-            // （`/api/pico/skills/:name/{install,uninstall}`、
-            // `/api/pico/skills/builtin/:name/{install,uninstall}`）都在进安装器**之前**
+            // （`/api/zeokeel/skills/:name/{install,uninstall}`、
+            // `/api/zeokeel/skills/builtin/:name/{install,uninstall}`）都在进安装器**之前**
             // 校验名字并回 400 —— 只有这一条把校验留给 `uninstallSkill`
             // 内部抛，于是同一个客户端面板对同一类输入看到 422 + code（走
             // `describeArchiveFailure` 的 typed 分支）。非法名是**请求有问题**，
@@ -1166,13 +1166,13 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
         },
     },
 
-      // Capability catalog proxy: /api/pico/capabilities (list).
+      // Capability catalog proxy: /api/zeokeel/capabilities (list).
       // Aggregates the gateway's unified catalog (market skills + org shared
       // skills + shared agents) and unions local-disk state: installed set,
       // installed version (best-effort from frontmatter/metadata), and the
       // locally authored rows (for the 「我的」 partition).
     {
-        kind: 'prefix', path: '/api/pico/capabilities',
+        kind: 'prefix', path: '/api/zeokeel/capabilities',
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (!guard(req, res)) return
           // r7c-6(P2):写面(install/upload/uninstall)要求持有性证明,与 login 同口径。
@@ -1183,7 +1183,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             return json(res, 403, { error: 'auditor cannot modify' })
           }
           const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
-          if (pathname !== '/api/pico/capabilities' || req.method !== 'GET') {
+          if (pathname !== '/api/zeokeel/capabilities' || req.method !== 'GET') {
             return json(res, 404, { error: 'not found' })
           }
           const url = new URL(req.url ?? '/', 'http://localhost')
@@ -1216,9 +1216,9 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             // 客户端 `hasUpdateFor()` 一见 undefined 就返回 false ⇒ 能力中心
             // 对共享 Agent 永远不显示「更新到 vX」。版本事实在磁盘上是有的:
             // agent-preset-install.ts 的安装器与技能一样写了
-            // `.picoaide/release.json`(provenance),这里按 kind 选 map。
+            // `.zeokeel/release.json`(provenance),这里按 kind 选 map。
             const localPresetVersions = new Map<string, string | undefined>()
-            // 溯源(D6):优先读 .picoaide/release.json(应用 ID/渠道/版本 +
+            // 溯源(D6):优先读 .zeokeel/release.json(应用 ID/渠道/版本 +
             // 安装时内容哈希),回退旧 .install-version 标记;并重算当前内容
             // 哈希判定「是否被本地修改过」。
             const provenance = new Map<string, { appId: string, channel: string, version: string, dirty: boolean, originServer?: string }>()
@@ -1251,7 +1251,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
               const mv = await readFile(marker, 'utf8').then(s => s.trim()).catch(() => undefined)
               localSkillVersions.set(r.name, mv ?? r.version)
             }
-            // 共享 Agent 同上:provenance(.picoaide/release.json)优先,回退
+            // 共享 Agent 同上:provenance(.zeokeel/release.json)优先,回退
             // `.install-version`。preset.yml 没有 version 字段,所以没有
             // 「frontmatter 兜底」这一层——读不到就留 undefined,由客户端
             // hasUpdateFor 保守判 false(宁可不提示,不可误报)。
@@ -1350,7 +1350,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
                     return await fetchJSON(s.serverURL, `/api/client/v2/capabilities?source=${source}`, { token: s.token, locale: hostLocale(req) })
                   } catch (cause) {
                     if (cause instanceof ApiError && cause.status === 404) {
-                      ctx.logger?.warn(`[pico] capabilities source=${source} is not available on this server (404); treated as empty`)
+                      ctx.logger?.warn(`[zeokeel] capabilities source=${source} is not available on this server (404); treated as empty`)
                       return { items: [] }
                     }
                     throw cause

@@ -3,7 +3,7 @@
  * stable machine code plus a human message. Codes are grouped:
  * - base taxonomy (network/timeout/not-found/...)
  * - isolation & policy (no-session/foreign-tab/...)
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 /** Machine-readable browser error codes (stable, model-facing). */

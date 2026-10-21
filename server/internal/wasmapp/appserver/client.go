@@ -3,7 +3,7 @@
 // 决策与架构：docs/decisions/2026-09-19-wasm-client-internal-origin.md。
 //
 // 模型一句话：应用只在桌面客户端内可用。客户端注册的自定义协议 handler 把
-// `picoaide-app://<app_id>/<path>` 上的请求，转成
+// `zeokeel-app://<app_id>/<path>` 上的请求，转成
 // `POST /api/client/v2/apps/wasm/:app_id/request` 的 JSON 信封送给本函数；
 // **身份由客户端注入**（它本来就持有员工会话），因此这里：
 //
@@ -22,9 +22,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/edge"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/edge"
 )
 
 // ClientScheme 是**默认**的客户端内部 origin scheme（契约 §1 第 1 条）。
@@ -36,16 +36,16 @@ import (
 // 生产路径一律读 `Options.AppScheme`（装配期由 `channel.AppOriginScheme()` 注入），
 // 本常量只在"未注入"（单元测试、本地最小装配）时生效 —— 取值与官方渠道一致，
 // 因此未注入时的行为与改造前逐字节相同。**不要**在任何生产路径直接引用它。
-const ClientScheme = "picoaide-app"
+const ClientScheme = "zeokeel-app"
 
-// PicoaideAppOrigin 返回应用的自身源（`picoaide-app://<app_id>`）。
+// ZeoKeelAppOrigin 返回应用的自身源（`zeokeel-app://<app_id>`）。
 //
 // ⚠️ 同上：这是**默认 scheme** 下的构造函数，生产路径请用 `(*Server).AppOrigin`。
 // 保留它是为了给默认值与文档一个可引用的名字（包外测试与装配的 fallback 也用它）。
 //
 // app_id 归一化规则与 registry 一致（小写）：调用方传进来的可能带空白/大写，
 // 这里统一收敛；**不做**任何其它改写（不补端口、不补路径、不去 scheme）。
-func PicoaideAppOrigin(appID string) string {
+func ZeoKeelAppOrigin(appID string) string {
 	return originFor(ClientScheme, appID)
 }
 
@@ -89,7 +89,7 @@ func (s *Server) AppOrigin(appID string) string {
 // 参数保留的理由只有两条，都是契约事实而不是习惯：①§8.2 冻结了这条显式传参的签名
 // （客户端与本机代理按它实现，改签名要跨端同批）；②`serverauth.SessionKey` 仍是
 // "吊销侧与请求侧同源"的唯一实现，删掉参数就会让它失去调用方（见 §8.2 的注释）。
-// 服务端侧**不再读它做任何判定**（归因改由客户端出站头 `X-PicoAppId` 承担，§21.4）。
+// 服务端侧**不再读它做任何判定**（归因改由客户端出站头 `X-ZeoKeelAppId` 承担，§21.4）。
 //
 // 本函数只做"身份投影 + 进入共用管线"，任何准入/执行语义都不在这里重复。
 func (s *Server) ServeClientRequest(w http.ResponseWriter, r *http.Request, appID string, user *serverstore.User, sessionKey string) {
@@ -165,7 +165,7 @@ func (s *Server) checkClientOrigin(r *http.Request, appID string) (bool, string)
 // normalizeCustomOrigin 归一化**自定义协议**的源：小写 scheme + 小写 host + 去一个尾部斜杠。
 //
 // 只做"同一源的等价形态"归一（大小写、一个尾部斜杠），**不**做任何"截到源"的操作 ——
-// `picoaide-app://other/x`、`picoaide-app://demo:8080`、`user@demo` 这类形态要么被
+// `zeokeel-app://other/x`、`zeokeel-app://demo:8080`、`user@demo` 这类形态要么被
 // edge.IsOriginShaped 拦下，要么归一化后与期望值不等（见 checkClientOrigin 的用例表）。
 func normalizeCustomOrigin(raw string) string {
 	s := strings.TrimSuffix(strings.TrimSpace(raw), "/")
@@ -215,7 +215,7 @@ func (s *Server) clientFrameUser(ctx context.Context, u *serverstore.User, app *
 	return out
 }
 
-// versionHeaderWriter 在**成功响应**（status < 400）上补 `X-PicoAide-App-Version`。
+// versionHeaderWriter 在**成功响应**（status < 400）上补 `X-ZeoKeel-App-Version`。
 //
 // 三条语义：
 //   - status < 400 才写：失败响应不该让客户端把"这一次"当成某个版本的缓存来源；

@@ -14,12 +14,12 @@ import (
 // EncPrefix marks AES-GCM encrypted values: "enc:v1:<base64(nonce+ciphertext)>".
 const EncPrefix = "enc:v1:"
 
-const masterKeyEnv = "PICOAI_MASTER_KEY"
+const masterKeyEnv = "ZEOKEEL_MASTER_KEY"
 
 // masterKeyFile is the path written by EnsureMasterKey; GetMasterKey reads it.
 var masterKeyFile string
 
-// EnsureMasterKey returns the master key: PICOAI_MASTER_KEY env when set,
+// EnsureMasterKey returns the master key: ZEOKEEL_MASTER_KEY env when set,
 // otherwise a 32-byte random key written to dataDir/master.key (0600).
 // The master key is never stored in the database.
 func EnsureMasterKey(dataDir string) ([]byte, error) {

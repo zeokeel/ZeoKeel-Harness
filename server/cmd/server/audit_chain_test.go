@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/auditchain"
+	"github.com/zeokeel/zeokeel-harness/server/internal/auditchain"
 )
 
 type auditChainCtxKey struct{}

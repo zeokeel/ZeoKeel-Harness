@@ -31,17 +31,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/bootstrap"
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/portal"
-	"github.com/picoaide/picoaide/internal/reports"
-	"github.com/picoaide/picoaide/internal/router"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/telemetry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
+	"github.com/zeokeel/zeokeel-harness/server/internal/reports"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/telemetry"
 )
 
 const r3Secret = "SUPER-SECRET-BOT-KEY"
@@ -57,7 +57,7 @@ func r3ProdRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 	gin.SetMode(gin.TestMode)
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef")
 
 	r := gin.New()
 	router.Register(r, router.Deps{
@@ -98,7 +98,7 @@ func r3Req(t *testing.T, r http.Handler, method, path, body, session, csrf strin
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if session != "" {
-		req.AddCookie(&http.Cookie{Name: "picoaide_session", Value: session})
+		req.AddCookie(&http.Cookie{Name: "zeokeel_session", Value: session})
 	}
 	if method != "GET" && csrf != "" {
 		req.Header.Set("X-CSRF-Token", csrf)

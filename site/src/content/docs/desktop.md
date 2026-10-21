@@ -190,7 +190,7 @@ Low 强制性标签）。写 DACL 需要调用者**拥有该目录或持有 WRIT
 
 | 情形 | 结果 |
 |---|---|
-| 声明进程引导变量（`PATH`、`NODE_OPTIONS`、`LD_PRELOAD`、`PYTHONPATH`、`BASH_ENV`…） | 拒收。`DSH_` / `ELECTRON_` / `PICOAIDE_` / `GIT_CONFIG_KEY_` / `GIT_CONFIG_VALUE_` 按**前缀**整族拒收 |
+| 声明进程引导变量（`PATH`、`NODE_OPTIONS`、`LD_PRELOAD`、`PYTHONPATH`、`BASH_ENV`…） | 拒收。`DSH_` / `ELECTRON_` / `ZEOKEEL_` / `GIT_CONFIG_KEY_` / `GIT_CONFIG_VALUE_` 按**前缀**整族拒收 |
 | 命令钩子族（`GIT_SSH_COMMAND`、`GIT_ASKPASS`、`BROWSER`、`LESSOPEN`、`PERL5OPT`、`JAVA_TOOL_OPTIONS`…） | 拒收：名字看起来是"配置"，值是会被**执行**的命令模板 |
 | `PAGER` / `EDITOR` / `GIT_EDITOR` 一类选择器 | 允许但**值受形状闸门约束**：只接受单个程序名形状（不允许空白与 shell 元字符），且 basename 不能是 `sh` / `python` 之类解释器 |
 | 出站目标解析到内网、保留段、回环或云元数据地址 | 拒发。解析失败一律 **fail-closed**（错误码 `resolution-failed` / `resolution-timeout` / `resolution-empty`） |
@@ -207,7 +207,7 @@ Low 强制性标签）。写 DACL 需要调用者**拥有该目录或持有 WRIT
   5xx 视为瞬时故障、保留旧凭据；**任何情况下都不会在后台替你打开浏览器**。
 - 行状态有五种：未连接 / 连接中 / 已连接 / 需要重新授权 / 错误。
 
-连接器面板是本地回环路由：`GET /api/pico/connectors` 列出，`/api/pico/connectors/<id>/<动作>`
+连接器面板是本地回环路由：`GET /api/zeokeel/connectors` 列出，`/api/zeokeel/connectors/<id>/<动作>`
 执行 `connect` / `cancel` / `auth-submit` / `state` / `disconnect` / `approve` / `deny` / `refresh`。
 **除状态轮询外的每一个动作都要求持有性证明**，拿不到就拒绝进入处理函数。
 
@@ -231,7 +231,7 @@ Low 强制性标签）。写 DACL 需要调用者**拥有该目录或持有 WRIT
 
 - 到点由 **Host 进程**投递；窗口关闭但应用仍在运行时照常触发；应用完全退出期间不触发。
 - 下次启动后，属于**当前登录账号**的到期任务会被补触发（不是全部历史）。
-- 任务目录、历史、更新与删除都按当前 Pico 账号（server + username）过滤：
+- 任务目录、历史、更新与删除都按当前 ZeoKeel 账号（server + username）过滤：
   其他账号的任务不可见、不可改，也不会被投递；未归属的历史任务在账号环境下同样不可见。
 - 应用完全退出或账号未登录期间不会向他人会话投递。
 
@@ -362,16 +362,16 @@ Agent 驱动的浏览器是一个**独立的 OS 窗口**，不是主窗口里的
 - **为什么是客户端专属**：应用窗口就是客户端里的一个独立原生窗口，用**自定义协议**
   `<scheme>://<应用 id>` 加载，页面里所有对外请求都经客户端加信封后转发给平台。
   因此**服务器不需要为应用准备任何公网入口或证书**，也不存在"应用子域"这一层。
-- **打开路径**：客户端本机路由 `POST /api/pico/wasm-apps/open`；平台侧唯一入口
+- **打开路径**：客户端本机路由 `POST /api/zeokeel/wasm-apps/open`；平台侧唯一入口
   `POST /api/client/v2/apps/wasm/:app_id/request`，带员工令牌转发执行。
 - **窗口隔离**：应用窗口跑在**按用户分区**的 session 里；导航、子帧导航与 302 重定向
   **共用同一个 origin 判据**——跨应用与外站一律拦、同应用放行。
-- **保留面**：应用页面里 `/__picoaide/` 前缀是宿主保留命名空间，目前**只有**
-  `/__picoaide/ai/chat` 一条路径存在（由客户端本地处理，绝不转发平台）；其余一律 404。
+- **保留面**：应用页面里 `/__zeokeel/` 前缀是宿主保留命名空间，目前**只有**
+  `/__zeokeel/ai/chat` 一条路径存在（由客户端本地处理，绝不转发平台）；其余一律 404。
 
 ### 访问模式
 
-应用配置 `picoaide.app.json` 的 `access` 决定谁能打开：
+应用配置 `zeokeel.app.json` 的 `access` 决定谁能打开：
 
 | 值 | 语义 |
 |---|---|
@@ -434,7 +434,7 @@ Agent 驱动的浏览器是一个**独立的 OS 窗口**，不是主窗口里的
   - 新密码至少 **10** 位，且不能与旧密码相同；
   - 改密成功后服务端会**吊销该账号的全部令牌**，本地会话随之清除，需要重新登录；
   - 管理员重置密码后可强制下次登录改密，服务端会以 `403 PASSWORD_CHANGE_REQUIRED` 拦住其它请求。
-- **退出登录**：`POST /api/pico/auth/logout`。退出后更新源消失（见上一节），各面板按新的会话身份重新解析。
+- **退出登录**：`POST /api/zeokeel/auth/logout`。退出后更新源消失（见上一节），各面板按新的会话身份重新解析。
 
 ## 更新机制
 
@@ -547,7 +547,7 @@ CLI 也拒绝操作这个 profile。第三方插件通过 profile 的**用户补
 
 | 层 | 开关 | 语义 |
 |---|---|---|
-| 真实进程环境变量 | `PICOAI_ALLOW_SYSTEM_PROXY=1` | 允许使用宿主机代理；显式 `0` / `false` 也生效（双向开关） |
+| 真实进程环境变量 | `ZEOKEEL_ALLOW_SYSTEM_PROXY=1` | 允许使用宿主机代理；显式 `0` / `false` 也生效（双向开关） |
 | 渠道包 | `desktop.allow_system_proxy: true` | 允许（只认严格布尔 `true`） |
 | 缺省 | —— | 禁止 |
 

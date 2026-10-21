@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func syncTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	// sync 测试自给自足:显式接线 DecryptSecret(此前依赖其它测试文件的
 	// 全局副作用,单独跑 sync 用例即失败)。密钥内容对假上游无意义。
 	prev := DecryptSecret
@@ -36,7 +36,7 @@ func syncTestDB(t *testing.T) *sql.DB {
 func TestSyncOnceReportsUnchanneled(t *testing.T) {
 	db, cleanup := serverstore.NewTestDB(t)
 	defer cleanup()
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	enc, err := encryptSecret("sk-test")
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +223,7 @@ func TestSyncExcludedModelNotResurrected(t *testing.T) {
 func TestSyncOnceManualProviderSkipped(t *testing.T) {
 	db, cleanup := serverstore.NewTestDB(t)
 	defer cleanup()
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	enc, err := encryptSecret("sk-test")
 	if err != nil {
 		t.Fatal(err)

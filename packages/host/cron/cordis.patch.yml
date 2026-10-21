@@ -1,7 +1,7 @@
 # Cron scheduler Host rows: the bare entry carries the package's client
 # bundle declaration (job center + settings card) and provides the
-# `picoCronService` Host service. The task board was merged into this
+# `zeokeelCronService` Host service. The task board was merged into this
 # scheduler (agent actions), so no sibling plugin consumes it anymore.
 - insert:
-    - id: pico-cron
-      name: '@picoaide/dsh-cron'
+    - id: zeokeel-cron
+      name: '@zeokeel/dsh-cron'

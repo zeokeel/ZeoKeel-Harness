@@ -20,8 +20,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/archiveutil"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/archiveutil"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // repoSkillDir 是本仓真实的内置技能**源树**目录（`server/skills/` 那一棵）。
@@ -154,7 +154,7 @@ func TestRealAssetPassesServerManifestValidation(t *testing.T) {
 		"references/diagnostics.md",
 		"examples/go/main.go",
 		"examples/go/go.mod",
-		"examples/go/picoaide.app.json",
+		"examples/go/zeokeel.app.json",
 		"examples/go/preview.mjs",
 		"examples/go/README.md",
 	} {
@@ -210,7 +210,7 @@ func TestPackEntryNameRejectsTraversalAndAbsolute(t *testing.T) {
 		"/etc/passwd":            "绝对路径",
 		"\\windows\\evil.txt":    "反斜杠绝对路径",
 		"C:\\temp\\evil.txt":     "盘符绝对路径",
-		".picoaide/release.json": "安装器溯源目录",
+		".zeokeel/release.json": "安装器溯源目录",
 	}
 	for rel, reason := range bad {
 		if _, _, err := packEntryName(rel); err == nil {
@@ -442,7 +442,7 @@ func TestCatalogDropsBrokenAssetAndRecordsProblem(t *testing.T) {
 }
 
 // 资产目录不存在不是错误（本地 `make build-server` 的二进制旁边没有
-// /opt/picoaide/skills），但清单必须是空数组而不是 null。
+// /opt/zeokeel/skills），但清单必须是空数组而不是 null。
 func TestCatalogMissingDirIsEmptyNotError(t *testing.T) {
 	c := New(filepath.Join(t.TempDir(), "nope"))
 	h := NewHandlers(c)
@@ -616,7 +616,7 @@ func TestAdminListBuiltinExplainsDirNameMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mismatch := strings.Replace(string(raw), "name: app-builder", "name: picoaide-app-builder", 1)
+	mismatch := strings.Replace(string(raw), "name: app-builder", "name: zeokeel-app-builder", 1)
 	if mismatch == string(raw) {
 		t.Fatal("前置：未能改写 frontmatter name")
 	}
@@ -654,8 +654,8 @@ func TestAdminListBuiltinMissingDirIsNotAnError(t *testing.T) {
 	}
 }
 
-// 资产根目录里的**散文件**：把 SKILL.md 放错层（放在 /opt/picoaide/skills/ 而不是
-// /opt/picoaide/skills/<name>/）是最可能的部署配置错误。它们确实不该进清单，但
+// 资产根目录里的**散文件**：把 SKILL.md 放错层（放在 /opt/zeokeel/skills/ 而不是
+// /opt/zeokeel/skills/<name>/）是最可能的部署配置错误。它们确实不该进清单，但
 // **不能静默**：原先 `if !de.IsDir() { continue }` 让管理端只看到"目录存在 + 空清单 +
 // 零问题"，而空态文案还指向一个不存在的「被跳过」块（R2-SK-2）。
 func TestAdminListBuiltinReportsLooseFilesAtAssetRoot(t *testing.T) {

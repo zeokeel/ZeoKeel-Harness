@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile/testdata/wasmtest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 )
 
 // 本文件是 R1-e2e-6 的**自证门禁**：平台把 wasm 自定义段当一等静态资源载体
@@ -43,7 +43,7 @@ import (
 // 为什么放**中性位置**（`server/demoapps/scripts/`）而不是技能目录：脚本要同时给
 // **演示应用**（Dockerfile 的 demoassets 阶段）与**随技能分发的作者工具**用 ——
 // 两边必须是同一份实现（两份会漂），所以源树里只有这一份：技能整目录随服务端镜像分发
-// （Dockerfile 的 COPY skills/app-builder/ → /opt/picoaide/skills，客户端能力中心按需
+// （Dockerfile 的 COPY skills/app-builder/ → /opt/zeokeel/skills，客户端能力中心按需
 // 安装到 <dshHome>/skills），镜像构建期再把这份中性源**注入**技能目录的 `scripts/`
 // （同一条链上的第二个落点，见 server/Dockerfile 的「内置技能随镜像分发」一节）。
 //

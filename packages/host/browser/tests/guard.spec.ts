@@ -39,12 +39,12 @@ describe('navigation policy', () => {
     // 2026-09-19 订正：内置浏览器**不得**导航到应用 scheme —— 自定义协议下
     // Origin/Sec-Fetch-* 恒为空，任意被浏览的 http(s) 页面都能发起"带身份的导航"，
     // 事后无法区分发起者。只有应用窗口可以（见下面那个 surface 用例）。
-    expect(classifyNavigation('picoaide-app://demo/')).toBe('deny')
-    expect(classifyNavigation('picoaide-app://demo/notes?page=2')).toBe('deny')
+    expect(classifyNavigation('zeokeel-app://demo/')).toBe('deny')
+    expect(classifyNavigation('zeokeel-app://demo/notes?page=2')).toBe('deny')
     // 渠道化后 scheme 是运行期值：任何非 http(s)/about 的 scheme 一律拒（不含名单）。
     expect(classifyNavigation('example-harness-app://demo/')).toBe('deny')
     expect(classifyNavigation('electron-app://x')).toBe('deny')
-    expect(classifyNavigation('picoaide://app/demo')).toBe('deny')
+    expect(classifyNavigation('zeokeel://app/demo')).toBe('deny')
   })
 
   it('allows the app scheme only on its own application surface (§16.1 按 surface 分流)', () => {
@@ -52,7 +52,7 @@ describe('navigation policy', () => {
     expect(classifyNavigation('example-harness-app://demo/', appSurface)).toBe('allow')
     expect(classifyNavigation('example-harness-app://demo/notes?page=2', appSurface)).toBe('allow')
     // 别的渠道的 scheme 与别的自定义协议在应用窗口里也拒（跨渠道隔离）。
-    expect(classifyNavigation('picoaide-app://demo/', appSurface)).toBe('deny')
+    expect(classifyNavigation('zeokeel-app://demo/', appSurface)).toBe('deny')
     expect(classifyNavigation('javascript:alert(1)', appSurface)).toBe('deny')
     // 应用窗口里的 http(s) 顶层导航也拒（外链走内置浏览器新标签，§7.2 冻结）。
     expect(classifyNavigation('https://evil.example/', appSurface)).toBe('deny')

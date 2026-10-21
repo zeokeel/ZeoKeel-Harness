@@ -43,7 +43,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // authorDocLimitAnchors 是「作者文档里点了名的某个上限」→「limits 表的键」的登记表。

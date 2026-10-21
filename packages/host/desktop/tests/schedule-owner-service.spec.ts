@@ -5,7 +5,7 @@ type Session = { serverURL: string, username: string } | null
 
 function serviceWith(rows: Map<string, any>, getSession: () => Session): any {
   const service = Object.create(ScheduleService.prototype) as any
-  service.ctx = { get: (name: string) => (name === 'picoSession' ? { getSession } : undefined) }
+  service.ctx = { get: (name: string) => (name === 'zeokeelSession' ? { getSession } : undefined) }
   service.serialize = (work: () => Promise<unknown>) => work()
   service.getDomain = async () => ({
     table: () => ({

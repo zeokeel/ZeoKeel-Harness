@@ -1,4 +1,4 @@
-# PicoAide 服务端容器化部署文档
+# ZeoKeel 服务端容器化部署文档
 
 > **2026-09-10 变更**：本仓库的部署脚本（`scripts/deploy.sh`、`scripts/install-server.sh`）
 > 与 `make release-export` **已全部移除**。部署与升级改为**一份给 AI 代理/运维执行的说明**
@@ -23,13 +23,13 @@
 │ server           │   固定 IP 172.28.0.3
 └──────┬───────────┘
        ▼
-   ./picoaide-data/   master.key + 应用数据(0700,目录 bind mount,升级不丢)
+   ./zeokeel-data/   master.key + 应用数据(0700,目录 bind mount,升级不丢)
 ```
 
-- 私有网段:自定义 bridge `picoaide-net`,默认子网 `172.28.0.0/24`(`.env` 的 `NETWORK_SUBNET` 可改)。
+- 私有网段:自定义 bridge `zeokeel-net`,默认子网 `172.28.0.0/24`(`.env` 的 `NETWORK_SUBNET` 可改)。
 - 固定 IP:容器 `ipv4_address` 锁定,`docker compose up -d` 重建/升级后 IP 不变,Caddyfile 的 `reverse_proxy server:8080` 恒可达。
 - server 不映射宿主机端口,外部流量只能经 Caddy 进入(内网隔离 + 攻击面收敛)。
-- **所有持久化数据均用 `./` 当前目录 bind mount,不使用命名卷**:`picoaide-data/`(应用数据+主密钥)、`caddy-data/`(Caddy 自动证书库)、`caddy-config/`(Caddy 配置)+ `certs/`(手动证书);pg 模式另加 `pg-data/`(内置 postgres 数据,挂载到容器 `/var/lib/postgresql`)。备份 = 直接拷走部署目录，或按部署说明打包 `picoaide-data/` + `pg_dump`。
+- **所有持久化数据均用 `./` 当前目录 bind mount,不使用命名卷**:`zeokeel-data/`(应用数据+主密钥)、`caddy-data/`(Caddy 自动证书库)、`caddy-config/`(Caddy 配置)+ `certs/`(手动证书);pg 模式另加 `pg-data/`(内置 postgres 数据,挂载到容器 `/var/lib/postgresql`)。备份 = 直接拷走部署目录，或按部署说明打包 `zeokeel-data/` + `pg_dump`。
 
 ### 0.1 数据库后端:PostgreSQL(唯一形态,内置容器)
 
@@ -40,7 +40,7 @@
 | 项目 | 值 |
 |---|---|
 | 数据落地 | `pg-data/`(容器 `postgres:18-alpine`,固定 IP `.4`) |
-| 连接 | 容器内 `postgres://picoaide:<密码>@postgres:5432/picoaide` |
+| 连接 | 容器内 `postgres://zeokeel:<密码>@postgres:5432/zeokeel` |
 | 密码 | `.env` 的 `PG_PASSWORD`(compose 强必填,缺失时 `docker compose up` 直接报错) |
 
 > **PG18 挂载点变化(重要)**:PostgreSQL 18 起官方镜像把 PGDATA 改为
@@ -67,21 +67,21 @@ pg 模式架构(caddy → server → postgres,全部内网固定 IP):
 ┌──────────────────┐   Go 服务端(-db-driver pg -pg-dsn …)
 │ server           │   固定 IP 172.28.0.3
 └──────┬───────────┘
-       │ postgres://picoaide:…@postgres:5432/picoaide
+       │ postgres://zeokeel:…@postgres:5432/zeokeel
        ▼
 ┌──────────────────┐   PostgreSQL 18(不发布宿主机端口)
 │ postgres         │   固定 IP 172.28.0.4,数据 ./pg-data
 └──────────────────┘
 ```
 
-- 使用最新镜像(**只从更新服务器取**:`https://release.picoaide.com/<channel>/releases/<版本>/picoaide-server-<版本>-amd64.zip`,内含 `image.tar`;本地可用 `make docker-image` 自建。**GHCR 已于 2026-09-10 下线**,仓库与 CI 均不再推送镜像仓库);PG 支持是当前所有发布镜像的默认能力;
+- 使用最新镜像(**只从更新服务器取**:`https://release.zeokeel.com/<channel>/releases/<版本>/zeokeel-server-<版本>-amd64.zip`,内含 `image.tar`;本地可用 `make docker-image` 自建。**GHCR 已于 2026-09-10 下线**,仓库与 CI 均不再推送镜像仓库);PG 支持是当前所有发布镜像的默认能力;
 - 服务端首次启动自动应用 `migrations-pg` 建表(幂等,空库即建);
 - usage 明细按月原生分区(保留 N 月可配,默认 6),日/月账本永久保留(见 docs/06-database.md)。
 
 ### 0.2 应用(WASM)访问模型(2026-09-19 起)
 
 员工自建的 WASM 应用**只在桌面客户端内**打开:客户端为应用开一个**独立应用窗口**加载自定义协议地址 `<渠道 app 源 scheme>://<app_id>/`(**不是**内置浏览器标签 —— W-C 裁决,见 `../../docs/planning/2026-09-19-wasm-client-only-design.md` §16.1)
-`picoaide-app://<app_id>/`,由客户端协议 handler 转发到服务端唯一入口
+`zeokeel-app://<app_id>/`,由客户端协议 handler 转发到服务端唯一入口
 `POST /api/client/v2/apps/wasm/:app_id/request`(Bearer 员工令牌)执行。
 
 因此本部署**不需要**为应用准备任何公网访问面:
@@ -116,7 +116,7 @@ compose 按 `./Caddyfile.${TLS_MODE:-manual}` 挂载模板，三种模式命名�
 
 | 目录 | 内容 | 备注 |
 |---|---|---|
-| `picoaide-data/` | 应用数据 + **`master.key`** | 丢失 = 数据库内加密的上游密钥**永久不可解**，必须备份 |
+| `zeokeel-data/` | 应用数据 + **`master.key`** | 丢失 = 数据库内加密的上游密钥**永久不可解**，必须备份 |
 | `pg-data/` | 内置 PostgreSQL 18 数据 | 挂载到容器 `/var/lib/postgresql`（PG18 起数据落 `18/docker/` 子目录） |
 | `caddy-data/` `caddy-config/` | Caddy 证书库与配置 | `auto` 模式必须备份（否则重新签发） |
 | `certs/` | 手动证书 | 仅 `manual` 模式 |
@@ -129,7 +129,7 @@ compose 按 `./Caddyfile.${TLS_MODE:-manual}` 挂载模板，三种模式命名�
 - 容器 IP 由 compose `ipam` + `ipv4_address` 声明式锁定：caddy `172.28.0.2`、
   server `172.28.0.3`、postgres `172.28.0.4`，`docker compose up -d` 重建后不变；
 - server 经 compose DNS（服务名 `server`）被 Caddy 反代，**无需写死 IP**；
-- `PICOAI_TRUSTED_PROXIES` 默认 `172.28.0.2`，使登录限流键解析真实客户端 IP；
+- `ZEOKEEL_TRUSTED_PROXIES` 默认 `172.28.0.2`，使登录限流键解析真实客户端 IP；
 - 与宿主机其他网段/容器冲突时改 `.env` 的 `NETWORK_SUBNET` 与三个固定 IP。
 
 ## 4. 常见问题

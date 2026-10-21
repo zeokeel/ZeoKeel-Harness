@@ -1,7 +1,7 @@
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from '../../../scripts/platform-modules.mjs'
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-account-card'
+const PACKAGE_NAME = '@zeokeel/dsh-account-card'
 
 export default defineConfig([
   {
@@ -20,7 +20,7 @@ export default defineConfig([
     external: [
       '@deepseek-ai/cordis',
       '@deepseek-ai/dsh-host-webserver',
-      '@picoaide/dsh-enterprise',
+      '@zeokeel/dsh-enterprise',
     ],
   },
   {

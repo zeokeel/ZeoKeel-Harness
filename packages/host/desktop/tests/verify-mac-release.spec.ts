@@ -29,8 +29,8 @@ function writeReleaseBundle(
   bundle: MacBundleFixtureOptions = {},
   runtimes: BundledRuntimesFixtureOptions = {},
 ): string {
-  const appPath = join(root, 'PicoAide Harness.app')
-  writeValidMacBundle(appPath, 'PicoAide Harness', bundle)
+  const appPath = join(root, 'ZeoKeel Harness.app')
+  writeValidMacBundle(appPath, 'ZeoKeel Harness', bundle)
   writeBundledRuntimesFixture(appPath, runtimes)
   return appPath
 }
@@ -41,11 +41,11 @@ function options(overrides: Partial<MacReleaseVerificationOptions> = {}) {
   const removeMountPoint = vi.fn()
   const value: MacReleaseVerificationOptions = {
     distDir: '/release/dist',
-    productName: 'PicoAide Harness',
+    productName: 'ZeoKeel Harness',
     // 期望身份**显式注入**（B-3）：缺省实现会去读工作树里那份 gitignored 的
     // `build/channel.json`，一次渠道构建残留就让本文件红，且被说成"产物声称了另一个身份"。
     expectedIdentifier: MAC_BUNDLE_FIXTURE_IDENTIFIER,
-    listDmgs: () => ['/release/dist/PicoAide Harness-2.0.0-arm64.dmg'],
+    listDmgs: () => ['/release/dist/ZeoKeel Harness-2.0.0-arm64.dmg'],
     makeMountPoint: () => '/private/tmp/dsh-desktop-dmg-test',
     run: (command, args) => { calls.push({ command, args: [...args] }) },
     // 随包运行时的版本判据**真的执行**三个 shim：夹具里是假字节，所以这里按 shim 名
@@ -66,24 +66,24 @@ function options(overrides: Partial<MacReleaseVerificationOptions> = {}) {
 describe('macOS release artifact verification', () => {
   it('mounts one DMG and verifies signature, Gatekeeper, and the stapled ticket', () => {
     const harness = options()
-    const appPath = join('/private/tmp/dsh-desktop-dmg-test', 'PicoAide Harness.app')
+    const appPath = join('/private/tmp/dsh-desktop-dmg-test', 'ZeoKeel Harness.app')
 
     expect(verifyMacRelease(harness.value)).toEqual({
-      appPath: '/private/tmp/dsh-desktop-dmg-test/PicoAide Harness.app',
-      dmgPath: '/release/dist/PicoAide Harness-2.0.0-arm64.dmg',
+      appPath: '/private/tmp/dsh-desktop-dmg-test/ZeoKeel Harness.app',
+      dmgPath: '/release/dist/ZeoKeel Harness-2.0.0-arm64.dmg',
     })
 
     expect(harness.calls).toEqual([
       {
         command: 'hdiutil',
         args: [
-          'attach', '/release/dist/PicoAide Harness-2.0.0-arm64.dmg',
+          'attach', '/release/dist/ZeoKeel Harness-2.0.0-arm64.dmg',
           '-mountpoint', '/private/tmp/dsh-desktop-dmg-test', '-nobrowse', '-readonly',
         ],
       },
       {
         command: 'lipo',
-        args: [join(appPath, 'Contents', 'MacOS', 'PicoAide Harness'), '-verify_arch', 'arm64'],
+        args: [join(appPath, 'Contents', 'MacOS', 'ZeoKeel Harness'), '-verify_arch', 'arm64'],
       },
       ...MACOS_ARM64_NATIVE_ENTRIES.map(entry => ({
         command: 'lipo',
@@ -94,15 +94,15 @@ describe('macOS release artifact verification', () => {
       })),
       {
         command: 'codesign',
-        args: ['--verify', '--deep', '--strict', '--verbose=2', '/private/tmp/dsh-desktop-dmg-test/PicoAide Harness.app'],
+        args: ['--verify', '--deep', '--strict', '--verbose=2', '/private/tmp/dsh-desktop-dmg-test/ZeoKeel Harness.app'],
       },
       {
         command: 'spctl',
-        args: ['--assess', '--type', 'execute', '--verbose=4', '/private/tmp/dsh-desktop-dmg-test/PicoAide Harness.app'],
+        args: ['--assess', '--type', 'execute', '--verbose=4', '/private/tmp/dsh-desktop-dmg-test/ZeoKeel Harness.app'],
       },
       {
         command: 'xcrun',
-        args: ['stapler', 'validate', '/private/tmp/dsh-desktop-dmg-test/PicoAide Harness.app'],
+        args: ['stapler', 'validate', '/private/tmp/dsh-desktop-dmg-test/ZeoKeel Harness.app'],
       },
       {
         command: 'hdiutil',
@@ -150,7 +150,7 @@ describe('macOS release artifact verification', () => {
     temporaryRoots.push(root)
     writeReleaseBundle(root)
     const harness = options({ makeMountPoint: () => root })
-    expect(verifyMacRelease(harness.value).appPath).toBe(join(root, 'PicoAide Harness.app'))
+    expect(verifyMacRelease(harness.value).appPath).toBe(join(root, 'ZeoKeel Harness.app'))
   })
 
   // 随包运行时（2026-10-08）：`codesign --verify --deep --strict` 不保证 `Contents/Resources`
@@ -268,7 +268,7 @@ describe('bundled agent runtimes are signed into the release bundle', () => {
   function runtimeApp(runtimes: BundledRuntimesFixtureOptions = {}): string {
     const root = mkdtempSync(join(tmpdir(), 'dsh-mac-runtimes-'))
     temporaryRoots.push(root)
-    const appPath = join(root, 'PicoAide Harness.app')
+    const appPath = join(root, 'ZeoKeel Harness.app')
     writeBundledRuntimesFixture(appPath, runtimes)
     return appPath
   }

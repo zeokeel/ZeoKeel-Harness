@@ -50,7 +50,7 @@ describe('desktop update badge client', () => {
     const request = vi.fn(async () => new Response('', { status: 202 }))
     await expect(triggerDesktopUpdateCheck(request)).resolves.toBe(true)
     expect(request).toHaveBeenCalledWith(
-      '/api/pico/desktop/update/check',
+      '/api/zeokeel/desktop/update/check',
       expect.objectContaining({ method: 'POST' }),
     )
   })
@@ -188,7 +188,7 @@ describe('desktop update shared client store', () => {
     const posts: string[] = []
     const request = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
-      if (url === '/api/pico/desktop/update') return Response.json(healthy)
+      if (url === '/api/zeokeel/desktop/update') return Response.json(healthy)
       posts.push(url)
       return new Response('', { status: 202 })
     })
@@ -197,14 +197,14 @@ describe('desktop update shared client store', () => {
     await refreshDesktopUpdate(request)
 
     await triggerDesktopUpdateAction(undefined, request)
-    expect(posts).toEqual(['/api/pico/desktop/update/check'])
+    expect(posts).toEqual(['/api/zeokeel/desktop/update/check'])
 
     // 已下载好:同一个动作入口必须改点"安装"路由(而不是再检查一次)。
     const ready = { ...healthy, availableVersion: '2.3.0', readyVersion: '2.3.0', readyPath: '/tmp/i' }
     await refreshDesktopUpdate(vi.fn(async () => Response.json(ready)))
     expect(updateActionFor(readDesktopUpdate())).toBe('install')
     await triggerDesktopUpdateAction(undefined, request)
-    expect(posts).toEqual(['/api/pico/desktop/update/check', '/api/pico/desktop/update/install'])
+    expect(posts).toEqual(['/api/zeokeel/desktop/update/check', '/api/zeokeel/desktop/update/install'])
     unsubscribe()
   })
 })

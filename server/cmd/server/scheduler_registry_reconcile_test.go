@@ -35,11 +35,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/auditchain"
-	"github.com/picoaide/picoaide/internal/auditretention"
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/tokenretention"
-	"github.com/picoaide/picoaide/internal/usageretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/auditchain"
+	"github.com/zeokeel/zeokeel-harness/server/internal/auditretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/tokenretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/usageretention"
 )
 
 // schedulerSeamPattern 匹配"启动一条后台周期执行者"的装配接缝名。

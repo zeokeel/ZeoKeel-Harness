@@ -34,7 +34,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/picoaide/picoaide/demoapps/internal/demoapp"
+	"github.com/zeokeel/zeokeel-harness/server/demoapps/internal/demoapp"
 )
 
 func main() {

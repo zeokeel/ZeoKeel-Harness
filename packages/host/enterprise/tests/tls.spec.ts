@@ -24,7 +24,7 @@ function fakeCert(bytes: number[] = [0x30, 0x82, 0x01, 0x03, 1, 2, 3, 4]): { dat
 }
 
 function tmpStore(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pico-tls-'))
+  const dir = mkdtempSync(join(tmpdir(), 'zeokeel-tls-'))
   return join(dir, 'fingerprints.json')
 }
 
@@ -40,12 +40,12 @@ describe('installCertificateVerification (TOFU hardening, P1-3)', () => {
       onUnknownFingerprint: (host, fp) => { unknown.push(`${host}:${fp.slice(0, 8)}`) },
     })
     let result: number | null = null
-    session.invoke({ hostname: 'pico.example.com', port: 443, certificate: fakeCert() }, (r) => { result = r })
+    session.invoke({ hostname: 'zeokeel.example.com', port: 443, certificate: fakeCert() }, (r) => { result = r })
     expect(result).toBe(-2) // rejected
     expect(unknown.length).toBe(1) // surfaced for human approval
     // nothing persisted: a second connect is still unknown → still rejected
     let second: number | null = null
-    session.invoke({ hostname: 'pico.example.com', port: 443, certificate: fakeCert() }, (r) => { second = r })
+    session.invoke({ hostname: 'zeokeel.example.com', port: 443, certificate: fakeCert() }, (r) => { second = r })
     expect(second).toBe(-2)
   })
 
@@ -54,18 +54,18 @@ describe('installCertificateVerification (TOFU hardening, P1-3)', () => {
     const cert = fakeCert()
     const fp = sha256Fingerprint(Buffer.from(cert.data, 'base64'))
     // Seed the store as if previously approved.
-    writeFileSync(store, JSON.stringify({ fingerprints: { 'pico.example.com:443': fp } }, null, 2), { mode: 0o600 })
+    writeFileSync(store, JSON.stringify({ fingerprints: { 'zeokeel.example.com:443': fp } }, null, 2), { mode: 0o600 })
     const session = mockSession()
     await installCertificateVerification(store, { getSession: () => session })
     let result: number | null = null
-    session.invoke({ hostname: 'pico.example.com', port: 443, certificate: cert }, (r) => { result = r })
+    session.invoke({ hostname: 'zeokeel.example.com', port: 443, certificate: cert }, (r) => { result = r })
     expect(result).toBe(0)
   })
 
   it('rejects a MISMATCHED fingerprint (pinned cert changed)', async () => {
     const store = tmpStore()
     const oldFp = sha256Fingerprint(Buffer.from([1, 2, 3]))
-    writeFileSync(store, JSON.stringify({ fingerprints: { 'pico.example.com:443': oldFp } }, null, 2), { mode: 0o600 })
+    writeFileSync(store, JSON.stringify({ fingerprints: { 'zeokeel.example.com:443': oldFp } }, null, 2), { mode: 0o600 })
     const session = mockSession()
     const mismatches: string[] = []
     await installCertificateVerification(store, {
@@ -74,7 +74,7 @@ describe('installCertificateVerification (TOFU hardening, P1-3)', () => {
     })
     let result: number | null = null
     // A different certificate than the pinned one.
-    session.invoke({ hostname: 'pico.example.com', port: 443, certificate: fakeCert([9, 9, 9]) }, (r) => { result = r })
+    session.invoke({ hostname: 'zeokeel.example.com', port: 443, certificate: fakeCert([9, 9, 9]) }, (r) => { result = r })
     expect(result).toBe(-2)
     expect(mismatches.length).toBe(1)
   })
@@ -104,7 +104,7 @@ describe('无 pin 时不干预 TLS（2026-09-11 定案：默认校验优先）',
 
   it('有 pin（env 预置）时才安装，且仍放行平台已信任的证书', async () => {
     const store = tmpStore()
-    applyPinnedFingerprintsFromEnv(store, { PICOAI_TLS_PINS: `self.example.com:8443=${sha256Fingerprint(Buffer.from([5, 5, 5]))}` } as NodeJS.ProcessEnv)
+    applyPinnedFingerprintsFromEnv(store, { ZEOKEEL_TLS_PINS: `self.example.com:8443=${sha256Fingerprint(Buffer.from([5, 5, 5]))}` } as NodeJS.ProcessEnv)
     const session = mockSession()
     await installCertificateVerification(store, { getSession: () => session })
     let result: number | null = null
@@ -165,12 +165,12 @@ describe('TLS 接线复核 (F13)', () => {
     expect(unknown).toHaveLength(0)
   })
 
-  it('PICOAI_TLS_PINS 预置指纹后,自签名证书按 pin 放行', async () => {
+  it('ZEOKEEL_TLS_PINS 预置指纹后,自签名证书按 pin 放行', async () => {
     const store = tmpStore()
     const cert = fakeCert()
     const fp = sha256Fingerprint(Buffer.from(cert.data, 'base64'))
     const applied = applyPinnedFingerprintsFromEnv(store, {
-      PICOAI_TLS_PINS: `self.example.com:8443=${fp}`,
+      ZEOKEEL_TLS_PINS: `self.example.com:8443=${fp}`,
     } as NodeJS.ProcessEnv)
     expect(applied).toBe(1)
     const session = mockSession()
@@ -180,10 +180,10 @@ describe('TLS 接线复核 (F13)', () => {
     expect(result).toBe(0)
   })
 
-  it('畸形/过短的 PICOAI_TLS_PINS 被忽略', () => {
+  it('畸形/过短的 ZEOKEEL_TLS_PINS 被忽略', () => {
     const store = tmpStore()
     const applied = applyPinnedFingerprintsFromEnv(store, {
-      PICOAI_TLS_PINS: 'host-only, bad=xyz, =nofp',
+      ZEOKEEL_TLS_PINS: 'host-only, bad=xyz, =nofp',
     } as NodeJS.ProcessEnv)
     expect(applied).toBe(0)
   })

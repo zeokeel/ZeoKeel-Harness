@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestPermanentWebhookFailureIsBackedOff：永久坏的 webhook 在 24 个 1 小时 tick 内

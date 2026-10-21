@@ -19,7 +19,7 @@
 > **① 访问模型变更（2026-09-19）**：本文件原描述的「浏览器 + 应用子域 + 换票」访问模型已**整体删除**。应用只在桌面客户端内以 `<渠道 app scheme>://<app_id>/` 打开，经客户端协议 handler 转发到服务端唯一入口 `POST /api/client/v2/apps/wasm/:app_id/request`（`BearerAuth` 必需）；**一律要求登录**，`access` 写侧只接受 `login` / `whitelist`（历史 `public` 读侧按 `login`）。
 > 无应用子域、无换票、无 Cookie、无 `entry_url`，也不再需要通配域名 / 通配证书 / Caddy 通配站点块；请求不发 `Origin`，由客户端协议 handler 补 `Origin: <app scheme>://<app_id>`（总纲 §8.3 / §10）。
 >
-> **② AI 能力变更（2026-09-19，总纲 §21）**：**服务端 `ai.chat` 已彻底删除** —— `abi.MethodAIChat` 与其白名单生成物、`hostcap.callAIChat`、`capapi.AI`、`internal/wasmapp/aichat/**`、`limits` 的 `AIChat*` 条目、事务内禁用条目、相关测试与技能示例全部移除。应用里的 AI 改由**客户端**提供：应用前端 JS 调保留路径 `POST /__picoaide/ai/chat`（协议 handler **本地**处理，**不经服务端**），走"每应用一个隐藏会话 + 使用者账计费 + 应用维度归因 + 首次授权 + 流式 SSE + 页面关闭即取消"。**本文件 §4.4 / §4.7 / §4.9 / §5.1 / §7.2 / §7.3 / §7.4 / §9.4 / §10.3 中把 `ai.chat` 当平台能力的条目全部作废**；老应用仍导入 `ai.chat` ⇒ 导入期 `IMPORT_NOT_ALLOWED` + 迁移指引，发布校验同步拒绝。
+> **② AI 能力变更（2026-09-19，总纲 §21）**：**服务端 `ai.chat` 已彻底删除** —— `abi.MethodAIChat` 与其白名单生成物、`hostcap.callAIChat`、`capapi.AI`、`internal/wasmapp/aichat/**`、`limits` 的 `AIChat*` 条目、事务内禁用条目、相关测试与技能示例全部移除。应用里的 AI 改由**客户端**提供：应用前端 JS 调保留路径 `POST /__zeokeel/ai/chat`（协议 handler **本地**处理，**不经服务端**），走"每应用一个隐藏会话 + 使用者账计费 + 应用维度归因 + 首次授权 + 流式 SSE + 页面关闭即取消"。**本文件 §4.4 / §4.7 / §4.9 / §5.1 / §7.2 / §7.3 / §7.4 / §9.4 / §10.3 中把 `ai.chat` 当平台能力的条目全部作废**；老应用仍导入 `ai.chat` ⇒ 导入期 `IMPORT_NOT_ALLOWED` + 迁移指引，发布校验同步拒绝。
 >
 > 本文件与访问模型、AI 能力**无关**的部分（wasm 运行时与 ABI、SQLite/应用库、内存四笔账与资源上限、
 > 编译与发布、目录/审核/审计、其余能力面）继续有效。
@@ -28,7 +28,7 @@
 
 ## 1. 一句话定义
 
-员工（或代表员工的 AI）把一个小应用编译成**单个 `.wasm` 文件**（静态资源、HTML、JS 全部编入），上传到平台；平台在**无网络、无文件系统**的沙箱里运行它，只给它**一个本应用专属的 SQLite 数据库**（100 MB 硬限）和受控的宿主能力；任何员工**在桌面客户端内**打开 `picoaide-app://<app_id>/`（渠道参数化：§10/F15，official/beta 取值才是 `picoaide-app`）使用。**应用代表使用者调用平台 AI，费用记在该使用者账上**（走平台既有请求路径，平台不为应用单独设额度，R36）。
+员工（或代表员工的 AI）把一个小应用编译成**单个 `.wasm` 文件**（静态资源、HTML、JS 全部编入），上传到平台；平台在**无网络、无文件系统**的沙箱里运行它，只给它**一个本应用专属的 SQLite 数据库**（100 MB 硬限）和受控的宿主能力；任何员工**在桌面客户端内**打开 `zeokeel-app://<app_id>/`（渠道参数化：§10/F15，official/beta 取值才是 `zeokeel-app`）使用。**应用代表使用者调用平台 AI，费用记在该使用者账上**（走平台既有请求路径，平台不为应用单独设额度，R36）。
 
 **员工只描述"想要什么"，AI 负责写代码、本机编译（含自备开发环境）、上传、自修、发布。** 平台不提供构建服务、不分发工具链、不做本地预览——这些属于 skill 与员工 AI 的职责（R40/R42）。
 
@@ -40,7 +40,7 @@
 |---|---|---|
 | **R1** | **每个应用一个独立数据库**（不是每用户一个） | 2026-09-17 |
 | **R2** | **每个应用数据库 100 MB 硬上限**（不可由用户配置） | 2026-09-17 |
-| **R3** | 访问标识用**自定义协议 origin** `<渠道 app 源 scheme>://<app_id>/`（2026-09-19 取代原「子域名」方案；**scheme 由渠道配置决定** —— 总纲 §10 的 `desktop.app_origin_scheme`，official/beta 取值才是 `picoaide-app`，不得硬编码）：`app_id` 是唯一应用标识，须符合 §4.1 的字符规则 | 2026-09-17（2026-09-19 修订；渠道参数化见 §10/F15） |
+| **R3** | 访问标识用**自定义协议 origin** `<渠道 app 源 scheme>://<app_id>/`（2026-09-19 取代原「子域名」方案；**scheme 由渠道配置决定** —— 总纲 §10 的 `desktop.app_origin_scheme`，official/beta 取值才是 `zeokeel-app`，不得硬编码）：`app_id` 是唯一应用标识，须符合 §4.1 的字符规则 | 2026-09-17（2026-09-19 修订；渠道参数化见 §10/F15） |
 | **R4** | 应用可用**当前登录用户**身份调 AI，费用扣该使用者 | 2026-09-17 |
 | **R5** | **无人类运营后台**（日常操作走 API/由 AI 驱动）；保留**最小运维面**（R23） | 2026-09-17 |
 | **R6** | **发布者即该应用的管理员**（仅管理平面） | 2026-09-17 |
@@ -66,13 +66,13 @@
 | **R26** | **平台不提供任何员工目录能力**（不列举 / 不搜索 / **不校验账号是否存在**）；名单写在应用配置文件里，由作者手填已知账号 | 2026-09-17 |
 | **R27** | 帧内提供 `user.is_publisher`（当前使用者是否为本应用发布者）；应用可选使用（如只给发布者显示设置/统计入口） | 2026-09-17 |
 | **R28** | **作者画像 = 全员自助**：不假设作者会写代码或懂运维；门槛由 skill + 员工 AI 承担 | 2026-09-17 |
-| ~~R29~~ | **2026-09-19 删除**：部署前置三项（通配域名 / 通配证书 / Caddy 通配站点块）与 `PICOAI_APPS_BASE_DOMAIN` / `wasm.apps_base_domain` 配置面全部废除——应用不再需要任何公网应用 origin（契约 §5、§6 W5） | 2026-09-17 |
+| ~~R29~~ | **2026-09-19 删除**：部署前置三项（通配域名 / 通配证书 / Caddy 通配站点块）与 `ZEOKEEL_APPS_BASE_DOMAIN` / `wasm.apps_base_domain` 配置面全部废除——应用不再需要任何公网应用 origin（契约 §5、§6 W5） | 2026-09-17 |
 | **R30** | **同步 publish**：校验与编译在请求内完成，成功才落 release 行，失败同步返回结构化错误（**不落行**） | 2026-09-17 |
 | **R31** | **编译进程 = 单进程串行（并发 1）+ `wazero.NewCompilationCacheWithDir` 磁盘缓存**；进程以非特权用户 + bwrap/landlock + seccomp + 无网络 + env 白名单运行 | 2026-09-17 |
 | **R32** | **表结构由应用自建**（宿主在 `db.define` 内代执行 `CREATE TABLE IF NOT EXISTS` 并强制上限）；**不做**发布期声明、自动迁移、`db.define` 自省与 `SCHEMA_MISMATCH`；`DROP`/`ALTER` 永久禁 | 2026-09-17 |
 | **R33** | 保留 **32 MiB wasm / 48 MiB 请求体**；配套补客户端上传超时、分片/续传与自定义段上限 | 2026-09-17 |
-| **R34** | **独立"应用中心"页**（客户端）：员工从应用中心"打开"应用（落到 `<渠道 app 源 scheme>://<app_id>/`，渠道参数化：§10/F15；official/beta 取值 `picoaide-app`），也可分享深链 `<渠道 scheme>://app/<app_id>` | 2026-09-17（2026-09-19 修订） |
-| ~~R35~~ | **2026-09-19 删除**：匿名 `public` 与匿名限流（全局匿名桶 / 每 IP 桶 / `PICOAI_TRUSTED_PROXIES` 启动自检 / `internal/wasmapp/anonlimit`）随匿名面一并删除（契约 §1 第 2 项、§5） | 2026-09-17 |
+| **R34** | **独立"应用中心"页**（客户端）：员工从应用中心"打开"应用（落到 `<渠道 app 源 scheme>://<app_id>/`，渠道参数化：§10/F15；official/beta 取值 `zeokeel-app`），也可分享深链 `<渠道 scheme>://app/<app_id>` | 2026-09-17（2026-09-19 修订） |
+| ~~R35~~ | **2026-09-19 删除**：匿名 `public` 与匿名限流（全局匿名桶 / 每 IP 桶 / `ZEOKEEL_TRUSTED_PROXIES` 启动自检 / `internal/wasmapp/anonlimit`）随匿名面一并删除（契约 §1 第 2 项、§5） | 2026-09-17 |
 | **R36** | **AI 调用走平台既有请求路径**：应用只是壳子，**谁登录用谁的额度与余额**；平台**不引入应用级配额、不做应用维度归因**（网关已有用户级记录）。调用事件里保留 `app_id` 仅供诊断与追责，不参与计费 | 2026-09-17 |
 | **R37** | 应用退役 = **冻结 → 只读快照保留 90 天（管理员可导出）→ 真删并写审计** | 2026-09-17 |
 | **R38** | ⚠️ 变更（2026-09-18，用户拍板）**目录一律展示全部应用**：无论公开与否、有没有权限、是否下架都列出来（条目里给出 `access` 与 `enabled`，由使用者判断该不该点）。`visible` 布尔与"按可见性过滤"**作废**；目录只剩三条硬条件——未删除 · `kind=wasm_app` · 有生效版本（冻结的应用不列：冻结即停止服务，列出来只是死链）。**能不能用仍由应用自己判**（R24） | 2026-09-17（2026-09-18 修订） |
@@ -119,7 +119,7 @@
 
 | 项 | 值 | 依据 |
 |---|---|---|
-| **`app_id`** | **既是应用标识、也是自定义协议 URL 的 host 段**（`picoaide-app://<app_id>`，渠道参数化：§10/F15）：基础规则沿用平台既有 `^[a-z0-9]+(?:-[a-z0-9]+)*$`（小写、无连续/首尾连字符）；**wasm 应用额外约束**：长度 ≤ **63**、**不得纯数字**、**不得以 `xn--` 开头**（punycode）、不得是保留字（下行）。（`app_id` 仍是 URL host 段与路由标识：host 段必须合法，且不得与保留名冲突；纯数字禁用同时避免与 IP/端口形态混淆） | `manifest.go:243/60-61` |
+| **`app_id`** | **既是应用标识、也是自定义协议 URL 的 host 段**（`zeokeel-app://<app_id>`，渠道参数化：§10/F15）：基础规则沿用平台既有 `^[a-z0-9]+(?:-[a-z0-9]+)*$`（小写、无连续/首尾连字符）；**wasm 应用额外约束**：长度 ≤ **63**、**不得纯数字**、**不得以 `xn--` 开头**（punycode）、不得是保留字（下行）。（`app_id` 仍是 URL host 段与路由标识：host 段必须合法，且不得与保留名冲突；纯数字禁用同时避免与 IP/端口形态混淆） | `manifest.go:243/60-61` |
 | `app_id` 唯一性 | **同 kind 内由 `apps` 主键 `(kind, app_id)` 保证** | 一个 `app_id` 只能对应一个应用标识，因此不需要额外标识列 |
 | `app_id` 改名 | **不支持改名**（改名等于换标识）：需要新名字就新建应用，旧应用照 R37 退役 | 版本与标识都是外部契约 |
 | 版本号 | 严格 `^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$`，必须严格递增；**失败的发布不占号**（R18：失败不落 release 行）；**已落行的版本永久占号**——被拒与软删（`deleted_at`）的版本同样不可复用（`UNIQUE(kind,app_id,version)`）。两者是**两条不同规则**，不得互相推导 | `manifest.go:248` + `appstore/publish.go:221-238` + `0053_apps.sql:50/53` |
@@ -134,13 +134,13 @@
 | 上传请求体上限 | **48 MiB**（base64 JSON，R21） | 必须进 `largeBodyRoutes` 白名单；**白名单只是豁免** ⇒ handler 内必须自己再套 `http.MaxBytesReader(48<<20)`；先查 `Content-Length` 回 413 |
 | **客户端上传超时** | **90 s**（必须 > 服务端 `ReadTimeout 60 s`）；>8 MiB 走**分片 + 续传** | 客户端既有大上传是 `timeoutMs: 30000`（`packages/host/enterprise/src/auth-gate.ts` 两处，`grep -n "timeoutMs: 30000"` 取当前位置——**行号会随提交漂移，文档不写死**），32 MiB 必然超时 |
 | 上传时限（服务端） | `http.Server.ReadTimeout = 60 s` | 48 MiB 需 ≈6.7 Mbps 保底；部署文档须写明前置反代不得设更小的 body 上限/超时 |
-| **发布链路每跳预算序关系** | 对客户端会等待的**每一个**发布相关请求：平台侧在该跳的预算**严格小于**客户端在该跳的剩余出站预算 | 单发 `publish`/`validate`：平台侧总预算 `publish_total_budget = client_upload_timeout 90 s − 传输余量 15 s = 75 s < 90 s`（`limits.go` 的 `PublishTotalBudget`）。分片链不一样：`CHUNKED_PUBLISH_BUDGET_MS` 的 90 s 是**整条链**共用的（开会话 + N 片 PUT + 续传刷新各自扣掉一段），`complete` 那一跳的客户端剩余 = `90 s − 已用`，可以 < 75 s ⇒ 客户端在**这一跳**的请求头 `X-Pico-Client-Budget-Ms` 里声明"我还会等多少毫秒"（值 = 它为该跳设置的出站计时器），平台取 `min(publish_total_budget, max(0, 该值 − 传输余量))`；**缺省 / 非法 / 越界一律回落 `publish_total_budget`，且只许缩小、永不放大**（老客户端与第三方客户端行为不变）。该值不足传输余量时平台**在入口**就给结构化结论（`RUNTIME_TIMEOUT` + `phase=publish_budget`，不占编译槽/额度），hints 指引"带同一个 `upload_id` 重发（续传只补缺失片，新的一次调用有完整预算）"。跨端判据：`packages/host/enterprise/tests/wasm-apps.spec.ts`（客户端声明的值 + 序关系扫描 + 头名读 Go 源码对拍）与 `server/internal/wasmapp/api/publish_client_budget_test.go`（钳位表 + 三态校验 + complete 端到端） |
+| **发布链路每跳预算序关系** | 对客户端会等待的**每一个**发布相关请求：平台侧在该跳的预算**严格小于**客户端在该跳的剩余出站预算 | 单发 `publish`/`validate`：平台侧总预算 `publish_total_budget = client_upload_timeout 90 s − 传输余量 15 s = 75 s < 90 s`（`limits.go` 的 `PublishTotalBudget`）。分片链不一样：`CHUNKED_PUBLISH_BUDGET_MS` 的 90 s 是**整条链**共用的（开会话 + N 片 PUT + 续传刷新各自扣掉一段），`complete` 那一跳的客户端剩余 = `90 s − 已用`，可以 < 75 s ⇒ 客户端在**这一跳**的请求头 `X-ZeoKeel-Client-Budget-Ms` 里声明"我还会等多少毫秒"（值 = 它为该跳设置的出站计时器），平台取 `min(publish_total_budget, max(0, 该值 − 传输余量))`；**缺省 / 非法 / 越界一律回落 `publish_total_budget`，且只许缩小、永不放大**（老客户端与第三方客户端行为不变）。该值不足传输余量时平台**在入口**就给结构化结论（`RUNTIME_TIMEOUT` + `phase=publish_budget`，不占编译槽/额度），hints 指引"带同一个 `upload_id` 重发（续传只补缺失片，新的一次调用有完整预算）"。跨端判据：`packages/host/enterprise/tests/wasm-apps.spec.ts`（客户端声明的值 + 序关系扫描 + 头名读 Go 源码对拍）与 `server/internal/wasmapp/api/publish_client_budget_test.go`（钳位表 + 三态校验 + complete 端到端） |
 | 静态资源 | **发布期从 wasm 自定义段抽出**到 `<data_root>/apps/<app_id>/assets/<release_id>/`，宿主直接服务 + 缓存；**抽完立即释放原始字节** | HTML/JS 也走这条（R8/R37）；抽出失败 = 发布失败；缓存键 `app_id + version + path` |
 | **自定义段总量上限** | **≤ 4 MiB**（超限 `SECTION_OVERRIDE_OVERSIZE` —— **以 §7.4 失败语义表为准**；本格旧写 `SECTION_OVERSIZE`，实现按 §7.4 用名） | 实测：自定义段零用途却整体进内存（2.48 MiB→32.48 MiB，RSS +34 MiB、编译 1.78 s） |
 | **导入面白名单** | **由参考实现构建期生成、不手写**：每语言一份"读帧 + 调全部宿主函数 + 写帧"的样例，CI 真编译后 dump 导入集写入 `limits.go`；**判据 = 符号 + 类型**（签名不匹配 ⇒ `IMPORT_SIGNATURE_MISMATCH`） | 必须含 `fd_read`（ABI 读 stdin 需要）；Go 实测 17 条 / 16 个不同名（`fd_write`×2） |
 | 导出面 | **必须含 `_start` 与 `memory`，额外导出忽略** | Rust 实测多一个 `__main_void` |
 | 编译超时 | 60 s | 实测 2.48 MiB 冷编译 1.27–1.69 s |
-| **应用配置文件** | `picoaide.app.json`（随 publish 提交，**不计入 32 MiB wasm 上限**，≤64 KiB）：`{access, whitelist[], purpose, data_sensitivity, owner}`，其中 `access` 是访问模式枚举，取值 `"login"` \| `"whitelist"`，**缺省 `login`**（2026-09-19 起写侧不再接受 `"public"`；历史 `public` 读侧按 `login`，见 R25 与 §4.7）；发布期随资源一起抽出到 `assets/<release_id>/`，应用用 `assets.read("picoaide.app.json")` 读取。**字段规格单一真源** = `appcfgspec.go` → `appcfg.json` + skill `references/app-config.md`（生成物，见 §5.5） | **平台不校验 whitelist 里的账号是否存在**（否则等于提供账号枚举接口）；`access="whitelist"` 且名单为空 ⇒ 拒（`APP_CONFIG_INVALID`）；whitelist ≤ 2 000 条；改任何一项都要发新版。旧字段 `login_required` / `visible` 只作读取侧兼容（§10.5 第 56c 项） |
+| **应用配置文件** | `zeokeel.app.json`（随 publish 提交，**不计入 32 MiB wasm 上限**，≤64 KiB）：`{access, whitelist[], purpose, data_sensitivity, owner}`，其中 `access` 是访问模式枚举，取值 `"login"` \| `"whitelist"`，**缺省 `login`**（2026-09-19 起写侧不再接受 `"public"`；历史 `public` 读侧按 `login`，见 R25 与 §4.7）；发布期随资源一起抽出到 `assets/<release_id>/`，应用用 `assets.read("zeokeel.app.json")` 读取。**字段规格单一真源** = `appcfgspec.go` → `appcfg.json` + skill `references/app-config.md`（生成物，见 §5.5） | **平台不校验 whitelist 里的账号是否存在**（否则等于提供账号枚举接口）；`access="whitelist"` 且名单为空 ⇒ 拒（`APP_CONFIG_INVALID`）；whitelist ≤ 2 000 条；改任何一项都要发新版。旧字段 `login_required` / `visible` 只作读取侧兼容（§10.5 第 56c 项） |
 | 上传期校验（validate） | 导入面（符号+类型）+ 导出面 + **自解析段表**（结构化错误，不把 wazero 裸错误当唯一出口）+ 体积 + **一次真实编译** + **合成帧干跑**（2 s 预算跑 `Instantiate → _start → 响应帧`） | 编译通过 ≠ 能跑（签名不匹配编译期全绿、实例化才炸，实测）；干跑与编译同进程同配额；**validate 不落版本号、不进审计** |
 | **publish** | **同步**：校验 → 编译（复用 validate 缓存）→ 落 release 行 → 生效或进待审；失败**不落行** | R30/R18；状态只有"审核态 + 删除态" |
 
@@ -162,7 +162,7 @@
 | 编译进程（R31） | **单进程串行（并发 1）** + 队列 64（满则 429）+ CPU 配额 | 实测 2.48 MiB 编译 1.3–1.7 s；32 MiB 极端模块 ~10–20 s |
 | 编译进程隔离（R31） | **非特权用户 + bwrap/landlock + seccomp + `--unshare-net` + env 白名单**（不得继承 PG DSN / master key 等） | 唯一"读不可信字节且可能写宿主"的进程；env 纪律与实例同等 |
 | 驱动与连接 | **一应用一 driver 实例 + 一应用一连接，不复用** | `vtab` 包级注册是进程全局 |
-| **内存四笔账** | 编译缓存驻留 + 实例池 + 编译峰值 + **上传峰值**（base64 单次 ≈118 MB：32+43+43）**各自设限并联立**；**启动自检：理论峰值 > 可用内存 70% ⇒ 拒绝启动**。**2026-09-18 起账本按部署档位算**（`PICOAI_WASM_MEMORY_PROFILE` = default 32×64 MiB / small 3×64 MiB / large 64×64 MiB），同一份数值同时驱动队列并发、实例内存上限、进程内模块缓存上限与库句柄上限 | 四笔账必须同时设限；峰值超可用内存 70% 时**拒绝启动**而不是等 OOM。**为什么改档位**：几百个应用 + 2 GB 机器的目标场景下默认档 2550 MiB 让功能根本打不开，而旧补救路径是"重新构建镜像"；决策与实测见 `docs/decisions/2026-09-18-wasm-memory-footprint.md` |
+| **内存四笔账** | 编译缓存驻留 + 实例池 + 编译峰值 + **上传峰值**（base64 单次 ≈118 MB：32+43+43）**各自设限并联立**；**启动自检：理论峰值 > 可用内存 70% ⇒ 拒绝启动**。**2026-09-18 起账本按部署档位算**（`ZEOKEEL_WASM_MEMORY_PROFILE` = default 32×64 MiB / small 3×64 MiB / large 64×64 MiB），同一份数值同时驱动队列并发、实例内存上限、进程内模块缓存上限与库句柄上限 | 四笔账必须同时设限；峰值超可用内存 70% 时**拒绝启动**而不是等 OOM。**为什么改档位**：几百个应用 + 2 GB 机器的目标场景下默认档 2550 MiB 让功能根本打不开，而旧补救路径是"重新构建镜像"；决策与实测见 `docs/decisions/2026-09-18-wasm-memory-footprint.md` |
 | **常驻与释放（2026-09-18）** | 进程内 `CompiledModule` 缓存与**磁盘**缓存解耦（`limits.ModuleCacheMaxBytes` 128 MiB / 128 条）+ **空闲 TTL 淘汰**（10 min，后台 sweep）+ **事件驱动逐出**（下架/冻结/删除）+ 逐出后**限频归还 OS**（`debug.FreeOSMemory` ≥30 s 间隔）；实例仍是**每请求新建、请求结束即关** | 实测（`temp/wasm-mem-probe`）：3.45 MiB Go 应用编译后 RSS ≈25 MB/应用、存活 ≈6 MiB；全部 Close 后 RSS **只回落约 20%** ⇒ "几百个应用"必须靠 TTL + 显式归还，否则常驻只涨不落 |
 | 应用库句柄 | 一应用一句柄（2 条连接）不变；**空闲回收 10 min → 3 min** + 后台 sweep + 事件驱动逐出；每连接 `PRAGMA cache_size = -1024`（1 MiB） | 每句柄常驻从 ~4 MiB 降到 ~2 MiB，且随应用数线性下降；旧实现只在"下一次同应用请求"时回收，没人再访问的应用永不释放 |
 | 上传频率 | 每用户 30 次/小时（validate + publish 合计）+ **同时最多 1 次编译中的上传** | 防"上传即预编译"成为 DoS 面 |
@@ -185,7 +185,7 @@
 |---|---|---|
 | 硬规则 | **宿主函数不得阻塞超过其预算**；每个宿主函数**必须**使用传入的 `ctx` | 实测：宿主阻塞时 guest 超时完全失效（预算 300 ms 跑满 3 s，且返回 `err=nil`） |
 | 宿主调用返回后 | **强制复检** `ctx` 与 module 状态，已取消即按超时处理 | 否则"被杀"会返回成功 |
-| ~~`ai.chat`~~ | **2026-09-19 删除**（总纲 §21）：服务端不再具备任何 AI 能力，本行原记的"单独预算 30 s / 走平台 `/v1` 路径 / 按使用者身份计费"全部作废。应用里的 AI = 前端桥 `POST /__picoaide/ai/chat`（协议 handler 本地处理，不经服务端），计费与归因走客户端既有 LLM 链路 | 已废除 |
+| ~~`ai.chat`~~ | **2026-09-19 删除**（总纲 §21）：服务端不再具备任何 AI 能力，本行原记的"单独预算 30 s / 走平台 `/v1` 路径 / 按使用者身份计费"全部作废。应用里的 AI = 前端桥 `POST /__zeokeel/ai/chat`（协议 handler 本地处理，不经服务端），计费与归因走客户端既有 LLM 链路 | 已废除 |
 | 宿主函数参数 | 任何宿主函数**不得接受文件路径**；`db.*` 只用逻辑标识 | 路径由宿主按 `app_id` 推导 |
 | 事务内宿主调用 | **禁止**（`db.tx` 内调 `log`/`assets.read`/`db.define` 直接报错） | 防事务长期持锁 + 占满执行槽 |
 | 兜底 | 每个宿主调用额外包 `recover()` 边界 | wazero 会 recover 宿主 panic，但那是实现细节不是契约 |
@@ -234,7 +234,7 @@
 ### 4.7 账号、AI 与额度
 
 > ⛔ **AI 各行已作废（2026-09-19，总纲 §21）**：服务端 `ai.chat` 已彻底删除。下表保留原判断作为历史记录；
-> 现行口径 = 应用 AI 由**客户端**提供（前端桥 `POST /__picoaide/ai/chat`，协议 handler 本地处理、
+> 现行口径 = 应用 AI 由**客户端**提供（前端桥 `POST /__zeokeel/ai/chat`，协议 handler 本地处理、
 > 不经服务端），每应用一个隐藏会话、走使用者账计费 + 应用维度归因、首次授权可撤销、流式 SSE、
 > 页面关闭即取消。**实施时读总纲 §21，不要照下表实施。**
 
@@ -245,7 +245,7 @@
 | 准入（R24） | **应用侧**：平台只注入身份；未授权请求照样进 wasm，由应用读自己配置里的 `whitelist` 判定并返回 403（页面必须显示本人账号） | 名单由作者手填在配置文件里；平台不提供目录、不校验账号存在性 |
 | 登录要求（R25） | 由应用配置文件的 `access` 决定：`login`（缺省）与 `whitelist` 都**要求登录**；未带 bearer 的请求在平台层即 401 `AUTH_REQUIRED`，不进 wasm。`whitelist` 只是"要求登录 + 在帧里告诉应用模式"，**名单仍由应用自己判**（R24） | 契约 §4.4 |
 | ~~AI 令牌~~ | **2026-09-19 删除**（总纲 §21）：服务端不再铸造/吊销应用 AI 令牌；**`api_tokens` 保持现状，不加列、不加唯一约束**（本行的结论仍然成立，但依据已不是"AI 走服务端"） | 已废除 |
-| ~~AI 额度与归因~~（R36） | **2026-09-19 删除**：原写"不做应用级额度、不做应用维度归因"。现行 = 仍**不做应用级额度**（沿用使用者余额 + 网关既有用户级边界），但**新增应用维度归因**（隐藏会话元数据带 `app_id`，出站带 `X-Pico-App-Id`，`usage` 加应用维度），见总纲 §21.4 | 已废除（R36 的额度部分保留） |
+| ~~AI 额度与归因~~（R36） | **2026-09-19 删除**：原写"不做应用级额度、不做应用维度归因"。现行 = 仍**不做应用级额度**（沿用使用者余额 + 网关既有用户级边界），但**新增应用维度归因**（隐藏会话元数据带 `app_id`，出站带 `X-ZeoKeel-App-Id`，`usage` 加应用维度），见总纲 §21.4 | 已废除（R36 的额度部分保留） |
 | **额度可见性** | **唯一的额度入口是桌面客户端**（余额/用量都在客户端里）；**应用协议页面与应用中心都不提供额度或用量页面** | 应用侧不需要知道余额，只需在返回额度错误时给出可读提示（现行错误码 `ai_balance_insufficient`） |
 | ~~AI 调用边界 / AI 并发 / 余额预留 / 模型准入 / 提示隔离~~ | **2026-09-19 删除**：这四行描述的"服务端侧 AI 调用边界、`InFlightGuard` 应用级计数、服务端余额预留、服务端模型准入裁决、服务端提示隔离"全部随 `ai.chat` 一起消失。现行 = 客户端 AI loop 承担（仅对话、无工具/无记忆、平台统一默认模型与提示、首次授权闸门、传输层有界），见总纲 §21 | 已废除 |
 
@@ -256,7 +256,7 @@
 | **应用响应安全头（宿主独占，含 4xx/5xx）** | 宿主**强制**写 `Content-Security-Policy`（`default-src 'none'` + 自身源 `script`/`style`/`img`；`frame-ancestors 'none'`）、`X-Content-Type-Options: nosniff`、`Referrer-Policy: same-origin`；应用自带的同名头一律剥离 | 应用页面是任意 HTML/JS 宿主（R8/R37）⇒ **"谁写安全头"必须落在宿主**；对照渠道 SVG 的既有口径（`channel/svg_guard.go`）。自定义协议下平台生产 CSP 已实测逐字放行（契约 §3）。`Referrer-Policy: same-origin` **保留为响应头策略**，但在客户端模型下**不再是安全前提**（请求不发 `Origin`/`Referer`，由协议 handler 补 `Origin`） |
 | 响应头白名单 | `content-type`（限定集合）、`cache-control`、`content-disposition`（仅 `inline`）、`x-content-type-options` | 无 cookie 语义：`Set-Cookie` 由宿主整体丢弃（契约 §4.2） |
 | CR/LF | 头值中出现即拒 | 防响应拆分 |
-| 请求 `host` 判据 | 只接受 `<渠道 app 源 scheme>://<app_id>`（渠道参数化：§10/F15；official/beta 取值 `picoaide-app`）（或裸 `<app_id>`）；`app_id` 来自路由路径，**绝不从 `Host` 反解**；其它形态一律 400 VALIDATION | 契约 §4.2 |
+| 请求 `host` 判据 | 只接受 `<渠道 app 源 scheme>://<app_id>`（渠道参数化：§10/F15；official/beta 取值 `zeokeel-app`）（或裸 `<app_id>`）；`app_id` 来自路由路径，**绝不从 `Host` 反解**；其它形态一律 400 VALIDATION | 契约 §4.2 |
 | 跨源写防护 | 非幂等方法要求 `Origin == 自源`（自源由 `app_id` 推导为 `<渠道 app 源 scheme>://<app_id>`，渠道参数化：§10/F15）；自定义协议请求**不发** `Origin`/`Referer`/`Sec-Fetch-*`，由客户端协议 handler 补 `Origin`（可信组件，必须 fail-closed），两者皆缺即拒 | 契约 §4.3 |
 
 #### 4.8.1 Referrer-Policy 与 `Origin: null`（原浏览器链路修正）
@@ -271,7 +271,7 @@
 | 审计（防篡改链） | 发布结果（成功/失败/被拒）、上下架、**冻结/导出/删除**、令牌铸造与吊销、配额超限、审核开关与可见性变更 | 写路径**单 worker 同步阻塞**（最坏 25 s）⇒ 高频项（令牌铸造/吊销）**异步 fire-and-forget + 失败计数**；`validate` 不进审计；应用请求不写 `audit_logs`（契约 §4.4） |
 | **审计的 app 维度** | `audit_logs` 加**可空 `app_id` + 索引**（哈希链版本化） | 否则答不出"谁在什么时候用了哪个应用" |
 | 调用事件 | 有界环形内存 → 批量落**独立表**（不进哈希链）；字段 `app_id / user_id / outcome / reason_code / cpu_ms / peak_memory_bytes / host_call_count / host_call_ms / queue_wait_ms / response_bytes / db_rows / db_bytes`；**7 天保留 + 丢最旧并计数** | 回答"这个应用刚才为什么被杀"的唯一载体；**必须带 `user_id`**（未授权访问/数据污染追责的底线） |
-| ~~用量归因~~ | **2026-09-19 订正**（总纲 §21.4）：原写"**不改 `usage` 表**、不做应用维度"。现行 = `usage` **新增应用维度**（新迁移 + 索引）用于管理端 AI 用量面板；归因头 `X-Pico-App-Id` 只在确属客户端会话链路时记录（伪造头的非会话请求忽略并记 warn） | 已废除；调用事件里的 `app_id` 仍只用于诊断 |
+| ~~用量归因~~ | **2026-09-19 订正**（总纲 §21.4）：原写"**不改 `usage` 表**、不做应用维度"。现行 = `usage` **新增应用维度**（新迁移 + 索引）用于管理端 AI 用量面板；归因头 `X-ZeoKeel-App-Id` 只在确属客户端会话链路时记录（伪造头的非会话请求忽略并记 warn） | 已废除；调用事件里的 `app_id` 仍只用于诊断 |
 | 诊断 API | 按应用聚合最近 N 条失败与被杀记录，结构化错误码 + hints（第一消费者是 AI）；含 guest exit code 与 stderr 尾巴 | §7.4 |
 | 运维面 | `/readyz`：磁盘余量 / 编译队列深度 / 执行队列深度 / 编译缓存大小；低于阈值红灯并**拒绝发布**（fail-closed） | 现网 `healthz` 只 `db.Ping`：磁盘满仍 healthy |
 
@@ -287,7 +287,7 @@
 | `db.query(sql, args)` | 单条 SELECT | 单语句、参数化、`SQLITE_LIMIT_*`、返回 ≤ 5 000 行 / 8 MiB |
 | `db.exec(sql, args)` | 单条写语句 | 仅 INSERT/UPDATE/DELETE；禁 DDL |
 | `db.tx(fn)` | 事务（语言侧糖） | ABI 层是 `tx_begin`/`tx_commit`/`tx_rollback`（§7.2）；事务内**允许** `db.query`/`db.exec`（+ 两个出口），**禁止** `tx_begin`（嵌套）/`log`/`assets.read`/`db.define`；硬超时 5 s 强制回滚。⚠️ **勘误**：本格原写"禁止调用任何其他宿主函数"，按字面实现会让 `db.tx` **完全不可用**（只能 begin→立刻 commit）—— §4.4 给的依据（"防事务长期持锁 + 占满执行槽"）只覆盖会长时间阻塞/占槽的能力，不覆盖同一条连接上的快 SQL（实施报告 D12，独立审计 P0）。⚠️ **2026-09-19**：禁用清单里的 `ai.chat` 随总纲 §21 一并删除（该能力已不存在） |
-| ~~`ai.chat(messages, model?)`~~ | **2026-09-19 删除**（总纲 §21）：服务端不再具备任何 AI 能力（原记的"模型由服务端裁决 / 预算 30 s / 按使用者身份计费"全部作废）。应用里的 AI = 前端桥 `POST /__picoaide/ai/chat`（客户端协议 handler 本地处理，不经服务端）；老应用仍导入 `ai.chat` ⇒ 导入期 `IMPORT_NOT_ALLOWED` + 迁移指引 | 已废除 |
+| ~~`ai.chat(messages, model?)`~~ | **2026-09-19 删除**（总纲 §21）：服务端不再具备任何 AI 能力（原记的"模型由服务端裁决 / 预算 30 s / 按使用者身份计费"全部作废）。应用里的 AI = 前端桥 `POST /__zeokeel/ai/chat`（客户端协议 handler 本地处理，不经服务端）；老应用仍导入 `ai.chat` ⇒ 导入期 `IMPORT_NOT_ALLOWED` + 迁移指引 | 已废除 |
 | `log(level, msg)` | 写日志 | 单条 ≤ 4 KiB；每请求 ≤ 100 条；超出丢弃并计数 |
 | `assets.read(path)` | 读包内资源 | 资源已在发布期抽到宿主磁盘（§4.2），应用与宿主读同一份；无文件系统语义、无路径穿越 |
 
@@ -346,8 +346,8 @@
 ### 6.1 请求链路
 
 > 本节原描述的「应用子域 → host 门控 → 换票 → Cookie → wasm」链路，随 2026-09-19 访问模型变更**整体删除**（含原链路图）。
-> 现模型：应用由**独立应用窗口**（不是内置浏览器标签，见总纲 §16.1 W-C）加载 `<渠道 app scheme>://<app_id>/<path>` → 客户端协议 handler 从 URL 取 `app_id`、取 `ctx.picoSession`、补 `Origin: <app scheme>://<app_id>` → `POST /api/client/v2/apps/wasm/:app_id/request`（`BearerAuth`）→ `appserver.ServeClientRequest` → 与旧路径共用的 `serveApp` 业务管线（准入/资源/静态/执行/计量不变）。
-> scheme 由渠道配置决定（总纲 §10 的 `desktop.app_origin_scheme`；official/beta = `picoaide-app`）——**不要在任何实现或文案里写死某个渠道的 scheme**。
+> 现模型：应用由**独立应用窗口**（不是内置浏览器标签，见总纲 §16.1 W-C）加载 `<渠道 app scheme>://<app_id>/<path>` → 客户端协议 handler 从 URL 取 `app_id`、取 `ctx.zeokeelSession`、补 `Origin: <app scheme>://<app_id>` → `POST /api/client/v2/apps/wasm/:app_id/request`（`BearerAuth`）→ `appserver.ServeClientRequest` → 与旧路径共用的 `serveApp` 业务管线（准入/资源/静态/执行/计量不变）。
+> scheme 由渠道配置决定（总纲 §10 的 `desktop.app_origin_scheme`；official/beta = `zeokeel-app`）——**不要在任何实现或文案里写死某个渠道的 scheme**。
 > 契约：`docs/decisions/2026-09-19-wasm-client-internal-origin.md` §2 / §4.1–4.4；总纲 §10 / §16.1。
 
 ### 6.2 编译与发布链路（同步，R30）
@@ -376,7 +376,7 @@
 |---|---|
 | **应用之间** | 文件边界 + `ATTACH` 被 `SQLITE_LIMIT_ATTACHED=0`（每条连接重设）与语句白名单双重否决 + 数据目录 `0700` + 文件名由宿主推导 |
 | **用户之间** | **不隔离**（R15）：同应用全员共享；需要按人区分时由应用自己加业务字段（这不是安全边界） |
-| **应用页面层** | 每个 `app_id` 一个自定义协议 origin（`picoaide-app://<app_id>`，渠道参数化：§10/F15）+ 自源 `Origin` 判据 + 宿主安全头；跨应用与跨 UI 的 fetch 由 Chromium 拦（已实测，契约 §3）。cookie 不适用 |
+| **应用页面层** | 每个 `app_id` 一个自定义协议 origin（`zeokeel-app://<app_id>`，渠道参数化：§10/F15）+ 自源 `Origin` 判据 + 宿主安全头；跨应用与跨 UI 的 fetch 由 Chromium 拦（已实测，契约 §3）。cookie 不适用 |
 
 ---
 
@@ -387,7 +387,7 @@
 **帧格式（唯一真源）**：`RS(0x1e) + 十进制长度 + '\n' + UTF-8 JSON`（长度前缀，读取方必须**一次读满**，不得用会预读的 JSON 流式解码器——实测会吞掉后续 RPC 应答；Node WASI 管道 stdin 无数据时 `fd_read` 立即 `EAGAIN`，**不得依赖阻塞语义**）。
 
 ```json
-{"abi":"picoaide-app/1","app_id":"expense-note","version":"1.0.0",
+{"abi":"zeokeel-app/1","app_id":"expense-note","version":"1.0.0",
  "auth":{"mode":"whitelist","verified":true},
  "user":{"id":10231,"username":"zhangwei","display_name":"张伟",
          "dept":"研发部","is_publisher":false},
@@ -396,7 +396,7 @@
  "body":"{\"amount\":100}"}
 ```
 
-（`auth.mode` 取自应用配置文件的 `access`，取值只有 `login` / `whitelist` 两个（历史 `public` 读侧按 `login`）。`whitelist` 模式下宿主**不比对名单**，只是把这个模式告诉应用。清单本身不进帧——应用用 `assets.read("picoaide.app.json")` 读自己的配置。首帧与后续 RPC 应答共用同一帧格式。）
+（`auth.mode` 取自应用配置文件的 `access`，取值只有 `login` / `whitelist` 两个（历史 `public` 读侧按 `login`）。`whitelist` 模式下宿主**不比对名单**，只是把这个模式告诉应用。清单本身不进帧——应用用 `assets.read("zeokeel.app.json")` 读自己的配置。首帧与后续 RPC 应答共用同一帧格式。）
 
 **身份契约（R24–R27，宿主保证）**：
 
@@ -407,7 +407,7 @@
 5. **稳定键**：`user.id` 与 `user.username` 都**不可变** ⇒ 名单与业务权限表用这两个键，不要用 `display_name`/`dept`。
 6. **准入不在宿主**（R24）：已登录但不在名单里的请求照样进 wasm，由应用返回 403；平台拦的是"未登录"。
 
-**应用侧标准模式（skill 模板强制）**：入口第一件事 = 读帧 → 取 `user` → `assets.read("picoaide.app.json")` 取自己的配置 → 比对 `whitelist` → 不在名单返回 403 页面（**必须显示 `user.username`**）。配置由作者在包里维护，**运行期不可改**（改配置 = 发新版，见 R25）。
+**应用侧标准模式（skill 模板强制）**：入口第一件事 = 读帧 → 取 `user` → `assets.read("zeokeel.app.json")` 取自己的配置 → 比对 `whitelist` → 不在名单返回 403 页面（**必须显示 `user.username`**）。配置由作者在包里维护，**运行期不可改**（改配置 = 发新版，见 R25）。
 
 ### 7.2 协议帧（应用 → 宿主）
 
@@ -471,7 +471,7 @@
 | **应用中心** | `GET /api/client/v2/apps/wasm/catalog` | R34/R38：**不再按可见性过滤**——列出全部未删除、有生效版本、未冻结的应用（名称/一句话说明/负责人/**访问级别 `access`**/**是否下架 `enabled`**）；条目提供"打开"动作（本机路由 → `<渠道 app 源 scheme>://<app_id>/`，渠道参数化：§10/F15）与深链分享；**不做安装语义，也不显示额度/用量**（额度只在桌面客户端可见） |
 | 运维面 | （webadmin）应用列表 / 下架 / 转移归属 / 冻结 | R23；转移归属必须放开 kind 白名单（现硬写 skill/agent ⇒ 400） |
 
-**发布链路的跨端预算头（`X-Pico-Client-Budget-Ms`，2026-10-04 审计 FW-2）**：三条发布入口
+**发布链路的跨端预算头（`X-ZeoKeel-Client-Budget-Ms`，2026-10-04 审计 FW-2）**：三条发布入口
 （`validate` / `:app_id/releases` / `uploads/:id/complete`）都接受这个可选请求头，语义是
 "客户端在**这一跳**还会等多少毫秒"（十进制整数毫秒）。平台据此把该跳的总预算钳成
 `min(publish_total_budget, max(0, 该值 − 传输余量))`：缺省 / 空 / 非法 / ≤0 / 大于
@@ -513,7 +513,7 @@
 
 ### 9.3 SKILL.md（AI 的操作手册）
 
-- 位置：**随服务端镜像发布**的内置技能（源码在服务端仓库的 `server/skills/app-builder/`，镜像内 `/opt/picoaide/skills/`；2026-09-19 从客户端 vendored 包迁入并改名 `picoaide-app-builder` → `app-builder`），由服务端 `skillseed` 打包下发（`GET /api/client/v2/skills/builtin`）、客户端在能力中心**按需安装**；**不再**走客户端插件的整目录同步
+- 位置：**随服务端镜像发布**的内置技能（源码在服务端仓库的 `server/skills/app-builder/`，镜像内 `/opt/zeokeel/skills/`；2026-09-19 从客户端 vendored 包迁入并改名 `zeokeel-app-builder` → `app-builder`），由服务端 `skillseed` 打包下发（`GET /api/client/v2/skills/builtin`）、客户端在能力中心**按需安装**；**不再**走客户端插件的整目录同步
 - 结构：小 `SKILL.md`（何时用 + 黄金路径 + 硬约束）+ `references/`（ABI、宿主函数、`limits`、发布、诊断）+ `examples/`（Go 一份，进 CI 真编译，白名单由它 dump 生成）
 - **单一真源**：约束表与 ABI 参考**从 `limits.go` / 契约定义生成**（`go generate` 出产物并提交，构建期比对），skill 带 `x-abi-version`
 - ⚠️ skill 是**客户可见交付物**：不得出现真实客户域名（用占位符）
@@ -524,13 +524,13 @@
 2. **无状态**：不要用全局变量存用户/会话状态——实例每请求新建
 3. **同一应用内所有用户共享数据**（R15）；要区分用户请自己加业务字段
 4. **stdout 只用于协议帧**（`RS` + 长度 + JSON）；日志走 `log`
-5. **服务端没有 AI**（总纲 §21）：`ai.chat` 已删除。要 AI 就在**应用前端**调保留路径 `POST /__picoaide/ai/chat`（客户端协议 handler 本地处理、流式 SSE），再把结果回传 wasm 落库 —— wasm 侧不再有任何 AI 能力
+5. **服务端没有 AI**（总纲 §21）：`ai.chat` 已删除。要 AI 就在**应用前端**调保留路径 `POST /__zeokeel/ai/chat`（客户端协议 handler 本地处理、流式 SSE），再把结果回传 wasm 落库 —— wasm 侧不再有任何 AI 能力
 6. ~~**不能联网**~~ **不能主动发起网络请求**（⚠️ **2026-09-19 措辞订正：总纲 §6 / RED-9 —— 不得对外宣称"不能联网"**）、不能读文件、不能开线程；外部资源必须内联（HTML/JS 也编进 wasm，R8/R37）
-7. **准入由你自己判**（R24）：配置写在 `picoaide.app.json`（`access` 只有 `login` 与 `whitelist` 两种取值），入口第一件事就是读它并比对名单；名单用 `username`/`user.id`；无权限页显示"你的账号：xxx"（平台不校验账号是否存在，拼错只能靠这一步发现）
+7. **准入由你自己判**（R24）：配置写在 `zeokeel.app.json`（`access` 只有 `login` 与 `whitelist` 两种取值），入口第一件事就是读它并比对名单；名单用 `username`/`user.id`；无权限页显示"你的账号：xxx"（平台不校验账号是否存在，拼错只能靠这一步发现）
 8. **平台不提供员工名录**（R26）：名单只能手填已知账号；改配置 = 发新版（R25）
 9. **不依赖 `$HOME`**：编译器状态目录必须落在会话工作区内（R42；否则沙箱下 Go 会报"标准库不存在"这种指错方向的错）
 10. **发布前先本地自测**：Node 内置 `node:wasi` 可零依赖跑通产物（读 stdin 帧、写 `RS` 帧），再走 `validate`
-11. **应用名就是应用标识**（`app_id` → URL host 段；客户端 origin = `<渠道 app 源 scheme>://<app_id>/`，渠道参数化：§10/F15，official/beta 取值 `picoaide-app`）：小写字母/数字/连字符、≤63、不能纯数字、不能 `xn--` 开头、不能是保留字（`app_id` 是 URL host 段与路由标识，host 段必须合法且不得与保留名冲突）；**一经发布不能改名**（改名等于换标识）
+11. **应用名就是应用标识**（`app_id` → URL host 段；客户端 origin = `<渠道 app 源 scheme>://<app_id>/`，渠道参数化：§10/F15，official/beta 取值 `zeokeel-app`）：小写字母/数字/连字符、≤63、不能纯数字、不能 `xn--` 开头、不能是保留字（`app_id` 是 URL host 段与路由标识，host 段必须合法且不得与保留名冲突）；**一经发布不能改名**（改名等于换标识）
 
 ---
 
@@ -637,7 +637,7 @@
     深链直达仍可用（能否用由应用自己判，R24）。`visible` 字段与"按可见性过滤"作废（R38）
 56f. 改了配置但版本号没变                                  → 拒（改配置 = 发新版，R25）
 58. 客户端上传超时 < 服务端 ReadTimeout                → 配置断言（limits 单一真源）；>8 MiB 必走分片
-58b. 分片链 complete 跳：客户端剩余预算 < 平台侧总预算     → 跨端钳位（`X-Pico-Client-Budget-Ms`；缺省/非法/越界回落 `publish_total_budget`，不得放大）；
+58b. 分片链 complete 跳：客户端剩余预算 < 平台侧总预算     → 跨端钳位（`X-ZeoKeel-Client-Budget-Ms`；缺省/非法/越界回落 `publish_total_budget`，不得放大）；
     该值不足传输余量 ⇒ **入口**给结构化结论（不占编译槽/额度），hints 指引带同一个 upload_id 重发
 58c. 总预算在**阶段之外**（前置读 / 落库）到点                → 仍是结构化 `RUNTIME_TIMEOUT` + `phase=publish_budget`（**不得**退化成 500 INTERNAL「查询失败/版本保存失败」）
 59. 编译失败重发同一版本号                            → **成功**（失败不落行，R18）
@@ -668,7 +668,7 @@
 **必须先定/先测（阻塞实现）**
 
 1. **导入白名单由参考实现生成**（先写 Go 样例 → CI 真编译 → dump 导入集）；核对含 `fd_read`
-2. **帧格式 + 应用配置文件落到示例代码**：长度前缀 + `read_exact` 样板（三处：宿主实现、skill references、validate 判据）；`picoaide.app.json` 的 schema、发布期抽取、`assets.read` 读取路径与校验规则（⚠️ 变更（2026-09-18，用户拍板）：含 `access="whitelist"` 空名单即拒；字段规格由 `appcfgspec.go` 生成）
+2. **帧格式 + 应用配置文件落到示例代码**：长度前缀 + `read_exact` 样板（三处：宿主实现、skill references、validate 判据）；`zeokeel.app.json` 的 schema、发布期抽取、`assets.read` 读取路径与校验规则（⚠️ 变更（2026-09-18，用户拍板）：含 `access="whitelist"` 空名单即拒；字段规格由 `appcfgspec.go` 生成）
 3. **迁移一件**：`apps.channel` CHECK 放开 + `kind` 白名单放开（**不新增标识列**：`app_id` 就是应用标识、同 kind 内由主键唯一；`api_tokens` 保持现状）。`app_releases.status` **无需迁移**——`0053_apps.sql:45` 的 CHECK 已含 `'pending','approved','rejected'`（2026-09-17 复核），只有引入新字面量才需要动
 4. **`kind` 影响面审计**：非测试代码 108 处引用 / 13 文件 + webadmin 6 个前端文件（**计数口径见 §15.2 引用纪律**：换 revision 会变）；**两个**未知值回落点都要加 wasm 分支——`channelLabel`（回落"组织共享库"）与 `kindLabelOf`（回落"技能"，用于官方锁定报错）
 5. **唯一 `request` 端点的信封限体 + 413 可读性**（`largeBodyRoutes` + handler 自套 1 MiB + 信封 ≤ 1 MiB×4/3 + 64 KiB）
@@ -684,7 +684,7 @@
 12. 32 MiB 模块（含 4 MiB 自定义段）在 60 s 内编译完成的把握；否则回到分片/异步
 13. 64 MiB 实例下"8 MiB 结果 + JSON 序列化"的真实余量（Go/Zig 不同基线）
 14. `db.define` 运行期建表在 16 表/16 列上限下的幂等与并发行为
-15. 自源 Origin 判据的覆盖率（`picoaide-app://<app_id>`，渠道参数化：§10/F15；协议 handler 补 `Origin`、非幂等写要求 `Origin == 自源`，其余缺则拒）
+15. 自源 Origin 判据的覆盖率（`zeokeel-app://<app_id>`，渠道参数化：§10/F15；协议 handler 补 `Origin`、非幂等写要求 `Origin == 自源`，其余缺则拒）
 
 **已知缺口（未闭合，需排期）**
 
@@ -726,13 +726,13 @@
 | 员工令牌 | `IssueToken`/`VerifyToken`/`CreateToken` | **无需改表**（R36）：身份直接用员工 bearer（`BearerAuth`）经 `clientFrameUser` 投影进帧；`VerifyToken` 保持现状 |
 | AI 网关 | `/v1` + `BearerAuth` + `InFlightGuard` | **应用侧零改动**（R36）：宿主用会话级用户令牌走既有路径；仅建议把既有"只判余额 >0、结算在后"的缺口一并修掉（平台自身风险，与应用无关） |
 | 路由 | `internal/router` 集中声明 | 应用请求 = 唯一 `POST /api/client/v2/apps/wasm/:app_id/request`（`BearerAuth`）+ 信封限体 + Origin 判据；上传路由进 `largeBodyRoutes` 且 handler 自套限体；补"新增大体积路由必须进白名单"的反向断言 |
-| 反代与证书 | `Caddyfile.autocert/manual/internal` | 应用专用反代/证书配置**已全部废除**：应用子域、通配域名/证书、Caddy 通配站点块与 `PICOAI_APPS_BASE_DOMAIN`/`wasm.apps_base_domain` 配置面均于 2026-09-19 删除（契约 §5） |
-| 数据卷 | `picoaide-data` + `entrypoint.sh` 启动 `chown` | 新增 `apps/`（库 + assets + 编译缓存）；`chown -R` 收敛为"只处理新增顶层"或改一次性初始化（失败不得静默 `|| true`） |
+| 反代与证书 | `Caddyfile.autocert/manual/internal` | 应用专用反代/证书配置**已全部废除**：应用子域、通配域名/证书、Caddy 通配站点块与 `ZEOKEEL_APPS_BASE_DOMAIN`/`wasm.apps_base_domain` 配置面均于 2026-09-19 删除（契约 §5） |
+| 数据卷 | `zeokeel-data` + `entrypoint.sh` 启动 `chown` | 新增 `apps/`（库 + assets + 编译缓存）；`chown -R` 收敛为"只处理新增顶层"或改一次性初始化（失败不得静默 `|| true`） |
 | 审计 | `AuditLog(db, username, action, detail)`（单 worker 同步阻塞，最坏 25 s） | 高频项异步化；`audit_logs.app_id` + 索引（哈希链版本化）；调用事件独立表（7 天） |
 | RBAC | 资源类别级 | 沿用粗粒度点 + 应用层 owner 比较；不造实例级权限点 |
-| **员工浏览器会话**（R16） | **不存在**（`picoaide_session` 是管理员专属；员工只有 Bearer） | **2026-09-19 删除**（原 R16）：员工会话表、登录页、登出、换票端点随 `internal/wasmapp/session/**` 一起删除；员工面身份直接走既有 bearer（契约 §4.4、§5） |
+| **员工浏览器会话**（R16） | **不存在**（`zeokeel_session` 是管理员专属；员工只有 Bearer） | **2026-09-19 删除**（原 R16）：员工会话表、登录页、登出、换票端点随 `internal/wasmapp/session/**` 一起删除；员工面身份直接走既有 bearer（契约 §4.4、§5） |
 | **编译进程**（R19/R31） | 不存在 | 独立进程 + wazero 磁盘缓存 + 队列 + 超时取消 + 结果回传 + **OS 级隔离** |
-| ~~**限流**~~ | ~~`callLimiter` 未导出；`PICOAI_TRUSTED_PROXIES` 可选~~ | **不存在**（2026-09-19）：`anonlimit`（全局匿名桶 / 每 IP 桶 / 启动自检）随匿名面与 `internal/wasmapp/anonlimit/**` 一并删除（§16 W4）；客户端专属形态下没有匿名请求 ⇒ 没有应用侧限流面。`PICOAI_TRUSTED_PROXIES` 仍保留，但只用于客户端 IP 归属（总纲 §12） |
+| ~~**限流**~~ | ~~`callLimiter` 未导出；`ZEOKEEL_TRUSTED_PROXIES` 可选~~ | **不存在**（2026-09-19）：`anonlimit`（全局匿名桶 / 每 IP 桶 / 启动自检）随匿名面与 `internal/wasmapp/anonlimit/**` 一并删除（§16 W4）；客户端专属形态下没有匿名请求 ⇒ 没有应用侧限流面。`ZEOKEEL_TRUSTED_PROXIES` 仍保留，但只用于客户端 IP 归属（总纲 §12） |
 | **客户端** | 无编译/上传/应用中心 | 应用中心页 + 编译编排 + 分片上传 + 状态展示（估 8–15 人日） |
 | **运行时依赖** | `server/go.mod` 无 wazero、无纯 Go SQLite 驱动；`CGO_ENABLED=0` 且无 vendor | 新增 `github.com/tetratelabs/wazero` + `modernc.org/sqlite` |
 

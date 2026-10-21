@@ -8,7 +8,7 @@ package router
 import (
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/connectors"
+	"github.com/zeokeel/zeokeel-harness/server/internal/connectors"
 )
 
 // fillConnectorsTestDeps 填连接器 handler。

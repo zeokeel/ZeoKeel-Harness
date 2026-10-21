@@ -41,10 +41,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/skillseed"
-	"github.com/picoaide/picoaide/webadmin"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillseed"
+	"github.com/zeokeel/zeokeel-harness/server/webadmin"
 )
 
 // ---------------------------------------------------------------------------
@@ -781,7 +781,7 @@ func sweepSilenceAccessLog(t *testing.T) {
 
 // sweepBuiltinSkillsDir 解析"这次跑要用哪个内置技能资产目录"。
 //
-// 优先用仓库里的真实资产（server/skills，即镜像 /opt/picoaide/skills 的源头）；
+// 优先用仓库里的真实资产（server/skills，即镜像 /opt/zeokeel/skills 的源头）；
 // 没有就**自建一个夹具技能**。
 //
 // 为什么必须有回退（2026-09-19 实测踩到）：本用例举证的是**路由的内容类型契约**

@@ -1275,7 +1275,7 @@ export const DEFAULT_EXIT_WAIT_TICKS = 240
 export const DEFAULT_BOOT_WAIT_TICKS = 60
 
 const HELPER_TEMPLATE = `#!/bin/sh
-# PicoAide Harness macOS 原地更新帮手。
+# ZeoKeel Harness macOS 原地更新帮手。
 # 由宿主在退出前用 detached 方式拉起（/bin/sh <脚本> <参数…>），宿主退出后由 launchd 收留。
 # 参数见宿主侧 macosUpdateHelperScript 的文档；脚本内**不插值任何路径**。
 # 退出码：0 = 已替换并确认启动；1 = 未替换（旧版本已重新打开或仍在运行）。

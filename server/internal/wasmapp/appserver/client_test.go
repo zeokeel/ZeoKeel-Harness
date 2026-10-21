@@ -30,13 +30,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // clientRequestFor 构造一次"客户端协议 handler 合成"的请求。
 //
 // 形状与 api 层 buildClientRequest 逐字一致（这是跨包契约，不是测试细节）：
-// `URL.Scheme = picoaide-app`、`URL.Host = Host = <app_id>`、路径/方法/体原样。
+// `URL.Scheme = zeokeel-app`、`URL.Host = Host = <app_id>`、路径/方法/体原样。
 // Origin 由协议 handler **合成**（契约 §4.3）—— 自定义协议下浏览器一个都不发。
 func clientRequestFor(t *testing.T, appID, method, path, origin, body string) *http.Request {
 	t.Helper()
@@ -79,7 +79,7 @@ func (e *env) clientUser(username string) *serverstore.User {
 }
 
 // clientOriginOf 是应用自身源（协议 handler 合成 Origin 时用的那个值）。
-func clientOriginOf(appID string) string { return PicoaideAppOrigin(appID) }
+func clientOriginOf(appID string) string { return ZeoKeelAppOrigin(appID) }
 
 // ===== ① 注入的身份必须真的进到应用帧里 =====
 
@@ -170,9 +170,9 @@ func TestClientRequest_AppSessionCookieIsNotIdentity(t *testing.T) {
 	// Cookie 一律不是身份，带上它不会 200、也不会触发任何跳转。
 	for name, cookie := range map[string]*http.Cookie{
 		// 旧模型的应用会话 Cookie 名 + 形态合法的明文值。
-		"forged": {Name: "picoaide_app", Value: "deadbeefdeadbeefdeadbeefdeadbeef", Path: "/"},
+		"forged": {Name: "zeokeel_app", Value: "deadbeefdeadbeefdeadbeefdeadbeef", Path: "/"},
 		// 员工会话 Cookie 名（旧模型里换票的输入）：同样不得被当身份。
-		"employee": {Name: "picoaide_emp", Value: "deadbeefdeadbeefdeadbeefdeadbeef", Path: "/"},
+		"employee": {Name: "zeokeel_emp", Value: "deadbeefdeadbeefdeadbeefdeadbeef", Path: "/"},
 	} {
 		req := clientRequestFor(t, appID, http.MethodGet, "/", "", "")
 		req.AddCookie(cookie)
@@ -263,7 +263,7 @@ func TestClientRequest_MissingOriginOnWriteIs403(t *testing.T) {
 // 或"任意域名都行"⇒ other-host / http(s) / 端口三条红；去掉形态闸 ⇒ malformed 两条红。
 func TestCheckClientOrigin(t *testing.T) {
 	const appID = "demo"
-	self := PicoaideAppOrigin(appID) // picoaide-app://demo
+	self := ZeoKeelAppOrigin(appID) // zeokeel-app://demo
 	cases := []struct {
 		name   string
 		method string
@@ -275,9 +275,9 @@ func TestCheckClientOrigin(t *testing.T) {
 		{"非幂等缺 Origin", http.MethodPost, "", false, "origin_and_referer_missing"},
 		{"非幂等缺 Origin（PUT）", http.MethodPut, "", false, "origin_and_referer_missing"},
 		{"自身源", http.MethodPost, self, true, ""},
-		{"自身源（大小写不敏感）", http.MethodPost, "PicoAide-App://DEMO", true, ""},
+		{"自身源（大小写不敏感）", http.MethodPost, "ZeoKeel-App://DEMO", true, ""},
 		{"自身源（一个尾部斜杠）", http.MethodPost, self + "/", true, ""},
-		{"跨应用", http.MethodPost, PicoaideAppOrigin("other"), false, "origin_mismatch"},
+		{"跨应用", http.MethodPost, ZeoKeelAppOrigin("other"), false, "origin_mismatch"},
 		{"任意域名", http.MethodPost, "https://evil.example", false, "origin_mismatch"},
 		{"同域名的 http 源", http.MethodPost, "http://" + appID, false, "origin_mismatch"},
 		{"带端口", http.MethodPost, self + ":8080", false, "origin_mismatch"},

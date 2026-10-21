@@ -18,7 +18,7 @@
  * 滚动升级窗口：`open` 端点是本版新增的。服务端还没有它时（404/405/501）宿主记一条
  * warn 并**按"不支持"继续打开** —— 否则升级期会出现"客户端一升、应用全打不开"。
  *
- * @module @picoaide/dsh-wasm-apps-host/open-gate
+ * @module @zeokeel/dsh-wasm-apps-host/open-gate
  */
 
 import { APP_PROOF_HEADER } from './app-proof.ts'
@@ -30,7 +30,7 @@ import { normalizeServerURL } from './server-url.ts'
 export const APP_OPEN_PATH = '/api/client/v2/apps/wasm'
 
 /** 版本头（§5.1：缓存键的唯一来源；客户端只剔逐跳头，天然透传）。 */
-export const APP_VERSION_HEADER = 'X-PicoAide-App-Version'
+export const APP_VERSION_HEADER = 'X-ZeoKeel-App-Version'
 
 /** 当日打开计数（§5.1b：pv = 每次 +1 不去重含本次；uv = 当日按 user 去重）。 */
 export interface AppOpenCounts {
@@ -226,7 +226,7 @@ export function createAppOpenGate(deps: AppOpenGateDeps): AppOpenGate {
         })
         // 端点还不存在（滚动升级窗口）：405/501 一律按"不支持"继续打开。
         if (response.status === 405 || response.status === 501) {
-          warn(`pico-wasm-apps-host: the platform has no app open endpoint yet (HTTP ${String(response.status)}); opening without a version check`)
+          warn(`zeokeel-wasm-apps-host: the platform has no app open endpoint yet (HTTP ${String(response.status)}); opening without a version check`)
           return { kind: 'unsupported' }
         }
         let body: unknown
@@ -242,7 +242,7 @@ export function createAppOpenGate(deps: AppOpenGateDeps): AppOpenGate {
         // 不分开的后果是**冻结/下架的应用在真实适配器下永远关不掉窗口**：404 被当成
         // "端点缺失"，路由拿到 `unsupported` 就照常打开。
         if (response.status === 404 && platformErrorCode(body) === null) {
-          warn('pico-wasm-apps-host: the platform has no app open endpoint yet (HTTP 404 without an error envelope); opening without a version check')
+          warn('zeokeel-wasm-apps-host: the platform has no app open endpoint yet (HTTP 404 without an error envelope); opening without a version check')
           return { kind: 'unsupported' }
         }
         if (!response.ok) {
@@ -275,13 +275,13 @@ export function createAppOpenGate(deps: AppOpenGateDeps): AppOpenGate {
         }
         const parsed = parseAppOpenResponse(body)
         if (parsed === null) {
-          warn(`pico-wasm-apps-host: the app open response for ${appId} was malformed`)
+          warn(`zeokeel-wasm-apps-host: the app open response for ${appId} was malformed`)
           return { kind: 'unreachable', detail: 'malformed open response' }
         }
         return { kind: 'ok', ...parsed }
       } catch (cause) {
         const detail = cause instanceof Error ? cause.message : String(cause)
-        warn(`pico-wasm-apps-host: the app open check for ${appId} failed (${detail})`)
+        warn(`zeokeel-wasm-apps-host: the app open check for ${appId} failed (${detail})`)
         return { kind: 'unreachable', detail }
       } finally {
         clearTimeout(timer)

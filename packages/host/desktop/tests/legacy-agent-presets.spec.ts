@@ -20,7 +20,7 @@
  *    Loader 里那行真的 ACTIVE、**而且它声明的插件真的跑过**（探针插件写了标记
  *    文件）。第三条是关键：只断言"roster 里有这个 id"咬不到"plugins 被掏空"。
  *    同一棵树里另有反向对照：**没有目录的那个 id 不得出现**。
- * 2. **跨包格式对拍**：桌面包在构建上**不能** import `@picoaide/dsh-enterprise`
+ * 2. **跨包格式对拍**：桌面包在构建上**不能** import `@zeokeel/dsh-enterprise`
  *    （enterprise 已依赖 `dsh-plugin-desktop`，反向 import 成环，
  *    `scripts/check-workspaces.mjs` 与 `temp/wasm-client-only/cycle-check.mjs`
  *    都会判红），所以格式常量是镜像的一份 —— 必须由**读对方源码**的对拍判据钉住，
@@ -282,8 +282,8 @@ describe('legacy agent preset composition contract', () => {
 
   it('mirrors the enterprise format constants instead of letting them drift', () => {
     // 两侧一致由**读对方源码**的对拍判据钉住：桌面包在构建上不能 import
-    // `@picoaide/dsh-enterprise`（反向 import 会与 enterprise → desktop 成环）。
-    // 2026-10-13（P0-b）：这个模块随技能面搬到 `@picoaide/dsh-capability-center`
+    // `@zeokeel/dsh-enterprise`（反向 import 会与 enterprise → desktop 成环）。
+    // 2026-10-13（P0-b）：这个模块随技能面搬到 `@zeokeel/dsh-capability-center`
     // （host + client 双面）。对拍判据的**对象没变**（还是那一份唯一实现），
     // 只是它的路径跟着走 —— 桌面包照样不能 import 它（反向 import 会成环）。
     const enterprise = readFileSync(

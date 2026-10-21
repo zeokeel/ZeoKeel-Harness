@@ -31,8 +31,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/cachetrust"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/cachetrust"
 	"github.com/tetratelabs/wazero"
 )
 
@@ -68,7 +68,7 @@ func NewRuntimeConfig() wazero.RuntimeConfig {
 // 分代名 = wazero 的真实版本（拿不到时才回落到 limits.CompileCacheRevision）。
 // ⚠️ 事实更正（审计 P1-3，2026-09-18）：早先的实现写死 limits.CompileCacheRevision，
 // 理由是"GetWazeroVersion() 在依赖方返回 dev"——**那只对 `go test` 二进制成立**。
-// `go build` 出来的 main 二进制（服务端进程 / cmd/picoaide-app-compile 都是）里
+// `go build` 出来的 main 二进制（服务端进程 / cmd/zeokeel-app-compile 都是）里
 // debug.ReadBuildInfo().Deps 有 wazero，返回的是真实版本（实测 v1.12.0）⇒ 升级 wazero 后
 // 旧目录本来就不会被命中，不需要任何人记得去改一个手写常量。手写常量只留给"版本不可知"的构建。
 //
@@ -105,7 +105,7 @@ func cacheNamespaceFor(v string) string {
 //
 // 判据（审计 P1-3，2026-09-18）：**只有 `go test` 二进制拿不到版本**（实测 Deps 里没有
 // wazero、Main.Version=(devel)）；`go build` 出来的 main 二进制（服务端进程与
-// cmd/picoaide-app-compile 子进程）Deps 里有 wazero ⇒ 返回 v1.12.0 ⇒ wazero 自己就会按
+// cmd/zeokeel-app-compile 子进程）Deps 里有 wazero ⇒ 返回 v1.12.0 ⇒ wazero 自己就会按
 // `wazero-v1.12.0-<os>-<arch>` 分片，升级 wazero 后旧条目本来就不会被命中。
 //
 // 编译侧有一份同样的镜像（compile.wazeroVersion，该包刻意不 import 本包）：

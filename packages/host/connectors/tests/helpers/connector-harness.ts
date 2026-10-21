@@ -159,7 +159,7 @@ export function createHarness(
 
   const ctx = {
     get: (name: string) => {
-      if (name === 'picoSession') {
+      if (name === 'zeokeelSession') {
         return {
           getSession: () => (username === null ? null : { username, ...(serverURL === null ? {} : { serverURL }), ...(sessionToken === null ? {} : { token: sessionToken }) }),
         }
@@ -170,13 +170,13 @@ export function createHarness(
       return undefined
     },
     on: (event: string, handler: (next: unknown) => void) => {
-      if (event === 'pico/session-changed') sessionHandlers.push(handler)
+      if (event === 'zeokeel/session-changed') sessionHandlers.push(handler)
       const list = eventHandlers.get(event) ?? []
       list.push(handler as (...args: unknown[]) => void)
       eventHandlers.set(event, list)
       return () => {}
     },
-    // The plugin emits `pico/connector-credentials-changed` after a refresh so
+    // The plugin emits `zeokeel/connector-credentials-changed` after a refresh so
     // that stdio servers (whose token lives in the child environment) are
     // re-registered. The real host bus runs these listeners synchronously.
     emit: (event: string, ...args: unknown[]) => {

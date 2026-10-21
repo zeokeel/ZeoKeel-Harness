@@ -1,5 +1,5 @@
 {
-  "schema": "picoaide-migration-checksums/1",
+  "schema": "zeokeel-migration-checksums/1",
   "algorithm": "sha256",
   "generatedBy": "node scripts/check-migration-range.mjs --print-checksums",
   "why": "已应用的迁移会被 `ApplyMigrations` 按版本号跳过、正文不再参与判定（`schema_migrations` 只有 (version, applied_at) 两列），所以\"文件被就地改写\"在运行期完全不可见：旧的已部署库永远拿不到改写后的内容。本表把每个迁移文件的字节摘要冻结下来，让\"改写历史迁移\"这件事在任何一次门禁里都必须显式出现在 diff 中。",

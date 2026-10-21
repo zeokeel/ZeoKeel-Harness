@@ -47,7 +47,7 @@ const CapabilityCenter: ComponentType = __FEATURE_SKILLS__ ? lazy(() => import('
 // 2026-09-18:应用中心(员工自建 WASM 应用的平台管理员面)。
 // 2026-09-19:原「应用平台」(`/app-platform`,并发/内存限制项)并入应用中心成为
 // 「限制项」子页;侧栏只留「应用中心」一个入口。
-// 2026-09-19(同日后半):WASM 应用改为**客户端专属**(`picoaide-app://<app_id>/`),
+// 2026-09-19(同日后半):WASM 应用改为**客户端专属**(`zeokeel-app://<app_id>/`),
 // 服务端删除应用基域配置面 ⇒ 上半天新增的「设置」子页(应用域名/泛域名)整页删除,
 // 连同这里的分区路由与 AppCenterLayout 的子导航项一起去掉(契约 §4.4/§4.5)。
 const AppCenterLayout: ComponentType = __FEATURE_APPS__ ? lazy(() => import('./pages/app-center/AppCenterLayout')) : DisabledPage
@@ -112,7 +112,7 @@ function NotFound() {
 
 // 审计 A5-L11: 侧栏 server_base_url 只在 5 分钟内首次进入时拉取一次网关列表,
 // 避免每次整页刷新都为单个链接重复拉取全量网关配置。
-const BASE_URL_CACHE_KEY = 'picoaide.base_url'
+const BASE_URL_CACHE_KEY = 'zeokeel.base_url'
 const BASE_URL_CACHE_TTL = 5 * 60 * 1000
 
 async function fetchBaseURL(): Promise<string> {

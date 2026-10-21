@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // defaultTick 发放检查间隔(新员工补发的最坏延迟)。

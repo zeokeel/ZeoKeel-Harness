@@ -14,7 +14,7 @@
  * `responsible`（负责人）。刻意**不搜** `app_id` 与 `access`：多一个字段就是多一条
  * 产品承诺，而"为什么这个应用搜不到"会变成无法回答的问题。
  *
- * @module @picoaide/dsh-wasm-apps/client/catalog-filter
+ * @module @zeokeel/dsh-wasm-apps/client/catalog-filter
  */
 
 import type { AppCenterItem } from './AppCenterPanel.tsx'

@@ -87,7 +87,7 @@ const macosUpdate = vi.hoisted(() => ({
   clearMacosUpdateFailures: vi.fn(),
   runMacosCommand: vi.fn(() => ''),
   normalizeVersion: vi.fn((value: string) => value.replace(/^v/u, '')),
-  macAppBundlePath: vi.fn(() => '/Applications/PicoAide Harness.app'),
+  macAppBundlePath: vi.fn(() => '/Applications/ZeoKeel Harness.app'),
   macosUpdatePaths: vi.fn(() => ({
     scriptPath: '/tmp/dsh-desktop-user-data/updates/macos/apply-update.sh',
     logPath: '/tmp/dsh-desktop-user-data/updates/macos/apply-update.log',
@@ -292,8 +292,8 @@ const spec: DesktopShellSpec = {
   minWidth: 900,
   minHeight: 640,
   url: 'http://127.0.0.1:43120/',
-  productName: 'PicoAide Harness',
-  windowTitle: 'PicoAide Harness',
+  productName: 'ZeoKeel Harness',
+  windowTitle: 'ZeoKeel Harness',
   iconPath: '/tmp/app-icon.png',
   trayIcons: {
     templatePath: '/tmp/tray-iconTemplate.png',
@@ -518,7 +518,7 @@ describe('Electron compatibility runtime', () => {
       vibrancy: 'sidebar',
     }))
     expect(options).not.toHaveProperty('autoHideMenuBar')
-    expect(electron.browserWindows[0]?.accessibleTitle).toBe('PicoAide Harness')
+    expect(electron.browserWindows[0]?.accessibleTitle).toBe('ZeoKeel Harness')
     expect(spec.readThemeSource).toHaveBeenCalled()
     expect(electron.nativeTheme.themeSource).toBe('system')
     expect(electron.browserWindows[0]?.removeMenu).not.toHaveBeenCalled()
@@ -549,10 +549,10 @@ describe('Electron compatibility runtime', () => {
     await runtime.mountScheduled()
 
     expect(electron.browserWindowOptions[0]).toEqual(expect.objectContaining({
-      title: 'PicoAide Harness',
+      title: 'ZeoKeel Harness',
       autoHideMenuBar: true,
     }))
-    expect(electron.browserWindows[0]?.accessibleTitle).toBe('PicoAide Harness')
+    expect(electron.browserWindows[0]?.accessibleTitle).toBe('ZeoKeel Harness')
     expect(electron.browserWindows[0]?.removeMenu).toHaveBeenCalledOnce()
     expect(electron.app.dock.setIcon).not.toHaveBeenCalled()
     expect(electron.trays[0]?.image).toBe(electron.blueIcon)
@@ -648,7 +648,7 @@ describe('Electron compatibility runtime', () => {
     expect(runtime.locale).toBe('zh')
     expect((electron.menuTemplates.at(-1) as Array<{ label?: string }>).map(item => item.label))
       .toEqual(expect.arrayContaining([
-        '打开 PicoAide Harness',
+        '打开 ZeoKeel Harness',
         '退出',
       ]))
 
@@ -656,7 +656,7 @@ describe('Electron compatibility runtime', () => {
     expect(runtime.locale).toBe('en')
     expect((electron.menuTemplates.at(-1) as Array<{ label?: string }>).map(item => item.label))
       .toEqual(expect.arrayContaining([
-        'Open PicoAide Harness',
+        'Open ZeoKeel Harness',
         'Quit',
       ]))
 
@@ -665,7 +665,7 @@ describe('Electron compatibility runtime', () => {
     expect(runtime.locale).toBe('zh')
     expect((electron.menuTemplates.at(-1) as Array<{ label?: string }>).map(item => item.label))
       .toEqual(expect.arrayContaining([
-        '打开 PicoAide Harness',
+        '打开 ZeoKeel Harness',
         '退出',
       ]))
 
@@ -781,7 +781,7 @@ describe('Electron compatibility runtime', () => {
 
     const labels = (electron.menuTemplates.at(-1) as Array<{ label?: string }>).map(item => item.label)
     expect(labels).toEqual([
-      'Open PicoAide Harness', undefined,
+      'Open ZeoKeel Harness', undefined,
       'Earlier Tool', 'Later Tool', undefined,
       'Check for Updates…', undefined,
       'Quit',
@@ -954,9 +954,9 @@ describe('Electron compatibility runtime', () => {
     expect(electron.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
       type: 'error',
       title: 'Plugin Recovery',
-      message: 'PicoAide Harness could not load all plugins.',
+      message: 'ZeoKeel Harness could not load all plugins.',
       detail: expect.stringContaining('dsh-vision-router'),
-      buttons: ['Restart PicoAide Harness', 'Dismiss'],
+      buttons: ['Restart ZeoKeel Harness', 'Dismiss'],
     }))
     const recoveryCalls = electron.dialog.showMessageBox.mock.calls as unknown as Array<[{ detail?: string }]>
     expect(recoveryCalls[0]?.[0].detail).toContain('vision_crop')
@@ -1025,7 +1025,7 @@ describe('Electron compatibility runtime', () => {
     const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
     const runtime = new ElectronDesktopRuntime(async () => {})
 
-    await expect(runtime.updates.request('https://api.github.com/repos/picoaide/picoaide-harness/releases/latest', { method: 'GET' }))
+    await expect(runtime.updates.request('https://api.github.com/repos/zeokeel/ZeoKeel-Harness/releases/latest', { method: 'GET' }))
       .resolves.toBe(response)
     expect(runtime.updates).toMatchObject({
       isPackaged: false,
@@ -1042,7 +1042,7 @@ describe('Electron compatibility runtime', () => {
       latestVersion: '2.0.0',
     })
     expect(electron.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
-      title: 'PicoAide Harness Is Up to Date',
+      title: 'ZeoKeel Harness Is Up to Date',
       detail: 'Installed version: 2.0.0',
       buttons: ['OK'],
     }))
@@ -1070,7 +1070,7 @@ describe('Electron compatibility runtime', () => {
     })
     await runtime.updates.announceUpdateReady('2.1.0', '/tmp/DSH-Desktop-2.1.0-mac.dmg')
     expect(electron.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
-      title: 'PicoAide Harness Update Ready',
+      title: 'ZeoKeel Harness Update Ready',
       buttons: ['OK'],
     }))
     expect(electron.shell.openPath).not.toHaveBeenCalled()
@@ -1078,7 +1078,7 @@ describe('Electron compatibility runtime', () => {
     await runtime.updates.installUpdate('2.1.0', '/tmp/DSH-Desktop-2.1.0-mac.dmg')
     expect(electron.shell.openPath).toHaveBeenCalledWith('/tmp/DSH-Desktop-2.1.0-mac.dmg')
     expect(electron.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
-      title: 'PicoAide Harness Update Downloaded',
+      title: 'ZeoKeel Harness Update Downloaded',
       buttons: ['OK'],
     }))
 
@@ -1206,12 +1206,12 @@ describe('Electron compatibility runtime', () => {
   describe('macOS 原地更新（2026-10-09）', () => {
     /** 一个准备好的替换计划（判据只关心它被原样传下去）。 */
     const PLAN = {
-      bundlePath: '/Applications/PicoAide Harness.app',
+      bundlePath: '/Applications/ZeoKeel Harness.app',
       mountPoint: '/tmp/dsh-desktop-user-data/updates/macos/image',
-      sourcePath: '/tmp/dsh-desktop-user-data/updates/macos/image/PicoAide Harness.app',
-      stagingPath: '/Applications/.PicoAide Harness.app.update-2.1.0.app',
-      backupPath: '/Applications/.PicoAide Harness.app.backup-2.1.0.app',
-      bundleIdentifier: 'ai.deepseek.dsh.desktop',
+      sourcePath: '/tmp/dsh-desktop-user-data/updates/macos/image/ZeoKeel Harness.app',
+      stagingPath: '/Applications/.ZeoKeel Harness.app.update-2.1.0.app',
+      backupPath: '/Applications/.ZeoKeel Harness.app.backup-2.1.0.app',
+      bundleIdentifier: 'com.zeokeel.harness',
     }
 
     it('confirms, prepares, starts the helper first and only then quits', async () => {
@@ -1224,7 +1224,7 @@ describe('Electron compatibility runtime', () => {
       const runtime = new ElectronDesktopRuntime(async () => {})
       runtime.schedule({ ...spec, requestQuit })
 
-      await runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+      await runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
 
       // 措辞必须是"会自动重启并替换"，因为接下来真的会发生这件事。
       expect(electron.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
@@ -1236,7 +1236,7 @@ describe('Electron compatibility runtime', () => {
         platform: 'darwin',
         isPackaged: true,
         executablePath: process.execPath,
-        installerPath: '/tmp/PicoAide-Harness-2.1.0-mac.dmg',
+        installerPath: '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg',
         version: '2.1.0',
         userDataPath: '/tmp/dsh-desktop-user-data',
       }))
@@ -1262,7 +1262,7 @@ describe('Electron compatibility runtime', () => {
       const runtime = new ElectronDesktopRuntime(async () => {})
       runtime.schedule({ ...spec, requestQuit })
 
-      await runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+      await runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
 
       expect(macosUpdate.prepareMacosInPlaceUpdate).not.toHaveBeenCalled()
       expect(macosUpdate.spawnMacosUpdateHelper).not.toHaveBeenCalled()
@@ -1276,9 +1276,9 @@ describe('Electron compatibility runtime', () => {
       const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
       const runtime = new ElectronDesktopRuntime(async () => {})
 
-      await runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+      await runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
 
-      expect(electron.shell.openPath).toHaveBeenCalledWith('/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+      expect(electron.shell.openPath).toHaveBeenCalledWith('/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
       expect(electron.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
         detail: expect.stringContaining('The disk image has opened'),
       }))
@@ -1295,9 +1295,9 @@ describe('Electron compatibility runtime', () => {
       const runtime = new ElectronDesktopRuntime(async () => {})
       runtime.schedule({ ...spec, requestQuit })
 
-      await runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+      await runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
 
-      expect(electron.shell.openPath).toHaveBeenCalledWith('/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+      expect(electron.shell.openPath).toHaveBeenCalledWith('/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
       expect(macosUpdate.spawnMacosUpdateHelper).not.toHaveBeenCalled()
       expect(requestQuit).not.toHaveBeenCalled()
     })
@@ -1312,7 +1312,7 @@ describe('Electron compatibility runtime', () => {
       const runtime = new ElectronDesktopRuntime(async () => {})
       runtime.schedule({ ...spec, requestQuit })
 
-      await expect(runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg'))
+      await expect(runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg'))
         .rejects.toThrow('the update image holds com.other.app')
       // 既不开磁盘映像（那等于把坏包交给用户），也不退出宿主。
       expect(electron.shell.openPath).not.toHaveBeenCalled()
@@ -1333,7 +1333,7 @@ describe('Electron compatibility runtime', () => {
       const runtime = new ElectronDesktopRuntime(async () => {})
       runtime.schedule({ ...spec, requestQuit })
 
-      await expect(runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg'))
+      await expect(runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg'))
         .rejects.toThrow('blocked')
       expect(requestQuit).not.toHaveBeenCalled()
     })
@@ -1344,17 +1344,17 @@ describe('Electron compatibility runtime', () => {
       macosUpdate.canInstallMacosInPlace.mockReturnValue(undefined)
       macosUpdate.prepareMacosInPlaceUpdate.mockImplementation(async () => {
         // 第一次还在准备（挂载/复制中）时，第二条入口又点了一次。
-        await runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+        await runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
         return { kind: 'fallback', reason: 'insufficient-space' }
       })
       const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
       const runtime = new ElectronDesktopRuntime(async () => {})
 
-      await runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+      await runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
 
       expect(macosUpdate.prepareMacosInPlaceUpdate).toHaveBeenCalledOnce()
       // 第一条以回落收场 ⇒ 闸门必须放开，用户点第二次仍然能更新。
-      await runtime.updates.installUpdate('2.1.0', '/tmp/PicoAide-Harness-2.1.0-mac.dmg')
+      await runtime.updates.installUpdate('2.1.0', '/tmp/ZeoKeel-Harness-2.1.0-mac.dmg')
       expect(macosUpdate.prepareMacosInPlaceUpdate).toHaveBeenCalledTimes(2)
     })
 
@@ -1372,7 +1372,7 @@ describe('Electron compatibility runtime', () => {
       expect(macosUpdate.writeMacosUpdateBootMarker).toHaveBeenCalledWith(
         '/tmp/dsh-desktop-user-data',
         APP_VERSION,
-        '/Applications/PicoAide Harness.app',
+        '/Applications/ZeoKeel Harness.app',
         expect.any(String),
       )
       await release()
@@ -1401,8 +1401,8 @@ describe('Electron compatibility runtime', () => {
           reason: 'application-did-not-start',
           fromVersion: '1.0.0',
           toVersion: '2.1.0',
-          targetPath: '/Applications/PicoAide Harness.app',
-          backupPath: '/Applications/.PicoAide Harness.app.backup-2.1.0.app',
+          targetPath: '/Applications/ZeoKeel Harness.app',
+          backupPath: '/Applications/.ZeoKeel Harness.app.backup-2.1.0.app',
           logPath: '/tmp/dsh-desktop-user-data/updates/macos/apply-update.log',
         },
       })
@@ -1417,7 +1417,7 @@ describe('Electron compatibility runtime', () => {
         electron.browserWindows.at(-1),
         expect.objectContaining({
           type: 'warning',
-          title: 'PicoAide Harness Could Not Be Updated',
+          title: 'ZeoKeel Harness Could Not Be Updated',
           message: expect.stringContaining('2.1.0'),
           detail: expect.stringContaining('did not start'),
         }),
@@ -1432,7 +1432,7 @@ describe('Electron compatibility runtime', () => {
       macosUpdate.readMacosUpdateOutcome.mockReturnValueOnce({
         kind: 'applied',
         toVersion: '2.1.0',
-        backupPath: '/Applications/.PicoAide Harness.app.backup-2.1.0.app',
+        backupPath: '/Applications/.ZeoKeel Harness.app.backup-2.1.0.app',
         logPath: '/tmp/dsh-desktop-user-data/updates/macos/apply-update.log',
       })
       const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
@@ -1444,7 +1444,7 @@ describe('Electron compatibility runtime', () => {
       // 审计 A10/A15：删备份前要先问"还有进程在跑它吗"（第三个参数就是那条命令边界），
       // 并且这一版成功之后要把它的失败账清掉。
       expect(macosUpdate.removeMacosUpdateBackup).toHaveBeenCalledWith(
-        '/Applications/.PicoAide Harness.app.backup-2.1.0.app',
+        '/Applications/.ZeoKeel Harness.app.backup-2.1.0.app',
         expect.any(Function),
         macosUpdate.runMacosCommand,
       )
@@ -1511,35 +1511,35 @@ describe('Electron compatibility runtime', () => {
     expect(electron.nativeTheme.themeSource).toBe('system')
   })
 
-  it('queues picoaide:// deep links before the handler is installed, then flushes', async () => {
+  it('queues zeokeel:// deep links before the handler is installed, then flushes', async () => {
     const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
     const runtime = new ElectronDesktopRuntime(async () => {})
     const links: string[] = []
     // 未安装 handler 时收到的链接入队
-    runtime.receiveDeepLink('picoaide://auth?token=early')
-    runtime.receiveDeepLink('picoaide://auth?token=early2')
+    runtime.receiveDeepLink('zeokeel://auth?token=early')
+    runtime.receiveDeepLink('zeokeel://auth?token=early2')
     expect(links).toEqual([])
     // 安装 handler → 冲刷全部排队链接
     runtime.setDeepLinkHandler((url) => links.push(url))
-    expect(links).toEqual(['picoaide://auth?token=early', 'picoaide://auth?token=early2'])
+    expect(links).toEqual(['zeokeel://auth?token=early', 'zeokeel://auth?token=early2'])
     // 后续链接直接投递
-    runtime.receiveDeepLink('picoaide://auth?token=later')
-    expect(links).toContain('picoaide://auth?token=later')
+    runtime.receiveDeepLink('zeokeel://auth?token=later')
+    expect(links).toContain('zeokeel://auth?token=later')
   })
 
-  it('drops deep links that are not allow-listed picoaide:// actions (P2-62)', async () => {
+  it('drops deep links that are not allow-listed zeokeel:// actions (P2-62)', async () => {
     const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
     const runtime = new ElectronDesktopRuntime(async () => {})
     const links: string[] = []
-    runtime.receiveDeepLink('picoaide://evil?token=stolen')
+    runtime.receiveDeepLink('zeokeel://evil?token=stolen')
     runtime.receiveDeepLink('https://auth?token=stolen')
-    runtime.receiveDeepLink('picoaide://')
+    runtime.receiveDeepLink('zeokeel://')
     runtime.receiveDeepLink('not a url')
     runtime.setDeepLinkHandler((url) => links.push(url))
     // Nothing queued before the handler: every candidate was rejected.
     expect(links).toEqual([])
-    runtime.receiveDeepLink('picoaide://auth?token=ok')
-    expect(links).toEqual(['picoaide://auth?token=ok'])
+    runtime.receiveDeepLink('zeokeel://auth?token=ok')
+    expect(links).toEqual(['zeokeel://auth?token=ok'])
   })
 
   it('does not re-deliver a deep link after the handler is replaced', async () => {
@@ -1548,12 +1548,12 @@ describe('Electron compatibility runtime', () => {
     const first: string[] = []
     const second: string[] = []
     runtime.setDeepLinkHandler((url) => first.push(url))
-    runtime.receiveDeepLink('picoaide://auth?token=a')
-    expect(first).toEqual(['picoaide://auth?token=a'])
+    runtime.receiveDeepLink('zeokeel://auth?token=a')
+    expect(first).toEqual(['zeokeel://auth?token=a'])
     runtime.setDeepLinkHandler((url) => second.push(url))
-    runtime.receiveDeepLink('picoaide://auth?token=b')
-    expect(first).toEqual(['picoaide://auth?token=a'])
-    expect(second).toEqual(['picoaide://auth?token=b'])
+    runtime.receiveDeepLink('zeokeel://auth?token=b')
+    expect(first).toEqual(['zeokeel://auth?token=a'])
+    expect(second).toEqual(['zeokeel://auth?token=b'])
   })
 
   it('lets the window load channel logos served by the customer gateway (img-src)', async () => {
@@ -1781,7 +1781,7 @@ describe('Electron compatibility runtime', () => {
   it('validates deep links against the channel scheme, not the vendor default', async () => {
     // 2026-09-11 真机复现：渠道构建（scheme=acmeai/probeharness 之类）的
     // 浏览器 SSO 回调在 shell 的严格闸门被当成畸形链接丢掉，因为 receiveDeepLink
-    // 用的是模块缺省 `picoaide`。scheme 必须由 main.ts 传进来。
+    // 用的是模块缺省 `zeokeel`。scheme 必须由 main.ts 传进来。
     const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
     const logger = { error: vi.fn(), errorCause: vi.fn() }
     const delivered: string[] = []
@@ -1902,7 +1902,7 @@ describe('崩溃回退：框架判据 + 串行化（B-01/B-03）', () => {
  * 必须共用**同一个** origin 判据闭包。
  *
  * 2026-09-25 审计实测：删掉 `will-redirect` 那一行注册后本文件 44/44 全绿 —— 302 把窗口
- * 换到外站/别的 origin 这类回归可以静默落地。应用窗口（`@picoaide/dsh-wasm-apps-host`）
+ * 换到外站/别的 origin 这类回归可以静默落地。应用窗口（`@zeokeel/dsh-wasm-apps-host`）
  * 的那一份有判据（`electron-adapter.spec.ts` 的「302 与 will-navigate 共用同一判据」），
  * 主窗口是同一不变量的第二条路径，此前零判据。
  *

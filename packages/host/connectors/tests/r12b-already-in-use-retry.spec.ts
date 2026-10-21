@@ -118,7 +118,7 @@ function createHarness(
 
   const ctx = {
     get: (name: string) => {
-      if (name === 'picoSession') return { getSession: () => ({ username: 'user-a' }) }
+      if (name === 'zeokeelSession') return { getSession: () => ({ username: 'user-a' }) }
       if (name === 'connection') return fence
       if (name === 'desktopRuntime') return { locale: 'zh' }
       return undefined
@@ -197,7 +197,7 @@ function createHarness(
 async function awaitAuthorizeUrl(h: ReturnType<typeof createHarness>, deadlineMs = 8_000): Promise<string> {
   const deadline = Date.now() + deadlineMs
   for (;;) {
-    const res = await callRoute(h as never, '/api/pico/connectors/example-mcp/state', 'GET')
+    const res = await callRoute(h as never, '/api/zeokeel/connectors/example-mcp/state', 'GET')
     const url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request?.authorizeUrl
     if (url !== undefined) return url
     if (Date.now() > deadline) throw new Error('no authorize URL')
@@ -214,7 +214,7 @@ describe('R12 B-03: `already in use` 重试路径必须重新发布活头记录'
 
     // ---- day 1：真实授权 + 真实连接（注册 #1） ------------------------------
     const day1 = createHarness([def(server.origin)], dir)
-    await callRoute(day1 as never, '/api/pico/connectors/example-mcp/connect', 'POST')
+    await callRoute(day1 as never, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(day1))
     await waitFor(() => day1.connects.length === 1 && day1.connects[0]?.ok === true, 15_000)
     expect(day1.connects[0]?.error, 'day 1 必须连上').toBeUndefined()
@@ -237,14 +237,14 @@ describe('R12 B-03: `already in use` 重试路径必须重新发布活头记录'
     const day2 = createHarness([def(server.origin)], dir, {
       ghost: true,
       race: async () => {
-        const res = await callRoute(day2 as never, '/api/pico/connectors/example-mcp/refresh', 'POST')
+        const res = await callRoute(day2 as never, '/api/zeokeel/connectors/example-mcp/refresh', 'POST')
         expect(res.status, '注入的刷新必须成功（否则这条用例什么都没证明）').toBe(200)
       },
     })
     await waitFor(() => day2.connects.length === 1 && day2.connects[0]?.settled === true, 30_000)
 
     const stored = await store.readCredential('example-mcp')
-    const row = JSON.parse((await callRoute(day2 as never, '/api/pico/connectors/example-mcp/state', 'GET')).body) as { status?: string }
+    const row = JSON.parse((await callRoute(day2 as never, '/api/zeokeel/connectors/example-mcp/state', 'GET')).body) as { status?: string }
     const day2Wire = server.stats.mcpBearerTokens.slice(baselineWire)
     const frames = server.stats.mcpHeaders.slice(baselineHeaders)
       .map(head => `${head['content-type'] === undefined ? 'no-body' : 'json-body'}:${String(head['x-probe-key'] ?? '<absent>')}`)

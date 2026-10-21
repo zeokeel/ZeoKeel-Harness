@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // skillArchiveBytes 构造一个合规技能归档(0052:git 模式移除后,内容一律
@@ -25,7 +25,7 @@ func skillArchiveBytes(t *testing.T, name string) []byte {
 
 func marketUserSetup(t *testing.T) (http.Handler, *sql.DB, string, int64, string) {
 	t.Helper()
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
 	uid, err := serverstore.CreateUserWithPassword(db, "alice", "pw123456")

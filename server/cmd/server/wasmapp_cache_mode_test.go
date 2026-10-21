@@ -36,9 +36,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 )
 
 // readyzCacheModes 从 `/readyz` 的**真实 HTTP 响应体**里取两个模式字段。

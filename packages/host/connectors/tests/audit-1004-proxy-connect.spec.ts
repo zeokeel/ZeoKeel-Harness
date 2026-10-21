@@ -41,7 +41,7 @@ const REBINDING_PUBLIC_ANSWER = '198.51.100.7'
 
 /** Every variable this suite's verdicts depend on. */
 const PROXY_ENV_NAMES: readonly string[] = [
-  'PICOAI_ALLOW_SYSTEM_PROXY', 'picoai_allow_system_proxy',
+  'ZEOKEEL_ALLOW_SYSTEM_PROXY', 'zeokeel_allow_system_proxy',
   'NODE_USE_ENV_PROXY', 'node_use_env_proxy',
   'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy',
   'ALL_PROXY', 'all_proxy', 'NO_PROXY', 'no_proxy',
@@ -199,7 +199,7 @@ describe('proxy policy: the route reproduces what the pre-pinning stack did', ()
     expect(resolveConnectorProxyRoute({}, url)).toEqual({ kind: 'direct', reason: 'default' })
     // The switch is bidirectional: an explicit off wins over everything else.
     expect(resolveConnectorProxyRoute({
-      PICOAI_ALLOW_SYSTEM_PROXY: '0',
+      ZEOKEEL_ALLOW_SYSTEM_PROXY: '0',
       NODE_USE_ENV_PROXY: '1',
       HTTPS_PROXY: 'http://proxy.example.com:3128',
     }, url)).toEqual({ kind: 'direct', reason: 'policy-off' })
@@ -395,7 +395,7 @@ describe('parity: the switch this package reads is the desktop shell\'s switch',
     const source = readFileSync(new URL('../../desktop/src/network-policy.ts', import.meta.url), 'utf8')
     const allowedName = /export const ALLOW_SYSTEM_PROXY_ENV = '([^']+)'/u.exec(source)?.[1]
     const flagName = /export const NODE_ENV_PROXY_FLAG = '([^']+)'/u.exec(source)?.[1]
-    expect(allowedName, 'network-policy.ts must still export ALLOW_SYSTEM_PROXY_ENV').toBe('PICOAI_ALLOW_SYSTEM_PROXY')
+    expect(allowedName, 'network-policy.ts must still export ALLOW_SYSTEM_PROXY_ENV').toBe('ZEOKEEL_ALLOW_SYSTEM_PROXY')
     expect(flagName, 'network-policy.ts must still export NODE_ENV_PROXY_FLAG').toBe('NODE_USE_ENV_PROXY')
     const flagBody = /export function isEnabledFlag\(([\s\S]*?)\n\}/u.exec(source)?.[1]
     expect(flagBody, 'network-policy.ts must still export isEnabledFlag').toBeDefined()
@@ -408,9 +408,9 @@ describe('parity: the switch this package reads is the desktop shell\'s switch',
       expect(source, `${name} must stay a proxy name the shell strips when it bans proxies`).toContain(name)
     }
     // And the switch that parity just checked is the one the route reads.
-    expect(resolveConnectorProxyRoute({ PICOAI_ALLOW_SYSTEM_PROXY: 'no' }, new URL('https://a.example.com/')).kind)
+    expect(resolveConnectorProxyRoute({ ZEOKEEL_ALLOW_SYSTEM_PROXY: 'no' }, new URL('https://a.example.com/')).kind)
       .toBe('direct')
-    expect(resolveConnectorProxyRoute({ PICOAI_ALLOW_SYSTEM_PROXY: '1', NODE_USE_ENV_PROXY: '1', HTTPS_PROXY: 'http://p.example.com:1' }, new URL('https://a.example.com/')).kind)
+    expect(resolveConnectorProxyRoute({ ZEOKEEL_ALLOW_SYSTEM_PROXY: '1', NODE_USE_ENV_PROXY: '1', HTTPS_PROXY: 'http://p.example.com:1' }, new URL('https://a.example.com/')).kind)
       .toBe('proxy')
   })
 

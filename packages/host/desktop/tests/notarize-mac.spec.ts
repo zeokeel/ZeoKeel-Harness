@@ -15,7 +15,7 @@ function makeOptions(overrides: Partial<NotarizeMacOptions> = {}): {
   calls: CommandCall[]
   responses: string[]
 } {
-  const appPath = '/app/PicoAide Harness.app'
+  const appPath = '/app/ZeoKeel Harness.app'
   const calls: CommandCall[] = []
   const responses: string[] = []
   return {
@@ -59,7 +59,7 @@ describe('notarytool-resilient notarization', () => {
     const result = await notarizeMacApp(options)
 
     expect(result).toEqual({
-      appPath: '/app/PicoAide Harness.app',
+      appPath: '/app/ZeoKeel Harness.app',
       submissionId: '00000000-0000-0000-0000-000000000001',
       status: 'Accepted',
     })
@@ -78,12 +78,12 @@ describe('notarytool-resilient notarization', () => {
     expect(waitArgs[2]).toBe('00000000-0000-0000-0000-000000000001')
     expect(waitArgs.at(-2)).toBe('--timeout')
     // 提交的是 zip(notarytool 不收 .app 目录),点击目标是 .app
-    expect(calls[0]?.args).toContain('PicoAide Harness.app')
+    expect(calls[0]?.args).toContain('ZeoKeel Harness.app')
     expect(calls[1]?.args[2]).toMatch(/\.zip$/u)
     // ditto 在 .app 父目录执行(keepParent 归档根为 .app 而非绝对路径)
     expect(calls[0]?.args).toContain('--keepParent')
-    expect(calls[4]?.args).toEqual(['stapler', 'staple', '/app/PicoAide Harness.app'])
-    expect(calls[5]?.args).toEqual(['stapler', 'validate', '/app/PicoAide Harness.app'])
+    expect(calls[4]?.args).toEqual(['stapler', 'staple', '/app/ZeoKeel Harness.app'])
+    expect(calls[5]?.args).toEqual(['stapler', 'validate', '/app/ZeoKeel Harness.app'])
   })
 
   it('accepts the legacy one-line Submission ID format too', async () => {
@@ -128,7 +128,7 @@ describe('notarytool-resilient notarization', () => {
     const resumeFile = join(dir, 'state.json')
     writeFileSync(
       resumeFile,
-      JSON.stringify({ appPath: '/app/PicoAide Harness.app', submissionId: '00000000-0000-0000-0000-000000000009' }),
+      JSON.stringify({ appPath: '/app/ZeoKeel Harness.app', submissionId: '00000000-0000-0000-0000-000000000009' }),
     )
     const { options, calls, responses } = makeOptions({ resumeFilePath: resumeFile })
     responses.push('Status: Accepted\n')
@@ -142,7 +142,7 @@ describe('notarytool-resilient notarization', () => {
     // 由调用方在整条发布链路成功后清除。
     expect(existsSync(resumeFile)).toBe(true)
     expect(JSON.parse(readFileSync(resumeFile, 'utf8'))).toEqual({
-      appPath: '/app/PicoAide Harness.app',
+      appPath: '/app/ZeoKeel Harness.app',
       submissionId: '00000000-0000-0000-0000-000000000009',
     })
     rmSync(dir, { recursive: true, force: true })
@@ -159,7 +159,7 @@ describe('notarytool-resilient notarization', () => {
 
     await expect(notarizeMacApp(options)).rejects.toThrow(/did not reach Accepted/u)
     expect(JSON.parse(readFileSync(resumeFile, 'utf8'))).toEqual({
-      appPath: '/app/PicoAide Harness.app',
+      appPath: '/app/ZeoKeel Harness.app',
       submissionId: '00000000-0000-0000-0000-00000000000a',
     })
     rmSync(dir, { recursive: true, force: true })

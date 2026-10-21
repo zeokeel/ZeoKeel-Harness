@@ -1,5 +1,5 @@
 import { ConnectorsList } from './ConnectorsSection.tsx'
-import { PanelPage, icons } from '@picoaide/dsh-panel-surface/client'
+import { PanelPage, icons } from '@zeokeel/dsh-panel-surface/client'
 import { t } from './locales.ts'
 
 /**
@@ -13,7 +13,7 @@ import { t } from './locales.ts'
  */
 export function ConnectorPanel({ onClose }: { onClose: () => void }) {
   return (
-    <div className="pico-connectors" data-role="connectors-page">
+    <div className="zeokeel-connectors" data-role="connectors-page">
       <PanelPage
         icon={<icons.IconPlug size={16} />}
         title={t('panel.title')}

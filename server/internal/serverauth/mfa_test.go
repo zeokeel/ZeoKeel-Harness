@@ -13,8 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // ---- 0057 密码/MFA 全链路测试 ----
@@ -175,7 +175,7 @@ func TestAdminChangeOwnPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}
 	// 旧密码错
 	w, _ := doAdmin(t, r, "POST", "/api/server/admin/me/password", `{"old_password":"nope","new_password":"abcd123456789"}`, hdr)
 	if w.Code != http.StatusUnauthorized {
@@ -210,7 +210,7 @@ func adminSessionHeaders(t *testing.T, db *sql.DB, username string) (map[string]
 	if err != nil {
 		t.Fatal(err)
 	}
-	return map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}, u.ID
+	return map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}, u.ID
 }
 
 func TestMFALifecycle(t *testing.T) {
@@ -279,7 +279,7 @@ func TestMFALifecycle(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("login/mfa: %d %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Header().Get("Set-Cookie"), "picoaide_session=") {
+	if !strings.Contains(w.Header().Get("Set-Cookie"), "zeokeel_session=") {
 		t.Fatalf("no session cookie: %v", w.Header())
 	}
 	// 重放 → 失效
@@ -399,7 +399,7 @@ func TestAdminMustChangeGuardBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}
 	// 业务端点被拦
 	w, out := doAdmin(t, r, "GET", "/api/server/admin/users", "", hdr)
 	if w.Code != http.StatusForbidden {

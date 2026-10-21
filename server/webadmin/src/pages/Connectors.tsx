@@ -173,7 +173,7 @@ const TEMPLATES: { label: string; name: string; description: string; authMode: A
     name: 'GlitchTip',
     description: 'GlitchTip(Sentry 兼容错误追踪):查询 issue 与最新事件堆栈。',
     authMode: 'token',
-    json: '{"tokenFields":[{"key":"GLITCHTIP_BASE_URL","label":"服务地址(必填,如自部署地址或 app.glitchtip.com)","type":"text","required":true},{"key":"GLITCHTIP_TOKEN","label":"API Token(Auth Tokens 页创建,需 org:read / project:read / event:read)","type":"password","required":true},{"key":"GLITCHTIP_ORGANIZATION","label":"组织 slug(如 picoaide)","type":"text","required":true}],"examples":["查询当前未解决的错误 issue","查看最近一次异常的堆栈详情"],"mcp":[{"serverName":"glitchtip","transport":"stdio","command":"npx","args":["-y","glitchtip-mcp"],"env":{}}]}',
+    json: '{"tokenFields":[{"key":"GLITCHTIP_BASE_URL","label":"服务地址(必填,如自部署地址或 app.glitchtip.com)","type":"text","required":true},{"key":"GLITCHTIP_TOKEN","label":"API Token(Auth Tokens 页创建,需 org:read / project:read / event:read)","type":"password","required":true},{"key":"GLITCHTIP_ORGANIZATION","label":"组织 slug(如 zeokeel)","type":"text","required":true}],"examples":["查询当前未解决的错误 issue","查看最近一次异常的堆栈详情"],"mcp":[{"serverName":"glitchtip","transport":"stdio","command":"npx","args":["-y","glitchtip-mcp"],"env":{}}]}',
   },
   {
     label: '销售易(标准 MCP 配置)',
@@ -375,13 +375,13 @@ function fmtTime(iso: string): string {
 }
 
 /**
- * 连接器页的**变体哨兵串**（P3；命名 = `picoaide.feature.<模块>.v1`，模块名 `connectors`
+ * 连接器页的**变体哨兵串**（P3；命名 = `zeokeel.feature.<模块>.v1`，模块名 `connectors`
  * 与 Go 侧 `-tags`、渠道配置 `features` 逐字一致）。
  *
  * 双侧判据与两条纪律见 `pages/CapabilityCenter.tsx` 的同名常量；产物级断言在
  * `scripts/check-feature-chunks.mjs`。
  */
-export const FEATURE_SENTINEL = 'picoaide.feature.connectors.v1'
+export const FEATURE_SENTINEL = 'zeokeel.feature.connectors.v1'
 
 export default function Connectors() {
   const [rows, setRows] = useState<ConnectorRow[]>([])

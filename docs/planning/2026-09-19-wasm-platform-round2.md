@@ -8,7 +8,7 @@
 > 存量部署的清理步骤见 `docs/deploy/AI-DEPLOY.md` §2.5。
 
 > 用户提出的问题（原文）：
-> 2. `picoaide-app-builder` 这个技能要改名字叫 `app-builder`，然后这个应该是默认放在服务端的技能库里，而不是放在客户端里。我在能力中心里看不到这个。
+> 2. `zeokeel-app-builder` 这个技能要改名字叫 `app-builder`，然后这个应该是默认放在服务端的技能库里，而不是放在客户端里。我在能力中心里看不到这个。
 > 3. 你需要检查一下，wasm 应用怎么支持高并发，不应该是每个请求串行。
 > 4. sqlite 应该是支持并发读取的。高并发读取情况下会有问题，写入确实需要串行。我记得 sqlite 是可以配置的。
 > 5. 你自己再检查一下性能方面，和流程配置，还有哪些不人性化的地方，只查 wasm 代码就行。
@@ -20,7 +20,7 @@
 
 | # | 定性 | 根因 | 严重度 |
 |---|---|---|---|
-| 2 | 产品/位置 | 技能确实是服务端内置（skillseed + 镜像），但**源码**在客户端 vendored 包目录，且名字带 `picoaide-` 前缀 | P1 |
+| 2 | 产品/位置 | 技能确实是服务端内置（skillseed + 镜像），但**源码**在客户端 vendored 包目录，且名字带 `zeokeel-` 前缀 | P1 |
 | 3 | 缺陷 | 同应用请求串行有**四层**叠加（队列 `app_running=1`、句柄池整请求独占、appdb 一把锁、池容量 2） | **P0** |
 | 4 | 缺陷 | 应用库**从未开启 WAL**、`busy_timeout=0`，读与写共用一把锁 | **P0** |
 | 5 | 质量 | 见 §5（审计子代理产出的分级清单） | P1/P2 |
@@ -91,20 +91,20 @@
 ## 3. 问题 2：技能改名 `app-builder` + 源码归位服务端（P1）
 
 侦查确认（与用户直觉的差异）：
-- `picoaide-app-builder` **已经是服务端内置技能**：镜像内 `/opt/picoaide/skills/`，
+- `zeokeel-app-builder` **已经是服务端内置技能**：镜像内 `/opt/zeokeel/skills/`，
   由 `skillseed` 打包下发（`GET /api/client/v2/skills/builtin[/:name/archive]`，
   BearerAuth，无授权门）；客户端能力中心已用普通卡片渲染
   （`BuiltinSkillsStrip.tsx`）。实测测试环境下发的清单里就是它。
 - 用户「看不到」的最可能原因：**部署/客户端版本**（skillseed 与卡片渲染在
   v2.7.6-beta.1/beta.3 才进），或他看的是 **webadmin**（管理后台当前没有内置技能面）。
 - 但**源码**确实在客户端 vendored 包目录
-  （`packages/vendor/memory-evolve/skills/picoaide-app-builder/`），服务端镜像只是把它
+  （`packages/vendor/memory-evolve/skills/zeokeel-app-builder/`），服务端镜像只是把它
   当 build context 拷进来 ⇒ 用户的诉求「应该在服务端」在**仓库结构**上仍然成立。
 
 本次要做：
 1. 技能源码从客户端 vendored 包**搬到服务端资产目录**，Dockerfile 直接 COPY
    （不再依赖 `skillassets` 指向客户端包）。
-2. 改名 `picoaide-app-builder` → `app-builder`，同步所有引用点：SKILL.md
+2. 改名 `zeokeel-app-builder` → `app-builder`，同步所有引用点：SKILL.md
    frontmatter 与正文、Dockerfile、CI 镜像内断言、`verify-packaged-runtime.ts`
    必需条目、客户端/服务端测试夹具、`skills-sync.js` 的排除表、docs/site。
 3. 能力中心可见性：确认服务端下发 + 客户端卡片渲染链路，并**在 webadmin 增加

@@ -23,9 +23,9 @@ function fixture(version = '2.0.0'): { readonly root: string; readonly portable:
   temporaryRoots.push(root)
   const dist = join(root, 'dist')
   mkdirSync(dist, { recursive: true })
-  const portable = join(dist, `PicoAide-Harness-${version}-x64-Portable.zip`)
+  const portable = join(dist, `ZeoKeel-Harness-${version}-x64-Portable.zip`)
   const archive = new AdmZip()
-  archive.addFile('PicoAide Harness.exe', portableExecutable())
+  archive.addFile('ZeoKeel Harness.exe', portableExecutable())
   archive.addFile('resources/app.asar', Buffer.from('asar'))
   archive.writeZip(portable)
   return { root, portable }
@@ -45,8 +45,8 @@ function OFFICIAL_OPTIONS(desktopRoot: string): WindowsPortableVerificationOptio
   return {
     desktopRoot,
     version: '2.0.0',
-    archiveName: 'PicoAide-Harness-2.0.0-x64-Portable.zip',
-    executableName: 'PicoAide Harness.exe',
+    archiveName: 'ZeoKeel-Harness-2.0.0-x64-Portable.zip',
+    executableName: 'ZeoKeel Harness.exe',
   }
 }
 
@@ -61,7 +61,7 @@ describe('Windows portable artifact verification', () => {
     const value = fixture('1.9.0')
 
     expect(() => verifyWindowsPortable(OFFICIAL_OPTIONS(value.root)))
-      .toThrow('PicoAide-Harness-2.0.0-x64-Portable.zip')
+      .toThrow('ZeoKeel-Harness-2.0.0-x64-Portable.zip')
   })
 
   it('rejects an application entry without a Windows PE header', () => {
@@ -69,7 +69,7 @@ describe('Windows portable artifact verification', () => {
     const invalid = portableExecutable()
     invalid.write('NO', 0, 'ascii')
     const archive = new AdmZip()
-    archive.addFile('PicoAide Harness.exe', invalid)
+    archive.addFile('ZeoKeel Harness.exe', invalid)
     archive.addFile('resources/app.asar', Buffer.from('asar'))
     archive.writeZip(value.portable)
 

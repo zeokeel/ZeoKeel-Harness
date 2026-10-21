@@ -22,7 +22,7 @@ import path from "node:path"
     const str = (v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined)
     const publicChannel = id === "official" || id === "beta"
     // 官方正式版的数据目录名(desktop-home.ts 的 PRODUCT_DSH_HOME_DIR,编译期常量)。
-    const OFFICIAL_HOME_DIR = ".picoaide-harness"
+    const OFFICIAL_HOME_DIR = ".zeokeel-harness"
     const missing = []
     const invalid = []
     const warnings = []
@@ -42,9 +42,9 @@ import path from "node:path"
     // 装到客户机器上时数据已经共享了。
     // **beta 相反(2026-09-12 用户定案)**:预发版是正式版的前置验证,必须与 official
     // 用同一个数据根,否则装预发版的用户升级后看不到既有会话与登录态 —— 当天早些
-    // 时候改成独立目录 `.picoaide-harness-beta` 就是这么炸的(用户报"所有对话都没了":
+    // 时候改成独立目录 `.zeokeel-harness-beta` 就是这么炸的(用户报"所有对话都没了":
     // 旧数据留在官方目录,新客户端读的是新目录)。这条**显式且唯一**:写别的目录(含
-    // 派生兜底 `.picoaide-harness-<渠道>`)一律 fail-loud,免得哪天又静默漂移。
+    // 派生兜底 `.zeokeel-harness-<渠道>`)一律 fail-loud,免得哪天又静默漂移。
     if (str(cfg?.desktop?.home_dir) === undefined && id !== "official") missing.push("desktop.home_dir")
     // 数据目录名形状:`~` 下的**单段**目录名(点开头 + 小写字母/数字/连字符)。
     // 允许分隔符等于让渠道包把数据根挪到任意位置;大写会让同一个渠道在 Linux 与
@@ -59,7 +59,7 @@ import path from "node:path"
     // 品牌渠道(official/beta 之外)**不得**等于官方目录:渠道线与 official 的
     // 会话格式世代可能不同,共用会静默分叉数据;不同客户之间更不该共享数据根。
     if (id !== "official" && id !== "beta" && homeDir === OFFICIAL_HOME_DIR) {
-      invalid.push("desktop.home_dir(不得与官方渠道共用数据目录:渠道线与 official 的会话格式世代可能不同,共用会静默分叉数据;请用 .picoaide-harness-<渠道>)")
+      invalid.push("desktop.home_dir(不得与官方渠道共用数据目录:渠道线与 official 的会话格式世代可能不同,共用会静默分叉数据;请用 .zeokeel-harness-<渠道>)")
     }
     // 非法字段**只报字段名,不回显取值** —— 渠道包里 slug/app_id/scheme 的值就是
     // 客户品牌(Acme-AI / com.acme.ai / acmeai),而这一步的输出进公开 Actions 日志。

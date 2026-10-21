@@ -158,8 +158,8 @@ const MINIMUM_REQUIRED_GUARDS = [
  */
 const REGISTERED_GUARD_ENTRIES = new Map([
   // 2026-10-13：`scripts/verify-layout.mjs` 的包名表新增
-  // `packages/host/capability-center` ↔ `@picoaide/dsh-capability-center` 与
-  // `packages/host/gateway-client` ↔ `@picoaide/dsh-gateway-client`
+  // `packages/host/capability-center` ↔ `@zeokeel/dsh-capability-center` 与
+  // `packages/host/gateway-client` ↔ `@zeokeel/dsh-gateway-client`
   // （能力中心 host + client 双面从 enterprise 拆出；网关客户端叶子包新建，2026-10-13 P0-b）
   // ⇒ 该守卫脚本内容变了，按本表上方的
   // 纪律在同一个改动里更新摘要（取值来自 `--print-digests` 的复算结果，

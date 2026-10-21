@@ -32,8 +32,8 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 )
 
 // 两条循环的检查间隔（装配层唯一真源：判据断言装配传的就是这两个常量）。

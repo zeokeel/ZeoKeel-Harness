@@ -18,23 +18,23 @@ scrollHeight / scrollTop / 是否被容器裁掉）。
 
 修复前（打包版实测，四个面板同形）：
 
-| 面板 | 容器高 | 面板根高 | `.pico-scroll` clientHeight | 能滚 |
+| 面板 | 容器高 | 面板根高 | `.zeokeel-scroll` clientHeight | 能滚 |
 | --- | --- | --- | --- | --- |
 | 定时任务 / 能力中心 / 连接器 / 应用中心 | 813px | **2714px** | 2652px（=内容高） | ❌ scrollTop 无效 |
 
-修复后同一探针：`rootH = 813 = containerH`，`.pico-scroll` clientHeight 694–751，注入超高内容
+修复后同一探针：`rootH = 813 = containerH`，`.zeokeel-scroll` clientHeight 694–751，注入超高内容
 后 `scrollHeight > clientHeight` 且 `scrollTop` 真的生效，四个面板全部 PASS。
 
 ### 根因
 
-高度链断在**面板根包装层**（各插件自己的 div：`.pico-capability` / `.pico-connectors` /
-`.pico-app-center` / cron 的 `div[data-dsh-plugin="cron"]`）：
+高度链断在**面板根包装层**（各插件自己的 div：`.zeokeel-capability` / `.zeokeel-connectors` /
+`.zeokeel-app-center` / cron 的 `div[data-dsh-plugin="cron"]`）：
 
 ```
 [data-dsh-panel-surface]  height:100%   ← 有界（813px）
-└─ .pico-capability      height:auto    ← 断点：无高度声明
+└─ .zeokeel-capability      height:auto    ← 断点：无高度声明
    └─ PanelPage          height:100%    ← 百分比在"包含块高度 auto"时按 auto 解析 ⇒ 退化成内容高
-      └─ .pico-scroll    flex:1;min-height:0;overflow:auto  ← 拿到的是内容高度 ⇒ 永不溢出、永不滚动
+      └─ .zeokeel-scroll    flex:1;min-height:0;overflow:auto  ← 拿到的是内容高度 ⇒ 永不溢出、永不滚动
 ```
 
 内容因此一路向下长，被容器（或中列祖先）裁掉 —— 用户看到的就是"翻不到下面"。
@@ -183,10 +183,10 @@ DISPLAY=:99 node temp/ui-scroll-probe.mjs --port 9232
 corepack yarn workspace dsh-plugin-desktop e2e:client
 
 # 3) 包级门禁
-corepack yarn workspace @picoaide/dsh-panel-surface test
-corepack yarn workspace @picoaide/dsh-cron test
-corepack yarn workspace @picoaide/dsh-connectors test
-corepack yarn workspace @picoaide/dsh-enterprise test
+corepack yarn workspace @zeokeel/dsh-panel-surface test
+corepack yarn workspace @zeokeel/dsh-cron test
+corepack yarn workspace @zeokeel/dsh-connectors test
+corepack yarn workspace @zeokeel/dsh-enterprise test
 ```
 
 打包踩坑（值得记）：`electron-builder --dir` 在**工作区里存在悬空符号链接**时会报

@@ -26,7 +26,7 @@ packages/host/desktop/build/assistedMessages.yml
 # `/favicon.svg` 与 `/manifest.webmanifest` 服务（src/brand-web-route.ts）读这份落盘文件；
 # 同样派生自品牌目录，不入库。
 packages/host/desktop/build/web-brand/
-# 渠道包(私有仓 picoaide/channels/<id>/channel.json)由**打包脚本**在打包前
+# 渠道包(私有仓 zeokeel/channels/<id>/channel.json)由**打包脚本**在打包前
 # 就位到 build/(scripts/channel-build.ts 的 stageChannelProfile),随应用资源
 # 分发;内容是客户品牌,绝不入库。
 packages/host/desktop/build/channel.json
@@ -106,9 +106,9 @@ temp/
 
 # Normify 架构结构库（normify-gen 技能产物：1541 个结构文件 + 渲染数据 + 单文件架构图）
 # 有意留在项目根目录供随项目查阅，但属派生产物、体量与 diff 都大，故不入库。
-# 若要改为版本化：删掉本行后 `git add normify-picoaide`（公开仓提交前先跑
+# 若要改为版本化：删掉本行后 `git add normify-zeokeel`（公开仓提交前先跑
 # `node scripts/check-no-real-domains.mjs` 确认零命中）。
-normify-picoaide/
+normify-zeokeel/
 
 # local writable DSH home mirror (this sandbox root fs is read-only)
 .dsh-home/
@@ -147,7 +147,7 @@ server/sockprobe
 # 浏览器 store 回退目录（无 Electron userData 时的兜底;审计 2026-09-08 P2-38b）
 .browser-store/
 
-# 渠道配置来自私有仓 picoaide/channels(CI 检出覆盖;本目录只保留 README)
+# 渠道配置来自私有仓 zeokeel/channels(CI 检出覆盖;本目录只保留 README)
 channels/*
 !channels/README.md
 

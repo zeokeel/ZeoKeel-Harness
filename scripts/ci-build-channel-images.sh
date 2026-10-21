@@ -2,7 +2,7 @@
 #
 # 逐渠道构建服务端镜像并导出交付压缩包。
 #
-# 每个渠道产出 `release-bundle/<channel>/picoaide-server-<ver>-amd64.zip` +
+# 每个渠道产出 `release-bundle/<channel>/zeokeel-server-<ver>-amd64.zip` +
 # `SHA256SUMS` —— 一张镜像内含该渠道的**三平台客户端**(客户端随镜像分发,
 # 由服务端自己下发给员工)与该渠道的渠道内容(品牌/文案/logo)。
 #
@@ -39,7 +39,7 @@ REPO_ROOT="${CI_IMAGE_BUILD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pw
 # 都以仓库根为基准 —— 调用方的工作目录不影响结果。
 cd "$REPO_ROOT"
 VER="${VERSION#v}"
-IMAGE="picoaide-harness-server"
+IMAGE="zeokeel-harness-server"
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
 
@@ -158,7 +158,7 @@ for channel in "${CHANNELS[@]}"; do
   #    缺任一即 fail-loud 并点名平台 —— 旧实现是 `[ -f … ] || return 0`,缺平台时
   #    生成的清单只是少一个键:更新清单少一个平台、门户少一个下载入口、
   #    `/updates/client/<安装包名>` 404,而流水线全绿、镜像内校验也绿。
-  BASE="https://release.picoaide.com/${channel}/releases/${VER}"
+  BASE="https://release.zeokeel.com/${channel}/releases/${VER}"
   {
     echo '{'
     echo '  "schema": 1,'
@@ -219,7 +219,7 @@ for channel in "${CHANNELS[@]}"; do
   cp -a "channels/${channel}/." "channels-context/${channel}/"
 
   # 4) 构建镜像 + 导出 zip。渠道轮静默。
-  ARCHIVE="picoaide-server-${VER}-amd64.zip"
+  ARCHIVE="zeokeel-server-${VER}-amd64.zip"
   mkdir -p "$OUT/$channel"
   # 每一步都显式 `|| return 1`:调用方在 `if ! build` 这类**条件语境**里调用时,
   # bash 会抑制函数体内的 set -e(条件语境的抑制会继承进函数/子 shell),于是
@@ -228,7 +228,7 @@ for channel in "${CHANNELS[@]}"; do
   build() {
     local img_tar="$REPO_ROOT/image.tar"
     # 内置技能资产的源头就在镜像构建上下文里（server/skills/<name>/，Dockerfile
-    # 直接 COPY 进 /opt/picoaide/skills；服务端由 GET /api/client/v2/skills/builtin
+    # 直接 COPY 进 /opt/zeokeel/skills；服务端由 GET /api/client/v2/skills/builtin
     # 下发、客户端在能力中心按需安装）。2026-09-19 起源头归位服务端，不再需要
     # 指向客户端 vendored 插件包的 --build-context skillassets。
     docker buildx build \
@@ -237,7 +237,7 @@ for channel in "${CHANNELS[@]}"; do
       --build-arg CHANNEL="$channel" \
       --build-context clientassets=./client-assets \
       --build-context channelassets=./channels-context \
-      --label "org.opencontainers.image.source=https://github.com/picoaide/picoaide-harness" \
+      --label "org.opencontainers.image.source=https://github.com/zeokeel/ZeoKeel-Harness" \
       --label "org.opencontainers.image.version=$VER" \
       --tag "${IMAGE}:v${VER}" \
       --load \
@@ -248,8 +248,8 @@ for channel in "${CHANNELS[@]}"; do
     # 直接 403,2026-09-10 实测)。
     #
     # 渠道 tag 是**同机多栈**的唯一防线(2026-09-23 审计 K-02):渠道差异在**内容**
-    # (/opt/picoaide/channel + 烘焙的渠道标识),不在 tag —— 归档内部 tag 恒为
-    # `picoaide-harness-server:v<ver>`。同一台宿主机部署两个渠道时,后 `docker load`
+    # (/opt/zeokeel/channel + 烘焙的渠道标识),不在 tag —— 归档内部 tag 恒为
+    # `zeokeel-harness-server:v<ver>`。同一台宿主机部署两个渠道时,后 `docker load`
     # 的会**覆盖**前者那个 tag,此后任一栈 `docker compose up -d server` 都会用
     # **另一渠道**的镜像重建(品牌、随包客户端全错,`.env` 里的 SERVER_IMAGE 看起来
     # 却完全正确)。带上渠道 tag 后,部署侧只要把该栈 `.env` 写成
@@ -276,25 +276,25 @@ for channel in "${CHANNELS[@]}"; do
   verify_image() {
     docker run --rm --entrypoint sh "${IMAGE}:v${VER}" -c '
       set -e
-      test -s /opt/picoaide/client/CLIENT-RELEASE.json || { echo "MISSING /opt/picoaide/client/CLIENT-RELEASE.json" >&2; exit 1; }
-      test -s /opt/picoaide/channel/channel.json || { echo "MISSING /opt/picoaide/channel/channel.json" >&2; exit 1; }
+      test -s /opt/zeokeel/client/CLIENT-RELEASE.json || { echo "MISSING /opt/zeokeel/client/CLIENT-RELEASE.json" >&2; exit 1; }
+      test -s /opt/zeokeel/channel/channel.json || { echo "MISSING /opt/zeokeel/channel/channel.json" >&2; exit 1; }
       # 内置技能（服务端下发、客户端按需安装）：缺 SKILL.md 时清单会是空的，
       # 而"清单是空的"在客户端只表现为"能力中心里没有这条技能"，零报错。
-      test -s /opt/picoaide/skills/app-builder/SKILL.md || { echo "MISSING /opt/picoaide/skills/app-builder/SKILL.md" >&2; exit 1; }
-      test -s /opt/picoaide/skills/app-builder/references/publishing.md || { echo "MISSING builtin skill references/" >&2; exit 1; }
+      test -s /opt/zeokeel/skills/app-builder/SKILL.md || { echo "MISSING /opt/zeokeel/skills/app-builder/SKILL.md" >&2; exit 1; }
+      test -s /opt/zeokeel/skills/app-builder/references/publishing.md || { echo "MISSING builtin skill references/" >&2; exit 1; }
       # 构建期从**中性源**注入技能目录的打包器（技能文档里 20 处按 scripts/pack-assets.mjs
       # 这个相对路径引用它）。它由 server/Dockerfile 的 COPY 注入，而 Go 侧判据只读
       # Dockerfile **文本** —— 这一条是同一件事的镜像级见证（跑在真镜像里）：
       # 注入 COPY 被删、或被挪进中间阶段时，文本判据会红；万一两者都漏过去，这里也会红。
-      test -s /opt/picoaide/skills/app-builder/scripts/pack-assets.mjs || { echo "MISSING /opt/picoaide/skills/app-builder/scripts/pack-assets.mjs" >&2; exit 1; }
-      test -s "/opt/picoaide/CHANNEL" || { echo "MISSING /opt/picoaide/CHANNEL" >&2; exit 1; }
+      test -s /opt/zeokeel/skills/app-builder/scripts/pack-assets.mjs || { echo "MISSING /opt/zeokeel/skills/app-builder/scripts/pack-assets.mjs" >&2; exit 1; }
+      test -s "/opt/zeokeel/CHANNEL" || { echo "MISSING /opt/zeokeel/CHANNEL" >&2; exit 1; }
       # 平台键齐全是硬判据:服务端只按这个清单下发更新地址,少一个键 = 该平台
       # 永远拿不到客户端(门户同样少一个下载入口),而镜像"看起来"是好的。
       for key in "$@"; do
-        grep -q "\"$key\"" /opt/picoaide/client/CLIENT-RELEASE.json || { echo "MISSING client asset key $key in CLIENT-RELEASE.json" >&2; exit 1; }
+        grep -q "\"$key\"" /opt/zeokeel/client/CLIENT-RELEASE.json || { echo "MISSING client asset key $key in CLIENT-RELEASE.json" >&2; exit 1; }
       done
-      ls /opt/picoaide/client/ | grep -q . || { echo "client dir empty" >&2; exit 1; }
-    ' picoaide-platform-check $PLATFORM_KEYS
+      ls /opt/zeokeel/client/ | grep -q . || { echo "client dir empty" >&2; exit 1; }
+    ' zeokeel-platform-check $PLATFORM_KEYS
   }
 
   if [ "$channel" = "official" ]; then

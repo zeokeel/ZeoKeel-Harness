@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/edge"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/edge"
 )
 
 // ============================================================================
@@ -74,7 +74,7 @@ func EnvelopeHeaderHint() string {
 // ============================================================================
 
 // HeadersSpecSchema 是 wasm-app-headers.json 的格式版本（消费方据此判断能否解析）。
-const HeadersSpecSchema = "picoaide-wasm-app-headers/1"
+const HeadersSpecSchema = "zeokeel-wasm-app-headers/1"
 
 // HeadersLimits 是信封里与头相关的**传输层上限**（与 clientreq.go 的常量同源）。
 type HeadersLimits struct {

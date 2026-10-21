@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func blockBalanceSettingsAudit(t *testing.T, db *sql.DB) {

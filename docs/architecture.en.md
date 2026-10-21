@@ -1,8 +1,8 @@
-# PicoAide Harness Architecture
+# ZeoKeel Harness Architecture
 
 ## Overview
 
-PicoAide Harness is a thin Electron host. It boots the official DSH Host in the Electron main process; the Host exposes the ordinary Web UI over a loopback HTTP/WebSocket carrier. PicoAide Harness does not create a second renderer IPC plugin system and does not expose raw Electron APIs to the page.
+ZeoKeel Harness is a thin Electron host. It boots the official DSH Host in the Electron main process; the Host exposes the ordinary Web UI over a loopback HTTP/WebSocket carrier. ZeoKeel Harness does not create a second renderer IPC plugin system and does not expose raw Electron APIs to the page.
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ The shell is fixed to the advanced presentation: the Client face installs the De
 
 ## Profile and service boundaries
 
-The launcher manages exactly one fixed `desktop` profile; there is no profile selector and no `web` default. Since upstream 0.1.5 the CLI rejects both `dsh --profile desktop` and `dsh plugin --profile desktop` ("managed exclusively by the Electron application"), so third-party plugins are added through the profile's own patch layer: write the row into `~/.picoaide-harness/cordis.patch.yml`, which the launcher merges on every boot.
+The launcher manages exactly one fixed `desktop` profile; there is no profile selector and no `web` default. Since upstream 0.1.5 the CLI rejects both `dsh --profile desktop` and `dsh plugin --profile desktop` ("managed exclusively by the Electron application"), so third-party plugins are added through the profile's own patch layer: write the row into `~/.zeokeel-harness/cordis.patch.yml`, which the launcher merges on every boot.
 
 The launcher-private `desktopRuntime`, `desktopPlugins` (profile-bundle disable preview/execute), Electron executable, Node helpers, and ABI environment are not third-party APIs. The supported public contracts are documented in [`dsh-plugin-desktop/docs/plugin-services.md`](../packages/host/desktop/docs/plugin-services.md).
 

@@ -3,7 +3,7 @@ package serverauth
 import (
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 审计 2026-09-12 P1-4 回归:报表订阅列表含 hook_url(凭据本体)⇒ 必须有

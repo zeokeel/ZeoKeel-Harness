@@ -17,9 +17,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // FIX-01(P0):审核预览上限同时是 SKILL.md 进 YAML 解析器的输入边界。
@@ -95,8 +95,8 @@ func skillUpload(t *testing.T, name, version, desc string) string {
 
 func setup(t *testing.T) (*gin.Engine, *sql.DB, map[string]string, map[string]string, map[string]string) {
 	t.Helper()
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "1000")
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "1000")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
 	tokens := map[string]string{}
@@ -136,11 +136,11 @@ func setup(t *testing.T) (*gin.Engine, *sql.DB, map[string]string, map[string]st
 	csrf, _ := out["csrf_token"].(string)
 	sess := ""
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "picoaide_session" {
+		if ck.Name == "zeokeel_session" {
 			sess = ck.Value
 		}
 	}
-	adminHdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	adminHdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 
 	return r, db, adminHdr,
 		map[string]string{"Authorization": "Bearer " + tokens["alice"]},

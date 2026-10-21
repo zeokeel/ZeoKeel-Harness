@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 )
 
 // nowMicros 是单调时钟读数（微秒），只用来算"这一跳花了多久"。
@@ -41,7 +41,7 @@ func nowMicros() int64 { return time.Since(bootAt).Microseconds() }
 var bootAt = time.Now()
 
 /** 应用配置文件在包内的逻辑路径（平台保留资源，永不被宿主直出）。 */
-const AppConfigPath = "picoaide.app.json"
+const AppConfigPath = "zeokeel.app.json"
 
 /** 入口 HTML 在包内的逻辑路径（由 {@link App.EntryHTML} 读出，不交给宿主直出）。 */
 const EntryAssetPath = "index.html"
@@ -381,7 +381,7 @@ type Config struct {
 	Owner           string   `json:"owner"`
 }
 
-// ReadConfig 读自己的 `picoaide.app.json`。
+// ReadConfig 读自己的 `zeokeel.app.json`。
 //
 // 它是**平台保留资源**：宿主永不直出，只有应用自己读得到 —— 所以名单可以放这里
 // （放进非保留资源等于对任何能打开应用的人公开）。

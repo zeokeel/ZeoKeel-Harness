@@ -47,11 +47,11 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
-	"github.com/picoaide/picoaide/internal/wasmapp/capapi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
 )
 
 // DefaultLogLevel 是 log 调用未给 level 时的兜底级别。
@@ -461,7 +461,7 @@ func (c *Capabilities) callAssetsRead(ctx context.Context, raw json.RawMessage) 
 		return nil, apperr.New(apperr.CodeValidation, "assets.read 的 path 不能为空").
 			WithDetail("method", abi.MethodAssetsRead).
 			WithDetail("field", "path").
-			WithHint("path 是包内逻辑路径，如 picoaide.app.json / index.html / static/app.css")
+			WithHint("path 是包内逻辑路径，如 zeokeel.app.json / index.html / static/app.css")
 	}
 	if c.Assets == nil {
 		return nil, capabilityUnavailable(abi.MethodAssetsRead)

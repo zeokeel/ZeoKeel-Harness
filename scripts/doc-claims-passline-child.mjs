@@ -75,7 +75,7 @@ if (!existsSync(childUrl)) {
 
 // 旧 Node（没有 `import.meta.main`）上，主模块靠这个**进程内**标记区分"被 import"与"被当入口执行"。
 // 它在 import 之前设置 ⇒ 环境变量 / 命令行都塞不进来（那是纯数据通道，改不了进程内 Symbol）。
-globalThis[Symbol.for('picoaide.check-doc-claims.passline-child')] = true
+globalThis[Symbol.for('zeokeel.check-doc-claims.passline-child')] = true
 
 const { failures, hits, moduleHits, surfaceProblems, summaryLine } = await import(childUrl.href)
 

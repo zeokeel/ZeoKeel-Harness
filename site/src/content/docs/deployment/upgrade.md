@@ -1,9 +1,9 @@
 ---
 title: 升级、备份与回滚
-description: 升级 PicoAide Harness 服务端：版本检查、备份与校验、切换镜像、升级后判据，以及同代与跨代回滚的不同做法。
+description: 升级 ZeoKeel Harness 服务端：版本检查、备份与校验、切换镜像、升级后判据，以及同代与跨代回滚的不同做法。
 ---
 
-升级只换镜像：`picoaide-data/`、`pg-data/`、`caddy-data/`、`certs/` 与 `.env` 都不动。
+升级只换镜像：`zeokeel-data/`、`pg-data/`、`caddy-data/`、`certs/` 与 `.env` 都不动。
 但**数据库迁移不可逆**，所以"备份 + 校验非空"和"升级后三项验证"是流程的一部分，不是可选项。
 
 ## 这一页解决什么问题
@@ -16,7 +16,7 @@ description: 升级 PicoAide Harness 服务端：版本检查、备份与校验�
 | 前提 | 说明 |
 |---|---|
 | 远端版本 **高于**当前运行版本 | 否则无需升级（第 1 步会给判据） |
-| 备份**必须做**，而且必须确认非空 | 唯一退路是升级前那份 `pg_dump` 与 `picoaide-data/` 快照 |
+| 备份**必须做**，而且必须确认非空 | 唯一退路是升级前那份 `pg_dump` 与 `zeokeel-data/` 快照 |
 | 知道本栈属于哪个渠道 | 同机多栈时必须用渠道专属 tag 做锚点（见[同一台服务器上跑多个渠道栈](#同一台服务器上跑多个渠道栈)） |
 | 能接受"升级后管理员需重登一次"这类行为变化 | 见第 2 步的行为变化清单，逐条判断是否需要处置 |
 
@@ -40,7 +40,7 @@ description: 升级 PicoAide Harness 服务端：版本检查、备份与校验�
 **为什么备份后必须校验非空。** 备份命令失败（磁盘满、容器名写错、`pg_dump` 权限不足）时，
 shell 仍会留下一个同名文件 —— 空文件、几 KB 的残件、被截断的 tar。
 如果升级随后出问题，你会在最需要退路的时候才发现退路不存在。因此判据是 `[ -s … ]`（非空），
-而不是"文件在不在"。`picoaide-data/` 尤其关键：里面的 `master.key` 一旦丢失，
+而不是"文件在不在"。`zeokeel-data/` 尤其关键：里面的 `master.key` 一旦丢失，
 数据库中所有加密的上游 API Key **永久无法解密**。
 
 **为什么迁移不可逆，以及为什么"跨代回滚"要和数据库一起退。** 迁移只向前推进库结构；
@@ -76,15 +76,15 @@ shell 仍会留下一个同名文件 —— 空文件、几 KB 的残件、被�
 
 ```bash
 # 远端最新版本（权威：latest.json 的 server.version）
-curl -fsS https://release.picoaide.com/official/latest.json \
+curl -fsS https://release.zeokeel.com/official/latest.json \
   | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
-cat /opt/picoaide/VERSION        # 当前部署版本
-docker exec picoaide-server /app/picoaide-server --version   # 运行中的版本
+cat /opt/zeokeel/VERSION        # 当前部署版本
+docker exec zeokeel-server /app/zeokeel-server --version   # 运行中的版本
 ```
 
 也可以直接看管理后台的**服务器信息**页：服务端自己检查更新并显示"发现新版本"（含目标镜像 tag）。
 
-- 检查地址来自 `PICOAI_UPDATE_ENDPOINT`，留空 = 本渠道默认目录 `release.picoaide.com/<渠道>/latest.json`；
+- 检查地址来自 `ZEOKEEL_UPDATE_ENDPOINT`，留空 = 本渠道默认目录 `release.zeokeel.com/<渠道>/latest.json`；
 - 服务端有 **6 小时缓存**，刚发版时等待属正常延迟；
 - "一直不显示新版本"先看 `docker compose logs server` 里的 `channel resolved: …` 与
   `manifest channel "official" != this server's channel "…"` —— 那是渠道配置不自洽
@@ -95,7 +95,7 @@ docker exec picoaide-server /app/picoaide-server --version   # 运行中的版�
 ### 2. 升级前检查
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 
 # (a) PG 数据布局检查：旧布局（PG16 时代）直接启动会被拒绝
 [ -f pg-data/PG_VERSION ] && echo "!!! 旧版 PG16 布局，需先做 dump/restore 迁移，停止升级" || echo "PG 布局 OK"
@@ -114,7 +114,7 @@ df -h /opt | tail -1
 | 管理端存量会话失效（迁移 `0066`：会话令牌只存哈希） | **管理员需重新登录一次**，属预期，不是故障 |
 | 不可逆迁移（`0073` 删表、`0074` 改写应用配置） | 引入这两条的版本线**回滚 ≠ 只换镜像**，必须连库一起退 |
 | 网关限流缺省值变化 | 代码缺省改成"不限速"，但**库里已保存的 `settings.gateway.rate_limit` 不会被自动覆盖** —— 老库仍按旧值限流，要放开请在管理后台「网关」页显式改成 `0` 或清空 |
-| 应用平台内存档位 | 可用内存 < 4GiB 的机器必须显式写 `PICOAI_WASM_MEMORY_PROFILE=small`，否则**升级后容器反复重启**（启动自检拒绝启动） |
+| 应用平台内存档位 | 可用内存 < 4GiB 的机器必须显式写 `ZEOKEEL_WASM_MEMORY_PROFILE=small`，否则**升级后容器反复重启**（启动自检拒绝启动） |
 | 客户端行为变化（例如不再使用系统代理） | 只有"经代理才能出公网"的部署需要处置：打开渠道字段或真实进程环境变量里的退路 |
 | 应用访问模型与客户端同版本要求 | 旧客户端升级后打不开应用，属预期；要确保客户端跟着升 |
 
@@ -123,14 +123,14 @@ df -h /opt | tail -1
 ### 3. 备份（不可跳过）
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 TS=$(date +%Y%m%d-%H%M%S); OUT=deploy-backup; mkdir -p "$OUT"
 
 # 应用数据（含 master.key）
-docker exec picoaide-server sh -c 'tar czf - -C /data .' > "$OUT/picoaide-data-$TS.tar.gz"
+docker exec zeokeel-server sh -c 'tar czf - -C /data .' > "$OUT/zeokeel-data-$TS.tar.gz"
 
 # 数据库（自定义格式，在线安全）
-docker exec picoaide-postgres pg_dump -U picoaide -Fc picoaide > "$OUT/pg-data-$TS.dump"
+docker exec zeokeel-postgres pg_dump -U zeokeel -Fc zeokeel > "$OUT/pg-data-$TS.dump"
 
 # auto 模式额外备份证书库
 [ -d caddy-data ] && tar czf "$OUT/caddy-data-$TS.tar.gz" -C . caddy-data
@@ -141,7 +141,7 @@ ls -lh "$OUT" | tail -5
 **校验备份非空**（否则后面的升级没有退路）：
 
 ```bash
-[ -s "$OUT/picoaide-data-$TS.tar.gz" ] || echo "!!! 应用数据备份为空"
+[ -s "$OUT/zeokeel-data-$TS.tar.gz" ] || echo "!!! 应用数据备份为空"
 [ -s "$OUT/pg-data-$TS.dump" ]          || echo "!!! 数据库备份为空"
 ```
 
@@ -149,18 +149,18 @@ ls -lh "$OUT" | tail -5
 （`pg-data` 的 dump 随数据量增长；几十字节的 dump 说明库名/用户写错了）。
 
 **备份为空意味着什么**：`pg_dump` 失败但 shell 仍创建了文件 —— 此时**没有数据库退路**。
-不要带着空备份继续升级：先修 `pg_dump`（容器名、用户 `picoaide`、库名 `picoaide`、
+不要带着空备份继续升级：先修 `pg_dump`（容器名、用户 `zeokeel`、库名 `zeokeel`、
 磁盘空间），重做一次并重新校验。
 
 ### 4. 导入新镜像
 
 ```bash
 VER=<第 1 步得到的版本>
-IMAGE=picoaide-harness-server
+IMAGE=zeokeel-harness-server
 
 curl -fL -o /tmp/pa.zip \
-  "https://release.picoaide.com/official/releases/${VER}/picoaide-server-${VER}-amd64.zip"
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/SHA256SUMS"
+  "https://release.zeokeel.com/official/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/SHA256SUMS"
 sha256sum -c SHA256SUMS
 unzip -p /tmp/pa.zip image.tar | docker load
 ```
@@ -175,14 +175,14 @@ unzip -p /tmp/pa.zip image.tar | docker load
 单栈宿主机：
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 # 用 latest.json 的 server.image_tag（权威，形如 v<版本>）
 # 归档里裸号与 v 号两种 tag 都在，写哪个都能起来；同机多栈必须用渠道 tag（见下一节）
 sed -i "s|^SERVER_IMAGE=.*|SERVER_IMAGE=${IMAGE}:${VER}|" .env
 grep -q '^SERVER_IMAGE=' .env || echo "SERVER_IMAGE=${IMAGE}:${VER}" >> .env
 
 # 可选但推荐：重新导出部署文件（替换语义，.env / 数据目录不动）
-docker run --rm -v /opt/picoaide:/out -e PICOAI_UNPACK_STACK=/out ${IMAGE}:${VER}
+docker run --rm -v /opt/zeokeel:/out -e ZEOKEEL_UNPACK_STACK=/out ${IMAGE}:${VER}
 
 docker compose up -d
 ```
@@ -207,15 +207,15 @@ docker compose up -d
 ```bash
 VER=<本次版本，不带 v>
 OLD=<升级前版本，不带 v>
-IMAGE=picoaide-harness-server
+IMAGE=zeokeel-harness-server
 CHANNEL=<本栈渠道 id>          # ← 与镜像内烘焙的渠道标记一致
-STACK=/opt/picoaide            # ← 本栈部署目录
-CT=picoaide-server             # ← 本栈 server 容器名
+STACK=/opt/zeokeel            # ← 本栈部署目录
+CT=zeokeel-server             # ← 本栈 server 容器名
 
 # 0) 把**升级前正在跑的**镜像固化成回滚锚点 —— "运行中容器"唯一正当的用途：
 #    它此刻代表的是**旧版本**，所以只能记成**旧版本**的渠道 tag。
 #    ⚠ 变量名不要用 GID / UID：远端 shell 是 zsh 时它们是只读特殊变量。
-docker exec "$CT" cat /opt/picoaide/CHANNEL        # 先确认这一栈此刻跑的确实是本渠道
+docker exec "$CT" cat /opt/zeokeel/CHANNEL        # 先确认这一栈此刻跑的确实是本渠道
 ROLLBACK_IMAGE_ID="$(docker inspect "$CT" --format '{{.Image}}')"
 docker tag "$ROLLBACK_IMAGE_ID" "${IMAGE}:${CHANNEL}-${OLD}"
 
@@ -228,7 +228,7 @@ test -n "$NEW_IMAGE_ID"
 test "$NEW_IMAGE_ID" != "$ROLLBACK_IMAGE_ID"       # 新旧必须是两份不同的镜像
 docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' \
   "${IMAGE}:${CHANNEL}-${VER}"                     # 应等于 ${VER}
-docker run --rm --entrypoint cat "${IMAGE}:${CHANNEL}-${VER}" /opt/picoaide/CHANNEL   # == ${CHANNEL}
+docker run --rm --entrypoint cat "${IMAGE}:${CHANNEL}-${VER}" /opt/zeokeel/CHANNEL   # == ${CHANNEL}
 
 # 3) 本栈 .env 指向渠道 tag（不要留裸 `v<版本>`）
 cd "$STACK"
@@ -240,8 +240,8 @@ docker compose up -d server
 ENV_TAG="$(sed -n 's/^SERVER_IMAGE=//p' .env)"
 test "$(docker image inspect --format '{{.Id}}' "$ENV_TAG")" = "$NEW_IMAGE_ID"   # .env 的 tag 指向新镜像
 docker inspect "$CT" --format '{{.Image}}'         # == $NEW_IMAGE_ID ← 最关键的一条
-docker exec "$CT" /app/picoaide-server --version   # == 目标版本（看二进制自报，不看 tag）
-docker exec "$CT" cat /opt/picoaide/CHANNEL        # == $CHANNEL
+docker exec "$CT" /app/zeokeel-server --version   # == 目标版本（看二进制自报，不看 tag）
+docker exec "$CT" cat /opt/zeokeel/CHANNEL        # == $CHANNEL
 curl -sk "https://<本栈域名>/api/client/v2/channel" | head -c 300   # channel_id 与之一致
 ```
 
@@ -257,13 +257,13 @@ curl -sk "https://<本栈域名>/api/client/v2/channel" | head -c 300   # channe
 
 旧包（不带渠道 tag 的归档，即 2026-09-24 之前）只能退回裸 tag：`docker load` 之后**立刻**用
 `docker image inspect --format '{{.Id}}' ${IMAGE}:${VER}` 取 id，并当场核对镜像内烘焙的渠道
-（`docker run --rm --entrypoint cat ${IMAGE}:${VER} /opt/picoaide/CHANNEL` 应等于 `${CHANNEL}`），
+（`docker run --rm --entrypoint cat ${IMAGE}:${VER} /opt/zeokeel/CHANNEL` 应等于 `${CHANNEL}`），
 通过后再贴成渠道 tag。首次部署（还没有运行中的容器）没有第 0 步，第 1–4 步照做。
 
 ### 6. 升级后验证（三项全过才算成功）
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2-)
 
 # (a) 健康检查
@@ -274,10 +274,10 @@ for i in $(seq 1 40); do
 done
 
 # (b) 运行版本 == 目标版本（权威判据：看二进制自报，不看 tag）
-docker exec picoaide-server /app/picoaide-server --version
+docker exec zeokeel-server /app/zeokeel-server --version
 
 # (c) 数据仍在（迁移已应用）
-docker exec picoaide-postgres psql -U picoaide -d picoaide -c 'select count(*) from users;'
+docker exec zeokeel-postgres psql -U zeokeel -d zeokeel -c 'select count(*) from users;'
 ```
 
 再抽查两条客户端分发链路：
@@ -296,11 +296,11 @@ curl -sk -o /dev/null -w '%{http_code}\n' --resolve "$DOMAIN:443:127.0.0.1" \
 ### 7. 收尾
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 echo "$VER" > VERSION                       # 若第 5 步没重新导出，这里手动更新
 docker compose ps                           # 三容器 Up
 # 旧镜像先留着（回滚锚点）；确认稳定运行 1～2 天后再清理：
-# docker image rm picoaide-harness-server:<旧版本>
+# docker image rm zeokeel-harness-server:<旧版本>
 ```
 
 客户端会在下次检查时看到新版本并提示员工升级（升级源就是这台服务器）。
@@ -329,14 +329,14 @@ docker compose ps                           # 三容器 Up
 > 并回填内容摘要。
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 OLD=<升级前的版本>
-IMAGE=picoaide-harness-server
+IMAGE=zeokeel-harness-server
 CHANNEL=<本栈渠道 id>          # ← 与镜像内烘焙的渠道标记一致
 
 # 1) 切回旧镜像 —— 用多栈章节第 0 步固化出来的**渠道 tag**（回滚锚点就是那一个）
 #    ⚠ 不要写裸 `${IMAGE}:${OLD}`：同机多栈时那个裸 tag 可能已被别渠道的 `docker load`
-#    覆盖，而 compose 的 PICOAI_CHANNEL 缺省为空 ⇒ 这一栈会以别渠道的品牌静默起来。
+#    覆盖，而 compose 的 ZEOKEEL_CHANNEL 缺省为空 ⇒ 这一栈会以别渠道的品牌静默起来。
 docker image inspect --format '{{.Id}} {{.RepoTags}}' "${IMAGE}:${CHANNEL}-${OLD}"   # 锚点必须存在
 sed -i "s|^SERVER_IMAGE=.*|SERVER_IMAGE=${IMAGE}:${CHANNEL}-${OLD}|" .env
 docker compose up -d
@@ -344,18 +344,18 @@ docker compose up -d
 # 2) 验证旧版本健康（版本 + 渠道两面）
 DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2-)
 curl -sk -o /dev/null -w '%{http_code}\n' --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/healthz"
-docker exec picoaide-server /app/picoaide-server --version      # 应等于 OLD
-docker exec picoaide-server cat /opt/picoaide/CHANNEL           # 应等于 $CHANNEL（防静默换品牌）
+docker exec zeokeel-server /app/zeokeel-server --version      # 应等于 OLD
+docker exec zeokeel-server cat /opt/zeokeel/CHANNEL           # 应等于 $CHANNEL（防静默换品牌）
 echo "$OLD" > VERSION
 
 # 3) 仅当应用数据被破坏时才恢复（会丢数据，需明确同意）
 # docker compose stop server
-# tar xzf deploy-backup/picoaide-data-<TS>.tar.gz -C picoaide-data
+# tar xzf deploy-backup/zeokeel-data-<TS>.tar.gz -C zeokeel-data
 # docker compose start server
 #
 # 4) 跨代回滚 / 含不可逆迁移的版本线：必须做这一步（会丢数据，需明确同意）
 # docker compose stop server
-# docker exec -i picoaide-postgres pg_restore -U picoaide -d picoaide --clean \
+# docker exec -i zeokeel-postgres pg_restore -U zeokeel -d zeokeel --clean \
 #   < deploy-backup/pg-data-<TS>.dump
 # docker compose start server
 ```
@@ -368,8 +368,8 @@ echo "$OLD" > VERSION
 |---|---|
 | 备份有效 | 两条 `[ -s … ]` 都不告警，且文件大小是可信量级 |
 | 镜像可信 | `sha256sum -c SHA256SUMS` 输出 `OK` |
-| 运行版本正确 | `docker exec picoaide-server /app/picoaide-server --version` == 目标版本 |
-| 渠道正确（多栈必查） | 容器 image id == 新镜像 id；`/opt/picoaide/CHANNEL` == `${CHANNEL}`；`/api/client/v2/channel` 的 `channel_id` 与之一致 |
+| 运行版本正确 | `docker exec zeokeel-server /app/zeokeel-server --version` == 目标版本 |
+| 渠道正确（多栈必查） | 容器 image id == 新镜像 id；`/opt/zeokeel/CHANNEL` == `${CHANNEL}`；`/api/client/v2/channel` 的 `channel_id` 与之一致 |
 | 服务可用 | `/healthz` 返回 200 |
 | 数据在 | `select count(*) from users;` 有结果；迁移已应用到当前区间 |
 | 客户端链路 | 清单 `client.version` 已变化；安装包可下载（206） |
@@ -380,9 +380,9 @@ echo "$OLD" > VERSION
 | 现象 | 判据 | 恢复动作 |
 |---|---|---|
 | 升级后容器反复重启 | 日志里 `SchemaMismatchError` | **跨代回滚**：按第 7 节四步顺序（停服 → 恢复 `pg_dump` → 回退镜像 → 客户端回退） |
-| 升级后容器反复重启 | 日志里"WASM 应用平台启动自检失败…拒绝启动" | 可用内存 < 4GiB：`.env` 写 `PICOAI_WASM_MEMORY_PROFILE=small` 后 `docker compose up -d server` |
+| 升级后容器反复重启 | 日志里"WASM 应用平台启动自检失败…拒绝启动" | 可用内存 < 4GiB：`.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` 后 `docker compose up -d server` |
 | `--version` 与 `.env` 声称的版本不一致 | 二进制自报值 ≠ 目标版本 | 说明容器没换到新镜像：多栈场景按第 5 节五项断言重做（关键看 `docker inspect <容器> --format '{{.Image}}'`） |
-| 升级后品牌变了 / 门户变成厂商品牌 | `/opt/picoaide/CHANNEL` ≠ `/api/client/v2/channel` 的 `channel_id` | 用错渠道镜像：改 `.env` 指回本渠道的渠道 tag 后重建；不要继续用它升级 |
+| 升级后品牌变了 / 门户变成厂商品牌 | `/opt/zeokeel/CHANNEL` ≠ `/api/client/v2/channel` 的 `channel_id` | 用错渠道镜像：改 `.env` 指回本渠道的渠道 tag 后重建；不要继续用它升级 |
 | healthz 一直非 200 | `docker compose ps` / `logs` | 先确认 postgres healthy 与迁移是否仍在跑（首次 1–2 分钟）；仍不通按第 7 节回滚 |
 | 备份为空 | `[ -s … ]` 打印 `!!!` | **停止升级**：修 `pg_dump`（容器名/用户/库名/磁盘）后重做备份并重新校验 |
 | 回滚后旧版本能起来但请求 500 | 日志里 `42P01`（`undefined_table`） | 这是"只换镜像、没回退数据库"的形态（没有双向对账判据的旧二进制）：停服 → 恢复升级前 `pg_dump` → 再启动 |
@@ -394,7 +394,7 @@ echo "$OLD" > VERSION
 - [ ] 远端版本 > 当前 `VERSION`
 - [ ] PG 布局检查通过（无 `pg-data/PG_VERSION`），磁盘余量足够
 - [ ] 行为变化清单逐条有结论（限流缺省、内存档位、客户端行为、不可逆迁移）
-- [ ] 备份已完成且**非空**（`picoaide-data/` + `pg_dump`）
+- [ ] 备份已完成且**非空**（`zeokeel-data/` + `pg_dump`）
 - [ ] 新镜像已导入并校验 `SHA256SUMS`
 - [ ] 多栈宿主机：升级前镜像已固化成**旧版本**的渠道 tag
 - [ ] `.env` 的 `SERVER_IMAGE` 指向新版本（多栈用渠道 tag）

@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // R7-F3-N3(P2,复核 2026-09-13):`sameOriginAsLoginRequest` 的第一条分支把
@@ -61,9 +61,9 @@ func TestOIDCLoginRejectsHostHeaderAloneAsOriginProof(t *testing.T) {
 }
 
 // 修复不得误伤合法流程:接受的来源必须是**服务端配置**里的对外来源 ——
-// PICOAI_PUBLIC_BASE_URL(客户端下载地址的唯一权威)、OIDC redirect_url 的
+// ZEOKEEL_PUBLIC_BASE_URL(客户端下载地址的唯一权威)、OIDC redirect_url 的
 // origin(IdP 把浏览器重定向回来的地址,必然是本服务的浏览器可达来源)、
-// PICOAI_TRUSTED_HOSTS(多域名部署的显式补充清单)。
+// ZEOKEEL_TRUSTED_HOSTS(多域名部署的显式补充清单)。
 func TestOIDCLoginAcceptsServerConfiguredReturnOrigins(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	idp := newFakeIDP(t)
@@ -129,9 +129,9 @@ func TestOIDCLoginAcceptsServerConfiguredReturnOrigins(t *testing.T) {
 
 	t.Run("trusted_hosts_allowlist", func(t *testing.T) {
 		// 多 vhost / 内外双域名部署:客户端填的地址既不是 Host 也不是
-		// PICOAI_PUBLIC_BASE_URL(后者还要给客户端下载用,不能随便改),
+		// ZEOKEEL_PUBLIC_BASE_URL(后者还要给客户端下载用,不能随便改),
 		// 由运维在显式清单里声明。
-		t.Setenv("PICOAI_TRUSTED_HOSTS", "internal.example.com, https://alt.example.com:8443")
+		t.Setenv("ZEOKEEL_TRUSTED_HOSTS", "internal.example.com, https://alt.example.com:8443")
 		p := newOIDCProvider(t, idp)
 		r := newOIDCLoginRouter(t, p)
 

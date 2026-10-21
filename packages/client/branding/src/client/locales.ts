@@ -10,9 +10,9 @@
  */
 export const zh = {
   /** 设置导航里该段的标题（`settings.section` 的 label，按语言现取）。 */
-  'about.sectionLabel': '关于 PicoAide',
+  'about.sectionLabel': '关于 ZeoKeel',
   /** 「关于」段正文。 */
-  'about.description': 'PicoAide 品牌与界面壳：品牌图形、主题色、悬浮徽章与关于页面全部经官方 client 插件 slot 注入，无上游代码分支。',
+  'about.description': 'ZeoKeel 品牌与界面壳：品牌图形、主题色、悬浮徽章与关于页面全部经官方 client 插件 slot 注入，无上游代码分支。',
   /** 条目名：品牌插件。 */
   'about.brandPlugin': '品牌插件',
   /** 条目名：产品版本。 */
@@ -24,8 +24,8 @@ export const zh = {
 }
 
 export const en: Record<keyof typeof zh, string> = {
-  'about.sectionLabel': 'About PicoAide',
-  'about.description': 'PicoAide branding and shell: the brand mark, theme colours, overlay badge and About page are all injected through official client-plugin slots — no upstream code forks.',
+  'about.sectionLabel': 'About ZeoKeel',
+  'about.description': 'ZeoKeel branding and shell: the brand mark, theme colours, overlay badge and About page are all injected through official client-plugin slots — no upstream code forks.',
   'about.brandPlugin': 'Brand plugin',
   'about.productVersion': 'Product version',
   'about.uiSurface': 'UI surface',

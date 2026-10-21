@@ -1,5 +1,5 @@
 {
-  "schema": "picoaide-app-session-id/1",
+  "schema": "zeokeel-app-session-id/1",
   "prefix": "app:",
   "scope_separator": "#",
   "app_id_pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",

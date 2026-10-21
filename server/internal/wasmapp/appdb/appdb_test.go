@@ -47,9 +47,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 
 	"modernc.org/sqlite"
 )
@@ -844,7 +844,7 @@ func TestDSNDatabaseFileParsing(t *testing.T) {
 		want string // 空串表示"不是文件库"
 	}{
 		{"裸路径", abs, abs},
-		{"裸路径带未知参数", abs + "?_picoaide_appdb=deadbeef", abs},
+		{"裸路径带未知参数", abs + "?_zeokeel_appdb=deadbeef", abs},
 		{"file: 绝对路径", "file:" + abs, abs},
 		{"file:/// 三斜杠", "file://" + abs, abs},
 		{"file://localhost", "file://localhost" + abs, abs},

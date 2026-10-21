@@ -11,13 +11,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/skillseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillseed"
 )
 
 func TestAPISweepExceptionEvidenceBinaryArchive(t *testing.T) {
 	db := requireRealDB(t)
 
-	// 内置技能目录：优先用仓库真实资产（server/skills = 镜像 /opt/picoaide/skills
+	// 内置技能目录：优先用仓库真实资产（server/skills = 镜像 /opt/zeokeel/skills
 	// 的源头），没有就自建夹具（见 sweepBuiltinSkillsDir 的注释：本用例举证的是
 	// **内容类型契约**，不该因为无关分支的资产没提交而红）。
 	skillsDir, skillName := sweepBuiltinSkillsDir(t)

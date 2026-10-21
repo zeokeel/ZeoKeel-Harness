@@ -1,15 +1,15 @@
 // Channel → CSS 变量映射(纯函数, 供客户端 index.ts applyVars 与单测共用)。
 //
-// 坑(2026-09 实测): BRAND_CSS 用 `content: var(--pico-hero-headline, "…")`
+// 坑(2026-09 实测): BRAND_CSS 用 `content: var(--zeokeel-hero-headline, "…")`
 // 渲染 hero 标题, 而 CSS content 只接受字符串字面量 —— 变量值必须以
 // `JSON.stringify` 写入(带引号的 token 流), 若直接写裸词流(如
-// `PicoAide Harness`)整条声明非法, content 计算值为 none, hero 标题与
+// `ZeoKeel Harness`)整条声明非法, content 计算值为 none, hero 标题与
 // 徽章文字事实上永远不可见。
 import type { ChannelConfig } from '../channel-content.ts'
 import { t } from './locales.ts'
 
 /** hero headline 默认值(渠道未配置该项时)。 */
-export const DEFAULT_HERO_HEADLINE = 'PicoAide Harness'
+export const DEFAULT_HERO_HEADLINE = 'ZeoKeel Harness'
 
 /**
  * hero 徽章兜底文案(渠道未配置 client.tagline 时)。
@@ -35,7 +35,7 @@ export function buildChannelCSSVars(channel: ChannelConfig | null): Record<strin
   const name = channel?.client?.display_name ? channel.client.display_name : ''
   const tagline = channel?.client?.tagline ? channel.client.tagline : ''
   return {
-    '--pico-hero-headline': JSON.stringify(name || DEFAULT_HERO_HEADLINE),
-    '--pico-hero-tagline': JSON.stringify(tagline || defaultHeroTagline()),
+    '--zeokeel-hero-headline': JSON.stringify(name || DEFAULT_HERO_HEADLINE),
+    '--zeokeel-hero-tagline': JSON.stringify(tagline || defaultHeroTagline()),
   }
 }

@@ -56,7 +56,7 @@
 `desktop-linux` job 在 `dist:linux` 后运行 `e2e:client`（mock gateway + Xvfb :99 + CDP，13 项断言），上传 `.e2e-report.md` + `.e2e-shots/`（`e2e-report` artifact，`if: always()` 失败也留证据）。
 
 ### D6. 每个提交的产物 + PR 评论（用户核心需求）
-- 触发保持 `pull_request` + `push`（全分支，含 tags），每次运行的 Artifacts：`desktop-Linux`（AppImage+deb）、`desktop-Windows-installer`（NSIS）、`desktop-macOS`（DMG）、`picoaide-server-linux-amd64`、`workspace-build`、`e2e-report`。
+- 触发保持 `pull_request` + `push`（全分支，含 tags），每次运行的 Artifacts：`desktop-Linux`（AppImage+deb）、`desktop-Windows-installer`（NSIS）、`desktop-macOS`（DMG）、`zeokeel-server-linux-amd64`、`workspace-build`、`e2e-report`。
 - 新增 `pr-summary` job（`needs` 三平台+server，`pull-requests: write`）：在 PR 上发布/刷新一条带标记的产物汇总评论（Actions 运行页 Artifacts 链接），fork PR（token 只读）跳过。
 - 多分支协作语义：任意分支 push → 完整门禁 + 产物；分支间互不干扰（concurrency 按 ref 互斥、产物按 run 隔离、缓存按 yarn.lock 共享）。
 
@@ -96,7 +96,7 @@
 - `node packages/host/desktop/scripts/release-mac.ts --pack --no-prebuild --no-gates`：解析正确（跳过 prebuild/check，进入平台检查）。
 - `yarn workspace dsh-better-sidebar check`：绿。**注意**：其 vendored 副本不含 `tests/`（上游仓库才有），`test: vitest run` 必然「No test files found」——这是它此前从未进根 check 的真实原因；故 `check` 不含 test（见 §3 实施清单）。
 - 根 `yarn check`（新语义）：全绿 rc=0（desktop 全量 + better-sidebar + 六包 + fabric）。
-- `dist:linux --no-prebuild`（模拟 CI 平台 job 的「gate 产物 → 纯打包」链路）：成功产出 `PicoAide-Harness-2.6.7-beta.1-x86_64.AppImage` 与 `-amd64.deb`（afterPack `verify-packaged-runtime` 在内通过）。注：本地沙箱 `/root/.cache` 只读导致首次打包失败，需 `ELECTRON_BUILDER_CACHE` 指向可写目录；CI runner 无此问题。
+- `dist:linux --no-prebuild`（模拟 CI 平台 job 的「gate 产物 → 纯打包」链路）：成功产出 `ZeoKeel-Harness-2.6.7-beta.1-x86_64.AppImage` 与 `-amd64.deb`（afterPack `verify-packaged-runtime` 在内通过）。注：本地沙箱 `/root/.cache` 只读导致首次打包失败，需 `ELECTRON_BUILDER_CACHE` 指向可写目录；CI runner 无此问题。
 - `e2e:client`（新打包产物上，Xvfb :99 + mock gateway + CDP）：**全部通过**（13 项断言，`.e2e-report.md` + `.e2e-shots/` 产出）。
 - webadmin `npm test`（CI server job 新增步骤）：109/109 绿；`gofmt -l cmd internal` 本地通过。
 - 完整 CI 真实运行（win/mac 打包、mac 签名、PR 评论）待 push 后观察——本分支实施验证不推进远程。

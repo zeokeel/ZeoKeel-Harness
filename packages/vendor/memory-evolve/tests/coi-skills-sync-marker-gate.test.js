@@ -1,6 +1,6 @@
 /**
  * tests/coi-skills-sync-marker-gate.test.js — 独立复审 r3 **F2** 的回归：
- * 安装器标记（`.picoaide/release.json`）的读取**没有类型/体积闸门**。
+ * 安装器标记（`.zeokeel/release.json`）的读取**没有类型/体积闸门**。
  *
  * 复审实测（temp/verify-skill-r3，真磁盘）：
  *   - 普通文件（8/32MiB 垃圾）⇒ 101ms 内 refused（没问题）；

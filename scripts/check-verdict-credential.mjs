@@ -31,7 +31,7 @@
  *   5. 计数断言：`--min <key> <n>`（`key=<数字>` 抽取后 ≥ n）与 `--equal <keyA> <keyB>`
  *      （两者相等）—— 与两个 runner 的语义（`planned == executed > 0` / `guards ≥ 1`）同源；
  *   6. 全部成立时打印**回显本次 nonce** 的通过凭据
- *      `picoaide-verdict: PASS nonce=<nonce> …`，并把它追加进 `$GITHUB_STEP_SUMMARY`
+ *      `zeokeel-verdict: PASS nonce=<nonce> …`，并把它追加进 `$GITHUB_STEP_SUMMARY`
  *      （平台侧产物）。步骤体再断言这行**恰好一条**。
  *
  * ## 诚实边界（认账）
@@ -294,7 +294,7 @@ function main(argv) {
     .filter(([, value]) => value !== null)
     .map(([key, value]) => `${key}=${value}`), ...Object.entries(expected).map(([key, value]) => `${key}=${value}`)]
     .join(' ')
-  const line = `picoaide-verdict: PASS nonce=${options.nonce} status=0 lines=1${summary === '' ? '' : ` ${summary}`}`
+  const line = `zeokeel-verdict: PASS nonce=${options.nonce} status=0 lines=1${summary === '' ? '' : ` ${summary}`}`
   process.stdout.write(`${line}\n`)
   if (typeof process.env.GITHUB_STEP_SUMMARY === 'string' && process.env.GITHUB_STEP_SUMMARY.trim() !== '') {
     try {

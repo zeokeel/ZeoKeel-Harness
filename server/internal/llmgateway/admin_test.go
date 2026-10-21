@@ -12,9 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 func adminTestSetup(t *testing.T) (http.Handler, *sql.DB, map[string]string) {
@@ -30,10 +30,10 @@ func adminTestSetup(t *testing.T) (http.Handler, *sql.DB, map[string]string) {
 // admin_sessions）在 shadow 里没有同名表，因此登录行为与主池一致。
 func adminTestSetupOnDB(t *testing.T, db *sql.DB) (http.Handler, *sql.DB, map[string]string) {
 	t.Helper()
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	// adminLoginLimiter 是包级共享(默认 10 次/5min):测试反复登录 boss,
 	// 用例增多后触发限流 → login 429 → csrf 为空(flaky)。按该 env 设计用途放宽。
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "10000")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "10000")
 	DecryptSecret = func(s string) (string, error) { return s, nil }
 	// channel-type provider creation now syncs immediately: default the
 	// fetchFn to a canned catalog so tests never hit the real upstream
@@ -67,11 +67,11 @@ func adminTestSetupOnDB(t *testing.T, db *sql.DB) (http.Handler, *sql.DB, map[st
 	csrf := out["csrf_token"].(string)
 	sess := ""
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "picoaide_session" {
+		if ck.Name == "zeokeel_session" {
 			sess = ck.Value
 		}
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 	return r, db, hdr
 }
 
@@ -926,12 +926,12 @@ func TestAdminModelsAndDefaultModel(t *testing.T) {
 		t.Fatalf("removed fields still in gateway config: %v", out)
 	}
 	// server_base_url:对外 HTTPS 地址,webadmin 配置并读回
-	w, _ = adminReq(t, r, "PUT", "/api/server/admin/gateway", `{"server_base_url":"https://picoaide.example.com"}`, hdr)
+	w, _ = adminReq(t, r, "PUT", "/api/server/admin/gateway", `{"server_base_url":"https://zeokeel.example.com"}`, hdr)
 	if w.Code != http.StatusOK {
 		t.Fatalf("set server_base_url: %d %s", w.Code, w.Body.String())
 	}
 	w, out = adminReq(t, r, "GET", "/api/server/admin/gateway", "", hdr)
-	if w.Code != http.StatusOK || out["server_base_url"] != "https://picoaide.example.com" {
+	if w.Code != http.StatusOK || out["server_base_url"] != "https://zeokeel.example.com" {
 		t.Fatalf("server_base_url not persisted: %d %v", w.Code, out)
 	}
 	// rate_limit:每用户限流,非法值拒绝、合法值持久化

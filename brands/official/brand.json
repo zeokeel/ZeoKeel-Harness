@@ -6,18 +6,18 @@
     "updated": "2026-09-04"
   },
   "identity": {
-    "display_name": "PicoAide Harness",
-    "short_name": "PicoAide",
-    "slug": "PicoAide-Harness",
-    "app_id": "ai.deepseek.dsh.desktop",
-    "company": "PicoAide",
-    "copyright": "© 2026 PicoAide",
-    "description": "PicoAide Harness: an Electron shell composed as a DeepSeek Harness Cordis plugin",
-    "deep_link": { "name": "PicoAide Harness Deep Link", "scheme": "picoaide" },
-    "linux": { "maintainer": "picoaide", "synopsis": "PicoAide Harness", "category": "Development" },
-    "data_dir_name": "PicoAide Harness",
-    "product_home_dir": ".picoaide-harness",
-    "telemetry_release": "picoaide-desktop"
+    "display_name": "ZeoKeel Harness",
+    "short_name": "ZeoKeel",
+    "slug": "ZeoKeel-Harness",
+    "app_id": "com.zeokeel.harness",
+    "company": "ZeoKeel",
+    "copyright": "© 2026 ZeoKeel",
+    "description": "ZeoKeel Harness: an Electron shell composed as a DeepSeek Harness Cordis plugin",
+    "deep_link": { "name": "ZeoKeel Harness Deep Link", "scheme": "zeokeel" },
+    "linux": { "maintainer": "zeokeel", "synopsis": "ZeoKeel Harness", "category": "Development" },
+    "data_dir_name": "ZeoKeel Harness",
+    "product_home_dir": ".zeokeel-harness",
+    "telemetry_release": "zeokeel-desktop"
   },
   "assets": {
     "logo_primary": "logo.svg",
@@ -42,19 +42,19 @@
     }
   },
   "copy": {
-    "window_title": "PicoAide Harness",
-    "product_name": "PicoAide Harness",
-    "login_title": "PicoAide 登录",
-    "login_fallback_name": "PicoAide",
+    "window_title": "ZeoKeel Harness",
+    "product_name": "ZeoKeel Harness",
+    "login_title": "ZeoKeel 登录",
+    "login_fallback_name": "ZeoKeel",
     "login_fallback_tagline": "Enterprise AI Gateway",
-    "session_title_zh": "PicoAide 企业登录",
-    "session_title_en": "PicoAide Enterprise Login",
-    "hero_headline": "PicoAide Harness",
+    "session_title_zh": "ZeoKeel 企业登录",
+    "session_title_en": "ZeoKeel Enterprise Login",
+    "hero_headline": "ZeoKeel Harness",
     "default_brand": {
-      "login_display_name": "PicoAide",
-      "client_display_name": "PicoAide Harness",
+      "login_display_name": "ZeoKeel",
+      "client_display_name": "ZeoKeel Harness",
       "tagline": "Enterprise AI Gateway",
-      "title": "PicoAide Harness"
+      "title": "ZeoKeel Harness"
     },
     "tray_update": {
       "downloading_en": "Downloading {product} {version}…",
@@ -83,7 +83,7 @@
   },
   "updates": {
     "mode": "github",
-    "repository": "picoaide/picoaide-harness",
+    "repository": "zeokeel/ZeoKeel-Harness",
     "asset_template": "{slug}-{version}-{platform}.{ext}",
     "assets": {
       "mac": { "pattern": "{slug}-{version}-mac.dmg", "ext": "dmg" },

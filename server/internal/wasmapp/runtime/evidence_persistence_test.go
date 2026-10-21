@@ -25,11 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/capapi"
-	"github.com/picoaide/picoaide/internal/wasmapp/diag"
-	"github.com/picoaide/picoaide/internal/wasmapp/events"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/diag"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/events"
 )
 
 func TestMemoryEvidenceIsPersistedToCallEvents(t *testing.T) {

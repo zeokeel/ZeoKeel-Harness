@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-host-locale",
+  "name": "@zeokeel/dsh-host-locale",
   "version": "0.1.0",
-  "description": "Host-side UI locale for PicoAide Harness: locale resolution and copy selection for host surfaces that cannot reach the client-face ctx.locale service",
+  "description": "Host-side UI locale for ZeoKeel Harness: locale resolution and copy selection for host surfaces that cannot reach the client-face ctx.locale service",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",

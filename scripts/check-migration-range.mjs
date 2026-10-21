@@ -170,7 +170,7 @@ const ALLOW_MARKER = 'migration-range:allow'
 // ─────────────────────────────────────────────────────────────────────────────
 const CHECKSUMS_POINTER = 'server/internal/serverstore/migrations-checksums.json'
 const CHECKSUMS_PATH = join(root, CHECKSUMS_POINTER)
-const CHECKSUMS_SCHEMA = 'picoaide-migration-checksums/1'
+const CHECKSUMS_SCHEMA = 'zeokeel-migration-checksums/1'
 /** 登记表表头里**必须**存在的字符串字段（谁生成 / 怎么更新 / 为什么）——删掉任何一个即红。 */
 const CHECKSUMS_HEADER_FIELDS = ['schema', 'algorithm', 'generatedBy', 'howToUpdate', 'why']
 const SQL_NAME = /^(\d{4})_.*\.sql$/u

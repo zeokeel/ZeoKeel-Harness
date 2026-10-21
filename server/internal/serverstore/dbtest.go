@@ -16,13 +16,13 @@ import (
 
 // PgTestDSN returns the PostgreSQL test DSN template (exported for
 // cross-package tests). Override via PG_DSN_TEST (e.g. CI sets
-// postgres://picoaide:ci@postgres:5432/picoaide_test). Default matches a
+// postgres://zeokeel:ci@postgres:5432/zeokeel_test). Default matches a
 // local dev PG (postgres/postgres).
 func PgTestDSN() string {
 	if dsn := os.Getenv("PG_DSN_TEST"); dsn != "" {
 		return dsn
 	}
-	return "postgres://postgres:postgres@127.0.0.1:5432/picoaide_test?sslmode=disable"
+	return "postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test?sslmode=disable"
 }
 
 // requireTestPG skips the test when the PostgreSQL test server is
@@ -51,7 +51,7 @@ func requireTestPG(t *testing.T, adminDSN string) *sql.DB {
 }
 
 // NewTestDB creates an isolated temporary PostgreSQL database for one test
-// (CREATE DATABASE picoaide_test_<rand>), applies migrations, and returns a
+// (CREATE DATABASE zeokeel_test_<rand>), applies migrations, and returns a
 // connection plus a cleanup func that drops the database. Each test gets a
 // fresh schema — no cross-test interference (shared-database truncation turned
 // out to leak runs between tests).
@@ -83,7 +83,7 @@ func NewTestDB(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("parse test dsn: %v", err)
 	}
 	suffix := randomSuffix(6)
-	dbName := "picoaide_test_" + suffix
+	dbName := "zeokeel_test_" + suffix
 	// 连 admin 库(postgres)建临时库
 	adminURL := *u
 	adminURL.Path = "/postgres"
@@ -161,7 +161,7 @@ func testDBTemplateName() (string, error) {
 	}
 	_, end := testPartitionWindow()
 	fmt.Fprintf(h, "partitions|%s\n", end.Format("2006-01"))
-	return "picoaide_tmpl_" + hex.EncodeToString(h.Sum(nil))[:12], nil
+	return "zeokeel_tmpl_" + hex.EncodeToString(h.Sum(nil))[:12], nil
 }
 
 // ensureTestDBTemplate 确保模板库存在且已完成迁移:advisory lock 串行化

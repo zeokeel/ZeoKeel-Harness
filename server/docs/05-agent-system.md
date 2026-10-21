@@ -58,7 +58,7 @@
 - `cancel()` 时队列全部拒绝("已取消");会话结束清理挂起审批。
 - 越界路径:文件工具执行前 `isAllowed(absPath, allowedDirs)` 校验,越界 → `allow_dir` 审批,同意后目录加入可访问目录(写回 settings 持久化)。
 - 命令审批:`needsApprovalFor(command, allowedDirs)`(terminal.ts),白名单命令(如 cd/pwd/ls/echo 等)免审批。
-- **测试钩子**:`PICOAI_TEST_AUTO_APPROVE=1` 自动通过、`=0` 自动拒绝(不发 confirm_required、不弹窗);仅测试/开发环境使用,打包产物不含该 env。
+- **测试钩子**:`ZEOKEEL_TEST_AUTO_APPROVE=1` 自动通过、`=0` 自动拒绝(不发 confirm_required、不弹窗);仅测试/开发环境使用,打包产物不含该 env。
 
 ## 6. 消息即状态(恢复/中断)
 

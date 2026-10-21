@@ -136,7 +136,7 @@ export const WAIT_BUDGET_FLOORS = {
 export const TEST_BUDGETS = {
   /**
    * **真实打包产物上的清单派生**：`verify-packaged-runtime.spec.ts` 的反向 oracle
-   * 要在真实产物目录上遍历 `node_modules/@picoaide/**` 并把派生出的每一条逐条
+   * 要在真实产物目录上遍历 `node_modules/@zeokeel/**` 并把派生出的每一条逐条
    * 反推。空闲机实测 911ms；三路套件并发时实测撞穿 5s 缺省
    * （`Test timed out in 5000ms`）⇒ 取 60s（≥10× 空闲耗时）。
    */

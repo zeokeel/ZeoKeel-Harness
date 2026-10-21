@@ -110,7 +110,7 @@ function toolHarness(): {
   setLocale: (locale: 'zh' | 'en') => void
   dispose: () => void
 } {
-  const home = mkdtempSync(join(tmpdir(), 'pico-cron-b4-'))
+  const home = mkdtempSync(join(tmpdir(), 'zeokeel-cron-b4-'))
   let locale: 'zh' | 'en' = 'zh'
   const tools = new Map<string, ToolDefinition>()
   const disposers: Array<() => void> = []

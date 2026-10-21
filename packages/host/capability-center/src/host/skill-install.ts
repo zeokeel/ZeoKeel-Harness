@@ -67,7 +67,7 @@ import { assertArchiveSafe, archiveFormat, extractTar, extractZip, MAX_ARCHIVE_B
 import { invocationBooleanVerdict, LEGACY_INVOCATION, precheckSkillPackage } from './manifest-precheck.ts'
 import { decodeSkillTextBytes, readSkillFrontmatterStrict, readSkillTextStrict } from './skill-frontmatter.ts'
 import { isWindowsReservedDeviceNameSegment } from './skill-name-rules.ts'
-import { normalizeServerURL } from '@picoaide/dsh-gateway-client/auth'
+import { normalizeServerURL } from '@zeokeel/dsh-gateway-client/auth'
 import {
   isSameSkillRoot,
   RUNTIME_SKILL_ROOT_RANKS,
@@ -75,7 +75,7 @@ import {
   skillRootPathKey,
   type RuntimeSkillRoot,
 } from './skill-runtime-roots.ts'
-import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@picoaide/dsh-host-locale'
+import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 
 /**
  * 运行时技能名规则 —— **单一真源指向上游**：
@@ -237,7 +237,7 @@ const ERRNO_HINT: Record<string, string> = {
  * 脱敏：把本机绝对路径换成 `…/<basename>`。
  *
  * 审计 2026-09-23 A12 实测的形态：安装失败时界面直接显示
- * `ENOTEMPTY: directory not empty, rename '/home/<user>/.picoaide-harness/skills/…'`
+ * `ENOTEMPTY: directory not empty, rename '/home/<user>/.zeokeel-harness/skills/…'`
  * —— 家目录/用户名连同内部 staging 结构一起透出。保留 errno 与原因，只去掉路径。
  * @param raw - 原始错误文案。
  * @returns 可安全展示的文案（≤300 字符）。
@@ -284,12 +284,12 @@ function systemErrorCode(cause: unknown, raw: string): string | undefined {
 /**
  * 把归档安装/卸载的失败翻译成 HTTP 信封（分类 + 脱敏 + 状态码）。
  *
- * **唯一实现**：技能（`/api/pico/skills*`、`/api/pico/shared-skills*`）与共享智能体
- * （`/api/pico/agent-presets*`）四条写面共用它。抽出来的理由：这三件事此前散在
+ * **唯一实现**：技能（`/api/zeokeel/skills*`、`/api/zeokeel/shared-skills*`）与共享智能体
+ * （`/api/zeokeel/agent-presets*`）四条写面共用它。抽出来的理由：这三件事此前散在
  * auth-gate 的四处 `isRefusal ? 422 : 502` 正则里，任一处漏改就会出现"同一个拒绝
  * 在这里 422、在那里 502"；而独立复审 2026-09-23 **A12** 实测智能体路径仍是旧写法
  * （裸分类 + 原文）⇒ 系统级错误（如
- * `ENOTDIR: not a directory, mkdir '/home/<user>/.picoaide-harness/agent-presets'`）
+ * `ENOTDIR: not a directory, mkdir '/home/<user>/.zeokeel-harness/agent-presets'`）
  * 会把**本机绝对路径**透给 UI。
  *
  * ## 文本出口只有一条（2026-10 审计 C2-3）
@@ -408,7 +408,7 @@ export const INTERRUPTED_SWAP_MIN_AGE_MS = 10 * 60 * 1000
  *
  * 为什么必须有它：随包插件（dsh-memory-evolve）的**开机同步**与这里的安装器都会
  * 整目录换入 `<skillsDir>/<name>`，此前两者完全不互斥（同步侧连这把锁都不取）。
- * 复审实测的并发终态是「内容是插件版 + `.picoaide` 是市场版 + 市场内容被删」
+ * 复审实测的并发终态是「内容是插件版 + `.zeokeel` 是市场版 + 市场内容被删」
  * （5/5；真实体量 20 轮 15 轮），而且此后插件侧永久 `SKILL_CHANNEL_CONFLICT`
  * 拒收该目录 ⇒ **不会自愈**。
  *
@@ -445,7 +445,7 @@ export const SKILL_LOCK_WAIT_MS = 5_000
 /** 等待期的轮询间隔（让出事件循环，见 {@link SKILL_LOCK_DIR}）。 */
 const SKILL_LOCK_POLL_MS = 25
 
-/** 安装器标记（`.picoaide/release.json`）的体积上限 —— 与同步侧同值（协议常量）。 */
+/** 安装器标记（`.zeokeel/release.json`）的体积上限 —— 与同步侧同值（协议常量）。 */
 const MARKER_MAX_BYTES = 64 * 1024
 
 /** 拿不到 per-name 锁时的失败（`SKILL_LOCKED`，对外 503：可重试，不是"请求有问题"）。 */
@@ -2788,16 +2788,16 @@ export async function synthesizeSkillFrontmatter(dir: string, fallbackName: stri
  * 技能库根（`<数据根>/skills`）—— **同名 re-export**。
  *
  * 2026-09-11：缺省值走共享的 `dshHomeSafe()`（数据目录唯一权威）—— 数据根随渠道，
- * 自己抄一份 `~/.picoaide-harness` 会在改渠道目录时漏掉，技能就落回官方目录。
+ * 自己抄一份 `~/.zeokeel-harness` 会在改渠道目录时漏掉，技能就落回官方目录。
  *
- * 2026-10-13（P0-b）：**实现搬到叶子包** `@picoaide/dsh-host-home`。理由是消费方
+ * 2026-10-13（P0-b）：**实现搬到叶子包** `@zeokeel/dsh-host-home`。理由是消费方
  * 横跨两个可选模块 —— 应用模块的 `wasm_app_*` 工具也要按同一路径判断"内置作者
  * 手册装没装"（`packages/host/wasm-apps-host/src/builtin-skills.ts`），而应用包
  * 指向技能包会得到"关掉技能就发布不了应用"，复制一份路径拼接则违反单一真源。
- * 本文件保留同名导出：本包内的相对 import 与 `@picoaide/dsh-capability-center`
+ * 本文件保留同名导出：本包内的相对 import 与 `@zeokeel/dsh-capability-center`
  * 的导出面都不变。**改判定请只改叶子包那份。**
  */
-export { resolveSkillsDir } from '@picoaide/dsh-host-home'
+export { resolveSkillsDir } from '@zeokeel/dsh-host-home'
 
 /** 上游 `skipSystem` 根里唯一被跳过的目录名（skill-filesystem 的 `roots()`）。 */
 export const SKILL_SYSTEM_DIR = '.system'
@@ -3248,7 +3248,7 @@ export async function uninstallSkill(
     /**
      * 这一份**算不算当前账号的**（2026-10 审计 C2-1）：`'unknown'` = 证明不了
      * （面板从聚合面的 `localOwnership` 带下来，见 `auth-gate.ts` 的
-     * `/api/pico/skills` 分支）。它只影响**随包技能的机器级墓碑**要不要写：
+     * `/api/zeokeel/skills` 分支）。它只影响**随包技能的机器级墓碑**要不要写：
      * 证明不了归属时**不写** —— 删除照常生效，但"随包同步对所有账号都不再装回"
      * 这个**不可逆**的机器级决定不下（安全的失败模式：删了下次同步还会回来）。
      * 省略（老调用方/工具面/测试）保持原行为：写墓碑。
@@ -3584,7 +3584,7 @@ async function ensureAnchoredLibrarySubdir(
 }
 
 /** 安装器写入的溯源目录名(服务端拒绝归档自带同名目录)。 */
-export const PROVENANCE_DIR = '.picoaide'
+export const PROVENANCE_DIR = '.zeokeel'
 
 /**
  * 「技能管理」禁用开关写进 SKILL.md frontmatter 的字段名（N1b，跨端同值契约）：
@@ -3663,7 +3663,7 @@ export async function writeProvenance(skillDir: string, info: SkillProvenance): 
  */
 export async function readProvenance(skillDir: string): Promise<SkillProvenance | undefined> {
   try {
-    // 类型 + 体积闸门（独立复审 r3 F2 同族）：`.picoaide/release.json` 可能是 FIFO /
+    // 类型 + 体积闸门（独立复审 r3 F2 同族）：`.zeokeel/release.json` 可能是 FIFO /
     // 目录 / 符号链接 / 超大文件 —— 直接 `readFile` 会永久阻塞（FIFO）或整份读进内存。
     // 这里与同步侧 `skills-sync.js` 的 `readSmallRegularFile` 同一份判据：不是"小普通
     // 文件"就按"读不出来"处理 ⇒ 该份内容按用户自制对待（fail-safe 方向：宁可多要
@@ -3697,7 +3697,7 @@ export async function readProvenance(skillDir: string): Promise<SkillProvenance 
  * `lib/coi/skills-sync.js` 的 `skillContentChecksum`）在每次自己写内容之后也写一份
  * 同样的哈希（`channel: 'plugin'` 落点的 `archiveChecksum`）。跨包 import 禁止 ⇒
  * 两份实现各自持有，等价性由 `tests/skill-channel-parity.spec.ts` 用真实 fixture
- * 对拍（嵌套目录 / 空目录 / 二进制 / 非 ASCII 名 / 符号链接 / 顶层 `.picoaide`）。
+ * 对拍（嵌套目录 / 空目录 / 二进制 / 非 ASCII 名 / 符号链接 / 顶层 `.zeokeel`）。
  * **改这里的算法必须同步改那边**（差异会让随包技能恒判脏或恒不判脏）。
  */
 export async function computeSkillContentHash(skillDir: string): Promise<string> {
@@ -4014,7 +4014,7 @@ async function addDirToZip(zip: AdmZip, root: string, dir: string, relPrefix: st
     const abs = join(dir, entry.name)
     const rel = relPrefix === '' ? entry.name : `${relPrefix}/${entry.name}`
     // 安装器自有文件**不是技能内容**，重新上传时必须排除（审计 2026-09-23 A13）：
-    //  - `.picoaide/`：溯源目录，服务端以 PROVENANCE_FORBIDDEN 拒绝（伪造归属防护）；
+    //  - `.zeokeel/`：溯源目录，服务端以 PROVENANCE_FORBIDDEN 拒绝（伪造归属防护）；
     //  - `.install-version`：安装器写的版本标记，此前会被打进上传包流出去。
     if (relPrefix === '' && (entry.name === PROVENANCE_DIR || entry.name === INSTALL_VERSION_FILE)) continue
     const info = await lstat(abs).catch(() => undefined)

@@ -33,8 +33,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
 )
 
 func TestBlankChecksumHeaderParityAcrossSkillSurfaces(t *testing.T) {

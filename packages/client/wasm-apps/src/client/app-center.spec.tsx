@@ -2,8 +2,8 @@
  * 应用中心客户端面的回归测试（R34 / R36 / R38 + 入口打开策略）。
  *
  * 三条断言口径（对应设计基线的三条硬约定）：
- *  - **R34 可达**：导航条目登记进 `picoFootMenu`（底部唯一的「更多」行由
- *    `@picoaide/dsh-foot-menu` 渲染，登记面在 `index.spec.ts`），侧边栏座位上只剩
+ *  - **R34 可达**：导航条目登记进 `zeokeelFootMenu`（底部唯一的「更多」行由
+ *    `@zeokeel/dsh-foot-menu` 渲染，登记面在 `index.spec.ts`），侧边栏座位上只剩
  *    **toast 宿主挂载点** —— 本文件断言后者真的只是挂载点（无 toast 时零渲染、
  *    不含任何"打开应用中心"的入口）；
  *  - **目录展示全部应用**（2026-09-18 拍板）：面板**原样渲染**服务端给的数组 ——
@@ -29,7 +29,7 @@
  *     实现）→ 「打开只打本机路由」与「没有系统浏览器兜底」红；
  *   - `openAppEntry` 不校验本机返回的协议 URL（谁给什么都当成功）⇒「返回别的应用/
  *     别的 scheme ⇒ 形状错误」红；
- *   - `pageHoldsWriteProof` 放行 `picoaide-app:` / `file:` ⇒「缺证明时不发请求」红。
+ *   - `pageHoldsWriteProof` 放行 `zeokeel-app:` / `file:` ⇒「缺证明时不发请求」红。
  */
 import { afterEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -48,9 +48,9 @@ import { HOST_PROOF_HEADER, HOST_PROOF_PATH, clearHostProofToken } from './host-
  * 官方渠道 fixture（值来自渠道包 `channel.json` 的官方声明；**产品代码里没有**这两个
  * scheme 字面量 —— 用例需要的是"某个具体渠道"，用 fixture 常量而不是把 scheme 抄进断言）。
  */
-const APP_SCHEME = 'picoaide-app'
-const DEEP_LINK_SCHEME = 'picoaide'
-const OFFICIAL_CHANNEL: AppChannel = { appOriginScheme: APP_SCHEME, deepLinkScheme: DEEP_LINK_SCHEME, productName: 'PicoAide' }
+const APP_SCHEME = 'zeokeel-app'
+const DEEP_LINK_SCHEME = 'zeokeel'
+const OFFICIAL_CHANNEL: AppChannel = { appOriginScheme: APP_SCHEME, deepLinkScheme: DEEP_LINK_SCHEME, productName: 'ZeoKeel' }
 
 /** 一条应用协议 URL（scheme 从 fixture 来，不在用例里写死产品常量）。 */
 const appURL = (appId: string, path = '/'): string => `${APP_SCHEME}://${appId}${path}`
@@ -153,7 +153,7 @@ describe('目录解析：只归一化，不新增筛选规则（展示全部应�
     const html = renderToStaticMarkup(<AppCenterBody state={{ kind: 'ready', items }} onRetry={() => {}} />)
     expect(html).toContain('旧行')
     expect(html).not.toContain('legacy.apps.example.com')
-    expect(html).not.toContain('pico-app-center-entry')
+    expect(html).not.toContain('zeokeel-app-center-entry')
     expect(html).not.toContain('入口')
   })
 
@@ -223,7 +223,7 @@ describe('目录渲染（R34 / R36）', () => {
     expect(html).toContain('值班记录与交接备注')
     expect(html).toContain('负责人: alice')
     // 2026-09-19：目录行不再有入口链接（契约 §4.5；应用只在客户端内以协议打开）。
-    expect(html).not.toContain('pico-app-center-entry')
+    expect(html).not.toContain('zeokeel-app-center-entry')
     expect(html).not.toContain('apps.example.com')
     expect(html).toContain('值班表')
     // 每条目一个"打开"按钮（真实 button，不是 div）。
@@ -368,7 +368,7 @@ describe('目录渲染（R34 / R36）', () => {
         if (url === HOST_PROOF_PATH) {
           return new Response(JSON.stringify({ proof: 'p', expires_at: Date.now() + 300_000 }), { status: 200, headers: { 'content-type': 'application/json' } })
         }
-        return new Response(JSON.stringify({ appOriginScheme: '', deepLinkScheme: 'picoaide', productName: 'P' }), { status: 200, headers: { 'content-type': 'application/json' } })
+        return new Response(JSON.stringify({ appOriginScheme: '', deepLinkScheme: 'zeokeel', productName: 'P' }), { status: 200, headers: { 'content-type': 'application/json' } })
       }) as unknown as typeof fetch,
     })
     expect(result.channel).toBeNull()
@@ -391,7 +391,7 @@ describe('目录渲染（R34 / R36）', () => {
     expect(parseAppChannel({ appOriginScheme: APP_SCHEME, deepLinkScheme: DEEP_LINK_SCHEME, productName: ' P ' }))
       .toEqual({ appOriginScheme: APP_SCHEME, deepLinkScheme: DEEP_LINK_SCHEME, productName: 'P' })
     // 大小写与空白归一化（两端同一口径）。
-    expect(parseAppChannel({ appOriginScheme: ' PicoAide-App ', deepLinkScheme: 'PicoAide' })?.appOriginScheme).toBe(APP_SCHEME)
+    expect(parseAppChannel({ appOriginScheme: ' ZeoKeel-App ', deepLinkScheme: 'ZeoKeel' })?.appOriginScheme).toBe(APP_SCHEME)
     // 缺字段 / 非串 / 空串 / 非法形状 / 保留 scheme / 两个 scheme 相同 ⇒ null。
     for (const bad of [
       null, {}, 'nope',
@@ -448,7 +448,7 @@ describe('侧边栏挂载点：只挂 toast 宿主，不再是导航行', () => 
     expect(html).toContain('data-role="app-toast"')
     expect(html).toContain(foreignDeepLinkToastText())
     // 挂载点自己不含任何"打开应用中心"的入口（入口在「更多」浮层里）。
-    expect(html).not.toContain('pico-app-center-trigger')
+    expect(html).not.toContain('zeokeel-app-center-trigger')
     expect(html).not.toContain('aria-label="应用中心"')
     clearAppToast()
   })
@@ -501,7 +501,7 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
   /**
    * **平台拒绝**不得被说成"本页面无法证明自己属于这个客户端窗口"（2026-09-20 真机 P0）。
    *
-   * 现场：服务端因为客户端没能出示 `X-Pico-App-Proof` 而回 401 `proof_required`，
+   * 现场：服务端因为客户端没能出示 `X-ZeoKeel-App-Proof` 而回 401 `proof_required`，
    * 宿主把它透传给渲染层，客户端见 `proof_required` 就映射到本机那一支的文案
    * ——「（因此没有发出任何请求）」，而请求其实发出去了、平台也答了。用户与维护者
    * 都被指到了错误的方向（去别的窗口重试 / 查本机服务）。
@@ -655,7 +655,7 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
     expect(openCalls(h)).toHaveLength(1)
     const call = openCalls(h)[0]!
     expect(call.url).toBe(OPEN_APP_PATH)
-    expect(OPEN_APP_PATH).toBe('/api/pico/wasm-apps/open')
+    expect(OPEN_APP_PATH).toBe('/api/zeokeel/wasm-apps/open')
     expect(call.init.method).toBe('POST')
     expect(JSON.parse(String(call.init.body))).toEqual({ app_id: 'demo' })
     expect(call.init.credentials).toBe('same-origin')
@@ -771,7 +771,7 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
       if (attempt === 1) {
         return new Response(JSON.stringify({ error: 'proof_expired' }), { status: 401, headers: { 'content-type': 'application/json' } })
       }
-      return new Response(JSON.stringify({ url: `picoaide-app://demo/` }), { status: 200, headers: { 'content-type': 'application/json' } })
+      return new Response(JSON.stringify({ url: `zeokeel-app://demo/` }), { status: 200, headers: { 'content-type': 'application/json' } })
     }) as unknown as typeof fetch
     const result = await openAppEntry('demo', { fetch: fetchImpl, holdsWriteProof: () => true, protocol: () => `${APP_SCHEME}:` })
     expect(result.ok).toBe(true)
@@ -893,7 +893,7 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
     expect(parseAppProtocolURL(appURL('demo'), 'demo', null)).toBeNull()
   })
 
-  it('scheme 来自渠道 seam 的注入值（不写死 `picoaide-app`）', () => {
+  it('scheme 来自渠道 seam 的注入值（不写死 `zeokeel-app`）', () => {
     setAppChannel(OFFICIAL_CHANNEL)
     expect(parseAppProtocolURL(appURL('demo'), 'demo')).toBe(appURL('demo'))
     // 换一个渠道（品牌）：同一条 URL 立即不再被认作本安装的应用。
@@ -905,45 +905,45 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
   /**
    * 源码级判据：**客户端不拼 app-proof 头**（§20.1/§23.1：proof 只由宿主持有并携带）。
    *
-   * ⚠️ 这里曾写的是 `not.toContain('X-Pico-App-Proof:')` —— 一条**形同没有**的判据：TS/JS 里
-   * 最自然的拼头写法是对象字面量 `{ 'X-Pico-App-Proof': value }`，引号夹在 `Proof` 与 `:`
+   * ⚠️ 这里曾写的是 `not.toContain('X-ZeoKeel-App-Proof:')` —— 一条**形同没有**的判据：TS/JS 里
+   * 最自然的拼头写法是对象字面量 `{ 'X-ZeoKeel-App-Proof': value }`，引号夹在 `Proof` 与 `:`
    * 之间，那个子串恒不命中（独立审计 R1-L3-1 的 M14 变异只让"产物不旧于源码"这条通用守卫
    * 变红，没有一条语义断言失败）。现在的写法不依赖引号形态：
    *
    *  ①**只允许声明一处**：`APP_PROOF_HEADER` 在**代码行**（整行注释不算）里出现且仅出现一次
    *    —— 任何"拼头"写法都必然再引用它一次 ⇒ 必红；
-   *  ②**按头名形态扫**：覆盖不带引号、带单/双引号三种形态的 `X-Pico-App-Proof:`；
+   *  ②**按头名形态扫**：覆盖不带引号、带单/双引号三种形态的 `X-ZeoKeel-App-Proof:`；
    *  ③真正发出去的本机请求 headers 里不含它（行为级，见下一条用例）。
    */
   it('源码级：open-app.ts 里没有写死的 app scheme（CHN-2），也不是客户端在拼 app-proof', () => {
     const source = readFileSync(new URL('./open-app.ts', import.meta.url), 'utf8')
-    // 旧实现的常量 `APP_PROTOCOL = 'picoaide-app:'` 必须彻底消失：scheme 是渠道变量。
+    // 旧实现的常量 `APP_PROTOCOL = 'zeokeel-app:'` 必须彻底消失：scheme 是渠道变量。
     expect(source).not.toContain(`'${APP_SCHEME}:'`)
     expect(source).not.toContain(APP_SCHEME)
     // 但冻结路径必须仍是**字面量**（跨包三方对拍的真源，见 desktop 的 route-parity 用例）。
-    expect(source).toContain("export const OPEN_APP_PATH = '/api/pico/wasm-apps/open'")
+    expect(source).toContain("export const OPEN_APP_PATH = '/api/zeokeel/wasm-apps/open'")
     // 头名常量必须在（跨端契约），但**只在声明处**出现一次。
-    expect(source).toContain("'X-Pico-App-Proof'")
+    expect(source).toContain("'X-ZeoKeel-App-Proof'")
     const code = source
       .split('\n')
       .filter(line => !/^\s*(\*|\/\/|\/\*)/u.test(line))   // 去掉整行注释（`{@link …}` 不算"使用"）
       .join('\n')
     expect(code.match(/APP_PROOF_HEADER/gu) ?? []).toHaveLength(1)
     // 三种引号形态的"拼头"都要被抓到（旧断言只覆盖不带引号的一种 ⇒ 恒不命中）。
-    expect(code).not.toMatch(/X-Pico-App-Proof['"]?[ \t]*:/u)
-    // 头名本体只允许出现在**声明那一行**（大小写不敏感：`headers['x-pico-app-proof']` 也算）。
+    expect(code).not.toMatch(/X-ZeoKeel-App-Proof['"]?[ \t]*:/u)
+    // 头名本体只允许出现在**声明那一行**（大小写不敏感：`headers['x-zeokeel-app-proof']` 也算）。
     const withoutDeclaration = code
       .split('\n')
       .filter(line => !line.includes('export const APP_PROOF_HEADER'))
       .join('\n')
-    expect(withoutDeclaration).not.toMatch(/x-pico-app-proof/iu)
+    expect(withoutDeclaration).not.toMatch(/x-zeokeel-app-proof/iu)
   })
 
   /**
    * 行为级对照（比源码 grep 强）：真的发一次打开请求，断言**实际 headers 里没有** proof、
    * 也没有 authorization —— 客户端半边不持 bearer、不签 proof（§5.1b/§20.3）。
    *
-   * 变异验证：在 `openAppEntry` 的 fetch init 里加 `{'X-Pico-App-Proof': 'x'}`
+   * 变异验证：在 `openAppEntry` 的 fetch init 里加 `{'X-ZeoKeel-App-Proof': 'x'}`
    * 或 `{Authorization: …}` ⇒ 本条必红（完全不依赖源码字符串形态）。
    */
   it('打开请求：带**本机**持有性证明头，不带平台 app-proof / authorization', async () => {
@@ -953,7 +953,7 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
     const headers = (call.init.headers ?? {}) as Record<string, string>
     const names = Object.keys(headers).map(name => name.toLowerCase()).sort()
     // 平台 app-proof 与 bearer 都在宿主侧（客户端不拼不签）；本机证明**必须**在。
-    expect(names).not.toContain('x-pico-app-proof')
+    expect(names).not.toContain('x-zeokeel-app-proof')
     expect(names).not.toContain('authorization')
     expect(names).toEqual(['content-type', HOST_PROOF_HEADER.toLowerCase()].sort())
     expect(JSON.parse(String(call.init.body))).toEqual({ app_id: 'demo' })
@@ -964,7 +964,7 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
     // 旧实现的两条路（内置浏览器标签 + window.open 兜底）必须一个字都不剩。
     // （模块注释里提到 entry_url 只是说明"它已经不存在"，所以这里查的是代码面。）
     expect(source).not.toContain('window.open')
-    expect(source).not.toContain('/api/pico/browser/open')
+    expect(source).not.toContain('/api/zeokeel/browser/open')
     expect(source).not.toContain('entryURL')
     expect(source).not.toContain('safeEntryURL')
     // 旧的返回形态 `via: 'built-in' | 'system' | 'none'` 也不在。

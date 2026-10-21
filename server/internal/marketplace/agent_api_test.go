@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // agentArchive 构造市场智能体归档(zip):agent.cordis.yml + preset.yml 元数据。

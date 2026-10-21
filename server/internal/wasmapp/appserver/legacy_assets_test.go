@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/appserver"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appserver"
 )
 
 // TestCleanupLegacyAssetDirs 守的是"清理工具只删它该删的东西"。

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 本文件是 FIX-31（审计 P0-1）的**覆盖性门禁**：把审计员的最小复现固化成仓库用例。
@@ -84,7 +84,7 @@ func TestWhitelistCoversTemplateRenderAndReadAtGuest(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Fatalf("【P0-1 回归】用 html/template 渲染 + os.File.ReadAt 的合法 Go 应用有 %d 条导入不在白名单，"+
-			"上传会被 IMPORT_NOT_ALLOWED 拒：\n  %s\n修复：cd server && go run ./cmd/picoaide-wasm-imports-gen",
+			"上传会被 IMPORT_NOT_ALLOWED 拒：\n  %s\n修复：cd server && go run ./cmd/zeokeel-wasm-imports-gen",
 			len(missing), strings.Join(missing, "\n  "))
 	}
 
@@ -229,7 +229,7 @@ func TestWhitelistCoversTinyGoStyleSocketImports(t *testing.T) {
 
 	// ② 正例：白名单必须覆盖它（否则 TinyGo 产物发不出去）。
 	if _, err := Validate(raw); err != nil {
-		t.Fatalf("TinyGo 风格产物的导入面必须被白名单覆盖：%v\n修复：cd server && go run ./cmd/picoaide-wasm-imports-gen", err)
+		t.Fatalf("TinyGo 风格产物的导入面必须被白名单覆盖：%v\n修复：cd server && go run ./cmd/zeokeel-wasm-imports-gen", err)
 	}
 
 	// ③ 反向：从白名单里删掉任一条 ⇒ 必须被拒（证明这两行是承重的）。

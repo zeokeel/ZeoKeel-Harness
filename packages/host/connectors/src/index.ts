@@ -56,14 +56,14 @@ import type { ConnectorCredential } from './store.ts'
 // this declaration lets plugins type-check without a runtime dependency.
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'pico/session-changed'(session: { username?: string; token?: string; serverURL?: string } | null): void
+    'zeokeel/session-changed'(session: { username?: string; token?: string; serverURL?: string } | null): void
     /**
      * A connector credential moved (refreshed token, rotated refresh token).
      * HTTP MCP servers pick it up on the next request through their auth
      * provider; stdio servers receive the token in the child environment and
      * are re-registered by this plugin in response.
      */
-    'pico/connector-credentials-changed'(payload: { id: string }): void
+    'zeokeel/connector-credentials-changed'(payload: { id: string }): void
   }
 }
 
@@ -75,14 +75,14 @@ declare module '@deepseek-ai/cordis' {
  * `ctx.plugin` once a connector connects.
  *
  * Exposes a loopback HTTP API consumed by the client settings UI:
- *   GET  /api/pico/connectors                -> list with states
- *   POST /api/pico/connectors/:id/connect    -> start auth flow
- *   POST /api/pico/connectors/:id/auth-submit-> token form values
- *   GET  /api/pico/connectors/:id/state      -> poll status + pending request
- *   POST /api/pico/connectors/:id/disconnect -> stop and forget
+ *   GET  /api/zeokeel/connectors                -> list with states
+ *   POST /api/zeokeel/connectors/:id/connect    -> start auth flow
+ *   POST /api/zeokeel/connectors/:id/auth-submit-> token form values
+ *   GET  /api/zeokeel/connectors/:id/state      -> poll status + pending request
+ *   POST /api/zeokeel/connectors/:id/disconnect -> stop and forget
  */
 
-export const name = 'pico-connectors'
+export const name = 'zeokeel-connectors'
 export const inject = ['webServer']
 
 /**
@@ -98,7 +98,7 @@ export const inject = ['webServer']
  * 打进去），而且哨兵判据必须**双侧** —— 开启变体里必须也存在，这个量具才算数。
  * 串的命名规则唯一真源是 `channel-constants.ts` 的 `featureSentinel()`。
  */
-export const CONNECTORS_FEATURE_SENTINEL = 'picoaide.feature.connectors.v1'
+export const CONNECTORS_FEATURE_SENTINEL = 'zeokeel.feature.connectors.v1'
 
 /**
  * How long a credential-change rebuild waits for the endpoint's in-flight MCP
@@ -312,7 +312,7 @@ function exact(handler: JsonHandler): (req: IncomingMessage, res: ServerResponse
 export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   // 渠道功能模块 `connectors` 的装配哨兵（见 CONNECTORS_FEATURE_SENTINEL 的说明）：
   // 一行 info 日志，让"这个模块在这次装配里真的到位了"在端到端产物里有一条可查的痕迹。
-  ctx.logger?.info?.(`pico-connectors: registered (${CONNECTORS_FEATURE_SENTINEL})`)
+  ctx.logger?.info?.(`zeokeel-connectors: registered (${CONNECTORS_FEATURE_SENTINEL})`)
   /**
    * Host locale of THIS message.
    *
@@ -354,7 +354,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   // `registerMcp` re-checks and refuses a streamable-http server when the fence
   // is unavailable, so a failure here is loud, not silent.
   void ensureMcpTransportRedirectFence().catch((error: unknown) => {
-    ctx.logger?.error('pico-connectors: MCP streamable-http 重定向栅栏安装失败，将拒绝注册此类连接器', error)
+    ctx.logger?.error('zeokeel-connectors: MCP streamable-http 重定向栅栏安装失败，将拒绝注册此类连接器', error)
   })
 
   // P8: the outbound transport may have to announce a degraded posture ONCE
@@ -363,7 +363,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   // here — this is the wiring that puts the line in the app log file instead of
   // a bare stderr write. Registered at apply time, i.e. before any connector
   // request can exist.
-  setConnectorOutboundNoticeSink(message => ctx.logger?.warn(`pico-connectors: ${message}`))
+  setConnectorOutboundNoticeSink(message => ctx.logger?.warn(`zeokeel-connectors: ${message}`))
 
   // 连接器目录(0042):服务端为准——bootstrap 下发 connectors[](定义 JSON),
   // 客户端无内置定义,仅保留 options.connectors 作为开发/测试注入。
@@ -374,8 +374,8 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   // 服务端不返回/请求失败时保留当前 defs(不影响已连接的 MCP 工具)。
   const syncServerDefs = async (): Promise<void> => {
     try {
-      const pico = ctx.get('picoSession') as { getSession?: () => { serverURL?: string; token?: string } | null } | undefined
-      const session = pico?.getSession?.()
+      const zeokeel = ctx.get('zeokeelSession') as { getSession?: () => { serverURL?: string; token?: string } | null } | undefined
+      const session = zeokeel?.getSession?.()
       if (!session?.serverURL || !session?.token) return
       // This runs inside the serial lifecycle queue: a black-holed gateway
       // must not park a logout/user switch for undici's default header
@@ -403,21 +403,21 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   // plugin also loads in compositions without the enterprise plugin.
   const currentUser = (): string | null => {
     try {
-      const pico = ctx.get('picoSession') as { getSession?: () => { username?: string } | null } | undefined
-      return pico?.getSession?.()?.username ?? null
+      const zeokeel = ctx.get('zeokeelSession') as { getSession?: () => { username?: string } | null } | undefined
+      return zeokeel?.getSession?.()?.username ?? null
     } catch {
       return null
     }
   }
 
   // R6-B-2: the SECOND half of the credential scope. Same source and same
-  // read-per-call shape as `@picoaide/dsh-browser`'s `currentServerHash()` —
+  // read-per-call shape as `@zeokeel/dsh-browser`'s `currentServerHash()` —
   // one machine can be logged into two deployments, and the credential of the
   // first must never be handed to the second (see `./user-scope.ts`).
   const currentServerURL = (): string | null => {
     try {
-      const pico = ctx.get('picoSession') as { getSession?: () => { serverURL?: string } | null } | undefined
-      const serverURL = pico?.getSession?.()?.serverURL
+      const zeokeel = ctx.get('zeokeelSession') as { getSession?: () => { serverURL?: string } | null } | undefined
+      const serverURL = zeokeel?.getSession?.()?.serverURL
       return typeof serverURL === 'string' ? serverURL : null
     } catch {
       return null
@@ -434,7 +434,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
    * 稳定的 ASCII tag + 原因 + 连接器 id）。
    */
   const credentialReadFault = (id: string, error: CredentialReadError): void => {
-    ctx.logger?.warn?.(`pico-connectors: read-fault id=${id} kind=${error.fault.kind} — ${error.message}`)
+    ctx.logger?.warn?.(`zeokeel-connectors: read-fault id=${id} kind=${error.fault.kind} — ${error.message}`)
   }
 
   let store = new ConnectorStore(
@@ -453,10 +453,10 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   /**
    * 凭据作用域闸门（R16B-04，第十六轮审计泳道 B）—— **写路径的前置条件**。
    *
-   * 缺陷形态：`pico/session-changed` 的处理被丢进 `runLifecycle`（串行队列），任务
+   * 缺陷形态：`zeokeel/session-changed` 的处理被丢进 `runLifecycle`（串行队列），任务
    * 是 `await teardownAll()` → `await syncServerDefs()`（**一次真实网络往返**，预算
    * 30s）→ `reconfigureUser()`（**`store` 只在这里被换成新账号的作用域**）。而
-   * `POST /api/pico/connectors/:id/connect` 是 HTTP 路由，**不在那条队列里**：窗口内
+   * `POST /api/zeokeel/connectors/:id/connect` 是 HTTP 路由，**不在那条队列里**：窗口内
    * 它读到的仍是上一个账号的凭据目录 —— token 模式会带着旧账号的 `fields`/令牌直接
    * `registerMcp`，OAuth 模式会用旧账号的 refresh token 去换票，于是新账号的会话里
    * 跑着旧账号凭据的 MCP 传输（同机两人共用时是跨账号泄漏；`teardownAll` 又把
@@ -479,7 +479,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   const credentialScopeSwitching = (): boolean =>
     scopeSwitchTarget !== null && scopeSwitchTarget !== store.dir
   /**
-   * 唯一的置位点：会话事件**同步**调用它（见下面 `pico/session-changed` 监听），用与
+   * 唯一的置位点：会话事件**同步**调用它（见下面 `zeokeel/session-changed` 监听），用与
    * `reconfigureUser()` 完全相同的取值链（服务读优先、事件载荷兜底）算出"这次会话
    * 要求的作用域目录"。
    *
@@ -615,7 +615,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       // exists for is preserved.
       const staticResolved = resolveStaticAuthorizationServer(target, locale())
       if (staticResolved.discovery === undefined) {
-        ctx.logger?.warn(`pico-connectors: ${def.id} 静态端点不可用（${staticResolved.failure?.message ?? 'unknown'}）`)
+        ctx.logger?.warn(`zeokeel-connectors: ${def.id} 静态端点不可用（${staticResolved.failure?.message ?? 'unknown'}）`)
         return {}
       }
       const baseline: { current: ConnectorCredential } = { current: credential }
@@ -629,7 +629,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         // 于是 SDK 只能自己再刷一次 —— 那条路径不在 per-id 单飞里，并发 401
         // 会把同一个单次 refresh token 出示两次（轮换复用检测吊销整个授权）。
         refreshOnUnauthorized: async () => await refreshForUnauthorized(def.id, baseline),
-        log: (message) => ctx.logger?.warn(`pico-connectors: ${def.id} ${message}`),
+        log: (message) => ctx.logger?.warn(`zeokeel-connectors: ${def.id} ${message}`),
         // **必须 await 落盘**（2026-09-17 flake 定案）：`saveTokens` 是 SDK 自己
         // 续期后唯一的持久化点，而 provider 的 `tokens()` 又会把内存里的新令牌
         // 交给下一次请求。写盘一旦 fire-and-forget，SDK 的续期就已经"完成"了而
@@ -642,7 +642,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
           await persistAndMaybeAnnounce(def.id, patch, baseline.current)
             .then((saved) => { if (saved !== null) baseline.current = saved })
             .catch((cause: unknown) => {
-              ctx.logger?.warn(`pico-connectors: ${def.id} 令牌持久化失败`, cause)
+              ctx.logger?.warn(`zeokeel-connectors: ${def.id} 令牌持久化失败`, cause)
             })
         },
       })
@@ -663,7 +663,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       if (resolved.failure) {
         // No refresh material: keep the token we have. A 401 then surfaces as
         // an ordinary tool error instead of a silent dead grant.
-        ctx.logger?.warn(`pico-connectors: ${def.id} 无法解析令牌端点（${resolved.failure.message}）`)
+        ctx.logger?.warn(`zeokeel-connectors: ${def.id} 无法解析令牌端点（${resolved.failure.message}）`)
         return {}
       }
       const baseline: { current: ConnectorCredential } = { current: credential }
@@ -675,7 +675,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         ensureFresh: async () => await ensureCredentialFresh(def.id, baseline),
         // 与静态端点分支同一条 401 收口（见上）。
         refreshOnUnauthorized: async () => await refreshForUnauthorized(def.id, baseline),
-        log: (message) => ctx.logger?.warn(`pico-connectors: ${def.id} ${message}`),
+        log: (message) => ctx.logger?.warn(`zeokeel-connectors: ${def.id} ${message}`),
         // The SDK's persistence point: a rotated refresh token or a new
         // access token must reach the store, or the next process (or the
         // next registration) would refresh with a dead grant. Never through
@@ -689,10 +689,10 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
             .then((saved) => {
               if (saved === null) return
               baseline.current = saved
-              ctx.emit('pico/connector-credentials-changed', { id: def.id })
+              ctx.emit('zeokeel/connector-credentials-changed', { id: def.id })
             })
             .catch((cause: unknown) => {
-              ctx.logger?.warn(`pico-connectors: ${def.id} 令牌持久化失败`, cause)
+              ctx.logger?.warn(`zeokeel-connectors: ${def.id} 令牌持久化失败`, cause)
             })
         },
       })
@@ -707,7 +707,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     } catch (error) {
       // A policy-blocked URL is an active redirection attempt: register
       // without the provider (the SDK will report 401 plainly) and log loudly.
-      ctx.logger?.error(`pico-connectors: ${def.id} 令牌端点解析被拒绝`, error)
+      ctx.logger?.error(`zeokeel-connectors: ${def.id} 令牌端点解析被拒绝`, error)
       return {}
     }
   }
@@ -841,7 +841,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   }
 
   /**
-   * One refresh engine for every connector. `pico/connector-credentials-changed`
+   * One refresh engine for every connector. `zeokeel/connector-credentials-changed`
    * is how the rest of the host learns that a token moved: HTTP MCP servers
    * pick the new token up on the next request (their auth provider reads the
    * store), while stdio servers must be re-registered to receive it.
@@ -932,10 +932,10 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         try {
           refreshLiveHeaders(announced, persisted, scope)
         } catch (cause: unknown) {
-          ctx.logger?.warn(`pico-connectors: ${id} 同步刷活头失败（已跳过；事件与重注册继续）`, cause)
+          ctx.logger?.warn(`zeokeel-connectors: ${id} 同步刷活头失败（已跳过；事件与重注册继续）`, cause)
         }
       }
-      ctx.emit('pico/connector-credentials-changed', { id })
+      ctx.emit('zeokeel/connector-credentials-changed', { id })
     },
     ...(options.outboundTimeoutMs === undefined ? {} : { timeoutMs: options.outboundTimeoutMs }),
   })
@@ -1372,7 +1372,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       // 旧补偿删掉（复核用强制交错探针实测到）。
       await intent.store.clearCredentialIfUnchanged(id, written)
     } catch (cause) {
-      ctx.logger?.warn(`pico-connectors: ${id} 竞态凭据写入回滚失败`, cause)
+      ctx.logger?.warn(`zeokeel-connectors: ${id} 竞态凭据写入回滚失败`, cause)
     }
   }
 
@@ -1499,7 +1499,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         // 转换顶掉是常规收敛（它只是局部动作，下一次扫掠/重建还会来），不记。
         if (kind === 'transition') {
           ctx.logger?.warn?.(
-            `pico-connectors: session transition superseded before it ran `
+            `zeokeel-connectors: session transition superseded before it ran `
             + `(epoch ${String(epoch)} < ${String(transitionEpoch)}); the newest transition carries the state`,
           )
         }
@@ -1515,7 +1515,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   /** Rebuild per-user store/runtime after a login/logout/switch. */
   const reconfigureUser = (eventServerURL?: string | null): void => {
     const username = currentUser()
-    // Migrate legacy `~/.picoaide/connectors` once (first login after
+    // Migrate legacy `~/.zeokeel/connectors` once (first login after
     // upgrade): A's pre-upgrade credentials must not be lost silently.
     migrateLegacyStore(username)
     if (!options.storeBaseDir) {
@@ -1535,7 +1535,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   // re-read credentials for the new one (restore fresh MCP servers). The def
   // catalog is synced from bootstrap FIRST so the restore registers the
   // current server directory (defs are server-issued now).
-  ctx.on('pico/session-changed', (next: unknown) => {
+  ctx.on('zeokeel/session-changed', (next: unknown) => {
     const eventServerURL = (next as { serverURL?: string } | null)?.serverURL ?? null
     // R16B-04：闸门必须在**会话事件一开始**就落下（同步、早于任何 await）——
     // 生命周期任务里的 `reconfigureUser()` 要等一次网络往返，这段窗口里 `store`
@@ -1558,7 +1558,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       }
       if (next !== null) await restoreAll(epoch)
     }).catch((cause: unknown) => {
-      ctx.logger?.error('pico-connectors: session change handling failed', cause)
+      ctx.logger?.error('zeokeel-connectors: session change handling failed', cause)
     })
   })
 
@@ -1640,7 +1640,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     const token = saved.accessToken ?? ''
     if (token === '' || lastAnnouncedToken.get(id) === token) return saved
     lastAnnouncedToken.set(id, token)
-    ctx.emit('pico/connector-credentials-changed', { id })
+    ctx.emit('zeokeel/connector-credentials-changed', { id })
     return saved
   }
 
@@ -2071,7 +2071,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     } catch (cause: unknown) {
       // The serialized rebuild below re-reads the credential and reports its own
       // failures; a failed hand-off must not take the event listener down.
-      ctx.logger?.warn(`pico-connectors: ${def.id} 令牌移交给活传输失败`, cause)
+      ctx.logger?.warn(`zeokeel-connectors: ${def.id} 令牌移交给活传输失败`, cause)
     }
   }
 
@@ -2230,13 +2230,13 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       ctx.logger?.warn(line)
     }
     if (providerSuppliesAuthorization && rendered.declaredAuthorization !== null) {
-      once('declared', rendered.declaredAuthorization, `pico-connectors: [declared-authorization] ${def.id}/${server.serverName} 声明了 ${rendered.declaredAuthorization} 头：按 ${AUTHORIZATION_KEY} 发送并覆盖 OAuth 提供者的活令牌（声明值优先）`)
+      once('declared', rendered.declaredAuthorization, `zeokeel-connectors: [declared-authorization] ${def.id}/${server.serverName} 声明了 ${rendered.declaredAuthorization} 头：按 ${AUTHORIZATION_KEY} 发送并覆盖 OAuth 提供者的活令牌（声明值优先）`)
     }
     if (rendered.ignoredAuthorization !== null) {
-      once('ignored', rendered.ignoredAuthorization, `pico-connectors: [declared-authorization-ignored] ${def.id}/${server.serverName} 声明的 ${rendered.ignoredAuthorization} 未解析出凭据（字段缺值/只有方案名）：按未声明处理，由框架填 ${AUTHORIZATION_KEY}`)
+      once('ignored', rendered.ignoredAuthorization, `zeokeel-connectors: [declared-authorization-ignored] ${def.id}/${server.serverName} 声明的 ${rendered.ignoredAuthorization} 未解析出凭据（字段缺值/只有方案名）：按未声明处理，由框架填 ${AUTHORIZATION_KEY}`)
     }
     for (const name of rendered.refusedHeaderNames) {
-      once('refused', name, `pico-connectors: [unsupported-header] ${def.id}/${server.serverName} 声明的头 ${name} 无法表示，已拒绝发送`)
+      once('refused', name, `zeokeel-connectors: [unsupported-header] ${def.id}/${server.serverName} 声明的头 ${name} 无法表示，已拒绝发送`)
     }
   }
 
@@ -2270,8 +2270,8 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       env[key] = value
     }
     if (process.versions.electron) env.ELECTRON_RUN_AS_NODE = '1'
-    if (credential?.accessToken) env.PICOAIDE_CONNECTOR_ACCESS_TOKEN = credential.accessToken
-    if (credential?.refreshToken) env.PICOAIDE_CONNECTOR_REFRESH_TOKEN = credential.refreshToken
+    if (credential?.accessToken) env.ZEOKEEL_CONNECTOR_ACCESS_TOKEN = credential.accessToken
+    if (credential?.refreshToken) env.ZEOKEEL_CONNECTOR_REFRESH_TOKEN = credential.refreshToken
     return { declared, credentialKeys: [...declaredKeys].sort(), env }
   }
 
@@ -2281,7 +2281,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
    * appears later (the auth flow may store one after approval) was still shown
    * to the user before it could ever be injected (audit R3 N2).
    */
-  const FRAMEWORK_STDIO_ENV_KEYS = ['PICOAIDE_CONNECTOR_ACCESS_TOKEN', 'PICOAIDE_CONNECTOR_REFRESH_TOKEN'] as const
+  const FRAMEWORK_STDIO_ENV_KEYS = ['ZEOKEEL_CONNECTOR_ACCESS_TOKEN', 'ZEOKEEL_CONNECTOR_REFRESH_TOKEN'] as const
 
   /**
    * The names a child of this server may EVER receive: what is injected now,
@@ -2491,10 +2491,10 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     const soleLiveTransport = otherLiveTransportsAt(url, server.serverName) === 0
     const outcome = await whenMcpOutboundIdle(url, graceMs, { soleLiveTransport })
     if (outcome === 'busy') {
-      ctx.logger?.warn(`pico-connectors: ${def.id}/${server.serverName} 重建等待在途调用超时（${graceMs}ms），仍按新凭据重建`)
+      ctx.logger?.warn(`zeokeel-connectors: ${def.id}/${server.serverName} 重建等待在途调用超时（${graceMs}ms），仍按新凭据重建`)
       return
     }
-    ctx.logger?.warn(`pico-connectors: ${def.id}/${server.serverName} 重建前等在途调用结束，避免掐断正在返回的调用`)
+    ctx.logger?.warn(`zeokeel-connectors: ${def.id}/${server.serverName} 重建前等在途调用结束，避免掐断正在返回的调用`)
   }
 
   /**
@@ -2598,13 +2598,13 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         // connection proceeds — the path pair goes to the log once, so a field
         // report carries the spellings instead of only the refusal text.
         if (claimMcpTransportFenceTargetWarning()) {
-          ctx.logger?.warn(`pico-connectors: ${def.id} streamable-http 传输身份校验未定论，仍按加固后的传输连接（${mcpTransportFenceTargetWarning() ?? ''}）`)
+          ctx.logger?.warn(`zeokeel-connectors: ${def.id} streamable-http 传输身份校验未定论，仍按加固后的传输连接（${mcpTransportFenceTargetWarning() ?? ''}）`)
         }
       } catch (error) {
         httpFenceError = error instanceof McpTransportFenceUnavailableError
           ? error.message
           : String(error)
-        ctx.logger?.error(`pico-connectors: ${def.id} streamable-http 传输未加固，已拒绝注册`, error)
+        ctx.logger?.error(`zeokeel-connectors: ${def.id} streamable-http 传输未加固，已拒绝注册`, error)
       }
     }
     const { apply: applyMcpClient } = await import('@deepseek-ai/dsh-mcp-client')
@@ -2756,7 +2756,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
           // previous generation). Retire whatever this plugin knows about and try
           // exactly once more; a second failure is the caller's to report.
           if (!message.includes('already in use')) throw cause
-          ctx.logger?.warn(`pico-connectors: ${def.id} 的 MCP 名被占用，先注销旧实例再重试一次`)
+          ctx.logger?.warn(`zeokeel-connectors: ${def.id} 的 MCP 名被占用，先注销旧实例再重试一次`)
           // Only the servers THIS registration owns: a credential-change rebuild
           // selects one subset, and retiring the rest here would dispose the very
           // transports the selection exists to leave alone (V3A-N4).
@@ -3282,7 +3282,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     // non-Chinese reader); keep the tag ASCII and keep it in one place.
     if (unscoped.length > 0) {
       ctx.logger?.warn?.(
-        `pico-connectors: unscoped-credentials count=${String(unscoped.length)} — `
+        `zeokeel-connectors: unscoped-credentials count=${String(unscoped.length)} — `
         + `检测到 ${String(unscoped.length)} 个未标记服务端的连接器凭据（升级前保存），`
         + '按服务端隔离策略不沿用，对应连接器需要重新授权；原文件保留在 '
         + `${store.unscopedDir ?? ''}；ids=${unscoped.join(',')}`,
@@ -3379,7 +3379,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         // not become an unhandled rejection: the host treats those as fatal
         // and exits the whole app. Surface it on the connector row instead.
         const message = error instanceof Error ? error.message : String(error)
-        ctx.logger.error(`pico-connectors: failed to restore ${def.id}: ${message}`)
+        ctx.logger.error(`zeokeel-connectors: failed to restore ${def.id}: ${message}`)
         setState(def.id, { status: 'error', error: message, ...withCode(error) })
       }
     }
@@ -3408,7 +3408,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       for (const intent of connectIntents.values()) intent.controller.abort(new Error(copy('flow.pluginUnloadConnect')))
       connectIntents.clear()
     }
-  }, 'pico connectors: restore + cleanup')
+  }, 'zeokeel connectors: restore + cleanup')
 
   /**
    * Background token sweep.
@@ -3424,11 +3424,11 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     if (intervalMs <= 0) return () => {}
     const timer = setInterval(() => {
       void runRefreshSweep().catch((cause: unknown) => {
-        ctx.logger?.warn('pico-connectors: token sweep failed', cause)
+        ctx.logger?.warn('zeokeel-connectors: token sweep failed', cause)
       })
     }, intervalMs)
     return () => { clearInterval(timer) }
-  }, 'pico connectors: token sweep')
+  }, 'zeokeel connectors: token sweep')
 
   /**
    * 一次扫掠：把"该刷新的连接器刷一遍"串在生命周期队列里（与连接/断开互斥），
@@ -3516,7 +3516,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
    * refreshed **in place** through the live header record the fence installed
    * ({@link refreshLiveHeaders}) — no rebuild, so there is nothing to cut.
    */
-  ctx.on('pico/connector-credentials-changed', (payload: { id: string }) => {
+  ctx.on('zeokeel/connector-credentials-changed', (payload: { id: string }) => {
     const announced = defs.find(entry => entry.id === payload.id)
     if (announced === undefined) return
     // R9-D-1 FIRST, and deliberately NOT through the lifecycle queue: the SDK's
@@ -3552,7 +3552,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         setState(def.id, { status: 'error', everConnected: true, error: outcome.rejected.join('; '), errorCode: undefined })
       }
     }).catch((cause: unknown) => {
-      ctx.logger?.warn(`pico-connectors: ${payload.id} 令牌更新后重注册失败`, cause)
+      ctx.logger?.warn(`zeokeel-connectors: ${payload.id} 令牌更新后重注册失败`, cause)
     })
   })
 
@@ -3848,7 +3848,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
      * `packages/host/enterprise/src/auth-gate.ts` 的 r7c-6 逐条一致。
      *
      * `loopback.ts` 自述的边界就是"伪造 Origin 的 curl 也能过"：本机任意进程
-     * 伪造 `Origin`/`Host`/`Sec-Fetch-Site` 即可 `POST /api/pico/connectors/
+     * 伪造 `Origin`/`Host`/`Sec-Fetch-Site` 即可 `POST /api/zeokeel/connectors/
      * <id>/auth-submit` 把攻击者 token 写进**本地连接器凭据库**（实测落盘
      * glitchtip.json，后续连接器出站就带攻击者凭据），或 `POST …/approve` 往
      * `.mcp-approvals.json` 写入持久化的「允许在本机执行 <command> <args>」审批
@@ -3863,7 +3863,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     const proofOfPossession = (req: IncomingMessage, res: ServerResponse): boolean => {
       const fence = (ctx as unknown as { get?: (name: string) => unknown }).get?.('connection') as ConnectionTrustFence | undefined
       if (fence === undefined || typeof fence.requestRejection !== 'function') {
-        ctx.logger?.warn?.('pico-connectors: connection service unavailable; refusing a local write (fail-closed)')
+        ctx.logger?.warn?.('zeokeel-connectors: connection service unavailable; refusing a local write (fail-closed)')
         json(res, 503, {
           error: 'browser session proof unavailable',
           hint: 'reopen the application window from its launch URL',
@@ -3875,11 +3875,11 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         rejection = fence.requestRejection({ headers: req.headers })
       } catch (err) {
         // 校验器自身抛错 = 无法证明 ⇒ 按拒绝处理（不把异常泄漏成 500）。
-        ctx.logger?.warn?.(`pico-connectors: browser proof check failed (${err instanceof Error ? err.message : String(err)})`)
+        ctx.logger?.warn?.(`zeokeel-connectors: browser proof check failed (${err instanceof Error ? err.message : String(err)})`)
         rejection = 403
       }
       if (rejection === undefined) return true
-      ctx.logger?.warn?.(`pico-connectors: refused a local write without browser proof (${String(rejection)})`)
+      ctx.logger?.warn?.(`zeokeel-connectors: refused a local write without browser proof (${String(rejection)})`)
       json(res, 403, {
         error: 'browser session proof required',
         hint: 'reopen the application window from its launch URL',
@@ -3898,12 +3898,12 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     // 少一条路由却没有任何信号。返回的 disposer 语义也保持"全部注册成功才返回"。
     const disposers: Array<() => void> = []
     try {
-      disposers.push(ctx.webServer.register({ kind: 'exact', path: '/api/pico/connectors', handler: (req, res) => {
+      disposers.push(ctx.webServer.register({ kind: 'exact', path: '/api/zeokeel/connectors', handler: (req, res) => {
         if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
         if (!guard(req, res)) return
         list(req, res)
       } }))
-      disposers.push(ctx.webServer.register({ kind: 'prefix', path: '/api/pico/connectors', handler: async (req, res) => {
+      disposers.push(ctx.webServer.register({ kind: 'prefix', path: '/api/zeokeel/connectors', handler: async (req, res) => {
         const segments = req.url?.split('/') ?? []
         const action = segments[5]?.split('?')[0]
         const handlers: Record<string, JsonHandler> = {
@@ -3949,7 +3949,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       throw error
     }
     return () => { for (const dispose of disposers) dispose() }
-  }, 'pico connectors: http routes')
+  }, 'zeokeel connectors: http routes')
 
   // Initial restore: wait for the bootstrap def sync (the directory is the
   // source now), then restore — startup with an empty defs list would skip
@@ -3962,14 +3962,14 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     await syncServerDefs()
     await restoreAll(epoch)
   }).catch((cause: unknown) => {
-    ctx.logger?.error('pico-connectors: initial restore failed', cause)
+    ctx.logger?.error('zeokeel-connectors: initial restore failed', cause)
   })
 }
 
 export type { ConnectorDef, ConnectorState, ConnectorAuthRequest } from './types.ts'
 
 /**
- * One-time migration of the pre-2026-08 legacy store dir `~/.picoaide/connectors`
+ * One-time migration of the pre-2026-08 legacy store dir `~/.zeokeel/connectors`
  * into the per-user scope. Runs on every session change but only acts when a
  * real user is logged in, the legacy dir exists, and the target dir does not.
  * Best-effort: a failure leaves the legacy dir in place (the next login
@@ -3982,7 +3982,7 @@ export type { ConnectorDef, ConnectorState, ConnectorAuthRequest } from './types
  * its files are never adopted: `restoreAll` probes them for existence, reports
  * "needs a fresh authorization" and leaves the bytes alone. Migrating still
  * earns its keep — it moves the files under the account that can see them (and
- * into the log line that lists them) instead of stranding them in `~/.picoaide`.
+ * into the log line that lists them) instead of stranding them in `~/.zeokeel`.
  *
  * TOCTOU hardening (2026-08-22): outside the `existsSync(target)` check the
  * claim is serialized through an atomic marker file created with `wx`
@@ -3994,7 +3994,7 @@ export type { ConnectorDef, ConnectorState, ConnectorAuthRequest } from './types
 function migrateLegacyStore(username: string | null): void {
   if (username === null || username.length === 0) return
   try {
-    const legacy = join(homedir(), '.picoaide', 'connectors')
+    const legacy = join(homedir(), '.zeokeel', 'connectors')
     if (!existsSync(legacy)) return
     const target = unscopedConnectorPath(username)
     if (existsSync(target)) return

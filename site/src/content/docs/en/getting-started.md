@@ -24,19 +24,19 @@ This page takes you from an empty machine to your first message: role-based path
 Client installers **ship with the server image** (they are not posted on a standalone download site), so there are only two sources:
 
 1. **Your enterprise server** (recommended): once deployed, open `https://<enterprise-domain>/` (the portal page) — it lists download entries for all three platforms;
-2. **The official image package** (trial / single machine): fetch the official image package from the update server or [GitHub Releases](https://github.com/picoaide/picoaide-harness/releases), then unpack the installers:
+2. **The official image package** (trial / single machine): fetch the official image package from the update server or [GitHub Releases](https://github.com/zeokeel/ZeoKeel-Harness/releases), then unpack the installers:
 
 ```bash
 VER=<version>        # use server.version from latest.json as the authority
 # the official channel is `official`, the pre-release channel is `beta` — swap as needed
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/picoaide-server-${VER}-amd64.zip"
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/SHA256SUMS"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/SHA256SUMS"
 sha256sum -c SHA256SUMS
-unzip -p "picoaide-server-${VER}-amd64.zip" image.tar | docker load
-mkdir -p ./picoaide-stack
-docker run --rm -v "$PWD/picoaide-stack:/out" -e PICOAI_UNPACK_STACK=/out \
-  "picoaide-harness-server:${VER}"
-ls -1 ./picoaide-stack/client    # installers for all three platforms + CLIENT-RELEASE.json
+unzip -p "zeokeel-server-${VER}-amd64.zip" image.tar | docker load
+mkdir -p ./zeokeel-stack
+docker run --rm -v "$PWD/zeokeel-stack:/out" -e ZEOKEEL_UNPACK_STACK=/out \
+  "zeokeel-harness-server:${VER}"
+ls -1 ./zeokeel-stack/client    # installers for all three platforms + CLIENT-RELEASE.json
 ```
 
 **Criteria**: `sha256sum -c` prints `OK` for every file, and `client/` contains the installers for all three platforms plus `CLIENT-RELEASE.json`. If `client/` is missing, you are not using a release package (locally built images carry no client assets).
@@ -112,7 +112,7 @@ The other always-on capabilities live in the same navigation: the **built-in bro
 | macOS says the developer cannot be verified | The package carries no notarization ticket | Pre-release packages are signed only; use a release package |
 | Double-clicking does nothing on Linux | The AppImage has no execute permission | `chmod +x`, then run it |
 | The app keeps crashing on start | A crash was recorded, but the UI never gets a chance to show it | Run the installed binary with `--export-diagnostics` (it does not start the host and prints the diagnostics ZIP path), or use "Export Diagnostics…" from the tray |
-| A plugin or preset does not show up | The app runs the fixed `desktop` profile, and changes only enter the Loader composition after a restart | Restart the app; third-party plugins go into `~/.picoaide-harness/cordis.patch.yml` (a different channel means a different data root) |
+| A plugin or preset does not show up | The app runs the fixed `desktop` profile, and changes only enter the Loader composition after a restart | Restart the app; third-party plugins go into `~/.zeokeel-harness/cordis.patch.yml` (a different channel means a different data root) |
 
 ## Criteria for "it is installed and working"
 

@@ -1,7 +1,7 @@
-# R2 → release.picoaide.com 更新服务器接入手册
+# R2 → release.zeokeel.com 更新服务器接入手册
 
 > 2026-09-10 修订（**架构纠正版**）。上游方案：`docs/planning/2026-09-10-client-server-bundled-release.md`。
-> 目标：把已创建的 R2 存储桶变成 `https://release.picoaide.com` —— **服务端镜像的更新分发面**。
+> 目标：把已创建的 R2 存储桶变成 `https://release.zeokeel.com` —— **服务端镜像的更新分发面**。
 
 ---
 
@@ -48,7 +48,7 @@
 
 GitHub Release **仍然发布**，但内容物变了，两者定位不同：
 
-| | R2 `release.picoaide.com` | GitHub Release |
+| | R2 `release.zeokeel.com` | GitHub Release |
 |---|---|---|
 | 发布物 | **镜像 tar 压缩包**（所有渠道一致）+ `latest.json` | **镜像 tar 压缩包**（同一个文件，长期存档） |
 | 版本范围 | **只留最近 2 个版本**（§3） | **全部历史版本永久保留** |
@@ -67,7 +67,7 @@ GitHub Release **仍然发布**，但内容物变了，两者定位不同：
 
 | 现有组件 | 位置 | 现状 | 改动 |
 |---|---|---|---|
-| 检查器 | `server/internal/updatecheck/updatecheck.go` | 硬编码 `api.github.com/repos/picoaide/picoaide-harness/releases/latest`，解析 `tag_name` | 支持 R2 响应格式；端点可由 env 覆盖 |
+| 检查器 | `server/internal/updatecheck/updatecheck.go` | 硬编码 `api.github.com/repos/zeokeel/ZeoKeel-Harness/releases/latest`，解析 `tag_name` | 支持 R2 响应格式；端点可由 env 覆盖 |
 | 缓存 | `updatecheck.CachedChecker` | 6 小时 TTL + singleflight，失败静默降级 | 不动 |
 | API | `server/internal/serverauth/sysinfo.go` | `sysinfo.Version` 里带 `update_check`（`current/latest/update_available/release_url/checked_at`） | 结果增加 `image_tag` / `image_url` |
 | 界面 | `server/webadmin/src/pages/ServerInfo.tsx:110` | **已有**「发现新版本 {latest}（当前 v{version}）」提示条 | 文案补一条升级命令 |
@@ -77,7 +77,7 @@ GitHub Release **仍然发布**，但内容物变了，两者定位不同：
 配置方式（新增一个 env，官方/渠道各自指向自己的目录）：
 
 ```bash
-PICOAI_UPDATE_ENDPOINT=https://release.picoaide.com/official/latest.json
+ZEOKEEL_UPDATE_ENDPOINT=https://release.zeokeel.com/official/latest.json
 # 不设置时保持现状（GitHub API），向后兼容
 ```
 
@@ -92,9 +92,9 @@ PICOAI_UPDATE_ENDPOINT=https://release.picoaide.com/official/latest.json
 
 | 渠道类型 | 渠道 id | 谁用 | 更新面目录 |
 |---|---|---|---|
-| **预发** | `beta` | 我们自己内测 | `release.picoaide.com/beta/` |
-| **官方** | `official` | 正式发布 | `release.picoaide.com/official/` |
-| **品牌** | `<brand-id>` | 企业定制交付 | `release.picoaide.com/<brand-id>/` |
+| **预发** | `beta` | 我们自己内测 | `release.zeokeel.com/beta/` |
+| **官方** | `official` | 正式发布 | `release.zeokeel.com/official/` |
+| **品牌** | `<brand-id>` | 企业定制交付 | `release.zeokeel.com/<brand-id>/` |
 
 渠道 id 形状统一为 `^[a-z0-9][a-z0-9-]{0,31}$`，三处实现同源：
 
@@ -112,19 +112,19 @@ PICOAI_UPDATE_ENDPOINT=https://release.picoaide.com/official/latest.json
    "检查失败"（不提示更新），**绝不提示跨渠道升级**。`expectedChannel` 来自安装渠道
    （`DSH_CHANNEL` → 适配器 `channel`，缺省官方）。
 3. **服务端**：`updatecheck` 同样校验清单渠道 == 本部署渠道。不一致时报
-   `ErrUnavailable`（**不是**"无更新"）——这通常意味着 `PICOAI_UPDATE_ENDPOINT`
+   `ErrUnavailable`（**不是**"无更新"）——这通常意味着 `ZEOKEEL_UPDATE_ENDPOINT`
    指到了别的渠道目录，必须让人看见并修，不能静默跨渠道升级。
 
 ### 三处配置必须自洽（最容易配错）
 
 ```
-PICOAI_CHANNEL=acme                                   # 本部署属于哪个渠道
-PICOAI_UPDATE_ENDPOINT=https://release.picoaide.com/acme/latest.json   # 从哪个目录取
+ZEOKEEL_CHANNEL=acme                                   # 本部署属于哪个渠道
+ZEOKEEL_UPDATE_ENDPOINT=https://release.zeokeel.com/acme/latest.json   # 从哪个目录取
 清单里的 "channel_id": "acme"                          # 目录里的内容声明自己是哪个渠道
 ```
 
-三者不一致会被校验拦下（fail-loud）。为降低配错概率，`PICOAI_UPDATE_ENDPOINT` 留空时
-`ResolveChannel()` 会**从端点路径首段推导渠道**；`PICOAI_CHANNEL` 也留空时则由端点推导，
+三者不一致会被校验拦下（fail-loud）。为降低配错概率，`ZEOKEEL_UPDATE_ENDPOINT` 留空时
+`ResolveChannel()` 会**从端点路径首段推导渠道**；`ZEOKEEL_CHANNEL` 也留空时则由端点推导，
 两者都不给才回落官方渠道。
 
 ### 客户端渠道的来源：**不是客户端清单，而是它登录的服务端**
@@ -156,7 +156,7 @@ CI 目前**只支持 `beta` 与 `official`**：渠道由 tag 形态推导（含 
 不受影响。
 
 理由：单版本渠道包**内含三平台客户端安装包**，实测 `v2.8.3-beta.1` 的
-`picoaide-server-2.8.3-beta.1-amd64.zip` = 1,248,847,268 B，其中 1.22 GB 就是
+`zeokeel-server-2.8.3-beta.1-amd64.zip` = 1,248,847,268 B，其中 1.22 GB 就是
 `Setup.exe` / `.dmg` / `.AppImage` 三件（服务端本体只占 ~69 MB）—— 于是
 `KEEP × 渠道数` 直接决定占用：4 渠道 × 3 版 ≈ 15 GB、× 2 版 ≈ 10 GB，而 R2 免费额度是
 10 GB ⇒ **3 版必然超**。回滚只需要"退回上一版"这一格：客户侧升级序列本来就把升级前镜像
@@ -239,11 +239,11 @@ r2://<bucket>/
     latest.json                                   # ← 服务端检查更新的唯一入口（可覆盖）
     releases/
       2.7.0/
-        picoaide-server-2.7.0-amd64.zip       # ~500MB，内含客户端包的服务端镜像
+        zeokeel-server-2.7.0-amd64.zip       # ~500MB，内含客户端包的服务端镜像
         SHA256SUMS                                # 上面这个 tar 的哈希（离线交付手工校验）
   acme/                                           # 定制渠道：与官方**结构完全相同**
     latest.json
-    releases/2.7.0/picoaide-server-2.7.0-acme.zip
+    releases/2.7.0/zeokeel-server-2.7.0-acme.zip
 ```
 
 **tar 文件名带版本号** → 天然 cache key，可设 `immutable` 长缓存，永不复用同一 URL 的不同内容。
@@ -251,7 +251,7 @@ r2://<bucket>/
 **为什么用路径前缀而不是「每渠道一个桶/子域」**：
 
 - 一个桶、一个域名、一套证书、一套上传凭证 → 新增渠道零基础设施动作（符合主仓 `brands/<channel-id>/` 的既定结构）；
-- 服务端只认一个 env（`PICOAI_UPDATE_ENDPOINT`），渠道差异就是 URL 里那一段；
+- 服务端只认一个 env（`ZEOKEEL_UPDATE_ENDPOINT`），渠道差异就是 URL 里那一段；
 - 以后整体迁到 OSS/COS 或换域名，**改一个 env / 一个常量**即可，不需要任何 redirect（正好绕开 §3.1 的禁令）；
 - 私有渠道可对单个前缀加 presigned URL / Cloudflare Access，不影响其他渠道。
 
@@ -289,7 +289,7 @@ r2://<bucket>/
 
 ### 3.3 服务端已经跑在容器里 —— 升级是"换镜像"，不是"改文件"
 
-`/app/picoaide-server` 在镜像层里，**运行时不可写**。所以服务端升级只有两条路，`upgrade.sh` 两条都要支持：
+`/app/zeokeel-server` 在镜像层里，**运行时不可写**。所以服务端升级只有两条路，`upgrade.sh` 两条都要支持：
 
 | 路径 | 命令 | 适用 |
 |---|---|---|
@@ -361,17 +361,17 @@ CH=official ; VER=2.7.0 ; DIR=release-bundle/
 #    用**单请求 PUT**:多段上传(`s3 cp`)的对象校验和是"分片校验和的校验和"(带 `-N`
 #    后缀),与本地 sha256 不可对拍;单请求 PUT 让存储端在写入时校验整对象字节,
 #    head-object 读回的就是本地那一份 sha256。R2 单次 PUT 上限 5 GiB,包 ~500MB。
-SUM_B64="$(openssl dgst -sha256 -binary "$DIR/picoaide-server-$VER-amd64.zip" | base64 | tr -d '\n')"
+SUM_B64="$(openssl dgst -sha256 -binary "$DIR/zeokeel-server-$VER-amd64.zip" | base64 | tr -d '\n')"
 $aws s3api put-object --bucket "$R2_BUCKET" \
-  --key "$CH/releases/$VER/picoaide-server-$VER-amd64.zip" \
-  --body "fileb://$DIR/picoaide-server-$VER-amd64.zip" \
+  --key "$CH/releases/$VER/zeokeel-server-$VER-amd64.zip" \
+  --body "fileb://$DIR/zeokeel-server-$VER-amd64.zip" \
   --content-type application/zip \
   --cache-control 'public, max-age=31536000, immutable' \
   --checksum-sha256 "$SUM_B64"
 
 # 1b) 上传后必须**证明远端字节完整**（大小 + 哈希),否则不写指针
 $aws s3api head-object --bucket "$R2_BUCKET" \
-  --key "$CH/releases/$VER/picoaide-server-$VER-amd64.zip" \
+  --key "$CH/releases/$VER/zeokeel-server-$VER-amd64.zip" \
   --checksum-mode ENABLED --query '{size:ContentLength,sha:ChecksumSHA256}' --output json
 #   size 必须 == stat -c%s 本地包；sha 必须 == $SUM_B64
 
@@ -422,9 +422,9 @@ printf '%s\n' "$versions" | sort -rV | tail -n +"$KEEP" | while read -r old; do
   "server": {
     "version": "2.7.0",             // ← 服务端 updatecheck 只读这一个字段做版本比较
     "image_tag": "v2.7.0",          // webadmin 展示的升级目标
-    "image_ref": "ghcr.io/picoaide/picoaide-harness-server:v2.7.0",
+    "image_ref": "ghcr.io/zeokeel/zeokeel-harness-server:v2.7.0",
     // 离线部署路径的镜像 tar（AI-DEPLOY.md §6.4 的 curl 目标）
-    "image_asset": "https://release.picoaide.com/official/releases/2.7.0/picoaide-server-2.7.0-amd64.zip"
+    "image_asset": "https://release.zeokeel.com/official/releases/2.7.0/zeokeel-server-2.7.0-amd64.zip"
   },
   "client": {
     // 镜像内配套的客户端版本。R2 只放服务端镜像,**不承担客户端分发**;
@@ -433,9 +433,9 @@ printf '%s\n' "$versions" | sort -rV | tail -n +"$KEEP" | while read -r old; do
     // 协议保留该字段,但**当前所有渠道都不填**:客户端包在镜像里,
     // 由服务端接口下发(见 §6.1/§8)。仅为将来"客户端与服务端分开分发"预留。
     "assets": {
-      "mac-universal": { "url": "https://release.picoaide.com/official/releases/2.7.0/PicoAide-Harness-2.7.0-mac.dmg", "sha256": "…", "size": 0 },
-      "win-x64":       { "url": "…/PicoAide-Harness-2.7.0-x64-Setup.exe", "sha256": "…", "size": 0 },
-      "linux-x64":     { "url": "…/PicoAide-Harness-2.7.0-x86_64.AppImage", "sha256": "…", "size": 0 }
+      "mac-universal": { "url": "https://release.zeokeel.com/official/releases/2.7.0/ZeoKeel-Harness-2.7.0-mac.dmg", "sha256": "…", "size": 0 },
+      "win-x64":       { "url": "…/ZeoKeel-Harness-2.7.0-x64-Setup.exe", "sha256": "…", "size": 0 },
+      "linux-x64":     { "url": "…/ZeoKeel-Harness-2.7.0-x86_64.AppImage", "sha256": "…", "size": 0 }
     }
   },
   "published_at": "2026-09-10T00:00:00Z"
@@ -449,7 +449,7 @@ printf '%s\n' "$versions" | sort -rV | tail -n +"$KEEP" | while read -r old; do
 - 客户端清单解析器（`packages/host/desktop/src/desktop-release.ts`）额外强制：资产 `url` 必须是**绝对 https**、`sha256` 必须匹配 `^[0-9a-f]{64}$`，否则整体拒绝 —— 清单是安全边界，缺失哈希等于放弃完整性校验；
 - **镜像 tar 的哈希不放这里**，放在 `releases/<v>/SHA256SUMS`：`latest.json` 只回答"最新版本是多少"，一个版本一个哈希文件，职责不重叠（`image_tar_sha256` 这个字段已废弃）。
 
-**校验锚点**：`image_ref` / `image_tag` 是 registry 的 tag，**不是**镜像 digest；离线 tar 加载后的权威校验是 `docker run --entrypoint /app/picoaide-server <img> --version` 输出等于 `server.version`（见 AI-DEPLOY.md §6.6）。
+**校验锚点**：`image_ref` / `image_tag` 是 registry 的 tag，**不是**镜像 digest；离线 tar 加载后的权威校验是 `docker run --entrypoint /app/zeokeel-server <img> --version` 输出等于 `server.version`（见 AI-DEPLOY.md §6.6）。
 
 
 ---
@@ -461,7 +461,7 @@ printf '%s\n' "$versions" | sort -rV | tail -n +"$KEEP" | while read -r old; do
 ```bash
 ./temp/r2-verify.sh official 2.7.0                          # 快速检查
 DOWNLOAD=1 ./temp/r2-verify.sh official 2.7.0               # 真下 tar 并校验 sha256（500MB，慢）
-BASE_URL=https://release.picoaide.com ./temp/r2-verify.sh acme 2.7.0
+BASE_URL=https://release.zeokeel.com ./temp/r2-verify.sh acme 2.7.0
 ```
 
 六项断言：
@@ -482,12 +482,12 @@ BASE_URL=https://release.picoaide.com ./temp/r2-verify.sh acme 2.7.0
 ## 10. 客户端那条链路（与 R2 无关，但要知道出口在哪）
 
 > ✅ **实现状态（2026-09-10 晚复核）：已上线。**
-> 镜像里的客户端资产（Dockerfile `COPY --from=clientassets` → `/opt/picoaide/client/`）
+> 镜像里的客户端资产（Dockerfile `COPY --from=clientassets` → `/opt/zeokeel/client/`）
 > 与两条路由均已实现：`GET /api/client/v2/updates/manifest`（`internal/clientrelease`
 > 的 `Manifest`）与 `GET /updates/client/<file>`（同包的 `File`，公开、自带 Range）。
 > 早期"清单放错目录 → 这条链整条是死的"那个坑已修（`d9b511a230`），现在由
 > `scripts/ci-build-channel-images.sh` 的 `verify_image()` 在镜像内断言
-> `/opt/picoaide/client/CLIENT-RELEASE.json` 存在。
+> `/opt/zeokeel/client/CLIENT-RELEASE.json` 存在。
 
 服务端升级完成后，客户端怎么拿到新包：**镜像里的客户端资产直接对外提供**（不落持久卷，镜像层本身就是版本锚点）：
 
@@ -496,9 +496,9 @@ GET /api/client/v2/updates/manifest   → { client.version, assets{ url, sha256,
 GET /updates/client/<asset>           → http.ServeFile（自带 Range 断点续传）
 ```
 
-`url` 由服务端**按请求来源重写**（`PICOAI_PUBLIC_BASE_URL` 优先，其次
+`url` 由服务端**按请求来源重写**（`ZEOKEEL_PUBLIC_BASE_URL` 优先，其次
 `X-Forwarded-Proto` / TLS；只接受 https 与回环 http）——镜像内清单里那串
-`https://release.picoaide.com/<channel>/…` 只是占位。客户端强制 https，因此服务端
+`https://release.zeokeel.com/<channel>/…` 只是占位。客户端强制 https，因此服务端
 推不出安全地址时**不下发 client 段**并给出原因，而不是发一个会被客户端静默丢弃的
 http 链接（那会表现为"永远显示已是最新"）。
 
@@ -539,7 +539,7 @@ run 中途失败/被取消时，中转对象会留在**公开读**的桶里（�
 
 ### 10.2 桶是**公开读**的：渠道 id 就是公开路径前缀
 
-`release.picoaide.com` 是 R2 自定义域，对象**无需任何凭证即可读取**（2026-09-10
+`release.zeokeel.com` 是 R2 自定义域，对象**无需任何凭证即可读取**（2026-09-10
 实测：匿名 `curl .../beta/latest.json` → 200）。因此：
 
 - **渠道 id = 可被枚举/猜测的公网路径前缀**。官方/beta 无所谓；**品牌渠道
@@ -549,7 +549,7 @@ run 中途失败/被取消时，中转对象会留在**公开读**的桶里（�
   **镜像**仍落在 `<channel-id>/` 下：这是当前的分发形态，安全边界落在"渠道 id
   不可猜"上。若将来要求更强隔离，改私有桶 + 预签名 URL（`aws s3 presign`，
   有效期可设 7 天）或 Cloudflare Access。
-- 渠道 id 出现在这些公开处：R2 路径、镜像内 `/opt/picoaide/CHANNEL` 与
+- 渠道 id 出现在这些公开处：R2 路径、镜像内 `/opt/zeokeel/CHANNEL` 与
   `channel.json`、`GET /api/client/v2/channel`（客户端对账需要）、门户页脚、
   被掩码后的 Actions 日志（`::add-mask::` 覆盖）。**不要把客户真名当渠道 id**。
 
@@ -557,15 +557,15 @@ run 中途失败/被取消时，中转对象会留在**公开读**的桶里（�
 
 ## 11. 域名与 DNS
 
-1. R2 控制台 → 桶 → Settings → **Custom Domains** → 添加 `release.picoaide.com`；
+1. R2 控制台 → 桶 → Settings → **Custom Domains** → 添加 `release.zeokeel.com`；
 2. 该域名须在 **Cloudflare DNS** 下（R2 自定义域要求），CF 会自动加 CNAME；
-3. 等证书签发，然后 `curl -sSI https://release.picoaide.com/official/latest.json` 确认 200。
+3. 等证书签发，然后 `curl -sSI https://release.zeokeel.com/official/latest.json` 确认 200。
 
 **不要用 `*.r2.dev` 开发域名做生产**：有限速、无 CDN 行为、随时可能变。
 
 ### 国内可达性（**已实测**，2026-09-10）
 
-`release.picoaide.com` 走 Cloudflare 网络 → 大陆访问默认路由**境外节点**。
+`release.zeokeel.com` 走 Cloudflare 网络 → 大陆访问默认路由**境外节点**。
 
 **实测数据**（测试环境 `<server-host>`，目标包 616,752,285 B）：
 
@@ -577,8 +577,8 @@ run 中途失败/被取消时，中转对象会留在**公开读**的桶里（�
 结论：**能跑，但必须并行取**。部署时的姿势（可直接粘给 AI 代理执行）：
 
 ```bash
-BASE="https://release.picoaide.com/<channel>/releases/<ver>"
-ZIP="picoaide-server-<ver>-amd64.zip"
+BASE="https://release.zeokeel.com/<channel>/releases/<ver>"
+ZIP="zeokeel-server-<ver>-amd64.zip"
 TOTAL=$(curl -fsSI "$BASE/$ZIP" | awk 'BEGIN{IGNORECASE=1}/^content-length:/{gsub(/\r/,"");print $2}')
 N=8; CHUNK=$(( (TOTAL + N - 1) / N ))
 rm -rf /tmp/pa-parts && mkdir -p /tmp/pa-parts

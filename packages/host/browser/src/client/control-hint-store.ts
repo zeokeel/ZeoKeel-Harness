@@ -5,23 +5,23 @@
  *
  * 这段轮询原本住在 `BrowserTrigger` 的 `useControlHint()` 里 —— 那时浏览器插件在
  * 侧边栏底部有自己的一整行，组件挂了轮询就活着。并道之后底部只剩
- * `@picoaide/dsh-foot-menu` 的「更多」行，条目只是**数据**（id / 文案 / 动作 /
+ * `@zeokeel/dsh-foot-menu` 的「更多」行，条目只是**数据**（id / 文案 / 动作 /
  * attention），所以状态必须由插件自己持有：`apply` 里 `ctx.effect` 启停，条目用
- * `attention()` 读它，状态变化时 `ctx.picoFootMenu.touch()` 把「更多」行的圆点与
+ * `attention()` 读它，状态变化时 `ctx.zeokeelFootMenu.touch()` 把「更多」行的圆点与
  * 浮层条目的琥珀色推给已经渲染的界面。
  *
  * 判据本身没有变（见 `control-hint.ts`）：读面是 GET（同源 + 回环 fence，无需写面
  * 证明），**失败一律保留上一次结果** —— 提示绝不能因为宿主暂时不可用而闪回"没有
  * 等待"。
  *
- * @module @picoaide/dsh-browser/client/control-hint-store
+ * @module @zeokeel/dsh-browser/client/control-hint-store
  */
 
 import { CONTROL_POLL_MS, NO_CONTROL_HINT, readControlHint, type ControlHint } from './control-hint.ts'
 
 /** 最近一次成功读取的提示（未 start 时是"无提示"）。 */
 let hint: ControlHint = NO_CONTROL_HINT
-/** 订阅者（`apply` 用 `ctx.picoFootMenu.touch()` 订阅）。 */
+/** 订阅者（`apply` 用 `ctx.zeokeelFootMenu.touch()` 订阅）。 */
 const listeners = new Set<() => void>()
 /** 下一次轮询的定时器；`undefined` = 没有排队的轮询。 */
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -71,7 +71,7 @@ export function dispose(): void {
 }
 
 /**
- * 读一次 `/api/pico/browser/state`，成功且**取值变化**时通知订阅者，然后排下一次。
+ * 读一次 `/api/zeokeel/browser/state`，成功且**取值变化**时通知订阅者，然后排下一次。
  * @param gen - 本轮的世代号；与当前世代不符（`dispose()`/`start()` 之后）即作废。
  * @returns 本轮结束（无论成败）后 resolve。
  */
@@ -79,7 +79,7 @@ async function read(gen: number): Promise<void> {
   /** 本轮是否仍然有效（未被 dispose、也没有被新的一轮取代）。 */
   const live = (): boolean => running && gen === generation
   try {
-    const response = await fetch('/api/pico/browser/state')
+    const response = await fetch('/api/zeokeel/browser/state')
     if (response.ok) {
       const next = readControlHint(await response.json() as unknown)
       if (!live()) return
@@ -90,7 +90,7 @@ async function read(gen: number): Promise<void> {
             listener()
           } catch (cause) {
             // 一个订阅者抛错不能停掉轮询（它可能是别的插件已卸载的接线）。
-            console.warn('[pico-browser] control-hint subscriber failed', cause)
+            console.warn('[zeokeel-browser] control-hint subscriber failed', cause)
           }
         }
       }

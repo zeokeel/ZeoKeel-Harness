@@ -52,7 +52,7 @@ function seedVictim(path, body = OUTSIDE_TEXT) {
 }
 
 /**
- * 给一个目标技能目录写本插件的溯源（`.picoaide/release.json`，channel: 'plugin'）。
+ * 给一个目标技能目录写本插件的溯源（`.zeokeel/release.json`，channel: 'plugin'）。
  *
  * 2026-09-23 P1-1 来源闸门引入后，整树换入**只**对本插件自己写下的目录生效；
  * 下面的落点断言用例必须先过这道闸门，否则"refused"来自闸门而不是符号链接/
@@ -61,9 +61,9 @@ function seedVictim(path, body = OUTSIDE_TEXT) {
  * @returns {void}
  */
 function seedPluginProvenance(dir) {
-  mkdirSync(join(dir, '.picoaide'), { recursive: true })
+  mkdirSync(join(dir, '.zeokeel'), { recursive: true })
   writeFileSync(
-    join(dir, '.picoaide', 'release.json'),
+    join(dir, '.zeokeel', 'release.json'),
     `${JSON.stringify({ appId: BUILTIN, version: '1', channel: 'plugin', installedAt: '2026-09-01T00:00:00.000Z' }, null, 2)}\n`,
   )
 }

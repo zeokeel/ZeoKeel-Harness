@@ -11,7 +11,7 @@ const blog = defineCollection({
     pubDate: z.coerce.date(),
     updatedDate: z.coerce.date().optional(),
     tags: z.array(z.string()).default([]),
-    author: z.string().default('PicoAide Team'),
+    author: z.string().default('ZeoKeel Team'),
     version: z.string().optional(),
     cover: z.string().optional(),
     draft: z.boolean().default(false),

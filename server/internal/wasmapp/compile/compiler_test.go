@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile/testdata/wasmtest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 )
 
 // 本文件是**真起进程**的编译验收（R19/R31）。
 //
-// 纪律：所有用例都真跑 cmd/picoaide-app-compile（或 testdata/compilechild 注入故障），
+// 纪律：所有用例都真跑 cmd/zeokeel-app-compile（或 testdata/compilechild 注入故障），
 // 不用 mock 替掉 exec —— 超时/被杀/协议破坏/退出码都只有跨进程边界才成立。
 //
 // 变异方式：

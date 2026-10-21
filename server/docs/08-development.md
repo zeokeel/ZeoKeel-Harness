@@ -26,12 +26,12 @@ docs/                  # 本文档集(superpowers/ 为历史设计文档)
 
 ```bash
 # 1) 写测试 → 运行确认红(DB 用例:设置 PG_DSN_TEST 指向临时测试库;不设则自动 Skip)
-PG_DSN_TEST=postgres://picoaide:ci@127.0.0.1:5432/picoaide_test?sslmode=disable go test ./internal/... -run TestXxx
+PG_DSN_TEST=postgres://zeokeel:ci@127.0.0.1:5432/zeokeel_test?sslmode=disable go test ./internal/... -run TestXxx
 # 2) 实现 → 运行确认绿
 # 3) git add -A && git commit -m "feat: xxx"
 ```
 
-实施计划:docs/superpowers/plans/2026-08-01-picoaide-next-full-implementation.md(阶段 1 服务端网关 → 2 客户端骨架 → 3 本地能力 → 4 产品化;按序执行)。
+实施计划:docs/superpowers/plans/2026-08-01-zeokeel-next-full-implementation.md(阶段 1 服务端网关 → 2 客户端骨架 → 3 本地能力 → 4 产品化;按序执行)。
 
 ## 4. 常用命令
 
@@ -40,7 +40,7 @@ make test              # 服务端全量测试(不依赖数据库;无 PG 时 DB 
 make test-server       # 服务端各业务域(显式枚举全部包)
 make check             # gofmt + go vet + test-server + webadmin 测试与构建(提交前跑)
 make build-server / webadmin / docker-image / release-export
-PICOAI_ADMIN_PASSWORD=x bin/picoaide-server -addr :8080 -data ./data -db-driver pg -pg-dsn <DSN> --bootstrap-admin admin
+ZEOKEEL_ADMIN_PASSWORD=x bin/zeokeel-server -addr :8080 -data ./data -db-driver pg -pg-dsn <DSN> --bootstrap-admin admin
 go run scripts/mock-upstream.go    # 假上游(无外网验证网关)
 # 桌面客户端(Yarn workspace,见仓库根 README):
 corepack yarn workspace dsh-plugin-desktop dev   # 开发

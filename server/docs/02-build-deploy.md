@@ -2,12 +2,12 @@
 
 ## 1. Makefile 目标
 
-服务端是 PicoAide Harness 平台的企业管控面,接入方(企业客户端 `packages/host/enterprise` 及第三方 HTTP 客户端)经 `/api/client/v2/*` 与 `/v1/*` 网关接入。
+服务端是 ZeoKeel Harness 平台的企业管控面,接入方(企业客户端 `packages/host/enterprise` 及第三方 HTTP 客户端)经 `/api/client/v2/*` 与 `/v1/*` 网关接入。
 
 ```bash
 make test              # go test ./... -count=1(服务端全量;不依赖数据库——无 PG 时 DB 用例自动 Skip,有 PG_DSN_TEST 时全量跑)
 make test-server       # 服务端各业务域测试(显式枚举全部包,见 Makefile)
-make build-server      # make webadmin + go build -o bin/picoaide-server
+make build-server      # make webadmin + go build -o bin/zeokeel-server
 make webadmin          # cd webadmin && npm run build(产物嵌入服务端二进制)
 make docker-image      # 服务端 Docker 镜像(本地自建;**发布镜像只走更新服务器,GHCR 已于 2026-09-10 下线**)
 make check             # gofmt 校验 + go vet + make test-server + webadmin 测试与构建
@@ -26,10 +26,10 @@ make build-server
 ### 运行参数
 
 ```bash
-PICOAI_ADMIN_PASSWORD=xxx bin/picoaide-server \
+ZEOKEEL_ADMIN_PASSWORD=xxx bin/zeokeel-server \
   -addr :8080 \
   -data ./data \
-  -db-driver pg -pg-dsn 'postgres://picoaide:pass@127.0.0.1:5432/picoaide?sslmode=disable' \
+  -db-driver pg -pg-dsn 'postgres://zeokeel:pass@127.0.0.1:5432/zeokeel?sslmode=disable' \
   --bootstrap-admin admin
 ```
 
@@ -39,16 +39,16 @@ PICOAI_ADMIN_PASSWORD=xxx bin/picoaide-server \
 | `-data` | 数据目录(0700),默认 `./data`;内含 master key 文件与品牌/归档静态数据(数据库在 PostgreSQL) |
 | `-db-driver` | 数据库后端:仅接受 `pg`(默认;`pg-external` 为历史兼容别名,部署层已不再使用,单 compose 固定内置 PostgreSQL);需 `-pg-dsn` |
 | `-pg-dsn` | PostgreSQL 连接串(如 `postgres://user:pass@host:5432/db?sslmode=disable`);必填 |
-| `--bootstrap-admin` | 初始超管用户名;首次启动时用 `PICOAI_ADMIN_PASSWORD` 创建(已存在则校验其为管理员);**首次启动后不可重复创建** |
-| `PICOAI_ADMIN_PASSWORD` | 初始超管密码(**必须**与 `--bootstrap-admin` 同时提供,否则启动失败) |
-| `PICOAI_MASTER_KEY` | 可选;不设置时首次启动自动生成随机 master key 写入 `data/` 下(0700)。**备份该文件**,丢失后已加密的网关/商城凭证无法解密 |
+| `--bootstrap-admin` | 初始超管用户名;首次启动时用 `ZEOKEEL_ADMIN_PASSWORD` 创建(已存在则校验其为管理员);**首次启动后不可重复创建** |
+| `ZEOKEEL_ADMIN_PASSWORD` | 初始超管密码(**必须**与 `--bootstrap-admin` 同时提供,否则启动失败) |
+| `ZEOKEEL_MASTER_KEY` | 可选;不设置时首次启动自动生成随机 master key 写入 `data/` 下(0700)。**备份该文件**,丢失后已加密的网关/商城凭证无法解密 |
 | `--reset-mfa <username>` | 运维兜底操作模式(0057):清空该用户的 TOTP 配置并吊销其全部会话(api_tokens + admin_sessions),完成即退出不启动服务。适用唯一超管丢失验证器/无法登录后台的场景;需 `-pg-dsn`(自动应用迁移);完成写入审计 `admin_mfa_reset(cli)` |
 | `--opens-rollup-repair-plan <FROM[,TO]>` | 运维操作模式(R20A-S-02):打印"从明细重建应用打开日汇总"的**离线修复计划**(两段 SQL + 执行纪律),完成即退出。**不连库、不执行任何写**;`FROM`/`TO` 是 `YYYY-MM-DD` 本地日、`TO` 右端开区间(省略 = 今天)。分日时区来自**部署 TZ**(与线上 `LocalDay` 同源)——修复历史坏行时不得手抄硬编码 `Asia/Shanghai` 的 SQL,否则 day 键会与线上错位 |
 
 ### 生产建议
 
 - 服务端放在企业内网,前置 HTTPS(反向代理终结 TLS);登录页拒绝非 HTTPS 远程地址。
-- 迁移/备份:PG 数据在 pg-data/;备份 = 打包 picoaide-data/(master key)+ pg_dump,步骤见 ../../docs/deploy/AI-DEPLOY.md §6.3;
+- 迁移/备份:PG 数据在 pg-data/;备份 = 打包 zeokeel-data/(master key)+ pg_dump,步骤见 ../../docs/deploy/AI-DEPLOY.md §6.3;
   外部 PG 用企业既有备份策略。
 - 假上游联调:无外网/无 key 环境 `go run scripts/mock-upstream.go` 起 mock 上游,验证网关链路。
 - **容器化部署(推荐)**:见 [../../docs/deploy/AI-DEPLOY.md](../../docs/deploy/AI-DEPLOY.md)(唯一部署说明);设计细节(compose 私有网段+固定 IP、Caddy 三证书模式、数据目录)见 [docs/DEPLOY.md](DEPLOY.md)。
@@ -59,7 +59,7 @@ PICOAI_ADMIN_PASSWORD=xxx bin/picoaide-server \
 
 - Stage1 `node:24-alpine` 构建 webadmin dist(go:embed 需要);
 - Stage2 `golang:1.26-alpine` 交叉编译:`CGO_ENABLED=0`,ldflags 注入 `-X main.version=$VERSION`(VERSION 默认 `dev`,CI 传 git tag 去 v 前缀);
-- Stage3 `alpine:3.21` 运行:非 root uid 10001(picoaide),`su-exec` 降权入口,`VOLUME /data`,`HEALTHCHECK` 与 compose 同源。
+- Stage3 `alpine:3.21` 运行:非 root uid 10001(zeokeel),`su-exec` 降权入口,`VOLUME /data`,`HEALTHCHECK` 与 compose 同源。
 
 ### 3.2 构建命令
 
@@ -67,7 +67,7 @@ PICOAI_ADMIN_PASSWORD=xxx bin/picoaide-server \
 make docker-image                 # 本地单平台(版本=VERSION,默认 git describe)
 make docker-image TAG=v2.4.6      # 指定版本
 docker buildx build --platform linux/amd64 \
-  --build-arg VERSION=2.4.6 -t picoaide-harness-server:v2.4.6 .
+  --build-arg VERSION=2.4.6 -t zeokeel-harness-server:v2.4.6 .
 # ⚠️ 不要 --push 到镜像仓库:GHCR 已于 2026-09-10 下线,发布面 = tag 流水线从源码
 #    构建镜像 → docker save|zip → 挂 GitHub Release + 上传更新服务器(<channel>/releases/<v>/)。
 ```
@@ -79,10 +79,10 @@ docker buildx build --platform linux/amd64 \
 - 触发:`push tag v*`;渠道集与「是否对外发布」由 `scripts/ci-release-policy.sh` **单点判定**(gate 第一步执行,未知 tag 形态当场红);
 - 前置:`release` job 的 `needs: [server, desktop-linux, desktop-windows, desktop-macos]` —— 四路全绿才构建镜像;
 - 从**源码**按渠道构建镜像(`scripts/ci-build-channel-images.sh`:打进该渠道的客户端安装包与渠道内容)
-  → `docker save | zip` 成 `picoaide-server-<版本>-amd64.zip`;单平台 `linux/amd64`(2026-08-26 起移除 arm64,不再 QEMU 模拟);
+  → `docker save | zip` 成 `zeokeel-server-<版本>-amd64.zip`;单平台 `linux/amd64`(2026-08-26 起移除 arm64,不再 QEMU 模拟);
 - 分发两条腿:**GitHub Release 只挂 beta/official**(品牌渠道是客户定制交付,不进公开 Releases);
   每个渠道的镜像包另由 `scripts/ci-publish-update-server.sh` 上传到
-  `https://release.picoaide.com/<channel>/releases/<版本>/`(同目录 `SHA256SUMS`,保留最近 3 版),
+  `https://release.zeokeel.com/<channel>/releases/<版本>/`(同目录 `SHA256SUMS`,保留最近 3 版),
   `<channel>/latest.json` 是更新清单;
 - **不经任何镜像仓库**:GHCR 已于 2026-09-10 下线,镜像只从更新服务器取(`image.tar` → `docker load`
   → 按渠道重打 tag → 写回 `.env` 的 `SERVER_IMAGE`)。
@@ -92,7 +92,7 @@ docker buildx build --platform linux/amd64 \
 | 检查 | 命令 | 预期 |
 |---|---|---|
 | 版本注入 | `docker run --rm <image> --version` | 构建时注入版本(非 `dev`) |
-| 非 root | `docker run --rm --entrypoint id <image>` | `uid=10001(picoaide)` |
+| 非 root | `docker run --rm --entrypoint id <image>` | `uid=10001(zeokeel)` |
 | 健康端点 | 起容器后 `curl /healthz` | 200 `{"ok":true}` |
 | 架构 | `docker image inspect <image> --format '{{.Os}}/{{.Architecture}}'` | `linux/amd64`(arm64 已移除;**镜像只在本地,没有可 inspect 的 registry manifest**) |
 | 持久化 | 写数据→重启→数据在 | 卷挂载有效 |

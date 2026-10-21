@@ -19,7 +19,7 @@
  *
  * 三类可删路径，各自有独立证据；**任何一条都不依赖"同一数据根只有一个实例"**
  * （那个前提是错的：渠道包可以共用数据根——beta 渠道的 `home_dir` 就是官方目录
- * `.picoaide-harness`，而 Electron 单实例锁在**按渠道分流**的 userData 里，两个
+ * `.zeokeel-harness`，而 Electron 单实例锁在**按渠道分流**的 userData 里，两个
  * 渠道的客户端可以同时跑在同一数据根上）：
  *
  * 证据的适用范围是**同一台机器、同一个 PID 命名空间**：`process.kill(pid, 0)` 的结论
@@ -59,7 +59,7 @@ const GUARDED_DOCUMENTS = ['settings.yaml', '.credentials.yaml'] as const
 
 /**
  * "没有属主记录"的锁至少要有这么老才允许回收（毫秒）。
- * 与 `@picoaide/dsh-cron` 的 `host-ledger.ts:STALE_LOCK_AGE_MS` 同口径；导出只为
+ * 与 `@zeokeel/dsh-cron` 的 `host-ledger.ts:STALE_LOCK_AGE_MS` 同口径；导出只为
  * 让判据能精确回拨 mtime 测边界，不是部署可调项。
  */
 export const NO_OWNER_LOCK_MIN_AGE_MS = 45_000

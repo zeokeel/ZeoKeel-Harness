@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestAllAuthMethodsEndToEnd:四种方式(local/ldap/openid/oidc)并存时的路由级
@@ -172,7 +172,7 @@ func browserLoginFlow(t *testing.T, r http.Handler, idp *fakeIDP, name string, a
 	// login(带 server 参数)。
 	// srvcore-1(P0,2026-09-13):`?server=` 必须命中**服务端配置**声明的对外来源;
 	// R7-F3-N3(复核 2026-09-13)起请求 Host 不再参与判定,故这里为测试部署声明
-	// 对外地址(真实部署由 PICOAI_PUBLIC_BASE_URL 或 OIDC redirect_url 提供);
+	// 对外地址(真实部署由 ZEOKEEL_PUBLIC_BASE_URL 或 OIDC redirect_url 提供);
 	// 深链里仍必须带回该地址,下面照旧断言。
 	t.Setenv(clientrelease.PublicBaseURLEnv, "https://gw.example.com")
 	w := httptest.NewRecorder()
@@ -187,7 +187,7 @@ func browserLoginFlow(t *testing.T, r http.Handler, idp *fakeIDP, name string, a
 	state := urlParse(t, authURL).Query().Get("state")
 	stateCookie := ""
 	for _, c := range w.Result().Cookies() {
-		if c.Name == "picoaide_oidc_state_"+name {
+		if c.Name == "zeokeel_oidc_state_"+name {
 			stateCookie = c.Value
 		}
 	}
@@ -198,16 +198,16 @@ func browserLoginFlow(t *testing.T, r http.Handler, idp *fakeIDP, name string, a
 	w = httptest.NewRecorder()
 	cb := "/api/client/v2/auth/" + name + "/callback?code=" + url.QueryEscape(code) + "&state=" + url.QueryEscape(state)
 	req := httptest.NewRequest("GET", cb, nil)
-	req.AddCookie(&http.Cookie{Name: "picoaide_oidc_state_" + name, Value: stateCookie})
+	req.AddCookie(&http.Cookie{Name: "zeokeel_oidc_state_" + name, Value: stateCookie})
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusFound {
 		t.Fatalf("%s callback status = %d body=%s", name, w.Code, w.Body.String())
 	}
 	loc := w.Header().Get("Location")
-	if !strings.HasPrefix(loc, "picoaide://auth?token=") {
+	if !strings.HasPrefix(loc, "zeokeel://auth?token=") {
 		t.Fatalf("%s deep link = %q", name, loc)
 	}
-	dlink := urlParse(t, strings.Replace(loc, "picoaide://auth", "https://auth.example", 1))
+	dlink := urlParse(t, strings.Replace(loc, "zeokeel://auth", "https://auth.example", 1))
 	tok := dlink.Query().Get("token")
 	if tok == "" {
 		t.Fatalf("%s deep link lacks token: %s", name, loc)

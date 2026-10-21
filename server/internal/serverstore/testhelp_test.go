@@ -96,7 +96,7 @@ func openTestDBWithSessionTZ(t *testing.T, db *sql.DB, tz string) *sql.DB {
 		t.Fatalf("parse pg config: %v", err)
 	}
 	cfg.RuntimeParams["TimeZone"] = tz
-	cfg.RuntimeParams["application_name"] = "picoaide-test-session-tz"
+	cfg.RuntimeParams["application_name"] = "zeokeel-test-session-tz"
 	h := sql.OpenDB(&rewriteConnector{raw: stdlib.GetConnector(*cfg)})
 	var got string
 	if err := h.QueryRow("SHOW timezone").Scan(&got); err != nil {

@@ -80,7 +80,7 @@ function skillsRoute(): (req: IncomingMessage, res: ServerResponse) => Promise<v
       ? { requestRejection: (r: { headers: Record<string, unknown> }) => (r.headers['cookie'] === undefined ? 401 as const : undefined) }
       : undefined),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => true,
       getSession: () => SESSION,
@@ -90,7 +90,7 @@ function skillsRoute(): (req: IncomingMessage, res: ServerResponse) => Promise<v
     webServer: { tapIndex: () => () => {}, register: (route: Route) => { routes.push(route); return () => {} } },
   }
   apply(ctx as never, {} as Config)
-  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/pico/skills')?.handler
+  const handler = routes.find(r => r.kind === 'prefix' && r.path === '/api/zeokeel/skills')?.handler
   if (handler === undefined) throw new Error('skills route not registered')
   return handler
 }
@@ -170,7 +170,7 @@ it.skipIf(!enabled)('服务端（Go）打的包 → 真安装器 → <dshHome>/s
 
   const handler = skillsRoute()
   const { res, read } = fakeRes()
-  await handler(fakeReq('/api/pico/skills/builtin/app-builder/install', 'POST'), res)
+  await handler(fakeReq('/api/zeokeel/skills/builtin/app-builder/install', 'POST'), res)
   const result = read()
   expect(result.code, JSON.stringify(result.body)).toBe(200)
 
@@ -184,6 +184,6 @@ it.skipIf(!enabled)('服务端（Go）打的包 → 真安装器 → <dshHome>/s
   }
   // 安装器额外写的两个标记（不属于技能内容）。
   expect(await stat(join(installed, '.install-version'))).toBeDefined()
-  expect(await stat(join(installed, '.picoaide', 'release.json'))).toBeDefined()
+  expect(await stat(join(installed, '.zeokeel', 'release.json'))).toBeDefined()
   console.log(`[skillseed-go-e2e] installed ${String(source.length)} files, archive ${String(archive.byteLength)}B, sha256=${jsSha}`)
 }, 60_000)

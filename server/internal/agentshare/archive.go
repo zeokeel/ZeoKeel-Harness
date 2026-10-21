@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/picoaide/picoaide/internal/archiveutil"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/archiveutil"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // Archive limits: the raw archive a client may upload, and the total

@@ -5,7 +5,7 @@ package main
 //
 // 缺陷形态：`docker-compose.yml` 让 `CADDY_IP` 可配（`${CADDY_IP:-172.28.0.2}`，
 // NETWORK_SUBNET 冲突时运维会一起改），而 `services.server.environment` 里
-// `PICOAI_TRUSTED_PROXIES` 的缺省**硬编码**同一个字面量，`main.go` 也只从 env
+// `ZEOKEEL_TRUSTED_PROXIES` 的缺省**硬编码**同一个字面量，`main.go` 也只从 env
 // 追加、不派生 ⇒ 只改 CADDY_IP 时 gin 不认 Caddy 的地址、忽略 XFF，`ClientIP()`
 // 退化成代理 IP：登录 / MFA / OIDC 限流桶坍缩成全组织共桶（60 次失败登录锁死
 // 全员），且完全静默。
@@ -29,7 +29,7 @@ func envFrom(m map[string]string) func(string) string {
 }
 
 // TestTrustedProxiesDerivedFromCaddyIP 钉住"未显式配置时从 CADDY_IP 派生"。
-// 变异：把派生那一段删掉（退回"只读 PICOAI_TRUSTED_PROXIES"）⇒ 本用例红。
+// 变异：把派生那一段删掉（退回"只读 ZEOKEEL_TRUSTED_PROXIES"）⇒ 本用例红。
 func TestTrustedProxiesDerivedFromCaddyIP(t *testing.T) {
 	got, source := trustedProxies(envFrom(map[string]string{"CADDY_IP": "172.30.0.2"}))
 	if source != "derived:CADDY_IP" {
@@ -51,11 +51,11 @@ func TestTrustedProxiesDerivedFromCaddyIP(t *testing.T) {
 // 且**不会**再把 CADDY_IP 悄悄加进去（避免"以为改了就生效"的误判）。
 func TestTrustedProxiesExplicitWins(t *testing.T) {
 	got, source := trustedProxies(envFrom(map[string]string{
-		"PICOAI_TRUSTED_PROXIES": "172.20.0.1, 10.0.0.7 ,, ",
+		"ZEOKEEL_TRUSTED_PROXIES": "172.20.0.1, 10.0.0.7 ,, ",
 		"CADDY_IP":               "172.30.0.2",
 	}))
-	if source != "env:PICOAI_TRUSTED_PROXIES" {
-		t.Fatalf("source = %q, want env:PICOAI_TRUSTED_PROXIES", source)
+	if source != "env:ZEOKEEL_TRUSTED_PROXIES" {
+		t.Fatalf("source = %q, want env:ZEOKEEL_TRUSTED_PROXIES", source)
 	}
 	for _, want := range []string{"172.20.0.1", "10.0.0.7"} {
 		if !containsStr(got, want) {
@@ -90,13 +90,13 @@ func TestTrustedProxiesLoopbackOnlyWhenNothingConfigured(t *testing.T) {
 // （改网段只改了一个正是这个形态）；一致或任一为空时不得吵。
 func TestTrustedProxyMismatchWarns(t *testing.T) {
 	if w := trustedProxyMismatchWarning(envFrom(map[string]string{
-		"PICOAI_TRUSTED_PROXIES": "172.20.0.1", "CADDY_IP": "172.30.0.2",
+		"ZEOKEEL_TRUSTED_PROXIES": "172.20.0.1", "CADDY_IP": "172.30.0.2",
 	})); w == "" {
 		t.Fatal("显式值与 CADDY_IP 不一致时没有告警 —— 改网段漏改一个会静默失效")
 	}
 	for _, m := range []map[string]string{
-		{"PICOAI_TRUSTED_PROXIES": "172.30.0.2", "CADDY_IP": "172.30.0.2"},
-		{"PICOAI_TRUSTED_PROXIES": "172.30.0.2"},
+		{"ZEOKEEL_TRUSTED_PROXIES": "172.30.0.2", "CADDY_IP": "172.30.0.2"},
+		{"ZEOKEEL_TRUSTED_PROXIES": "172.30.0.2"},
 		{"CADDY_IP": "172.30.0.2"},
 		{},
 	} {
@@ -106,7 +106,7 @@ func TestTrustedProxyMismatchWarns(t *testing.T) {
 	}
 	// 多值显式列表里含 CADDY_IP ⇒ 一致（不算漂移）。
 	if w := trustedProxyMismatchWarning(envFrom(map[string]string{
-		"PICOAI_TRUSTED_PROXIES": "172.20.0.1,172.30.0.2", "CADDY_IP": "172.30.0.2",
+		"ZEOKEEL_TRUSTED_PROXIES": "172.20.0.1,172.30.0.2", "CADDY_IP": "172.30.0.2",
 	})); w != "" {
 		t.Fatalf("显式列表已包含 CADDY_IP，不该告警：%s", w)
 	}
@@ -115,7 +115,7 @@ func TestTrustedProxyMismatchWarns(t *testing.T) {
 // TestComposeTrustedProxiesShareCaddyIPDefault 是编排级对拍：server 容器必须拿到
 // CADDY_IP，且它与 caddy 容器的固定 IP 引用**同一个变量、同一份缺省**。
 //
-// 变异：把 server.environment 的 CADDY_IP 删掉 / 把 PICOAI_TRUSTED_PROXIES 的缺省
+// 变异：把 server.environment 的 CADDY_IP 删掉 / 把 ZEOKEEL_TRUSTED_PROXIES 的缺省
 // 换回硬编码 IP ⇒ 本用例红。
 func TestComposeTrustedProxiesShareCaddyIPDefault(t *testing.T) {
 	env := composeServerEnvironment(t)
@@ -141,16 +141,16 @@ func TestComposeTrustedProxiesShareCaddyIPDefault(t *testing.T) {
 			caddyIPValue, defaultOf(caddyIPValue), caddyDefault, defaultOf(caddyDefault))
 	}
 	// ③ 信任列表的缺省**不得**再是硬编码 IP（那正是本条的缺陷形态）：留空即派生。
-	tp, ok := env["PICOAI_TRUSTED_PROXIES"]
+	tp, ok := env["ZEOKEEL_TRUSTED_PROXIES"]
 	if !ok {
-		t.Fatal("services.server.environment 里没有 PICOAI_TRUSTED_PROXIES")
+		t.Fatal("services.server.environment 里没有 ZEOKEEL_TRUSTED_PROXIES")
 	}
-	if !strings.Contains(tp, "${PICOAI_TRUSTED_PROXIES") {
-		t.Fatalf("PICOAI_TRUSTED_PROXIES 的取值是 %q —— 必须写成 ${PICOAI_TRUSTED_PROXIES:-}"+
+	if !strings.Contains(tp, "${ZEOKEEL_TRUSTED_PROXIES") {
+		t.Fatalf("ZEOKEEL_TRUSTED_PROXIES 的取值是 %q —— 必须写成 ${ZEOKEEL_TRUSTED_PROXIES:-}"+
 			"（留空 = 从 CADDY_IP 派生），硬编码 IP 会让改网段部署静默失去 XFF", tp)
 	}
 	if def := defaultOf(tp); def != "" {
-		t.Fatalf("PICOAI_TRUSTED_PROXIES 的缺省是 %q，want 空（空 = 派生自 CADDY_IP）", def)
+		t.Fatalf("ZEOKEEL_TRUSTED_PROXIES 的缺省是 %q，want 空（空 = 派生自 CADDY_IP）", def)
 	}
 }
 
@@ -179,13 +179,13 @@ func composeCaddyIPv4Address(t *testing.T) string {
 	if !ok {
 		t.Fatalf("%s 的 services.caddy.networks 不是映射（判据锚点漂移）", composePath)
 	}
-	net, ok := nets["picoaide-net"].(map[string]any)
+	net, ok := nets["zeokeel-net"].(map[string]any)
 	if !ok {
-		t.Fatalf("%s 的 services.caddy.networks.picoaide-net 不是映射（判据锚点漂移）", composePath)
+		t.Fatalf("%s 的 services.caddy.networks.zeokeel-net 不是映射（判据锚点漂移）", composePath)
 	}
 	ip, _ := net["ipv4_address"].(string)
 	if ip == "" {
-		t.Fatalf("%s 的 services.caddy.networks.picoaide-net.ipv4_address 为空（判据锚点漂移）", composePath)
+		t.Fatalf("%s 的 services.caddy.networks.zeokeel-net.ipv4_address 为空（判据锚点漂移）", composePath)
 	}
 	return ip
 }

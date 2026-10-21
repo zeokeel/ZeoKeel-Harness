@@ -13,12 +13,12 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // 本文件是「平台限制项」的运行期持有者（2026-09-19 用户要求：并发应用数量与应用
@@ -26,7 +26,7 @@ import (
 //
 // 解析优先级（与 baseDomainHolder 同一套纪律）：
 //
-//		控制台保存的设置（wasm.limits）> 部署档位（PICOAI_WASM_MEMORY_PROFILE）> 编译期默认
+//		控制台保存的设置（wasm.limits）> 部署档位（ZEOKEEL_WASM_MEMORY_PROFILE）> 编译期默认
 //
 //	  - 读路径：Get 走原子指针（每请求/每次渲染都要读，必须无锁）；
 //	  - 写路径：只有控制台（Apply），落库 + 下发运行中组件；
@@ -111,7 +111,7 @@ func (h *wasmLimitsHolder) profileConfigured() bool {
 
 // profileSource 返回"档位路径"下当前值的来源标识：
 //
-//	"profile" —— 部署侧显式配置了 PICOAI_WASM_MEMORY_PROFILE（值真的来自档位）；
+//	"profile" —— 部署侧显式配置了 ZEOKEEL_WASM_MEMORY_PROFILE（值真的来自档位）；
 //	"default" —— 未配置（值是编译期默认）。
 //
 // 为什么要与 Value 一起区分（AUD-2，2026-09-20）：控制台的 `source`/`source_label`
@@ -220,7 +220,7 @@ func (h *wasmLimitsHolder) Preview(availableBytes int64) readyz.MemoryBudget {
 //
 // 为什么"删行"而不是"把档位值写回设置"（旧实现，是审计判定的"承诺不成立"）：
 // 写回之后库里的行仍在、`source` 仍报 `setting`、label 仍显示「控制台保存」——
-// 运维**事实上无法回落档位**：此后即使改 `PICOAI_WASM_MEMORY_PROFILE` 也会被那条
+// 运维**事实上无法回落档位**：此后即使改 `ZEOKEEL_WASM_MEMORY_PROFILE` 也会被那条
 // 钉死的设置覆盖，而界面上看不出任何异常。删行之后 `source`/`source_label` 如实回到
 // 部署档位（或编译期默认），下一次启动按同一条优先级重新解析。
 //

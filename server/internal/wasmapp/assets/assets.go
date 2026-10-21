@@ -13,7 +13,7 @@
 //  1. **同一件事只能有一处实现**：抽段落盘原先既有发布链路一份、又有播种链路一份，
 //     播种那份漏抽资源 ⇒ 演示应用入口页 500。内存模型下"构造资源集"只有一处。
 //  2. **不能有两份权威**：应用配置曾经在库里（`config_json`）与磁盘上
-//     （`<release>/picoaide.app.json`）各一份，必须写一致性判据 + 半成品自愈。
+//     （`<release>/zeokeel.app.json`）各一份，必须写一致性判据 + 半成品自愈。
 //     现在库是唯一权威，运行期把配置**注入**资源集（保留资源名，仍然永不直出）。
 //  3. **没有路径拼接就没有路径穿越**：原实现要逐段 `Lstat` 拒符号链接、realpath
 //     前缀比对、原子写防半写 —— 内存模型下这些防御连同它们的判据一起消失。
@@ -40,8 +40,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 const (
@@ -179,10 +179,10 @@ func IsAssetSection(name string) bool {
 
 // SplitSections 把自定义段分成「静态资源」与「非资源段（忽略并报告）」。
 //
-// 判据只有一条：IsAssetSection（不是工具链元数据、不是平台独占的 `picoaide.app.json`、
+// 判据只有一条：IsAssetSection（不是工具链元数据、不是平台独占的 `zeokeel.app.json`、
 // 是包内逻辑路径预判；完整路径校验在 Set.Build 里做，那里会拒掉超长与非法字符）。
 //
-// `picoaide.app.json` 是平台独占名（配置由平台按库内 `config_json` 注入），
+// `zeokeel.app.json` 是平台独占名（配置由平台按库内 `config_json` 注入），
 // 模块里的同名段直接忽略 —— 否则"资源拒绝覆盖"会先占位，导致配置注入不进去。
 func SplitSections(in map[string][]byte) (kept map[string][]byte, skipped []string) {
 	kept = make(map[string][]byte, len(in))
@@ -313,7 +313,7 @@ type Set struct {
 //
 // 入参 sections 是**已抽出的自定义段**（调用方用 wasmmod.ExtractCustomSections 得到），
 // cfgJSON 是该版本的 `config_json`（库内权威副本）；非空时以保留资源名
-// `picoaide.app.json` 注入 —— 模块里的同名段在 SplitSections 已被忽略。
+// `zeokeel.app.json` 注入 —— 模块里的同名段在 SplitSections 已被忽略。
 //
 // 逐条校验（不通过即整份失败；发布期有同一套判据先拦一次，这里是运行期兜底）：
 //   - 段名必须过 ValidateLogicalPath；

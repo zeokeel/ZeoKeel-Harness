@@ -26,7 +26,7 @@
  * - anything left over — a frame owner with no reachable frame, a reachable
  *   frame with no owner, an ambiguous pairing — is reported as a
  *   {@link FrameOrderProblem} and turned into a fail-loud tool error.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 /** CDP's address for a `srcdoc` frame (`iframe.srcdoc` has no URL of its own). */

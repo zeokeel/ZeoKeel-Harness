@@ -11,7 +11,7 @@
  * sees every action in the browser window, so per-action prompts were
  * dropped. Navigation is still scheme-gated; downloads still route through
  * the native save dialog.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
 import type { BrowserNavigationVerdict } from './types.ts'
@@ -24,7 +24,7 @@ import { join, dirname, basename, extname } from 'node:path'
 export const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
 
 /** Default downloads directory (overridden by the runtime wiring). */
-export const DEFAULT_DOWNLOAD_DIR = '.picoaide-downloads'
+export const DEFAULT_DOWNLOAD_DIR = '.zeokeel-downloads'
 
 /**
  * Windows 保留设备名（含带扩展名/结尾点的变体）。
@@ -564,7 +564,7 @@ export function installAppSchemeRequestGate(session: NativeWebRequestSession, op
     }
     // 正向对照的纪律（R2T-7）：这里**取消**请求 —— handler 一次都不会被调用，
     // 而不是"让它抵达再拒绝响应"。判据断言的是 handler 调用计数为 0。
-    warn(`pico-browser: refused an application-scheme request from a non-application surface (resourceType=${details.resourceType ?? 'unknown'})`)
+    warn(`zeokeel-browser: refused an application-scheme request from a non-application surface (resourceType=${details.resourceType ?? 'unknown'})`)
     callback({ cancel: true })
   })
   return () => { active = false }

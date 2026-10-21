@@ -10,13 +10,13 @@
  * 才能打红。本文件就是那条真挂载判据：真 `createRoot + act` 挂载真
  * `CapabilityCenterPanel`，喂真形状的 `?source=local` 载荷，断言 DOM。
  *
- * ## 为什么这条判据住在 `@picoaide/dsh-account-card` 而不在面板的归属包
+ * ## 为什么这条判据住在 `@zeokeel/dsh-account-card` 而不在面板的归属包
  *
- * 面板的归属包（2026-10-13 起是 `@picoaide/dsh-capability-center`，此前是 enterprise）
+ * 面板的归属包（2026-10-13 起是 `@zeokeel/dsh-capability-center`，此前是 enterprise）
  * 的测试环境是 node —— 它**没有** jsdom / react-dom 依赖（同族包内用例
  * `capability-center-panel.spec.ts` 已就此写明取舍），所以那条包内只能用源码级守卫。
  * account-card 是**唯一**同时满足下面三条的客户端包，故真挂载判据落在这里：
- *   1. `package.json` 已声明 `@picoaide/dsh-capability-center`（`devDependencies`，
+ *   1. `package.json` 已声明 `@zeokeel/dsh-capability-center`（`devDependencies`，
  *      本来就是测试期源码 import ⇒ 这里的跨包源码 import 不新增**打包**图边，
  *      `temp/wasm-client-only/cycle-check.mjs` 的 "声明 == 实测" 不变量不受影响）；
  *   2. 自带 jsdom + react-dom（挂载类用例在文件头切 `@vitest-environment jsdom`）；
@@ -136,9 +136,9 @@ async function mountPanel(): Promise<void> {
   await act(async () => { root.render(<CapabilityCenterPanel onClose={() => {}} />) })
 }
 
-/** 按卡片里的标题文本取那张卡（本面板给技能卡的 className 是 `pico-skill-card`）。 */
+/** 按卡片里的标题文本取那张卡（本面板给技能卡的 className 是 `zeokeel-skill-card`）。 */
 function cardOf(name: string): HTMLElement {
-  const card = [...container.querySelectorAll<HTMLElement>('.pico-skill-card')]
+  const card = [...container.querySelectorAll<HTMLElement>('.zeokeel-skill-card')]
     .find(element => (element.textContent ?? '').includes(name))
   if (card === undefined) throw new Error(`没有渲染出 ${name} 的卡片（DOM: ${container.textContent ?? ''}）`)
   return card

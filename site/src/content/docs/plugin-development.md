@@ -3,7 +3,7 @@ title: 插件开发
 description: 从零写一个 DSH 插件：Cordis 形态、宿主面与客户端面、平台模块表、本地调试，到打进客户端或服务端。
 ---
 
-插件是给 DSH 添加能力的扩展包——模型、工具、界面、工作流都能做成插件。PicoAide Harness **不魔改上游源码**：桌面壳本身就是一个合法的 DSH 插件，与第三方插件走同一条官方 Cordis 组合路径。这一页写给二次开发者与维护者，讲清「写一个插件 → 本地调试 → 打进桌面客户端 / 装到企业服务端」的完整路径，以及每一步的边界在哪。
+插件是给 DSH 添加能力的扩展包——模型、工具、界面、工作流都能做成插件。ZeoKeel Harness **不魔改上游源码**：桌面壳本身就是一个合法的 DSH 插件，与第三方插件走同一条官方 Cordis 组合路径。这一页写给二次开发者与维护者，讲清「写一个插件 → 本地调试 → 打进桌面客户端 / 装到企业服务端」的完整路径，以及每一步的边界在哪。
 
 ## 设计目标：为什么是插件而不是分支
 
@@ -105,9 +105,9 @@ export default class MyService extends Service {
 | 界面面板、槽位、主题、语言字典、客户端 store、命令面板 | **客户端面** | 渲染进程是沙箱 Web 页面，拿不到 Node |
 | 会话、登录态 | 两面各有一份视图 | 宿主面是 `sessionController` 与自有会话服务，客户端面是客户端的 `sessions`——两份不同的服务 |
 
-两半之间**只有 loopback HTTP 与 WebSocket 这一条通道**：客户端面不能直接读宿主服务，产品也没有给它们加 preload 或 Electron IPC 桥。带界面的插件走普通 DSH 模式——宿主面注册同源 HTTP 路由（惯例前缀 `/api/pico/…`），客户端面用 fetch 消费；写面必须自己挂持有性证明（同源校验），不能假设"是本机请求就可信"。
+两半之间**只有 loopback HTTP 与 WebSocket 这一条通道**：客户端面不能直接读宿主服务，产品也没有给它们加 preload 或 Electron IPC 桥。带界面的插件走普通 DSH 模式——宿主面注册同源 HTTP 路由（惯例前缀 `/api/zeokeel/…`），客户端面用 fetch 消费；写面必须自己挂持有性证明（同源校验），不能假设"是本机请求就可信"。
 
-一个具体的坑：`ctx.locale` 是**客户端面专属**服务，宿主面拿不到它。宿主侧要输出多语言文案（内嵌 HTML 页面、窗口标题、托盘文案、错误载荷）时用 `@picoaide/dsh-host-locale`（`hostLocaleFrom(...)` + `hostCopy(locale, zh, en)`），并且**按请求解析**，不要把语言冻结在模块级常量里。
+一个具体的坑：`ctx.locale` 是**客户端面专属**服务，宿主面拿不到它。宿主侧要输出多语言文案（内嵌 HTML 页面、窗口标题、托盘文案、错误载荷）时用 `@zeokeel/dsh-host-locale`（`hostLocaleFrom(...)` + `hostCopy(locale, zh, en)`），并且**按请求解析**，不要把语言冻结在模块级常量里。
 
 ### 跨包客户端 import 为什么被禁止
 
@@ -118,7 +118,7 @@ export default class MyService extends Service {
 
 所以构建期有一道 **purity gate**：客户端 bundle 里任何 `@deepseek-ai/*` 的值 import，只有在"属于平台模块表"、"在 `dsh.client.external` 里显式请求过"、"属于可内联的纯契约层"三种情况之一时才放行，其余直接构建失败（类型 import 会被擦除，不受影响）。上游实现见 `deepseek-harness/packages/client/tsdown.client.ts`。
 
-**跨插件协作只有两条路**：Cordis 服务（推荐，例如各面板向 `@picoaide/dsh-foot-menu` 提供的 `ctx.picoFootMenu` 登记条目），或者共享的槽位契约。
+**跨插件协作只有两条路**：Cordis 服务（推荐，例如各面板向 `@zeokeel/dsh-foot-menu` 提供的 `ctx.zeokeelFootMenu` 登记条目），或者共享的槽位契约。
 
 ### 槽位：注入与注册的正确姿势
 
@@ -214,7 +214,7 @@ profile 的 bundle 列表由 `desktopBundleList()` 修复：必装层按固定�
 
 ### 托盘与桌面契约
 
-桌面为第三方开放的 surface 只有两处，见 [`packages/host/desktop/docs/plugin-services.zh.md`](https://github.com/picoaide/picoaide-harness/tree/master/packages/host/desktop/docs)：
+桌面为第三方开放的 surface 只有两处，见 [`packages/host/desktop/docs/plugin-services.zh.md`](https://github.com/zeokeel/ZeoKeel-Harness/tree/master/packages/host/desktop/docs)：
 
 ```ts
 export const inject = ['desktopRuntime']
@@ -248,7 +248,7 @@ export function apply(ctx) {
 
 | 类别 | 例子 | 生效方式 |
 |---|---|---|
-| **编译期注入**（改内容 = 重新构建镜像） | 渠道内容：产品名、标语、欢迎语、标识、主题色、数据根、深链 scheme、应用源 scheme、内置服务端地址 | 构建时从私有渠道仓注入镜像的 `/opt/picoaide/channel/`，客户端在**组装期**由 `channelProfilePatches()` 写进对应行的 config |
+| **编译期注入**（改内容 = 重新构建镜像） | 渠道内容：产品名、标语、欢迎语、标识、主题色、数据根、深链 scheme、应用源 scheme、内置服务端地址 | 构建时从私有渠道仓注入镜像的 `/opt/zeokeel/channel/`，客户端在**组装期**由 `channelProfilePatches()` 写进对应行的 config |
 | **运行时配置**（管理后台 / 数据库 / 环境变量） | 模型目录与定价、限流与峰谷窗口、余额闸门策略、连接器目录与下发开关、能力中心审批与授权、审计保留天数、应用中心限制项 | 管理后台保存即生效；少数项（如应用单实例内存）需要重启服务端 |
 
 为什么品牌文案不做成运行时可编辑：它是客户可见交付物，必须可审计、可复现——同一份配置构建出来的镜像，任何一台机器上的呈现都一样。客户端的随包品牌是兜底（服务端不可达时用），登录后以服务端下发的渠道内容为准。
@@ -294,4 +294,4 @@ export function apply(ctx) {
 - [系统架构](/architecture/) — 三层拓扑与启动顺序
 - [桌面客户端](/desktop/) — 用户侧的插件管理与随包运行时
 - [API 参考](/api-reference/) — 服务端接口契约
-- [桌面插件服务 contract（仓库）](https://github.com/picoaide/picoaide-harness/tree/master/packages/host/desktop/docs/plugin-services.zh.md) — 类型、生命周期与失败语义
+- [桌面插件服务 contract（仓库）](https://github.com/zeokeel/ZeoKeel-Harness/tree/master/packages/host/desktop/docs/plugin-services.zh.md) — 类型、生命周期与失败语义

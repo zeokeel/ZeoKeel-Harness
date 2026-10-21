@@ -41,21 +41,21 @@
 ### B. 名称与元数据（编译期）
 | 项 | 现状位置 |
 |---|---|
-| `appId`（bundle id） | `package.json` build.appId = `ai.deepseek.dsh.desktop` |
-| `productName`（显示名/dock 名/关于页） | build.productName = `PicoAide Harness` |
-| 产物文件名模板（×3 平台） | build.mac/win/nsis/linux `artifactName` = `PicoAide-Harness-${version}-…` |
-| windows 快捷方式名 | `nsis.shortcutName` = `PicoAide Harness` |
-| linux 维护者/简介 | `build.linux.maintainer`=picoaide、`synopsis` |
-| 深链 scheme | build.protocols schemes = `picoaide`（企业定制后与官方 app 互抢 scheme，需渠道化或关闭） |
+| `appId`（bundle id） | `package.json` build.appId = `com.zeokeel.harness` |
+| `productName`（显示名/dock 名/关于页） | build.productName = `ZeoKeel Harness` |
+| 产物文件名模板（×3 平台） | build.mac/win/nsis/linux `artifactName` = `ZeoKeel-Harness-${version}-…` |
+| windows 快捷方式名 | `nsis.shortcutName` = `ZeoKeel Harness` |
+| linux 维护者/简介 | `build.linux.maintainer`=zeokeel、`synopsis` |
+| 深链 scheme | build.protocols schemes = `zeokeel`（企业定制后与官方 app 互抢 scheme，需渠道化或关闭） |
 | 版权/公司 | 由 package.json author/copyright 生成（目前未显式设置，需确认） |
 
 ### C. 运行时文案与默认配置（编译期注入）
 | 项 | 现状位置 |
 |---|---|
-| 更新源仓库常量 | `src/update-checker.ts`、`src/update-download.ts` 的 `DESKTOP_RELEASE_REPOSITORY = 'picoaide/picoaide-harness'` |
-| 资产名匹配模板 | `update-download.ts` 硬编码 `PicoAide-Harness-<v>-mac.dmg` / `-x64-Setup.exe` / `-x86_64.AppImage` |
+| 更新源仓库常量 | `src/update-checker.ts`、`src/update-download.ts` 的 `DESKTOP_RELEASE_REPOSITORY = 'zeokeel/ZeoKeel-Harness'` |
+| 资产名匹配模板 | `update-download.ts` 硬编码 `ZeoKeel-Harness-<v>-mac.dmg` / `-x64-Setup.exe` / `-x86_64.AppImage` |
 | 默认品牌文案（服务端未配品牌时） | `packages/host/enterprise/src/brand-sync.ts` `DEFAULT_BRAND`（display_name/tagline/title） |
-| 登录页标题/样式 | `packages/host/enterprise/src/auth-gate.ts` `LOGIN_HTML`（title `PicoAide 登录`、配色） |
+| 登录页标题/样式 | `packages/host/enterprise/src/auth-gate.ts` `LOGIN_HTML`（title `ZeoKeel 登录`、配色） |
 | 默认服务器地址 | 登录页让用户输入（无渠道预填）——企业版应预填企业网关地址 |
 | 功能开关/插件启停、遥测渠道 id | 无现成渠道概念，新增 |
 
@@ -64,7 +64,7 @@
 |---|---|
 | mac 签名/公证 | `scripts/release-preflight.ts` 常量清单：`APPLE_API_ISSUER/KEY/KEY_ID`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`MAC_CERT_P12_BASE64`、`CSC_*` 等；`release-mac.ts` 走 Developer ID + notarize |
 | mac universal 运行时准备 | `scripts/mac-universal.ts`（与品牌无关，不动） |
-| 发布目标 | `ci.yml` release job → `gh release create` 到 `picoaide/picoaide-harness`，产物 `SHA256SUMS.txt` |
+| 发布目标 | `ci.yml` release job → `gh release create` 到 `zeokeel/ZeoKeel-Harness`，产物 `SHA256SUMS.txt` |
 
 **结论**：技术栈（electron-builder 配置结构、universal 打包、签名/公证、verify 脚本）全部已有；真正要做的 = ①把上述硬编码点收敛为单一配置源 ②加"渠道配置包"与素材派生 ③CI 按渠道矩阵化 ④更新源与默认配置运行时可注入。
 
@@ -73,9 +73,9 @@
 ## 2. 核心设计：渠道配置包
 
 ### 2.1 目录结构（**独立品牌私有仓**，2026-09-05 定案）
-> 渠道配置不在主仓（主仓公开，无私有分支可言，见 §6 风险 2）；存放于同账号私有仓（如 `picoaide/brands`）。主仓仅保留官方 `brands/official/` 与本地开发回落骨架。
+> 渠道配置不在主仓（主仓公开，无私有分支可言，见 §6 风险 2）；存放于同账号私有仓（如 `zeokeel/brands`）。主仓仅保留官方 `brands/official/` 与本地开发回落骨架。
 ```
-# 品牌私有仓 <picoaide/brands>（纯数据仓：配置+素材，无代码/脚本/证书）
+# 品牌私有仓 <zeokeel/brands>（纯数据仓：配置+素材，无代码/脚本/证书）
 channels/
   index.json                 # 渠道注册表：id/display_name/slug/app_id 全局唯一
   acme/                      # 企业渠道（示例）
@@ -199,14 +199,14 @@ channels/
 ## 6. 风险与坑（提前点名）
 
 1. **更新源污染（P0）**：企业版内嵌官方更新源 → 升级即被"洗"成官方版。`updates.mode` 必须由渠道配置强驱动，verify-branded 断言更新源 = 渠道配置值。
-2. **企业素材进公开仓库**（2026-09-05 定案）：主仓 `picoaide/picoaide-harness` 为公开仓库（`private: false`），GitHub 公开仓**不存在私有分支/私有 PR**——渠道素材进主仓=必然公开 → 渠道目录放**同账号独立品牌私有仓**（单仓多渠道），CI 构建时检出到 `temp/` 引用（pin ref）；大文件用 git-lfs 或构建时从 secrets/artifact 注入。
+2. **企业素材进公开仓库**（2026-09-05 定案）：主仓 `zeokeel/ZeoKeel-Harness` 为公开仓库（`private: false`），GitHub 公开仓**不存在私有分支/私有 PR**——渠道素材进主仓=必然公开 → 渠道目录放**同账号独立品牌私有仓**（单仓多渠道），CI 构建时检出到 `temp/` 引用（pin ref）；大文件用 git-lfs 或构建时从 secrets/artifact 注入。
 3. **多企业 secrets 集中单仓**：任何有 repo 写权限的人可在 CI 中读取 environment secrets → 企业自签模式（含企业证书 p12）强烈建议走企业私仓；厂商统一签名则无此顾虑。
 4. **mac 证书生命周期**：Developer ID/公证凭证会过期 → 渠道构建失败；需要证书有效期登记与轮换提醒（构建记录含指纹）。
 5. **图标规范不合格**（512px、JPG、非方形、无安全边距）：validate-channel fail-loud，素材清单文档化（Phase 3 输出《企业素材清单模板》）。
 6. **版本号冲突**：渠道版本与官方版本同号混乱 → 渠道构建版本 = 套餐版本 + 渠道后缀（如 `2.5.9+acme.20240904`），更新源按渠道隔离后无跨渠道比较。
 7. **electron-builder 配置合并语义**：`--config` 与 package.json `build` 的深合并行为需实施时验证（若覆盖不干净，改为生成完整 build 段）。
 8. **中文名与 ASCII**：显示名可中文，`slug` 必须 ASCII（文件名/可执行名/安装器名/域名路径），两字段分离防中文文件名坑。
-9. **深链 scheme 冲突**：多款产品共用 `picoaide://` 会互抢；企业渠道默认关闭或强制渠道私有 scheme。
+9. **深链 scheme 冲突**：多款产品共用 `zeokeel://` 会互抢；企业渠道默认关闭或强制渠道私有 scheme。
 
 ---
 

@@ -1,9 +1,9 @@
 /**
  * 渠道包在客户端侧的读取与派生（渠道化构建的运行时出口）。
  *
- * **渠道包**指私有仓 `picoaide/channels/<channel-id>/` 里的那份配置
+ * **渠道包**指私有仓 `zeokeel/channels/<channel-id>/` 里的那份配置
  * （`channel.json` + logo 等素材）。服务端镜像在构建时把它打进
- * `/opt/picoaide/channel/`；客户端构建则把它打进应用资源，于是同一个渠道的
+ * `/opt/zeokeel/channel/`；客户端构建则把它打进应用资源，于是同一个渠道的
  * 客户端与服务端来自**同一份**配置，不会各说各话。
  *
  * 客户端需要在**登录之前**就知道三件事，所以它们必须随包而非随服务端下发
@@ -43,14 +43,14 @@ const CHANNEL_PROFILE_FILE = new URL('../build/channel.json', import.meta.url)
 const CHANNEL_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/u
 
 /** 官方渠道的深链 scheme(改造前的硬编码值)。 */
-export const DEFAULT_DEEP_LINK_SCHEME = 'picoaide'
+export const DEFAULT_DEEP_LINK_SCHEME = 'zeokeel'
 
 /**
- * 官方渠道的应用源 scheme（§10：official/beta 取 `picoaide-app`，公共渠道共用命名
+ * 官方渠道的应用源 scheme（§10：official/beta 取 `zeokeel-app`，公共渠道共用命名
  * 空间）。只在**没有渠道包**（官方构建/本地开发）时使用；渠道构建缺
  * `desktop.app_origin_scheme` 一律 fail-loud（见 {@link resolveAppOriginScheme}）。
  */
-export const DEFAULT_APP_ORIGIN_SCHEME = 'picoaide-app'
+export const DEFAULT_APP_ORIGIN_SCHEME = 'zeokeel-app'
 
 /**
  * 应用源 scheme 的形状（§8.3 冻结：与 Go `channel.AppOriginScheme()` 及新包
@@ -110,7 +110,7 @@ export function resolveAppOriginScheme(raw: unknown, deepLinkScheme: string): st
 }
 
 /** 官方产品名（没有渠道包时的内置兜底；渠道构建必须由渠道包给出）。 */
-export const OFFICIAL_PRODUCT_NAME = 'PicoAide Harness'
+export const OFFICIAL_PRODUCT_NAME = 'ZeoKeel Harness'
 
 /** 应用 id（bundle id / AppUserModelId）形状：反向域名。 */
 const APP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.-]*$/u
@@ -262,7 +262,7 @@ export interface DesktopChannelProfile {
    * 数据目录名（`~` 下的那一段）—— **本次渠道构建的隔离标识**。
    *
    * 渠道包没写 `desktop.home_dir` 时由 `desktop.slug` 派生、再退到
-   * `.picoaide-harness-<channelId>`；**任何情况下都不会等于官方目录**
+   * `.zeokeel-harness-<channelId>`；**任何情况下都不会等于官方目录**
    * （见 desktop-home.ts 的 `channelDshHomeDir`）。官方构建没有渠道包，
    * 走调用方的官方缺省，行为不变。
    */
@@ -278,7 +278,7 @@ export interface DesktopChannelProfile {
    * 深链 scheme（OIDC/OpenID 浏览器回调把 token 交回客户端用的那个）。
    *
    * 渠道构建必须用它自己的 scheme:浏览器在跳回客户端时会弹出
-   * "打开 <scheme>?" 的确认框,渠道客户不该在这里看到 `picoaide`。
+   * "打开 <scheme>?" 的确认框,渠道客户不该在这里看到 `zeokeel`。
    * 未配置时回落官方 scheme —— 官方行为逐字节不变。
    */
   readonly deepLinkScheme: string
@@ -288,7 +288,7 @@ export interface DesktopChannelProfile {
    * 它是应用页的 origin（`<scheme>://<app_id>`），也是**渠道之间的隔离面**：官方与
    * 渠道、渠道与渠道各用自己的 scheme，跨渠道的链接自然打不开。注入链见
    * `main.ts`（启动期特权注册）、`profile.ts`（profile 行 config）与本包
-   * `src/index.ts`（本机只读路由 `GET /api/pico/wasm-apps/channel`）。
+   * `src/index.ts`（本机只读路由 `GET /api/zeokeel/wasm-apps/channel`）。
    *
    * 渠道包缺这个字段时**构建/启动即失败**（{@link resolveAppOriginScheme}）：
    * 静默回落官方值 = 跨租户共用 origin。
@@ -464,7 +464,7 @@ export function parseDesktopChannelProfile(input: unknown): DesktopChannelProfil
   // 让 AppOriginSchemeError 一路冒到 readDesktopChannelProfile 的调用方（main.ts 在
   // 启动早期读，报错即中止启动，比"两个渠道共用 origin"早得多也清楚得多）。
   const appOriginScheme = resolveAppOriginScheme(desktopRecord.app_origin_scheme, deepLinkScheme)
-  // 数据目录名：渠道包显式配的家目录（形状校验）> slug 派生 > `.picoaide-harness-<id>`。
+  // 数据目录名：渠道包显式配的家目录（形状校验）> slug 派生 > `.zeokeel-harness-<id>`。
   // 运行期**不**因为畸形值而拒绝启动：渠道化是增量能力，最差也要落到一个
   // 只属于本渠道的目录（回落官方目录才是不可接受的 —— 那是跨租户共享）。
   const declaredHomeDir = nonEmptyString(desktopRecord.home_dir)

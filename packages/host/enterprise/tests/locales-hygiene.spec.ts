@@ -14,7 +14,7 @@
  *   3. 桌面包把 enterprise 加进 allowlist 时能直接通过。
  *
  * 2026-10-13：能力中心（技能商店）的客户端面与它的 75 个 `capability.*` 键整块搬到
- * `@picoaide/dsh-capability-center`。本文件因此只剩企业面自己的键；能力中心那份字典
+ * `@zeokeel/dsh-capability-center`。本文件因此只剩企业面自己的键；能力中心那份字典
  * 由新包的 `tests/locales-hygiene.spec.ts` 用**同一套判据**原地钉住（含那条
  * `capability.nameTaken` 的双语模板断言）—— 覆盖面没有缩小，只是跟着字典走。
  */
@@ -81,7 +81,7 @@ describe('企业字典卫生', () => {
     // 反向保护：别把仍在用的键当死键删掉（这些是账号/更新面的核心）。
     //
     // 2026-10-13：`capability.title` / `capability.nameTaken` 两条随能力中心的客户端面
-    // 一起搬到了 `@picoaide/dsh-capability-center` —— 它们现在**不属于**本字典，
+    // 一起搬到了 `@zeokeel/dsh-capability-center` —— 它们现在**不属于**本字典，
     // 反向保护改成企业面自己的键；能力中心那两条（以及"模板参数在两种语言下都可用"
     // 这条判据）改由新包的 `tests/locales-hygiene.spec.ts` 原地钉住，判据一条不少。
     for (const key of ['hero.tagline', 'account.password.errOld', 'update.upToDate', 'settings.account']) {

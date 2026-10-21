@@ -6,7 +6,7 @@ package serverauth
 //
 // `BearerAuth` 把 `VerifyToken` 的**任何** error 都回 401 `AUTH_FAILED`，而客户端
 // （`packages/host/enterprise/src/server-connector/auth.ts`）把任何 401 读作
-// `auth_expired` ⇒ `ctx.picoSession.clear()` ⇒ **删掉磁盘上的令牌**
+// `auth_expired` ⇒ `ctx.zeokeelSession.clear()` ⇒ **删掉磁盘上的令牌**
 // （`$DSH_HOME/session.json`，`session-service.ts` 的 `clear()` 里 `unlinkSync`）。
 // 也就是说：一次 PG 抖动（重启 / 连接池耗尽 / 语句超时 / 卷切换）= **全体在线员工
 // 被登出**，LDAP/OIDC 用户还要重走 IdP。三个技能面（组织 / 市场 / 能力中心聚合）的
@@ -37,7 +37,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // ---------------------------------------------------------------------------

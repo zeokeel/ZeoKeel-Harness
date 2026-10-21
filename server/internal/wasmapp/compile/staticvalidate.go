@@ -3,7 +3,7 @@ package compile
 import (
 	"sort"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/wasmmod"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/wasmmod"
 )
 
 // 本文件是 compile 侧对**静态校验**的接线：把 wasmmod（模块 A 的实现）适配成本包的
@@ -35,7 +35,7 @@ var StaticValidatorHook StaticValidator
 
 // NewValidator 返回生产用静态校验器（wasmmod 适配器）。
 //
-// 编译子进程（cmd/picoaide-app-compile）与父侧 ValidateWasm 都用它——两侧同一实现，
+// 编译子进程（cmd/zeokeel-app-compile）与父侧 ValidateWasm 都用它——两侧同一实现，
 // 因此"预检通过但编译子进程拒绝"这类不一致在结构上不可能发生。
 func NewValidator() StaticValidator { return wasmmodValidator{} }
 

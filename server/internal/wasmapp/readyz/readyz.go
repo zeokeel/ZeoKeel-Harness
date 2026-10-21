@@ -24,9 +24,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/queue"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 )
 
 // 以下三个常量是**启动自检的估算系数**，不是"应用可见的上限"，
@@ -47,7 +47,7 @@ const (
 	// InstancePoolBytes 是"32 × 64 MiB 实例"这笔账（§4.3 第二笔）。
 	//
 	// 保留为**默认档**的数值；实际生效值由 MemoryPlan 给（部署可用
-	// PICOAI_WASM_MEMORY_PROFILE 声明更小的档位，见 memprofile 包）。
+	// ZEOKEEL_WASM_MEMORY_PROFILE 声明更小的档位，见 memprofile 包）。
 	InstancePoolBytes = limits.GlobalInstances * limits.InstanceMemoryPages * limits.WasmPageSize
 )
 
@@ -445,7 +445,7 @@ var publishBlockers = []publishBlocker{
 	},
 	{
 		Prefix: reasonCompileUnavailable, BlocksPublish: true, Heal: HealOperator,
-		Action: "构建 cmd/picoaide-app-compile 并与 picoaide-server 放在同一目录（生产镜像还需 bubblewrap），" +
+		Action: "构建 cmd/zeokeel-app-compile 并与 zeokeel-server 放在同一目录（生产镜像还需 bubblewrap），" +
 			"然后重启服务端（可用性在启动期判定）",
 		Why: "没有编译器就没有发布（审计 P2-2）",
 	},
@@ -1185,7 +1185,7 @@ func CheckStartupMemoryFor(availableBytes int64, plan MemoryPlan) (MemoryBudget,
 		WithDetail("profile", b.Profile).
 		WithDetail("guard_percent", limits.MemoryPeakGuardPercent).
 		WithHint("§4.3 要求内存四笔账联立：实例池 + 编译峰值 + 上传峰值 + 缓存驻留").
-		WithHint("两条出路：①扩容机器内存；②用 PICOAI_WASM_MEMORY_PROFILE 声明更小的档位" +
+		WithHint("两条出路：①扩容机器内存；②用 ZEOKEEL_WASM_MEMORY_PROFILE 声明更小的档位" +
 			"（small = 3 并发 / 64 MiB 实例 / 64 MiB 模块缓存，适合 2 GB 级机器）")
 }
 

@@ -1,11 +1,11 @@
 /**
- * `picoCronService` — the Host service exposing the job ledger / scheduler
+ * `zeokeelCronService` — the Host service exposing the job ledger / scheduler
  * surface to sibling plugins and the Host half.
  *
  * Runtime identity lives in this package's Host half: the value is provided
- * via `ctx.provide('picoCronService', service)` and consumed through the
+ * via `ctx.provide('zeokeelCronService', service)` and consumed through the
  * cordis service name, never through a value import. Consumers pull the type
- * with `import type {} from '@picoaide/dsh-cron'` (type-only, erased at
+ * with `import type {} from '@zeokeel/dsh-cron'` (type-only, erased at
  * compile time), or spell the same shape locally.
  *
  * v2: the dsh-task bridge (task actions) was removed — the task board was
@@ -24,7 +24,7 @@ export interface CronJobRegistration {
 }
 
 /** The cron Host service surface. */
-export interface PicoCronService {
+export interface ZeoKeelCronService {
   /** Register (upsert) a job; used by sibling plugins. */
   registerJob(registration: CronJobRegistration): void
   /** Remove a job by id (no-op when absent). */
@@ -41,7 +41,7 @@ export interface PicoCronService {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Cron scheduler service provided by @picoaide/dsh-cron. */
-    picoCronService: PicoCronService
+    /** Cron scheduler service provided by @zeokeel/dsh-cron. */
+    zeokeelCronService: ZeoKeelCronService
   }
 }

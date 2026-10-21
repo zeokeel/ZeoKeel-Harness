@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 目录全量同步(LDAP 用户/组自动同步):

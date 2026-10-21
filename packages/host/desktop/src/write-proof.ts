@@ -4,7 +4,7 @@
  * `desktop-update-route.ts` 的 `acceptRendererPost` 只在
  * `origin !== undefined && origin !== expectedOrigin` 时拒绝 —— **不带 Origin
  * 直接过**。本机任意进程伪造 `Host`/`Origin`/`Sec-Fetch-Site` 即可
- * `POST /api/pico/desktop/update/install` 拉起已下载的安装包、`/update/check`
+ * `POST /api/zeokeel/desktop/update/install` 拉起已下载的安装包、`/update/check`
  * 触发一次联网检查；`/_dsh/desktop/renderer-boot` 与 `pick-directory` 同族。
  *
  * 证明 = 上游 `connection` 服务的 BrowserAuth cookie（`dsh-auth-<authority>`：

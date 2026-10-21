@@ -3,14 +3,14 @@
  *
  * ## 分工（改样式前先读这条）
  *
- * **颜色与交互反馈在样式表里**（`stylesheet.ts` 的 `.pico-*` 类：`:hover` /
+ * **颜色与交互反馈在样式表里**（`stylesheet.ts` 的 `.zeokeel-*` 类：`:hover` /
  * `:focus-visible` / `:active` 没有内联表达方式，一旦把颜色写进行内联样式，悬停反馈
  * 就再也做不出来）；**几何在内联样式里**（尺寸/间距/圆角按调用点微调最方便）。
  *
  * 所以：不要在这些组件上写 `background` / `color` / `border-color` 的内联样式，
- * 需要新配色就加 `.pico-btn--xxx` / 用 `<Chip tone>`。
+ * 需要新配色就加 `.zeokeel-btn--xxx` / 用 `<Chip tone>`。
  *
- * @module @picoaide/dsh-panel-surface/client/ui
+ * @module @zeokeel/dsh-panel-surface/client/ui
  */
 
 import { forwardRef } from 'react'
@@ -20,7 +20,7 @@ import { IconBack } from './icons.tsx'
 /** 语义色调（映射到会随主题翻转的 DSH alias token，不写死颜色）。 */
 export type PanelTone = 'neutral' | 'brand' | 'success' | 'warn' | 'danger' | 'accent'
 
-/** 色调 → 文字色（徽章底色由 `.pico-chip` 用 `currentColor` 派生）。 */
+/** 色调 → 文字色（徽章底色由 `.zeokeel-chip` 用 `currentColor` 派生）。 */
 export const TONE_COLOR: Record<PanelTone, string> = {
   neutral: 'var(--dsw-alias-label-secondary)',
   brand: 'var(--dsw-alias-brand-primary)',
@@ -30,7 +30,7 @@ export const TONE_COLOR: Record<PanelTone, string> = {
   accent: 'var(--dsw-alias-state-business-primary)',
 }
 
-/** 按钮变体 → `.pico-btn--*` 类。 */
+/** 按钮变体 → `.zeokeel-btn--*` 类。 */
 export type PanelButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 /** 按钮尺寸（高度 / 横向内边距 / 字号 / 圆角）。 */
 export type PanelButtonSize = 'sm' | 'md' | 'lg'
@@ -70,7 +70,7 @@ export const PanelButton = forwardRef<HTMLButtonElement, PanelButtonProps>(funct
       type={type ?? 'button'}
       {...rest}
       ref={ref}
-      className={`pico-btn pico-btn--${variant}${className === undefined ? '' : ` ${className}`}`}
+      className={`zeokeel-btn zeokeel-btn--${variant}${className === undefined ? '' : ` ${className}`}`}
       style={{ ...BUTTON_SIZE[size], ...(block === true ? { width: '100%' } : {}), ...style }}
     >
       {icon}
@@ -95,7 +95,7 @@ export interface ChipProps {
 export function Chip({ tone = 'neutral', plain, title, className, children }: ChipProps): JSX.Element {
   return (
     <span
-      className={`pico-chip${className === undefined ? '' : ` ${className}`}`}
+      className={`zeokeel-chip${className === undefined ? '' : ` ${className}`}`}
       {...(plain === true ? { 'data-plain': 'true' } : {})}
       {...(title === undefined ? {} : { title })}
       style={{ color: TONE_COLOR[tone] }}
@@ -131,7 +131,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     <div
       {...rest}
       ref={ref}
-      className={`pico-card${className === undefined ? '' : ` ${className}`}`}
+      className={`zeokeel-card${className === undefined ? '' : ` ${className}`}`}
       {...(interactive === true ? { 'data-interactive': 'true' } : {})}
       {...(muted === true ? { 'data-muted': 'true' } : {})}
     >
@@ -161,7 +161,7 @@ export function IconTile({ tone = 'brand', size = 36, radius = 11, label, classN
   const color = TONE_COLOR[tone]
   return (
     <span
-      className={`pico-tile${className === undefined ? '' : ` ${className}`}`}
+      className={`zeokeel-tile${className === undefined ? '' : ` ${className}`}`}
       aria-hidden="true"
       style={{
         width: size,
@@ -199,7 +199,7 @@ export interface SegmentedControlProps<T extends string> {
  */
 export function SegmentedControl<T extends string>({ value, options, onChange, ariaLabel }: SegmentedControlProps<T>): JSX.Element {
   return (
-    <div className="pico-seg" role="tablist" aria-label={ariaLabel}>
+    <div className="zeokeel-seg" role="tablist" aria-label={ariaLabel}>
       {options.map(option => (
         <button
           key={option.value}
@@ -286,7 +286,7 @@ export function PanelPage({ title, subtitle, icon, onClose, backLabel, actions, 
       {toolbar === undefined ? null : (
         <div style={{ flex: 'none', padding: '10px 20px', borderBottom: '1px solid var(--dsw-alias-border-l2)' }}>{toolbar}</div>
       )}
-      <div className="pico-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <div className="zeokeel-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <div style={{ maxWidth: width, margin: '0 auto', padding: padded ? '18px 20px 34px' : 0 }}>{children}</div>
       </div>
     </div>
@@ -309,7 +309,7 @@ export function PanelStats({ items }: PanelStatsProps): JSX.Element {
       {items.map(item => (
         <div
           key={item.label}
-          className="pico-card"
+          className="zeokeel-card"
           style={{ flex: '1 1 150px', minWidth: 0, borderRadius: 12, padding: '10px 14px' }}
         >
           <div style={{ fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-caption)' }}>{item.label}</div>

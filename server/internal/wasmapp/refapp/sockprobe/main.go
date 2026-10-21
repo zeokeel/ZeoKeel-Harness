@@ -17,7 +17,7 @@
 // 门禁 `TestWhitelistAllowsOnlyFdFreeSockSymbols` 仍逐字钉住**精确集合**
 // （允许 sock_accept/sock_recv/sock_send/sock_shutdown；禁止造 fd 的四条）。
 //
-// 生成方式与其他探测程序一致：只被 `picoaide-wasm-imports-gen` **编译**、从不运行。
+// 生成方式与其他探测程序一致：只被 `zeokeel-wasm-imports-gen` **编译**、从不运行。
 // 为了本机原生 `go build ./...` 与 `go vet` 也能过，wasm 专用的导入声明放在
 // `sock_wasip1.go`（只有 wasip1 构建才参与编译），其他平台用 `sock_other.go` 的空实现。
 package main

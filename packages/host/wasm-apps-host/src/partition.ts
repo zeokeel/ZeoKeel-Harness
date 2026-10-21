@@ -16,7 +16,7 @@
  * 于是跨租户串味。2026-09-21 审计 P1-10 证据②。未登录（匿名）没有租户可隔离，
  * 因此**不带**哈希（与 browser 包的启动分区逐字相同）。
  *
- * `@picoaide/dsh-browser` **没有导出**这个辅助函数（它的 exports 只有
+ * `@zeokeel/dsh-browser` **没有导出**这个辅助函数（它的 exports 只有
  * `.`/`./client`/`./invariant`/`./guard`/`./surface`），而本包不允许反向依赖它
  * （构建顺序 + 它是 C4 的白名单），所以只能在这里再写一份 —— 与 browser 镜像
  * connectors 的 `encodeSegment` 是同一个取舍：
@@ -27,14 +27,14 @@
  * 因此**browser 侧必须同批改成同一份公式**（含 `@<server-hash>` 后缀与同一个哈希
  * 口径）；找到 `browserPartitionFor` 的**一处**定义改成与本文件同形，并让
  * `packages/host/browser/src/index.ts` 把当前会话的服务端地址哈希传进去。
- * 最好的终局是把这份实现从 `@picoaide/dsh-browser/surface` 导出来，删掉本镜像
+ * 最好的终局是把这份实现从 `@zeokeel/dsh-browser/surface` 导出来，删掉本镜像
  * （台账 TST-14「分区名跨包镜像无对拍」的根治）。
  *
  * `src/partition.spec.ts` 把形状（含 browser `tests/partition.spec.ts` 的全部例值 +
  * 哈希后缀）钉死；部署侧若真的需要另一种命名，用插件 config 的 `partition` 覆盖，
  * 不要去改这里的推导。
  *
- * @module @picoaide/dsh-wasm-apps-host/partition
+ * @module @zeokeel/dsh-wasm-apps-host/partition
  */
 
 import { createHash } from 'node:crypto'

@@ -31,7 +31,7 @@ import { afterEach } from 'vitest'
 
 const PKG_ROOT = fileURLToPath(new URL('..', import.meta.url))
 /**
- * 能力中心的面板与字典（2026-10-13 起住在 `@picoaide/dsh-capability-center`）。
+ * 能力中心的面板与字典（2026-10-13 起住在 `@zeokeel/dsh-capability-center`）。
  * 判据本身没变：文案仍必须只有字典里那一份、面板仍必须经 `t()` 引用它们 ——
  * 只是面板/字典的**归属包**换了，盘上的路径跟着走。
  */

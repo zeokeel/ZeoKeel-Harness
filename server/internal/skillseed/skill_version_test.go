@@ -39,7 +39,7 @@ import (
 //   - 给某条摘要补一个已用过的 version ⇒ 反向断言红。
 //
 // ⚠️ 本表是**整目录**摘要：`references/limits.md` 是 limits 生成器的产物，它的内容由
-// `cmd/picoaide-limits-gen` 决定 —— 改 limits 的真源（limitsspec.go）并重跑生成器后，
+// `cmd/zeokeel-limits-gen` 决定 —— 改 limits 的真源（limitsspec.go）并重跑生成器后，
 // 这里会红，那不是误报：交付给员工的手册变了，版本就该提。
 
 // appBuilderSkillDigests 是 **app-builder** 技能的「内容摘要 → SKILL.md 的 version」登记表。
@@ -71,7 +71,7 @@ var appBuilderSkillDigests = map[string]string{
 	//   - `references/abi.md` §3.7：随包资源改为"wasm 自定义段，运行期由宿主解析后常驻
 	//     内存"，可见性/直出规则同步；`ASSET_EXISTS` 的含义由"抽取时目标已存在"改成
 	//     "同一个包内路径在自定义段里出现了两次"（平台直接拒，不再静默取第一个）；
-	//   - `references/publishing.md` §3：`picoaide.app.json` 的落点改为"随资源集一起
+	//   - `references/publishing.md` §3：`zeokeel.app.json` 的落点改为"随资源集一起
 	//     进内存"；
 	//   - `scripts/README.md`：打包脚本产出物的去向改为内存资源集。
 	//
@@ -104,7 +104,7 @@ var appBuilderSkillDigests = map[string]string{
 	//   ① `references/limits.md`：删掉服务端宿主 AI / 匿名限流 / 换票 / 应用会话 /
 	//      员工浏览器表单的数值行，新增 §21.2 的 AI 桥形状（64 条 / 单条 16 KiB）；
 	//   ② `references/imports.md`：导入面说明里的宿主能力清单不再含 AI（`db.* / log /
-	//      assets.read`），来源是 `cmd/picoaide-wasm-imports-gen` 的重生成；
+	//      assets.read`），来源是 `cmd/zeokeel-wasm-imports-gen` 的重生成；
 	//   ③ `references/app-config.md`：`app_id` 的措辞不再写"域名标签 `<app_id>.<应用基域>`"
 	//      （应用只在客户端内以 `<渠道 app 源 scheme>://<app_id>` 打开）。
 	// 为什么必须提版本：交付给员工的手册字节变了，已安装的客户端靠 version 判「有更新」
@@ -156,7 +156,7 @@ var appBuilderSkillDigests = map[string]string{
 	// 2.5.0 = **作者声明敏感列**（`sensitive_columns`，§5.9 第 8 点后半，2026-09-21）：
 	// 默认脱敏是**列名启发式**，覆盖不到每个业务词汇 ⇒ 给作者一条声明通道（加法：
 	// 声明的列一定脱敏，启发式照旧）。两处生成物随之变：
-	//   - `references/app-config.md`：`picoaide.app.json` 的字段表多一行
+	//   - `references/app-config.md`：`zeokeel.app.json` 的字段表多一行
 	//     `sensitive_columns`（去重/上限/缺席即不参与的口径都写在字段提示里）；
 	//   - `references/limits.md`：新增两条上限（声明条目数 100、单条列名 64 字节）。
 	// 为什么必须提版本：这两份都是随镜像下发给员工的手册，已安装的客户端靠 version 判
@@ -307,7 +307,7 @@ var appBuilderSkillDigests = map[string]string{
 	// 2.12.0 = **打包器与技能源码目录解耦**（W4）：`scripts/pack-assets.mjs` 不再是技能源树里的
 	// 文件，唯一实现搬到中性位置 `server/demoapps/scripts/pack-assets.mjs`（演示应用的打包器与
 	// 它必须是同一份实现），构建镜像时由 Dockerfile 从那**同一个源**注入回
-	// `/opt/picoaide/skills/app-builder/scripts/pack-assets.mjs`。
+	// `/opt/zeokeel/skills/app-builder/scripts/pack-assets.mjs`。
 	//   - `SKILL.md` / `references/abi.md` / `references/publishing.md` / `scripts/README.md`：
 	//     写明"在**已安装的技能目录**里路径仍是 `scripts/pack-assets.mjs`，平台仓库里的唯一源在
 	//     `server/demoapps/scripts/`"（否则读者在仓库里按旧路径找文件会落空，或有人"修"回一份副本）；

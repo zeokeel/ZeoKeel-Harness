@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestSkillArchiveForReviewRejectsTraversalVersion(P3-4,审计 2026-09-13):

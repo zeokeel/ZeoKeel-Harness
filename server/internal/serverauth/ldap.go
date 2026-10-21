@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-ldap/ldap/v3"
 
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // ldapTimeout bounds every LDAP connection (C-7): connect, bind and search.

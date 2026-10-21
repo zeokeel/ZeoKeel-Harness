@@ -7,8 +7,8 @@
  * 而真正的原因在「系统设置 → 隐私与安全性 → 麦克风」里（或者是根本没点过允许）。
  * 只靠渲染层无法区分这两种情形（设备列表同样为空），所以状态必须由**宿主**给出：
  *
- *   · `GET  /api/pico/voice/mic`          —— 只读：平台 + TCC 状态（渲染层据此决定文案与按钮）
- *   · `POST /api/pico/voice/mic/request`  —— 触发系统授权（macOS `askForMediaAccess`；
+ *   · `GET  /api/zeokeel/voice/mic`          —— 只读：平台 + TCC 状态（渲染层据此决定文案与按钮）
+ *   · `POST /api/zeokeel/voice/mic/request`  —— 触发系统授权（macOS `askForMediaAccess`；
  *                                            其它平台没有"申请"这一步，直接回当前状态）
  *
  * 安全口径：GET 不改变任何状态（只报一枚枚举值），与既有只读本机路由同规格；
@@ -22,9 +22,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { acceptWriteProof, type WriteProofDeps } from './write-proof.ts'
 
 /** 只读状态路由（渲染层轮询/读取）。 */
-export const VOICE_MIC_STATUS_PATH = '/api/pico/voice/mic'
+export const VOICE_MIC_STATUS_PATH = '/api/zeokeel/voice/mic'
 /** 申请系统授权（macOS 弹 TCC 对话框；其它平台为无副作用的读回）。 */
-export const VOICE_MIC_REQUEST_PATH = '/api/pico/voice/mic/request'
+export const VOICE_MIC_REQUEST_PATH = '/api/zeokeel/voice/mic/request'
 
 /** macOS TCC 对麦克风的四种取值 + 非 macOS 的"不适用"。 */
 export type VoiceMicPermission =

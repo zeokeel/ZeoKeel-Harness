@@ -206,7 +206,7 @@ P2/P3 还包括：审计写入 best-effort 且 94 处调用点全部丢弃错误
 ### 3.7 构建/发布/文档（K 路 3 条 P1）
 
 - **K-01**：R2 上传后**不校验大小/哈希**（只断言对象存在）⇒ 假 aws 把对象截断到 10 字节仍 EXIT=0 并写出指向损坏对象的 `latest.json`（与 2026-09-22 现场"宣告 522MB / 实际可读 383MB"同形）。
-- **K-02**：同机多渠道德镜像 **tag 覆盖零防护零文档**（所有渠道共用 `picoaide-harness-server:v<ver>`，而部署文档的升级步骤正是踩坑序列）。
+- **K-02**：同机多渠道德镜像 **tag 覆盖零防护零文档**（所有渠道共用 `zeokeel-harness-server:v<ver>`，而部署文档的升级步骤正是踩坑序列）。
 - **K-03**：README 中英两份的下载指引指向**不存在的 Release 资产**（客户端已随镜像分发，官网口径才是对的）。
 
 ## 4. 修复计划与状态
@@ -297,10 +297,10 @@ PostgreSQL 探针统一使用容器 `pg-test`（`postgres:postgres@127.0.0.1:543
 - **第二轮唯一的 P0 = MIG-1**：`migrations-pg/0039` 假设 `usage` 已是分区表，而 v2.4.0 旧库的 `0004` 被原地重写成分区版、`migrate.go` 只记版本号不校验和 ⇒ 升级时 `ERROR: "usage" is not partitioned` → 回滚 + 版本不落库 + `log.Fatalf` ⇒ **启动崩溃循环**。修法 `accce75cc5`：原地转换普通表 + 逐行迁移 + fail-loud 自检 + 用真实 v2.4.0 载荷做回归（变异 8/8 红）。同批修掉 MIG-2（P1）：`0054/0055` 同名技能回填静默丢组织 release 后 DROP 源表 ⇒ 改为确定性归并 + DROP 前逐行比对 fail-loud。
 - **用户现场报障的 P1 确认并修复**（`0b50e83a54`）：客户端市场页把组织共享技能合并进列表却仍打**市场命名空间**接口 ⇒ 20 次 404。该条**首轮审计未发现**（11 份子报告 + 3 份复审 + 6 份重构报告全文检索均无此条）；结构性原因是分区把"服务端市场面"与"webadmin 面"切开，且首轮 webadmin 判据里没有"每行动作的命名空间是否与 `channel` 一致"。二轮起把**跨面拼接**列为固定判据（见 §7.2）。
 - **技能库两条 P1**（`4f49f31237`）：①随包插件开机同步是唯一无闸门的写者，会静默整树覆盖用户同名技能（用户文件被删、正文被换、还被标成商店来源）；②市场 × 插件同名双向静默覆盖 + provenance 归属与实际内容不一致。修法：插件侧新增来源闸门（渠道相同按 `x-version` 更新；其它商店渠道 ⇒ `SKILL_CHANNEL_CONFLICT`；无溯源/未知 ⇒ `SKILL_LOCAL_CONTENT`），安装侧渠道互斥需显式 `?overwrite=1`。
-- **闸门带来的升级余波，用"可验证同一性"而非启发式收口**（`920c62f02a`）：A9 写溯源不在任何已发布 tag 里 ⇒ 现场存在"旧版插件同步落下、但目录没有 `.picoaide` 溯源"的历史副本，会被新闸门按用户内容拒收（当时无碍，但将来插件升 `x-version` 时不会自动更新）。判据取**逐字同一性**：条目集合逐项相同（文件与目录都算）+ 每个普通文件字节逐字相同 + 全程无符号链接/FIFO/读取失败 ⇒ 判定为随包技能的未溯源副本，**换入之前**补写 `channel:'plugin'` 溯源并报 `adopted`；写失败 ⇒ `refused` + `SKILL_ADOPT_FAILED`（只回收本次可能建出的空 `.picoaide/`，绝不递归删），不存在"内容已换、溯源没写"。渠道互斥优先于同一性（内容相同但溯源是 market/org/builtin 仍拒）。落点四态可区分：`adopted` / `synced` / `unchanged` / `refused`（均点名技能与目录）。**明确不加 mtime/大小判据**：大小是字节比较的推论，mtime 在"安装包解包 / 旧同步写入 / `cp -a`"三条真实链路上不可比，只会误拒真正的历史副本（属"看起来更严、实际更不可靠"）。
+- **闸门带来的升级余波，用"可验证同一性"而非启发式收口**（`920c62f02a`）：A9 写溯源不在任何已发布 tag 里 ⇒ 现场存在"旧版插件同步落下、但目录没有 `.zeokeel` 溯源"的历史副本，会被新闸门按用户内容拒收（当时无碍，但将来插件升 `x-version` 时不会自动更新）。判据取**逐字同一性**：条目集合逐项相同（文件与目录都算）+ 每个普通文件字节逐字相同 + 全程无符号链接/FIFO/读取失败 ⇒ 判定为随包技能的未溯源副本，**换入之前**补写 `channel:'plugin'` 溯源并报 `adopted`；写失败 ⇒ `refused` + `SKILL_ADOPT_FAILED`（只回收本次可能建出的空 `.zeokeel/`，绝不递归删），不存在"内容已换、溯源没写"。渠道互斥优先于同一性（内容相同但溯源是 market/org/builtin 仍拒）。落点四态可区分：`adopted` / `synced` / `unchanged` / `refused`（均点名技能与目录）。**明确不加 mtime/大小判据**：大小是字节比较的推论，mtime 在"安装包解包 / 旧同步写入 / `cp -a`"三条真实链路上不可比，只会误拒真正的历史副本（属"看起来更严、实际更不可靠"）。
 - **对上面两个技能库提交的独立对抗性复审结论**（`temp/verify-skill-r3/VERIFY.md`；基线钉字节：`skills-sync.js` sha256 `7d604244…`、`skill-install.ts` 快照 `221c9038…`；两提交**不在 `origin/master`、不在任何 tag** ⇒ 未发布）：
   - `4f49f31237`（来源闸门 + 安装侧渠道互斥）⇒ **成立**。24 组对抗性用例逐条实测：市场/组织/内置同名 ⇒ `refused`+`SKILL_CHANNEL_CONFLICT` 且内容与溯源逐字未变；用户手写 ⇒ `SKILL_LOCAL_CONTENT` 且用户文件保留；`appId` 不符 / 渠道未知（`PLUGIN`、`" plugin"`、西里尔同形字）/ 标记 JSON 坏 / 8–32MiB 垃圾标记 ⇒ `refused` 且不采纳；`SKILL.md` 或落点是符号链接（含悬空、指向库外）⇒ `refused` 且**库外零写入**；同渠道更新**不需**多余确认。变异：拆闸门 17/20 红、删逐字节比较 1 红、采纳失败改静默 1 红、渠道互斥恒假 4 红。
-  - `920c62f02a`（内容同一性采纳）⇒ **部分成立**：静态判据与目标状态全部相符，但"不存在中间态"的绝对表述被三个口子推翻，均已另派修复：**F1（P2）判定→写溯源之间的 TOCTOU**（复现：比较期间写入的用户文件被盖上 `channel:'plugin'`，下一轮随包升版**被静默删除**）；**F2（P3）标记读取无类型/体积闸门**（`.picoaide/release.json` 是 FIFO 时启动同步挂起 12s 不返回、指向大文件则整份读入内存）；**F3（P3）与安装器不互斥**（并发下仍能产出"内容是插件版 + 溯源是 market"这一 P1-2 归属错，**且该终态不会自愈**）。另有 F4（渠道常量两份无对拍门禁）、F5（面板按键看 409 而不看 `error.code`）。
+  - `920c62f02a`（内容同一性采纳）⇒ **部分成立**：静态判据与目标状态全部相符，但"不存在中间态"的绝对表述被三个口子推翻，均已另派修复：**F1（P2）判定→写溯源之间的 TOCTOU**（复现：比较期间写入的用户文件被盖上 `channel:'plugin'`，下一轮随包升版**被静默删除**）；**F2（P3）标记读取无类型/体积闸门**（`.zeokeel/release.json` 是 FIFO 时启动同步挂起 12s 不返回、指向大文件则整份读入内存）；**F3（P3）与安装器不互斥**（并发下仍能产出"内容是插件版 + 溯源是 market"这一 P1-2 归属错，**且该终态不会自愈**）。另有 F4（渠道常量两份无对拍门禁）、F5（面板按键看 409 而不看 `error.code`）。
   - **认账代价**（须随下次发布说明披露）：一份**逐字未改动**的用户自制副本会被判定为随包技能并采纳（该目录里不存在任何用户创作的字节；改一个字节或加一个文件即不再成立）。
 
 **用户点名五问的结论**（W4，11 个探针；全文见 `temp/round2-2026-09-23/W4-skill-roots.md`）：
@@ -376,7 +376,7 @@ PostgreSQL 探针统一使用容器 `pg-test`（`postgres:postgres@127.0.0.1:543
 | **CI 泳道三条取舍** | **接受** | ①C-4 的 fail-loud 对本地浅克隆同样生效（EXIT=3），逃生门是显式 `--no-commit-range`；②`--concurrency`/`--full-output` 刻意放行（不减覆盖面、只影响日志）；③`ci-channel-transfer.sh` 刻意不算"对外上传"（R2 上只是 run 级临时中转前缀、由 release job 的 `always()` 销毁），否则三个桌面打包 job 都要加发布说明检查。 |
 | **C-5/C-6/C-8/C-9（P2/P3）** | **已修 + 已独立复验** | C-5（域名守卫扫描面「已跟踪 + 未跟踪未忽略」+ 空扫描面 fail-loud）`898fecb98e`；C-6（迁移区间守卫零文档/缺 `AGENTS.md` fail-loud）`1305dcf450`；C-8（编排器"软降级"进 CI 摘要，有界）+ C-1/C-2（`needs` 成环/打错不再静默丢包、调度表自检）`8844d42963`；C-9（变异守卫的输入/扫描面判据）+ 跨守卫合成正负例 `c6be2b42bd`。复验 `temp/verify-guards-final/VERIFY.md`：**5/5 成立**，且修复前形态可逐字复现（旧版成环 `EXIT=0` + "7 个任务:7 通过、0 失败、0 跳过"）。 |
  + 分支保护必需评审人数为 0 | **需用户在 GitHub 侧处置（本会话不可改仓库设置）** | 现状：同一个提交既能往 `ALLOWED_DOMAINS` 加白名单条目、又能让守卫放行，且无需任何人工评审 ⇒ 铁律 0 的第一道防线完全依赖"提交者自觉"。代码侧可做的缓解（每条白名单必须带 owner+理由、白名单变更与守卫变更不得同提交）无法真正阻止有写权限者；**建议**给 `scripts/check-no-real-domains.mjs`（及其白名单）配 CODEOWNERS，并把 `required_approving_review_count` 提到 ≥1。 |
-| **P-1** 打包必需清单"单条删除＝同时删断言" | **已修 + 已独立复验**（`51e37828e0`，续 `17652dad3e`/`5ce4d18ec3`） | 反向 oracle（归档里每个 `@picoaide/*/lib/**` 真实 specifier 都必须被清单覆盖）+ 每包条数棘轮 ⇒ 删条目必红（复验实测：删一条仍需 **24 failed**）；后续把"暂存层接线"判据升级为**能力级**（不注入替身、断言 builder 那一刻 `--config.directories.app` 指向真实暂存目录）⇒ 审计原两种注入形态修前 `17 passed`/`34 passed`、修后必红。 |
+| **P-1** 打包必需清单"单条删除＝同时删断言" | **已修 + 已独立复验**（`51e37828e0`，续 `17652dad3e`/`5ce4d18ec3`） | 反向 oracle（归档里每个 `@zeokeel/*/lib/**` 真实 specifier 都必须被清单覆盖）+ 每包条数棘轮 ⇒ 删条目必红（复验实测：删一条仍需 **24 failed**）；后续把"暂存层接线"判据升级为**能力级**（不注入替身、断言 builder 那一刻 `--config.directories.app` 指向真实暂存目录）⇒ 审计原两种注入形态修前 `17 passed`/`34 passed`、修后必红。 |
 | **W-1~W-5**（WASM 门禁：树移出扫描面/三方对拍改名退化为 PENDING/桶上限来自 env/组 3 与组 6 从不执行） | **已修 + 已独立复验 + 已接线** | 判定层 `a910bf9f19`（删除面清单驱动 + 包清单双向断言 + 旧能力结构指纹；桶上限真源移入仓内 JSON，env 只能收紧；判定脚本三段退出码；全组 SKIP 即失败）；CI 接线 `70360f5a33`（`WASM_GATE_EXPECT_HEAD=${{ github.sha }}` 接进 gate 的两处入口 + `check-workflows` [SK-12]③ + `verify-ci-scripts` 静态/动态双判据）⇒ "有能力、没接线"这条形态闭合。 |
 | 组 8 载体措辞扫描面 | **已收口**（`bf82c7d03e`） | 扫描面 4 根/148 文件 → 6 根/877 文件（含 `packages/**` 源码，反向保留 vendored `memory-evolve/lib`），当场红出 6 处"应用由内置浏览器承载"的错误模型并逐条改注释（**零豁免**）；缩面两条独立判据（登记值 + `package.json#workspaces`）缺任一即 exit 2。 |
 | `check:wasm-channels` 是否"声明了却从不运行" | **核实为误判（无孤儿守卫）** | 它由 `verify-wasm-client-only.sh:504-513` 间接调用，而 `check:wasm-client-only` 在编排器 `GUARDS` 内。逐条核对 package.json 的 `check:*` ↔ 编排器后：**无孤儿守卫**。（行号勘误：第四轮 R4-D 复核发现原文写的 `:361` 在任何提交上都不成立，结论不受影响。） |
@@ -394,7 +394,7 @@ PostgreSQL 探针统一使用容器 `pg-test`（`postgres:postgres@127.0.0.1:543
 
 ### 7.36 Normify 架构结构库：二轮增量刷新完成（结构库本身不入库）
 
-- **形状**：1544 模块（312 容器 + 1232 叶子；+3 为补"新源文件无模块认领"的覆盖缺口）、3551 条唯一 API 键、2536 条 source 证据、1165 条依赖边、312 层渲染数据（容器 100% 覆盖）；产物 `tree.json`/`outline.md`/`api-index.json`/`receipt.json`/`picoaide-architecture.html`（5.49 MB）。
+- **形状**：1544 模块（312 容器 + 1232 叶子；+3 为补"新源文件无模块认领"的覆盖缺口）、3551 条唯一 API 键、2536 条 source 证据、1165 条依赖边、312 层渲染数据（容器 100% 覆盖）；产物 `tree.json`/`outline.md`/`api-index.json`/`receipt.json`/`zeokeel-architecture.html`（5.49 MB）。
 - **自证**：独立校验器 `tools/verify-tree.mjs` **problems 336 → 0**；`repair-plan.mjs` 0 悬空边/0 重复键/0 缺 apis/0 缺 layout；`normify_validate` **408 error → 0 error**（18 条 warning 与任务书"已知可接受"完全吻合，且数字未变）；行号越界 7 → 0；build ✅ render ✅。变更记录 `2026-09-23-incremental-refresh-round2`（**verified**，revision.after `7a82c2db81`，create 3 / modify 480 / delete 0）。
 - **做法上的一处关键修正**：没有把 `normify_sync` 的 `affected` 当重建清单 —— 那是"文件→模块"映射的**上界**（含大量只改测试文件、或生成期已读到新内容而无需动的模块）。改为独立只读脚本对全部模块复算指纹并与本区间真改动文件比对，得到 **334 个真漂移模块**再重建；16 个偏粗叶子与 859 条未锚定箭头维持原样（非本轮引入）。
 - **认账的不确定性**：①仓库有并发写者，`docs/AUDIT-*` 收尾时仍在被追加 ⇒ 该模块会再次显示 fingerprint-drift（预期，可 `normify_module_refresh` 消掉）；②`verify-packaged-runtime.ts` 当时有未提交改动，4 个 runtime-verify 叶子的行段按当时 HEAD 给出，落地后需再刷一轮；③`update-download.ts` 的两条修复当时只在 `origin/master` 而不在工作树。
@@ -807,7 +807,7 @@ OIDC 流程桶把"自身在途配额满"的 429 也计入失败预算（NAT 出�
 **十条 P1（第八轮 8 条 + 修复复审 2 条）**
 
 1. **连接器 401 续期被自己的重注册掐断**（R8-B，P1，**确定性复现**）：续期成功后 `onRefreshed` 发
-   `pico/connector-credentials-changed` ⇒ 对整条连接器**全量重注册** ⇒ `retire()` 关掉**正在重试的那条活传输**，
+   `zeokeel/connector-credentials-changed` ⇒ 对整条连接器**全量重注册** ⇒ `retire()` 关掉**正在重试的那条活传输**，
    而 SDK 只在同一条传输上重试一次 ⇒ 用户这次调用以 `ERR:Connection closed` 失败（探针实测 dispose 落在 t+21ms / t+36ms，
    两种端点形态都中；多 server 连接器一次续期 dispose 两条活传输）。**续期本身完全正确**（1 grant、reuse=0）—— 死的只是这次调用。
    **为什么现有回归看不见**：`audit-r7b-production-shape.spec.ts` 与 `openClient()` 都是**测试自建传输**，harness 的假 fiber
@@ -1006,7 +1006,7 @@ tag `v2.8.2-beta.1` 的 Release job 在「上传版本资产」失败：`aws: [E
 2. **ANSI 让判定行全灭（主控在集成期从真实 CI 日志发现，两份复审都没列）**：PR #146 的失败 job 里编排器打印「本次输出里**一条锚定判定行都没有匹配到**」，而同一份输出里确实有 ` FAIL  tests/…` —— CI 的 vitest 输出带 ANSI（`\x1b[41m\x1b[1m FAIL \x1b[22m\x1b[49m`），而锚定判据要求**行首**（仅空白之后）就是判定词；本地无 TTY ⇒ 无 ANSI ⇒ **判据"本地绿、CI 瞎"**，且它直接让每一次 CI 失败都变得不可诊断。
 3. **服务端把窗口关闭的代价转成了秒级停顿（V2）**：把补账移进临界区后，`usage`（父表）的 AEX 从 57ms 涨到 **2.5s（空载逐语句 @2M 行）/ 10.9–22.0s（有并发写入）**，**并发计量 `INSERT INTO usage` 被挡同一时长**（PG 慢语句日志坐实 18866ms，`errs=0` ⇒ 不是 503 而是整段停顿）；且 20s 是**每语句**预算而补账已吃到 94%（实测持锁 22.02s > 20s）⇒ 一旦超时被归类为"延后"，该月**永久静默不回收**；`ownerChanged := assertDetachedFromUsage(...) != nil` 把"复检自身报错"当成"归属已变"⇒ 真失败被当良性吞掉。
 
-**由 CI 实证暴露的既有真 bug（P1，非第十轮回归）**：`2c7088aabd` 的**同一 commit 两次 CI 一红一绿**，失败用例是第九轮的 R9-D-1（"重试带旧声明头 ⇒ 第二次 401 ⇒ 现场每次失败再烧一枚 refresh grant"）。G4 泳道用 `BASE`/`HEAD` 双语料对拍证明**两棵树同因同率（整套件 3 路并发下各 1/21 ≈ 4.8%）**、竞态源头**逐字节相同** ⇒ 既有竞态，被本轮的 CI 实证**暴露**（本轮对 connectors 的改动在该路径上行为等价）。机制：活头记录（围栏装进实例 `_requestInit.headers` 的那个对象）的原地更新**只从** `pico/connector-credentials-changed` 监听器进入，而它是 `void handOffLiveHeaders(...)` fire-and-forget、函数体第一件事是 `await store.readCredential(def.id)`；pinned SDK 的 401 自愈在续期 promise 落地后 **3–4ms** 就重读该记录（`_send` 递归里重新 `await this._commonHeaders()`）⇒ **这次磁盘读只要被推迟 ≥1ms，重试就重放被冻死的头**（判别性探针：给交接注入 0ms ⇒ 1×401；**≥1ms ⇒ 2×401 且实测重试头为旧值**）。**关键否证**：整体变慢**不会**翻红（pbkdf2 占满 libuv 线程池把交接推迟 319–1866ms 仍 1×401，因为重试排在同一个 FIFO 队列之后）⇒ 这是"**只推迟交接侧**"的差分停顿型竞态，也正是"本地怎么压都绿、CI 偶红"的原因；窗口（3–4ms）比一次 HTTP 路由往返回还窄，**测试侧确定性等待够不着它** ⇒ 只能修产品侧。
+**由 CI 实证暴露的既有真 bug（P1，非第十轮回归）**：`2c7088aabd` 的**同一 commit 两次 CI 一红一绿**，失败用例是第九轮的 R9-D-1（"重试带旧声明头 ⇒ 第二次 401 ⇒ 现场每次失败再烧一枚 refresh grant"）。G4 泳道用 `BASE`/`HEAD` 双语料对拍证明**两棵树同因同率（整套件 3 路并发下各 1/21 ≈ 4.8%）**、竞态源头**逐字节相同** ⇒ 既有竞态，被本轮的 CI 实证**暴露**（本轮对 connectors 的改动在该路径上行为等价）。机制：活头记录（围栏装进实例 `_requestInit.headers` 的那个对象）的原地更新**只从** `zeokeel/connector-credentials-changed` 监听器进入，而它是 `void handOffLiveHeaders(...)` fire-and-forget、函数体第一件事是 `await store.readCredential(def.id)`；pinned SDK 的 401 自愈在续期 promise 落地后 **3–4ms** 就重读该记录（`_send` 递归里重新 `await this._commonHeaders()`）⇒ **这次磁盘读只要被推迟 ≥1ms，重试就重放被冻死的头**（判别性探针：给交接注入 0ms ⇒ 1×401；**≥1ms ⇒ 2×401 且实测重试头为旧值**）。**关键否证**：整体变慢**不会**翻红（pbkdf2 占满 libuv 线程池把交接推迟 319–1866ms 仍 1×401，因为重试排在同一个 FIFO 队列之后）⇒ 这是"**只推迟交接侧**"的差分停顿型竞态，也正是"本地怎么压都绿、CI 偶红"的原因；窗口（3–4ms）比一次 HTTP 路由往返回还窄，**测试侧确定性等待够不着它** ⇒ 只能修产品侧。
 
 **第二波修复（G1–G4，与第一波同一分支同一 PR）**
 
@@ -1129,7 +1129,7 @@ tag `v2.8.2-beta.1` 的 Release job 在「上传版本资产」失败：`aws: [E
 
 **同轮独立复核（修复方不得自证）**：**provider PUT 原子化（`0dd74681b7`）⇒ 总判"修复成立"**（`temp/verify-put-r3/VERIFY.md`，358 行：事务边界 `Begin→UpdateGatewayProviderTx→SyncProviderModelsTx→tx 读快照→AuditLogTx→Commit`、15 条 return 逐条核对、事务开始后 5 条错误分支**全部回滚**、事务内零出网；契约面动作名与明细串逐字未变、审计链可混排；新用例在父提交上**必红**且红在"provider 行 + 密钥已落库"；13 条自写边界用例修复态 13/13 绿、其中 4 条在父提交上红；包级 `llmgateway` ok 369.5s、`serverstore` ok 202.1s）。技能库两提交 ⇒ `4f49f31237` 成立、`920c62f02a` 部分成立（三个口子已派修）；provider PUT 原子化 ⇒ 独立复审进行中；connectors 死授权 ⇒ 用**审计方自己的探针**复跑得 `VERDICT: not reproduced`（修复前 REPRODUCED）。
 
-**已落地的修复（第三轮窗口内）**：`7e7ac1c27d`（建流失败不再遗留回调服务器与定时器）、`4b8d808fa9`（设备码定义缺验证地址 fail-loud）、`28e2062e38`（死授权按账号记账）、`8f8e88c7aa`（真实适配器 `stop` 透传）、`eb981016cb`（cron 封笔）、`f4a9a7774b`（市场归档端点）、`0dd74681b7`（provider PUT 事务化）、`1305dcf450`（迁移区间守卫 fail-loud）、`d6a891f1b4`/`30b5c85c82`/`ca5a7c3e56`（文档与数字真值 + 新守卫）、`920c62f02a`（内容同一性采纳）、`4f49f31237`（随包同步闸门 + 渠道互斥）、`2f6eda18a1`（4 条根守卫 fail-loud：空扫描面/缺失输入不再静默通过；含 `check-patch-pin` 那条**从未执行过**的断言）、`322be5186d`（integration-tests 两条不可达断言改为有判别力 + 缺环境显式 `exit 77`）、`812f539923`（集成测试判据自检 + 假网关正反例接入门禁）、`d73a421bfe`（编排器 GUARDS 登记 `check:integration-tests`）、`8f07fcd1ff`（账户浮层补齐 ARIA 契约，一次 Esc 只关一层）、`aea28fbae1`（中等守卫三条假绿：零字节补丁/丢整段/glitchtip 自测不驱动 ssh 与容器判定；并自行发现并修掉「容器不可达只打 UNKNOWN 却 exit 0」这条同族 fail-open）、`ec0121f543`（webadmin 审计 sink 白名单补 `AuditLogTx`，修 provider PUT 事务化引入的跨面真红）、`579e8e6bc5`/`579b785923`/`89026689ba`/`ac9e7e2c60`/`0027bfef2f`（**R3-A 的 A-2/A-1/A-11/A-10/A-6+A-7**：A-2 预检补归属校验、非归属人**404 且与 owner-only 读面逐字节同形**、不再继承/回显他人配置；A-1 枚举并收敛"宿主→guest 全部返回路径"到**唯一写出口**（源码级守卫钉住）+ 三层桥（≤帧原样 / `db.query` 按**编码后**字节丢尾行并标 `Truncated` / 其余结构化错误），生产者侧 `SQLMaxResultBytes` 8 MiB → **172032** 与帧预算同源；A-11 省略 `enabled` 即保持现值（顺带把"不存在"从静默/500 修成 404）；A-10 版本比较**把 `wasmapp/registry` 委托给唯一实现**（`util.CompareSemVer`）并按 SemVer §11 纠正（认账 `1.0.0-rc10 < 1.0.0-rc2` 的行为变更）；**注意口径（第四轮 R4-D-1 复核）**：这只收编了 registry 一个调用点 —— 全仓实测仍有 **6 份**版本先后实现（Go 4：`util`/`updatecheck`/`skillmanifest`/registry；TS 2：`enterprise/version-compare.ts`、`desktop/updates.ts`），其中客户端那份**就是被废弃的旧 tokenizer** ⇒ 双端结论分叉（`rc10` vs `rc2`：Go −1 / 客户端 +1，会把降级当升级）。已作为第四轮 P1 派修（共享语料 + 跨端对拍），详见 §7.38。A-6/A-7 口径统一为"**保证可交付 168 KiB**、1 MiB 只是原始字节帧上限"并让跨端对拍真钉两个数；8 变异全红、32 包 `go test` EXIT=0、客户端 24 文件/311 用例绿）、`a910bf9f19`（**WASM 门禁面 W-1~W-5**：删除面/扫描面按**清单 + 结构指纹**判定（树移出扫描面 ⇒ 红）、route-parity 缺一端 fail-loud、桶上限**真源移入仓内 JSON**（`BUDGET=999` 之类 env 不再能把红翻绿）、判定脚本三段退出码（前置缺失 = 2 而不是通过）、**全组 SKIP 即失败**；五条都在隔离副本复现「修前假绿 → 修后必红」，另补了 `tests/` 目录洞；**`corepack yarn check` 31/31、0 失败、0 跳过（334.6s）**；W-4/W-5 的 CI 接线按拍板未动 `.github`，已另行派工）、`51e37828e0`（**打包泳道 P-1**：`REQUIRED_PACKAGED_RUNTIME_ENTRIES` 改为**反向 oracle**（从包声明的入口面 + 产物里真实的 `@picoaide/*` specifier 推导期望面，不看清单）+ **每包计数棘轮**（不读产物 ⇒ CI 干净检出同样成立）；并**顺带抓出并补齐 8 条此前不在任何一张表里的真实缺口** —— 其中 `dsh-browser/lib/guard.js` 缺失会导致打包版**启动期 `ERR_MODULE_NOT_FOUND`**；删一条清单条目的变异：修复前 `78 passed / EXIT=0`（假绿）→ 修复后 `24 failed / EXIT=1`；真 asar 的 afterPack 路径同样由红变绿；包级 97 文件/1106 用例 EXIT=0）、`048cc554de`/`ef4e1ba22c`（**W-4/W-5 接线**：`go test -json` 落盘 + `check-go-test-json.mjs --scope internal/wasmapp,internal/router --require <三条>`，与 Gate job 的 `WASM_GATE_REQUIRE_COVERED_PLATFORM=1 … --groups 6`；新增 `[SK-12]` 十项静态判据（含"锚点用文件名 `ci.yml` 而非内容"——内容锚点会随接线一起消失）+ `verify-ci-scripts` §1d 行为回归（范围外 skip 不影响结论、范围内 skip 必红、少一条关键用例必红）；10 个变异全红。**关键判断：W-4 不能按"整份报告零用例级 skip"接** —— 全仓 83 处 `t.Skip*`，其中 `serverstore` 的"本机时区无夏令时"在 UTC runner 上**必然 skip**，原样接会每次必红（假红的下场通常是判据被关掉），故改为"同一条判据 + 显式范围"；`--scope` 缺省行为不变（组 3 不受影响）且前缀不得带尾斜杠（`internal/router/` 会漏掉根包 65 个事件）。实测 scoped `go test` 4m29s EXIT=0、6454 事件、用例级 pass 1457；全量 `yarn check` **31/31、0 失败、0 跳过（342.9s）**）、`642858f92e`/`304c8f540b`/`7545fb0ac5`（**CI 门禁面 6 条**：docs-only 也跑根守卫且新增**结构上不可跳过**的 `gate-guards` job、gate 取全历史 + 守卫侧 base 解析重写（浅克隆 ⇒ EXIT=3 而不是假绿）、新增 `[SK-8]`/`[SK-9]`/`[SK-10]`/`[SK-11]` 静态策略、两道策展发布说明检查真跑；15 条注入中 **14 条在修复前是 GREEN（真漏）**，修复后全 RED；全量 `yarn check` **31/31 EXIT=0**）、`cd1f8971c4`（cron B-4/B-5：空名判据收敛到唯一真源 + DST 缺口可观测且**不改触发时刻**）、`fa49eb7f5b`（**独立复审在用户点名区打出的三个缺口全部收口**：随包同步与安装器共用 per-name 锁、采纳写溯源后复检同一性、标记读取加类型/体积闸门）。
+**已落地的修复（第三轮窗口内）**：`7e7ac1c27d`（建流失败不再遗留回调服务器与定时器）、`4b8d808fa9`（设备码定义缺验证地址 fail-loud）、`28e2062e38`（死授权按账号记账）、`8f8e88c7aa`（真实适配器 `stop` 透传）、`eb981016cb`（cron 封笔）、`f4a9a7774b`（市场归档端点）、`0dd74681b7`（provider PUT 事务化）、`1305dcf450`（迁移区间守卫 fail-loud）、`d6a891f1b4`/`30b5c85c82`/`ca5a7c3e56`（文档与数字真值 + 新守卫）、`920c62f02a`（内容同一性采纳）、`4f49f31237`（随包同步闸门 + 渠道互斥）、`2f6eda18a1`（4 条根守卫 fail-loud：空扫描面/缺失输入不再静默通过；含 `check-patch-pin` 那条**从未执行过**的断言）、`322be5186d`（integration-tests 两条不可达断言改为有判别力 + 缺环境显式 `exit 77`）、`812f539923`（集成测试判据自检 + 假网关正反例接入门禁）、`d73a421bfe`（编排器 GUARDS 登记 `check:integration-tests`）、`8f07fcd1ff`（账户浮层补齐 ARIA 契约，一次 Esc 只关一层）、`aea28fbae1`（中等守卫三条假绿：零字节补丁/丢整段/glitchtip 自测不驱动 ssh 与容器判定；并自行发现并修掉「容器不可达只打 UNKNOWN 却 exit 0」这条同族 fail-open）、`ec0121f543`（webadmin 审计 sink 白名单补 `AuditLogTx`，修 provider PUT 事务化引入的跨面真红）、`579e8e6bc5`/`579b785923`/`89026689ba`/`ac9e7e2c60`/`0027bfef2f`（**R3-A 的 A-2/A-1/A-11/A-10/A-6+A-7**：A-2 预检补归属校验、非归属人**404 且与 owner-only 读面逐字节同形**、不再继承/回显他人配置；A-1 枚举并收敛"宿主→guest 全部返回路径"到**唯一写出口**（源码级守卫钉住）+ 三层桥（≤帧原样 / `db.query` 按**编码后**字节丢尾行并标 `Truncated` / 其余结构化错误），生产者侧 `SQLMaxResultBytes` 8 MiB → **172032** 与帧预算同源；A-11 省略 `enabled` 即保持现值（顺带把"不存在"从静默/500 修成 404）；A-10 版本比较**把 `wasmapp/registry` 委托给唯一实现**（`util.CompareSemVer`）并按 SemVer §11 纠正（认账 `1.0.0-rc10 < 1.0.0-rc2` 的行为变更）；**注意口径（第四轮 R4-D-1 复核）**：这只收编了 registry 一个调用点 —— 全仓实测仍有 **6 份**版本先后实现（Go 4：`util`/`updatecheck`/`skillmanifest`/registry；TS 2：`enterprise/version-compare.ts`、`desktop/updates.ts`），其中客户端那份**就是被废弃的旧 tokenizer** ⇒ 双端结论分叉（`rc10` vs `rc2`：Go −1 / 客户端 +1，会把降级当升级）。已作为第四轮 P1 派修（共享语料 + 跨端对拍），详见 §7.38。A-6/A-7 口径统一为"**保证可交付 168 KiB**、1 MiB 只是原始字节帧上限"并让跨端对拍真钉两个数；8 变异全红、32 包 `go test` EXIT=0、客户端 24 文件/311 用例绿）、`a910bf9f19`（**WASM 门禁面 W-1~W-5**：删除面/扫描面按**清单 + 结构指纹**判定（树移出扫描面 ⇒ 红）、route-parity 缺一端 fail-loud、桶上限**真源移入仓内 JSON**（`BUDGET=999` 之类 env 不再能把红翻绿）、判定脚本三段退出码（前置缺失 = 2 而不是通过）、**全组 SKIP 即失败**；五条都在隔离副本复现「修前假绿 → 修后必红」，另补了 `tests/` 目录洞；**`corepack yarn check` 31/31、0 失败、0 跳过（334.6s）**；W-4/W-5 的 CI 接线按拍板未动 `.github`，已另行派工）、`51e37828e0`（**打包泳道 P-1**：`REQUIRED_PACKAGED_RUNTIME_ENTRIES` 改为**反向 oracle**（从包声明的入口面 + 产物里真实的 `@zeokeel/*` specifier 推导期望面，不看清单）+ **每包计数棘轮**（不读产物 ⇒ CI 干净检出同样成立）；并**顺带抓出并补齐 8 条此前不在任何一张表里的真实缺口** —— 其中 `dsh-browser/lib/guard.js` 缺失会导致打包版**启动期 `ERR_MODULE_NOT_FOUND`**；删一条清单条目的变异：修复前 `78 passed / EXIT=0`（假绿）→ 修复后 `24 failed / EXIT=1`；真 asar 的 afterPack 路径同样由红变绿；包级 97 文件/1106 用例 EXIT=0）、`048cc554de`/`ef4e1ba22c`（**W-4/W-5 接线**：`go test -json` 落盘 + `check-go-test-json.mjs --scope internal/wasmapp,internal/router --require <三条>`，与 Gate job 的 `WASM_GATE_REQUIRE_COVERED_PLATFORM=1 … --groups 6`；新增 `[SK-12]` 十项静态判据（含"锚点用文件名 `ci.yml` 而非内容"——内容锚点会随接线一起消失）+ `verify-ci-scripts` §1d 行为回归（范围外 skip 不影响结论、范围内 skip 必红、少一条关键用例必红）；10 个变异全红。**关键判断：W-4 不能按"整份报告零用例级 skip"接** —— 全仓 83 处 `t.Skip*`，其中 `serverstore` 的"本机时区无夏令时"在 UTC runner 上**必然 skip**，原样接会每次必红（假红的下场通常是判据被关掉），故改为"同一条判据 + 显式范围"；`--scope` 缺省行为不变（组 3 不受影响）且前缀不得带尾斜杠（`internal/router/` 会漏掉根包 65 个事件）。实测 scoped `go test` 4m29s EXIT=0、6454 事件、用例级 pass 1457；全量 `yarn check` **31/31、0 失败、0 跳过（342.9s）**）、`642858f92e`/`304c8f540b`/`7545fb0ac5`（**CI 门禁面 6 条**：docs-only 也跑根守卫且新增**结构上不可跳过**的 `gate-guards` job、gate 取全历史 + 守卫侧 base 解析重写（浅克隆 ⇒ EXIT=3 而不是假绿）、新增 `[SK-8]`/`[SK-9]`/`[SK-10]`/`[SK-11]` 静态策略、两道策展发布说明检查真跑；15 条注入中 **14 条在修复前是 GREEN（真漏）**，修复后全 RED；全量 `yarn check` **31/31 EXIT=0**）、`cd1f8971c4`（cron B-4/B-5：空名判据收敛到唯一真源 + DST 缺口可观测且**不改触发时刻**）、`fa49eb7f5b`（**独立复审在用户点名区打出的三个缺口全部收口**：随包同步与安装器共用 per-name 锁、采纳写溯源后复检同一性、标记读取加类型/体积闸门）。
 
 **冻结态实测（两次：`ed30ce6baf` 与收口批末的 `52ea7fbf54`）**
 
@@ -1186,7 +1186,7 @@ tag `v2.8.2-beta.1` 的 Release job 在「上传版本资产」失败：`aws: [E
 1. **锚定物可被同 job 的仓内执行点改写（R13-D-01）**：载荷改写判据执行体**并 `git commit`** ⇒ `git show HEAD:` 与工作树**自洽**，`--restore` / `--require-clean` / 摘要登记**全部失效**；实测 Full gate **EXIT=0** 且打印**真凭据**（`planned=32 executed=32`），**一条测试没跑**。`HEAD != $GITHUB_SHA`，而全仓**没有判据比对这两个值**。
 2. **启动器可被替换（R13-D-02）**：**不碰 git、不改任何被跟踪文件**，只把假 `node` 目录写进 `$GITHUB_PATH`（写在 `.sh` 里 ⇒ YAML 静态判据看不见）⇒ 探针 / 编排器 / **凭据检查器**三次 `node` 调用全被替换，假 node 按 `--nonce-file` 自己回显凭据，`EXIT=0`、工作树干净。
 3. **判据的「定义版本」= 被审版本（R13-D-§8）**：`on: pull_request` 用 **PR merge ref 的 workflow 文件**；分支保护按 **(context 名, app_id=15368=GitHub Actions)** 匹配 ⇒ **保留 5 个 `name:`、把 job 体换成 `echo ok`**，5 个必需检查全绿而**仓内没有一条判据会红**。现状：`required_approving_review_count: 0`、`require_code_owner_reviews: false`、无 `CODEOWNERS`、`rulesets=[]`。
-4. **应用 AI 隐藏会话跨账号复用（B-P0-1 / E-P1-04）**：`app-ai-runner.ts:214` 的 `live` 与磁盘会话只按 `app:<app_id>` 建键（`wasm-apps-host/src/ai-chat.ts:60-62`），`main.ts:543` 进程级 provide 一次、**无 `pico/session-changed` 释放**；真 agent-loop 探针实测：A 账号用过某 app 的 AI → 登出 → B 账号登录 → B 对**同一 app_id** 发一轮，**请求体的对话消息逐字为 `[A 的 user 消息, A 的 assistant 回复, B 的 user 消息]`**；而"同意使用应用 AI"的授权本身是按账号的（`ai-authorization.ts:53` 的 `aiConsentKey = userId\0appId`）。反向：B 取消会 `dropAgent` 掉 A 的活体会话。
+4. **应用 AI 隐藏会话跨账号复用（B-P0-1 / E-P1-04）**：`app-ai-runner.ts:214` 的 `live` 与磁盘会话只按 `app:<app_id>` 建键（`wasm-apps-host/src/ai-chat.ts:60-62`），`main.ts:543` 进程级 provide 一次、**无 `zeokeel/session-changed` 释放**；真 agent-loop 探针实测：A 账号用过某 app 的 AI → 登出 → B 账号登录 → B 对**同一 app_id** 发一轮，**请求体的对话消息逐字为 `[A 的 user 消息, A 的 assistant 回复, B 的 user 消息]`**；而"同意使用应用 AI"的授权本身是按账号的（`ai-authorization.ts:53` 的 `aiConsentKey = userId\0appId`）。反向：B 取消会 `dropAgent` 掉 A 的活体会话。
 
 5. **integration-tests 的运行期判据可被整体掏空而门禁 EXIT=0（R13-F-01）**：`integration-tests/dex/dex-sso-test.py` 与 `integration-tests/openldap/ldap-rbac-brand-test.py` 的运行期判据（**14/17 条**）换成恒真 `check(name, [], '')` 后，`--self-test` 仍报 **24/24、29/29**，`scripts/check-integration-tests.mjs` 照打「2 个契约脚本判据自检通过」且 **`REAL_GATE_EXIT=0`**。根因：第 4–6 轮把「判据表 + 逐条正负例 + 运行期逐条引用 + 端到端变异」这套纪律**只加在 `electron-shots` 一条腿**上（该面共 **3 条腿 / 26 条运行期判据**）。⇒ 又一次「**同族只收口一条**」，且这次收口的是**判据纪律本身**。另：该端到端面在 CI 语境下 **0 执行**（`ci.yml` 对 integration/dex/openldap 的命中数为 0），因此它连"跑过"都不成立。
 
@@ -1275,7 +1275,7 @@ tag `v2.8.2-beta.1` 的 Release job 在「上传版本资产」失败：`aws: [E
 **第十三轮修复批（PR #149；三条提交：`36f9910b63` 主批 → `f0c13a09f5` / `6899874589` 首跑 CI 暴露的两处 → `53d28c34f7` 复审补充）**
 
 - **门禁执行面（GA + GH1）**：①平台锚 —— `check-install-integrity` 断言 `HEAD == $GITHUB_SHA`（不等 / CI 上缺席 ⇒ 退出码 2），值进 VERDICT 与 `--json`；`check-guard-parser-integrity` 增加**远端对象库锚**（`fetch --depth 1 origin $GITHUB_SHA` 后 `cat-file` 复算摘要）并**如实降级其效力表述**（"另一个域上的独立确认"，"字节不符"分支只有合成 `expected` 能触发，新增一次网络依赖 = fail-closed）。②**冻结启动器**：两个判据 job 的首个执行体把 `command -v node/bash/git` 的绝对路径写进步骤输出，判据步只用 runner 侧展开值；新增 `check-frozen-launchers.mjs`（静态判据 + **逐 job/逐判据步**的行为探针 + 正控）。③**GH1 补的第二半**：第一版只冻结了解释器，**脚本体里的裸 `node` 仍走活 PATH**（V13-A 实测 `ci.yml` 从未 `export PATH="${{ …outputs.path }}"`，wasm 门禁 group 2 由 `fail=1/EXIT=1` 被翻成 `fail=0/EXIT=0`）⇒ 新增第二个冻结点 `frozen-toolchain`（冻结 PATH + **白名单**合成，白名单外新增目录当场红）、**11 个判据步**在任何仓内命令之前导出、`[SK-20]` 补三条静态判据（形态两端锚定 / 顺序 / 外部命令登记制）。④**执行体全集**从"目录形状"改为"**执行点推导**"（workflow `run:` 命令位 / manifest scripts / `check-integration-tests.mjs` 的 spawn 面 / 包内 `vitest`+`tsdown.config.ts`）：96 → **130 条** + `EXECUTION_POINT_REGISTRY` 34 条双向登记（V13-A 点名的五类逐条落地；语料 `tests/**` 仍单列）。⑤`--restore` 覆盖集 = 全集；`VERDICT_LINE` 的独立见证迁到 `verify-check-workspaces.mjs`（29 条 + 负控 + 注册自检）；`.yarnrc.yml` 六种等价写法逐条红；`YARN_YARN_PATH` 按入口族收口；`--since` 参数通道整体移除；`gate-guards` 的 `permissions` 登记制 `[SK-21]`。
-- **客户端/服务端（GB + GC + GD + GE + GH3）**：应用 AI 隐藏会话 id 加**账号作用域**（`app:<app_id>#<账号[@服务端哈希]>`，形状真源 `app-session-id.json` 由 Go `//go:embed` 与 TS 共读）+ `pico/session-changed` 释放（订阅收口到零依赖叶子包 `@picoaide/dsh-host-locale/session-events`）+ 服务端归因改按会话 id 前缀派生；空 `user-invocable:` 两侧判非法并与 pinned 上游**行为对拍**（Go 切上游 `frontmatterBoolean` 函数体派生字面量集合，TS 真跑上游注册表 24 条语料）；「已安装技能」集合收敛到运行时同一判据 + **跨根残留判 `RESIDUE`**（根表单一真源 + 真跑上游注册表判定）；`isSafeDshHome` 与 cwd 闸门共用唯一谓词；技能用量去重键加作用域 + LRU；发现面契约按 `scripts.test` 真实 argv 取见证 + 形态登记制 + 包枚举改为 `workspaces` 派生（**事实面 = `packages/` 递归 ∪ glob 展开**，覆盖 `community/*`）；计时器上界移到抖动之后；`refreshable` 键作用域化并入 `teardownAll`；`pendingLiveHeaders` 的**更早窗口**追赶（入口世代号无 await 重放）；`search_path` **读面**收口 + **第三条路径**（`internal/llmgateway` 4 处 + 又扫出 3 类，共 7 处；`audit_logs` 纳入并 pin，另披露 3 张 known-uncovered）与守卫文件面扩到整个 `server/`（68 包 / 42 表双向登记）；停摆位改为"任一受阻月" + 反向判据；`usageReclaimFreezeBudgetMS` 拆成单语句/段两个具名量 + 序关系不变量；权限点集合双向对账（前向 + 反向 + 危害同构三层）；启动账本窗口归一到月初（唯一实现 + 248 组合表驱动）；迁移集合双向对账（反向差集 fail-loud）。
+- **客户端/服务端（GB + GC + GD + GE + GH3）**：应用 AI 隐藏会话 id 加**账号作用域**（`app:<app_id>#<账号[@服务端哈希]>`，形状真源 `app-session-id.json` 由 Go `//go:embed` 与 TS 共读）+ `zeokeel/session-changed` 释放（订阅收口到零依赖叶子包 `@zeokeel/dsh-host-locale/session-events`）+ 服务端归因改按会话 id 前缀派生；空 `user-invocable:` 两侧判非法并与 pinned 上游**行为对拍**（Go 切上游 `frontmatterBoolean` 函数体派生字面量集合，TS 真跑上游注册表 24 条语料）；「已安装技能」集合收敛到运行时同一判据 + **跨根残留判 `RESIDUE`**（根表单一真源 + 真跑上游注册表判定）；`isSafeDshHome` 与 cwd 闸门共用唯一谓词；技能用量去重键加作用域 + LRU；发现面契约按 `scripts.test` 真实 argv 取见证 + 形态登记制 + 包枚举改为 `workspaces` 派生（**事实面 = `packages/` 递归 ∪ glob 展开**，覆盖 `community/*`）；计时器上界移到抖动之后；`refreshable` 键作用域化并入 `teardownAll`；`pendingLiveHeaders` 的**更早窗口**追赶（入口世代号无 await 重放）；`search_path` **读面**收口 + **第三条路径**（`internal/llmgateway` 4 处 + 又扫出 3 类，共 7 处；`audit_logs` 纳入并 pin，另披露 3 张 known-uncovered）与守卫文件面扩到整个 `server/`（68 包 / 42 表双向登记）；停摆位改为"任一受阻月" + 反向判据；`usageReclaimFreezeBudgetMS` 拆成单语句/段两个具名量 + 序关系不变量；权限点集合双向对账（前向 + 反向 + 危害同构三层）；启动账本窗口归一到月初（唯一实现 + 248 组合表驱动）；迁移集合双向对账（反向差集 fail-loud）。
 - **外设面（GF + GH2）**：`integration-tests` 三条腿统一到同一套判据纪律（判据表外置 `contractkit.py` + 逐条正负例 + 两个自证 + 变异锚点 + 守卫四层覆盖）；接线/新增登记双向；`check:doc-claims` 的真源改为**解析代码**、通过行按覆盖项反解断言、**断言钉在真实打印路径**（跑一次真脚本读真 stdout）；登记制的**判别力下限**（`minJudgments` 逐数相等 + SKIP 原因码闭集双向）；`run-all.sh` 解析正则不再吃换行；webadmin 路由/审计 sink（Go 调用图闭包到不动点）/随包技能目录三方双向；锁面板"成功才解锁 + 渲染期归零"。
 - **首跑 CI 暴露的两处（不属于本轮发现，属"修复自身的问题"）**：①`check-frozen-launchers.mjs` 用命令行参数动态构造 RegExp ⇒ **CodeQL 两条 high（`js/regex-injection`）**，改为字面量正则 + 字符串比较；②webadmin 的"归因三段锚点"用例**无条件读 pinned 上游 submodule**，而 `Go server` job **不检 submodule** ⇒ 必需检查被打红，改为"冻结件 + 在场时逐字对拍 + 明确记录判定来源"（`upstream-anchor-freeze.ts`）。
 - **集成判据**：整仓 `corepack yarn check` **32/32 通过 / 0 失败 / 0 跳过**（`VERDICT PASS planned=32 executed=32`）；`node scripts/check-install-integrity.mjs`（`GITHUB_SHA` 在场）= `judge-bodies=130 execution-points=64`；`check-guard-parser-integrity` / `check-workflows` / `check-frozen-launchers`（jobs=2 steps=11 probes=12）/ `check-integration-tests` / `check-doc-claims` / `verify-check-workspaces`（断言 494 / 场景 30 / 自检 11/11）全 EXIT=0；webadmin 42 文件 / 668 用例全绿（**含无 submodule 的形态**——那正是 `Go server` job 的实况）；Go 侧 54/55 包绿（`internal/serverstore` 在 `-p 2` 下因模板库克隆饥饿撞 1800s 包级超时、**零用例级失败**，隔离复跑 `ok 396s`）。
@@ -1407,7 +1407,7 @@ tag `v2.8.2-beta.1` 的 Release job 在「上传版本资产」失败：`aws: [E
 
 **复审对复审的两条更正（本轮的价值恰在于此）**：① V14-C 的 `judge-attack.sh` 有量具 bug（spec 拆分截断）⇒ 它"拆掉被测物仍绿"的结论对**其中一条**不成立，lane O 实跑纠正并把真形态（别名池句柄）补成判据；② V14-C 把 `setAuthConfig` 记成"池守卫的战果"是口径串线 —— 该处事务里没有池调用，它是由 `[R13GH3]` 咬住的（池守卫**正确地不报**）。
 
-**本轮修复批的门禁**：`node scripts/check-root-guards.mjs` **17/17 EXIT=0**；`corepack yarn check`（见下表）；`check-doc-claims` 不带 `CI` 与 `CI=true` 都 EXIT=0 且打印通过行；`check-no-real-domains` 零命中（含 18 条提交信息）；`check-no-leftover-mutants` 零残留。**一条本地红是外来的**：`check-install-integrity` 判"工作树 == HEAD"，而共享工作树里**另一会话暂存了 `.gitignore`**（`normify-picoaide/` 忽略行，未提交）⇒ 本地 EXIT=1、其余 184 条执行体与 19 个 manifest 逐字节通过；CI 的干净检出不受影响（master 上该 job 已绿）。
+**本轮修复批的门禁**：`node scripts/check-root-guards.mjs` **17/17 EXIT=0**；`corepack yarn check`（见下表）；`check-doc-claims` 不带 `CI` 与 `CI=true` 都 EXIT=0 且打印通过行；`check-no-real-domains` 零命中（含 18 条提交信息）；`check-no-leftover-mutants` 零残留。**一条本地红是外来的**：`check-install-integrity` 判"工作树 == HEAD"，而共享工作树里**另一会话暂存了 `.gitignore`**（`normify-zeokeel/` 忽略行，未提交）⇒ 本地 EXIT=1、其余 184 条执行体与 19 个 manifest 逐字节通过；CI 的干净检出不受影响（master 上该 job 已绿）。
 
 ---
 
@@ -1434,7 +1434,7 @@ tag `v2.8.2-beta.1` 的 Release job 在「上传版本资产」失败：`aws: [E
 
 **判据面（R15-A）**：**R15A-01** doc-claims 通过行自证的两处不对称（层③ `emitted` **只保留最后一次 write** ⇒ 真通过行**之前**多打一行看不见，连含前缀的伪通过行也 EXIT=0；层② 的"像通过行的行恰好 1 行"是**字面量识别** ⇒ 换措辞的宽自述也 EXIT=0 —— R13-GF 要根治的"自我陈述比覆盖面宽"仍可复现，且该缝**基线就有**）；**R15A-02** 44 条 `--selftest` **没有任何调用方** ⇒ 整条删掉 `client-platforms` 规则（36 条断言）主入口仍 EXIT=0 且通过行自洽缩成"已覆盖 6 项"；**R15A-04** AST 尺子两条未登记盲区（**方法值 `qr := db.QueryRow`**、**接口洗白 `hand.(*sql.DB)`** —— 真 PG 下与基线同样 3.00s 取不到连接而守卫绿）；**R15A-06/07/08**（新子入口无内容摘要登记；`[SK-22]` 的 `-` 收窄把**合法**表达式 `${{ github.run_number - 1 > 0 }}` 判红；汇总 note 在判红时仍打 ✓）。
 **客户端（R15-B）**：**R15B-02** 服务端稳定码 `403 PASSWORD_CHANGE_REQUIRED` 客户端零处理（被压成 `502` 且**丢 code**）；**R15B-03** `manifest-precheck` 的 11 个限额是与 Go 的**两份手抄**（数值一致但**无对拍守卫**），服务端 6 条规则（`MaxSkillMDBytes`、frontmatter 深度/集合/列表项/锚点、`changelog` 长度）在预检里**完全不存在**、`maxChangelog` 是**死常量** ⇒ 预检放行的内容上传后被拒；**R15B-04** 同服务端**换账号**没有任何"身份变了"的信号 ⇒ 已加载页面继续用旧账号渲染状态跑在新令牌下。
-**服务端（R15-C）**：**W-02…W-08** 七个 webadmin 页面把"**读取失败**"当成确定态（其中 W-02 的删除会**不可恢复地释放归档**）；**R15C-03** compose 的 `CADDY_IP` 可配而 `PICOAI_TRUSTED_PROXIES` 缺省**硬编码同一 IP** ⇒ 改网段部署**静默**失去 XFF、限流桶坍缩成全组织共桶；**R15C-04** 唯一超管被 dirsync 停用后 `--bootstrap-admin` **静默 no-op**（只看 `IsSuperAdmin` 不看 `status`）⇒ 文档兜底对该态无效；**R-02** SSE 上游中途断连**静默收尾**（无 error 事件、无 DONE、零日志）；**R-03** 三条已废除配置**启动期零提示**；**G-04** `UpsertApp` 缺官方归属守卫。
+**服务端（R15-C）**：**W-02…W-08** 七个 webadmin 页面把"**读取失败**"当成确定态（其中 W-02 的删除会**不可恢复地释放归档**）；**R15C-03** compose 的 `CADDY_IP` 可配而 `ZEOKEEL_TRUSTED_PROXIES` 缺省**硬编码同一 IP** ⇒ 改网段部署**静默**失去 XFF、限流桶坍缩成全组织共桶；**R15C-04** 唯一超管被 dirsync 停用后 `--bootstrap-admin` **静默 no-op**（只看 `IsSuperAdmin` 不看 `status`）⇒ 文档兜底对该态无效；**R-02** SSE 上游中途断连**静默收尾**（无 error 事件、无 DONE、零日志）；**R-03** 三条已废除配置**启动期零提示**；**G-04** `UpsertApp` 缺官方归属守卫。
 
 #### 本轮判为"打不坏"（实跑攻击失败）
 
@@ -1485,7 +1485,7 @@ R16-A 用 **18 种新形态**证明 R15A-03 的修法方向不闭合：四条静
 #### 客户端 5 条 P1（R16-B）
 
 - **R16B-02（R16-B 判最该先修；上一批修复引入的回归）**：OAuth「等用户回调」阶段把 abort 监听提前摘掉、清掉 5 分钟定时器、丢掉回调 server 句柄 ⇒ **取消是假的**、超时永不触发、**每放弃一次泄漏一个仍在监听的 loopback 端口**。修法＝三条收尾交还 `finally` 的 `releaseFlow()`，并加可注入的 `flowTimeoutMs` 让"等待阶段仍有武装定时器"**可判**（3 变异全红：只搬 `callbackServer=null` 那条红在**端口断言**）。
-- **R16B-01**：同服务端**换号 A→B** 后 `/api/pico/account/usage` 在 300ms 去抖窗口内回 **200 + A 的余额**并渲染成 `Bbob·¥11.00`（跨账号金额交付）。修法＝宿主快照按 `sessionKey` 建键、键变**立刻**丢数据并撤在途；路由出口 `owns()` 不符即 401；200 响应带 `sessionIdentity()` 身份章、渲染期 `identityMismatch` 即作废。4 变异全红，其中一条**逐字复现**审计现场 `expected 'Bbob·¥11.00' not to contain '11.00'`。
+- **R16B-01**：同服务端**换号 A→B** 后 `/api/zeokeel/account/usage` 在 300ms 去抖窗口内回 **200 + A 的余额**并渲染成 `Bbob·¥11.00`（跨账号金额交付）。修法＝宿主快照按 `sessionKey` 建键、键变**立刻**丢数据并撤在途；路由出口 `owns()` 不符即 401；200 响应带 `sessionIdentity()` 身份章、渲染期 `identityMismatch` 即作废。4 变异全红，其中一条**逐字复现**审计现场 `expected 'Bbob·¥11.00' not to contain '11.00'`。
 - **R16B-04**：换号后 `store` 要等一次网络往返（≤30s）才切换，窗口内 `POST /connect` 读**上一个账号的凭据目录**注册 MCP。修法＝写路径前置**作用域闸门**（单调目标键 + 唯一判定函数，接在 connect/auth-submit/refresh/disconnect/approve 五条路由，409+提示），复核变异逐字复现缺陷签名。
 - **R16B-19**：WASM 应用窗口**零崩溃恢复、零加载失败恢复**（shell 窗口两者都有），模型面硬编码 `crashed:false` ⇒ 用户与 AI 都看不出它坏了。修法＝照 shell 窗口形态补 `render-process-gone`/`did-fail-load`（只认主框架、跳 `-3`）/`did-finish-load` + 单飞状态机 + 失败页重试，并把 `crashed` 如实上报。
 - **R16B-03**：「未登录记住这次打开 ⇒ 登录后自动继续」在登录那一跳**没有消费方**（整文档导航、面板未挂载），真正兑现点是**下次激活应用中心**⇒ 承诺没兑现且会自己弹窗。修法＝消费点搬到页面装载那一跳 + **原子认领** `claimOpenIntent`（实测"先清后开"不足以防两次开窗）。
@@ -1604,7 +1604,7 @@ R16-A 用 **18 种新形态**证明 R15A-03 的修法方向不闭合：四条静
 
 **R19B-03** 「允许 AI 读取此应用的数据」授权**只按 app_id、机器级**（落盘 `{version, apps}` 无 user/server 维度）⇒ 同机换账号或换服务端（换租户）原样继承，而兄弟闸门 `wasm-apps-host/ai-authorization.ts` 是 `user\0app` 且明文写"换账号/换服务端**不得**继承"（对拍探针：`bRows=true` 红 / `bChat=false` 绿）· **R19B-04** 「未定价模型默认拒绝」已实现，但**6 处文案仍写"未定价模型费用按 0 计"**（含 webadmin **新增模型对话框**、公开站中英、决策文档）· **R19B-05** `cmd/server/main.go:254,257` 两条后台循环是进程内唯一**无 ctx/无停止/无运行状态、也没进 `scheduler_status.go`、且零装配断言**的循环，其中 `SyncLoop` 是 `CleanupPendingUsage` 的**唯一**周期执行者（陈旧 0-token 流式行的无界增长闸门）⇒ 删掉一行整包仍绿 · **R19B-06** `docs/releases/v2.8.2-beta.1.md` 的「行为变更登记」停在第 11 轮，**12–18 轮全缺**（含未定价 429 / 项目根 422 RESIDUE / 删除 409 FILE_BUSY 三条客户可见变更）· **R19B-07** 公开站 `desktop.md:59`（中英）承诺卸载 =「本地目录移除」，实现可 422 RESIDUE 拒绝且不删 · **R19B-08** 删除认领协议的 `409 FILE_BUSY`/`FILE_RECLAIMED` 与 `skipped` 字段未进两份服务端权威文档 · **R19B-09** RESIDUE 拒绝对话纯英文硬编码（中文界面原样透出，违反 host-locale 纪律）· **R19B-10** webadmin JSX 残留 Markdown 星号；公开站错误码表缺 `MODEL_NOT_PRICED` 且 `BALANCE_EXHAUSTED` 判据失真。
 
-**复核仍开的旧项**：**R15C-03** —— `docker-compose.yml:54` 让 `CADDY_IP` 可配，而 `:96` 的 `PICOAI_TRUSTED_PROXIES` 缺省仍硬编码 `172.28.0.2`（`main.go:146` 只从 env 追加、不派生）⇒ 改网段部署静默失去 XFF、限流桶坍缩成全组织共桶。
+**复核仍开的旧项**：**R15C-03** —— `docker-compose.yml:54` 让 `CADDY_IP` 可配，而 `:96` 的 `ZEOKEEL_TRUSTED_PROXIES` 缺省仍硬编码 `172.28.0.2`（`main.go:146` 只从 env 追加、不派生）⇒ 改网段部署静默失去 XFF、限流桶坍缩成全组织共桶。
 
 #### 方法学（本轮新增一条）
 
@@ -1872,7 +1872,7 @@ E-01 写面是"调用名清单"（`os.open+os.write`/`fs.copyFileSync`/`subproce
 |---|---|
 | **R25-Y3-1（P1）** | 服务侧 app_id 解析收口成**唯一入口**，7 处客户端面/管理面调用点改过去（写侧两处仍是写侧）；判据升级为**调用点级**（AST 断言每个服务侧 handler 解析到 ForServing + 真 PG/真路由端到端矩阵）。**教训固化**：上一轮那条 P1 的根因就是"判据只钉 registry 两个函数、不钉调用点"——把 `serve.go` 改回写侧变体时包级测试仍全绿 |
 | **R25-Y1-1（P1）** | `scanUsageMonthTables` 改为只排除 `usage_daily_*`、月份归属由**边界事实**推导 ⇒ 季度/整年命名的叶子分区纳入保留期回收；判据含"三种命名都被正确回收 / 未超期不得误删 / `usage_daily_*` 仍跳过 / 既有保留期回归保持绿" |
-| **R25-Y4-1（P1）** | 新增 `debug-switches.ts`（6 类受管开关 × `argv`/`execArgv`，纯函数 + 可注入副作用），`main.ts` **模块作用域** fail-loud（早于 `whenReady`；`--inspect` 在 JS 之前已监听，`removeSwitch` 对它无效），逃生门 `PICOAI_ALLOW_DEBUG_SWITCHES=1`；6 个 CDP 驱动打包产物的 E2E/探针脚本补该 env（否则 CI e2e 会因 app 拒绝启动而红）。真机三态实跑（打包态拒绝 / 开发态放行 / 逃生门放行）。**认账**：同机同用户攻击者同时控制 argv 与环境，逃生门对他不构成障碍 —— 拦的是无意/遗留开关与静默暴露；cookie 那一半的真正闭合需结构性修法 |
+| **R25-Y4-1（P1）** | 新增 `debug-switches.ts`（6 类受管开关 × `argv`/`execArgv`，纯函数 + 可注入副作用），`main.ts` **模块作用域** fail-loud（早于 `whenReady`；`--inspect` 在 JS 之前已监听，`removeSwitch` 对它无效），逃生门 `ZEOKEEL_ALLOW_DEBUG_SWITCHES=1`；6 个 CDP 驱动打包产物的 E2E/探针脚本补该 env（否则 CI e2e 会因 app 拒绝启动而红）。真机三态实跑（打包态拒绝 / 开发态放行 / 逃生门放行）。**认账**：同机同用户攻击者同时控制 argv 与环境，逃生门对他不构成障碍 —— 拦的是无意/遗留开关与静默暴露；cookie 那一半的真正闭合需结构性修法 |
 | **R25-Y4-2（P1）** | `--verify-app-dir` 两级解析（先分包根再仓库根）+ 解析不到即 fail-loud + 通过行如实写 `included/skipped`；`verify-ci-scripts` 补回归（真 asar 夹具证明"篡改 `channel_id` 必红"、缺目录必须失败） |
 | **R25-Y4-3（P1）** | `electron-shots` 的 CDP 归属：缺省 `--remote-debugging-port=0`、显式端口先探占用、端口必须来自**本次拉起的进程自己宣告**（stderr 横幅或 `DevToolsActivePort`，不一致即失败）、`/json/version` 必须 Electron 形状且主版本一致、page target 必须本 app 主窗口且同源；同批五条 P2（`send()` 超时 / `--display` 真被使用 / 截图目录不得写仓内 / 全新 HOME 与清理 / 未知参数 fail-loud）。**真机修后 13/13 PASS，修前在真 app 上本来就是红的**（旧实现抓的是内置浏览器页） |
 | 面板焦点 P2 | 整页面板打开后焦点不再被侧边栏行抢回（`surface.tsx` 焦点契约 + `FootMenuRow` 先交还锚点） |
@@ -1952,7 +1952,7 @@ E-01 写面是"调用名清单"（`os.open+os.write`/`fs.copyFileSync`/`subproce
   **没有任何代际/会话身份判定**，迟到的旧会话响应直接写 settings/DSN/品牌/网关段。
 - 最重后果（实跑）：构造「服务端 A 的 bootstrap 慢 → 登出并登录服务端 B → B 先回、A 后回」⇒ 当前会话
   （B）的 `llm-deepseek.models` / `agent-default-model` / `web-search-deepseek.baseURL` 被改写成 A 的，
-  而 `gateway-model.ts:42` 已把 `PICOAI_GATEWAY_TOKEN` 写成 **B 的令牌** ⇒ 上游 `web-search-deepseek`
+  而 `gateway-model.ts:42` 已把 `ZEOKEEL_GATEWAY_TOKEN` 写成 **B 的令牌** ⇒ 上游 `web-search-deepseek`
   在同一次请求里用这份 URL+key ⇒ **B 的 90 天 bearer 被 POST 到 A 的 `/v1/messages`**（跨租户凭据外泄）。
 - 同族表现：error-reporting 迟到 bootstrap 把 Sentry DSN 改回旧服务端（错误/堆栈/URL 上报到**上一个租户的
   采集端**），且登出后 status 由 `disabled` 变回 `ready`；gateway-model 的登出 `sync(null)` 续体落在重新登录
@@ -2049,7 +2049,7 @@ Z1 泳道（复核 FIX-27/28/29）在撰写本节时**仍在运行**，其结论
    而**同一个函数**的 catch 分支里已经写着第二十二轮的收口注释：
    「R22-V1-N3（同族收口）：`session` 是**订阅那一刻**的那一份，而 `sync` 里有 await ——
    期间用户可能已经重新登录。无条件 `clear()` 会把新登录一起清掉 ⇒ 由会话服务判定'还是不是同一位'」
-   并调用 `ctx.picoSession.clearIfCurrent(session.token)`。
+   并调用 `ctx.zeokeelSession.clearIfCurrent(session.token)`。
    ⇒ **上一轮的正确推理只应用到了错误路径，成功路径原样保留**。这使修复方向无歧义：
    把 `clearIfCurrent` 的同一位判定提升为**每个 await 之后**的通用守卫，四条投影共用一份实现。
 2. **Z2-02 成立（源码行级）** —— `packages/host/desktop/src/debug-switches.ts:123`：
@@ -2300,7 +2300,7 @@ Z2 报告把 Z2-01 列为 P1、把 Z2-03/04/05 列在 B.3【P2】"同族（三�
 `packages/host/enterprise/tests/session-epoch-wiring.spec.ts` 的 `GUARDED_FILES`
 把作用域**写死成那 4 个文件名** ⇒ 它的"新增未守卫接入口即红"**对别的包结构上不可能报警**。
 这正是 §7.65.4 那条漏派的**判据侧镜像**：判据的**扫描根**决定了它能看见什么。
-要真收口，扫描根必须是**仓库级**（或按 `subscribeSession*` / `pico/session-changed` 反查全仓调用点）。
+要真收口，扫描根必须是**仓库级**（或按 `subscribeSession*` / `zeokeel/session-changed` 反查全仓调用点）。
 AA3 的全仓普查表已在报告里：`packages/host/**` 另有两条同族（本节 AA3-01、AA3-03）
 + 两条未实跑观察（`wasm-apps-host/src/index.ts:683/694` 的 `void closeAll/clearAll` 无代际；
 `skill-telemetry.ts:176/187` 在 await 之后才读会话）。**已核干净**：app-ai-runner（generation 守卫）、
@@ -2355,7 +2355,7 @@ yarn 步骤（`.github/workflows/ci.yml` 共 5 处）；锁文件不一致 ⇒ *
 接进根守卫，让这个口径缺口在本地闭合。属独立课题（要选形态、要评估耗时与离线可用性）。
 
 **同批的第二条认账（环境）**：本轮审计期间有**并发 `yarn install`** 把 `node_modules` 撕开，
-导致 ①AA1 的副本出现 `Cannot find package '@picoaide/…'` 假红、②主控在 lane 运行期跑的那次全量门禁
+导致 ①AA1 的副本出现 `Cannot find package '@zeokeel/…'` 假红、②主控在 lane 运行期跑的那次全量门禁
 出现 `tests/app-ai-release-gate.spec.ts` 两条失败。**恢复 `node_modules` 后该 spec 单跑 6/6 绿**
 ⇒ 那次门禁红是**环境性**，不是 FIX-35 的回归。教训：**`node_modules` 被并发 install 撕开的窗口内，
 任何测试结论都不算数**；且**门禁不得在 lane 正在改树时跑**（我这次犯了，白跑 614s）。
@@ -2521,7 +2521,7 @@ AB1 锚 `bc08719a0e`（副本逐文件 sha256 与 `git show HEAD:<path>` 对拍�
    函数**读起来有守卫**。现网 4 个投影文件 + `updates.ts` 里未找到这 9 种形态的实例
    ⇒ 属"下一次回归会静默通过"（故判 P2 而非 P1）。已派 FIX-42。
 3. **FIX-36 的同族未派**：`packages/client/account-card/src/index.ts` 的 exact 路由
-   `GET /api/pico/account/usage?refresh=1` 是状态变更 GET（立刻往返网关），
+   `GET /api/zeokeel/account/usage?refresh=1` 是状态变更 GET（立刻往返网关），
    防护只有 `browserSameOriginMarker && isLoopbackRequest`，而 `loopback.ts` 自己写着
    "a curl with a forged Origin passes this too"。真跑（真 apply + 真路由）：
    伪造 Origin 的**裸 GET（无 cookie）** ⇒ `status=200 gatewayCalls=1`，**连发 5 次 = 5 次网关往返**
@@ -2611,16 +2611,16 @@ FIX-39（迁移执行器）VERDICT **FIXED 3 / DEFERRED 2**，并核实主控的
 ⇒ **第二十八轮合计 ≥ 0 P0 / 2 P1**（AB1-02 与 AB2-B-01）。以本节为准。
 
 **AB2-B-01【P1】FIX-39 的三个新 env 让一个既有守卫当场变红**：
-`server/cmd/server/compose_env_test.go:133-188` 的 `TestEveryServerPICOAIEnvNameIsWiredOrExempt`
+`server/cmd/server/compose_env_test.go:133-188` 的 `TestEveryServerZEOKEELEnvNameIsWiredOrExempt`
 在**干净的 `git archive HEAD server` 副本**里复跑 ⇒
 ```
---- FAIL: TestEveryServerPICOAIEnvNameIsWiredOrExempt (0.01s)
-    compose_env_test.go:185: 这些 PICOAI_* 名字既不在 ../../docker-compose.yml 的
+--- FAIL: TestEveryServerZEOKEELEnvNameIsWiredOrExempt (0.01s)
+    compose_env_test.go:185: 这些 ZEOKEEL_* 名字既不在 ../../docker-compose.yml 的
     server.environment 里、也没有豁免理由：写进 .env 会静默不生效
-          PICOAI_MIGRATION_{ADVISORY_TIMEOUT,LOCK_TIMEOUT,SLOW}_MS
-FAIL	github.com/picoaide/picoaide/cmd/server	0.126s
+          ZEOKEEL_MIGRATION_{ADVISORY_TIMEOUT,LOCK_TIMEOUT,SLOW}_MS
+FAIL	github.com/zeokeel/zeokeel-harness/server/cmd/server	0.126s
 ```
-旁证三段：`grep -n PICOAI_MIGRATION server/docker-compose.yml` **零命中**；
+旁证三段：`grep -n ZEOKEEL_MIGRATION server/docker-compose.yml` **零命中**；
 `server/AGENTS.md:120-123` 把它们写成"运维可调"；`internal/serverstore/migrate.go:318-320` 真读、
 `:693/:759` 的错误文案还叫运维去调。溯源：FIX-39 的提交 `dc632d5c91` 只动了 `AGENTS.md` + `migrate.go`
 （`git show --name-only` 里 `docker-compose.yml` **零命中**）。
@@ -3258,7 +3258,7 @@ R28 的 AB2 与 R31 的 AE2 是 32 轮里仅有的两条 **P0/P1 干净**的审�
 —— 与 AE2 §AE2-01 逐字同形。
 
 **并且它抓出一条被这次改动"暴露"的洞**：`step2-brand` 的期望值原先只算服务端那一侧，
-在渠道包上会算成 `PicoAide`（**该腿此前在渠道包上从未被求值，所以这个错一直没被发现**）
+在渠道包上会算成 `ZeoKeel`（**该腿此前在渠道包上从未被求值，所以这个错一直没被发现**）
 ⇒ 补 `expectedBrandName(channel, packageBrand)` 随包品牌回落。
 **这是"判据不覆盖 ⇒ 判据里的错也看不见"的又一实例**：不是判据写错了，是**它从未被执行过**。
 
@@ -3392,9 +3392,9 @@ Go 侧 56 包 ok）、`e7baf42f80`（R33 批，**首次空载 + 有对照**）�
 1. **会话格式 v3 → v4**（唯一需要提前告知使用者的变更，结论见 §8.9.2a）。
 2. **模型链路**：上游**删除**了 `llm-deepseek.protocol`（配了直接抛），路径固定
    `<baseURL>/messages`；我们网关只认 `Authorization: Bearer` ⇒ 新增自研行
-   `@picoaide/dsh-enterprise/gateway-llm`（Bearer `resolveAuth`，**每请求**解析，
+   `@zeokeel/dsh-enterprise/gateway-llm`（Bearer `resolveAuth`，**每请求**解析，
    缺令牌直接抛且一个请求都不发），组装期禁用上游 api-key 行；设置命名空间
-   `llm-deepseek` → `picoaide-gateway-llm`（唯一真源 `gateway-contract.ts`）。
+   `llm-deepseek` → `zeokeel-gateway-llm`（唯一真源 `gateway-contract.ts`）。
 3. **设置模型换代**：`@deepseek-ai/dsh-settings-file` 并入 `@deepseek-ai/dsh-settings`，
    命名空间 = profile 条目 id；桌面启动设置改读组合后的 `desktop-shell` 行。
 4. **包结构**：`dsh-agent-presets` 拆成 `agent-preset` + `agent-preset-registry`。
@@ -3458,7 +3458,7 @@ Schemastery 会剥未声明字段）、`plugin-package-inventory-deepseek`、`sa
 
 | # | 现象 | 级别 | 真因 / 判据 |
 |---|---|---|---|
-| U1 | 覆盖层补丁**只出现在组合结果里、没进 Loader 真正挂载的树** ⇒ 桌面外壳与全部自研行整片缺失 | **P0** | **真因（UPG-5 定位，比初判更严重）**：桌面把十层补丁**手工 push 进 `bundlePatches`**（既不在 `profile.layers`、也不在 `ProfileContext.overlays`），而上游 `dsh-config-editor` 的 `edit()` 在**每一次设置写入之前**都跑 `reconcileProfilePatches(root, readProfilePatches(profileContext))`，后者只读 `layers + patchPath + home + overlays` ⇒ 复算少 **25 行**，把 `desktop-shell` 与九个自研面**从运行树上摘掉**（该行 `apply` 从未跑过 = `desktop shell was not registered`）。**触发点是生产同形的**：升级机的 `settings.yaml` 一次性导入、登录时 `gateway-model` 写 baseURL、用户改任何设置项。修法 = 十层提升为**真正的 profile bundle 层**（`REQUIRED_BUNDLES`；桌面自己那层由企业包 `dsh.bundle.patch` 首项 `../../../cordis.patch.yml` 携带，因为 `resolveBundleDir` 的 `resolve.paths()` 不含包自身目录）。**放进 `overlays` 不行**（overlays 追加在最后 ⇒ insert 晚于设置文档 ⇒ `Configuration for "picoaide-gateway-llm" is overridden` 断言炸）——这条反证也记在报告里 |
+| U1 | 覆盖层补丁**只出现在组合结果里、没进 Loader 真正挂载的树** ⇒ 桌面外壳与全部自研行整片缺失 | **P0** | **真因（UPG-5 定位，比初判更严重）**：桌面把十层补丁**手工 push 进 `bundlePatches`**（既不在 `profile.layers`、也不在 `ProfileContext.overlays`），而上游 `dsh-config-editor` 的 `edit()` 在**每一次设置写入之前**都跑 `reconcileProfilePatches(root, readProfilePatches(profileContext))`，后者只读 `layers + patchPath + home + overlays` ⇒ 复算少 **25 行**，把 `desktop-shell` 与九个自研面**从运行树上摘掉**（该行 `apply` 从未跑过 = `desktop shell was not registered`）。**触发点是生产同形的**：升级机的 `settings.yaml` 一次性导入、登录时 `gateway-model` 写 baseURL、用户改任何设置项。修法 = 十层提升为**真正的 profile bundle 层**（`REQUIRED_BUNDLES`；桌面自己那层由企业包 `dsh.bundle.patch` 首项 `../../../cordis.patch.yml` 携带，因为 `resolveBundleDir` 的 `resolve.paths()` 不含包自身目录）。**放进 `overlays` 不行**（overlays 追加在最后 ⇒ insert 晚于设置文档 ⇒ `Configuration for "zeokeel-gateway-llm" is overridden` 断言炸）——这条反证也记在报告里 |
 | U2 | 两个 boot 冒烟**没接 0.1.7 的进程内包解析**（`PluginPackages` + `createRuntimeResolution`）⇒ 163–169 个 bare specifier 解析失败 | **P0** | 0.1.6 那层 `installProfilePackageResolver` 在 0.1.7 不够用；`main.ts` 接了、两个冒烟没接 |
 | U3 | `verify:closure`：10 条 0.1.7 **新包的必填一方 peer** 没在部署根声明 | P1 | 上游拆包后依赖图变大 |
 | U4 | 文档 pin 漂移 6 处（`site/` 中英 + 桌面包 README 中英） | P1 | 升级后 `upstream.json` 变了、文档没跟 |
@@ -3512,7 +3512,7 @@ Schemastery 会剥未声明字段）、`plugin-package-inventory-deepseek`、`sa
 （`plugin-manager/src/index.ts:268`）⇒ "复算看得见它们"与"模型能用 `set_plugin` 改它们"
 是同一个事实；保留 2026-09-23 那次裁决想要的"不可寻址"就等于保留"每次设置写入摘掉桌面行"
 这个 P0。**本次选不丢功能**。代价：创造模式里 `plugin_manager` 现在可以禁用
-`desktop-*`/`picoaide-*`/`pico-*` 行，而其中 **19 条是 `REQUIRED_DESKTOP_ROWS`**
+`desktop-*`/`zeokeel-*`/`zeokeel-*` 行，而其中 **19 条是 `REQUIRED_DESKTOP_ROWS`**
 （禁用后下次启动会被 `assertRequiredRowsActive` 判致命 —— **响亮地失败，不是静默**），
 恢复需要编辑/删除用户 profile 补丁。缓解（未做，需拍板）：给上游 `plugin-manager` 加
 `protectedModules` 注入点，或在桌面侧不给 `cordis` preset 暴露 `plugin_manager` 工具。
@@ -3529,7 +3529,7 @@ Schemastery 会剥未声明字段）、`plugin-package-inventory-deepseek`、`sa
    `[R5AB]` 调试打印。`.yarn/cache` 有 pristine 副本，但**没有任何守卫**比对"未被补丁触碰的
    `node_modules` 包 == cache 里的 pristine 内容"。发布产物不受影响（CI 从干净检出
    `yarn install` 重新物化），但本地打包会带上。判据形状建议：对**除 8 个补丁目标包之外**的
-   `node_modules/@deepseek-ai/*` 与 `@picoaide/*` 做一次目录摘要对拍。
+   `node_modules/@deepseek-ai/*` 与 `@zeokeel/*` 做一次目录摘要对拍。
    **排查提示**：`grep -rl '<标记>'` 会在 base64 资源里误命中（本轮先误判了两处），
    判据要按"代码行形态"而不是纯子串。
    **本轮事后核对（一次性脚本，未落成守卫）**：把 `packages/*/…/node_modules` 下**每一个**
@@ -3548,7 +3548,7 @@ Schemastery 会剥未声明字段）、`plugin-package-inventory-deepseek`、`sa
    非 http(s) / 带 userinfo / 不可解析一律拒，码 `ENDPOINT_MISMATCH`，错误点名两端、不含令牌，
    判据 11/11）。**当前所有部署都不受影响**（渠道的 `defaults.server_url` 天然就是 `serverURL`），
    但"网关放在另一个 origin"这种形态目前**没有正当入口**。精确改法：给
-   `picoaide-gateway-llm` 行 Config 增加**非 volatile** 的 `gatewayBaseURL`
+   `zeokeel-gateway-llm` 行 Config 增加**非 volatile** 的 `gatewayBaseURL`
    （组装期/渠道注入；非 volatile ⇒ 表单写入被 `Config field … is not volatile` 拒绝），
    并在 `allowedGatewayEndpoint` 里并入允许集、拒绝信息里点名来源。
 5. **U1 的治理面暴露**（见 §8.9.5 末段）：自研行现在对 `plugin_manager` 可寻址，
@@ -3608,7 +3608,7 @@ CI 的 `Desktop (Linux)` job 在同一个 step 里先跑 `e2e:client` 再跑 `e2
 
 ```
 [DEBUG] href=http://127.0.0.1:40979/          ← 就是应用页（不是别的 target）
-[DEBUG] title=PicoAide Harness                ← 宿主/品牌面正常
+[DEBUG] title=ZeoKeel Harness                ← 宿主/品牌面正常
 [DEBUG] text="HARNESS\nFailed to load plugins\nweb boot: 19 entries did not activate\n
         @deepseek-ai/dsh-client-ui-open-in-app: pending (waiting for service: layout)\n
         @deepseek-ai/dsh-client-ui-sidebar: pending (waiting for services: layout, uiWorkspace)\n
@@ -3703,7 +3703,7 @@ probe-right-sidebar: 2 passed, 6 failed, 1 skipped    NEG_EXIT=1
 **同机制对任意插件行通用、且全程静默**。
 
 **可撞性**：装机形态撞不上（交付包是 asar，`dist/linux-unpacked` 里除 asar 外零 `package.json`；
-默认 `~/.picoaide-harness` 的台阶上也没有同名 manifest）。**撞得上**的是：源码检出 + 打包产物混用
+默认 `~/.zeokeel-harness` 的台阶上也没有同名 manifest）。**撞得上**的是：源码检出 + 打包产物混用
 （本次探针现场）、`asar:false` 的便携/解包布局（数据根放进应用夹）、以及任何人把包目录放在数据根之上。
 
 **已落地的加固（不在本 beta 内，随下一个版本发布）**：把"可观测结果"做成启动断言 ——
@@ -3724,8 +3724,8 @@ probe-right-sidebar: 2 passed, 6 failed, 1 skipped    NEG_EXIT=1
 （`Desktop (Linux)` 已从 §8.9.12 恢复），但 `Release` job 红在 **step 7 "Fetch channel packages"**：
 
 ```
-channel-asset-files: Cannot find package '@picoaide/dsh-host-home' imported from
-  /home/runner/work/picoaide-harness/picoaide-harness/packages/host/desktop/src/desktop-home.ts
+channel-asset-files: Cannot find package '@zeokeel/dsh-host-home' imported from
+  /home/runner/work/zeokeel-harness/zeokeel-harness/packages/host/desktop/src/desktop-home.ts
 ##[error]读不到渠道素材文件名清单(.../scripts/channel-build.ts 的 CHANNEL_ASSET_FILES)
 ```
 
@@ -3733,7 +3733,7 @@ channel-asset-files: Cannot find package '@picoaide/dsh-host-home' imported from
 （`scripts/ci-channels.sh`、`scripts/ci-channel-transfer.sh`、`scripts/ci-build-channel-images.sh`）
 用 `import(file://…/channel-build.ts)` 读 `CHANNEL_ASSET_FILES` / `CLIENT_PLATFORM_ASSETS`
 （第 26 轮 Z3-2/Z3-3 加的"单一真源"判据），而 `channel-build.ts` **顶端** import
-`../src/desktop-home.ts`（后者 `export * from '@picoaide/dsh-host-home'`）
+`../src/desktop-home.ts`（后者 `export * from '@zeokeel/dsh-host-home'`）
 ⇒ 这三处读取需要一个**装了依赖、且工作区已构建**的环境。
 Gate 与三个打包 job 都是这种环境，所以分支/PR CI（含本批 152 个提交的全部检查）全绿；
 而 **release job 只 `checkout` + `setup-node`**（不 install、不 build，它只做 docker 构建与发布）
@@ -3833,7 +3833,7 @@ master 头**上是"这次发布从未发生"的更正，而不是覆盖一个已
 > 已按同一事实直接改正（断言未动，只改注释）。
 
 **真机实测（本地重建的真实交付件，不是估算）**：
-`PicoAide-Harness-2.8.2-beta.2-x86_64.AppImage` **192,354,510 B → 149,119,491 B**
+`ZeoKeel-Harness-2.8.2-beta.2-x86_64.AppImage` **192,354,510 B → 149,119,491 B**
 （−43,235,019 B = **−22.5%**）；squashfs 超级块实测 `block_size=1048576, compression_id=4 (xz)`（offset 188,392）。
 功能验证：`--appimage-extract` 成功；用 `--appimage-extract-and-run` 起打包版走 CDP 探针（`temp/upg/diag-sidebar.mjs`），
 桌面外壳正常渲染、`__DSH_BOOT__.entries` = **69 且含 `dsh-plugin-desktop`**（§8.9.12 加的那条不变量）。
@@ -3850,11 +3850,11 @@ master 头**上是"这次发布从未发生"的更正，而不是覆盖一个已
 
 ### §8.9.10 「本地绿、CI 红」的权限模型缺口：两条自校准 EACCES 用例（CI 抓到，本地补跑抓到第二条）
 
-**现象**：CI 的 `Gate (tests + workspace build)` 在 `@picoaide/dsh-wasm-apps-host` 上红：
+**现象**：CI 的 `Gate (tests + workspace build)` 在 `@zeokeel/dsh-wasm-apps-host` 上红：
 
 ```
 FAIL src/ai-authorization.spec.ts > 读不动的记录文件… > 真 EACCES（自校准）：记录不被吞 + 写面拒绝覆盖
-Error: EACCES: permission denied, open '/tmp/pico-app-ai-consent-XXXX/wasm-apps-ai-consent.json'
+Error: EACCES: permission denied, open '/tmp/zeokeel-app-ai-consent-XXXX/wasm-apps-ai-consent.json'
 ```
 
 **真因（判据自身的缺陷，不是被测行为）**：两条"真 EACCES（自校准）"用例在
@@ -3871,7 +3871,7 @@ Error: EACCES: permission denied, open '/tmp/pico-app-ai-consent-XXXX/wasm-apps-
 补跑方式（已实测有效）：
 
 ```bash
-capsh --drop=cap_dac_override,cap_dac_read_search -- -c "cd /data/picoaide-harness && corepack yarn check"
+capsh --drop=cap_dac_override,cap_dac_read_search -- -c "cd /data/zeokeel-harness && corepack yarn check"
 ```
 
 正控：`chmod 000` 的文件在 root 下读得到、在该命令下 `权限不够`
@@ -3895,8 +3895,8 @@ capsh --drop=cap_dac_override,cap_dac_read_search -- -c "cd /data/picoaide-harne
    而不是靠调用序号猜。**
 2. **产物 specifier 空转下限过期**：`verify-packaged-runtime.ts` 的
    `MIN_RESOLVED_WORKSPACE_SPECIFIERS` 由 20 下调到 17 —— 十层自研补丁不再用
-   `createRequire(…).resolve('@picoaide/<pkg>/package.json')` 解析（U1 的修法），
-   产物里的 `@picoaide/*` specifier 随之减少，**CI 干净检出实测 18**（本地完整树 ≥20）。
+   `createRequire(…).resolve('@zeokeel/<pkg>/package.json')` 解析（U1 的修法），
+   产物里的 `@zeokeel/*` specifier 随之减少，**CI 干净检出实测 18**（本地完整树 ≥20）。
    该常数的用途**只有"防空转"**（产物没构建时会掉到 ≈0），17 仍远高于那个形态；
    注释里写明了历史值与下调理由。**教训：本地完整树的计数会掩盖"干净检出"的计数** ——
    凡是拿"产物里有多少条 X"当下限的判据，都要在**干净检出**上实测一次。
@@ -3924,7 +3924,7 @@ capsh --drop=cap_dac_override,cap_dac_read_search -- -c "cd /data/picoaide-harne
 **两条 P1（都已按事实更正，而不是"解释过去"）**：
 
 1. **C22 真机网关 L1 复跑 9/12**（此前登记"期望 12/12"）。根因：本轮新加的 `ENDPOINT_MISMATCH`
-   硬边界把**探针自己的客户端栈**拒了（探针段 B 没有登录态 ⇒ 无 `picoSession.serverURL`），
+   硬边界把**探针自己的客户端栈**拒了（探针段 B 没有登录态 ⇒ 无 `zeokeelSession.serverURL`），
    后三段"全链路 pong / 网关侧 Bearer 观测 / 上游 key 对照"**结构上不可能 PASS**。
    **准确口径**：不是"真实用户必然坏"（边界 fail-closed，登录后即有 `serverURL`），
    而是"**登记的那条验收判据在锚上已过期**，且上一轮唯一的端到端证据不再可复现"。
@@ -3932,7 +3932,7 @@ capsh --drop=cap_dac_override,cap_dac_read_search -- -c "cd /data/picoaide-harne
    （实测常量 `[EMPTY_RESPONSE, RATE_LIMIT, SERVER, TIMEOUT, TRANSPORT]`）⇒
    **会话未就绪窗口内的模型请求从"带令牌照发"变成"不可重试的硬失败"**。已写进发布说明（§一.2 末条）。
    待办：① 把该探针改成"带登录态的 12/12"并补"session 未就绪 / 端点不符"两档判据；
-   ② 确认 `picoSession` 就绪时序覆盖 **cron 与应用 AI** 两个入口（它们可能先于交互式登录发请求）。
+   ② 确认 `zeokeelSession` 就绪时序覆盖 **cron 与应用 AI** 两个入口（它们可能先于交互式登录发请求）。
 2. **D13 发布说明漏报**：上游 `spill-policy` 由 `maxInlineBytes: 50000` 换成
    `maxInlineTokens: 12500`（schema 只认 token），我方零引用 ⇒ 桌面直接吃新默认，
    而**长工具结果的落盘时机是用户可感的**。已补进发布说明（§一.3），等价性仍标 UNVERIFIED。

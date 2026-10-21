@@ -14,8 +14,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // maxNameLen bounds the reported skill name (defense: bound every field the
@@ -26,8 +26,8 @@ const maxNameLen = 128
 // 双桶(每分钟):perUser 防单账号刷量,perSkill 防单技能被集中刷票。
 // 可用环境变量下调(测试/压测);0 = 不限。
 var (
-	perUserLimitPerMin  = envInt("PICOAI_TELEMETRY_MAX_PER_MIN", 60)
-	perSkillLimitPerMin = envInt("PICOAI_TELEMETRY_MAX_PER_SKILL_PER_MIN", 10)
+	perUserLimitPerMin  = envInt("ZEOKEEL_TELEMETRY_MAX_PER_MIN", 60)
+	perSkillLimitPerMin = envInt("ZEOKEEL_TELEMETRY_MAX_PER_SKILL_PER_MIN", 10)
 	skillCallLimiter    = newCallLimiter(time.Minute)
 )
 

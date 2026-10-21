@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AuthError } from '@picoaide/dsh-enterprise/server-connector/auth'
+import { AuthError } from '@zeokeel/dsh-enterprise/server-connector/auth'
 import { UsageService, isAuthExpired, type UsagePayload, type UsageFetcher } from './usage-service.ts'
 
 const SESSION = { serverURL: 'https://gw.example.com', username: 'alice', token: 'tok-1' }

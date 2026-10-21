@@ -5,7 +5,7 @@
    · 零外部依赖：没有 CDN、没有框架、没有外链字体；只用浏览器原生能力；
    · 渲染一律走 textContent / createElement —— **不拼 innerHTML**（用户与平台返回的
      文本原样当文本节点，天然转义）；
-   · 唯一允许的跨边界调用是客户端 AI loop：POST /__picoaide/ai/chat（本机处理，
+   · 唯一允许的跨边界调用是客户端 AI loop：POST /__zeokeel/ai/chat（本机处理，
      绝不转发平台）；其余请求都是应用自己的 /api/*；
    · Cookie 不可用、Cache Storage 不可用（见「存储边界」那一屏），要留存的放应用库。
    ========================================================================== */
@@ -329,7 +329,7 @@ async function loadWhoami(options) {
       { label: '保留资源 content_type', value: data.config_asset.content_type, kind: 'mono' },
       { label: '保留资源 size', value: `${data.config_asset.size} 字节`, kind: 'mono' },
       { label: '保留资源 encoding', value: data.config_asset.encoding, kind: 'mono' },
-      { label: 'picoaide.app.json 原文' + (data.config.raw_truncated ? '（已截断）' : ''), value: data.config.raw, kind: 'code' },
+      { label: 'zeokeel.app.json 原文' + (data.config.raw_truncated ? '（已截断）' : ''), value: data.config.raw, kind: 'code' },
     ]
     accessHost.appendChild(fieldsBlock(assetFields))
     if (data.config_asset.error) accessHost.appendChild(errorBlock(data.config_asset.error))
@@ -692,7 +692,7 @@ async function askAi() {
       host.appendChild(
         errorBlock({
           code: errorInfo.code,
-          method: '客户端 AI loop（/__picoaide/ai/chat）',
+          method: '客户端 AI loop（/__zeokeel/ai/chat）',
           message: errorInfo.message,
           hints: [aiHint(errorInfo.code)],
         }),
@@ -702,11 +702,11 @@ async function askAi() {
     } else {
       setStatus('ok', 'AI 回答完成')
     }
-    updateFoot(`POST /__picoaide/ai/chat · ${errorInfo ? errorInfo.code : 'done'} · ${full.length} 字`)
+    updateFoot(`POST /__zeokeel/ai/chat · ${errorInfo ? errorInfo.code : 'done'} · ${full.length} 字`)
   }
 
   try {
-    const res = await fetch('/__picoaide/ai/chat', {
+    const res = await fetch('/__zeokeel/ai/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
       body: JSON.stringify({ messages: [{ role: 'user', content: question }], stream: true }),

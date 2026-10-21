@@ -16,13 +16,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/router"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
 )
 
 // 本文件是「平台限制项」**保存路径**的装配级门禁（审计 R1-rt-8）。
@@ -230,7 +230,7 @@ func auditRow(t *testing.T, db *sql.DB, action string) (int, string) {
 // 缺陷现场（审计活体复现）：`{"limits":null}` 号称"回落部署档位"，而 `Apply("")` 把档位值
 // **又写回 settings** 并 `h.set(..., "setting")` ⇒ 库行仍在、`source` 仍 `setting`、
 // label 仍「控制台保存（wasm.limits）」—— 运维**事实上无法回落档位**（此后改
-// PICOAI_WASM_MEMORY_PROFILE 会被这条钉死的设置覆盖，而界面上看不出异常）。
+// ZEOKEEL_WASM_MEMORY_PROFILE 会被这条钉死的设置覆盖，而界面上看不出异常）。
 //
 // 判据（全部在真装配上，逐条对应一个可观测事实）：
 //  1. 清空前：设置行存在、`source=setting`，**换一个档位构造 holder 也仍读设置值**
@@ -242,7 +242,7 @@ func auditRow(t *testing.T, db *sql.DB, action string) (int, string) {
 //  5. 生效值回到档位值（不是"设置值被重写成档位值"的那种假回落）；
 //  6. 写了一条 `wasm_limits_change` 审计，明细点名来源变化（setting → profile）；
 //  7. **重启视角**：清空后用**另一个档位**构造 holder ⇒ 新档位真的生效（这正是
-//     "运维可以改 PICOAI_WASM_MEMORY_PROFILE 回落/换档"的可操作含义）。
+//     "运维可以改 ZEOKEEL_WASM_MEMORY_PROFILE 回落/换档"的可操作含义）。
 //
 // 变异验证（任一即红）：
 //   - 把 `Apply("")` 改回 `SetSetting(..., next.Encode())` + `h.set(next, "setting", …)`

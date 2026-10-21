@@ -18,9 +18,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // WebConfig mirrors the bootstrap `web` section.
@@ -33,7 +33,7 @@ type WebConfig struct {
 	// 上报等级阈值(2026-08): error|warning|info|debug;>= 阈值才上报。
 	ErrorReportingLevel string `json:"error_reporting_level"`
 	// 正向心跳开关(2026-09-16,D4):true 时客户端每次进程启动发一条带
-	// `picoaide.heartbeat` tag 的 info 事件,**只对该 tag 绕过**上面的等级阈值
+	// `zeokeel.heartbeat` tag 的 info 事件,**只对该 tag 绕过**上面的等级阈值
 	// (error_reporting_level 语义未改变);默认 false = 与历史行为完全一致。
 	// 用途:让管理员有办法证明「客户端 → GlitchTip」这一跳活着 ——
 	// 否则 level=error 下健康链路在后台也一条都没有,与"坏掉"不可区分。

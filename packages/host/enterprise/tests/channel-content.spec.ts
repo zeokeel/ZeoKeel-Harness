@@ -44,7 +44,7 @@ describe('brandChannel', () => {
     })
     const out = brandChannel(profile?.brand)
     expect(out.client?.short_name).toBe('Acme AI')
-    expect(JSON.stringify(out)).not.toContain('PicoAide')
+    expect(JSON.stringify(out)).not.toContain('ZeoKeel')
   })
 
   it('carries the packaged logo so the UI never falls back to the vendor mark', () => {
@@ -91,7 +91,7 @@ describe('brandChannel', () => {
     const mapped = brandChannel(bare?.brand)
     expect(mapped.client?.display_name).toBe('Harness')
     expect(mapped.login?.display_name).toBe('Harness')
-    expect(JSON.stringify(mapped)).not.toContain('PicoAide')
+    expect(JSON.stringify(mapped)).not.toContain('ZeoKeel')
   })
 
   it('treats whitespace-only fields as absent (official base)', () => {
@@ -114,7 +114,7 @@ describe('brandChannel', () => {
  *
  * 这条是白标的最后一道防线:服务端那份内容缺字段时(旧服务端、渠道配置没打进
  * 镜像、字段被清空),消费方绝不能回落到内置的**厂商**文案 —— 渠道客户会看到
- * PicoAide,而链路上一处报错都没有。
+ * ZeoKeel,而链路上一处报错都没有。
  */
 describe('mergeChannel', () => {
   const packaged = brandChannel({
@@ -144,7 +144,7 @@ describe('mergeChannel', () => {
     expect(merged.title).toBe('Zephyr AI')
     expect(merged.login?.display_name).toBe('Zephyr')
     expect(merged.client?.short_name).toBe('Zephyr')
-    expect(JSON.stringify(merged)).not.toContain('PicoAide')
+    expect(JSON.stringify(merged)).not.toContain('ZeoKeel')
   })
 
   it('never drops the server-only asset fields', () => {
@@ -192,7 +192,7 @@ describe('channelTitle', () => {
 })
 
 /**
- * 载荷结构校验:`/api/pico/channel` 回来的东西**必须像渠道内容**才能进 store。
+ * 载荷结构校验:`/api/zeokeel/channel` 回来的东西**必须像渠道内容**才能进 store。
  *
  * 2026-09-10 实测事故链(E2E 抓到):mock/旧服务端对未知路由回 `{ok:true}`,
  * 客户端把它当渠道内容存下 → 每个品牌字段取不到值 → 侧边栏与窗口标题回落到

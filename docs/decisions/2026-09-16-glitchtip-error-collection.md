@@ -17,8 +17,8 @@
 
 ## 1. 问题陈述
 
-用户报告：自托管 GlitchTip（`https://glitchtip.example.com/`，6.2.6，org `picoaide`，
-project `picoaide-web`）**收集不到内容**，最新一条 issue 还是 20 天前（2026-08-27，即搭建当天）。
+用户报告：自托管 GlitchTip（`https://glitchtip.example.com/`，6.2.6，org `zeokeel`，
+project `zeokeel-web`）**收集不到内容**，最新一条 issue 还是 20 天前（2026-08-27，即搭建当天）。
 
 **关键重述（本决策的出发点）**：这不是"最近坏了"，而是**真实客户端错误从上线至今一条都没进来过，
 只是一直没人发现**——搭建当天的 9 条 issue 全部是人造联调探针（F5），之后 20 天零真实流量。
@@ -38,7 +38,7 @@ project `picoaide-web`）**收集不到内容**，最新一条 issue 还是 20 �
 | **F7** | 产品对坏 DSN **完全静默**：webadmin 只校验 `/^https?:\/\//i`，`http://key@localhost:8000/1` 照收并提示"已保存"；客户端 init 失败只 `console.warn`（GUI 无人可见） | 源码 + 实测 |
 | **F8** | 坏 DSN 的真实行为：上层毫无察觉（`initSentry returned`），底层 `connect ECONNREFUSED 127.0.0.1:8000`，GlitchTip 零新增 | 实测 |
 | **F9** | `level=error` 让"健康"与"坏掉"在后台**看起来一模一样**（`beforeSend` 把 info 自检丢弃） | 源码 + 后续实测 |
-| **F10** | **推翻 H1**：生产正在分发的 2.7.5-beta.2 发布树里 `@sentry/node` 可 `require`（7.120.4）、`error-reporting` 插件可 `import`、真发事件到达 GlitchTip（`PICOAIDE-WEB-D`） | 实测（发布树） |
+| **F10** | **推翻 H1**：生产正在分发的 2.7.5-beta.2 发布树里 `@sentry/node` 可 `require`（7.120.4）、`error-reporting` 插件可 `import`、真发事件到达 GlitchTip（`ZEOKEEL-WEB-D`） | 实测（发布树） |
 | **F11** | **F9 升级为实测复现**：`level=error` 下 `captureMessage(info)` **查无此 issue**、`captureMessage(error)` **到达** ⇒ 链路完全健康时后台也一条都没有 | 实测 |
 | **F12** | **确认只采主进程**：`error-reporting.ts` 只初始化 `@sentry/node`；全仓无 `window.onerror` / `unhandledrejection` 采集；发布树里没有 `@sentry/browser` ⇒ 用户界面上真实遇到的报错**结构上不会进 GlitchTip**；且 `initSentry` 只在 session 事件之后执行，**启动期/登录流程本身的崩溃永不上报** | 源码 + 发布树 |
 | **F13** | GlitchTip 的 DSN 展示与 **issue permalink** 都是 `http://localhost:8000/...`（缺 `GLITCHTIP_DOMAIN`）；且仓库 `e2e-fixture-gateway.mjs:57` 硬编码生产 DSN 又**没开** `error_reporting_enabled` ⇒ E2E 假绿 + 地址泄漏 | 实测 + 源码 |
@@ -138,7 +138,7 @@ project `picoaide-web`）**收集不到内容**，最新一条 issue 还是 20 �
 - **默认可见性**：webadmin 显示**「最近一次上报时间」**（数据来自 D1 的状态上报）。零噪音、零语义风险，
   且证明的正是**真正出问题的那一段**（配置下发 + 客户端 init）。
 - **可选端到端证明**：`web.error_reporting_heartbeat`（布尔，默认 **off**）。为 true 时客户端每次
-  进程启动发一条带 tag `picoaide.heartbeat` 的 **info** 事件，`beforeSend` **仅对带该 tag 的事件**
+  进程启动发一条带 tag `zeokeel.heartbeat` 的 **info** 事件，`beforeSend` **仅对带该 tag 的事件**
   绕过等级阈值；普通事件仍走原纯等级过滤 ⇒ `error_reporting_level` 语义**未被改变**。
 - **落地形态**：复用现有自检消息 + 一个新 tag（不新造文案），加"每进程只发一次"守卫，
   且**不修改** `error_reporting_level` 语义、不新增等级取值（`debug|info|warning|error` 白名单两端已一致）。
@@ -151,7 +151,7 @@ project `picoaide-web`）**收集不到内容**，最新一条 issue 还是 20 �
 - **做法**：`@sentry/node` 保持 `tsdown.config.ts` 的 external 与**静态** import；在
   `verify-packaged-runtime.ts` 的 `afterPack` 阶段新增 smoke：用**打包后的 Electron**
   （`ELECTRON_RUN_AS_NODE=1`）`require('@sentry/node')` 并断言 `typeof init === 'function'`，
-  同时断言 `@picoaide/dsh-enterprise/error-reporting` 可解析；成功标记 `SENTRY-SMOKE-OK`，
+  同时断言 `@zeokeel/dsh-enterprise/error-reporting` 可解析；成功标记 `SENTRY-SMOKE-OK`，
   缺失时**硬失败**（不是警告）。`REQUIRED_ASAR_EXPORTS` 补 `error-reporting` 条目。
 - **理由**：源码注释（`error-reporting.ts:6-8`）记录了**实测结论**——动态 import 会被 tsdown 拆 chunk
   导致运行时解析挂起。改成惰性加载属于**重新踩已知的坑**；正确做法是"保持静态 + 打包期断言"。
@@ -265,10 +265,10 @@ AC1–AC13 来自设计蓝图 §5.2（全部采纳），AC14/AC15 为 D8/D9 追�
 | **AC1** | 服务端**拒绝**指向 loopback（`localhost`/`127.0.0.1`/`127.1.2.3`/`::1`/`[::1]`）、链路本地与云 metadata（`169.254.169.254`/`fd00:ec2::/64`）、unspecified（`0.0.0.0`）的 DSN：HTTP 400 + JSON 信封 `{"error":{"code":"VALIDATION","message":"…中文…"}}`，且 **settings 未被写入**；合规公网 DSN 行为与今天完全一致（200 + 写库） | `cd server && go test ./internal/llmgateway/ -run TestValidateErrorReportingDSN -v` 全 PASS；`TestSetGatewayConfigDSNRejected` 断言 400 + 库值不变 |
 | **AC2** | webadmin 在**发请求之前**就拦下同类 DSN，给出中文报错且**不产生 PUT**；合规 DSN 仍提交 | `cd server/webadmin && npm test -- ErrorMonitoring` 新增「拒绝指向本机的 DSN 并给出中文提示」用例 + 既有用例不回归 |
 | **AC3** | 「发送测试事件」：可达 → 200 `{ok:true,event_id,http_status}` 且 GlitchTip 侧新增 issue；不可达 → 5xx + **可读中文原因**且 `detail.kind ∈ {DNS,CONNECT,TLS,TIMEOUT,HTTP_4XX,HTTP_5XX}` | `cd server && go test ./internal/llmgateway/ -run TestErrorReportingTestEvent -v` |
-| **AC4** | 客户端 init 失败**不再静默**：`getErrorReportingStatus().state === 'failed'` 且带 `reason`，同时 `ctx.logger.warn` 被调用；`enabled!==true` / `fellBack=true` / bootstrap 抛错三种情形分别得到 `disabled` / `config_unavailable` / `config_unavailable`，且**都至少一条 warn** | `corepack yarn workspace @picoaide/dsh-enterprise test -- error-reporting` 全 PASS |
+| **AC4** | 客户端 init 失败**不再静默**：`getErrorReportingStatus().state === 'failed'` 且带 `reason`，同时 `ctx.logger.warn` 被调用；`enabled!==true` / `fellBack=true` / bootstrap 抛错三种情形分别得到 `disabled` / `config_unavailable` / `config_unavailable`，且**都至少一条 warn** | `corepack yarn workspace @zeokeel/dsh-enterprise test -- error-reporting` 全 PASS |
 | **AC5** | 客户端状态可上报并被 webadmin 看到：`POST /api/client/v2/telemetry/error-reporting` 200 + upsert；`GET .../gateway/error-reporting/clients` 返回统计与 `items[]`；页面渲染「已启用 N / 失败 M」与最近原因 | `go test ./internal/telemetry/ -run TestReportErrorReportingStatus -v`；`PG_DSN_TEST=… go test ./internal/serverstore/ -run ErrorReporting -v`（须见 `--- PASS` 而非 `--- SKIP`）；`cd server/webadmin && npm test -- ErrorMonitoring` |
 | **AC6** | 打包产物断言：`afterPack` 阶段用**打包后的 Electron**（`ELECTRON_RUN_AS_NODE=1`）`require('@sentry/node')` 成功且 `error-reporting` 可解析，stdout 出现 `SENTRY-SMOKE-OK`；缺失时 **afterPack 硬失败** | `corepack yarn workspace dsh-plugin-desktop vitest run tests/verify-packaged-runtime.spec.ts` 全 PASS；`REQUIRED_ASAR_EXPORTS` 含 `error-reporting` |
-| **AC7** | 正向心跳：`heartbeat=true` 时带 `picoaide.heartbeat` tag 的 info 事件**通过** `beforeSend`；开关 false 时**不发**；开关 true 时**普通** info 事件**仍被**过滤（证明 `error_reporting_level` 语义未变） | `corepack yarn workspace @picoaide/dsh-enterprise test -- error-reporting`；`go test ./internal/llmgateway/ -run TestGatewayHeartbeatSetting -v`；`npm test -- ErrorMonitoring` |
+| **AC7** | 正向心跳：`heartbeat=true` 时带 `zeokeel.heartbeat` tag 的 info 事件**通过** `beforeSend`；开关 false 时**不发**；开关 true 时**普通** info 事件**仍被**过滤（证明 `error_reporting_level` 语义未变） | `corepack yarn workspace @zeokeel/dsh-enterprise test -- error-reporting`；`go test ./internal/llmgateway/ -run TestGatewayHeartbeatSetting -v`；`npm test -- ErrorMonitoring` |
 | **AC8** | （条件性，取决于 H5 验证结论）主进程致命异常发生后 GlitchTip **确实**收到该事件；若判定为"丢失"，修复后必须复测通过并在文档中记录修复前后的观测差异 | 打包态 + Xvfb 注入未捕获异常 → issue 计数 +1 |
 | **AC9** | 四条命令全绿：`enterprise typecheck` / `enterprise test` / `webadmin npm test` / `go test ./internal/llmgateway/` | 四条 exit code = 0；失败时必须**单独**重跑被改测试文件以区分"与本次无关的既有失败" |
 | **AC10** | `corepack yarn check` 全绿；若有既有失败，逐条列出并给出**归属判定**（缺依赖 / `lib/` 比 `src/` 旧 / 与本轮无关） | `corepack yarn check`；时间戳比对 `ls -la --time-style=+%m-%d_%H:%M …/lib/ …/src/` |
@@ -276,7 +276,7 @@ AC1–AC13 来自设计蓝图 §5.2（全部采纳），AC14/AC15 为 D8/D9 追�
 | **AC12** | 交付物归位：蓝图/实施/决策按需求书 §8 归入 `docs/planning/`、`docs/decisions/`；若本轮打 tag，`docs/releases/<tag>.md` **必须存在** | `ls docs/planning/2026-09-16-glitchtip-error-collection-*.md docs/decisions/2026-09-16-glitchtip-error-collection.md`；tag 前 `node scripts/check-workflows.mjs` |
 | **AC13** | E2E 夹具不再假绿、不再携带生产上报地址：`e2e-fixture-gateway.mjs` 的 `web` 段**不含** `glitchtip.example.com` / 生产 public key 字面量，且 `error_reporting_enabled: true`；`e2e:client` 能**断言上报被触发** | `grep -c 'glitchtip.example.com\|<glitchtip-public-key>' …/e2e-fixture-gateway.mjs` → **0**；`grep -c 'error_reporting_enabled'` → **≥1**；`e2e:client` 报告含上报断言且 pass |
 | **AC14**（D8 新增） | 渲染进程未捕获错误（`window.onerror` / `unhandledrejection` / `render-process-gone`）能被主进程捕获并上报到 GlitchTip；渲染进程侧**不出现任何 DSN 或直连流量** | preload 转发单测 + 主进程 handler 单测；发布树/运行时断言渲染侧无 DSN 字面量 |
-| **AC15**（D9 新增） | 生产现场修复后，`GET /api/0/projects/picoaide/picoaide-web/keys/` 返回的 DSN 主机为 `glitchtip.example.com`（不再是 `localhost:8000`），且 issue permalink 同样正确 | 修后只读 `curl` 该端点 + 任取一条 issue 看 `permalink` |
+| **AC15**（D9 新增） | 生产现场修复后，`GET /api/0/projects/zeokeel/zeokeel-web/keys/` 返回的 DSN 主机为 `glitchtip.example.com`（不再是 `localhost:8000`），且 issue permalink 同样正确 | 修后只读 `curl` 该端点 + 任取一条 issue 看 `permalink` |
 
 ---
 

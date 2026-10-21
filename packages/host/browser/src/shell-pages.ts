@@ -13,13 +13,13 @@
  * hidden behind the tabs — this split is what keeps the AI UI visible.
  *
  * Both pages are BUILT PER CALL from the locale the host resolved for that
- * request (`@picoaide/dsh-host-locale`), because the language can change
+ * request (`@zeokeel/dsh-host-locale`), because the language can change
  * while the app runs: a module-level table selected once would freeze the
  * copy the page was first served with.
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
-import type { HostLocale } from '@picoaide/dsh-host-locale'
+import type { HostLocale } from '@zeokeel/dsh-host-locale'
 
 /**
  * Failure copy shared by BOTH pages: each page's `failureText` maps a failed
@@ -338,7 +338,7 @@ export function browserShellHtml(locale: HostLocale): string {
     const timer = setTimeout(() => controller.abort(), 8000)
     return fetch(url, Object.assign({}, init, { signal: controller.signal })).finally(() => clearTimeout(timer))
   }
-  const post = (action, body) => fetchWithTimeout('/api/pico/browser/' + action, {
+  const post = (action, body) => fetchWithTimeout('/api/zeokeel/browser/' + action, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}),
   }).then(
     (r) => readJson(r).then((data) => ({ ok: r.ok === true, status: r.status, data })),
@@ -350,7 +350,7 @@ export function browserShellHtml(locale: HostLocale): string {
 
   async function refresh() {
     try {
-      const res = await fetch('/api/pico/browser/state')
+      const res = await fetch('/api/zeokeel/browser/state')
       // 读面失败（403/代理 HTML）保持上一次状态：原来的 r.json() 抛错虽然被 catch，
       // 但一条 500 的 JSON 错误体会把 tab 条清空成"没有标签页"。
       if (res.ok !== true) return
@@ -509,7 +509,7 @@ export function browserShellHtml(locale: HostLocale): string {
 
   function connectStream() {
     try {
-      const es = new EventSource('/api/pico/browser/stream')
+      const es = new EventSource('/api/zeokeel/browser/stream')
       // onopen/onerror 不再翻状态标志：重连由 EventSource 自己负责，页面只关心
       // "最近一次真的有事件推过来是什么时候"（见 SSE_STALE_MS）。
       for (const ev of ['tab', 'tab-meta', 'busy', 'takeover', 'release', 'ops', 'state']) {
@@ -1019,7 +1019,7 @@ export function browserOverlayHtml(locale: HostLocale): string {
       init.headers = { 'content-type': 'application/json' }
       init.body = JSON.stringify(body || {})
     }
-    return fetchWithTimeout('/api/pico/browser/' + path, init).then(
+    return fetchWithTimeout('/api/zeokeel/browser/' + path, init).then(
       (r) => readJson(r).then((data) => ({ ok: r.ok === true, status: r.status, data })),
       () => ({ ok: false, status: 0, data: null }),
     ).then((r) => { if (!r.ok) showToast(failureText(r.status, r.data)); return r })
@@ -1029,7 +1029,7 @@ export function browserOverlayHtml(locale: HostLocale): string {
 
   /** 读面：非 2xx 直接抛，由调用点的 try/catch 变成页面上的可见文案。 */
   const getJson = async (path) => {
-    const r = await fetchWithTimeout('/api/pico/browser/' + path)
+    const r = await fetchWithTimeout('/api/zeokeel/browser/' + path)
     if (r.ok !== true) throw new Error('HTTP ' + r.status)
     return await r.json()
   }
@@ -1063,7 +1063,7 @@ export function browserOverlayHtml(locale: HostLocale): string {
     if (mode !== 'capsule' || noticeOn === visible) return
     noticeOn = visible
     try {
-      fetchWithTimeout('/api/pico/browser/notice', {
+      fetchWithTimeout('/api/zeokeel/browser/notice', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ visible: visible }),
@@ -1415,7 +1415,7 @@ export function browserOverlayHtml(locale: HostLocale): string {
 
   function connectStream() {
     try {
-      const es = new EventSource('/api/pico/browser/stream')
+      const es = new EventSource('/api/zeokeel/browser/stream')
       // onopen/onerror 不再翻状态标志：重连由 EventSource 自己负责，页面只关心
       // "最近一次真的有事件推过来是什么时候"（见 SSE_STALE_MS）。
       for (const ev of ['tab', 'tab-meta', 'busy', 'takeover', 'release', 'ops', 'state']) {

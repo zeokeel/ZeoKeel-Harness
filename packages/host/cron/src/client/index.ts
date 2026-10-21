@@ -1,7 +1,7 @@
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 /**
  * Cron plugin client half: registers the foot-lane entry (an entry into the
- * `picoFootMenu` registry owned by `@picoaide/dsh-foot-menu`, which owns the one
+ * `zeokeelFootMenu` registry owned by `@zeokeel/dsh-foot-menu`, which owns the one
  * sidebar foot row) and the main-area job center unconditionally, plus two
  * optional faces that exist only where their owning rows do — the scheduled-job
  * tab in the official right
@@ -20,10 +20,10 @@ import type { IWorkspaces } from '@deepseek-ai/dsh-api-workspace-controller/clie
 import type { ConfigForms } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: the foot-lane registry contract (`ctx.picoFootMenu`) and its entry
+// Type-only: the foot-lane registry contract (`ctx.zeokeelFootMenu`) and its entry
 // shape. Never a runtime import: the registry reaches this bundle as a Cordis
 // service, not as a module.
-import type {} from '@picoaide/dsh-foot-menu/client'
+import type {} from '@zeokeel/dsh-foot-menu/client'
 // Type-only: the official right Sidebar's tab registry, seats, and `ctx.sidebarRight`.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 // Type-only: the Plugins page's `plugins.item` list-slot declaration. Upstream
@@ -62,8 +62,8 @@ import { en, setActiveLocale, t, zh } from './locales.ts'
 // card down with the tab, with no error anywhere (P1-7). The tab is registered
 // inside its own `ctx.inject` scope below instead.
 //
-// `picoFootMenu` is deliberately NOT here for the same reason: the row that
-// provides it (`@picoaide/dsh-foot-menu`) can be disabled by a channel overlay or
+// `zeokeelFootMenu` is deliberately NOT here for the same reason: the row that
+// provides it (`@zeokeel/dsh-foot-menu`) can be disabled by a channel overlay or
 // the machine-wide patch, and a hard inject on a never-provided service leaves
 // this fiber pending forever with no error — taking the whole plugin (job
 // center + settings card + right-Sidebar tab) down with the entry. The entry is
@@ -79,23 +79,23 @@ export const inject = ['slots', 'configForms', 'locale', 'workspaces', 'connecti
  * free-form `'cron'` document section. Kept as a literal here because the client
  * bundle must not import the Host half.
  */
-const CRON_NS = 'pico-cron'
+const CRON_NS = 'zeokeel-cron'
 
 /** Locale namespace this plugin owns. */
 const LOCALE_NS = 'cron'
 
 /** Right-Sidebar tab type identity: the definition id (also the body's seat key). */
-const CRON_TAB_ID = 'pico:cron'
+const CRON_TAB_ID = 'zeokeel:cron'
 /** Right-Sidebar tab kind: what `ctx.sidebarRight.openTab` names. */
-const CRON_TAB_KIND = 'pico-cron'
+const CRON_TAB_KIND = 'zeokeel-cron'
 
 /** Cordis service name of the browser cron face (sibling plugins consume). */
-const BROWSER_CRON_SERVICE = 'picoCronService'
+const BROWSER_CRON_SERVICE = 'zeokeelCronService'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Browser cron face provided by the cron plugin's client half. */
-    picoCronService: BrowserCronService
+    zeokeelCronService: BrowserCronService
   }
 }
 
@@ -126,7 +126,7 @@ export function apply(ctx: ClientContext): void {
   }, 'follow active locale')
 
   // Browser cron face: sibling plugins reach schedules through this client
-  // service (the Host half's picoCronService is not visible to the browser).
+  // service (the Host half's zeokeelCronService is not visible to the browser).
   // Same HTTP/SSE transport as the job center.
   const browserCron = new HttpBrowserCronService(new HttpCronTransport())
   ctx.effect(() => {
@@ -153,7 +153,7 @@ export function apply(ctx: ClientContext): void {
   // Upstream 0.1.7 replaced the client settings-scope seam (`ctx.settingsScope.bind`)
   // with the profile-backed form registry: `ctx.configForms.get(entryId)` returns a
   // per-namespace `ConfigForm` whose namespace **is the profile entry id** of the
-  // owning Host row (`pico-cron`, see the Host half's CRON_SETTINGS_ROW_ID).
+  // owning Host row (`zeokeel-cron`, see the Host half's CRON_SETTINGS_ROW_ID).
   const configForms = ctx.get('configForms') as ConfigForms | undefined
   if (configForms !== undefined && ctx.slots.spec('plugins.item') !== undefined) {
     const scope = configForms.get<CronSettings>(CRON_NS)
@@ -187,18 +187,18 @@ export function apply(ctx: ClientContext): void {
   const openSession = navigation === undefined
     ? undefined
     : (id: string) => { navigation.openSession(id as SessionId) }
-  // Foot-lane entry (the single `⋯ 更多` row owned by `@picoaide/dsh-foot-menu`):
+  // Foot-lane entry (the single `⋯ 更多` row owned by `@zeokeel/dsh-foot-menu`):
   // one controller drives both the main-area center and the panel tab.
   // `order: -10` keeps the job center first in the popover, and `id: 'cron'` is
   // the panel-surface PanelId — the foot row reads it to render `更多 · 定时任务`
   // while this panel is active.
   //
-  // 登记放在**子 fiber** 里等服务到位，而不是把 `picoFootMenu` 写进本插件的
+  // 登记放在**子 fiber** 里等服务到位，而不是把 `zeokeelFootMenu` 写进本插件的
   // `inject`：那一行可以被渠道覆盖层或 `$DSH_HOME/cordis.patch.yml` 禁用，硬 inject
   // 会让整条 fiber 永久 pending（**没有任何报错**），把任务中心、设置卡片与右栏标签
   // 一起带走（P1-7 的原话）。这里只有"登记这一个条目"等它，其余面貌照常 apply。
-  ctx.inject(['picoFootMenu'], (scope: ClientContext) => {
-    scope.effect(() => scope.picoFootMenu.add({
+  ctx.inject(['zeokeelFootMenu'], (scope: ClientContext) => {
+    scope.effect(() => scope.zeokeelFootMenu.add({
       id: 'cron',
       order: -10,
       title: () => t('job.listTitle'),

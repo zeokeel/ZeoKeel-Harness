@@ -1,7 +1,7 @@
 /**
  * Browser-side cron service face.
  *
- * The Host half of dsh-cron provides `picoCronService` in the Host cordis
+ * The Host half of dsh-cron provides `zeokeelCronService` in the Host cordis
  * context, which is invisible to the browser. Sibling plugins that want to
  * drive schedules from the client consume this browser face instead: it
  * wraps the same `/api/cron/*` same-origin transport the job center uses,

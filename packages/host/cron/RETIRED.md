@@ -1,6 +1,6 @@
 # RETIRED — 自动化任务已改用官方 Schedule（2026-10-18）
 
-本包（`@picoaide/dsh-cron`）**已从桌面组合中移除**，不再加载 Host 定时器、HTTP 路由、
+本包（`@zeokeel/dsh-cron`）**已从桌面组合中移除**，不再加载 Host 定时器、HTTP 路由、
 `cron_*` 工具、设置卡与任务面板。自研「定时任务」由上游 0.2.1 默认装配的
 `@deepseek-ai/dsh-schedule` + `@deepseek-ai/dsh-client-ui-schedule` + `@deepseek-ai/dsh-tool-schedule`
 取代；入口仍保留在侧栏「更多」浮层的原位（第一位，文案「自动化任务」），点击打开官方

@@ -33,7 +33,7 @@ import {
 
 describe('app url parsing (strict)', () => {
   it('parses scheme/host/path/query into the envelope fields', () => {
-    expect(parseAppUrl('picoaide-app://demo/notes?page=2', 'picoaide-app')).toEqual({
+    expect(parseAppUrl('zeokeel-app://demo/notes?page=2', 'zeokeel-app')).toEqual({
       appId: 'demo',
       path: '/notes',
       query: 'page=2',
@@ -41,27 +41,27 @@ describe('app url parsing (strict)', () => {
   })
 
   it('treats the bare origin as the root path with no query', () => {
-    expect(parseAppUrl('picoaide-app://demo/', 'picoaide-app')).toEqual({ appId: 'demo', path: '/', query: '' })
-    expect(parseAppUrl('picoaide-app://demo', 'picoaide-app')).toEqual({ appId: 'demo', path: '/', query: '' })
+    expect(parseAppUrl('zeokeel-app://demo/', 'zeokeel-app')).toEqual({ appId: 'demo', path: '/', query: '' })
+    expect(parseAppUrl('zeokeel-app://demo', 'zeokeel-app')).toEqual({ appId: 'demo', path: '/', query: '' })
   })
 
   it('rejects every non-app scheme and shape', () => {
     for (const raw of [
       'https://demo/notes',
-      'picoaide-app-extra://demo/',
-      'picoaide-app:///notes',
-      'picoaide-app://Demo/notes',
-      'picoaide-app://-demo/',
-      'picoaide-app://demo--x/',
-      'picoaide-app://demo.other/',
+      'zeokeel-app-extra://demo/',
+      'zeokeel-app:///notes',
+      'zeokeel-app://Demo/notes',
+      'zeokeel-app://-demo/',
+      'zeokeel-app://demo--x/',
+      'zeokeel-app://demo.other/',
       '',
       'not a url',
-      `picoaide-app://${'a'.repeat(64)}/`,
+      `zeokeel-app://${'a'.repeat(64)}/`,
     ]) {
-      expect(parseAppUrl(raw, 'picoaide-app'), raw).toBeNull()
+      expect(parseAppUrl(raw, 'zeokeel-app'), raw).toBeNull()
     }
-    expect(parseAppUrl(undefined, 'picoaide-app')).toBeNull()
-    expect(parseAppUrl(42, 'picoaide-app')).toBeNull()
+    expect(parseAppUrl(undefined, 'zeokeel-app')).toBeNull()
+    expect(parseAppUrl(42, 'zeokeel-app')).toBeNull()
   })
 
   it('keeps the app id pattern in sync with the platform limits', () => {
@@ -74,7 +74,7 @@ describe('app url parsing (strict)', () => {
 })
 
 describe('request envelope', () => {
-  const url = parseAppUrl('picoaide-app://demo/notes?page=2', 'picoaide-app')!
+  const url = parseAppUrl('zeokeel-app://demo/notes?page=2', 'zeokeel-app')!
 
   it('synthesizes the self origin even though Chromium sends none (contract §4.3)', () => {
     const built = buildRequestEnvelope({
@@ -90,8 +90,8 @@ describe('request envelope', () => {
       method: 'POST',
       path: '/notes',
       query: 'page=2',
-      host: 'picoaide-app://demo',
-      headers: { 'content-type': 'application/json', origin: 'picoaide-app://demo' },
+      host: 'zeokeel-app://demo',
+      headers: { 'content-type': 'application/json', origin: 'zeokeel-app://demo' },
       body: Buffer.from('{"title":"x"}').toString('base64'),
     })
   })
@@ -118,7 +118,7 @@ describe('request envelope', () => {
     expect(built.ok).toBe(true)
     if (!built.ok) return
     // Origin 只可能是 handler 合成的自源（应用伪造的值在过滤阶段就被丢掉）。
-    expect(built.envelope.headers.origin).toBe('picoaide-app://demo')
+    expect(built.envelope.headers.origin).toBe('zeokeel-app://demo')
     expect(built.envelope.headers).not.toHaveProperty('authorization')
     expect(built.envelope.headers).not.toHaveProperty('cookie')
     expect(built.envelope.body).toBe('')
@@ -237,7 +237,7 @@ describe('response envelope', () => {
 
   it('accepts only the frozen scheme shape and rejects reserved schemes (design §8.3/§10)', () => {
     // 与 Go `channel.AppOriginScheme()` 的正则逐字一致：^[a-z][a-z0-9+.-]{1,31}$
-    expect(isValidAppScheme('picoaide-app')).toBe(true)
+    expect(isValidAppScheme('zeokeel-app')).toBe(true)
     expect(isValidAppScheme('example-harness-app')).toBe(true)
     expect(isValidAppScheme('a1')).toBe(true)
     for (const value of ['a', '', 'A-app', '-app', 'app_', 'app name', 'x'.repeat(33), 'http', 'https', 'file', 'data', 'javascript', 'about', 'blob']) {
@@ -246,6 +246,6 @@ describe('response envelope', () => {
   })
 
   it('builds the app origin from the parsed host only', () => {
-    expect(appOrigin(DEFAULT_APP_SCHEME, 'demo')).toBe('picoaide-app://demo')
+    expect(appOrigin(DEFAULT_APP_SCHEME, 'demo')).toBe('zeokeel-app://demo')
   })
 })

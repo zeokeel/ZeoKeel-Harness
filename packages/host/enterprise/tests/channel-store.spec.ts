@@ -4,7 +4,7 @@ import { readChannelSync, startChannelStore, subscribeChannel } from '../src/cli
 import type { ChannelConfig } from '../src/channel-content.ts'
 
 const CHANNEL: ChannelConfig = {
-  name: 'PicoAide',
+  name: 'ZeoKeel',
   logoUrl: 'https://srv/logo.svg',
   faviconUrl: 'https://srv/favicon.svg',
   primaryColor: '#2563eb',
@@ -14,7 +14,7 @@ function ctxWithEvent(): { ctx: ClientContext; emit: (channel: ChannelConfig | n
   const listeners = new Set<(channel: ChannelConfig | null) => void>()
   const ctx = {
     on: (event: string, listener: (channel: ChannelConfig | null) => void) => {
-      expect(event).toBe('pico/channel-changed')
+      expect(event).toBe('zeokeel/channel-changed')
       listeners.add(listener)
       return () => { listeners.delete(listener) }
     },
@@ -169,7 +169,7 @@ describe('channel store packaged-brand seed', () => {
 describe('channel store value subscriptions', () => {
   it('notifies value subscribers on seed and on host events', async () => {
     // 标题归一化/hero 变量这类非 React 消费方靠它:播种不经过 Host 事件,
-    // 只订阅 pico/channel-changed 会一直拿旧值(实测:侧边栏已是渠道名、
+    // 只订阅 zeokeel/channel-changed 会一直拿旧值(实测:侧边栏已是渠道名、
     // 窗口标题还是厂商名)。
     const seen: Array<unknown> = []
     const off = subscribeChannel((channel) => seen.push(channel))

@@ -51,7 +51,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // r7cUpstream 按给定 SSE 事件序列回放(每条已含 \n\n)。与复核探针同形态:

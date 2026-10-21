@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { UsageService, type UsagePayload } from './usage-service.ts'
 
 const enterpriseAuth = vi.hoisted(() => ({ fetchJSON: vi.fn() }))
-vi.mock('@picoaide/dsh-enterprise/server-connector/auth', () => ({ fetchJSON: enterpriseAuth.fetchJSON }))
+vi.mock('@zeokeel/dsh-enterprise/server-connector/auth', () => ({ fetchJSON: enterpriseAuth.fetchJSON }))
 
 function payload(monthly_cost: number): UsagePayload {
   return {
@@ -109,7 +109,7 @@ function browserFence(): { requestRejection: (r: { headers: Record<string, unkno
 function request(): IncomingMessage {
   return {
     method: 'GET',
-    url: '/api/pico/account/usage?refresh=1',
+    url: '/api/zeokeel/account/usage?refresh=1',
     headers: {
       host: AUTHORITY,
       origin: `http://${AUTHORITY}`,
@@ -137,7 +137,7 @@ describe('account-card route binds the response to the requesting session (P2-22
     let current: typeof USER_A | null = USER_A
     let registered: RouteEntry | undefined
     const ctx = {
-      picoSession: { getSession: () => current },
+      zeokeelSession: { getSession: () => current },
       get: (name: string) => (name === 'connection' ? browserFence() : undefined),
       logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
       on: vi.fn(() => () => {}),

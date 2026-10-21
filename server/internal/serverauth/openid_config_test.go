@@ -3,7 +3,7 @@ package serverauth
 import (
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestConfigureProvidersOpenID verifies openid.* settings configure a

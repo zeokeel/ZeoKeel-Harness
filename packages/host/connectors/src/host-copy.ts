@@ -7,7 +7,7 @@
  * ----------------------
  * The client half has its own dictionary (`src/client/locales.ts`) driven by
  * `ctx.locale`, but Host code cannot reach that service — `ctx.locale` lives in
- * the client face. The shared resolver is `@picoaide/dsh-host-locale`
+ * the client face. The shared resolver is `@zeokeel/dsh-host-locale`
  * (the zero-dependency leaf package; `dsh-plugin-desktop/host-locale` re-exports
  * the same module for the host surfaces that already import it):
  * probed `desktopRuntime.locale` (the user's in-app choice) → request
@@ -28,7 +28,7 @@
  *
  * @module
  */
-import { DEFAULT_HOST_LOCALE, hostCopy as pickHostCopy, hostLocaleFrom, type HostLocale } from '@picoaide/dsh-host-locale'
+import { DEFAULT_HOST_LOCALE, hostCopy as pickHostCopy, hostLocaleFrom, type HostLocale } from '@zeokeel/dsh-host-locale'
 
 /**
  * Structural view of a context that can hand out the probed desktop runtime.

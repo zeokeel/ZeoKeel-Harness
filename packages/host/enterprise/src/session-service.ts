@@ -2,8 +2,8 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { subscribeSessionChanges } from '@picoaide/dsh-host-locale/session-events'
-import { SESSION_CHANGED_EVENT } from '@picoaide/dsh-host-locale/session-events'
+import { subscribeSessionChanges } from '@zeokeel/dsh-host-locale/session-events'
+import { SESSION_CHANGED_EVENT } from '@zeokeel/dsh-host-locale/session-events'
 import type { Session } from './server-connector/config.ts'
 import { loadElectronModule } from './server-connector/electron.ts'
 import { dshHomeSafe } from 'dsh-plugin-desktop/desktop-home'
@@ -20,7 +20,7 @@ const TOKEN_FILE_MODE = 0o600
  * bearer token 不得落到攻击者可读位置)。
  *
  * 2026-09-11:缺省值走共享的 `dshHomeSafe()`(数据目录唯一权威),不再自己拼
- * `~/.picoaide-harness` —— 数据根随渠道(渠道客户端由主进程写 DSH_HOME),
+ * `~/.zeokeel-harness` —— 数据根随渠道(渠道客户端由主进程写 DSH_HOME),
  * 这里抄一份常量就会在改渠道目录时漏掉,于是 token 落回官方目录。
  */
 export function defaultTokenFile(env: NodeJS.ProcessEnv = process.env): string {
@@ -28,7 +28,7 @@ export function defaultTokenFile(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /** Cordis event emitted whenever the session is set, restored, or cleared. */
-export { SESSION_CHANGED_EVENT } from '@picoaide/dsh-host-locale/session-events'
+export { SESSION_CHANGED_EVENT } from '@zeokeel/dsh-host-locale/session-events'
 
 /**
  * 订阅会话变更，并**补发启动时那一次**。
@@ -49,11 +49,11 @@ export { SESSION_CHANGED_EVENT } from '@picoaide/dsh-host-locale/session-events'
  * `=== true` ⇒ 已经错过（这里立即补一次）。两个方向都不重不漏。
  *
  * 2026-09-24（R13）：顺序与判据的实现已收口到零依赖叶子包
- * `@picoaide/dsh-host-locale/session-events` 的 {@link subscribeSessionChanges} ——
+ * `@zeokeel/dsh-host-locale/session-events` 的 {@link subscribeSessionChanges} ——
  * desktop（应用 AI 执行面）与 wasm-apps-host（窗口/缓存作用域）不可能 import 本包
  * （它们在构建图上游），此前各自抄了一份，而"抄一份"正是本仓反复出现的失效形态。
  * 本函数保留原签名，只是把它交给那一份实现。
- * @param ctx - 宿主插件上下文（需注入 `picoSession`）。
+ * @param ctx - 宿主插件上下文（需注入 `zeokeelSession`）。
  * @param listener - 收到会话（或 null）时的回调。
  * @returns 取消订阅的函数。
  */
@@ -66,10 +66,10 @@ export function subscribeSession(
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    picoSession: SessionService
+    zeokeelSession: SessionService
   }
   interface Events {
-    'pico/session-changed'(session: Session | null): void
+    'zeokeel/session-changed'(session: Session | null): void
   }
 }
 
@@ -91,7 +91,7 @@ export const Config: z<Config> = z.object({
 
 /**
  * Enterprise session state, restored from an encrypted token file and exposed
- * as the `picoSession` service. Emits `pico/session-changed` on every change.
+ * as the `zeokeelSession` service. Emits `zeokeel/session-changed` on every change.
  */
 export default class SessionService extends Service {
   static Config = Config
@@ -105,10 +105,10 @@ export default class SessionService extends Service {
   private persistEpoch = 0
 
   constructor(ctx: Context, config: Config) {
-    super(ctx, 'picoSession')
+    super(ctx, 'zeokeelSession')
     this.tokenFile = config.tokenFile ?? defaultTokenFile()
-    // picoaide:// deep-link auth (OIDC/OpenID callback): store the session
-    // when a valid link arrives. Emits pico/session-changed → auth-gate
+    // zeokeel:// deep-link auth (OIDC/OpenID callback): store the session
+    // when a valid link arrives. Emits zeokeel/session-changed → auth-gate
     // reloads into the app (login page poll sees loggedIn).
     // scheme 用桌面壳注入的本安装值（渠道构建是自己的），见 installDeepLinkListener。
     installDeepLinkListener(ctx, (session) => {
@@ -145,7 +145,7 @@ export default class SessionService extends Service {
     // and let the next successful login persist again.
     void persist(this.tokenFile, session, () => epoch === this.persistEpoch).catch((cause: unknown) => {
       const message = cause instanceof Error ? cause.message : String(cause)
-      this.ctx.logger?.warn(`[pico] session token could not be persisted (${this.tokenFile}): ${message}`)
+      this.ctx.logger?.warn(`[zeokeel] session token could not be persisted (${this.tokenFile}): ${message}`)
     })
     this.ctx.emit(SESSION_CHANGED_EVENT, session)
   }
@@ -190,7 +190,7 @@ export default class SessionService extends Service {
    *    ⇒ 走 {@link clear}，内存会话与磁盘令牌一起清掉（这是"401 弹回登录页"那条链，
    *    也是 `session-service.spec.ts` 钉住的行为）；
    *  - **迟到 401 必须不动**：当前令牌与请求令牌不同（已重登 / 已换号）⇒ 返回 false，
-   *    而且**连 `pico/session-changed` 都不发** —— 发 `null` 会让渲染层 tripwire
+   *    而且**连 `zeokeel/session-changed` 都不发** —— 发 `null` 会让渲染层 tripwire
    *    误判"已登出"而刷新回登录页，那是把"该登出没登出"换成"不该登出却登出"，
    *    两个方向都错；
    *  - **无会话可清**：`session` 为 null、或没有令牌可比 ⇒ 什么都不做（与
@@ -263,7 +263,7 @@ async function persist(tokenFile: string, s: Session, stillCurrent: () => boolea
     // credential with its own server-side TTL; 0600 on the file is the best
     // guard available without a keyring. Warn once so the operator knows
     // the dependency (gnome-keyring/kwallet) would harden this.
-    console.warn('[pico] token persisted as 0600 plaintext: no safeStorage keyring available')
+    console.warn('[zeokeel] token persisted as 0600 plaintext: no safeStorage keyring available')
     if (!stillCurrent()) return // F7(二次校验:await 之后仍可能变化)
     writeFileSync(tokenFile, JSON.stringify(s), { mode: TOKEN_FILE_MODE })
     return

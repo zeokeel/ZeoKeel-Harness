@@ -4,7 +4,7 @@
  *
  * 缺陷形态（两路独立命中，修复前实测）：隐藏会话 id 只有应用维度（`app:<app_id>`），
  * 而它同时是 ①本机多轮上下文的键、②`live`/`queues` 的键。桌面壳的 runner **进程级
- * provide 一次**、且全文件没有任何 `pico/session-changed` 释放路径 ⇒ 同一台机器上
+ * provide 一次**、且全文件没有任何 `zeokeel/session-changed` 释放路径 ⇒ 同一台机器上
  * **先 A 后 B**（共用工作站的常见形态）时，B 那一轮的**真实模型请求里带着 A 的 user
  * 消息与 assistant 回复**；反向，B 的取消会 `dispose` 掉 A 的活体会话。
  *
@@ -12,7 +12,7 @@
  *  - ①两个账号（同一个应用、同一个服务端）拿到**不同**的 sessionId；
  *    同名账号在**不同服务端**上也是不同的会话（测试/正式并存的租户维度）；
  *  - ②B 的第一轮请求体**不含** A 的内容（真 agent-loop + 记录请求体的假适配器）；
- *  - ③`pico/session-changed` 之后 `live`/`queues` 清空，且**排队中的那一轮被拒**
+ *  - ③`zeokeel/session-changed` 之后 `live`/`queues` 清空，且**排队中的那一轮被拒**
  *    （不是"清完记账又把它跑起来"）；
  *  - ④反向对照：**同账号**第二轮仍带第一轮上下文（多轮不能被"修好作用域"顺手砍掉）。
  *
@@ -33,7 +33,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createAppAiRunner } from '../src/app-ai-runner.ts'
-import { gateAppAi, type AiChatAuthorization, type AiChatMessage, type AiChatScope } from '@picoaide/dsh-wasm-apps-host/ai-chat'
+import { gateAppAi, type AiChatAuthorization, type AiChatMessage, type AiChatScope } from '@zeokeel/dsh-wasm-apps-host/ai-chat'
 import { WAIT_BUDGETS } from './wait-budgets.ts'
 
 const SERVER = 'https://harness.example.com'
@@ -206,11 +206,11 @@ describe('应用 AI 隐藏会话的账号作用域（R13-GB）', () => {
   })
 })
 
-describe('换账号/登出释放（pico/session-changed，R13-GB）', () => {
-  /** 造一个带假 `picoSession`（未恢复完成 ⇒ 不触发补发）的平面。 */
+describe('换账号/登出释放（zeokeel/session-changed，R13-GB）', () => {
+  /** 造一个带假 `zeokeelSession`（未恢复完成 ⇒ 不触发补发）的平面。 */
   async function planeWithSession(adapter: LlmAdapter): Promise<Context> {
     const ctx = await plane(adapter)
-    ctx.provide('picoSession', { isRestored: () => false, getSession: () => null })
+    ctx.provide('zeokeelSession', { isRestored: () => false, getSession: () => null })
     return ctx
   }
 
@@ -247,7 +247,7 @@ describe('换账号/登出释放（pico/session-changed，R13-GB）', () => {
 
     // 换账号/登出。
     const before = runner.generation()
-    ctx.emit('pico/session-changed', null)
+    ctx.emit('zeokeel/session-changed', null)
     // 现象：释放要先取消在飞那一轮再逐个 `dispose()`（异步）⇒ 轮询等到代次真的翻过去。
     await expect.poll(() => runner.generation(), { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS }).toBe(before + 1)
     // 变异：去掉 `subscribeSessionChanges` ⇒ 这两条红（live/queues 仍是 1）。

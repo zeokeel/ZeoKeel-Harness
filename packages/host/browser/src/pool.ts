@@ -6,10 +6,10 @@
  * quota bounds the pool. A light ledger persists the tab list (url/title/
  * active) across restarts; views are recreated on demand (login state lives
  * in the per-user partition).
- * @module @picoaide/dsh-browser
+ * @module @zeokeel/dsh-browser
  */
 
-import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@picoaide/dsh-host-locale'
+import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 import { browserError } from './errors.ts'
 import type { BrowserError } from './errors.ts'
 import { TAB_SLOT_WAIT_TIMEOUT_MS, USER_GATE_TIMEOUT_MS } from './budgets.ts'

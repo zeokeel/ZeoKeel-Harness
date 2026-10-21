@@ -24,7 +24,7 @@
 | K-08 跨设备成因点名 | `tests/audit-r20-skill-library.spec.ts` | 同上 | **自跳**（此前连登记都没有） |
 
 **这是显式认账的未覆盖项，不是"忘了接"。** `.github/workflows/` 里没有任何 job 设
-`PICOAI_MOUNT_TESTS`；`privilegedCommand` 是**跑法**而**不是执行者**。登记表能保证的只有一件事：
+`ZEOKEEL_MOUNT_TESTS`；`privilegedCommand` 是**跑法**而**不是执行者**。登记表能保证的只有一件事：
 **自跳不可能被误读成通过**（可检索标记 + 真实原因 + 跑法 + 声明"必须提供"时硬红）。
 
 ### 为什么不给特权路径接一个 CI job
@@ -43,7 +43,7 @@
 
 ```bash
 cd packages/host/enterprise
-PICOAI_MOUNT_TESTS=required ./node_modules/.bin/vitest run \
+ZEOKEEL_MOUNT_TESTS=required ./node_modules/.bin/vitest run \
   tests/skill-library-anchor-escape.spec.ts tests/audit-r20-skill-library.spec.ts \
   tests/env-gated-criteria.spec.ts
 ```
@@ -52,7 +52,7 @@ PICOAI_MOUNT_TESTS=required ./node_modules/.bin/vitest run \
 
 ```bash
 cd packages/host/enterprise
-PICOAI_MOUNT_TESTS=required setpriv --bounding-set=-sys_admin --inh-caps=-all --ambient-caps=-all \
+ZEOKEEL_MOUNT_TESTS=required setpriv --bounding-set=-sys_admin --inh-caps=-all --ambient-caps=-all \
   ./node_modules/.bin/vitest run tests/env-gated-criteria.spec.ts \
   tests/skill-library-anchor-escape.spec.ts tests/audit-r20-skill-library.spec.ts
 # ⇒ G1/G2/K-08 各 1 failed，消息含真实 stderr 与前置条件，EXIT=1
@@ -73,7 +73,7 @@ PICOAI_MOUNT_TESTS=required setpriv --bounding-set=-sys_admin --inh-caps=-all --
 
 豁免只有 `REGISTRY_SELF_SPEC` 一个**具名常量**（登记表自己的量具），不再是隐式收窄。
 
-K-08 同时改走 `judgeMountGate`（尊重 `PICOAI_MOUNT_TESTS`）并登记，`reasonToken` 钉的是
+K-08 同时改走 `judgeMountGate`（尊重 `ZEOKEEL_MOUNT_TESTS`）并登记，`reasonToken` 钉的是
 spec 侧的取证动作 `stderr`。
 
 ### 3.2 消费点：从"文本 `toContain`"→ **可执行函数**（审计 P2-2）

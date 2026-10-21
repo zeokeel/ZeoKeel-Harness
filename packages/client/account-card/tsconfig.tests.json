@@ -7,7 +7,7 @@
   // `src/*.ts`，`tsconfig.client.json` 只看 `src/client/**`，而 `check` 只有 `build && test`。
   // 于是「`typecheck` EXIT=0」对 `tests/**` 里的 import 路径**没有观察力** —— 审计实测把
   // `tests/capability-delisted-badge.spec.tsx` 的 import 改成指向不存在的目录后，
-  // `yarn workspace @picoaide/dsh-account-card typecheck` 仍然 **EXIT=0**，只有 vitest
+  // `yarn workspace @zeokeel/dsh-account-card typecheck` 仍然 **EXIT=0**，只有 vitest
   // 才报 `Failed to resolve import`。跨包源码 import（`../../../host/capability-center/…`、
   // `../../../host/enterprise/src/client/channel-store.ts`）正是最容易悄悄写坏的那一类，
   // 所以这条路径必须有编译期判据，而不是只靠跑起来才发现。

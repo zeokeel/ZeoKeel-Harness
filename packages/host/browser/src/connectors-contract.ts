@@ -1,5 +1,5 @@
 /**
- * `@picoaide/dsh-connectors` 的**窄接口**（本插件唯一一条可选跨包依赖的契约）。
+ * `@zeokeel/dsh-connectors` 的**窄接口**（本插件唯一一条可选跨包依赖的契约）。
  *
  * ## 为什么这里不 import 连接器包的类型
  *
@@ -95,7 +95,7 @@ export interface ConnectorStoreCtorLike {
  * 上面那份"真源 ↔ 契约"的正向用例钉住（真 `ConnectorStore` 实例的 `dir` 必须是
  * 字符串），而不是让本函数去构造一个实例（那会把一个纯形状判据变成有副作用的调用）。
  *
- * @param candidate - `require('@picoaide/dsh-connectors/store')` 的返回值（未知形状）。
+ * @param candidate - `require('@zeokeel/dsh-connectors/store')` 的返回值（未知形状）。
  * @returns 通过校验的构造函数，或 `undefined`。
  */
 export function connectorStoreCtorOf(candidate: unknown): ConnectorStoreCtorLike | undefined {

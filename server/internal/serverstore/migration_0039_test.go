@@ -297,7 +297,7 @@ func newVersionedTestDB(t *testing.T, ms []migration) (*sql.DB, func()) {
 		admin.Close()
 		t.Fatalf("parse test dsn: %v", err)
 	}
-	name := "picoaide_test_" + randomSuffix(6)
+	name := "zeokeel_test_" + randomSuffix(6)
 	if _, err := admin.Exec("CREATE DATABASE " + name); err != nil {
 		admin.Close()
 		t.Fatalf("创建临时库 %s: %v", name, err)

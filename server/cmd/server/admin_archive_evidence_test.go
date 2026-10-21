@@ -34,7 +34,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // zipBytes 构造一个最小 zip 归档（archiveutil.Format 按魔数嗅探为 zip）。
@@ -91,14 +91,14 @@ func TestAdminMarketArchiveEndpointsAreBinary(t *testing.T) {
 	csrf, _ := loginBody["csrf_token"].(string)
 	session := ""
 	for _, ck := range lw.Result().Cookies() {
-		if ck.Name == "picoaide_session" {
+		if ck.Name == "zeokeel_session" {
 			session = ck.Value
 		}
 	}
 	if csrf == "" || session == "" {
 		t.Fatalf("登录未返回 csrf/session（csrf=%q session=%q）", csrf, session)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + session, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + session, "X-CSRF-Token": csrf}
 
 	do := func(method, path, body string) *httptest.ResponseRecorder {
 		t.Helper()

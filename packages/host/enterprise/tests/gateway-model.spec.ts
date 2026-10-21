@@ -47,7 +47,7 @@ function ctxFixture() {
 
 describe('gateway-model', () => {
   it('exposes the stable env/token contract', () => {
-    expect(TOKEN_ENV).toBe('PICOAI_GATEWAY_TOKEN')
+    expect(TOKEN_ENV).toBe('ZEOKEEL_GATEWAY_TOKEN')
   })
 
   it('writes the session token and points the gateway provider row at the server', async () => {
@@ -68,7 +68,7 @@ describe('gateway-model', () => {
     // first session-changed event is then already gone. apply() must sample
     // the restored session itself.
     const f = ctxFixture()
-    ;(f.ctx as unknown as { picoSession: unknown }).picoSession = {
+    ;(f.ctx as unknown as { zeokeelSession: unknown }).zeokeelSession = {
       isRestored: () => true,
       getSession: () => SESSION,
     }
@@ -158,7 +158,7 @@ describe('gateway-model', () => {
     }>
     const inserted = entries
       .flatMap(entry => Array.isArray(entry.insert) ? entry.insert : []) as Array<{ id?: unknown, name?: unknown }>
-    const gateway = inserted.filter(entry => entry.name === '@picoaide/dsh-enterprise/gateway-llm')
+    const gateway = inserted.filter(entry => entry.name === '@zeokeel/dsh-enterprise/gateway-llm')
     expect(gateway, '补丁必须恰插入一条网关 provider 行').toHaveLength(1)
     expect(gateway[0]?.id).toBe(GATEWAY_LLM_ROW_ID)
     // 上游那一行必须被禁用（留着 = 两个适配器抢同一个 provider 路由）。

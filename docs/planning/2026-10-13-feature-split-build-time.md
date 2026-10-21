@@ -43,7 +43,7 @@
 ### 2.2 变体标识与哨兵串
 
 - 解析出一个稳定标识：`FEATURES=skills,apps,connectors`（全开）／`FEATURES=none`（只基础），供 Go `-tags`、客户端组装、webadmin build-arg 共用；
-- **哨兵串**：每个模块一个唯一常量（形如 `picoaide.feature.<module>.v1`），放在该模块会被真正使用的路径里（模块注册/装配时写入日志或登记表的那个串），用于端到端副证。
+- **哨兵串**：每个模块一个唯一常量（形如 `zeokeel.feature.<module>.v1`），放在该模块会被真正使用的路径里（模块注册/装配时写入日志或登记表的那个串），用于端到端副证。
   **2026-10-13 量具校准（实测，`temp/sentinel-probe/`）**：哨兵串在 Go 产物里的存活**取决于可达性与用法**，不取决于"代码有没有被编译" ——
   | 哨兵所在位置 | `-ldflags "-s -w"` 产物里 `strings` 命中 |
   |---|---|
@@ -77,7 +77,7 @@
 
 1. **技能面住在必需包里**：能力中心是 `packages/host/enterprise/src/client/index.ts:34` 的静态 import（→ `capability-surface.tsx` → `CapabilityCenterPanel.tsx`，约 2012 行），而 enterprise 同时承载登录门/品牌/账号设置段/更新/网关/应用本机 API。⇒ **拆包是前置条件**，不是优化项。
 2. **打包配置的合法改写通道**：渠道那套生成 `<desktop>/temp/channel-electron-builder.cjs` + `--config` 的先例可以照抄（`scripts/channel-build.ts:341-353`、`:671-701`；官方渠道返回 `[]` 保证零影响）。**不要**把变体差异写进 `package.json` 的 build 块（会被 `tests/package.spec.ts:270-320` 的漂移断言咬住）。
-3. **拆包必须连 host 面一起搬，只搬 UI 等于没拆**（2026-10-13 实测教训）：模块的"本机 API"（`/api/pico/<模块>/*`）如果留在必需包里，关闭模块时它照样进 app.asar。P0 的第一版就把技能面拆成了"UI 搬走、host 代理留在 `@picoaide/dsh-enterprise`" —— 四组本机路由仍在 `packages/host/enterprise/src/auth-gate.ts:2031`（`/api/pico/skills`）、`:2399`（`/agent-presets`）、`:2632`（`/shared-skills`）、`:2841`（`/capabilities`）（该文件 3142 行），apps 侧同形（`packages/host/enterprise/src/wasm-apps.ts`）。
+3. **拆包必须连 host 面一起搬，只搬 UI 等于没拆**（2026-10-13 实测教训）：模块的"本机 API"（`/api/zeokeel/<模块>/*`）如果留在必需包里，关闭模块时它照样进 app.asar。P0 的第一版就把技能面拆成了"UI 搬走、host 代理留在 `@zeokeel/dsh-enterprise`" —— 四组本机路由仍在 `packages/host/enterprise/src/auth-gate.ts:2031`（`/api/zeokeel/skills`）、`:2399`（`/agent-presets`）、`:2632`（`/shared-skills`）、`:2841`（`/capabilities`）（该文件 3142 行），apps 侧同形（`packages/host/enterprise/src/wasm-apps.ts`）。
    搬运口径：**被基础功能真实调用的留 base，只服务模块自身的随模块走**；host 面可以放在模块包的第二入口（照 `packages/host/connectors` 的 host + client 双面形态），不要新建"模块 host 包 + 模块 client 包"两个包去骗自己。
 
 ## 4. 数据库一致性口径
@@ -102,7 +102,7 @@
 | 1 | `/readyz` 是应用中心资产 | `server/cmd/server/main.go:745-747`（`d.Ready == nil` 直接 panic）；唯一生产来源 `main.go:259` 的 `wasmPlat.Checker.Handler()`；**`readyz` 整包位于 `server/internal/wasmapp/readyz/`，基础侧（`cmd/server/main.go`、`internal/router`、`internal/serverauth`、`internal/serverstore`）零 import，只有 `cmd/server/wasmapp*.go` 引用它** | 基础侧提供替身探针（`readyz` 需随模块或搬到中性包）；`apps` 关闭时不得因此拒启 |
 | 2 | 权限点 ↔ 路由双向判据 | `server/cmd/server/audit_r13ge_permset_test.go:72`（`reservedPermissions` 当前空表）；`server/webadmin/src/lib/nav.test.ts:665-678` 四向对拍读 `server/internal/serverauth/rbac.go` | **保留权限点 + 登记**（权限模型不随变体变） |
 | 3 | 渠道字段 `app_origin_scheme` 属应用中心 | `scripts/ci-channels.sh:770-772`（必需字段）；服务端 `main.go:463`（fail-loud） | 随 `apps` 变体放宽：关闭时不再强制 |
-| 4 | Dockerfile 跨模块取文件 | `server/Dockerfile:88` 把 `skills/app-builder/scripts/pack-assets.mjs` 拷给演示应用构建（:81 注释自陈"是同一个文件"）；`scripts/ci-build-channel-images.sh:228-229` 断言该技能文件存在 | 该脚本搬到中性位置（演示应用工具链，如 `server/demoapps/scripts/`），技能侧改成引用同一份；四方对拍判据（磁盘 ↔ Dockerfile COPY ↔ `builtinSkillRegistry` ↔ `seededSkillDigests`）同步改。**已查清**：`/opt/picoaide/skills` 的唯一消费方是 `skillseed`（`server/cmd/server/main.go:243` → `:257` → `internal/router/router.go:82` → 平台内置技能面），整条链在 `internal/wasmapp/` 树下 ⇒ 该目录属 `skills` 模块，`skills` 关闭时不应随包 |
+| 4 | Dockerfile 跨模块取文件 | `server/Dockerfile:88` 把 `skills/app-builder/scripts/pack-assets.mjs` 拷给演示应用构建（:81 注释自陈"是同一个文件"）；`scripts/ci-build-channel-images.sh:228-229` 断言该技能文件存在 | 该脚本搬到中性位置（演示应用工具链，如 `server/demoapps/scripts/`），技能侧改成引用同一份；四方对拍判据（磁盘 ↔ Dockerfile COPY ↔ `builtinSkillRegistry` ↔ `seededSkillDigests`）同步改。**已查清**：`/opt/zeokeel/skills` 的唯一消费方是 `skillseed`（`server/cmd/server/main.go:243` → `:257` → `internal/router/router.go:82` → 平台内置技能面），整条链在 `internal/wasmapp/` 树下 ⇒ 该目录属 `skills` 模块，`skills` 关闭时不应随包 |
 | 5 | 演示应用/内置技能播种 | `server/cmd/server/main.go:230`（演示应用）、`:243-251`（内置技能目录） | 分别随 `apps` / `skills` 变体 |
 | 6 | 应用归因写 `usage.app_id` | `server/internal/llmgateway/app_attribution.go:29` → `serverstore/wasm_app_opens.go:386-411`（同事务校验 `kind='wasm_app'` 存在） | 关闭 `apps` 后归因恒空是**预期**，需在文档与判据里写死（不是缺陷） |
 | 7 | 审计链双版本 | `server/internal/serverstore/audit.go:377-388`、`:684-687`；写入方含 `appstore/admin.go:114/141`（三种 kind 共用） | 链校验两版本都过 ⇒ 不报错；但**链内容不可跨变体比对**，写进口径 |
@@ -112,17 +112,17 @@
 
 ### 关键更正：客户端的真开关是**依赖清单**，不是 profile 层
 
-实测（基线 asar，135,392,765 B）：asar 里 `@picoaide/*` 的集合 **恰好等于** `packages/host/desktop/package.json` 的 `dependencies` 集合（10 个）；**不在依赖里**的 `@picoaide/dsh-panel-surface` 在 asar 里 0 条。⇒ 把某模块从 profile 的 bundle 层摘掉只是"不加载"，**文件照样进 app.asar**；要真的不进产物，必须把该包从 `dsh-plugin-desktop.dependencies` 里摘掉（并按变体重算打包清单）。
+实测（基线 asar，135,392,765 B）：asar 里 `@zeokeel/*` 的集合 **恰好等于** `packages/host/desktop/package.json` 的 `dependencies` 集合（10 个）；**不在依赖里**的 `@zeokeel/dsh-panel-surface` 在 asar 里 0 条。⇒ 把某模块从 profile 的 bundle 层摘掉只是"不加载"，**文件照样进 app.asar**；要真的不进产物，必须把该包从 `dsh-plugin-desktop.dependencies` 里摘掉（并按变体重算打包清单）。
 
 ### 残留量化（关闭 `skills` 时，按 P0 第一版形态交付）
 
 | 残留 | 字节 |
 |---|---|
-| `@picoaide/dsh-enterprise/lib/skill-install-<hash>.js`（安装器/预检/归档/根表/frontmatter） | 220,271 |
-| `@picoaide/dsh-enterprise/lib/skill-telemetry.js` | 9,608 |
-| `@picoaide/dsh-enterprise/lib/auth-gate.js` 里的四条技能路由（sourcemap 归因，下界） | 28,395（整文件 263,254） |
+| `@zeokeel/dsh-enterprise/lib/skill-install-<hash>.js`（安装器/预检/归档/根表/frontmatter） | 220,271 |
+| `@zeokeel/dsh-enterprise/lib/skill-telemetry.js` | 9,608 |
+| `@zeokeel/dsh-enterprise/lib/auth-gate.js` 里的四条技能路由（sourcemap 归因，下界） | 28,395（整文件 263,254） |
 | **最小残留合计** | **≈493 KB（1+2+3 的文件体量）** |
-| 若忘了摘依赖：`@picoaide/dsh-capability-center/lib/client.js` 等 | ≈171.5 KB |
+| 若忘了摘依赖：`@zeokeel/dsh-capability-center/lib/client.js` 等 | ≈171.5 KB |
 
 对照（同一 asar）：connectors 493,150 B、wasm-apps 客户端 410,375 B、wasm-apps-host 259,518 B、browser 800,272 B。
 
@@ -136,7 +136,7 @@
 
 ### 两条"静默"缺口（变体化前必须补判据）
 
-1. `picoaide-skill-telemetry` **不在** `REQUIRED_DESKTOP_ROWS`（`packages/host/desktop/src/startup-rows.ts:70-96` 共 19 条）⇒ 它被静默禁用时**没有任何判据会红**；变体化会让这件事变成常态，必须先把它纳入登记或明确豁免理由。
+1. `zeokeel-skill-telemetry` **不在** `REQUIRED_DESKTOP_ROWS`（`packages/host/desktop/src/startup-rows.ts:70-96` 共 19 条）⇒ 它被静默禁用时**没有任何判据会红**；变体化会让这件事变成常态，必须先把它纳入登记或明确豁免理由。
 2. 跨包测试 import 存在**两种口径**：`packages/host/enterprise/tests/**` 用相对路径读 `packages/client/capability-center/src/**` 却**未声明依赖**；而 `packages/client/account-card` 的同类跨包用例**加了 devDependency**。拆包后必须统一（否则"声明即构建"的不变量在测试面出现分叉）。
 
 
@@ -156,7 +156,7 @@
 
 **新增**
 1. **产物不含被关模块的代码（分层，承重的是第一层）**：
-   - **① 依赖图/文件清单（承重）**：服务端 `go list -deps ./cmd/server`（可按 `-tags` 变体跑）按模块树过滤 —— 关闭的模块其包**不得出现在依赖闭包里**（实测该命令离线可用：缺省构建下 `internal/**` 54 个包，其中 `internal/wasmapp` 树 28 个、技能/连接器 6 个）；客户端断言 **asar 条目**（`node_modules/@picoaide/<模块>` 的 `lib/**`、`cordis.patch.yml` 不得存在）——**必须复用既有工具**：`packages/host/desktop/scripts/verify-packaged-runtime.ts:18` 的 `listPackage` + `normalizeAsarEntry`/`toAsarEntryPath`（`scripts/asar-entry-path.ts`），**不要自己拼 `/` 路径**（`@electron/asar` v3 的 `getNode` 按 `path.sep` 切目录，Linux 恰好对、Windows 必错——已踩过的坑）；webadmin 断言 **dist chunk 清单**。
+   - **① 依赖图/文件清单（承重）**：服务端 `go list -deps ./cmd/server`（可按 `-tags` 变体跑）按模块树过滤 —— 关闭的模块其包**不得出现在依赖闭包里**（实测该命令离线可用：缺省构建下 `internal/**` 54 个包，其中 `internal/wasmapp` 树 28 个、技能/连接器 6 个）；客户端断言 **asar 条目**（`node_modules/@zeokeel/<模块>` 的 `lib/**`、`cordis.patch.yml` 不得存在）——**必须复用既有工具**：`packages/host/desktop/scripts/verify-packaged-runtime.ts:18` 的 `listPackage` + `normalizeAsarEntry`/`toAsarEntryPath`（`scripts/asar-entry-path.ts`），**不要自己拼 `/` 路径**（`@electron/asar` v3 的 `getNode` 按 `path.sep` 切目录，Linux 恰好对、Windows 必错——已踩过的坑）；webadmin 断言 **dist chunk 清单**。
    - **② 端到端哨兵（副证，必须双侧）**：开启变体哨兵**必须存在**（量具自检）+ 关闭变体哨兵**必须缺席**；单侧断言一律不合格（见 §2.2 的校准实测）。
 2. 变体矩阵编译与测试（四组合 `go build` / `go vet` / `go test`，且**非缺省 tag 的用例必须真跑**）；
 3. schema 快照跨变体逐字节对拍 + `migrations-pg/` 无 `//go:build`。**现状（别重复造）**：`server/internal/serverstore/migrate_checksum_test.go:76-106` 已对拍**内嵌迁移集合 ↔ 磁盘生成的 `migrations-checksums.json`**（双向：死条目/未登记都红，并逐条比 sha256 与字节数）⇒ "迁移集合固定、不随构建方式变"这条**已有强判据**；缺的只是 (a) 变体之间**最终 schema 相同**的运行期对拍、(b) "禁止在迁移序列之外做 DDL"的结构判据（防止将来有人用 `//go:build` 文件里的 `CREATE TABLE IF NOT EXISTS` 绕开迁移序列）；
@@ -189,17 +189,17 @@
 
 **不红的**（已逐条核过，都是通用结构断言）：`verify-win-installer.ts`、`verify-win-portable.ts`、`verify-mac-smoke.ts`、`verify-mac-release.ts`、`mac-bundle-consistency.ts`、`verify-channel-package.ts`、`ci-package-clients.sh`、`pack-app-root.mjs`（白名单只有 `lib`/`build`/`cordis.patch.yml`/`package.json`）、`package-linux.mjs`。
 
-**协议与模块无关（关键事实，省掉一整块工作）**：`build.protocols` 只注册深链 `picoaide`（`package.json:358-365`）；`app_origin_scheme`（默认 `picoaide-app`，`src/desktop-channel.ts:52`）**只在运行期**经 `registerAppScheme(APP_ORIGIN_SCHEME)` 注册（`src/main.ts:456`，必须早于 `app.whenReady()`），**不进 Info.plist / NSIS 注册表**；`macos-entitlements.plist` 的 4 个键里唯一功能绑定是 `audio-input`（语音输入）。⇒ 关掉 apps **不需要**改协议或 entitlements；也**没有任何判据**会把"协议列表 == 启用模块"钉住（`CFBundleURLTypes` 在 desktop 侧 0 命中）——所以 §5 表格里"渠道字段 `app_origin_scheme` 随变体放宽"只涉及 `ci-channels.sh` 与服务端启动校验，与打包链无关。
+**协议与模块无关（关键事实，省掉一整块工作）**：`build.protocols` 只注册深链 `zeokeel`（`package.json:358-365`）；`app_origin_scheme`（默认 `zeokeel-app`，`src/desktop-channel.ts:52`）**只在运行期**经 `registerAppScheme(APP_ORIGIN_SCHEME)` 注册（`src/main.ts:456`，必须早于 `app.whenReady()`），**不进 Info.plist / NSIS 注册表**；`macos-entitlements.plist` 的 4 个键里唯一功能绑定是 `audio-input`（语音输入）。⇒ 关掉 apps **不需要**改协议或 entitlements；也**没有任何判据**会把"协议列表 == 启用模块"钉住（`CFBundleURLTypes` 在 desktop 侧 0 命中）——所以 §5 表格里"渠道字段 `app_origin_scheme` 随变体放宽"只涉及 `ci-channels.sh` 与服务端启动校验，与打包链无关。
 
 **必须按变体给期望的硬编码枚举（10 处，P2 逐处改）**：
 1. `scripts/verify-packaged-runtime.ts:59-305`（apps 两条 `:263-267`、`:273-281`）
 2. 同文件 `:1869-1927`（connectors 六条 `:1921-1926`）
 3. 同文件 `:1947-1966`（`:1952-1953` wasm-apps、`:1956-1957` connectors、`:1960-1961` wasm-apps-host）
 4. 同文件 `:1411-1429` 每包计数棘轮（connectors `0/7/5`、wasm-apps `5/5/3`、wasm-apps-host `6/6/4`）+ `:1437` 总下限 129
-5. 同文件 `:1599-1613` **双向**断言：产物里出现的 `@picoaide/*` 必须已登记（否则 "unregistered" 红）；登记了但产物里没有 ⇒ "dead" 红（"包已删除/改名 ⇒ 同步这张表"）
+5. 同文件 `:1599-1613` **双向**断言：产物里出现的 `@zeokeel/*` 必须已登记（否则 "unregistered" 红）；登记了但产物里没有 ⇒ "dead" 红（"包已删除/改名 ⇒ 同步这张表"）
 6. `scripts/prebuild-workspace-deps.ts:105/123/142` —— **注意**：三平台 `dist:*` 默认先跑 prebuild，会去构建被裁掉的包，所以这张表也必须变体化（不只是打包清单）
 7. `packages/host/desktop/package.json:310/316/317`（`dependencies`）——**这才是客户端"代码不进产物"的真开关**（见 §5bis）
-8. `packages/host/desktop/src/startup-rows.ts:81/84`（`pico-connectors`、`pico-wasm-apps-host` 必需行）
+8. `packages/host/desktop/src/startup-rows.ts:81/84`（`zeokeel-connectors`、`zeokeel-wasm-apps-host` 必需行）
 9. `packages/host/desktop/tests/verify-packaged-runtime.spec.ts:754-775`（`:762-763` 逐条列 connectors 产物条目）
 10. `packages/host/desktop/tests/package.spec.ts:210/242`（`registerAppScheme(` 必须存在——关 apps 时要按变体给期望）
 
@@ -212,11 +212,11 @@
 2. `/readyz` 由基础侧提供替身；
 3. 关闭模块的表保留期清理**留在基础**（否则关掉即无界增长）；
 4. `app_origin_scheme` 随 `apps` 变体放宽；
-5. `pico-skill-filesystem` / `pico-tool-skill`（模型侧 `skill` 工具与本地技能目录发现）**归基础**；
+5. `zeokeel-skill-filesystem` / `zeokeel-tool-skill`（模型侧 `skill` 工具与本地技能目录发现）**归基础**；
 6. 连接器凭据**不自动删**（明文凭据属用户数据），只做文档与可选清理入口。
 
 **待拍板**：
-- ~~内置技能目录在 `skills` 关闭时是否随包？~~ → **已由证据收敛（仍可推翻）**：`/opt/picoaide/skills`（Dockerfile 逐条 COPY）的唯一消费方是 `skillseed`（`server/cmd/server/main.go:243/257` → `internal/router/router.go:82` → 平台内置技能面 `GET /api/server/admin/skills/builtin` 与客户端 `/api/client/v2/skills/builtin`），而 `skillseed` 整包在 `internal/wasmapp/` 树下 ⇒ 它是 `skills` 模块的内容，关闭时不应随包；演示应用构建所需的那一份 `pack-assets.mjs` 因此必须搬出技能目录（见 §5-4）。
+- ~~内置技能目录在 `skills` 关闭时是否随包？~~ → **已由证据收敛（仍可推翻）**：`/opt/zeokeel/skills`（Dockerfile 逐条 COPY）的唯一消费方是 `skillseed`（`server/cmd/server/main.go:243/257` → `internal/router/router.go:82` → 平台内置技能面 `GET /api/server/admin/skills/builtin` 与客户端 `/api/client/v2/skills/builtin`），而 `skillseed` 整包在 `internal/wasmapp/` 树下 ⇒ 它是 `skills` 模块的内容，关闭时不应随包；演示应用构建所需的那一份 `pack-assets.mjs` 因此必须搬出技能目录（见 §5-4）。
 - webadmin 是否真裁（要真裁必须加 Dockerfile build-arg + vite `define`）；
 - P0 的拆包是否作为独立 PR 先合（推荐：是，纯重构、无行为变化，便于回溯）。
 

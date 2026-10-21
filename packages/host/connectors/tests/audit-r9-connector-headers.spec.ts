@@ -112,7 +112,7 @@ function def(
 }
 
 async function state(h: ReturnType<typeof createHarness>, id = 'probe-mcp'): Promise<{ status: string, request?: { authorizeUrl?: string } | null }> {
-  const res = await callRoute(h, `/api/pico/connectors/${id}/state`, 'GET')
+  const res = await callRoute(h, `/api/zeokeel/connectors/${id}/state`, 'GET')
   return JSON.parse(res.body) as { status: string, request?: { authorizeUrl?: string } | null }
 }
 
@@ -132,7 +132,7 @@ async function connectAndAuthorize(
   expected = 1,
   id = 'probe-mcp',
 ): Promise<RegisteredTransport> {
-  await callRoute(h, `/api/pico/connectors/${id}/connect`, 'POST')
+  await callRoute(h, `/api/zeokeel/connectors/${id}/connect`, 'POST')
   await completeAuthorization(await awaitAuthorizeUrl(h, id))
   await waitFor(() => h.configs.length === expected, 10_000)
   return h.configs[expected - 1] as unknown as RegisteredTransport
@@ -354,7 +354,7 @@ describe('R9-D-1: a credential change reaches a live provider-backed transport i
         // no 401 anywhere. The live record must follow it, and the next call
         // must carry it without burning another grant.
         const grantsBefore = server.stats.grants.filter(grant => grant === 'refresh_token').length
-        await callRoute(h, '/api/pico/connectors/probe-mcp/refresh', 'POST')
+        await callRoute(h, '/api/zeokeel/connectors/probe-mcp/refresh', 'POST')
         const rotated = await waitForAsync(
           async () => (await config.authProvider?.tokens())?.access_token,
           token => token !== undefined && token !== live,
@@ -418,7 +418,7 @@ describe('R9A-2: the default bearer injection is keyed on the authorization slot
       // the fix this rebuild produced `{"X-Probe-Key": "..."}` with no
       // Authorization at all — forever, because nothing else re-bakes it.
       const base = h.configs.length
-      h.emit('pico/connector-credentials-changed', { id: 'probe-mcp' })
+      h.emit('zeokeel/connector-credentials-changed', { id: 'probe-mcp' })
       await waitFor(() => h.configs.length === base + 1, 12_000)
       const rebuilt = h.configs.at(-1) as unknown as RegisteredTransport
       expect(rebuilt.authProvider, '前置：该形态没有 provider').toBeUndefined()
@@ -438,7 +438,7 @@ describe('R9A-2: the default bearer injection is keyed on the authorization slot
 
       // (3) a rotated credential reaches the rebuilt transport too.
       await announceNewToken(dir, 'at-r9-fresh')
-      h.emit('pico/connector-credentials-changed', { id: 'probe-mcp' })
+      h.emit('zeokeel/connector-credentials-changed', { id: 'probe-mcp' })
       await waitFor(() => h.configs.length === base + 2, 12_000)
       expect(
         (h.configs.at(-1) as unknown as RegisteredTransport).headers?.Authorization,
@@ -477,7 +477,7 @@ describe('R9A-3: the provider-less rebuild waits for the call in flight', () => 
         server.setMcpDelay(600)
         await announceNewToken(dir, 'at-r9-mid')
         const t0 = Date.now()
-        h.emit('pico/connector-credentials-changed', { id: 'probe-mcp' })
+        h.emit('zeokeel/connector-credentials-changed', { id: 'probe-mcp' })
         // The rebuild needs ~600ms (its own discovery probe is delayed by the
         // same fixture knob) to reach `retire()`; this call is sent 300ms in and
         // answered 600ms later, so the two MUST overlap.
@@ -536,7 +536,7 @@ describe('R9A-3: the provider-less rebuild waits for the call in flight', () => 
         // Let the POST reach the fenced fetch (and be counted) first.
         await new Promise(resolve => setTimeout(resolve, 200))
         await announceNewToken(dir, 'at-r9-stall')
-        h.emit('pico/connector-credentials-changed', { id: 'probe-mcp' })
+        h.emit('zeokeel/connector-credentials-changed', { id: 'probe-mcp' })
         await waitFor(() => h.configs.length === 3, 12_000)
         expect(
           h.warns.some(line => line.includes('重建等待在途调用超时')),

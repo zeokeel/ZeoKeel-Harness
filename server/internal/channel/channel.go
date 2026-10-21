@@ -2,7 +2,7 @@
 //
 // 2026-09-10 起,原来那套"运行时品牌"被渠道配置取代:
 //
-//   - 内容的唯一来源是镜像内的渠道目录 /opt/picoaide/channel/
+//   - 内容的唯一来源是镜像内的渠道目录 /opt/zeokeel/channel/
 //     (构建时由 CI 从仓库 channels/<channel-id>/ 复制进来)。
 //   - 没有上传接口、没有快照、没有开关:改内容 = 改渠道配置 → 重新构建镜像,
 //     因此内容始终可审计、可追溯,也不会出现"某人改了线上品牌没人知道"。
@@ -26,10 +26,10 @@ import (
 )
 
 // DirEnv 渠道目录在镜像内的位置(可由 Dockerfile 覆盖)。
-const DirEnv = "PICOAI_CHANNEL_DIR"
+const DirEnv = "ZEOKEEL_CHANNEL_DIR"
 
 // defaultDir 渠道目录默认位置。
-const defaultDir = "/opt/picoaide/channel"
+const defaultDir = "/opt/zeokeel/channel"
 
 // maxConfigBytes 配置体积上限(防御异常文件)。
 const maxConfigBytes = 64 * 1024
@@ -65,7 +65,7 @@ type Config struct {
 		DeepLinkScheme string `json:"deep_link_scheme"`
 		// AppOriginScheme 是应用页在客户端里的 origin scheme(2026-09-19 契约 §10)。
 		//
-		// 为什么服务端必须知道它:客户端协议 handler 把 `picoaide-app://<app_id>/…`
+		// 为什么服务端必须知道它:客户端协议 handler 把 `zeokeel-app://<app_id>/…`
 		// 上的请求转成平台信封,平台要用**同一个** scheme 组装"自身源"做跨源写判据,
 		// 并对信封里的 host 做逐字符校验。两端 scheme 不一致 ⇒ 所有非幂等请求 403。
 		AppOriginScheme string `json:"app_origin_scheme"`
@@ -81,7 +81,7 @@ type Config struct {
 }
 
 // DefaultDeepLinkScheme 未配置时的深链 scheme(= 改造前的硬编码值)。
-const DefaultDeepLinkScheme = "picoaide"
+const DefaultDeepLinkScheme = "zeokeel"
 
 // deepLinkSchemePattern 与客户端 desktop-channel.ts 的校验同源(RFC 3986 scheme)。
 var deepLinkSchemePattern = regexp.MustCompile(`^[a-z][a-z0-9+.-]{1,31}$`)
@@ -111,7 +111,7 @@ func ValidDeepLinkScheme(s string) bool {
 //
 // 取值 = 官方渠道的 `desktop.app_origin_scheme`,也是改造前 appserver.ClientScheme
 // 的硬编码值 —— 逐字节相同,所以"没带渠道配置的本地构建"行为不变。
-const DefaultAppOriginScheme = "picoaide-app"
+const DefaultAppOriginScheme = "zeokeel-app"
 
 // appOriginSchemePattern 与客户端(open-app.ts / browser guard)及 CI 的校验同源。
 //

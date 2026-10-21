@@ -76,7 +76,7 @@
 
 ```bash
 cd server/demoapps/forum
-export GOCACHE=/data/picoaide-harness/temp/forum-gocache GOMODCACHE=/root/go/pkg/mod GOPROXY=off
+export GOCACHE=/data/zeokeel-harness/temp/forum-gocache GOMODCACHE=/root/go/pkg/mod GOPROXY=off
 
 # 编译 + 打包（资源进 wasm 自定义段）
 GOOS=wasip1 GOARCH=wasm go build -o /tmp/forum.wasm .
@@ -134,7 +134,7 @@ _ = syscall.SetNonblock(int(os.Stdout.Fd()), false)
 ## 权限与准入
 
 `../demos.json` 把 `demo-forum` 配成 `access: login`。入口 `/` 的第一件事仍是
-`app.AccessAllowed()`：读自己的 `picoaide.app.json`（平台保留资源，宿主永不直出）并按
+`app.AccessAllowed()`：读自己的 `zeokeel.app.json`（平台保留资源，宿主永不直出）并按
 `access` 判定；不通过时返回自制的 403 页，**页面上显示本人账号** —— 名单拼错时这是唯一
 能发现的途径。`/api/*` 走同一条判定，拒绝时给 `403 FORBIDDEN` 的 JSON 信封。
 

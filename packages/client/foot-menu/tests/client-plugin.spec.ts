@@ -3,7 +3,7 @@
  * 客户端半边的装配契约：`apply(ctx)` 到底注册/提供了什么。
  *
  * 这是"底部那一行真的存在、条目真的有地方登记"的**第一层**证据：这里没把
- * `sidebar.footer.action` 的唯一占用者注册上、或者没 provide `picoFootMenu`，
+ * `sidebar.footer.action` 的唯一占用者注册上、或者没 provide `zeokeelFootMenu`，
  * 后面所有组件用例都可能全绿而产品里什么都没有（"存在性断言=假绿"的同族形态）。
  *
  * ---- 变异验证 ----
@@ -95,14 +95,14 @@ afterEach(() => {
 
 describe('客户端半边：apply 注册面', () => {
   it('声明插件名与服务依赖', () => {
-    expect(name).toBe('picoaide-foot-menu-client')
+    expect(name).toBe('zeokeel-foot-menu-client')
     expect(inject).toEqual(['slots', 'locale'])
   })
 
-  it('提供 picoFootMenu 服务，且它就是行组件要读的那份登记表', () => {
+  it('提供 zeokeelFootMenu 服务，且它就是行组件要读的那份登记表', () => {
     const f = fixture()
     apply(f.ctx)
-    expect(f.provided.map(item => item.key)).toEqual(['picoFootMenu'])
+    expect(f.provided.map(item => item.key)).toEqual(['zeokeelFootMenu'])
     const service = f.provided[0]?.value as { add: (entry: unknown) => () => void, snapshot: () => unknown[] }
     expect(typeof service.add).toBe('function')
     expect(service.snapshot().map(entry => (entry as { id: string }).id)).toEqual(['schedules', 'settings'])
@@ -124,7 +124,7 @@ describe('客户端半边：apply 注册面', () => {
     const f = fixture()
     apply(f.ctx)
     expect(f.slots).toEqual(['sidebar.footer.action'])
-    expect(f.registered).toEqual([expect.objectContaining({ name: 'sidebar.footer.action', id: 'pico-foot-menu', order: 10 })])
+    expect(f.registered).toEqual([expect.objectContaining({ name: 'sidebar.footer.action', id: 'zeokeel-foot-menu', order: 10 })])
     expect(f.components).toEqual([FootMenuRow])
   })
 
@@ -140,16 +140,16 @@ describe('客户端半边：apply 注册面', () => {
   it('注入 hover/focus 样式（含透明底），并在卸载时移除 style 标签', () => {
     const f = fixture()
     apply(f.ctx)
-    const styles = [...document.querySelectorAll('style')].filter(element => element.textContent?.includes('.pico-foot-menu-trigger'))
+    const styles = [...document.querySelectorAll('style')].filter(element => element.textContent?.includes('.zeokeel-foot-menu-trigger'))
     expect(styles).toHaveLength(1)
     const css = styles[0]!.textContent ?? ''
     // 透明底与 hover 底必须在同一张表里：行内 `background` 会压死 `:hover`。
-    expect(css).toContain('.pico-foot-menu-trigger { background: transparent; }')
-    expect(css).toContain('.pico-foot-menu-trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }')
-    expect(css).toContain('.pico-foot-menu-item { background: transparent; }')
-    expect(css).toContain('.pico-foot-menu-item:hover, .pico-foot-menu-item:focus-visible { background: var(--dsw-alias-interactive-bg-hover); }')
+    expect(css).toContain('.zeokeel-foot-menu-trigger { background: transparent; }')
+    expect(css).toContain('.zeokeel-foot-menu-trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }')
+    expect(css).toContain('.zeokeel-foot-menu-item { background: transparent; }')
+    expect(css).toContain('.zeokeel-foot-menu-item:hover, .zeokeel-foot-menu-item:focus-visible { background: var(--dsw-alias-interactive-bg-hover); }')
     f.disposers.get('foot-menu: hover styles')?.()
-    expect([...document.querySelectorAll('style')].filter(element => element.textContent?.includes('.pico-foot-menu-trigger'))).toHaveLength(0)
+    expect([...document.querySelectorAll('style')].filter(element => element.textContent?.includes('.zeokeel-foot-menu-trigger'))).toHaveLength(0)
   })
 
   it('插件卸载后登记表单例被清掉（不再有"半挂"的行）', () => {

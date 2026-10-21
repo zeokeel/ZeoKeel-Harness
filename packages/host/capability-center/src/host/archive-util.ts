@@ -193,7 +193,7 @@ export async function assertArchiveSafe(archive: Buffer): Promise<void> {
     scanZip(archive)
     return
   }
-  const staging = await mkdtemp(join(tmpdir(), 'pico-archive-scan-'))
+  const staging = await mkdtemp(join(tmpdir(), 'zeokeel-archive-scan-'))
   const archiveFile = join(staging, 'archive.tar.gz')
   try {
     await writeFile(archiveFile, archive, { mode: 0o600 })

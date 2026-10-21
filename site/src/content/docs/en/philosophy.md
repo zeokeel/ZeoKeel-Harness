@@ -3,7 +3,7 @@ title: Product Philosophy
 description: 'Seven design principles together with their evidence in this repository: everything is a plugin, the control plane lives on the server, the client is bound to its server, deny by default, data stays on the customer machine, AI proposes and humans decide, and the upstream version is pinned — plus what each principle costs.'
 ---
 
-PicoAide Harness is not "a pile of features" but a set of **design trade-offs with explicit boundaries**. This page states seven principles, gives **evidence you can check in this repository** for each of them (configuration keys, code paths, observable behaviour), and finishes with the **costs** of those trade-offs — a trade-off without a cost usually means it has not been thought through.
+ZeoKeel Harness is not "a pile of features" but a set of **design trade-offs with explicit boundaries**. This page states seven principles, gives **evidence you can check in this repository** for each of them (configuration keys, code paths, observable behaviour), and finishes with the **costs** of those trade-offs — a trade-off without a cost usually means it has not been thought through.
 
 The test is simple: if a principle has no landing place in the code, it does not belong on this page.
 
@@ -14,7 +14,7 @@ The test is simple: if a principle has no landing place in the code, it does not
 **Evidence**
 
 - Upstream sits at a fixed version in `deepseek-harness/` (a git submodule), and the source of truth is `upstream.json` at the repository root (`repository` / `commit` / `sourceVersion`).
-- The desktop shell is an **ordinary plugin row**: `packages/host/desktop/cordis.patch.yml` declares `desktop-shell` (`dsh-plugin-desktop`) plus `desktop-diagnostics`, `desktop-updates`, `desktop-loop-notify`, and so on through `- insert:`. Enterprise capabilities are rows too: `packages/host/enterprise/cordis.patch.yml` declares `picoaide-enterprise`, `picoaide-session`, `picoaide-auth-gate`, and the rest.
+- The desktop shell is an **ordinary plugin row**: `packages/host/desktop/cordis.patch.yml` declares `desktop-shell` (`dsh-plugin-desktop`) plus `desktop-diagnostics`, `desktop-updates`, `desktop-loop-notify`, and so on through `- insert:`. Enterprise capabilities are rows too: `packages/host/enterprise/cordis.patch.yml` declares `zeokeel-enterprise`, `zeokeel-session`, `zeokeel-auth-gate`, and the rest.
 - UI capabilities are injected through upstream's slot mechanism and service capabilities through service contracts; the only things the desktop exposes to third parties are explicit contracts such as `desktopRuntime.registerTrayItem` / `desktopActions` (`packages/host/desktop/docs/plugin-services.md`). The window, tray, and packager internals are **not** third-party API.
 - Because the desktop shell is a plugin, "replace one upstream row" is a configuration-level operation: `packages/host/desktop/cordis.patch.yml` both disables rows we do not need (`disabled: true`) and overrides whole-row `config` values.
 
@@ -48,7 +48,7 @@ The test is simple: if a principle has no landing place in the code, it does not
 
 **Evidence**
 
-- The update source is **session-derived**: `packages/host/desktop/src/updates.ts` listens for `pico/session-changed` and reads `serverURL` from the session; when `serverURL === null` (signed out) there is **no update source** and no outbound check is made. Switching servers invalidates in-flight checks and downloads wholesale (a session epoch counter), and an already-downloaded installer is withdrawn.
+- The update source is **session-derived**: `packages/host/desktop/src/updates.ts` listens for `zeokeel/session-changed` and reads `serverURL` from the session; when `serverURL === null` (signed out) there is **no update source** and no outbound check is made. Switching servers invalidates in-flight checks and downloads wholesale (a session epoch counter), and an already-downloaded installer is withdrawn.
 - Manifests and installers come from the same server: `GET /api/client/v2/updates/manifest` and `/updates/client/*` both live on the server (`server/internal/clientrelease/`); the client **does not visit the update server or GitHub**.
 - Channel reconciliation is a hard criterion: the manifest's `channel_id` must exist and must be exactly equal to the channel id the server reports at `/api/client/v2/channel`; a mismatch makes the manifest invalid with no retry.
 - The model path is bound to the session as well: `packages/host/enterprise/src/gateway-model.ts` sets `baseURL` to `${session.serverURL}/v1`, and the sign-in page, channel content, model catalogue, Capability Hub, and connector catalogue all come from this server.
@@ -71,7 +71,7 @@ The test is simple: if a principle has no landing place in the code, it does not
 - Local write surfaces require **proof of possession**: `packages/host/desktop/src/write-proof.ts` validates upstream `connection`'s `dsh-auth-*` cookie on non-GET requests, answering 403 when the proof is insufficient and 503 when the mechanism is absent — never a pass.
 - Connector outbound traffic fails closed: `packages/host/connectors/src/outbound.ts` allows https (or loopback http) only, refuses private / link-local / metadata addresses, pins `redirect: 'manual'` so a 3xx is refused instead of followed, and treats an unverifiable name resolution (failure, timeout, empty answer) exactly like a name that resolves into a non-public range; the verified addresses are handed to the connection so there is no second resolution (no TOCTOU).
 - The renderer has no permissions by default: the main window's permission handler refuses everything except the clipboard for the top-level document of this installation's loopback origin (the built-in browser and app windows each manage their own permission surface).
-- Outbound proxies are banned by default: `packages/host/desktop/src/network-policy.ts` ignores system proxy settings, proxy environment variables, PAC files, and `--proxy-server`; the only escape hatches are the channel field `desktop.allow_system_proxy` or the **real process environment variable** `PICOAI_ALLOW_SYSTEM_PROXY=1`.
+- Outbound proxies are banned by default: `packages/host/desktop/src/network-policy.ts` ignores system proxy settings, proxy environment variables, PAC files, and `--proxy-server`; the only escape hatches are the channel field `desktop.allow_system_proxy` or the **real process environment variable** `ZEOKEEL_ALLOW_SYSTEM_PROXY=1`.
 - The server side denies by default too: unauthorized content is invisible (404 without leaking existence), every admin route must declare a permission point, and login rate limiting counts **failures only** (a success clears the counters).
 
 **Cost**
@@ -86,7 +86,7 @@ The test is simple: if a principle has no landing place in the code, it does not
 
 **Evidence**
 
-- Local data has exactly one authoritative directory: `packages/host/desktop/src/desktop-home.ts` defines the Harness home (`~/.picoaide-harness`, with `DSH_HOME` taking precedence and a different directory per channel), under which sessions, settings, workspaces, and skills live; the platform checks whether it falls inside critical system directories and refuses to write session tokens where an attacker on the same machine could read them.
+- Local data has exactly one authoritative directory: `packages/host/desktop/src/desktop-home.ts` defines the Harness home (`~/.zeokeel-harness`, with `DSH_HOME` taking precedence and a different directory per channel), under which sessions, settings, workspaces, and skills live; the platform checks whether it falls inside critical system directories and refuses to write session tokens where an attacker on the same machine could read them.
 - Connector credentials live in a scope directory split by (account + server) (`packages/host/connectors/src/user-scope.ts`), with `0700` directories, `0600` files, and atomic writes that guard against symlinks and path escape.
 - The local Harness service listens only on `127.0.0.1`; session content, workspace files, tool execution, sandbox state, and audio all stay on the employee machine.
 - The server stores only what it must know: accounts, model usage and cost, the balance ledger, content and authorization, and audit events. It does **not** touch employee files or session logs.

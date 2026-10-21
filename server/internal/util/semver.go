@@ -1,4 +1,4 @@
-// Package util provides shared helpers for the picoaide server.
+// Package util provides shared helpers for the zeokeel server.
 package util
 
 import (

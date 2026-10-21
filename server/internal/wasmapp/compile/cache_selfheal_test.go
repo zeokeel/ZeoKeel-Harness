@@ -4,7 +4,7 @@ package compile
 //
 // 结论（本用例钉住的事实，也是"为什么编译侧不加自愈代码"的依据）：
 // **编译侧本来就不会被这件事打坏** —— 子进程对每次请求都新建一份 wazero Runtime 与
-// `NewCompilationCacheWithDir(req.CacheDir)`（cmd/picoaide-app-compile/main.go 的 compile；
+// `NewCompilationCacheWithDir(req.CacheDir)`（cmd/zeokeel-app-compile/main.go 的 compile；
 // `server` 类型自己的注释写着"无跨请求状态：每次编译都是一份新的 wazero Runtime"），
 // 而 wazero 的 `ensuresFileCache` 在构造时会 mkdir 缓存目录与版本分片目录 ⇒ 目录被删之后
 // **下一次编译会自己把它建回来**。真正会被打坏的是**执行侧**（`Runtime` 在构造期绑定一次，
@@ -14,7 +14,7 @@ package compile
 // 这个设计**。把 cache 提升为进程级（一个很自然的优化）就会让编译侧变成"删目录 ⇒ 失败到
 // 重启"，而那种退化不会有任何别的用例红。本用例就是那道闸：
 //
-//	变异验证（实跑，见交付报告）：把 cmd/picoaide-app-compile 的 cache 提升为**进程级**
+//	变异验证（实跑，见交付报告）：把 cmd/zeokeel-app-compile 的 cache 提升为**进程级**
 //	（sync.Once + 包级变量，模拟"常驻子进程只绑定一次"的优化）⇒ 本用例红。
 //
 // ⚠️ 第二个模块必须与第一个内容不同：wazero 的缓存是内容寻址的，同一份字节第二次编译
@@ -25,7 +25,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/compile/testdata/wasmtest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 )
 
 // TestCompileSurvivesCacheDirRemoval 见文件头。

@@ -27,7 +27,7 @@ function stubCtx(): { ctx: Context; emit: ReturnType<typeof vi.fn> } {
 
 describe('session-service', () => {
   it('exposes the stable session-changed event name', () => {
-    expect(SESSION_CHANGED_EVENT).toBe('pico/session-changed')
+    expect(SESSION_CHANGED_EVENT).toBe('zeokeel/session-changed')
   })
 
   it('validates the tokenFile config through the schema', () => {
@@ -61,7 +61,7 @@ describe('session-service', () => {
   it('degrades with a warning instead of an unhandled rejection when the token file is unwritable (P1-13)', async () => {
     const { ctx, emit } = stubCtx()
     const warn = (ctx.logger as unknown as { warn: ReturnType<typeof vi.fn> }).warn
-    const service = new SessionService(ctx, { tokenFile: '/nonexistent-picoaide-dir-xyz/session.json' })
+    const service = new SessionService(ctx, { tokenFile: '/nonexistent-zeokeel-dir-xyz/session.json' })
     const rejections: unknown[] = []
     const onRejection = (reason: unknown): void => { rejections.push(reason) }
     process.on('unhandledRejection', onRejection)
@@ -101,9 +101,9 @@ describe('defaultTokenFile', () => {
 
   it('falls back to the product home when DSH_HOME is unset or blank', async () => {
     const { defaultTokenFile } = await import('../src/session-service.ts')
-    const home = expect(defaultTokenFile({})).toContain('.picoaide-harness')
+    const home = expect(defaultTokenFile({})).toContain('.zeokeel-harness')
     expect(home).toBeTruthy()
-    expect(defaultTokenFile({ DSH_HOME: '   ' })).toContain('.picoaide-harness')
+    expect(defaultTokenFile({ DSH_HOME: '   ' })).toContain('.zeokeel-harness')
   })
 })
 
@@ -130,7 +130,7 @@ describe('maxOutputFromDefaultParams', () => {
 
 describe('R21-A2-01 clear() 只删属于自己的那份令牌', () => {
   it('没有会话可清时 clear() **不得**删盘上的令牌（迟到的 401 / 重复登出）', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-session-keep-'))
+    const dir = mkdtempSync(join(tmpdir(), 'zeokeel-session-keep-'))
     const file = join(dir, 'session.json')
     writeFileSync(file, JSON.stringify(SAMPLE_SESSION), { mode: 0o600 })
     const { ctx } = stubCtx()
@@ -142,7 +142,7 @@ describe('R21-A2-01 clear() 只删属于自己的那份令牌', () => {
   })
 
   it('正向对照：确实在清一个会话时，令牌文件照旧被删（登出/令牌失效路径不退化）', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-session-drop-'))
+    const dir = mkdtempSync(join(tmpdir(), 'zeokeel-session-drop-'))
     const file = join(dir, 'session.json')
     writeFileSync(file, JSON.stringify(SAMPLE_SESSION), { mode: 0o600 })
     const { ctx } = stubCtx()
@@ -155,7 +155,7 @@ describe('R21-A2-01 clear() 只删属于自己的那份令牌', () => {
 
 describe('session persist 竞态 (F7 复核)', () => {
   it('clear() 之后在途的异步 persist 不得复活 token 文件', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-session-race-'))
+    const dir = mkdtempSync(join(tmpdir(), 'zeokeel-session-race-'))
     const file = join(dir, 'session.json')
     const { ctx } = stubCtx()
     const service = new SessionService(ctx, { tokenFile: file })

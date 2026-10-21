@@ -1,14 +1,14 @@
 /**
  * R7-RV-3 回归（第三轮对抗复核）：本地写路由的持有性证明。
  *
- * 缺陷面（`packages/host/browser/src/index.ts` 的 `/api/pico/browser` 前缀与
+ * 缺陷面（`packages/host/browser/src/index.ts` 的 `/api/zeokeel/browser` 前缀与
  * 四条 exact 路由）此前只有 `guard()`（`browserSameOriginMarker &&
  * isLoopbackRequest`），而 `loopback.ts:60-64` 自述其边界就是"伪造 Origin 的
  * curl 也能过"：本机任意进程伪造 `Origin`/`Host`/`Sec-Fetch-Site` 即可
  *
- *   - `POST /api/pico/browser/eval` 以用户已登录身份在任意站点执行脚本；
- *   - `POST /api/pico/browser/clear-data` 抹掉用户浏览器数据；
- *   - `POST /api/pico/browser/navigate` 把用户浏览器导航到攻击者页面。
+ *   - `POST /api/zeokeel/browser/eval` 以用户已登录身份在任意站点执行脚本；
+ *   - `POST /api/zeokeel/browser/clear-data` 抹掉用户浏览器数据；
+ *   - `POST /api/zeokeel/browser/navigate` 把用户浏览器导航到攻击者页面。
  *
  * 修法与 enterprise `auth-gate.ts` 的 r7c-6 同口径：写面（非 GET）经
  * `connection.requestRejection()` 要一份 BrowserAuth cookie 持有性证明；
@@ -88,7 +88,7 @@ function harness(withFence = true): void {
   fence = browserFence()
   const ctx = {
     get: (name: string) => {
-      if (name === 'picoSession') return { getSession: () => null }
+      if (name === 'zeokeelSession') return { getSession: () => null }
       if (name === 'connection') return withFence ? fence : undefined
       return undefined
     },
@@ -107,7 +107,7 @@ function harness(withFence = true): void {
 
 function handlerFor(url: string): Route['handler'] {
   const path = url.split('?')[0]
-  // 真路由表先匹配 exact（`/api/pico/browser/bookmarks` 不该落到 `/api/pico/browser` 前缀上）。
+  // 真路由表先匹配 exact（`/api/zeokeel/browser/bookmarks` 不该落到 `/api/zeokeel/browser` 前缀上）。
   const route = routes.find((r) => r.kind === 'exact' && r.path === path)
     ?? routes.find((r) => r.kind === 'prefix' && path.startsWith(r.path))
   if (route === undefined) throw new Error(`no route for ${url}`)
@@ -125,24 +125,24 @@ async function call(method: string, url: string, body?: string, cookie = false) 
 
 /** 每一条写面一个代表动作（报告实测的 200 + sideEffect:executed 那批）。 */
 const WRITE_REQUESTS: Array<{ method: string, url: string, body?: string }> = [
-  { method: 'POST', url: '/api/pico/browser/eval', body: '{"expression":"document.cookie"}' },
-  { method: 'POST', url: '/api/pico/browser/navigate', body: '{"url":"https://evil.example"}' },
-  { method: 'POST', url: '/api/pico/browser/clear-data' },
-  { method: 'POST', url: '/api/pico/browser/downloads/open', body: '{"id":1}' },
-  { method: 'POST', url: '/api/pico/browser/bookmarks', body: '{"title":"x"}' },
-  { method: 'POST', url: '/api/pico/browser/open', body: '{}' },
-  { method: 'POST', url: '/api/pico/browser/show' },
+  { method: 'POST', url: '/api/zeokeel/browser/eval', body: '{"expression":"document.cookie"}' },
+  { method: 'POST', url: '/api/zeokeel/browser/navigate', body: '{"url":"https://evil.example"}' },
+  { method: 'POST', url: '/api/zeokeel/browser/clear-data' },
+  { method: 'POST', url: '/api/zeokeel/browser/downloads/open', body: '{"id":1}' },
+  { method: 'POST', url: '/api/zeokeel/browser/bookmarks', body: '{"title":"x"}' },
+  { method: 'POST', url: '/api/zeokeel/browser/open', body: '{}' },
+  { method: 'POST', url: '/api/zeokeel/browser/show' },
   // 蒙版页自己的两个按钮（§7b 方案 A 的"产品不能被修坏"面）：接管与隐藏窗口。
-  { method: 'POST', url: '/api/pico/browser/takeover', body: '{"active":true}' },
-  { method: 'POST', url: '/api/pico/browser/hide' },
+  { method: 'POST', url: '/api/zeokeel/browser/takeover', body: '{"active":true}' },
+  { method: 'POST', url: '/api/zeokeel/browser/hide' },
   // 胶囊态的失败提示矩形信号（2026-09-21 缺陷 #7）：同样是写面。
-  { method: 'POST', url: '/api/pico/browser/notice', body: '{"visible":true}' },
-  { method: 'DELETE', url: '/api/pico/browser/bookmarks?id=1' },
-  { method: 'DELETE', url: '/api/pico/browser/downloads?id=1' },
+  { method: 'POST', url: '/api/zeokeel/browser/notice', body: '{"visible":true}' },
+  { method: 'DELETE', url: '/api/zeokeel/browser/bookmarks?id=1' },
+  { method: 'DELETE', url: '/api/zeokeel/browser/downloads?id=1' },
 ]
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'pico-browser-proof-'))
+  home = mkdtempSync(join(tmpdir(), 'zeokeel-browser-proof-'))
   vi.stubEnv('DSH_HOME', home)
 })
 
@@ -160,8 +160,8 @@ describe('R7-RV-3 browser:本地写路由要求持有性证明', () => {
       expect(out.body.error, write.url).toBe('browser session proof required')
     }
     // 围栏之外什么都没发生:书签/下载台账没有新增条目(读面照常,证明请求本身是有效的)。
-    expect(await call('GET', '/api/pico/browser/bookmarks')).toMatchObject({ code: 200 })
-    expect(await call('GET', '/api/pico/browser/downloads')).toMatchObject({ code: 200 })
+    expect(await call('GET', '/api/zeokeel/browser/bookmarks')).toMatchObject({ code: 200 })
+    expect(await call('GET', '/api/zeokeel/browser/downloads')).toMatchObject({ code: 200 })
     expect(fence.seen).toBeGreaterThanOrEqual(WRITE_REQUESTS.length)
   })
 
@@ -169,35 +169,35 @@ describe('R7-RV-3 browser:本地写路由要求持有性证明', () => {
     harness()
     // 带 proof 的 navigate 必须真的驱动 runtime(而不是 403):用一个不存在的标签页
     // 让 runtime 明确报错 —— 关键是**没有**走到 proof 拒绝分支。
-    const out = await call('POST', '/api/pico/browser/navigate', '{"url":"https://ok.example"}', true)
+    const out = await call('POST', '/api/zeokeel/browser/navigate', '{"url":"https://ok.example"}', true)
     expect(out.code).not.toBe(403)
     expect(out.body.error).not.toBe('browser session proof required')
     // bookmarks 带 proof 时如实报"没有标签页"(证明 handler 真的执行了)。
-    const bookmark = await call('POST', '/api/pico/browser/bookmarks', '{"title":"x"}', true)
+    const bookmark = await call('POST', '/api/zeokeel/browser/bookmarks', '{"title":"x"}', true)
     expect(bookmark.code).toBe(400)
     expect(bookmark.body.error).toBe('no tab open to bookmark')
     // 蒙版页的两个按钮：持票时必须**真的执行动作**（§7b 方案 A 之后蒙版跑在默认
     // session 里，票据天然在 —— 这两条是"修好漏洞不能弄坏产品"的正向判据）。
-    expect(await call('POST', '/api/pico/browser/takeover', '{"active":true}', true))
+    expect(await call('POST', '/api/zeokeel/browser/takeover', '{"active":true}', true))
       .toMatchObject({ code: 200, body: { ok: true } })
-    expect(await call('POST', '/api/pico/browser/hide', undefined, true))
+    expect(await call('POST', '/api/zeokeel/browser/hide', undefined, true))
       .toMatchObject({ code: 200, body: { ok: true } })
     // 胶囊态提示矩形信号（2026-09-21 缺陷 #7）：真路由必须接到 runtime ——
     // 漏 case 会落到 `default: 404 not found`（这条判据就是抓那个）。
-    expect(await call('POST', '/api/pico/browser/notice', '{"visible":true}', true))
+    expect(await call('POST', '/api/zeokeel/browser/notice', '{"visible":true}', true))
       .toMatchObject({ code: 200, body: { ok: true } })
   })
 
   it('read routes keep the guard-only contract (GET stays readable for the panel)', async () => {
     harness()
-    for (const url of ['/api/pico/browser/state', '/api/pico/browser/ops', '/api/pico/browser/bookmarks', '/api/pico/browser/history', '/api/pico/browser/downloads']) {
+    for (const url of ['/api/zeokeel/browser/state', '/api/zeokeel/browser/ops', '/api/zeokeel/browser/bookmarks', '/api/zeokeel/browser/history', '/api/zeokeel/browser/downloads']) {
       const out = await call('GET', url)
       expect(out.code, url).toBe(200)
     }
     // 跨站伪造仍然被 guard 拦下(与证明无关的既有围栏不得退化)。
     const r = fakeRes()
-    await handlerFor('/api/pico/browser/bookmarks')({
-      ...fakeReq('GET', '/api/pico/browser/bookmarks'),
+    await handlerFor('/api/zeokeel/browser/bookmarks')({
+      ...fakeReq('GET', '/api/zeokeel/browser/bookmarks'),
       headers: { host: '127.0.0.1:3080', origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
     } as unknown as IncomingMessage, r.res)
     expect(r.read().code).toBe(403)
@@ -205,7 +205,7 @@ describe('R7-RV-3 browser:本地写路由要求持有性证明', () => {
 
   it('fails closed when the connection service is absent (same level as login/enterprise writes)', async () => {
     harness(false)
-    const out = await call('POST', '/api/pico/browser/eval', '{"expression":"1"}')
+    const out = await call('POST', '/api/zeokeel/browser/eval', '{"expression":"1"}')
     expect(out.code).toBe(503)
     expect(out.body.error).toBe('browser session proof unavailable')
   })
@@ -245,13 +245,13 @@ describe('R7-RV-3 browser:等价伪造形态（同族绕过面）', () => {
         : (401 as const)
     }
     const r = fakeRes()
-    const req = fakeReq('POST', '/api/pico/browser/eval', '{"expression":"1"}')
+    const req = fakeReq('POST', '/api/zeokeel/browser/eval', '{"expression":"1"}')
     const merged = { ...req.headers } as Record<string, unknown>
     for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
       if (value === undefined) delete merged[key]
       else merged[key] = value
     }
-    await handlerFor('/api/pico/browser/eval')({ ...req, headers: merged } as unknown as IncomingMessage, r.res)
+    await handlerFor('/api/zeokeel/browser/eval')({ ...req, headers: merged } as unknown as IncomingMessage, r.res)
     expect(r.read().code).toBe(403)
   })
 })

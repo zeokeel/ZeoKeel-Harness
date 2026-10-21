@@ -34,11 +34,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appproof"
-	"github.com/picoaide/picoaide/internal/wasmapp/appserver"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appproof"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appserver"
 )
 
 // ===== 夹具 =====
@@ -230,8 +230,8 @@ func (e *clientEnv) postRaw(appID string, raw []byte, mutate ...func(*http.Reque
 	// 缺省自动附一份合法 proof：本文件的既有用例测的是**信封语义**，proof 是它们
 	// 的前置条件（契约 §20.1 的准入顺序：BearerAuth → app-proof → 信封）。要测 proof
 	// 本身用 noProof 或 mutate 覆盖这个头。
-	if !e.noProof && req.Header.Get("X-Pico-App-Proof") == "" {
-		req.Header.Set("X-Pico-App-Proof", e.mintProof(appID))
+	if !e.noProof && req.Header.Get("X-ZeoKeel-App-Proof") == "" {
+		req.Header.Set("X-ZeoKeel-App-Proof", e.mintProof(appID))
 	}
 	for _, m := range mutate {
 		m(req)
@@ -245,7 +245,7 @@ func (e *clientEnv) postRaw(appID string, raw []byte, mutate ...func(*http.Reque
 func okEnvelope(appID string) clientEnvelope {
 	return clientEnvelope{
 		Method: http.MethodGet, Path: "/notes", Query: "page=2",
-		Host: appserver.PicoaideAppOrigin(appID),
+		Host: appserver.ZeoKeelAppOrigin(appID),
 	}
 }
 
@@ -266,7 +266,7 @@ func errEnvelope(t *testing.T, rec *httptest.ResponseRecorder, wantStatus int) m
 	return obj
 }
 
-// ===== host 判据（契约 §4.2：只接受 picoaide-app://<app_id> 或裸 <app_id>）=====
+// ===== host 判据（契约 §4.2：只接受 zeokeel-app://<app_id> 或裸 <app_id>）=====
 
 func TestClientRequest_HostForms(t *testing.T) {
 	const appID = "demo"
@@ -276,10 +276,10 @@ func TestClientRequest_HostForms(t *testing.T) {
 		name string
 		host string
 	}{
-		{"规范 origin", appserver.PicoaideAppOrigin(appID)},
+		{"规范 origin", appserver.ZeoKeelAppOrigin(appID)},
 		{"裸 app_id", appID},
-		{"首尾空白", "  " + appserver.PicoaideAppOrigin(appID) + "  "},
-		{"大小写不敏感（归一化到小写）", "PicoAide-App://DEMO"},
+		{"首尾空白", "  " + appserver.ZeoKeelAppOrigin(appID) + "  "},
+		{"大小写不敏感（归一化到小写）", "ZeoKeel-App://DEMO"},
 	}
 	for _, tc := range legal {
 		t.Run("合法/"+tc.name, func(t *testing.T) {
@@ -304,9 +304,9 @@ func TestClientRequest_HostForms(t *testing.T) {
 		{"旧草稿带端口", appID + ".app.localhost:41234"},
 		{"任意域名", "evil.example"},
 		{"http(s) 源", "https://" + appID},
-		{"带端口", appserver.PicoaideAppOrigin(appID) + ":8080"},
-		{"带路径", appserver.PicoaideAppOrigin(appID) + "/x"},
-		{"另一应用的源", appserver.PicoaideAppOrigin("other")},
+		{"带端口", appserver.ZeoKeelAppOrigin(appID) + ":8080"},
+		{"带路径", appserver.ZeoKeelAppOrigin(appID) + "/x"},
+		{"另一应用的源", appserver.ZeoKeelAppOrigin("other")},
 		{"带凭据", "user@" + appID},
 		{"缺失", ""},
 	}
@@ -344,12 +344,12 @@ func TestClientRequest_SyntheticRequestShape(t *testing.T) {
 		Method: http.MethodPost, Path: "/notes", Query: "page=2&q=a%2Fb",
 		Host: appID,
 		Headers: map[string]string{
-			"origin":           appserver.PicoaideAppOrigin(appID),
+			"origin":           appserver.ZeoKeelAppOrigin(appID),
 			"content-type":     "application/json",
 			"accept":           "application/json",
 			"accept-language":  "zh-CN",
 			"if-none-match":    `"v1"`,
-			"user-agent":       "picoaide-client",
+			"user-agent":       "zeokeel-client",
 			"x-requested-with": "XMLHttpRequest",
 		},
 		Body: base64.StdEncoding.EncodeToString(body),
@@ -499,13 +499,13 @@ func TestClientRequest_HeaderWhitelist(t *testing.T) {
 	// 合法集合：白名单的八个头一个不少。
 	env := okEnvelope(appID)
 	env.Headers = map[string]string{
-		"origin":            appserver.PicoaideAppOrigin(appID),
+		"origin":            appserver.ZeoKeelAppOrigin(appID),
 		"content-type":      "application/json",
 		"accept":            "text/html",
 		"accept-language":   "zh-CN",
 		"if-none-match":     `"v1"`,
 		"if-modified-since": "Wed, 21 Oct 2026 07:28:00 GMT",
-		"user-agent":        "picoaide-client",
+		"user-agent":        "zeokeel-client",
 		"x-requested-with":  "XMLHttpRequest",
 	}
 	if rec := e.post(appID, env); rec.Code != http.StatusOK {
@@ -519,7 +519,7 @@ func TestClientRequest_HeaderWhitelist(t *testing.T) {
 		name    string
 		headers map[string]string
 	}{
-		{"cookie（实测不存在）", map[string]string{"cookie": "picoaide_app=deadbeef"}},
+		{"cookie（实测不存在）", map[string]string{"cookie": "zeokeel_app=deadbeef"}},
 		{"referer（实测不存在）", map[string]string{"referer": "https://evil.example/"}},
 		{"sec-fetch-site（实测不存在）", map[string]string{"sec-fetch-site": "cross-site"}},
 		{"sec-fetch-mode", map[string]string{"sec-fetch-mode": "navigate"}},
@@ -738,7 +738,7 @@ func TestClientRequest_InvalidAppID(t *testing.T) {
 	// 这里按 registry 的既有规则校验（保留字/纯数字/xn--/长度）。
 	for _, bad := range []string{"123", "xn--abc", "admin", "portal"} {
 		rec := e.post(bad, clientEnvelope{
-			Method: http.MethodGet, Path: "/", Host: appserver.PicoaideAppOrigin(bad),
+			Method: http.MethodGet, Path: "/", Host: appserver.ZeoKeelAppOrigin(bad),
 		})
 		if rec.Code == http.StatusOK {
 			t.Fatalf("非法 app_id %q 不该放行", bad)

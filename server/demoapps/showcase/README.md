@@ -13,14 +13,14 @@
 | 屏 | 展示的能力 | 数据来源 |
 | --- | --- | --- |
 | 01 身份注入 | `user.id / username / display_name / dept / is_publisher`、`auth.mode/verified`、帧里的 headers 与「不含 Cookie」 | `GET /api/whoami`（全部来自请求帧，应用没有登录逻辑） |
-| 02 访问模式 | `access` / `whitelist` / `purpose` / `data_sensitivity` / `owner`、`picoaide.app.json` 原文，以及 login 与 whitelist 的区别（**R24**：平台不比对名单） | 同上 + `assets.read("picoaide.app.json")` |
+| 02 访问模式 | `access` / `whitelist` / `purpose` / `data_sensitivity` / `owner`、`zeokeel.app.json` 原文，以及 login 与 whitelist 的区别（**R24**：平台不比对名单） | 同上 + `assets.read("zeokeel.app.json")` |
 | 03 建表 | `db.define`（DDL 唯一入口、幂等、列配额与保留列 `_row_id` 的存在） | `POST /api/run` |
 | 04 写入 + 查询 | `db.exec` 插一条、`db.query` 读回来，值一律 `?` 占位 | 同上 |
 | 05 事务 | 「提交」「回滚」两个按钮各写两条，再用同一 marker 的行数证明**回滚真的没落库** | `POST /api/tx`（`mode=commit|rollback`） |
 | 06 应用日志 | `log` 写一条、`accepted/dropped`、单条 ≤4 KiB / 每请求 ≤100 条 / 保留 7 天 | `POST /api/log`、`POST /api/run` |
 | 07 包内资源 | `assets.read` 的 `content_type / size / encoding`（入口页 + 保留资源两种），并现场对比「宿主直出 `/static/*`」与「交给 wasm」 | `POST /api/run` + 页面直接 `fetch('/static/app.css')` |
 | 08 被拒的样子 | 8 种**故意违规**（SQL 提保留列 / 别名 rowid / `WITH` / 多语句 / 直接 DDL / 事务里 `log` / 事务里 `db.define` / 嵌套事务），把平台回的 code+message+details+hints 原样渲染，并对比「文档预期」与「本次实际」 | `GET/POST /api/denied` |
-| 09 客户端 AI | 页面直接 `POST /__picoaide/ai/chat`，按 SSE 解析 `delta` / `done` / `error` 三类帧增量渲染；六个错误码逐条给出可读处置 | 客户端 AI loop（wasm 里没有 AI） |
+| 09 客户端 AI | 页面直接 `POST /__zeokeel/ai/chat`，按 SSE 解析 `delta` / `done` / `error` 三类帧增量渲染；六个错误码逐条给出可读处置 | 客户端 AI loop（wasm 里没有 AI） |
 | 10 存储边界 | 应用库不随清缓存/切账号丢失；`localStorage`/`sessionStorage`/`IndexedDB` 可再生；`Cache Storage` 与 cookie 不可用 | 静态说明 |
 | 11 历史证据 | 应用库里的真实数据（最近 20 行） | `GET /api/runs` |
 | 12 能力时间线 | 本次请求 `app.Traces()`：方法 / 成功与否 / 备注 / 耗时微秒 + 汇总统计 | 每个响应里的 `traces` |
@@ -36,7 +36,7 @@
 | `POST /api/log` | 只写一条日志，`{"message":"…"}`（可省） |
 | `GET/POST /api/denied` | GET 返回 8 种违规形态清单（页面据此渲染按钮）；POST `{"kind":"…"}` 触发一次并把拒绝信封原样返回 |
 | `GET /api/runs?limit=N` | 历史证据（≤50 行） |
-| 其它 GET 路径 | 兜底：在 wasm 里 `assets.read` 一次（宿主直出没命中时才会走到）。**保留资源 `picoaide.app.json` 与 `__picoaide/*` 在这里被明确挡掉**，不会被当普通资源发出去 |
+| 其它 GET 路径 | 兜底：在 wasm 里 `assets.read` 一次（宿主直出没命中时才会走到）。**保留资源 `zeokeel.app.json` 与 `__zeokeel/*` 在这里被明确挡掉**，不会被当普通资源发出去 |
 
 每一步的 `micros` 都是「这一步真实发生的宿主调用耗时之和」（`app.Traces()` 的片段），
 页面上的数字可以和时间线逐条对上。
@@ -56,28 +56,28 @@
 
 ```bash
 cd server/demoapps/showcase
-export GOCACHE=/data/picoaide-harness/temp/showcase-gocache GOMODCACHE=/root/go/pkg/mod GOPROXY=off
+export GOCACHE=/data/zeokeel-harness/temp/showcase-gocache GOMODCACHE=/root/go/pkg/mod GOPROXY=off
 GOOS=wasip1 GOARCH=wasm go build -o /tmp/showcase.wasm .
 node ../scripts/pack-assets.mjs --in /tmp/showcase.wasm --out /tmp/showcase-packed.wasm \
   web/index.html=index.html web/app.css=static/app.css web/app.js=static/app.js
 
 # 入口（走 wasm：先判名单再给页面）
 node ../../skills/app-builder/examples/go/preview.mjs /tmp/showcase-packed.wasm \
-  --config picoaide.app.json --path / --user zhangwei
+  --config zeokeel.app.json --path / --user zhangwei
 # 宿主直出静态资源（不执行 wasm）
 node ../../skills/app-builder/examples/go/preview.mjs /tmp/showcase-packed.wasm --path /static/app.css
 # 身份与访问模式
 node ../../skills/app-builder/examples/go/preview.mjs /tmp/showcase-packed.wasm \
-  --config picoaide.app.json --path /api/whoami --user zhangwei
+  --config zeokeel.app.json --path /api/whoami --user zhangwei
 # 全套能力（注意：本地假宿主没有事务原语，见下）
 node ../../skills/app-builder/examples/go/preview.mjs /tmp/showcase-packed.wasm \
-  --config picoaide.app.json --path /api/run --method POST --user zhangwei
+  --config zeokeel.app.json --path /api/run --method POST --user zhangwei
 ```
 
 `server/scripts/build-demo-apps.sh` 与镜像里的 `Dockerfile` 走的是同一套步骤
 （`demoapps/<app>/web/*` → `index.html` / `static/app.css` / `static/app.js` 三个自定义段）。
 
-### 本目录里的 `picoaide.app.json`
+### 本目录里的 `zeokeel.app.json`
 
 它是**平台保留资源**，生产环境由 `appseed` 依 `demos.json` 写进版本资源目录；
 本目录里的这一份**只服务本地预览**（预览工具要读它才能演示 `access` / `whitelist`）。

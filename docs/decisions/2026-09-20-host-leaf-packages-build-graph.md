@@ -5,12 +5,12 @@
 WASM 应用「客户端专属」改造让 desktop 的 Electron 引导第一次**静态 import 了一个插件包**：
 
 ```
-desktop ──静态 import──▶ @picoaide/dsh-wasm-apps-host ──静态 import──▶ @picoaide/dsh-browser/guard
+desktop ──静态 import──▶ @zeokeel/dsh-wasm-apps-host ──静态 import──▶ @zeokeel/dsh-browser/guard
    ▲                                                                          │
    └──────────── dsh-plugin-desktop/host-locale（browser 5 个文件 + connectors）┘
 ```
 
-第一次断环（只抽 `host-locale`）后又露出第二段：`browser → @picoaide/dsh-connectors`（`typeof import(…)` 三处 + `tests/credential-site.spec.ts` 用真实 `ConnectorStore`），而 connectors 依赖 desktop 的 `desktop-home` ⇒ 四边环。
+第一次断环（只抽 `host-locale`）后又露出第二段：`browser → @zeokeel/dsh-connectors`（`typeof import(…)` 三处 + `tests/credential-site.spec.ts` 用真实 `ConnectorStore`），而 connectors 依赖 desktop 的 `desktop-home` ⇒ 四边环。
 
 **后果（实测）**：不存在任何构建顺序能产出全部产物 —— **CI 必红**（PR #101 的 Gate：`src/main.ts` / `src/app-ai-runner.ts` 报 TS2307），而**本机因为 `lib/` 产物早已存在而看不出来**（典型的"本地绿、CI 红"）。
 
@@ -20,8 +20,8 @@ desktop ──静态 import──▶ @picoaide/dsh-wasm-apps-host ──静态 i
 
 | 新包 | 源 | 消费方 |
 | --- | --- | --- |
-| `@picoaide/dsh-host-locale`（`packages/host/host-locale/`） | 原 `desktop/src/host-locale.ts`（逐字节迁移） | browser（5 文件）、connectors、desktop |
-| `@picoaide/dsh-host-home`（`packages/host/host-home/`） | 原 `desktop/src/desktop-home.ts`（逐字节迁移） | connectors、desktop |
+| `@zeokeel/dsh-host-locale`（`packages/host/host-locale/`） | 原 `desktop/src/host-locale.ts`（逐字节迁移） | browser（5 文件）、connectors、desktop |
+| `@zeokeel/dsh-host-home`（`packages/host/host-home/`） | 原 `desktop/src/desktop-home.ts`（逐字节迁移） | connectors、desktop |
 
 **兼容面保持不变**：`dsh-plugin-desktop/host-locale` 与 `dsh-plugin-desktop/desktop-home` 仍是**可用的 re-export**（各自带 re-export 判据 + 类型层与运行期两层变异验证），既有文档与外部引用无需改动。
 

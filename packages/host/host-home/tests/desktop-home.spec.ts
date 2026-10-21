@@ -3,7 +3,7 @@
  *
  * 2026-09-20（构建环修复，路线 A 扩展）：本文件自
  * `packages/host/desktop/tests/desktop-home.spec.ts` **逐字迁移**，唯一改动是
- * import 路径 —— 实现现在住在这个零依赖叶子包里（`@picoaide/dsh-host-home`）。
+ * import 路径 —— 实现现在住在这个零依赖叶子包里（`@zeokeel/dsh-host-home`）。
  * 25 个 `it` 一条未减；`dsh-plugin-desktop/desktop-home` 那条对外子路径由 desktop
  * 自己的 `tests/desktop-home-reexport.spec.ts` 守住。
  */
@@ -25,9 +25,9 @@ import {
 } from '../src/index.ts'
 
 describe('resolveDshHome (product home)', () => {
-  it('defaults to ~/.picoaide-harness (product home, not upstream ~/.dsh)', () => {
+  it('defaults to ~/.zeokeel-harness (product home, not upstream ~/.dsh)', () => {
     expect(resolveDshHome(undefined, {}, '/home/user')).toBe(join('/home/user', PRODUCT_DSH_HOME_DIR))
-    expect(PRODUCT_DSH_HOME_DIR).toBe('.picoaide-harness')
+    expect(PRODUCT_DSH_HOME_DIR).toBe('.zeokeel-harness')
   })
 
   it('prefers an explicit DSH_HOME environment variable over the default', () => {
@@ -89,7 +89,7 @@ describe('channelDshHomeDir (渠道数据隔离的唯一派生点)', () => {
       { homeDir: '../escape' },
       { homeDir: '/abs' },
       { homeDir: '.UPPER' },
-      { slug: 'PicoAide-Harness' },
+      { slug: 'ZeoKeel-Harness' },
       { slug: '../../etc' },
       { slug: 42 },
     ]) {
@@ -115,7 +115,7 @@ describe('dshHomePath and display', () => {
   })
 
   it('labels the default home symbolically', () => {
-    expect(DEFAULT_DSH_HOME_DISPLAY).toBe('~/.picoaide-harness')
+    expect(DEFAULT_DSH_HOME_DISPLAY).toBe('~/.zeokeel-harness')
   })
 })
 
@@ -129,7 +129,7 @@ describe('expandHomePath', () => {
 
 describe('isSafeDshHome (审计 P2-3 系统目录拒绝)', () => {
   it('allows the product default and /tmp-based homes (e2e/sandbox use)', () => {
-    expect(isSafeDshHome('/home/user/.picoaide-harness')).toBe(true)
+    expect(isSafeDshHome('/home/user/.zeokeel-harness')).toBe(true)
     expect(isSafeDshHome('/tmp/dsh-desktop-profile-abc')).toBe(true)
     expect(isSafeDshHome('/tmp')).toBe(true)
   })
@@ -142,7 +142,7 @@ describe('isSafeDshHome (审计 P2-3 系统目录拒绝)', () => {
     expect(isSafeDshHome('/')).toBe(false)
     expect(isSafeDshHome('/etc')).toBe(false)
     expect(isSafeDshHome('/usr/local')).toBe(false)
-    expect(isSafeDshHome('/var/lib/picoaide')).toBe(false)
+    expect(isSafeDshHome('/var/lib/zeokeel')).toBe(false)
     expect(isSafeDshHome('/dev/shm')).toBe(false)
     expect(isSafeDshHome('/proc/self')).toBe(false)
   })
@@ -185,12 +185,12 @@ describe('isSystemWorkingDirectory (P2-34: packaged cwd guard)', () => {
       ProgramData: 'C:\\ProgramData',
     }
     expect(isSystemWorkingDirectory('C:\\Windows\\System32', env)).toBe(true)
-    expect(isSystemWorkingDirectory('C:\\Program Files\\PicoAide', env)).toBe(true)
-    expect(isSystemWorkingDirectory('C:\\ProgramData\\PicoAide', env)).toBe(true)
+    expect(isSystemWorkingDirectory('C:\\Program Files\\ZeoKeel', env)).toBe(true)
+    expect(isSystemWorkingDirectory('C:\\ProgramData\\ZeoKeel', env)).toBe(true)
   })
 
   it('allows ordinary project directories', () => {
-    expect(isSystemWorkingDirectory('/data/picoaide-harness')).toBe(false)
+    expect(isSystemWorkingDirectory('/data/zeokeel-harness')).toBe(false)
     expect(isSystemWorkingDirectory('/home/user/projects/app')).toBe(false)
     expect(isSystemWorkingDirectory('/tmp/workspace')).toBe(false)
   })

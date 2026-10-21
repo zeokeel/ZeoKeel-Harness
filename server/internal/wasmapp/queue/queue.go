@@ -28,8 +28,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // Options 是调度器上限（零值字段用 limits 缺省填充）。
@@ -97,7 +97,7 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-// Stats 是队列水位（§4.9 /readyz 与 /api/pico/... 观测面用）。
+// Stats 是队列水位（§4.9 /readyz 与 /api/zeokeel/... 观测面用）。
 type Stats struct {
 	// GlobalRunning 是当前全局在跑数。
 	GlobalRunning int `json:"global_running"`

@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // gwfEnv 是「网关文件台账」用例的公共夹具：真路由树（生产镜像）+ 真库 + 假上游。
@@ -71,7 +71,7 @@ func (e *gwfEnv) session(t *testing.T, name, role string) map[string]string {
 	if err != nil {
 		t.Fatalf("create admin session %s: %v", name, err)
 	}
-	return map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}
+	return map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}
 }
 
 func (e *gwfEnv) seed(t *testing.T, id string, uid int64, exp *time.Time, size int64) {

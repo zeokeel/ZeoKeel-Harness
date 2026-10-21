@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-wasm-apps-host'
+const PACKAGE_NAME = '@zeokeel/dsh-wasm-apps-host'
 
 export default defineConfig({
   name: PACKAGE_NAME,
@@ -15,7 +15,7 @@ export default defineConfig({
     // 此前 `package.json` 的 `exports` 声明了 ./app-proof·./windows·./host-request·./ai-chat
     // 四个子路径，而这里只构建 index/invariant/electron-adapter ⇒ 那四个 `lib/*.js`
     // **从未产出**。后果不是"少几个文件"，而是**打包版启动即挂**：desktop 的
-    // `lib/main.js` 值导入 `@picoaide/dsh-wasm-apps-host/app-proof`（安装密钥仓库），
+    // `lib/main.js` 值导入 `@zeokeel/dsh-wasm-apps-host/app-proof`（安装密钥仓库），
     // 在真实 app.asar 里报 ERR_MODULE_NOT_FOUND（Linux e2e 的
     // "app did not expose CDP within 30s" 就是它；本地单测因为走源码路径而全绿）。
     // 教训：**声明了的入口就必须构建**，否则"能 import"只是源码期的幻觉。

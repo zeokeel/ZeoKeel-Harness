@@ -66,7 +66,7 @@
    白字白底主按钮）。**升级上游修不了**（上游 main 与 vendored 基线在这些名字上逐字节一致）。
    → **已实施适配层**（不改 vendored 源码）：
    `packages/host/desktop/src/client/legacy-theme-tokens.ts` 用
-   `ctx.get('theme').overrideTokens('picoaide-vendored-legacy-tokens', …)` 一次覆盖 49 个名字；
+   `ctx.get('theme').overrideTokens('zeokeel-vendored-legacy-tokens', …)` 一次覆盖 49 个名字；
    同义 alias 直接指真实 token（自动跟随主题），另一套 0–11 刻度色板映射到同值/近值的
    上游 static token，上游缺族/缺档的（紫、黄、深色阶）给显式亮/暗一对。
    护栏：`tests/legacy-theme-tokens.spec.ts` —— 对 vendored 源码做**全深度扫描**，

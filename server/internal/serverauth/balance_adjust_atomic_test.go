@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // blockBalanceAudit 用表级 CHECK 精确阻断 balance_adjust 的审计写入。
@@ -65,7 +65,7 @@ func adminLoginHdr(t *testing.T, r http.Handler) map[string]string {
 	if csrf == "" || sess == "" {
 		t.Fatal("登录未拿到 csrf/session")
 	}
-	return map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	return map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 }
 
 func TestAdminBalanceAdjustAuditFailureRollsBackMoney(t *testing.T) {

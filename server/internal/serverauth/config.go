@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // ProviderBuildFailure 描述"配置里启用了、但**构建失败**"的一个登录方式

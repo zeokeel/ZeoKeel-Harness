@@ -101,8 +101,8 @@ func loadSemverCorpus(t *testing.T) []semverCorpusCase {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("共享语料不是合法 JSON：%v", err)
 	}
-	if doc.Schema != "picoaide-semver-corpus/1" {
-		t.Fatalf("共享语料 schema=%q，want picoaide-semver-corpus/1", doc.Schema)
+	if doc.Schema != "zeokeel-semver-corpus/1" {
+		t.Fatalf("共享语料 schema=%q，want zeokeel-semver-corpus/1", doc.Schema)
 	}
 	if len(doc.Cases) == 0 {
 		t.Fatal("共享语料没有任何用例")

@@ -4,7 +4,7 @@ import type { RendererErrorReport } from './renderer-error-contract.ts'
 import type { DesktopUpdateErrorCategory } from './desktop-update-contract.ts'
 import type { UpdateCheckResult, UpdateRequest } from './update-checker.ts'
 
-/** Electron platforms supported by the PicoAide Harness native adapter. */
+/** Electron platforms supported by the ZeoKeel Harness native adapter. */
 export type DesktopPlatform = 'darwin' | 'win32' | 'linux'
 
 /**
@@ -315,7 +315,7 @@ export interface DesktopRuntime {
    *
    * 自定义拖拽区（`-webkit-app-region: drag`）拿不到原生双击行为
    * （electron#16385），由 renderer 判定命中后经
-   * `POST /api/pico/desktop/window/titlebar-double-click` 请宿主执行；
+   * `POST /api/zeokeel/desktop/window/titlebar-double-click` 请宿主执行；
    * 非 macOS 平台与无窗口时是 no-op。
    */
   performTitleBarDoubleClick(): void
@@ -363,7 +363,7 @@ export interface DesktopRuntime {
   prepareToQuit(): void
 
   /**
-   * Install the handler for `picoaide://` deep links (auth callback etc.).
+   * Install the handler for `zeokeel://` deep links (auth callback etc.).
    * The launcher captures protocol invocations via `open-url` (macOS),
    * `second-instance`/argv (Windows/Linux); already-received links are
    * delivered to the handler when it is installed.
@@ -385,7 +385,7 @@ export interface DesktopRuntime {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Electron adapter provided by the PicoAide Harness launcher. */
+    /** Electron adapter provided by the ZeoKeel Harness launcher. */
     desktopRuntime: DesktopRuntime
   }
 }

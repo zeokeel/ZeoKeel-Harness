@@ -77,7 +77,7 @@
 | --- | --- |
 | 预算倒挂（P0） | 新增 `src/budgets.ts` 作为唯一真源：`BROWSER_TOOL_TIMEOUT_MS = 30_000`、`USER_GATE_RESERVE_MS = 20_000`、`USER_GATE_TIMEOUT_MS = 10_000`；`POOL_DEFAULTS.userGateTimeoutMs` 改用它。闸门拒绝文案统一为「用户正在操作浏览器（我来操作）—— 请在浏览器窗口点「交给 AI」交还控制权后重试」 |
 | 状态对模型不可见（P0） | `browser_list_tabs` 增加 `control` 字段（`controlled/busy/busyTool/awaitingRelease/awaitingReleaseTool`），渲染时在有控制权争议时追加一行 `USER HOLDS CONTROL…`；system prompt 第 4 条同步说明"这不是页面坏了" |
-| 状态对用户不可见（P0） | runtime 记录"被闸门挡住"这一状态（`gateBlock`，一次控制权周期只记一条 op + 一条 `state` 事件），随 `/api/pico/browser/state` 的 `awaitingRelease` 下发；侧边栏浏览器入口在等待时着色 + 警示圆点 + 文案/tooltip「AI 正在等你交还浏览器控制权…」 |
+| 状态对用户不可见（P0） | runtime 记录"被闸门挡住"这一状态（`gateBlock`，一次控制权周期只记一条 op + 一条 `state` 事件），随 `/api/zeokeel/browser/state` 的 `awaitingRelease` 下发；侧边栏浏览器入口在等待时着色 + 警示圆点 + 文案/tooltip「AI 正在等你交还浏览器控制权…」 |
 | `controlled` 比池子活得久（P1） | `TabPool.clear()`（关闭浏览器 / 窗口销毁 / 切换会话或分区 / 清数据）同时 `setUserControl(false)`，与 2026-09-15 P1-1 的会话切换修复同一口径 |
 
 测试：`tests/audit-0916-user-gate.spec.ts`（预算不变量 / list_tabs 模型面 / 侧边栏投影）、

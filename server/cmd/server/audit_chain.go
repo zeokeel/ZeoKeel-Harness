@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/auditchain"
+	"github.com/zeokeel/zeokeel-harness/server/internal/auditchain"
 )
 
 // auditChainIntervalEnv 是周期校验间隔的运维覆盖（Go duration 字面量，如 "15m"）。
@@ -38,7 +38,7 @@ import (
 // 只读扫描** —— 两者的取舍随表大小与合规要求变化（默认 1 小时：窗口够短，代价是每
 // 小时一次全表读）。非法值**响亮**回落默认值（打 WARNING），不静默 ——
 // "未知 env 静默回落"本身是本仓登记过的审计缺陷类。
-const auditChainIntervalEnv = "PICOAI_AUDIT_CHAIN_INTERVAL"
+const auditChainIntervalEnv = "ZEOKEEL_AUDIT_CHAIN_INTERVAL"
 
 // resolveAuditChainTick 解析生效间隔：缺省/非法都用传入的常量（非法时告警）。
 func resolveAuditChainTick(def time.Duration) time.Duration {

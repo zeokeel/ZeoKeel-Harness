@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // Skill is a marketplace skill row.

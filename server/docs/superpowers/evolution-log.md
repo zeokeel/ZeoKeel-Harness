@@ -1,4 +1,4 @@
-# PicoAide 进化日志(Evolution Log)
+# ZeoKeel 进化日志(Evolution Log)
 
 > 本文件是自我进化循环的状态记录。每轮完成后更新:调研发现、实施功能、验证结果。
 > 主会话上下文被压缩后,凭本文件恢复循环状态。
@@ -134,7 +134,7 @@
 ## Round 8(2026-08-06):端到端联调冒烟
 
 **执行**(controller 亲测,真实进程):
-- 起真实 bin/picoaide-server + mock 上游(127.0.0.1:18081)+ AES 加密 api_key 直插 DB
+- 起真实 bin/zeokeel-server + mock 上游(127.0.0.1:18081)+ AES 加密 api_key 直插 DB
 - 验证全链路:healthz(DB Ping 200)→ 登录 → bootstrap(默认模型回退)→ LLM 网关非流式代理 ✓ → 流式 SSE 分块 ✓ → api_key 解密 ✓
 - 意外收获:SIGTERM → 优雅退出日志 "shutting down…"(Round 7 功能真实生效)
 - 踩坑:pkill -f 匹配 bash 自身命令行自杀(第 3 次,改用精确进程名);api_key 明文被 DecryptSecret 拒绝(安全设计有效)
@@ -244,12 +244,12 @@
 
 ## Round 15(2026-08-19):Skill 版本检测接口(供 harness 客户端自动升级)
 
-**背景**:为 https://github.com/picoaide/picoaide-harness(feat/enterprise)客户端提供技能自动升级能力。已阅读 harness:`plugins/dsh-enterprise` 经本地代理 `/api/pico/skills`(prefix)转发网关 `/api/marketplace/skills` 与 `/archive`;bootstrap 下发 skills 目录(含 version);客户端无本地已装版本记录,技能中心仅手动下载。
+**背景**:为 https://github.com/zeokeel/ZeoKeel-Harness(feat/enterprise)客户端提供技能自动升级能力。已阅读 harness:`plugins/dsh-enterprise` 经本地代理 `/api/zeokeel/skills`(prefix)转发网关 `/api/marketplace/skills` 与 `/archive`;bootstrap 下发 skills 目录(含 version);客户端无本地已装版本记录,技能中心仅手动下载。
 
-**设计**:`GET /api/marketplace/skills/updates?installed=name:version,...`——GET+query 与 harness 现有 prefix 代理天然兼容(`/api/pico/skills/updates?...` 直接透传),客户端零代理改造。响应仅含"较新"技能(最新 version/archive_url);严格授权过滤(admin 全量、普通用户仅授权,未授权/下架不返回,不泄露存在性)。
+**设计**:`GET /api/marketplace/skills/updates?installed=name:version,...`——GET+query 与 harness 现有 prefix 代理天然兼容(`/api/zeokeel/skills/updates?...` 直接透传),客户端零代理改造。响应仅含"较新"技能(最新 version/archive_url);严格授权过滤(admin 全量、普通用户仅授权,未授权/下架不返回,不泄露存在性)。
 
 **实施**(TDD 红-绿):`1a95312` marketplace `skillUpdates` handler + `parseInstalled`(≤100 项、SafePathSegment、name:version 格式);6 用例(有更新/无更新/下架/未授权→授权后出现/非法输入 400/未登录 401)。
 
 **验证**:marketplace 全量 ok;服务端 8 包全绿;已 commit 推送 server-webadmin-only。
 
-**harness 侧后续**(不在本仓库):技能中心「获取」时记录本地已装版本 → 登录/进中心调 `/api/pico/skills/updates` → 自动下载 archive(X-Skill-Version/Checksum 校验)替换。
+**harness 侧后续**(不在本仓库):技能中心「获取」时记录本地已装版本 → 登录/进中心调 `/api/zeokeel/skills/updates` → 自动下载 archive(X-Skill-Version/Checksum 校验)替换。

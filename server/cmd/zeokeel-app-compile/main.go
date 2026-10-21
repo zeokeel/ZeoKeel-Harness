@@ -1,4 +1,4 @@
-// Command picoaide-app-compile 是 WASM 应用平台的**编译子进程**（R19/R31）。
+// Command zeokeel-app-compile 是 WASM 应用平台的**编译子进程**（R19/R31）。
 //
 // 它存在的唯一理由：它是整个平台里**唯一"读不可信字节且可能写宿主"的进程**（§15.1
 // 第 14 条）。因此它被设计成：
@@ -7,7 +7,7 @@
 //   - **父侧控制超时 + 自身 -timeout 兜底**：两层，任一层生效都能收场；
 //   - **只读两个路径**：module_path 指向的文件（读）与 cache_dir 目录（写缓存）；
 //   - **不继承宿主 env**：只拿 PATH/TMPDIR/TZ/LANG 白名单（§4.3「环境变量白名单」），
-//     绝不继承 PG DSN / master key / PICOAI_*（详见 compile.CompileProcessEnv）；
+//     绝不继承 PG DSN / master key / ZEOKEEL_*（详见 compile.CompileProcessEnv）；
 //   - **OS 级隔离由父侧施加**：bwrap `--unshare-all` 等（§15.1 第 14 条 / R31）。
 //     子进程不做隔离（一个进程无法给自己降权），也不假设自己已被隔离。
 //
@@ -16,7 +16,7 @@
 //	请求  {"op":"compile","module_path":"/abs/a.wasm","cache_dir":"/abs/dir"}
 //	应答  {"ok":true,"imports":[…],"exports":[…],"custom_bytes":N,"compile_ms":N,"cached":bool}
 //	失败  {"ok":false,"code":"COMPILE_TIMEOUT|COMPILE_OOM|SECTION_MALFORMED|…","message":"…","details":{…}}
-//	探活  {"op":"ping"} → {"ok":true,"version":"picoaide-app-compile/1"}
+//	探活  {"op":"ping"} → {"ok":true,"version":"zeokeel-app-compile/1"}
 //
 // ⚠️ 不用 abi 的 RS 帧：那是"宿主 ↔ 应用"的协议（§7.1），与本协议混淆会让
 // "编译进程的输出被当成应用输出"这类事故变得可能。两套协议在格式上就不同（这里没有魔数）。
@@ -24,10 +24,10 @@
 // 用法（父侧 spawn 的两种形态）：
 //
 //	# 常驻（父侧默认；逐行请求/应答，空闲由父侧杀）
-//	picoaide-app-compile -listen -timeout 60s
+//	zeokeel-app-compile -listen -timeout 60s
 //
 //	# 单次（手工排障；父侧不用这条路径，因为它要常驻复用进程内编译状态）
-//	picoaide-app-compile -request '{"op":"compile","module_path":"/a.wasm","cache_dir":"/c"}'
+//	zeokeel-app-compile -request '{"op":"compile","module_path":"/a.wasm","cache_dir":"/c"}'
 package main
 
 import (
@@ -42,9 +42,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
 	"github.com/tetratelabs/wazero"
 )
 
@@ -61,7 +61,7 @@ func main() {
 	flag.Parse()
 
 	if *listen && *request != "" {
-		fmt.Fprintln(os.Stderr, "picoaide-app-compile: -listen 与 -request 互斥")
+		fmt.Fprintln(os.Stderr, "zeokeel-app-compile: -listen 与 -request 互斥")
 		os.Exit(2)
 	}
 
@@ -85,7 +85,7 @@ func main() {
 		err = srv.serve(os.Stdin, os.Stdout)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "picoaide-app-compile: %v\n", err)
+		fmt.Fprintf(os.Stderr, "zeokeel-app-compile: %v\n", err)
 		os.Exit(1)
 	}
 }

@@ -18,8 +18,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // fakeIDP is an in-process OIDC identity provider: discovery, JWKS,
@@ -307,7 +307,7 @@ func TestOIDCRoutes(t *testing.T) {
 	stateCookie := w.Result().Cookies()
 	var stateCookieVal string
 	for _, c := range stateCookie {
-		if c.Name == "picoaide_oidc_state_oidc" {
+		if c.Name == "zeokeel_oidc_state_oidc" {
 			stateCookieVal = c.Value
 		}
 	}
@@ -344,22 +344,22 @@ func TestOIDCRoutes(t *testing.T) {
 		t.Fatalf("callback without state cookie = %d, want 400", w.Code)
 	}
 
-	// full flow -> 302 picoaide://auth?token=...
+	// full flow -> 302 zeokeel://auth?token=...
 	code := authorize(t, idp, authURL)
 	w = httptest.NewRecorder()
 	req := httptest.NewRequest("GET",
 		"/api/client/v2/auth/oidc/callback?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(state), nil)
-	req.AddCookie(&http.Cookie{Name: "picoaide_oidc_state_oidc", Value: stateCookieVal})
+	req.AddCookie(&http.Cookie{Name: "zeokeel_oidc_state_oidc", Value: stateCookieVal})
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusFound {
 		t.Fatalf("callback status = %d body=%s", w.Code, w.Body.String())
 	}
 	loc := w.Header().Get("Location")
-	if !strings.HasPrefix(loc, "picoaide://auth?token=") {
+	if !strings.HasPrefix(loc, "zeokeel://auth?token=") {
 		t.Fatalf("redirect = %q", loc)
 	}
 	// 解析深链参数(2026-09):回调携带 token + server(发起方地址)+ user
-	dlink := urlParse(t, strings.Replace(loc, "picoaide://auth", "https://auth.example", 1))
+	dlink := urlParse(t, strings.Replace(loc, "zeokeel://auth", "https://auth.example", 1))
 	token := dlink.Query().Get("token")
 	u, err := VerifyToken(db, token)
 	if err != nil {
@@ -422,7 +422,7 @@ func TestOIDCLoginServerParam(t *testing.T) {
 	state := urlParse(t, authURL).Query().Get("state")
 	stateCookie := ""
 	for _, c := range w.Result().Cookies() {
-		if c.Name == "picoaide_oidc_state_oidc" {
+		if c.Name == "zeokeel_oidc_state_oidc" {
 			stateCookie = c.Value
 		}
 	}
@@ -433,13 +433,13 @@ func TestOIDCLoginServerParam(t *testing.T) {
 	w = httptest.NewRecorder()
 	req := httptest.NewRequest("GET",
 		"/api/client/v2/auth/oidc/callback?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(state), nil)
-	req.AddCookie(&http.Cookie{Name: "picoaide_oidc_state_oidc", Value: stateCookie})
+	req.AddCookie(&http.Cookie{Name: "zeokeel_oidc_state_oidc", Value: stateCookie})
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusFound {
 		t.Fatalf("callback status = %d body=%s", w.Code, w.Body.String())
 	}
 	loc := w.Header().Get("Location")
-	dlink := urlParse(t, strings.Replace(loc, "picoaide://auth", "https://auth.example", 1))
+	dlink := urlParse(t, strings.Replace(loc, "zeokeel://auth", "https://auth.example", 1))
 	if got := dlink.Query().Get("server"); got != "https://server.example.com" {
 		t.Fatalf("deep link server = %q, want server.example.com", got)
 	}

@@ -94,7 +94,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
 )
 
 // directRouteHint 是红信息里那句可直接照抄的处置口径。

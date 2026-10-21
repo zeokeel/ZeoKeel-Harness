@@ -1,6 +1,6 @@
 # 渠道包（channel package）字段参考
 
-> 2026-09-10 定案后落地。**这是 `picoaide/channels` 私有仓里
+> 2026-09-10 定案后落地。**这是 `zeokeel/channels` 私有仓里
 > `channels/<channel-id>/channel.json` 的权威字段表** —— 写渠道配置时以本文 +
 > 代码为准；`docs/planning/2026-09-04-enterprise-channel-branding.md` 是早期
 > 设计草图（字段分组不同，勿照抄）。
@@ -13,7 +13,7 @@
 ## 1. 渠道包是什么、放到哪
 
 ```
-picoaide/channels  (私有仓)
+zeokeel/channels  (私有仓)
   channels/
     official/           # 官方渠道(= 默认品牌)
       channel.json
@@ -30,8 +30,8 @@ picoaide/channels  (私有仓)
 - **每个渠道一个目录，目录名 = 渠道 id**。id 形状 `^[a-z0-9][a-z0-9-]{0,31}$`
   （客户端 `CHANNEL_ID_PATTERN` / 服务端 `IsChannelID` / CI grep 三处同源），
   且 `channel.json` 的 `channel_id` 必须与目录名一致（CI 强校验，不一致即中止）。
-- 渠道 id 决定三处落点，必须自洽：R2 目录 `release.picoaide.com/<id>/`、
-  镜像内 `/opt/picoaide/channel/`、客户端 `channel_id` 校验。
+- 渠道 id 决定三处落点，必须自洽：R2 目录 `release.zeokeel.com/<id>/`、
+  镜像内 `/opt/zeokeel/channel/`、客户端 `channel_id` 校验。
 - 仓库**不保存**任何渠道包内容（`.gitignore` 忽略 `channels/*`），
   仓库里也不应有客户品牌字样。
 
@@ -154,11 +154,11 @@ picoaide/channels  (私有仓)
 
 | 字段 | 生效位置 | 效果 |
 |---|---|---|
-| `defaults.server_url` | `profile.ts` → `picoaide-auth-gate` 的 `defaultServer` | 登录页跳过 Step1 直连服务端；若只配了浏览器 SSO 方式(纯 OIDC/OpenID),直接发起跳转 |
+| `defaults.server_url` | `profile.ts` → `zeokeel-auth-gate` 的 `defaultServer` | 登录页跳过 Step1 直连服务端；若只配了浏览器 SSO 方式(纯 OIDC/OpenID),直接发起跳转 |
 | `features` | 构建期取值 → 随包 `build/channel.json` 的 `features` / `features_variant` | 功能模块开关（缺省全开）。**本轮只到取值与输出点**：消费端（Go `-tags` / 客户端组装 / webadmin `--build-arg`）尚未接线，改它不改变产物内容 |
 | `desktop.product_name` / `window_title` | `profile.ts` → `desktop-shell` 行配置 | 窗口标题 / 托盘 / 通知文案 / 插件加载失败弹窗 / 渲染失败页 |
 | `desktop.product_name` | `src/main.ts` 的 `PRODUCT_NAME` | 通知发送者 / `app.setName` 数据目录 |
-| `identity.*` / `copy.*`（品牌文案） | `profile.ts` → `picoaide-auth-gate` + `picoaide-channel-sync` 的 `brand` | 登录页标题与品牌区、客户端侧边栏/顶栏、服务端不可达时的兜底内容 |
+| `identity.*` / `copy.*`（品牌文案） | `profile.ts` → `zeokeel-auth-gate` + `zeokeel-channel-sync` 的 `brand` | 登录页标题与品牌区、客户端侧边栏/顶栏、服务端不可达时的兜底内容 |
 | `desktop.home_dir` | `src/main.ts` 的 `dshHomeSafe({ productDir })` → `DSH_HOME` | **本次安装的数据根**（账户 token/settings/会话/连接器凭据）；见 §4.4 |
 | `desktop.app_id` | `src/main.ts` 的 `app.setAppUserModelId` | Windows 通知身份（必须与快捷方式的 AppUserModelId 一致） |
 | `channel_id` | 供排查与将来对账 | — |
@@ -182,19 +182,19 @@ picoaide/channels  (私有仓)
 
 | 字段 | 缺了会怎样 |
 |---|---|
-| `desktop.slug` | 安装包名回落 `PicoAide-Harness-…` —— **交付物上直接出现厂商品牌** |
+| `desktop.slug` | 安装包名回落 `ZeoKeel-Harness-…` —— **交付物上直接出现厂商品牌** |
 | `desktop.app_id` | bundle id / AppUserModelId 回落厂商值 —— 两个渠道的客户端在系统里变成"同一个 app" |
-| `desktop.deep_link_scheme` | 回落 `picoaide` —— 浏览器 SSO 回调的确认框里出现厂商名 |
+| `desktop.deep_link_scheme` | 回落 `zeokeel` —— 浏览器 SSO 回调的确认框里出现厂商名 |
 
 **`desktop.home_dir`（数据根）是硬性必填字段**（2026-09-11 加；2026-09-12 两次修订）：
 它不是编译期品牌，而是运行期数据隔离 —— 缺了就与官方客户端共用数据根（共享登录
 token/settings/会话），品牌渠道之间更不该共享（跨租户）。取值只有两种合法形状：
 
-- **`beta`（预发布渠道）必须与官方正式版一致**（`.picoaide-harness`）：预发版是正式版
+- **`beta`（预发布渠道）必须与官方正式版一致**（`.zeokeel-harness`）：预发版是正式版
   的前置验证，登录态/设置/会话要与正式版延续；写成自己的目录会让已装预发版的用户
   升级后看不到既有会话（2026-09-12 实测事故：beta.2 → beta.6 用户报"所有对话都没了"，
   详见 `docs/decisions/2026-09-11-channel-scoped-data-roots.md` 的两次 2026-09-12 修订）。
-- **品牌渠道不得写 `.picoaide-harness`**：渠道线与 official 的会话格式世代可能不同
+- **品牌渠道不得写 `.zeokeel-harness`**：渠道线与 official 的会话格式世代可能不同
   （正式线稳定版 v0 / 含上游 0.1.5-rc.2 的预发线 v3），共用会让两代客户端各写一份、
   旧版静默看不到新版会话并造成历史分叉。
 
@@ -209,7 +209,7 @@ WASM 应用在客户端里的 origin scheme。**它与 `desktop.deep_link_scheme
 | 项 | 规则 |
 | --- | --- |
 | 取值 | 必须匹配 `^[a-z][a-z0-9+.-]{1,31}$` |
-| 必填范围 | **全部渠道**（含 `official` / `beta`）：official/beta 的取值 = **`picoaide-app`**（两者共用同一命名空间） |
+| 必填范围 | **全部渠道**（含 `official` / `beta`）：official/beta 的取值 = **`zeokeel-app`**（两者共用同一命名空间） |
 | 取值惯例 | `<deep_link_scheme>-app`（**仅惯例**，以显式配置为准，**不派生、不回落**） |
 | 禁止 | 不得与 `desktop.deep_link_scheme` 同值；不得是 `http`/`https`/`file`/`data`/`javascript`/`about`；**不得与其它渠道冲突**（跨渠道唯一） |
 | 缺字段 / 非法 / 与深链 scheme 同值 / 跨渠道重复 | **构建期 CI 中止（fail-loud）⇒ 该渠道本次没有产物**，不会静默回落到厂商值 |
@@ -270,11 +270,11 @@ URL、客户端拿到死链），`app-icon.png` 必须是 **1024×1024、16 位 
 中间两条靠 `mergeChannel(base, override)` **逐字段**合并（服务端有值即胜出），
 不是整体替换 —— 整体替换会让"服务端少给一个字段"变成"客户端露出厂商名"。
 
-**载荷结构校验**（`asChannelPayload()`）：`/api/pico/channel` 的响应必须至少
+**载荷结构校验**（`asChannelPayload()`）：`/api/zeokeel/channel` 的响应必须至少
 含一个非空品牌字段，否则一律不采纳。为什么需要：服务端对未知路由可能回
 `{ok:true}` 之类的兜底对象（旧服务端、网关、代理），把它当渠道内容存进 store
 会让**每个**品牌字段取不到值，消费方全部回落到内置厂商文案 —— 界面上就是
-"渠道客户看到 PicoAide"，而链路里一处报错都没有（2026-09-10 实测，E2E 抓到）。
+"渠道客户看到 ZeoKeel"，而链路里一处报错都没有（2026-09-10 实测，E2E 抓到）。
 
 **中性占位 vs 官方内容**：判据是"有没有非空名字"，不是"品牌对象是否存在"。
 schemastery 会把未注入的 `brand` 物化成 `{}`，把它当渠道会让**官方**构建改名
@@ -296,7 +296,7 @@ schemastery 会把未注入的 `brand` 物化成 `{}`，把它当渠道会让**�
 
 | 环节 | 规则 | 位置 |
 |---|---|---|
-| 谁拼服务端地址 | `/api/pico/channel` 在**出口**统一绝对化；没有服务端地址就**丢弃**相对 URL（宁可回落内置品牌图形，也不渲染必然 404 的地址） | `enterprise/src/channel-content.ts` 的 `absolutizeChannelAssets` |
+| 谁拼服务端地址 | `/api/zeokeel/channel` 在**出口**统一绝对化；没有服务端地址就**丢弃**相对 URL（宁可回落内置品牌图形，也不渲染必然 404 的地址） | `enterprise/src/channel-content.ts` 的 `absolutizeChannelAssets` |
 | store 播种 | 该端点的载荷可能来自旧版本代码，播种前再丢一次相对素材 URL | `enterprise/src/client/channel-store.ts` 的 `stripRelativeAssetURLs` |
 | 窗口 CSP | `img-src` 必须放行 `http:` / `https:` —— 渠道 logo 来自**客户自己的服务器**，打包期不可能知道它的地址；只写 `'self' data: blob:` 会被 CSP 直接拦掉（微实验复现：`violates the following Content Security Policy directive: "img-src 'self' data: blob:"`，`naturalWidth=0`） | `desktop/src/electron-runtime.ts` 的 `APP_CONTENT_SECURITY_POLICY` |
 | 服务端不可达 / 旧版服务端 | 渠道目录里的 logo 由 `stageChannelProfile()` **内联成 `data:` URI** 写进随包 `channel.json`（`assets.logo_inline` / `logo_dark_inline`），随包品牌因此自带标识 —— 否则客户端只能回落编译期内置的**官方**花括号 mark，白标客户的登录页上出现厂商图形（2026-09-11 在 acme 渠道线上实测） | `desktop/scripts/channel-build.ts` → `desktop-channel.ts` 的 `brand.logoURL` → `brandChannel()` |
@@ -321,14 +321,14 @@ schemastery 会把未注入的 `brand` 物化成 `{}`，把它当渠道会让**�
 ### 4.3 服务端不下发的字段（`short_name`）与侧边栏品牌名（2026-09-11）
 
 `client.short_name` 是**随包品牌独有**的字段：服务端 `channel.Response` 里没有它，
-侧边栏却只用它（"PicoAide" 而不是 "PicoAide Harness"）。所以**每一个把渠道内容交给
+侧边栏却只用它（"ZeoKeel" 而不是 "ZeoKeel Harness"）。所以**每一个把渠道内容交给
 客户端的出口都必须以随包品牌为底做逐字段叠加**（`mergeChannel`），只透传服务端载荷
 就会让这个字段整条消失：
 
 | 出口 | 叠加 | 位置 |
 |---|---|---|
-| `/api/pico/channel`（登录页与客户端 store 的播种源） | `mergeChannel(builtInChannel(brand), 绝对化后的服务端载荷)` | `enterprise/src/auth-gate.ts` |
-| `pico/channel-changed`（登录后的服务端同步） | `mergeChannel(builtIn, 绝对化的服务端载荷)` | `enterprise/src/channel-sync.ts` |
+| `/api/zeokeel/channel`（登录页与客户端 store 的播种源） | `mergeChannel(builtInChannel(brand), 绝对化后的服务端载荷)` | `enterprise/src/auth-gate.ts` |
+| `zeokeel/channel-changed`（登录后的服务端同步） | `mergeChannel(builtIn, 绝对化的服务端载荷)` | `enterprise/src/channel-sync.ts` |
 
 两个出口的"随包品牌 → 渠道内容"映射只允许有一份实现：`channel-content.ts` 的
 `brandChannel()`（`auth-gate` 曾自己写第二份，两份在"只配了 `login.short_name`"时
@@ -348,8 +348,8 @@ schemastery 会把未注入的 `brand` 物化成 `{}`，把它当渠道会让**�
 
 | 数据根 | 官方 | 渠道 | 里面是什么 |
 |---|---|---|---|
-| Harness home（`~/.<目录名>`） | `~/.picoaide-harness` | `desktop.home_dir`（如 `~/.acme-harness`） | 账户 token（`session.json`）、`.credentials.yaml`、`settings.yaml`（含服务端地址）、`sessions/`、`storages/`、`profiles/`、`users/<用户名>/connectors/`（连接器凭据）、cron ledger、browser store |
-| Electron userData（`appData/<产品名>`） | `~/.config/PicoAide Harness` | 渠道产品名（如 `~/.config/Acme Harness`） | 日志、更新状态、插件管理状态、崩溃取证、**单实例锁** |
+| Harness home（`~/.<目录名>`） | `~/.zeokeel-harness` | `desktop.home_dir`（如 `~/.acme-harness`） | 账户 token（`session.json`）、`.credentials.yaml`、`settings.yaml`（含服务端地址）、`sessions/`、`storages/`、`profiles/`、`users/<用户名>/connectors/`（连接器凭据）、cron ledger、browser store |
+| Electron userData（`appData/<产品名>`） | `~/.config/ZeoKeel Harness` | 渠道产品名（如 `~/.config/Acme Harness`） | 日志、更新状态、插件管理状态、崩溃取证、**单实例锁** |
 
 **为什么必须分开**（不是"目录名好不好看"）：
 - 共用 home ⇒ 渠道客户端启动时会恢复**官方那台**的登录 token 并连上官方服务端
@@ -362,14 +362,14 @@ schemastery 会把未注入的 `brand` 物化成 `{}`，把它当渠道会让**�
 `channelDshHomeDir`，构建期与运行期同一个函数）：
 
 ```
-official                          → .picoaide-harness        （逐字节不变，存量数据不搬）
+official                          → .zeokeel-harness        （逐字节不变，存量数据不搬）
 显式 home_dir                     → 原值（须匹配 ^\.[a-z0-9][a-z0-9-]{0,62}$）
 没有 home_dir，有 slug            → "." + slug 小写（Acme-Harness → .acme-harness）
-都没有（beta 这类复用官方品牌的）  → .picoaide-harness-<channel id>
+都没有（beta 这类复用官方品牌的）  → .zeokeel-harness-<channel id>
 ```
 
 **派生/回落路径永不撞上官方目录**（slug 恰好等于官方 slug 会被忽略并退档），
-但**显式声明一律照办** —— 包括显式写 `.picoaide-harness`（beta 就是这么配的）；
+但**显式声明一律照办** —— 包括显式写 `.zeokeel-harness`（beta 就是这么配的）；
 品牌渠道写官方目录由 `ci-channels.sh` 在构建期拦下。
 `$DSH_HOME` / 显式配置仍然优先（e2e、便携安装、多 profile 依赖它）。
 
@@ -388,7 +388,7 @@ official                          → .picoaide-harness        （逐字节不�
 
 **校验与门禁**：
 - `scripts/ci-channels.sh`：`desktop.home_dir` 形状校验；**品牌渠道必填**且不得等于
-  `.picoaide-harness`（公共渠道 official/beta 不受此限，beta 正是显式共用官方目录）；
+  `.zeokeel-harness`（公共渠道 official/beta 不受此限，beta 正是显式共用官方目录）；
 - `scripts/verify-channel-package.ts`：用**运行期解析器**读随包 `channel.json`，
   断言这次装出来的数据目录就是本渠道的（`yarn check` 的 `verify:channel` 会跑）；
 - `tests/desktop-home.spec.ts` / `desktop-channel.spec.ts` / `desktop-user-data.spec.ts`：
@@ -407,11 +407,11 @@ official/beta），所以直接切换；官方渠道目录不变，存量用户�
 | 字段 | electron-builder 覆盖 | 缺省（官方渠道） |
 |---|---|---|
 | `desktop.product_name` | `productName` | `package.json build.productName` |
-| `desktop.app_id` | `appId` | `ai.deepseek.dsh.desktop` |
-| `desktop.slug` | `mac/win/nsis/linux.artifactName` | `PicoAide-Harness-*` |
+| `desktop.app_id` | `appId` | `com.zeokeel.harness` |
+| `desktop.slug` | `mac/win/nsis/linux.artifactName` | `ZeoKeel-Harness-*` |
 | `desktop.shortcut_name` | `nsis.shortcutName` | `package.json build.nsis.shortcutName` |
 | `desktop.maintainer` / `synopsis` | `linux.maintainer` / `linux.synopsis` | `package.json build.linux.*` |
-| `desktop.deep_link_scheme` / `deep_link_name` | `protocols[0].schemes[0]` / `protocols[0].name` | `picoaide` / `<产品名> Deep Link` |
+| `desktop.deep_link_scheme` / `deep_link_name` | `protocols[0].schemes[0]` / `protocols[0].name` | `zeokeel` / `<产品名> Deep Link` |
 | 渠道目录里的 `logo.svg` / `app-icon.png` | 打包脚本调 `prepareChannelPackaging()` 派生到 `build/`（electron-builder 的 `directories.buildResources`）后再打包 | `brands/official/` |
 
 规则：
@@ -490,7 +490,7 @@ CI 现在的规则（`.github/workflows/ci.yml` 的 `desktop-macos`）：
 |---|---|---|
 | electron-builder `protocols` | 操作系统级注册（`x-scheme-handler/<scheme>`） | `scripts/channel-build.ts` 生成的配置文件 |
 | 桌面壳的深链闸门 | argv/`open-url`/第二实例的严格校验（P2-62） | `main.ts` 的 `DEEP_LINK_SCHEME` → 构造 `ElectronDesktopRuntime` 时注入 |
-| 会话服务（企业插件） | 解析 `<scheme>://auth?token=…` 完成 SSO 登录 | 组装期由 `profile.ts` 的 `channelProfilePatches()` 注入 `picoaide-session` 行的 config（**不要**让它自己读 `channel.json`，见下） | 
+| 会话服务（企业插件） | 解析 `<scheme>://auth?token=…` 完成 SSO 登录 | 组装期由 `profile.ts` 的 `channelProfilePatches()` 注入 `zeokeel-session` 行的 config（**不要**让它自己读 `channel.json`，见下） | 
 | 服务端 OIDC 回调 | 拼 `<scheme>://auth?token=…` | `server/internal/channel` 的 `DeepLinkScheme()` |
 
 校验口径：构建期（`channel-build.ts`）遇到畸形 scheme **fail-loud**；运行期
@@ -506,7 +506,7 @@ CI 现在的规则（`.github/workflows/ci.yml` 的 `desktop-macos`）：
 > **实现坑二（2026-09-11 真机复现，曾让渠道客户端的浏览器 SSO 完全不可用）**：
 > 随包 `channel.json` 只能由**桌面包自己**读（`readDesktopChannelProfile()` 的
 > `../build/channel.json` 是相对模块位置算的）。企业插件被打进**自己的** lib，
-> 同样的代码在那里会指向 `@picoaide/dsh-enterprise/build/channel.json` —— 打包产物
+> 同样的代码在那里会指向 `@zeokeel/dsh-enterprise/build/channel.json` —— 打包产物
 > 里不存在（asar 只有应用根的 `/build/`），于是静默回落官方 scheme；桌面壳的深链
 > 闸门当时也漏传 scheme，渠道回调在闸门处就被丢掉。**规则：跨包的渠道内容一律在
 > 组装期注入（`channelProfilePatches`），插件不得自行读随包文件。**
@@ -515,9 +515,9 @@ CI 现在的规则（`.github/workflows/ci.yml` 的 `desktop-macos`）：
 
 - 客户端（官方与渠道一致）**只从它登录的那台服务端取更新**：
   `GET {serverURL}/api/client/v2/updates/manifest`。客户端不再有任何指向
-  `release.picoaide.com` 的路径 —— 渠道身份由服务端在结构上决定，
+  `release.zeokeel.com` 的路径 —— 渠道身份由服务端在结构上决定，
   跨渠道版本错乱不可能发生。相关代码：`desktop-release.ts`、`updates.ts`。
-- 服务端自己的"检查更新"仍读 R2：`release.picoaide.com/<channel>/latest.json`，
+- 服务端自己的"检查更新"仍读 R2：`release.zeokeel.com/<channel>/latest.json`，
   仅用于在 webadmin 提醒管理员。清单的 `channel_id` 必须等于本部署渠道，
   不一致报"检查不可用"（fail-loud，不是"无更新"）。
 - R2 上**只放镜像**；客户端安装包在镜像里，由服务端下发。
@@ -543,7 +543,7 @@ CI 现在的规则（`.github/workflows/ci.yml` 的 `desktop-macos`）：
 前缀形如 `s3://<bucket>/_transfer/<run-id>-<HMAC(R2 密钥, run-id)>/ch-<index>/`：
 
 - `ch-<index>` 用渠道列表行号，**路径里没有渠道 id**；
-- token 是 HMAC 派生的，桶虽然公开读（`release.picoaide.com` 是 R2 自定义域），
+- token 是 HMAC 派生的，桶虽然公开读（`release.zeokeel.com` 是 R2 自定义域），
   但没有 R2 凭据就算不出对象地址，无法按 run id 猜；
 - 上传/下载都用 `--only-show-errors`，避免 aws 回显含品牌文件名的对象键；
 - **R2 凭据缺失 + 存在品牌渠道 = 直接失败**（`ci-channel-transfer.sh` 与

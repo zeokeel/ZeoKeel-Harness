@@ -1,9 +1,9 @@
 ---
 title: Upgrade, backup & rollback
-description: 'Upgrading the PicoAide Harness server: version check, backup and verification, switching images, post-upgrade criteria, and how same-generation and cross-generation rollbacks differ.'
+description: 'Upgrading the ZeoKeel Harness server: version check, backup and verification, switching images, post-upgrade criteria, and how same-generation and cross-generation rollbacks differ.'
 ---
 
-An upgrade only replaces the image: `picoaide-data/`, `pg-data/`, `caddy-data/`, `certs/` and `.env`
+An upgrade only replaces the image: `zeokeel-data/`, `pg-data/`, `caddy-data/`, `certs/` and `.env`
 are all left untouched. But **database migrations are irreversible**, so "back up and verify it is not
 empty" and "verify three things afterwards" are part of the process, not optional.
 
@@ -18,7 +18,7 @@ image → switching and restarting → post-upgrade verification → rollback.
 | Prerequisite | Notes |
 |---|---|
 | The remote version is **higher** than the running version | Otherwise there is nothing to do (step 1 gives the criterion) |
-| A backup is **mandatory**, and must be verified non-empty | The only way back is the `pg_dump` and the `picoaide-data/` snapshot taken before the upgrade |
+| A backup is **mandatory**, and must be verified non-empty | The only way back is the `pg_dump` and the `zeokeel-data/` snapshot taken before the upgrade |
 | You know which channel this stack belongs to | On a multi-stack host the rollback anchor must be the channel-specific tag (see [Running multiple channel stacks on one server](#running-multiple-channel-stacks-on-one-server)) |
 | You accept behavioural changes such as "administrators must sign in again" | See the behaviour-change list in step 2 and decide each item |
 
@@ -46,7 +46,7 @@ is the only safe anchor.
 **Why a backup must be verified non-empty.** When a backup command fails (disk full, wrong container
 name, insufficient `pg_dump` privileges) the shell still leaves a file behind — empty, a few KB, or a
 truncated tar. If the upgrade then goes wrong, you discover the missing way back exactly when you need
-it most. The criterion is therefore `[ -s … ]` (non-empty), not "the file exists". `picoaide-data/` is
+it most. The criterion is therefore `[ -s … ]` (non-empty), not "the file exists". `zeokeel-data/` is
 the critical one: lose `master.key` and every encrypted upstream API key in the database is
 **permanently undecryptable**.
 
@@ -87,17 +87,17 @@ means a **same-generation rollback** (image only); a database newer than the bin
 
 ```bash
 # Latest remote version (authoritative: server.version in latest.json)
-curl -fsS https://release.picoaide.com/official/latest.json \
+curl -fsS https://release.zeokeel.com/official/latest.json \
   | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
-cat /opt/picoaide/VERSION        # currently deployed version
-docker exec picoaide-server /app/picoaide-server --version   # running version
+cat /opt/zeokeel/VERSION        # currently deployed version
+docker exec zeokeel-server /app/zeokeel-server --version   # running version
 ```
 
 The admin console's **server info** page also shows a "new version available" hint (including the
 target image tag), because the server performs the update check itself.
 
-- The check address comes from `PICOAI_UPDATE_ENDPOINT`; empty = this channel's default directory
-  `release.picoaide.com/<channel>/latest.json`;
+- The check address comes from `ZEOKEEL_UPDATE_ENDPOINT`; empty = this channel's default directory
+  `release.zeokeel.com/<channel>/latest.json`;
 - The server caches the result for **6 hours**, so a delay right after a release is normal;
 - If no new version ever appears, look at `channel resolved: …` and
   `manifest channel "official" != this server's channel "…"` in `docker compose logs server` — that is a
@@ -110,7 +110,7 @@ target image tag), because the server performs the update check itself.
 ### 2. Pre-upgrade checks
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 
 # (a) PostgreSQL data layout check: the old layout (PG16 era) is refused on startup
 [ -f pg-data/PG_VERSION ] && echo "!!! old PG16 layout, dump/restore migration required, stop the upgrade" || echo "PG layout OK"
@@ -130,7 +130,7 @@ automatically.
 | Existing admin sessions are invalidated (migration `0066`: session tokens are stored hashed) | **Administrators must sign in once more**; that is expected, not a fault |
 | Irreversible migrations (`0073` drops tables, `0074` rewrites app configuration) | For version lines that introduced them, **a rollback is not just an image swap** — the database must roll back with it |
 | The default gateway rate limit changed | The code default became "no rate limit", but **an already-stored `settings.gateway.rate_limit` is not overwritten** — an old database keeps the old limit. To lift it, set the value to `0` (or clear it) explicitly on the admin **gateway** page |
-| App-platform memory profile | A host with less than 4 GiB available memory must set `PICOAI_WASM_MEMORY_PROFILE=small`, otherwise the container **restarts in a loop after the upgrade** (the startup self-check refuses to start) |
+| App-platform memory profile | A host with less than 4 GiB available memory must set `ZEOKEEL_WASM_MEMORY_PROFILE=small`, otherwise the container **restarts in a loop after the upgrade** (the startup self-check refuses to start) |
 | Client behaviour changes (for example, no longer using the system proxy) | Only deployments that can reach the internet *solely* through a proxy need action: enable the escape hatch in the channel field or in the real process environment |
 | App access model and the same-version requirement | Old clients cannot open apps after the upgrade; that is expected — make sure clients upgrade too |
 
@@ -140,14 +140,14 @@ behaviour change has a decision.
 ### 3. Backup (cannot be skipped)
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 TS=$(date +%Y%m%d-%H%M%S); OUT=deploy-backup; mkdir -p "$OUT"
 
 # Application data (including master.key)
-docker exec picoaide-server sh -c 'tar czf - -C /data .' > "$OUT/picoaide-data-$TS.tar.gz"
+docker exec zeokeel-server sh -c 'tar czf - -C /data .' > "$OUT/zeokeel-data-$TS.tar.gz"
 
 # Database (custom format, safe while online)
-docker exec picoaide-postgres pg_dump -U picoaide -Fc picoaide > "$OUT/pg-data-$TS.dump"
+docker exec zeokeel-postgres pg_dump -U zeokeel -Fc zeokeel > "$OUT/pg-data-$TS.dump"
 
 # auto mode: additionally back up the certificate store
 [ -d caddy-data ] && tar czf "$OUT/caddy-data-$TS.tar.gz" -C . caddy-data
@@ -158,7 +158,7 @@ ls -lh "$OUT" | tail -5
 **Verify the backups are not empty** (otherwise the upgrade has no way back):
 
 ```bash
-[ -s "$OUT/picoaide-data-$TS.tar.gz" ] || echo "!!! application data backup is empty"
+[ -s "$OUT/zeokeel-data-$TS.tar.gz" ] || echo "!!! application data backup is empty"
 [ -s "$OUT/pg-data-$TS.dump" ]          || echo "!!! database backup is empty"
 ```
 
@@ -167,17 +167,17 @@ ls -lh "$OUT" | tail -5
 
 **What an empty backup means**: `pg_dump` failed while the shell still created the file — there is **no
 database way back**. Do not continue with an empty backup: fix `pg_dump` (container name, user
-`picoaide`, database `picoaide`, free space), redo it and verify again.
+`zeokeel`, database `zeokeel`, free space), redo it and verify again.
 
 ### 4. Import the new image
 
 ```bash
 VER=<version from step 1>
-IMAGE=picoaide-harness-server
+IMAGE=zeokeel-harness-server
 
 curl -fL -o /tmp/pa.zip \
-  "https://release.picoaide.com/official/releases/${VER}/picoaide-server-${VER}-amd64.zip"
-curl -fL -O "https://release.picoaide.com/official/releases/${VER}/SHA256SUMS"
+  "https://release.zeokeel.com/official/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
+curl -fL -O "https://release.zeokeel.com/official/releases/${VER}/SHA256SUMS"
 sha256sum -c SHA256SUMS
 unzip -p /tmp/pa.zip image.tar | docker load
 ```
@@ -193,7 +193,7 @@ package again over another path, or use the bypass procedure in
 On a single-stack host:
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 # Use server.image_tag from latest.json (authoritative, shaped like v<version>).
 # The archive carries both the bare and the v-prefixed tag, so either starts; multi-stack hosts
 # must use the channel tag (next section).
@@ -201,7 +201,7 @@ sed -i "s|^SERVER_IMAGE=.*|SERVER_IMAGE=${IMAGE}:${VER}|" .env
 grep -q '^SERVER_IMAGE=' .env || echo "SERVER_IMAGE=${IMAGE}:${VER}" >> .env
 
 # Optional but recommended: re-export the deployment files (replace semantics; .env and data untouched)
-docker run --rm -v /opt/picoaide:/out -e PICOAI_UNPACK_STACK=/out ${IMAGE}:${VER}
+docker run --rm -v /opt/zeokeel:/out -e ZEOKEEL_UNPACK_STACK=/out ${IMAGE}:${VER}
 
 docker compose up -d
 ```
@@ -232,15 +232,15 @@ host is:
 ```bash
 VER=<this version, without v>
 OLD=<version before the upgrade, without v>
-IMAGE=picoaide-harness-server
+IMAGE=zeokeel-harness-server
 CHANNEL=<this stack's channel id>   # ← must match the channel marker baked into the image
-STACK=/opt/picoaide                 # ← this stack's deployment directory
-CT=picoaide-server                  # ← this stack's server container
+STACK=/opt/zeokeel                 # ← this stack's deployment directory
+CT=zeokeel-server                  # ← this stack's server container
 
 # 0) Freeze the PRE-UPGRADE running image as the rollback anchor — the only legitimate use of
 #    "the running container": right now it IS the old version, so it may only get an OLD channel tag.
 #    ⚠ Do not name the variable GID/UID: they are read-only specials in zsh on some hosts.
-docker exec "$CT" cat /opt/picoaide/CHANNEL        # first confirm this stack really runs this channel
+docker exec "$CT" cat /opt/zeokeel/CHANNEL        # first confirm this stack really runs this channel
 ROLLBACK_IMAGE_ID="$(docker inspect "$CT" --format '{{.Image}}')"
 docker tag "$ROLLBACK_IMAGE_ID" "${IMAGE}:${CHANNEL}-${OLD}"
 
@@ -253,7 +253,7 @@ test -n "$NEW_IMAGE_ID"
 test "$NEW_IMAGE_ID" != "$ROLLBACK_IMAGE_ID"       # old and new must be two different images
 docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' \
   "${IMAGE}:${CHANNEL}-${VER}"                     # must equal ${VER}
-docker run --rm --entrypoint cat "${IMAGE}:${CHANNEL}-${VER}" /opt/picoaide/CHANNEL   # == ${CHANNEL}
+docker run --rm --entrypoint cat "${IMAGE}:${CHANNEL}-${VER}" /opt/zeokeel/CHANNEL   # == ${CHANNEL}
 
 # 3) Point this stack's .env at the channel tag (never leave a bare `v<version>`)
 cd "$STACK"
@@ -265,8 +265,8 @@ docker compose up -d server
 ENV_TAG="$(sed -n 's/^SERVER_IMAGE=//p' .env)"
 test "$(docker image inspect --format '{{.Id}}' "$ENV_TAG")" = "$NEW_IMAGE_ID"   # .env's tag points at the new image
 docker inspect "$CT" --format '{{.Image}}'         # == $NEW_IMAGE_ID ← the most important one
-docker exec "$CT" /app/picoaide-server --version   # == target version (ask the binary, not the tag)
-docker exec "$CT" cat /opt/picoaide/CHANNEL        # == $CHANNEL
+docker exec "$CT" /app/zeokeel-server --version   # == target version (ask the binary, not the tag)
+docker exec "$CT" cat /opt/zeokeel/CHANNEL        # == $CHANNEL
 curl -sk "https://<this stack's domain>/api/client/v2/channel" | head -c 300   # channel_id matches
 ```
 
@@ -286,14 +286,14 @@ curl -sk "https://<this stack's domain>/api/client/v2/channel" | head -c 300   #
 Old packages (archives without a channel tag, i.e. before 2026-09-24) can only fall back to the bare
 tag: immediately after `docker load`, read the id with
 `docker image inspect --format '{{.Id}}' ${IMAGE}:${VER}` and verify the baked channel on the spot
-(`docker run --rm --entrypoint cat ${IMAGE}:${VER} /opt/picoaide/CHANNEL` must equal `${CHANNEL}`),
+(`docker run --rm --entrypoint cat ${IMAGE}:${VER} /opt/zeokeel/CHANNEL` must equal `${CHANNEL}`),
 then tag it as the channel tag. A first deployment (no running container yet) has no step 0; steps 1–4
 apply as-is.
 
 ### 6. Post-upgrade verification (all three must pass)
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2-)
 
 # (a) health check
@@ -304,10 +304,10 @@ for i in $(seq 1 40); do
 done
 
 # (b) running version == target version (authoritative: ask the binary, not the tag)
-docker exec picoaide-server /app/picoaide-server --version
+docker exec zeokeel-server /app/zeokeel-server --version
 
 # (c) data still there (migrations applied)
-docker exec picoaide-postgres psql -U picoaide -d picoaide -c 'select count(*) from users;'
+docker exec zeokeel-postgres psql -U zeokeel -d zeokeel -c 'select count(*) from users;'
 ```
 
 Also spot-check the two client distribution links:
@@ -327,11 +327,11 @@ previous section.
 ### 7. Finishing up
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 echo "$VER" > VERSION                       # update the local version record if step 5 did not re-export
 docker compose ps                           # three containers Up
 # Keep the old image for now (rollback anchor); clean it up after 1–2 days of stable operation:
-# docker image rm picoaide-harness-server:<old version>
+# docker image rm zeokeel-harness-server:<old version>
 ```
 
 Clients see the new version on their next check and prompt employees (the update source is this server).
@@ -363,15 +363,15 @@ different.
 > and refills its checksum.
 
 ```bash
-cd /opt/picoaide
+cd /opt/zeokeel
 OLD=<version before the upgrade>
-IMAGE=picoaide-harness-server
+IMAGE=zeokeel-harness-server
 CHANNEL=<this stack's channel id>   # ← must match the channel marker baked into the image
 
 # 1) Switch back to the old image — use the channel tag frozen in step 0 of the multi-stack section
 #    (that tag IS the rollback anchor).
 #    ⚠ Never write the bare `${IMAGE}:${OLD}`: on a multi-stack host another channel's `docker load`
-#    may already have overwritten it, and compose's PICOAI_CHANNEL defaults to empty
+#    may already have overwritten it, and compose's ZEOKEEL_CHANNEL defaults to empty
 #    ⇒ this stack comes up under another channel's branding, silently.
 docker image inspect --format '{{.Id}} {{.RepoTags}}' "${IMAGE}:${CHANNEL}-${OLD}"   # the anchor must exist
 sed -i "s|^SERVER_IMAGE=.*|SERVER_IMAGE=${IMAGE}:${CHANNEL}-${OLD}|" .env
@@ -380,19 +380,19 @@ docker compose up -d
 # 2) Verify the old version is healthy (both version and channel)
 DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2-)
 curl -sk -o /dev/null -w '%{http_code}\n' --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/healthz"
-docker exec picoaide-server /app/picoaide-server --version      # must equal OLD
-docker exec picoaide-server cat /opt/picoaide/CHANNEL           # must equal $CHANNEL (catches a silent brand swap)
+docker exec zeokeel-server /app/zeokeel-server --version      # must equal OLD
+docker exec zeokeel-server cat /opt/zeokeel/CHANNEL           # must equal $CHANNEL (catches a silent brand swap)
 echo "$OLD" > VERSION
 
 # 3) Restore application data only if it was damaged (loses data; explicit consent required)
 # docker compose stop server
-# tar xzf deploy-backup/picoaide-data-<TS>.tar.gz -C picoaide-data
+# tar xzf deploy-backup/zeokeel-data-<TS>.tar.gz -C zeokeel-data
 # docker compose start server
 #
 # 4) Cross-generation rollback / version lines with irreversible migrations: this step is mandatory
 #    (loses data; explicit consent required)
 # docker compose stop server
-# docker exec -i picoaide-postgres pg_restore -U picoaide -d picoaide --clean \
+# docker exec -i zeokeel-postgres pg_restore -U zeokeel -d zeokeel --clean \
 #   < deploy-backup/pg-data-<TS>.dump
 # docker compose start server
 ```
@@ -405,8 +405,8 @@ echo "$OLD" > VERSION
 |---|---|
 | The backup is valid | Neither `[ -s … ]` warns, and both files have a plausible size |
 | The image is trustworthy | `sha256sum -c SHA256SUMS` prints `OK` |
-| The running version is correct | `docker exec picoaide-server /app/picoaide-server --version` == target version |
-| The channel is correct (mandatory on multi-stack hosts) | the container image id == the new image id; `/opt/picoaide/CHANNEL` == `${CHANNEL}`; `/api/client/v2/channel`'s `channel_id` matches |
+| The running version is correct | `docker exec zeokeel-server /app/zeokeel-server --version` == target version |
+| The channel is correct (mandatory on multi-stack hosts) | the container image id == the new image id; `/opt/zeokeel/CHANNEL` == `${CHANNEL}`; `/api/client/v2/channel`'s `channel_id` matches |
 | The service is usable | `/healthz` returns 200 |
 | The data is there | `select count(*) from users;` returns a result; migrations are applied up to the current range |
 | The client links work | the manifest's `client.version` changed; the installer downloads (206) |
@@ -417,9 +417,9 @@ echo "$OLD" > VERSION
 | Symptom | Criterion | Recovery |
 |---|---|---|
 | Containers restart in a loop after the upgrade | the log shows `SchemaMismatchError` | **Cross-generation rollback**: follow the four steps in section 7 (stop → restore `pg_dump` → roll the image back → roll clients back) |
-| Containers restart in a loop after the upgrade | the log says the WASM platform startup self-check refused to start | Less than 4 GiB available memory: write `PICOAI_WASM_MEMORY_PROFILE=small` in `.env`, then `docker compose up -d server` |
+| Containers restart in a loop after the upgrade | the log says the WASM platform startup self-check refused to start | Less than 4 GiB available memory: write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env`, then `docker compose up -d server` |
 | `--version` disagrees with what `.env` claims | the binary reports something other than the target version | The container was not replaced: on multi-stack hosts redo the five assertions in step 5 (the key one is `docker inspect <container> --format '{{.Image}}'`) |
-| Branding changed after the upgrade / the portal shows vendor branding | `/opt/picoaide/CHANNEL` ≠ `channel_id` from `/api/client/v2/channel` | Wrong channel image: point `.env` back at this channel's channel tag and recreate; do not keep upgrading from it |
+| Branding changed after the upgrade / the portal shows vendor branding | `/opt/zeokeel/CHANNEL` ≠ `channel_id` from `/api/client/v2/channel` | Wrong channel image: point `.env` back at this channel's channel tag and recreate; do not keep upgrading from it |
 | healthz stays non-200 | `docker compose ps` / `logs` | First confirm postgres is healthy and whether migrations are still running (1–2 minutes on a first start); otherwise roll back per section 7 |
 | The backup is empty | `[ -s … ]` prints `!!!` | **Stop the upgrade**: fix `pg_dump` (container / user / database / disk) and redo the backup, then verify again |
 | The old version starts after a rollback but requests return 500 | the log shows `42P01` (`undefined_table`) | This is "the image was rolled back but the database was not" (an old binary without the two-way reconciliation): stop the service → restore the pre-upgrade `pg_dump` → start again |
@@ -431,7 +431,7 @@ echo "$OLD" > VERSION
 - [ ] Remote version > current `VERSION`
 - [ ] PostgreSQL layout check passed (no `pg-data/PG_VERSION`), disk headroom is sufficient
 - [ ] Every behaviour change has a decision (rate limit default, memory profile, client behaviour, irreversible migrations)
-- [ ] Backup completed and **not empty** (`picoaide-data/` + `pg_dump`)
+- [ ] Backup completed and **not empty** (`zeokeel-data/` + `pg_dump`)
 - [ ] New image imported and `SHA256SUMS` verified
 - [ ] On multi-stack hosts: the pre-upgrade image is frozen under an **old-version** channel tag
 - [ ] `.env`'s `SERVER_IMAGE` points at the new version (the channel tag on multi-stack hosts)

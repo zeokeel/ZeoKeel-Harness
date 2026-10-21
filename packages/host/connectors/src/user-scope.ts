@@ -2,7 +2,7 @@
  * Per-user **and per-server** scope resolution for the connectors plugin.
  *
  * The enterprise session is the product's single source of truth for "who is
- * logged in" (`picoSession` service + `pico/session-changed` event) and for
+ * logged in" (`zeokeelSession` service + `zeokeel/session-changed` event) and for
  * "which deployment they are logged into" (`session.serverURL`). Connector
  * credentials, CLI caches, and browser persistent partitions are scoped per
  * logged-in user so A's tokens never leak into B's session.
@@ -45,10 +45,10 @@ import { join } from 'node:path'
 
 // P2-36: the DSH-home constants/resolution used to be inlined copies of the
 // single authority (`dsh-plugin-desktop/desktop-home` at the time). Re-export it
-// instead, exactly like `@picoaide/dsh-cron`'s dsh-home module.
+// instead, exactly like `@zeokeel/dsh-cron`'s dsh-home module.
 //
 // 2026-09-20（构建环修复，路线 A 扩展）：权威搬到了零依赖叶子包
-// `@picoaide/dsh-host-home`，本包改指它 —— 原来那条
+// `@zeokeel/dsh-host-home`，本包改指它 —— 原来那条
 // `connectors → dsh-plugin-desktop/desktop-home` 是真实构建环的一段
 // （`desktop → wasm-apps-host → browser → connectors → desktop`），
 // 改指叶子包后 connectors 不再依赖桌面包，环断开。
@@ -60,9 +60,9 @@ export {
   resolveDshHome,
   dshHome,
   dshHomePath,
-} from '@picoaide/dsh-host-home'
+} from '@zeokeel/dsh-host-home'
 
-import { resolveDshHome } from '@picoaide/dsh-host-home'
+import { resolveDshHome } from '@zeokeel/dsh-host-home'
 
 /**
  * Filesystem-safe encoding of a username for a directory segment. Hex-encodes
@@ -72,7 +72,7 @@ import { resolveDshHome } from '@picoaide/dsh-host-home'
  * names. The `~` escape introducer is unambiguous because `~` itself is
  * encoded (`~7E~`), so the output is injective (no two inputs collide).
  *
- * CROSS-PACKAGE CONSTRAINT (2026-08-22): `@picoaide/dsh-browser`
+ * CROSS-PACKAGE CONSTRAINT (2026-08-22): `@zeokeel/dsh-browser`
  * `encodePartitionSegment` (electron-adapter.ts) mirrors this encoding
  * byte-for-byte (kept separate because cross-package runtime imports are
  * forbidden). Never diverge; the empty-string fallback differs on purpose
@@ -125,8 +125,8 @@ export const UNSCOPED_SERVER_SEGMENT = 'unscoped'
  * Server address → the scope segment it maps to (sha256, first 32 hex chars).
  *
  * CROSS-PACKAGE CONSTRAINT (2026-09-24): this is the SAME normalization and the
- * SAME truncation as `@picoaide/dsh-browser/surface`'s `serverPartitionHash`
- * and its mirror `@picoaide/dsh-wasm-apps-host/partition` — "one machine, two
+ * SAME truncation as `@zeokeel/dsh-browser/surface`'s `serverPartitionHash`
+ * and its mirror `@zeokeel/dsh-wasm-apps-host/partition` — "one machine, two
  * deployments, two tenants" is one threat model, so it gets ONE hash. The
  * three implementations are kept in step by
  * `tests/server-scope-parity.spec.ts`, which runs the other two in a real Node
@@ -188,7 +188,7 @@ export function connectorScopePath(
  * `<dshHome>/users/<encoded-user>/connectors`.
  *
  * It is the pre-2026-09-24 layout and the target of {@link migrateLegacyStore}
- * (the even older single-user `~/.picoaide/connectors`). Nothing resolves it as
+ * (the even older single-user `~/.zeokeel/connectors`). Nothing resolves it as
  * a live scope any more: the plugin only asks whether these files exist, so it
  * can tell the user "this connector needs a fresh authorization" instead of
  * quietly using a secret of unknown provenance. Those bytes must never be

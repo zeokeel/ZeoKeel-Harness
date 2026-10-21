@@ -13,14 +13,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appseed"
 )
 
 // 本文件是「内置演示应用」的启动播种入口（2026-09-19 用户要求：仓库里要有几个
 // 不同权限模式的 demo，装完即可给客户演示，且可以删除）。
 //
-// 分工：制品与清单随镜像分发（`/opt/picoaide/demo-apps/{showcase,forum,board}.wasm`
+// 分工：制品与清单随镜像分发（`/opt/zeokeel/demo-apps/{showcase,forum,board}.wasm`
 // 与 `demos.json`，
 // 由 Dockerfile 构建），播种逻辑在 internal/wasmapp/appseed；本文件只负责
 // 「找到归属人 → 调用播种 → 记日志」。
@@ -30,9 +30,9 @@ import (
 // 影响服务启动，日志里说清楚）。
 const (
 	// EnvDemoAppsDir 覆盖演示目录（缺省 = 镜像内路径；源码构建没有该目录时自动跳过）。
-	EnvDemoAppsDir = "PICOAI_DEMO_APPS_DIR"
+	EnvDemoAppsDir = "ZEOKEEL_DEMO_APPS_DIR"
 	// defaultDemoAppsDir 是镜像内演示目录（Dockerfile 的 COPY 目标）。
-	defaultDemoAppsDir = "/opt/picoaide/demo-apps"
+	defaultDemoAppsDir = "/opt/zeokeel/demo-apps"
 )
 
 // seedDemoApps 播种内置演示应用；任何失败都只记日志（不影响服务启动）。

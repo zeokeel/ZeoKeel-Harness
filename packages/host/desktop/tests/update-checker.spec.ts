@@ -31,17 +31,17 @@ function platformAssets(version: string): Record<string, { url: string, sha256: 
   const releases = `${SERVER}/updates/client/${version}`
   return {
     'mac-universal': {
-      url: `${releases}/PicoAide-Harness-${version}-mac.dmg`,
+      url: `${releases}/ZeoKeel-Harness-${version}-mac.dmg`,
       sha256: RELEASE_SHA256,
       size: 12_345,
     },
     'win-x64': {
-      url: `${releases}/PicoAide-Harness-${version}-x64-Setup.exe`,
+      url: `${releases}/ZeoKeel-Harness-${version}-x64-Setup.exe`,
       sha256: RELEASE_SHA256,
       size: 0,
     },
     'linux-x64': {
-      url: `${releases}/PicoAide-Harness-${version}-x86_64.AppImage`,
+      url: `${releases}/ZeoKeel-Harness-${version}-x86_64.AppImage`,
       sha256: RELEASE_SHA256,
       size: 0,
     },
@@ -123,7 +123,7 @@ describe('release manifest parsing', () => {
       schema: 1,
       client: {
         version: '2.7.0',
-        assets: { 'mac-universal': { url: 'https://release.picoaide.com/mac.dmg', sha256: RELEASE_SHA256 } },
+        assets: { 'mac-universal': { url: 'https://release.zeokeel.com/mac.dmg', sha256: RELEASE_SHA256 } },
       },
     })).toBeNull()
 
@@ -133,12 +133,12 @@ describe('release manifest parsing', () => {
       channel_id: 'official',
       client: {
         version: '2.7.0',
-        assets: { 'mac-universal': { url: 'https://release.picoaide.com/mac.dmg', sha256: RELEASE_SHA256 } },
+        assets: { 'mac-universal': { url: 'https://release.zeokeel.com/mac.dmg', sha256: RELEASE_SHA256 } },
       },
     }))
     expect(manifest.channelId).toBe('official')
     expect(manifest.assets['mac-universal']).toEqual({
-      url: 'https://release.picoaide.com/mac.dmg',
+      url: 'https://release.zeokeel.com/mac.dmg',
       sha256: RELEASE_SHA256,
       size: 0,
     })
@@ -148,7 +148,7 @@ describe('release manifest parsing', () => {
     const manifest = requireManifest(parseReleaseManifest(manifestValue('2.7.0')))
 
     expect(releaseAssetFor(manifest, 'darwin')?.url).toBe(
-      `${SERVER}/updates/client/2.7.0/PicoAide-Harness-2.7.0-mac.dmg`,
+      `${SERVER}/updates/client/2.7.0/ZeoKeel-Harness-2.7.0-mac.dmg`,
     )
     expect(releaseAssetFor(manifest, 'win32')?.url).toContain('-x64-Setup.exe')
     expect(releaseAssetFor(manifest, 'linux')?.url).toContain('-x86_64.AppImage')
@@ -175,21 +175,21 @@ describe('release manifest parsing', () => {
       schema: 1,
       client: {
         version: '2.7.0',
-        assets: { 'mac-x64': { url: 'https://release.picoaide.com/mac.dmg', sha256: RELEASE_SHA256 } },
+        assets: { 'mac-x64': { url: 'https://release.zeokeel.com/mac.dmg', sha256: RELEASE_SHA256 } },
       },
     }],
     ['a non-record asset entry', {
       schema: 1,
-      client: { version: '2.7.0', assets: { 'mac-universal': 'https://release.picoaide.com/mac.dmg' } },
+      client: { version: '2.7.0', assets: { 'mac-universal': 'https://release.zeokeel.com/mac.dmg' } },
     }],
   ])('rejects a manifest with %s', (_case, value) => {
     expect(parseReleaseManifest(value)).toBeNull()
   })
 
   it.each([
-    ['a plain http url', { url: 'http://release.picoaide.com/PicoAide.dmg', sha256: RELEASE_SHA256 }],
-    ['a protocol-relative url', { url: '//release.picoaide.com/PicoAide.dmg', sha256: RELEASE_SHA256 }],
-    ['a relative url', { url: 'releases/2.7.0/PicoAide.dmg', sha256: RELEASE_SHA256 }],
+    ['a plain http url', { url: 'http://release.zeokeel.com/ZeoKeel.dmg', sha256: RELEASE_SHA256 }],
+    ['a protocol-relative url', { url: '//release.zeokeel.com/ZeoKeel.dmg', sha256: RELEASE_SHA256 }],
+    ['a relative url', { url: 'releases/2.7.0/ZeoKeel.dmg', sha256: RELEASE_SHA256 }],
     ['a non-string url', { url: 42, sha256: RELEASE_SHA256 }],
     ['a missing url', { sha256: RELEASE_SHA256 }],
   ])('rejects an asset with %s', (_case, asset) => {
@@ -212,7 +212,7 @@ describe('release manifest parsing', () => {
       schema: 1,
       client: {
         version: '2.7.0',
-        assets: { 'mac-universal': { url: 'https://release.picoaide.com/PicoAide.dmg', sha256 } },
+        assets: { 'mac-universal': { url: 'https://release.zeokeel.com/ZeoKeel.dmg', sha256 } },
       },
     })).toBeNull()
   })
@@ -228,7 +228,7 @@ describe('release manifest parsing', () => {
       client: {
         version: '2.7.0',
         assets: {
-          'mac-universal': { url: 'https://release.picoaide.com/PicoAide.dmg', sha256: RELEASE_SHA256, size },
+          'mac-universal': { url: 'https://release.zeokeel.com/ZeoKeel.dmg', sha256: RELEASE_SHA256, size },
         },
       },
     })).toBeNull()
@@ -250,7 +250,7 @@ describe('服务端给不出安全下载地址（client_unavailable）', () => {
       schema: 1,
       channel_id: 'official',
       server: { version: '2.10.0' },
-      client_unavailable: 'server origin is not https; set PICOAI_PUBLIC_BASE_URL',
+      client_unavailable: 'server origin is not https; set ZEOKEEL_PUBLIC_BASE_URL',
     })
 
     await expect(checkForUpdateDetailed({
@@ -259,7 +259,7 @@ describe('服务端给不出安全下载地址（client_unavailable）', () => {
       request,
     })).resolves.toEqual({
       kind: 'unavailable',
-      reason: 'server origin is not https; set PICOAI_PUBLIC_BASE_URL',
+      reason: 'server origin is not https; set ZEOKEEL_PUBLIC_BASE_URL',
     })
     // 老的布尔式 API 仍然返回 null(兼容既有调用方与测试)。
     await expect(checkForUpdate({ manifestURL: MANIFEST_URL, currentVersion: '2.9.9', request }))
@@ -313,7 +313,7 @@ describe('public Desktop version check', () => {
     expect(calls[0]?.url).toBe(MANIFEST_URL)
     expect(calls[0]?.url).toBe('https://server.test/api/client/v2/updates/manifest')
     // 客户端不再直连任何分发面(2026-09-10 定案):请求里绝不能出现它。
-    expect(calls[0]?.url).not.toContain('release.picoaide.com')
+    expect(calls[0]?.url).not.toContain('release.zeokeel.com')
     expect(calls[0]?.url).not.toContain('api.github.com')
     expect(calls[0]?.init).toMatchObject({
       method: 'GET',
@@ -336,9 +336,9 @@ describe('public Desktop version check', () => {
     expect(serverManifestURL('https://server.test///')).toBe(
       'https://server.test/api/client/v2/updates/manifest',
     )
-    // 子路径部署(反代挂在 /picoaide 下)必须原样保留前缀。
-    expect(serverManifestURL('https://server.test/picoaide')).toBe(
-      'https://server.test/picoaide/api/client/v2/updates/manifest',
+    // 子路径部署(反代挂在 /zeokeel 下)必须原样保留前缀。
+    expect(serverManifestURL('https://server.test/zeokeel')).toBe(
+      'https://server.test/zeokeel/api/client/v2/updates/manifest',
     )
     expect(serverChannelURL('https://server.test/')).toBe(
       'https://server.test/api/client/v2/channel',
@@ -416,14 +416,14 @@ describe('public Desktop version check', () => {
       schema: 1,
       client: {
         version: '2.1.0',
-        assets: { 'mac-universal': { url: 'http://release.picoaide.com/mac.dmg', sha256: RELEASE_SHA256 } },
+        assets: { 'mac-universal': { url: 'http://release.zeokeel.com/mac.dmg', sha256: RELEASE_SHA256 } },
       },
     }],
     ['an invalid asset digest', {
       schema: 1,
       client: {
         version: '2.1.0',
-        assets: { 'mac-universal': { url: 'https://release.picoaide.com/mac.dmg', sha256: 'nope' } },
+        assets: { 'mac-universal': { url: 'https://release.zeokeel.com/mac.dmg', sha256: 'nope' } },
       },
     }],
   ])('silently ignores a manifest with %s', async (_case, value) => {
@@ -596,7 +596,7 @@ describe('channel isolation', () => {
     const foreign = {
       schema: 1,
       channel_id: 'official',
-      client: { version: '9.9.9', assets: { 'mac-universal': { url: 'https://release.picoaide.com/mac.dmg', sha256: RELEASE_SHA256 } } },
+      client: { version: '9.9.9', assets: { 'mac-universal': { url: 'https://release.zeokeel.com/mac.dmg', sha256: RELEASE_SHA256 } } },
     }
     // 不校验渠道时结构本身是合法的
     expect(parseReleaseManifest(foreign)).not.toBeNull()
@@ -611,12 +611,12 @@ describe('channel isolation', () => {
   it('rejects a manifest without a channel id even when no channel is expected', () => {
     expect(parseReleaseManifest({
       schema: 1,
-      client: { version: '2.7.0', assets: { 'mac-universal': { url: 'https://release.picoaide.com/mac.dmg', sha256: RELEASE_SHA256 } } },
+      client: { version: '2.7.0', assets: { 'mac-universal': { url: 'https://release.zeokeel.com/mac.dmg', sha256: RELEASE_SHA256 } } },
     })).toBeNull()
     expect(parseReleaseManifest({
       schema: 1,
       channel_id: '',
-      client: { version: '2.7.0', assets: { 'mac-universal': { url: 'https://release.picoaide.com/mac.dmg', sha256: RELEASE_SHA256 } } },
+      client: { version: '2.7.0', assets: { 'mac-universal': { url: 'https://release.zeokeel.com/mac.dmg', sha256: RELEASE_SHA256 } } },
     })).toBeNull()
   })
 

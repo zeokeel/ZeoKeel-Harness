@@ -30,7 +30,7 @@ import { DEFAULT_SYSTEM_PROMPT, PLAN_SYSTEM_NOTICE, buildSystemPrompt } from './
 
 describe('default system prompt', () => {
   const eleven = [
-    'PicoAide', // 1 身份职责
+    'ZeoKeel', // 1 身份职责
     '输出到对话', // 2 系统规则
     '先读文件再修改', // 3 执行任务
     '先想后写', // 4 工程准则
@@ -86,12 +86,12 @@ Expected: FAIL(`Cannot find module './prompt'` 或 引用未定义)。
 创建 `desktop/src/main/agent/prompt.ts`(完整内容,11 段 + PLAN_SYSTEM_NOTICE + buildSystemPrompt):
 
 ```ts
-// PicoAide 默认系统提示词(六源融合,2026-08-05)
+// ZeoKeel 默认系统提示词(六源融合,2026-08-05)
 // 结构参考 Claude Code 模块化设计;工程准则借鉴 Karpathy Guidelines(MIT);
 // 自主坚持借鉴 Codex CLI(Apache-2.0);均改写为中文企业办公场景指令,未逐字复制。
 // 修改注意:保持 ≤3000 字(小型模型友好);与 AGENTS.md 工程原则冲突时以 AGENTS.md 为准。
 
-export const DEFAULT_SYSTEM_PROMPT = `你是 PicoAide,企业办公智能体,运行在员工本机,可操作本机文件、终端、浏览器和屏幕。所有操作以工具实际返回为准,不得虚构操作结果;浏览器插件未连接时,必须如实告知。
+export const DEFAULT_SYSTEM_PROMPT = `你是 ZeoKeel,企业办公智能体,运行在员工本机,可操作本机文件、终端、浏览器和屏幕。所有操作以工具实际返回为准,不得虚构操作结果;浏览器插件未连接时,必须如实告知。
 
 ## 系统规则
 - 除工具调用外,你输出的所有文字都会显示给用户,用它沟通。
@@ -118,7 +118,7 @@ export const DEFAULT_SYSTEM_PROMPT = `你是 PicoAide,企业办公智能体,运�
 ## 工具纪律
 - 有专用工具时不用终端替代:读文件用读取工具、搜索用搜索工具,终端仅用于系统命令与脚本执行;运行非平凡命令前,简短说明该命令的作用与原因。
 - 相互独立的工具调用并行执行;有依赖关系的顺序执行。
-- 浏览器操作(打开/导航/点击/输入/滚动/执行脚本)必须调用 browser_* 工具;若返回"浏览器插件未连接",明确告知用户需在 Chrome/Edge 安装 PicoAide 扩展,不得虚构操作结果。
+- 浏览器操作(打开/导航/点击/输入/滚动/执行脚本)必须调用 browser_* 工具;若返回"浏览器插件未连接",明确告知用户需在 Chrome/Edge 安装 ZeoKeel 扩展,不得虚构操作结果。
 - 文件读写仅限允许目录(会话工作区与用户配置的可访问目录);需要访问范围之外时,先询问用户。
 - 若工作区存在 AGENTS.md 或项目指令文件,先读取并遵守。
 
@@ -235,7 +235,7 @@ import { buildSystemPrompt } from './agent/prompt'
       },
 ```
 
-即:删除原 8 行 base 字符串拼接逻辑(含"你是 PicoAide..."、"浏览器操作必须调用 browser_*..."、"保持行动直到任务完成..."三段),改为一行调用。loadInstalledSkillInstruction 返回空串时传 undefined(与 buildSystemPrompt 的空值处理一致)。
+即:删除原 8 行 base 字符串拼接逻辑(含"你是 ZeoKeel..."、"浏览器操作必须调用 browser_*..."、"保持行动直到任务完成..."三段),改为一行调用。loadInstalledSkillInstruction 返回空串时传 undefined(与 buildSystemPrompt 的空值处理一致)。
 
 - [ ] **Step 2: 运行测试确认通过**
 
@@ -280,7 +280,7 @@ Expected: EXIT 0(format + lint + 服务端 go test + 客户端 test + typecheck)
 cd desktop && npm run build
 ```
 
-然后手工验证(需要网关:启动 `bin/picoaide-server` + mock 上游,或使用已有环境):
+然后手工验证(需要网关:启动 `bin/zeokeel-server` + mock 上游,或使用已有环境):
 1. 启动 Electron,登录后任意问一句多步任务(如"读取我允许目录下某个文件并总结成报告保存")
 2. 观察:回复风格变简洁(输出效率段)、规划-执行行为(复杂任务先列步骤)、浏览器插件未连接时明确告知(工具纪律段)、审批弹窗正常出现而非报错(谨慎执行段)
 

@@ -149,7 +149,7 @@ AdminAuth (会话+CSRF) → RequirePermission(perm) (403 FORBIDDEN)
 | `portal.client_download_note` | 下载说明文字 | 空 |
 | `portal.landing_path` | 登录后默认落地页 | ``（角色默认） |
 
-**客户端下载(2026-09 三平台化)**：门户页渲染 **Linux / macOS / Windows 三个独立下载按钮**，分别取 `client_download_linux/mac/win`；任一未配置时兜底官方 Releases `https://github.com/picoaide/picoaide-harness/releases/latest`；旧 `client_download_url` 保留兼容(读写均保留,未拆分时三平台共用)。**品牌/门户一致性**：门户页复用 `brand.login.*`（logo/名称/副标题），与登录页同源。
+**客户端下载(2026-09 三平台化)**：门户页渲染 **Linux / macOS / Windows 三个独立下载按钮**，分别取 `client_download_linux/mac/win`；任一未配置时兜底官方 Releases `https://github.com/zeokeel/ZeoKeel-Harness/releases/latest`；旧 `client_download_url` 保留兼容(读写均保留,未拆分时三平台共用)。**品牌/门户一致性**：门户页复用 `brand.login.*`（logo/名称/副标题），与登录页同源。
 
 ### 2.2 角色权限管理页（新：替换 Users.tsx is_admin switch）
 
@@ -171,7 +171,7 @@ AdminAuth (会话+CSRF) → RequirePermission(perm) (403 FORBIDDEN)
 **服务端强制**（v3b）：
 - `AuthenticateConfiguredAdmin` 改为**只尝试 local**（删除 `order := []string{"ldap", "local"}` 的 ldap 分支）；`configuredAdminOnly` 语义 = 仅本地账号 + `role != 'user'`。
 - **LDAP 员工面不变**（`/api/auth/login` 仍走 ConfigureProviders 的 ldap 员工认证）；仅 webadmin 的 `handleLogin` 改走 local-only 辅助函数。
-- **SSO 仅客户端生效**：OIDC/OpenID 回调逻辑不变（签发员工 API token → `picoaide://` 深链），**永不**为 webadmin 建 admin session——现状已如此，v3b 明确其为契约（写测试断言）。
+- **SSO 仅客户端生效**：OIDC/OpenID 回调逻辑不变（签发员工 API token → `zeokeel://` 深链），**永不**为 webadmin 建 admin session——现状已如此，v3b 明确其为契约（写测试断言）。
 
 **新 IA**（v2 保持，追加 `hide_local`）：
 
@@ -221,10 +221,10 @@ AdminAuth (会话+CSRF) → RequirePermission(perm) (403 FORBIDDEN)
 | 键 | 含义 | 默认 |
 |---|---|---|
 | `brand.enabled` | 启用自定义品牌 | `false` |
-| `brand.login.logo/display_name/tagline/welcome` | 登录页 | 空/`PicoAide`/`Enterprise AI Gateway`/空 |
-| `brand.client.logo/display_name/tagline` | 客户端 | 空/`PicoAide Harness`/空 |
+| `brand.login.logo/display_name/tagline/welcome` | 登录页 | 空/`ZeoKeel`/`Enterprise AI Gateway`/空 |
+| `brand.client.logo/display_name/tagline` | 客户端 | 空/`ZeoKeel Harness`/空 |
 | `brand.favicon` | favicon | 空 |
-| `brand.title` | 页面标题后缀 | `PicoAide Harness` |
+| `brand.title` | 页面标题后缀 | `ZeoKeel Harness` |
 
 ### 3.2 端点
 
@@ -259,7 +259,7 @@ AdminAuth (会话+CSRF) → RequirePermission(perm) (403 FORBIDDEN)
                                           [方式选择器+表单/跳转登录按钮]
 ```
 
-- **Step 1**：URL 输入 +「下一步」**不置灰**；并行拉 `/api/brand` + `/api/pico/auth/methods?server=<url>`；均失败停留 Step1 内联报错；任一成功进 Step2。
+- **Step 1**：URL 输入 +「下一步」**不置灰**；并行拉 `/api/brand` + `/api/zeokeel/auth/methods?server=<url>`；均失败停留 Step1 内联报错；任一成功进 Step2。
 - **Step 2 品牌区**：logo/名称/副标题/欢迎语 + 固定占位高（防跳动）。无配置回退默认。（2026-09 变更：品牌主色 `client.accent` 已下线，客户端界面固定内置主题色。）
 - **Step 2 登录方式区**：
   - 1 种 → 直接内联；>1 种 → 方式卡片选择器（label+desc+配置徽章）；未配置置灰。
@@ -278,11 +278,11 @@ AdminAuth (会话+CSRF) → RequirePermission(perm) (403 FORBIDDEN)
 | **右上角**（新） | `brand.client.logo+display_name` | 注册 `conversation.session.header.actions` slot → `BrandBadge`（logo 24px+名称，纯装饰） |
 | 页面标题 | `brand.title` | `document.title` |
 
-**Host 侧 `brand-sync.ts`**：`SESSION_CHANGED_EVENT` → 拉 `GET /api/brand`（带 token）→ 内存 store（serverURL 键控）→ emit `pico/brand-changed`；登出清空回退默认。
+**Host 侧 `brand-sync.ts`**：`SESSION_CHANGED_EVENT` → 拉 `GET /api/brand`（带 token）→ 内存 store（serverURL 键控）→ emit `zeokeel/brand-changed`；登出清空回退默认。
 
 ### 4.3 认证方式归类
 
-`/api/pico/auth/methods` 转发服务端 `browser`+`hidden` 标记；客户端判定只用 `m.browser` / `m.hidden`（删除硬编码 openid/oidc 白名单）。
+`/api/zeokeel/auth/methods` 转发服务端 `browser`+`hidden` 标记；客户端判定只用 `m.browser` / `m.hidden`（删除硬编码 openid/oidc 白名单）。
 
 ### 4.4 客户端角色差异化（仅 user 可用）
 
@@ -296,7 +296,7 @@ AdminAuth (会话+CSRF) → RequirePermission(perm) (403 FORBIDDEN)
 
 ### 4.5 客户端代理角色校验（双保险）
 
-- Host 侧 `/api/pico/*`（capabilities/connectors/skills 等写类）按 session.role 校验：role=auditor 因 §4.4 已不可能有 session，但防御性断言（如未来放开边界，此处拦截）。
+- Host 侧 `/api/zeokeel/*`（capabilities/connectors/skills 等写类）按 session.role 校验：role=auditor 因 §4.4 已不可能有 session，但防御性断言（如未来放开边界，此处拦截）。
 
 ---
 
@@ -384,7 +384,7 @@ AdminAuth (会话+CSRF) → RequirePermission(perm) (403 FORBIDDEN)
 - [ ] 3.1 auth-gate.ts Step1/Step2 + brand/methods 并行探测 + 方式选择器（browser/hidden）
 - [ ] 3.2 brand-sync.ts + Brand.tsx 动态化 + 右上角 BrandBadge + hero（（2026-09 变更：accent 下线））
 - [ ] 3.3 auditor 登录拦截（login 响应 role=auditor → 拒存 session + 提示打开 admin + 服务端员工面全拒）
-- [ ] 3.4 客户端代理角色校验（/api/pico/* 写类防御断言）
+- [ ] 3.4 客户端代理角色校验（/api/zeokeel/* 写类防御断言）
 - [ ] 3.5 测试：dsh-enterprise（Step 状态机/brand-sync/BrandMark/browser/auditor 拦截）
 
 ### Phase 4：审计增强 + 联调

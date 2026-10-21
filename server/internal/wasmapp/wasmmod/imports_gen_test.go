@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 本文件是 §5.5「导入面生成：手写清单即测试红」的门禁实现。
@@ -48,7 +48,7 @@ import (
 // 本机沙箱先 `source temp/goenv.sh`；CI 上由 go 工具链默认值满足。
 
 // whitelistSourcesForTest 是参与白名单生成的来源程序，必须与生成器
-// cmd/picoaide-wasm-imports-gen 的 whitelistSources 一致（这里**独立列出**：
+// cmd/zeokeel-wasm-imports-gen 的 whitelistSources 一致（这里**独立列出**：
 // 门禁要能发现"生成器偷偷少编了一份来源"这种情况）。
 var whitelistSourcesForTest = []string{
 	"./internal/wasmapp/refapp",
@@ -157,7 +157,7 @@ var bannedSocketFdCreation = []string{"sock_open", "sock_bind", "sock_listen", "
 // 为什么 2026-09-21 从两条扩到四条（审计 P0-6）：Go 的 wasip1 运行时只声明
 // sock_accept/sock_shutdown（`syscall/net_wasip1.go`），而 **TinyGo 的 `net/url`
 // 路径还会带出 sock_recv/sock_send**。白名单的既定语义是"Go/TinyGo 运行时的保守超集"
-// （见 cmd/picoaide-wasm-imports-gen 的包注释），只按 Go 收紧会让同一份纯标准库代码
+// （见 cmd/zeokeel-wasm-imports-gen 的包注释），只按 Go 收紧会让同一份纯标准库代码
 // "TinyGo 编译发不出去、Go 编译能过" —— 而内存实测 TinyGo 产物常驻只有 Go 的约 1/4。
 var allowedSocketSymbols = map[string]string{
 	"sock_accept":   "i32i32i32_i32",
@@ -177,7 +177,7 @@ var allowedSocketSymbols = map[string]string{
 // 判据刻意**不解析 Go AST**：`whitelistSources` 是一段字面量，正则抽出其中的
 // `./internal/...` 字符串即可；true 源仍是生成器（这里只做集合对拍）。
 func TestWhitelistSourcesMatchGenerator(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "cmd", "picoaide-wasm-imports-gen", "main.go")
+	path := filepath.Join("..", "..", "..", "cmd", "zeokeel-wasm-imports-gen", "main.go")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("读取生成器源码失败（%s）：%v", path, err)
@@ -243,13 +243,13 @@ func TestImportWhitelistMatchesAllSources(t *testing.T) {
 
 	if len(union) != len(ImportWhitelist) {
 		t.Fatalf("导入白名单条数不一致：磁盘 %d 条，来源程序并集 %d 条\n"+
-			"修复：cd server && go run ./cmd/picoaide-wasm-imports-gen\n磁盘: %s\n实际: %s",
+			"修复：cd server && go run ./cmd/zeokeel-wasm-imports-gen\n磁盘: %s\n实际: %s",
 			len(ImportWhitelist), len(union), formatSpecs(ImportWhitelist), formatSpecs(union))
 	}
 	for i := range union {
 		if union[i] != ImportWhitelist[i] {
 			t.Fatalf("导入白名单第 %d 条不一致：\n磁盘: %+v\n实际: %+v\n"+
-				"修复：cd server && go run ./cmd/picoaide-wasm-imports-gen", i, ImportWhitelist[i], union[i])
+				"修复：cd server && go run ./cmd/zeokeel-wasm-imports-gen", i, ImportWhitelist[i], union[i])
 		}
 	}
 }
@@ -262,7 +262,7 @@ func TestWhitelistCoversEverySource(t *testing.T) {
 		info, err := Validate(raw)
 		if err != nil {
 			t.Fatalf("%s 未通过 Validate（白名单缺项/签名过期？）: %v\n"+
-				"修复：cd server && go run ./cmd/picoaide-wasm-imports-gen", pkg, err)
+				"修复：cd server && go run ./cmd/zeokeel-wasm-imports-gen", pkg, err)
 		}
 		if !info.MemoryExported {
 			t.Fatalf("%s 应导出 memory", pkg)
@@ -443,7 +443,7 @@ func TestGeneratorCheckModeAgreesWithDisk(t *testing.T) {
 	// ⚠️ `-check` 现在是**双产物**门禁：wasmmod/imports_gen.go **与**作者面的
 	// references/imports.md 都要与实时产物逐字节一致（R1-pm-18）。
 	root := moduleRootForTest(t)
-	cmd := exec.Command("go", "run", "./cmd/picoaide-wasm-imports-gen", "-check")
+	cmd := exec.Command("go", "run", "./cmd/zeokeel-wasm-imports-gen", "-check")
 	cmd.Dir = root
 	cmd.Env = os.Environ()
 	var out bytes.Buffer
@@ -461,7 +461,7 @@ func TestGeneratorCheckModeAgreesWithDisk(t *testing.T) {
 	if err := os.WriteFile(tmp, []byte("package wasmmod\n"), 0o644); err != nil {
 		t.Fatalf("写临时文件: %v", err)
 	}
-	cmd = exec.Command("go", "run", "./cmd/picoaide-wasm-imports-gen", "-check", "-o", tmp)
+	cmd = exec.Command("go", "run", "./cmd/zeokeel-wasm-imports-gen", "-check", "-o", tmp)
 	cmd.Dir = root
 	cmd.Env = os.Environ()
 	out.Reset()
@@ -477,7 +477,7 @@ func TestGeneratorCheckModeAgreesWithDisk(t *testing.T) {
 	if err := os.WriteFile(tmpDoc, []byte("# 空文档\n"), 0o644); err != nil {
 		t.Fatalf("写临时文档: %v", err)
 	}
-	cmd = exec.Command("go", "run", "./cmd/picoaide-wasm-imports-gen", "-check", "-imports-md", tmpDoc)
+	cmd = exec.Command("go", "run", "./cmd/zeokeel-wasm-imports-gen", "-check", "-imports-md", tmpDoc)
 	cmd.Dir = root
 	cmd.Env = os.Environ()
 	out.Reset()
@@ -501,7 +501,7 @@ func TestGeneratorCheckModeAgreesWithDisk(t *testing.T) {
 	if werr := os.WriteFile(crlfDoc, bytes.ReplaceAll(rawDoc, []byte("\n"), []byte("\r\n")), 0o644); werr != nil {
 		t.Fatalf("写 CRLF 临时文档: %v", werr)
 	}
-	cmd = exec.Command("go", "run", "./cmd/picoaide-wasm-imports-gen", "-check", "-imports-md", crlfDoc)
+	cmd = exec.Command("go", "run", "./cmd/zeokeel-wasm-imports-gen", "-check", "-imports-md", crlfDoc)
 	cmd.Dir = root
 	cmd.Env = os.Environ()
 	out.Reset()
@@ -549,7 +549,7 @@ func TestSkillImportsDocCoversEveryWhitelistSymbol(t *testing.T) {
 		r, ok := seen[spec.Name]
 		if !ok {
 			t.Fatalf("%s 缺少白名单符号 %s —— 作者会以为它不被放行（修复：cd server && "+
-				"go run ./cmd/picoaide-wasm-imports-gen）", skillImportsDocRelPath, spec.Name)
+				"go run ./cmd/zeokeel-wasm-imports-gen）", skillImportsDocRelPath, spec.Name)
 		}
 		if r.module != spec.Module || r.kind != spec.Kind || r.signature != spec.Signature {
 			t.Fatalf("%s 的 %s 与真源不一致：文档 %+v，真源 %+v", skillImportsDocRelPath, spec.Name, r, spec)
@@ -576,7 +576,7 @@ func TestSkillImportsDocCoversEveryWhitelistSymbol(t *testing.T) {
 		"零 preopen",
 		"IMPORT_NOT_ALLOWED",
 		"details.symbol",
-		"picoaide-wasm-imports-gen",
+		"zeokeel-wasm-imports-gen",
 		"不要手改",
 	} {
 		if !strings.Contains(doc, want) {
@@ -624,11 +624,11 @@ func TestGeneratedFileLocationAndHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("读生成产物 %s: %v", path, err)
 	}
-	const header = "// Code generated by picoaide-wasm-imports-gen; DO NOT EDIT."
+	const header = "// Code generated by zeokeel-wasm-imports-gen; DO NOT EDIT."
 	if !bytes.HasPrefix(content, []byte(header)) {
 		t.Fatalf("%s 缺少生成头 %q（生成器模板被改坏了？）", generatedFileName, header)
 	}
-	if !strings.Contains(string(content), "cd server && go run ./cmd/picoaide-wasm-imports-gen") {
+	if !strings.Contains(string(content), "cd server && go run ./cmd/zeokeel-wasm-imports-gen") {
 		t.Fatalf("%s 头部应写明重跑命令（§4.2）", generatedFileName)
 	}
 	if !strings.Contains(string(content), "保守超集") || !strings.Contains(string(content), "零 preopen") {

@@ -4,9 +4,9 @@
  * 缺陷形态（审计探针 `probe/failure-classification.probe.spec.ts`，跑 HEAD 真实模块）：
  *   ```
  *   {"status":502,"refusal":false,"message":"EACCES: permission denied"}                ← 无 hint 词（既有回归）
- *   {"status":422,"refusal":true,"message":"EROFS: … open '/home/u/.picoaide-harness/skills/.skill-tmp/install-AbC123/archive.tar.gz'"}
+ *   {"status":422,"refusal":true,"message":"EROFS: … open '/home/u/.zeokeel-harness/skills/.skill-tmp/install-AbC123/archive.tar.gz'"}
  *   {"status":422,"refusal":true,"message":"EACCES: … same staging path …"}
- *   {"status":422,"refusal":true,"message":"ENOTEMPTY: … rename '/home/u/.picoaide-harness/skills/archive'"}
+ *   {"status":422,"refusal":true,"message":"ENOTEMPTY: … rename '/home/u/.zeokeel-harness/skills/archive'"}
  *   ```
  * 判据当时是"**原文里有没有 hint 词**"，而安装器自己的 tar 通道就把归档写在
  * `<staging>/archive.tar.gz`（技能名本身也可以是 `archive`）⇒ 任何系统级失败只要提到
@@ -41,7 +41,7 @@ let stagingArchive = ''
 let leakFragments: string[] = []
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), 'pico-c23-'))
+  root = await mkdtemp(join(tmpdir(), 'zeokeel-c23-'))
   // 与安装器 staging 落点同形：<root>/skills/.skill-tmp/install-XXXX/archive.tar.gz
   stagingArchive = join(root, 'skills', '.skill-tmp', 'install-AbC123', 'archive.tar.gz')
   leakFragments = [root, join(root, 'skills'), '.skill-tmp', 'install-AbC123']

@@ -15,7 +15,7 @@ import { FEATURE_ENABLED, FEATURES_VARIANT } from '../../lib/features'
 //
 // 2026-09-19 WASM 客户端专属改造:原「设置」子页(应用访问域名/泛域名)整页删除
 // (契约 `docs/decisions/2026-09-19-wasm-client-internal-origin.md` §4.4/§4.5)——
-// 应用只在桌面客户端内以 `picoaide-app://<app_id>/` 打开,服务端连基域配置面
+// 应用只在桌面客户端内以 `zeokeel-app://<app_id>/` 打开,服务端连基域配置面
 // (`wasm.apps_base_domain`、`GET/PUT /wasm-apps/domain`)一起删。因此这里另加两条
 // 拦截用例:①子导航不再有「设置」、旧路径落 404;②**整个应用中心一个字节都不许**
 // 再请求 `/wasm-apps/domain`(后端下线后前端还发请求 = 每次进页面都 404/500)。
@@ -127,7 +127,7 @@ describe.skipIf(!APPS_ON)(`应用中心(合并后)的子导航与子路由 [变�
 
   it('原「设置」的位置留一行说明:应用只在桌面客户端内打开,不再需要应用域名与证书', async () => {
     await renderAppAt('/admin/app-center')
-    // 契约 §2/§4.5:应用只在客户端内以 picoaide-app://<app_id>/ 打开。
+    // 契约 §2/§4.5:应用只在客户端内以 zeokeel-app://<app_id>/ 打开。
     // 这行说明是配置面删除后唯一的"去哪了"答案(不说明会被读成功能被藏起来)。
     expect(await screen.findByTestId('app-center-client-only-note')).toHaveTextContent(
       '应用只在桌面客户端内打开，不再需要应用域名与证书。',

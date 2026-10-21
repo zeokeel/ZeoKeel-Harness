@@ -39,7 +39,7 @@ function stubCtx(restored?: Session | null): {
     settings: { update, replace },
     // subscribeSession 用 isRestored() 判断"启动时那次会话事件是否已经错过"。
     // 不传 restored = 恢复还在进行（事件随后必到）。
-    picoSession: {
+    zeokeelSession: {
       clear: vi.fn(),
       isRestored: () => restored !== undefined,
       getSession: () => restored ?? null,
@@ -75,7 +75,7 @@ describe('bootstrap sync', () => {
       }))
       // web-search-deepseek 被 repoint 到网关 token + 网关 v1 前缀
       expect(settings.update).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        apiKeyEnv: 'PICOAI_GATEWAY_TOKEN',
+        apiKeyEnv: 'ZEOKEEL_GATEWAY_TOKEN',
         baseURL: 'https://gateway.example/v1',
         model: 'deepseek-chat',
       }))
@@ -180,7 +180,7 @@ describe('resolveInputModalities', () => {
 describe('会话代际守卫（Z2-01）：迟到的 bootstrap 响应不得落地', () => {
   // 场景：`getBootstrap` 缺省 15s 超时，期间用户登出并登录到**另一台**服务端。
   // 没有守卫时，迟到的旧响应会把上一台的模型目录/默认模型/搜索地址写进当前会话，
-  // 而 `PICOAI_GATEWAY_TOKEN` 已经是新服务端的令牌 ⇒ 一次 web 搜索就把新会话的
+  // 而 `ZEOKEEL_GATEWAY_TOKEN` 已经是新服务端的令牌 ⇒ 一次 web 搜索就把新会话的
   // bearer 发到旧服务端的 `/v1/messages`（跨租户凭据外泄）。
   const SESSION_A: Session = { serverURL: 'https://server-a.example.com', username: 'alice', token: 'tok-a' }
   const SESSION_B: Session = { serverURL: 'https://server-b.example.com', username: 'bob', token: 'tok-b' }
@@ -256,7 +256,7 @@ describe('会话代际守卫（Z2-01）：迟到的 bootstrap 响应不得落地
         },
         '迟到响应改写了当前会话（B）的模型配置：凭据是新服务端的令牌，baseURL/模型目录却是旧服务端的',
       ).toEqual({
-        search: { apiKeyEnv: 'PICOAI_GATEWAY_TOKEN', baseURL: 'https://server-b.example.com/v1', model: 'model-of-B' },
+        search: { apiKeyEnv: 'ZEOKEEL_GATEWAY_TOKEN', baseURL: 'https://server-b.example.com/v1', model: 'model-of-B' },
         catalog: { models: [{ id: 'model-of-B', name: 'model-of-B' }] },
         defaultModel: { provider: 'deepseek-official', model: 'model-of-B' },
       })

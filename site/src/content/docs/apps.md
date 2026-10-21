@@ -1,6 +1,6 @@
 ---
 title: 应用中心
-description: 员工自建 WASM 应用的执行链路、picoaide.app.json 配置契约、发布生命周期与运行时边界。
+description: 员工自建 WASM 应用的执行链路、zeokeel.app.json 配置契约、发布生命周期与运行时边界。
 ---
 
 应用中心是员工**自建小工具**的地方：员工在对话里描述需求，AI 用内置的应用构建技能写一个 WASI 应用、本地编译成 `.wasm`，员工在应用中心里填表发布；同事在**桌面客户端的独立窗口**里打开它。
@@ -45,7 +45,7 @@ description: 员工自建 WASM 应用的执行链路、picoaide.app.json 配置�
 1. 员工在应用中心点开某个应用，客户端调用**本机的**打开路由（面板本身不持员工令牌）；
 2. 宿主向服务端 `POST /api/client/v2/apps/wasm/:app_id/open` 校验一次，同时登记当日打开次数；
 3. 校验通过后，客户端开一个**独立窗口**，加载 `<应用源 scheme>://<app_id>/<path>`。已有窗口时改为聚焦；
-4. 响应里的应用版本（`X-PicoAide-App-Version`）是客户端内容缓存的唯一来源；版本变了就清掉该应用在当前会话作用域下的全部缓存。
+4. 响应里的应用版本（`X-ZeoKeel-App-Version`）是客户端内容缓存的唯一来源；版本变了就清掉该应用在当前会话作用域下的全部缓存。
 
 **窗口内的每一次请求**（页面自己 `fetch`、点链接、提交表单）：
 
@@ -55,7 +55,7 @@ description: 员工自建 WASM 应用的执行链路、picoaide.app.json 配置�
         ▼
 协议 handler 合成请求信封（method / path / query / host / 白名单头 / base64 body）
         │  POST /api/client/v2/apps/wasm/<app_id>/request
-        │  头：Authorization: Bearer <员工令牌> + X-Pico-App-Proof: <持有性证明>
+        │  头：Authorization: Bearer <员工令牌> + X-ZeoKeel-App-Proof: <持有性证明>
         ▼
 服务端：认证 → 准入 → 静态资源直出 或 wazero 执行 → 响应信封
         │  {"status":200,"headers":{…},"body":"<base64>","truncated":false}
@@ -69,7 +69,7 @@ description: 员工自建 WASM 应用的执行链路、picoaide.app.json 配置�
 - 请求体 ≤ 1 MiB，信封 ≤ `1 MiB × 4/3 + 64 KiB`；
 - `Set-Cookie` 整体丢弃（自定义协议没有 cookie 语义），逐跳头与 `Content-Length` 剔除。
 
-**预留面**：`/__picoaide` 及其子路径是宿主保留面。目前只有应用 AI 桥 `POST /__picoaide/ai/chat` 一条，由协议 handler **本地处理、绝不转发平台**；其余 `/__picoaide/*` 一律 404，不会被当成应用自己的路由。
+**预留面**：`/__zeokeel` 及其子路径是宿主保留面。目前只有应用 AI 桥 `POST /__zeokeel/ai/chat` 一条，由协议 handler **本地处理、绝不转发平台**；其余 `/__zeokeel/*` 一律 404，不会被当成应用自己的路由。
 
 **升级必须服务端与客户端同版本**：应用地址由渠道包在组装期注入（`desktop.app_origin_scheme`，必填、不得与深链 scheme 相同、不得是 http 之类的保留 scheme），信封与协议头的形状是两端共同的契约。旧客户端撞上新服务端（或反过来）的表现是**打开失败并提示「客户端与服务端必须同版本升级」**，而不是静默降级——这条约束的代价是「服务端与客户端要一起升」，收益是协议面永远只有一份形状。
 
@@ -77,7 +77,7 @@ description: 员工自建 WASM 应用的执行链路、picoaide.app.json 配置�
 
 ## 应用配置契约
 
-配置文件名固定为 `picoaide.app.json`（发布时以对象形态放进 `config` 字段）。**单一真源是服务端** `server/internal/wasmapp/appcfg/appcfg.json`（schema `picoaide-app-config/1`），客户端镜像同一份字段规格并与它对拍；帧内协议版本是 `picoaide-app/1`。
+配置文件名固定为 `zeokeel.app.json`（发布时以对象形态放进 `config` 字段）。**单一真源是服务端** `server/internal/wasmapp/appcfg/appcfg.json`（schema `zeokeel-app-config/1`），客户端镜像同一份字段规格并与它对拍；帧内协议版本是 `zeokeel-app/1`。
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -107,7 +107,7 @@ description: 员工自建 WASM 应用的执行链路、picoaide.app.json 配置�
 - **平台不做构建**：产物在作者机器上编译好再上传（导入面只认 `wasi_snapshot_preview1`，组件模型产物直接拒）；
 - **AI 侧的工具面就是作者的入口**：`wasm_app_list`（查标识占用与当前版本）、`wasm_app_validate`（预检：静态校验 + 真编译 + 干跑，**不占版本号、不进审计**，可反复调）、`wasm_app_publish`（发布）、以及回读面的 `wasm_app_schema` / `wasm_app_diagnostics` / `wasm_app_rows`；
 - **上传大小分两档**：`.wasm` ≤ 32 MiB（base64 编码后的请求体 ≤ 48 MiB）。超过单片上限（8 MiB）时自动走**分片 + 续传**：开会话 → 逐片 PUT → 查询已收片 → 完成（`POST /uploads`、`PUT /uploads/:id/chunks/:index`、`GET /uploads/:id`、`POST /uploads/:id/complete`、`DELETE /uploads/:id`）；单片 64 KiB–8 MiB、片数 ≤ 1024、会话 30 分钟、每用户 4 个并发会话与 48 MiB 在飞磁盘配额、上传频率 30 次/小时（预检 + 发布合计）；
-- **预算交接**：客户端整条上传链共用 90 秒预算，在「完成」那一跳会把**该跳真正还会等多久**通过请求头 `X-Pico-Client-Budget-Ms` 告诉平台，平台据此收窄自己的预算（**只许缩小、永不放大**）——这样平台的结构化错误总能先于客户端放弃返回，员工不会只看到一句「网络错误」。
+- **预算交接**：客户端整条上传链共用 90 秒预算，在「完成」那一跳会把**该跳真正还会等多久**通过请求头 `X-ZeoKeel-Client-Budget-Ms` 告诉平台，平台据此收窄自己的预算（**只许缩小、永不放大**）——这样平台的结构化错误总能先于客户端放弃返回，员工不会只看到一句「网络错误」。
 
 ### 发布链路
 
@@ -171,7 +171,7 @@ description: 员工自建 WASM 应用的执行链路、picoaide.app.json 配置�
 
 两条与数据有关的授权边界：
 
-- **应用内的 AI 只有对话**：`/__picoaide/ai/chat` 由宿主本地处理，只发送本次对话内容；没有工具、不能读写文件、不能用连接器与记忆。授权按「账号 × 服务端 × 应用」记录，随时可撤销。
+- **应用内的 AI 只有对话**：`/__zeokeel/ai/chat` 由宿主本地处理，只发送本次对话内容；没有工具、不能读写文件、不能用连接器与记忆。授权按「账号 × 服务端 × 应用」记录，随时可撤销。
 - **AI 读应用库默认关闭**：作者要在应用中心里显式授权之后，AI 的数据工具才能读该应用的数据（仅脱敏列、每次调用写审计）；撤销后立刻恢复默认（再调用被拒）。
 
 ## 运行时边界
@@ -195,7 +195,7 @@ description: 员工自建 WASM 应用的执行链路、picoaide.app.json 配置�
 | 日志 | `log` |
 | 读随包资源 | `assets.read`（参数是**包内逻辑路径**，不是宿主路径） |
 
-> 服务端**没有** `ai.chat` 之类的 AI 能力了。应用要用模型，走「前端 JS 调 `/__picoaide/ai/chat` → 结果回传 wasm 落库」这条路；老应用在**发布校验期**就会被拒（`IMPORT_NOT_ALLOWED` + 迁移指引），不会静默失效。
+> 服务端**没有** `ai.chat` 之类的 AI 能力了。应用要用模型，走「前端 JS 调 `/__zeokeel/ai/chat` → 结果回传 wasm 落库」这条路；老应用在**发布校验期**就会被拒（`IMPORT_NOT_ALLOWED` + 迁移指引），不会静默失效。
 
 ### 预算（编译期默认值）
 

@@ -77,7 +77,7 @@ export async function makeRealRuntime({ credentials, workDir } = {}) {
   const adapter = createRealElectronAdapter(electron)
   const store = new BrowserStore({ dir })
   // Keep downloads inside the disposable probe dir: the default
-  // `.picoaide-downloads` would litter the package checkout.
+  // `.zeokeel-downloads` would litter the package checkout.
   const downloads = join(dir, 'downloads')
   mkdirSync(downloads, { recursive: true })
   const runtime = new BrowserRuntime(adapter, { downloadDir: downloads }, credentials, undefined, { store })

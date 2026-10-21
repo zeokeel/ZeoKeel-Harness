@@ -9,9 +9,9 @@ const SESSION: Session = { serverURL: 'https://gateway.example', username: 'test
 /** fetchJSON 被 mock:捕获上报 payload 供断言。 */
 const captured: Array<{ path: string; body: unknown }> = []
 // 2026-10-13（P0-b）：网关客户端（`fetchJSON`）的实现搬到叶子包
-// `@picoaide/dsh-gateway-client`；被测插件 import 的是**它**，mock 必须打在同一个
+// `@zeokeel/dsh-gateway-client`；被测插件 import 的是**它**，mock 必须打在同一个
 // 模块 id 上，否则替身拦不到、上报计数恒 0（判据会以"没上报"的形式假红）。
-vi.mock('@picoaide/dsh-gateway-client/auth', () => ({
+vi.mock('@zeokeel/dsh-gateway-client/auth', () => ({
   fetchJSON: vi.fn(async (serverURL: string, path: string, opts: { body?: unknown }) => {
     captured.push({ path, body: opts.body })
     return { ok: true }
@@ -20,7 +20,7 @@ vi.mock('@picoaide/dsh-gateway-client/auth', () => ({
 
 function stubCtx(): Context {
   return {
-    picoSession: { getSession: () => SESSION },
+    zeokeelSession: { getSession: () => SESSION },
     on: vi.fn(),
   } as unknown as Context
 }

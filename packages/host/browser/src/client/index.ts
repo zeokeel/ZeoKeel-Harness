@@ -1,9 +1,9 @@
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: the foot-lane registry contract (`ctx.picoFootMenu`). The single
-// sidebar foot row belongs to `@picoaide/dsh-foot-menu` and reaches this bundle
+// Type-only: the foot-lane registry contract (`ctx.zeokeelFootMenu`). The single
+// sidebar foot row belongs to `@zeokeel/dsh-foot-menu` and reaches this bundle
 // as a Cordis service — never as a module import.
-import type {} from '@picoaide/dsh-foot-menu/client'
+import type {} from '@zeokeel/dsh-foot-menu/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { controlHintLevel, showsControlHint } from './control-hint.ts'
 import * as controlHint from './control-hint-store.ts'
@@ -31,11 +31,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  * component; it now lives in a plugin-scope store started here, so collapsing
  * the popover never stops it (见 `control-hint-store.ts`).
  */
-export const name = 'pico-browser-client'
+export const name = 'zeokeel-browser-client'
 
 const LOCALE_NS = 'browser'
 
-/** Services required: locale for the entry copy. `picoFootMenu` is waited on from a child scope. */
+/** Services required: locale for the entry copy. `zeokeelFootMenu` is waited on from a child scope. */
 export const inject = ['locale']
 
 /** 条目文案的唯一分支点：档位 → 短标签 / 可操作长句（`none` 用中性文案，不会被展示）。 */
@@ -85,31 +85,31 @@ export function apply(ctx: ClientContext): void {
   //
   // 两件事都放在**子 fiber** 里等服务到位：
   //  ① 订阅提示变化并 `touch()` 重新发布；② 登记条目。
-  // 为什么 ① 也必须在这里：`picoFootMenu` 不在本插件的 `inject` 里，而 Cordis 4 对
-  // **未 inject 的服务读取直接抛**（`cannot get property "picoFootMenu" without
-  // inject`）—— 在订阅回调里读外层 `ctx.picoFootMenu` 会在**每一次提示变化**时抛异常
+  // 为什么 ① 也必须在这里：`zeokeelFootMenu` 不在本插件的 `inject` 里，而 Cordis 4 对
+  // **未 inject 的服务读取直接抛**（`cannot get property "zeokeelFootMenu" without
+  // inject`）—— 在订阅回调里读外层 `ctx.zeokeelFootMenu` 会在**每一次提示变化**时抛异常
   // （被 store 的 try/catch 吞掉），于是「更多」行的琥珀色圆点永远不会实时出现：
   // `attention()` 是对的，但已经渲染好的行不会再渲染（2026-09-21 二轮对抗审计 P1，
-  // 真 cordis 探针实测 touchCalls: 0）。子 scope 里读 `scope.picoFootMenu` 合法。
+  // 真 cordis 探针实测 touchCalls: 0）。子 scope 里读 `scope.zeokeelFootMenu` 合法。
   // 反过来硬 inject 也不行：那一行可以被渠道覆盖层禁用，硬 inject 会让整条 fiber
   // 永久 pending（无报错），把控制权轮询一起带走（P1-7 教训）。
-  ctx.inject(['picoFootMenu'], (scope: ClientContext) => {
+  ctx.inject(['zeokeelFootMenu'], (scope: ClientContext) => {
     scope.effect(() => {
-      const off = controlHint.subscribe(() => { scope.picoFootMenu.touch() })
+      const off = controlHint.subscribe(() => { scope.zeokeelFootMenu.touch() })
       return () => { off() }
     }, 'browser: republish control hint')
-    scope.effect(() => scope.picoFootMenu.add({
+    scope.effect(() => scope.zeokeelFootMenu.add({
       id: 'browser',
       order: 1,
       title: () => t(entryCopy(controlHintLevel(controlHint.current())).short),
       activate: () => {
         // 2026-09-15 审计 F6：这是写面（需持有性证明 cookie）。失败时旧实现静默吞掉，
         // 用户看到的正是"点了按钮没反应"，而主机日志与客户端控制台都不留痕。
-        void fetch('/api/pico/browser/show', { method: 'POST' }).then(
+        void fetch('/api/zeokeel/browser/show', { method: 'POST' }).then(
           (response) => {
-            if (!response.ok) console.warn('[pico-browser] show rejected', response.status)
+            if (!response.ok) console.warn('[zeokeel-browser] show rejected', response.status)
           },
-          (cause: unknown) => { console.warn('[pico-browser] show request failed', cause) },
+          (cause: unknown) => { console.warn('[zeokeel-browser] show request failed', cause) },
         )
       },
       // 圆点 = "AI 现在不能操作浏览器"（用户持控制权）—— 2026-10-04 起 `controlled`

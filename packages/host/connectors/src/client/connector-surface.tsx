@@ -1,14 +1,14 @@
 /**
  * 「连接器中心」整页面板的装载点。
  *
- * 与能力中心 / 应用中心 / 定时任务共用 `@picoaide/dsh-panel-surface` 的切换语义
+ * 与能力中心 / 应用中心 / 定时任务共用 `@zeokeel/dsh-panel-surface` 的切换语义
  * （中列整页接管、互斥、点侧边栏行让位、Esc 返回）。本文件只负责接上装载器。
  *
- * @module @picoaide/dsh-connectors/client/connector-surface
+ * @module @zeokeel/dsh-connectors/client/connector-surface
  */
 
 import { createElement } from 'react'
-import { mountPanelSurface, type PanelSurfaceHandle } from '@picoaide/dsh-panel-surface/client'
+import { mountPanelSurface, type PanelSurfaceHandle } from '@zeokeel/dsh-panel-surface/client'
 import { ConnectorPanel } from './ConnectorPanel.tsx'
 
 /** 本面板在共享协议里的 id。 */

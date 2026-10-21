@@ -1,5 +1,5 @@
 /**
- * FIX-36（第二十七轮 AA3-04）回归：`GET /api/pico/desktop/loop-notify/session` 是
+ * FIX-36（第二十七轮 AA3-04）回归：`GET /api/zeokeel/desktop/loop-notify/session` 是
  * **状态变更 GET**（read-then-clear 消费待跳转会话，P2-24），修前它同时落在两条缝里：
  *
  *  1. **exact 胜过 prefix**：上游 webserver 先查 exact 表、未命中才走 prefix
@@ -228,7 +228,7 @@ describe('FIX-36：状态变更 GET 的持有性证明（真实 WebServer + 真�
     expect(fixture.judgeCalls()).toBeGreaterThanOrEqual(1)
 
     // 对照腿：同一条 webserver 上，prefix `/api` 空间的其它路径确实被围栏挡住。
-    const control = await rawRequest(fixture.port, 'GET', '/api/pico/desktop/not-a-real-route', {})
+    const control = await rawRequest(fixture.port, 'GET', '/api/zeokeel/desktop/not-a-real-route', {})
     expect(control.status).toBe(401)
     expect(control.body).toBe('unauthorized')
     expect(fixture.prefixFenceCalls()).toBe(1)
@@ -455,7 +455,7 @@ function routeHarness(platform: 'darwin' | 'win32'): RouteHarness {
   const runtime = {
     platform,
     locale: 'en',
-    productName: 'PicoAide Harness',
+    productName: 'ZeoKeel Harness',
     updates: {
       isPackaged: true,
       canDownload: true,

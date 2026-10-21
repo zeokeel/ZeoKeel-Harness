@@ -60,7 +60,7 @@
 证据（同一次构建的 `dist/builder-debug.yml`）：
 
 - `nodeModuleFilePatterns` = 我们的 `build.files` 全量（含 `!src/**`、`!**/*.map`、
-  `!temp/**`）⇒ 这些规则**对 `node_modules` 有效**，实测 `@picoaide/*/src` 因此清零；
+  `!temp/**`）⇒ 这些规则**对 `node_modules` 有效**，实测 `@zeokeel/*/src` 因此清零；
 - `firstOrDefaultFilePatterns` = 默认 `**/*` + electron-builder 内置排除
   （`!**/node_modules/**`、`!build{,/**/*}`、`!dist/*-unpacked{,/**/*}`、
   `!**/*.{…,d.ts,…}`）⇒ **应用根目录按这一份执行**，我们的排除规则一条都没进去。
@@ -202,7 +202,7 @@ asar 条目**逐条断言，命中即拒包（坏包产不出来，不靠人 rev
 
 ```
 src/** · tests/** · scripts/** · 根级 *.ts|*.tsx
-node_modules/@picoaide/*/{src,tests,docs}/**
+node_modules/@zeokeel/*/{src,tests,docs}/**
 *.map
 .e2e-*/** · .real-env-*/** · temp/** · dist*/**
 ```

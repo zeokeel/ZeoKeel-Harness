@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // 发布面水位闸门的回归用例（审计 P1-1：`readyz.AllowPublish` 曾**零调用方** ——

@@ -32,7 +32,7 @@ import { serverPartitionHash } from './partition.ts'
 import { createWasmAppsWindows, type WasmAppsWindowAdapter } from './windows.ts'
 import { WasmAppsCache } from './cache.ts'
 import { createAppSchemeHandler } from './handler.ts'
-import type { AppSession, PicoSessionLike } from './session.ts'
+import type { AppSession, ZeoKeelSessionLike } from './session.ts'
 
 const PROOF_PARTITION_ALICE = `persist:agent-browser-alice@${serverPartitionHash('https://harness.example.com')}`
 const PROOF_PARTITION_BOB = `persist:agent-browser-bob@${serverPartitionHash('https://harness.example.com')}`
@@ -101,11 +101,11 @@ function fakeContext(initial: AppSession | null): {
         ? new Response(JSON.stringify({ version: '1.0.0', changed: false }), { status: 200 })
         : new Response('{}', { status: 200 }),
     }],
-    ['picoSession', {
+    ['zeokeelSession', {
       getSession: () => session,
       isRestored: () => true,
       clear() {},
-    } satisfies PicoSessionLike],
+    } satisfies ZeoKeelSessionLike],
     ['desktopRuntime', { locale: 'zh' }],
     ['connection', { requestRejection: () => undefined }],
     [WASM_APPS_WINDOW_ADAPTER_SERVICE, windowAdapter],
@@ -131,7 +131,7 @@ function fakeContext(initial: AppSession | null): {
   return {
     ctx: ctx as unknown as Parameters<typeof apply>[0],
     setSession: (next: AppSession | null) => { session = next },
-    fireSessionChanged: () => { for (const handler of listeners.get('pico/session-changed') ?? []) handler(session) },
+    fireSessionChanged: () => { for (const handler of listeners.get('zeokeel/session-changed') ?? []) handler(session) },
     routes,
     warnings,
     // 让测试能拿到录音替身：挂到 ctx 上（等价于 `ctx.get(WASM_APPS_WINDOW_ADAPTER_SERVICE)`）。
@@ -184,7 +184,7 @@ describe('WS-1 直接换账号必须重建应用窗口（2026-09-23 审计）', 
       const { res, state } = fakeResponse()
       routeOf().handler(fakeRequest('GET', undefined, {}, `${WASM_APPS_LOCAL_PREFIX}/host-proof`), res)
       await flush()
-      return { 'x-pico-host-proof': JSON.parse(state.body).proof }
+      return { 'x-zeokeel-host-proof': JSON.parse(state.body).proof }
     }
     const openApp = async (appId: string): Promise<{ status: number, body: string }> => {
       const headers = await proofOf()
@@ -330,7 +330,7 @@ describe('WS-2 根路径 `/` 不是静态子资源（2026-09-23 审计）', () =
           body: Buffer.from(JSON.stringify({ rows: [1, 2, 3] }), 'utf8').toString('base64'),
           truncated: false,
         }
-        return new Response(JSON.stringify(envelope), { status: 200, headers: { 'x-picoaide-app-version': '1.2.3' } })
+        return new Response(JSON.stringify(envelope), { status: 200, headers: { 'x-zeokeel-app-version': '1.2.3' } })
       },
       clearSession: () => {},
       hostLocale: () => 'zh',

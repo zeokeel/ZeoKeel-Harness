@@ -121,7 +121,7 @@ var (
 	}
 	// connectorDeniedEnvPrefixes: 产品自有命名空间 + 带索引的 git 配置注入
 	// (GIT_CONFIG_KEY_0=core.sshCommand 是命令钩子,前缀覆盖所有索引;conn-5)。
-	connectorDeniedEnvPrefixes = []string{"DSH_", "ELECTRON_", "PICOAIDE_", "GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"}
+	connectorDeniedEnvPrefixes = []string{"DSH_", "ELECTRON_", "ZEOKEEL_", "GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"}
 	// connectorConfirmationOnlyEnvKeys: **不拒绝**、交给本地审批提示(其值会被
 	// 披露,conn-5)让用户判断的"选择器"族(F-6 / R7 第二轮)。
 	//
@@ -350,7 +350,7 @@ var connectorCredentialFieldLists = []string{"tokenFields", "settings"}
 
 // validateConnectorCredentialFields 校验 tokenFields[] / settings[] 的元素形状,
 // 并拒绝任何 key 命中受保护环境键(denylist 与客户端 policy.ts 的
-// DENIED_ENV_KEYS + DSH_/ELECTRON_/PICOAIDE_/GIT_CONFIG_KEY_/GIT_CONFIG_VALUE_
+// DENIED_ENV_KEYS + DSH_/ELECTRON_/ZEOKEEL_/GIT_CONFIG_KEY_/GIT_CONFIG_VALUE_
 // 前缀逐条对齐,由 TestConnectorDeniedEnvKeysMatchClientPolicy 守卫防漂移)。
 //
 // 为什么必须在这里拦:客户端把"定义里声明过的字段名"当成可信白名单

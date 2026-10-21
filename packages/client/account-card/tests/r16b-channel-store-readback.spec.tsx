@@ -20,11 +20,11 @@
  * 这不是人为排序：它就是 React 的提交顺序本身。另两拍覆盖"装完监听后的正常推送"
  * 与"首帧就拿到当前值"（防止把修复做成"先渲染空再补"）。
  *
- * ## 为什么这条判据住在 `@picoaide/dsh-account-card` 而不是 enterprise
+ * ## 为什么这条判据住在 `@zeokeel/dsh-account-card` 而不是 enterprise
  *
  * 与同目录 `capability-delisted-badge.spec.tsx` 同一取舍：enterprise（`channel-store`
  * 的归属包）的测试环境是 node，**没有** jsdom / react-dom 依赖；account-card 是唯一
- * 同时满足「已声明 `@picoaide/dsh-enterprise` 依赖边（不新增构建图边）」「自带 jsdom +
+ * 同时满足「已声明 `@zeokeel/dsh-enterprise` 依赖边（不新增构建图边）」「自带 jsdom +
  * react-dom」「vitest 把 react/react-dom 钉到本包安装副本（跨包源码用例必须共用同一个
  * React 实例）」三条的客户端包。`channel-content.ts` 是零 import 的叶子模块，跨包
  * 源码 import 不会再牵出别的边。
@@ -48,16 +48,16 @@ const SECOND: ChannelConfig = { channel_id: 'example-b', client: { display_name:
 let container: HTMLDivElement
 let root: Root
 let stopStore: () => void
-/** Host 事件监听器（`pico/channel-changed`）—— 测试用它当"渠道内容变了"的入口。 */
+/** Host 事件监听器（`zeokeel/channel-changed`）—— 测试用它当"渠道内容变了"的入口。 */
 let emitChannel: (channel: ChannelConfig | null) => void
 
 beforeEach(() => {
-  emitChannel = () => { throw new Error('the channel store did not subscribe to pico/channel-changed') }
+  emitChannel = () => { throw new Error('the channel store did not subscribe to zeokeel/channel-changed') }
   // 随包品牌的播种请求：本用例只关心事件路径，让播种失败（保持 store 不变）。
   vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })))
   const ctx = {
     on: (event: string, handler: (channel: ChannelConfig | null) => void) => {
-      if (event === 'pico/channel-changed') emitChannel = handler
+      if (event === 'zeokeel/channel-changed') emitChannel = handler
       return () => {}
     },
   }

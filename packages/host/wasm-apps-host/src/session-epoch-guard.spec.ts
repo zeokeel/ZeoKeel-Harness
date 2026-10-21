@@ -100,7 +100,7 @@ function boot(onOpen: (index: number) => Promise<Response>) {
       webContents: (handle: { id: number }) => ({ wc: handle.id }),
       workArea: () => ({ x: 0, y: 0, width: 1280, height: 800 }),
     }],
-    ['picoSession', { getSession: () => current, isRestored: () => true, clear: () => {} }],
+    ['zeokeelSession', { getSession: () => current, isRestored: () => true, clear: () => {} }],
     ['desktopRuntime', { locale: 'zh' }],
     ['connection', { requestRejection: () => undefined }],
   ])
@@ -161,13 +161,13 @@ function boot(onOpen: (index: number) => Promise<Response>) {
     },
     /** 发一次打开请求（不等待回包 —— 调用方自己决定何时 await）。 */
     open(token: string) {
-      const state = call('POST', JSON.stringify({ app_id: APP }), { 'x-pico-host-proof': token })
+      const state = call('POST', JSON.stringify({ app_id: APP }), { 'x-zeokeel-host-proof': token })
       return { state, done: waitStatus(state, `open ${APP}`) }
     },
     /** 换代：改会话 + 广播事件（与 `subscribeSessionChanges` 的真实形态一致）。 */
     switchTo(next: typeof ALICE | typeof BOB): void {
       current = next
-      for (const handler of listeners.get('pico/session-changed') ?? []) handler(next)
+      for (const handler of listeners.get('zeokeel/session-changed') ?? []) handler(next)
     },
   }
 }

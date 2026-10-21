@@ -24,7 +24,7 @@
  * 三条合起来才挡住"只改一侧"：改服务端 ⇒ 对拍红；改客户端数组 ⇒ 对拍红 + tsc 红；
  * 改文案表 ⇒ tsc 红 + 对拍红。
  *
- * @module @picoaide/dsh-wasm-apps/client/availability-contract
+ * @module @zeokeel/dsh-wasm-apps/client/availability-contract
  */
 import type { AppCenterKey } from './locales.ts'
 

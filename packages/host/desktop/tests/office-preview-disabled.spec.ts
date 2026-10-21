@@ -79,7 +79,7 @@ function callSites(identifier: string): number {
 describe('Office preview stays disabled in the desktop client (patch guard)', () => {
   it('does not register the Office renderer', () => {
     // 补丁是真的落在这份产物上（不是上游恰好改了形状）。
-    expect(bundle).toContain('PicoAide: the desktop host ships no LibreOffice')
+    expect(bundle).toContain('ZeoKeel: the desktop host ships no LibreOffice')
     // ① 唯一稳定的判据：不存在任何以 config.office 为实参的调用。
     expect(bundle).not.toMatch(/\(ctx, config\.office\)/u)
     // ② 由内容锚点认出 Office 那个函数，再要求它只剩定义（死代码）：重新接线会让计数回到 2。

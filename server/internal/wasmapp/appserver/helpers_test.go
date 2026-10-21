@@ -64,8 +64,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/events"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/events"
 )
 
 // 测试用的账号夹具（本仓公开，禁止真实域名：AGENTS.md 的域名纪律 —— W4 删除
@@ -139,7 +139,7 @@ func appBinary(t *testing.T, name string) []byte {
 		t.Fatalf("找不到 go 工具链（本包用例需要现场编译 wasip1 应用）: %v", err)
 	}
 	out := filepath.Join(appBinDir, name+".wasm")
-	// testdata 是**独立模块**（module picoaide.test/apps）：站在应用作者的位置，
+	// testdata 是**独立模块**（module zeokeel.test/apps）：站在应用作者的位置，
 	// 不 import 平台内部包，自实现帧协议。
 	cmd := exec.Command(goTool, "build", "-o", out, "./"+name)
 	cmd.Dir = filepath.Join("testdata")
@@ -179,7 +179,7 @@ func withCustomSection(t *testing.T, app, name string, payload []byte) []byte {
 // 因此这里直接追加即可，不影响模块执行。段名按字典序写入 ⇒ 同一个 spec 产出同一份
 // 模块字节（wazero 的磁盘编译缓存才能跨用例复用）。
 //
-// `picoaide.app.json` 不在这里注入：它是平台保留资源名，`assets.SplitSections` 会忽略
+// `zeokeel.app.json` 不在这里注入：它是平台保留资源名，`assets.SplitSections` 会忽略
 // 模块里的同名段，运行期由库内 `config_json` 注入（配置的唯一权威）。
 func withAssetsInWasm(wasm []byte, files map[string]string) []byte {
 	if len(files) == 0 {
@@ -338,13 +338,13 @@ type appSpec struct {
 	frozen  bool
 	// status 空 = approved（生效）。非 approved 的版本不会成为"生效版本"。
 	status string
-	// config 是 picoaide.app.json 的内容；空 = 默认 login（客户端专属模型的唯一
+	// config 是 zeokeel.app.json 的内容；空 = 默认 login（客户端专属模型的唯一
 	// 常规模式：未注入身份即 401）。
 	config string
 	// configOverride 为 true 时 config 为空表示"不写配置文件"（测平台故障分支）。
 	skipConfig bool
 	// assets 是**随包资源**（包内逻辑路径 → 内容）。publishApp 把它们折成 wasm 的
-	// 自定义段（2026-09-20 起随包资源不再落盘）；`picoaide.app.json` 不放这里 ——
+	// 自定义段（2026-09-20 起随包资源不再落盘）；`zeokeel.app.json` 不放这里 ——
 	// 平台保留资源名由资源集按库内 `config_json` 注入（见 withAssetsInWasm）。
 	assets map[string]string
 	// wasm 空 = echoapp。

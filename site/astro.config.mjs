@@ -5,14 +5,14 @@ import sitemap from '@astrojs/sitemap'
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://www.picoaide.com',
+  site: 'https://www.zeokeel.com',
   integrations: [
     sitemap({
       filter: page => !page.includes('/404'),
     }),
     starlight({
-      title: 'PicoAide Wiki',
-      description: 'PicoAide Harness 部署、使用与开发文档',
+      title: 'ZeoKeel Wiki',
+      description: 'ZeoKeel Harness 部署、使用与开发文档',
       logo: {
         light: '../brands/official/logo.svg',
         dark: '../brands/official/logo-dark.svg',

@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-panel-surface'
+const PACKAGE_NAME = '@zeokeel/dsh-panel-surface'
 
 /**
  * 客户端面板的**共享叶子包**：中列整页切换的装载器 + 一套共享视觉语言。
@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@picoaide/dsh-panel-surface'
  *
  * 为什么不做成 Cordis 客户端插件（没有 `cordis.patch.yml` / `dsh.bundle` / `./invariant`）：
  * 它不参与任何 profile 组合，只是被四个插件的 client bundle **内联**进产物的库
- * （与 `@picoaide/dsh-host-locale` / `@picoaide/dsh-host-home` 同形）。
+ * （与 `@zeokeel/dsh-host-locale` / `@zeokeel/dsh-host-home` 同形）。
  * 消费方**不要**把它写进 tsdown 的 `external` —— 内联是预期行为，而且它自己不持有
  * 任何跨插件共享的可变状态（激活态只落在 `document.documentElement` 的属性上，
  * 那本来就是全局的）。

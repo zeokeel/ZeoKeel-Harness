@@ -37,7 +37,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // tokenIssueMaxPerWindow 是**单用户在窗口内可签发的令牌数**。
@@ -46,7 +46,7 @@ import (
 //   - 真实客户端只在首次登录/登出/换密/令牌失效时登录，几台设备也远达不到；
 //   - 对照实测的攻击面 9.0 次/秒，配额把它压到 **1/270**；90 天窗口内单账号最多
 //     约 26 万行（修复前无上界），且这已是"持续打满配额 90 天"的极端值；
-//   - 与本仓既有的 `PICOAI_GATEWAY_MAX_INFLIGHT_PER_USER`（缺省 32）同属"每用户
+//   - 与本仓既有的 `ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER`（缺省 32）同属"每用户
 //     一条硬顶"的形态，语义直白、可解释。
 const (
 	tokenIssueMaxPerWindow = 20

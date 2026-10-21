@@ -14,7 +14,7 @@
  *  2. **不清会话**：403 的语义是"凭据有效、这一步被策略拒绝"，清会话会把用户丢回
  *     登录页再撞同一堵墙；
  *  3. **可操作路径**：命中时把 `mustChangePassword` 落回会话（幂等），而索引渲染
- *     本来就按这个标记进强制改密页；注入页面的看门狗再按 `/api/pico/auth/state`
+ *     本来就按这个标记进强制改密页；注入页面的看门狗再按 `/api/zeokeel/auth/state`
  *     的 `must_change_password` 重载 —— 三处合起来才是"用户真的能改密"；
  *  4. 其它网关错误**行为不变**（仍是 502 + 原文），不借机改口径。
  *
@@ -29,7 +29,7 @@
  * `loginServerSwitchConflict` 只比 `serverURL`（同服务端换账号是**有意放行**的），
  * 而唯一会重载窗口的脚本判据只有 `loggedIn === false` ⇒ 换账号后已加载的应用页
  * 继续以**上一个账号的渲染状态**跑在新账号的令牌下（四个整页面板与账号卡都还显示
- * 旧账号的行）。判据：身份口径唯一（`session-identity.ts`）、`/api/pico/auth/state`
+ * 旧账号的行）。判据：身份口径唯一（`session-identity.ts`）、`/api/zeokeel/auth/state`
  * 下发它、注入脚本按它重载、login/deep-link 在换人时留下信号。
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -108,7 +108,7 @@ function harness(initial: Session | null): Harness {
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? { requestRejection: () => undefined } : undefined))),
     logger: { info: vi.fn(), warn, error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => current !== null,
       getSession: () => current,
@@ -136,7 +136,7 @@ function harness(initial: Session | null): Harness {
     clear,
     warn,
     callRoute,
-    call: (url, method = 'GET', body) => callRoute('prefix', '/api/pico/capabilities', url, method, body),
+    call: (url, method = 'GET', body) => callRoute('prefix', '/api/zeokeel/capabilities', url, method, body),
     renderIndex: (html) => indexes.map(fn => fn(html)).join('\n'),
   }
 }
@@ -156,7 +156,7 @@ describe('R15B-02 强制改密的稳定码穿到客户端（保留码 + 可操�
   it('代理不再压成 502：403 + 稳定码 + 动作 + 提示，且会话**没有**被清', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => PASSWORD_403()))
     const h = harness({ ...ALICE })
-    const res = await h.call('/api/pico/capabilities?source=market')
+    const res = await h.call('/api/zeokeel/capabilities?source=market')
 
     expect(res.code).toBe(403)
     expect(res.body.code).toBe(PASSWORD_CHANGE_REQUIRED_CODE)
@@ -172,22 +172,22 @@ describe('R15B-02 强制改密的稳定码穿到客户端（保留码 + 可操�
   it('可操作路径：命中即把 mustChangePassword 落回会话（幂等，不刷事件）', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => PASSWORD_403()))
     const h = harness({ ...ALICE })
-    await h.call('/api/pico/capabilities?source=market')
+    await h.call('/api/zeokeel/capabilities?source=market')
 
     expect(h.setSession).toHaveBeenCalledTimes(1)
     expect(h.session()?.mustChangePassword).toBe(true)
     expect(h.session()?.token).toBe(ALICE.token)
 
     // 第二次命中不重复 setSession（标记已经是 true）—— 否则每个被拒的请求都会
-    // 广播一次 pico/session-changed，订阅方（渠道同步/错误上报/应用 AI）被反复惊动。
-    await h.call('/api/pico/capabilities?source=market')
+    // 广播一次 zeokeel/session-changed，订阅方（渠道同步/错误上报/应用 AI）被反复惊动。
+    await h.call('/api/zeokeel/capabilities?source=market')
     expect(h.setSession).toHaveBeenCalledTimes(1)
   })
 
   it('可操作路径：标记落回之后，索引渲染就是强制改密页（不是应用页）', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => PASSWORD_403()))
     const h = harness({ ...ALICE })
-    await h.call('/api/pico/capabilities?source=market')
+    await h.call('/api/zeokeel/capabilities?source=market')
 
     const html = h.renderIndex('<!DOCTYPE html><html><head></head><body>app</body></html>')
     // 断言**渲染出来的是哪一页**，而不是"某段字符串存在"：强制改密页自带的标题。
@@ -199,14 +199,14 @@ describe('R15B-02 强制改密的稳定码穿到客户端（保留码 + 可操�
   it('归档代理（不经 fetchJSON 的二进制路径）同样按码处理，其余错误行为不变', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => PASSWORD_403()))
     const h = harness({ ...ALICE })
-    const res = await h.callRoute('prefix', '/api/pico/skills', '/api/pico/skills/codeql/archive')
+    const res = await h.callRoute('prefix', '/api/zeokeel/skills', '/api/zeokeel/skills/codeql/archive')
     expect(res.code).toBe(403)
     expect(res.body.code).toBe(PASSWORD_CHANGE_REQUIRED_CODE)
 
     // 对照：非该码的网关失败逐字保持原样（状态透传 + 'gateway error'）。
     vi.stubGlobal('fetch', vi.fn(async () => new Response('boom', { status: 500 })))
     const h2 = harness({ ...ALICE })
-    const other = await h2.callRoute('prefix', '/api/pico/skills', '/api/pico/skills/codeql/archive')
+    const other = await h2.callRoute('prefix', '/api/zeokeel/skills', '/api/zeokeel/skills/codeql/archive')
     expect(other.code).toBe(500)
     expect(other.body).toEqual({ error: 'gateway error' })
   })
@@ -217,7 +217,7 @@ describe('R15B-02 强制改密的稳定码穿到客户端（保留码 + 可操�
       { status: 500, headers: { 'content-type': 'application/json' } },
     )))
     const h = harness({ ...ALICE })
-    const res = await h.call('/api/pico/capabilities?source=market')
+    const res = await h.call('/api/zeokeel/capabilities?source=market')
     expect(res.code).toBe(502)
     expect(res.body).toEqual({ error: 'gateway error: 上游炸了' })
   })
@@ -247,9 +247,9 @@ describe('R15B-04 同服务端换账号：身份口径唯一 + 应用页按它�
       .not.toBe(sessionIdentity({ serverURL: 'https://a', username: 'b|c' }))
   })
 
-  it('/api/pico/auth/state 下发同一口径的 identity（客户端唯一要比的值）', async () => {
+  it('/api/zeokeel/auth/state 下发同一口径的 identity（客户端唯一要比的值）', async () => {
     const h = harness({ ...ALICE })
-    const state = await h.callRoute('exact', '/api/pico/auth/state', '/api/pico/auth/state')
+    const state = await h.callRoute('exact', '/api/zeokeel/auth/state', '/api/zeokeel/auth/state')
     expect(state.code).toBe(200)
     expect(state.body.identity).toBe(sessionIdentity(ALICE))
     expect(state.body.must_change_password).toBe(false)
@@ -284,7 +284,7 @@ describe('R15B-04 同服务端换账号：身份口径唯一 + 应用页按它�
     }), { status: 200, headers: { 'content-type': 'application/json' } })))
 
     const switched = harness({ ...ALICE })
-    const res = await switched.callRoute('exact', '/api/pico/auth/login', '/api/pico/auth/login', 'POST', {
+    const res = await switched.callRoute('exact', '/api/zeokeel/auth/login', '/api/zeokeel/auth/login', 'POST', {
       server: ALICE.serverURL, username: 'bob', password: 'pw',
     })
     expect(res.code).toBe(200)
@@ -293,7 +293,7 @@ describe('R15B-04 同服务端换账号：身份口径唯一 + 应用页按它�
     expect(switched.warn.mock.calls.some(([message]) => String(message).includes('session identity changed'))).toBe(true)
 
     const same = harness({ ...ALICE })
-    await same.callRoute('exact', '/api/pico/auth/login', '/api/pico/auth/login', 'POST', {
+    await same.callRoute('exact', '/api/zeokeel/auth/login', '/api/zeokeel/auth/login', 'POST', {
       server: ALICE.serverURL, username: 'alice', password: 'pw',
     })
     expect(same.warn.mock.calls.some(([message]) => String(message).includes('session identity changed'))).toBe(false)
@@ -301,7 +301,7 @@ describe('R15B-04 同服务端换账号：身份口径唯一 + 应用页按它�
 
   it('反证：换**服务端**仍然 409（同服务端换账号的放行不是把闸门拆掉）', async () => {
     const h = harness({ ...ALICE })
-    const res = await h.callRoute('exact', '/api/pico/auth/login', '/api/pico/auth/login', 'POST', {
+    const res = await h.callRoute('exact', '/api/zeokeel/auth/login', '/api/zeokeel/auth/login', 'POST', {
       server: 'https://other.example', username: 'alice', password: 'pw',
     })
     expect(res.code).toBe(409)

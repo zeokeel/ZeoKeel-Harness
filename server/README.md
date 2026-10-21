@@ -1,6 +1,6 @@
-# PicoAide Harness 服务端
+# ZeoKeel Harness 服务端
 
-PicoAide Harness 平台的企业管控面：Go 服务端提供认证（local / LDAP / OIDC）、LLM 网关（密钥不出服务端、按用户计量计费）、技能商城、共享内容（技能 / Agent）与全部管理接口；webadmin 管理端（shadcn SPA，内嵌进服务端二进制）负责用户 / 部门 / 网关 / 用量 / 商城 / 能力中心 / 品牌与门户的配置。
+ZeoKeel Harness 平台的企业管控面：Go 服务端提供认证（local / LDAP / OIDC）、LLM 网关（密钥不出服务端、按用户计量计费）、技能商城、共享内容（技能 / Agent）与全部管理接口；webadmin 管理端（shadcn SPA，内嵌进服务端二进制）负责用户 / 部门 / 网关 / 用量 / 商城 / 能力中心 / 品牌与门户的配置。
 
 仓库内服务端与桌面客户端（`packages/host/*`）同源；接入方（企业客户端、任何 HTTP 客户端）经 `/api/client/v2/*` 与 `/v1/*` 网关接入。
 
@@ -16,11 +16,11 @@ PicoAide Harness 平台的企业管控面：Go 服务端提供认证（local / L
 # 1) 从更新服务器下载镜像包并导入（唯一来源，不经任何镜像仓库）
 VER=2.7.0
 curl -fL -o /tmp/pa.zip \
-  "https://release.picoaide.com/official/releases/${VER}/picoaide-server-${VER}-amd64.zip"
+  "https://release.zeokeel.com/official/releases/${VER}/zeokeel-server-${VER}-amd64.zip"
 unzip -p /tmp/pa.zip image.tar | docker load
 # 2) 把部署文件导到部署目录（镜像自带，无需仓库/外网）
-docker run --rm -v /opt/picoaide:/out -e PICOAI_UNPACK_STACK=/out \
-  picoaide-harness-server:${VER}
+docker run --rm -v /opt/zeokeel:/out -e ZEOKEEL_UNPACK_STACK=/out \
+  zeokeel-harness-server:${VER}
 # 3) 之后按说明写 .env → docker compose up -d → 校验 /healthz
 ```
 
@@ -28,22 +28,22 @@ docker run --rm -v /opt/picoaide:/out -e PICOAI_UNPACK_STACK=/out \
 [`docs/deploy/AI-DEPLOY.md`](../docs/deploy/AI-DEPLOY.md) —— 那份文档同时是交付给客户的运维说明。
 
 - 数据库：**固定内置 PostgreSQL 18 容器**（单 compose 文件 caddy+server+postgres），PG-only，SQLite 已下线。
-- 部署目录约定 `/opt/picoaide`（`picoaide-data/` 存 master.key，`pg-data/` 存数据库）。
-- 升级：服务端通过 `PICOAI_UPDATE_ENDPOINT`（默认官方渠道
-  `https://release.picoaide.com/official/latest.json`）检查新版本，webadmin「服务器信息」页会提示；
+- 部署目录约定 `/opt/zeokeel`（`zeokeel-data/` 存 master.key，`pg-data/` 存数据库）。
+- 升级：服务端通过 `ZEOKEEL_UPDATE_ENDPOINT`（默认官方渠道
+  `https://release.zeokeel.com/official/latest.json`）检查新版本，webadmin「服务器信息」页会提示；
   管理员按说明执行升级，**升级前必须备份**。
 
 ### 1. 服务端（Go 1.26+）
 
 ```bash
 make build-server
-PICOAI_ADMIN_PASSWORD=admin123 bin/picoaide-server \
+ZEOKEEL_ADMIN_PASSWORD=admin123 bin/zeokeel-server \
   -addr :8080 -data ./data \
-  -db-driver pg -pg-dsn 'postgres://picoaide:pass@127.0.0.1:5432/picoaide?sslmode=disable' \
+  -db-driver pg -pg-dsn 'postgres://zeokeel:pass@127.0.0.1:5432/zeokeel?sslmode=disable' \
   --bootstrap-admin admin
 ```
 
-- `--bootstrap-admin` + `PICOAI_ADMIN_PASSWORD` 首次创建超管；`PICOAI_MASTER_KEY` 可显式指定加密主密钥（不设则自动生成于 data 目录，请备份）。
+- `--bootstrap-admin` + `ZEOKEEL_ADMIN_PASSWORD` 首次创建超管；`ZEOKEEL_MASTER_KEY` 可显式指定加密主密钥（不设则自动生成于 data 目录，请备份）。
 - 管理页：`http://localhost:8080/admin/`（用户 / 部门 / 网关 / 用量 / 商城 / 能力中心 / 品牌 / 门户）。
 - 无外网环境可 `go run scripts/mock-upstream.go` 起假上游联调网关。
 - **可选模块的变体（构建期开关）**：`make build-server GO_TAGS=<变体>` 同时决定 Go 的 `-tags`

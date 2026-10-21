@@ -30,8 +30,8 @@
   `<渠道 deep link scheme>://app/<app_id>`（scheme 由客户端渠道配置决定，同一份应用在不同
   渠道的客户端里可能不同，**不要写死某个 scheme**）。应用在客户端里的 origin 是
   `<渠道 app 源 scheme>://<app_id>`，每个应用一个 origin（official/beta 客户端的取值才是
-  `picoaide-app`）；两个 scheme 都能由客户端本机只读路由
-  `GET /api/pico/wasm-apps/channel` 得到（`{appOriginScheme, deepLinkScheme, productName}`），
+  `zeokeel-app`）；两个 scheme 都能由客户端本机只读路由
+  `GET /api/zeokeel/wasm-apps/channel` 得到（`{appOriginScheme, deepLinkScheme, productName}`），
   拿不到时**不要编链接**。
 - **一律要求登录**：平台没有匿名面，每个请求都带已登录的使用者身份。
 - **不能主动发起网络请求、不能读文件**（⚠️ **不要对外说成"不能联网"**）：沙箱与 CSP
@@ -74,7 +74,7 @@
 | `db.query(sql, args)` | 单条 `SELECT` | 单语句；值用 `args` 占位（**平台不检查你是否参数化**，见 §10）、受 `SQLITE_LIMIT_*` 约束、最多返回 5000 行 / 168 KiB（**行数或字节超限只截断并置 `truncated:true`，不报错** —— 看到它就该分页） |
 | `db.exec(sql, args)` | 单条写语句 | 仅 `INSERT`/`UPDATE`/`DELETE`；禁 DDL |
 | `db.tx` | 事务 | ABI 层是 `tx_begin`/`tx_commit`/`tx_rollback`；事务内**只允许数据库读写**（`db.query`/`db.exec` + 两个出口），`log`/`assets.read`/`db.define` 与嵌套 `tx_begin` 一律拒；超时 5 秒强制回滚 |
-| ~~`ai.chat(messages, model?)`~~ | **已删除（2026-09-19）** | 它从来不是 WASI 导入，而是 stdout 上 JSON-RPC 的宿主方法名（平台也不反编译产物）⇒ 老产物**能通过发布校验**，直到**运行期第一次调用**才失败（`code = "NOT_FOUND"`、message 逐字 `未知的宿主方法: ai.chat`）。应用里的 AI 改走**客户端 AI loop**：应用前端 JS 调保留路径 `POST /__picoaide/ai/chat`（客户端本地处理，不经服务端），再见 §2.1c |
+| ~~`ai.chat(messages, model?)`~~ | **已删除（2026-09-19）** | 它从来不是 WASI 导入，而是 stdout 上 JSON-RPC 的宿主方法名（平台也不反编译产物）⇒ 老产物**能通过发布校验**，直到**运行期第一次调用**才失败（`code = "NOT_FOUND"`、message 逐字 `未知的宿主方法: ai.chat`）。应用里的 AI 改走**客户端 AI loop**：应用前端 JS 调保留路径 `POST /__zeokeel/ai/chat`（客户端本地处理，不经服务端），再见 §2.1c |
 | `log(level, msg)` | 写日志 | 单条不超过 4 KiB；每请求最多 100 条；超出丢弃并计数 |
 | `assets.read(path)` | 读随包资源 | 资源 = wasm 的**自定义段**（运行期由宿主解析后常驻内存，不落盘）；无文件系统语义、不能穿越；结果用 `encoding` 判别负载（`text` / `base64` / `empty`） |
 
@@ -87,7 +87,7 @@
 `assets.read` 读到的资源**默认不对外公开** —— 它按包内逻辑路径在宿主内存里查（资源来自
 wasm 的自定义段，不落盘），没有文件系统语义，也没人能从外面列目录。
 
-**唯一例外是"非保留资源"**：`picoaide.app.json` 之外的一切包内文件（HTML/JS/CSS/
+**唯一例外是"非保留资源"**：`zeokeel.app.json` 之外的一切包内文件（HTML/JS/CSS/
 图片/字体/数据文件）会被宿主**按路径直出给任何能打开应用的人**（这正是"静态资源
 编译进 wasm"的用法，也是平台能把静态响应缓存起来的依据，§4.2/§4.6）。
 
@@ -96,8 +96,8 @@ wasm 的自定义段，不落盘），没有文件系统语义，也没人能从
 - **不要把机密、账号名单、内部说明、口令、内网地址写进非保留资源** ——
   `GET /data/users.json` 这类请求，任何能打开这个应用的人都能拿到，与 `access` 无关
   （登录只决定**谁**能打开应用；能打开的人在应用内取非保留资源仍然是直出）。
-- **名单放 `picoaide.app.json`**：它是平台保留资源，**不会被直出**；应用自己用
-  `assets.read("picoaide.app.json")` 读它，读不到的访问者只会拿到应用自己的
+- **名单放 `zeokeel.app.json`**：它是平台保留资源，**不会被直出**；应用自己用
+  `assets.read("zeokeel.app.json")` 读它，读不到的访问者只会拿到应用自己的
   （404/403）页面。
 - 包内资源是**不改名、不发新版就改不掉**的：要改内容必须发新版本（§4.2）。
 
@@ -119,7 +119,7 @@ node scripts/pack-assets.mjs --in app.wasm --out dist/app-packed.wasm \
   不含 `..` 与 `:`；整条路径不超过 256 字节、单段不超过 255 字节；自定义段总量不超过 4 MiB）。
 - **`--out` 必填且必须是新路径**：脚本绝不就地覆盖输入（原模块要留着继续编译/重打包；
   顺带一提，`go build -o 已存在文件` 不截断旧文件、会留尾部垃圾，编译产物也别就地覆盖）。
-- **保留资源不能这样加**：`picoaide.app.json` 由平台在发布期写入（内容 = 随包提交的
+- **保留资源不能这样加**：`zeokeel.app.json` 由平台在发布期写入（内容 = 随包提交的
   `config`），模块里的同名段会被平台忽略 —— 脚本会直接拒绝，别把名单塞进这种会被直出的资源。
 
 ### 2.1b 页面怎么产出：静态前端 + JSON API（模板是例外用法）
@@ -153,7 +153,7 @@ JSON-RPC error `code = "NOT_FOUND"`、message 逐字 **`未知的宿主方法: a
 
 ```
 应用页面（前端 JS）                      wasm（后端）
-  fetch('/__picoaide/ai/chat')  ─┐
+  fetch('/__zeokeel/ai/chat')  ─┐
     POST {messages, stream}      │  ①保留路径：宿主协议 handler **本地**处理，绝不转发平台
     ← SSE delta… / done          │  ②首次授权闸门（用户 × 应用）→ 隐藏会话 app:<app_id>
   ───────────────────────────────┘     ③桌面客户端跑一轮 ctx.agentLoop（工具集为空）
@@ -164,7 +164,7 @@ JSON-RPC error `code = "NOT_FOUND"`、message 逐字 **`未知的宿主方法: a
 
 | 项 | 口径 |
 | --- | --- |
-| 端点 | `POST /__picoaide/ai/chat`（**保留路径**，宿主协议 handler 本地处理，不经服务端） |
+| 端点 | `POST /__zeokeel/ai/chat`（**保留路径**，宿主协议 handler 本地处理，不经服务端） |
 | 请求体 | `{messages:[{role, content}], stream:bool}`；未知字段拒；`messages` ≤ 64 条、单条正文 ≤ 16 KiB |
 | 非流式响应 | `{content, usage?}` |
 | 流式响应 | `text/event-stream`：`delta` 事件增量推送，`done` 收尾（失败给 `error` 事件） |
@@ -173,12 +173,12 @@ JSON-RPC error `code = "NOT_FOUND"`、message 逐字 **`未知的宿主方法: a
 | 会话 | **每应用一个隐藏会话** `app:<app_id>`（支持多轮上下文；不出现在侧边栏，诊断里可查） |
 | 系统提示 | **平台统一注入一条固定系统提示**，并且**不注入记忆、不注入用户的历史会话** |
 | 计费 | 使用者本人的既有 LLM 链路（扣他自己的余额）+ 平台统一默认模型 |
-| 归因 | ⚠️ **应用维度用量归因尚未接通**（客户端不出站 `X-Pico-App-Id`）⇒ 不要承诺"应用详情页能看到 AI 用量"；只有管理端 webadmin 的应用中心看板，且无归因数据时显示「统计尚未上线：暂无应用归因」 |
+| 归因 | ⚠️ **应用维度用量归因尚未接通**（客户端不出站 `X-ZeoKeel-App-Id`）⇒ 不要承诺"应用详情页能看到 AI 用量"；只有管理端 webadmin 的应用中心看板，且无归因数据时显示「统计尚未上线：暂无应用归因」 |
 | 用户授权 | **首次调用授权一次**（按 用户×应用 记录；**撤销入口只有应用详情页的 AI 面板里那个按钮**，设置页里没有） |
 | 预设 | **应用不能**声明提示词/模型/温度 —— 平台统一给 |
 | 并发与超时 | AI 桥**没有自己的超时预算**（宿主给普通应用请求设的那条预算对它不适用）；唯一边界是页面关闭/导航离开触发的 abort 与下游 LLM 链路；并发按**隐藏会话串行**（第二个请求排队，不是被拒绝） |
 | 后台调用 | **仅前台**：应用页面关闭即取消，不存在无人值守跑 AI 的通道 |
-| 保留前缀 | 整个 `__picoaide/` 是宿主保留命名空间：其余路径一律 404、**绝不转发平台**；**随包资源不得占用该前缀**（发布期 `ASSET_DENIED` + `details.reason = "reserved_path_prefix"`） |
+| 保留前缀 | 整个 `__zeokeel/` 是宿主保留命名空间：其余路径一律 404、**绝不转发平台**；**随包资源不得占用该前缀**（发布期 `ASSET_DENIED` + `details.reason = "reserved_path_prefix"`） |
 
 三条要点：
 
@@ -226,7 +226,7 @@ JSON-RPC error `code = "NOT_FOUND"`、message 逐字 **`未知的宿主方法: a
    `document.cookie` 本来就是空的）。
 3. **两类帧靠顶层字段判别**：含 `jsonrpc` ⇒ 应用在调宿主；含 `status` ⇒ 最终响应信封。
 
-## 4. 应用配置文件 `picoaide.app.json`
+## 4. 应用配置文件 `zeokeel.app.json`
 
 随发布提交（不计入 wasm 体积上限，本身不超过 64 KiB）：
 
@@ -288,7 +288,7 @@ JSON-RPC error `code = "NOT_FOUND"`、message 逐字 **`未知的宿主方法: a
   两者由 `go generate ./internal/limits` 从 `appcfgspec.go` 生成。**本节写在这里，是为了在生成物尚未包含 `window` 字段时作者仍有可查处**；生成物补齐后两者应一致，若不一致**以生成物为准并报给平台**。
 
 **这份文件是平台保留资源**：宿主**不会**把它当静态资源直出（§4.2）。
-它只能由应用自己用 `assets.read("picoaide.app.json")` 读 —— 也就是说
+它只能由应用自己用 `assets.read("zeokeel.app.json")` 读 —— 也就是说
 **准入名单放在这里不会被访问者下载到**（见 §2.1「包内资源的可见性」）。
 
 ## 5. 本地编译与自测
@@ -389,7 +389,7 @@ node <技能目录>/examples/go/preview.mjs app.wasm --user someone-else   # 看
 本地预览**不算预算**，只用同一份分类决定"哪些段能当资源直出"）：
 
 - **打包（`pack-assets.mjs`）把它们当"工具链段"忽略**，不当作应用资源；应用资源只认
-  `picoaide.app.json` 声明过的逻辑路径。**本地预览（`preview.mjs`）同判** —— 否则会
+  `zeokeel.app.json` 声明过的逻辑路径。**本地预览（`preview.mjs`）同判** —— 否则会
   出现"本地能打开、线上 404"（预览把 DWARF 直出了，而平台上它根本不在资源集里）。
 - **段总量预算（4 MiB）统计的是"会计入资源集的段"的负载字节和**，`.debug_*` **不计入**
   —— 它们在发布期就被丢弃，不可能被静态直出、`assets.read` 也读不到。所以
@@ -453,16 +453,16 @@ node <技能目录>/examples/go/preview.mjs app.wasm --user someone-else   # 看
 3. **同一应用内所有用户共享数据**；要区分用户请自己加业务字段。
 4. **stdout 只用于协议帧**（`RS` + 长度 + JSON）；日志走 `log`。
 5. **wasm 里没有 AI**：宿主方法 `ai.chat` 已删除（它不是 WASI 导入 ⇒ 老产物在**运行期**才失败）。
-   要 AI 就在**应用前端**调保留路径 `POST /__picoaide/ai/chat`（客户端本地处理、流式 SSE，
+   要 AI 就在**应用前端**调保留路径 `POST /__zeokeel/ai/chat`（客户端本地处理、流式 SSE，
    见 §2.1c），再把结果回传 wasm 落库。
 6. **不能主动发起网络请求、不能读文件、不能开线程**（**不要对外说成"不能联网"**：CSP 不管顶层导航与弹窗，见 §1.1 与总纲 §6）；外部资源必须内联（HTML/JS 也编进 wasm）。
-7. **准入由你自己判**：配置写在 `picoaide.app.json`（`access` = `login` / `whitelist`
+7. **准入由你自己判**：配置写在 `zeokeel.app.json`（`access` = `login` / `whitelist`
    + `whitelist`），入口第一件事就是读它并比对名单；名单用 `username`/`user.id`；
    无权限页显示"你的账号：xxx"。
 8. **平台不提供员工名录**：名单只能手填已知账号；改配置 = 发新版。
 9. **不依赖 `$HOME`**：编译器状态目录必须落在会话工作区内。
 10. **发布前先本地自测**：Node 内置 `node:wasi` 可零依赖跑通产物，再走 `validate`。
-11. **应用名就是标识**（`app_id`，也是应用 origin 的 host 段 `<渠道 app 源 scheme>://<app_id>/`，渠道参数化：official/beta 取值 `picoaide-app`）：
+11. **应用名就是标识**（`app_id`，也是应用 origin 的 host 段 `<渠道 app 源 scheme>://<app_id>/`，渠道参数化：official/beta 取值 `zeokeel-app`）：
     小写字母/数字/连字符、
     不超过 63 个字符、不能纯数字、不能 `xn--` 开头、不能是保留字；**一经发布不能改名**。
 
@@ -525,16 +525,16 @@ node <技能目录>/examples/go/preview.mjs app.wasm --user someone-else   # 看
 | ABI 参考 | 同目录 `references/abi.md` |
 | 上限表（生成物，勿手改） | 同目录 `references/limits.md`；源码真源 `server/internal/limits/limits.go` |
 | 配置字段参考（生成物，勿手改） | 同目录 `references/app-config.md`；源码真源 `server/internal/wasmapp/appcfg/appcfgspec.go` |
-| **发布字段规格（机器可读单一真源）** | `server/internal/wasmapp/appcfg/appcfg.json`（`schema=picoaide-app-config/1`）。被四处对拍：服务端解析行为 / 宿主工具参数 / 客户端表单与提交体 / 上面的字段参考 |
+| **发布字段规格（机器可读单一真源）** | `server/internal/wasmapp/appcfg/appcfg.json`（`schema=zeokeel-app-config/1`）。被四处对拍：服务端解析行为 / 宿主工具参数 / 客户端表单与提交体 / 上面的字段参考 |
 | 发布与运维 | 同目录 `references/publishing.md` |
 | 静态资源打包器（官方，零依赖） | 唯一源 `server/demoapps/scripts/pack-assets.mjs`（构建期注入技能目录的 `scripts/`）+ 技能目录的 `scripts/README.md`（随技能分发） |
 | 诊断 | 同目录 `references/diagnostics.md` |
 | 可编译示例（共享便签） | 同目录 `examples/go/`（`GOOS=wasip1 GOARCH=wasm go build` 通过，门禁真题编译） |
-| 上限生成器 | `server/cmd/picoaide-limits-gen`（`-check` 是 CI 门禁入口） |
+| 上限生成器 | `server/cmd/zeokeel-limits-gen`（`-check` 是 CI 门禁入口） |
 | 上限门禁测试 | `server/internal/limits/limits_gen_test.go` |
 
 改任何上限数值或配置字段：改 `limits.go` / `appcfgspec.go` → 跑
-`go run ./cmd/picoaide-limits-gen` 重新生成**全部**产物 —— 服务端侧
+`go run ./cmd/zeokeel-limits-gen` 重新生成**全部**产物 —— 服务端侧
 `internal/limits/limits.json`、`internal/limits/limits.md`、
 `internal/wasmapp/appcfg/appcfg.json`，以及技能目录下的 `references/limits.md` 与
 `references/app-config.md` → 提交生成物（门禁 `-check` 逐字节比对，忘生成即红灯；

@@ -974,7 +974,7 @@ export function installSkillsManager(ctx, options = {}) {
 
     skillCtx.inject(['webServer', 'workspaceRegistry'], (webCtx) => {
       const handler = async (req, res) => {
-        // F6(审计 2026-09-11)+复核增强:技能管理 API 与 /sidebar、/api/pico
+        // F6(审计 2026-09-11)+复核增强:技能管理 API 与 /sidebar、/api/zeokeel
         // 同类,此前没有任何本地信任栅栏 —— DNS rebinding 页面或同机进程可直接
         // 读技能文件、写文本、添加管理目录。栅栏口径与 cron/browser 插件一致:
         //   1) Host 自称 loopback 时,socket 必须也是 loopback(伪造 Host 拒绝);

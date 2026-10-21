@@ -5,7 +5,7 @@
  * 目录占位（EISDIR）一律 rethrow → `apply()` 抛 → cordis 报
  * `plugin tree failed to load: failed to apply loader entry dsh-memory-evolve`
  * → 宿主 `shutdown.request(1)`：**整个桌面应用起不来**，用户看不到任何界面，
- * 只能手删 `~/.picoaide-harness/memories/plugin-state.json` 自救。
+ * 只能手删 `~/.zeokeel-harness/memories/plugin-state.json` 自救。
  *
  * 本文件钉住三件事：
  *   1. 各种损坏形态下 `apply()` **不抛**，工具/快照照常注册；

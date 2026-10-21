@@ -3,7 +3,7 @@ title: Plugin Development
 description: 'Write a DSH plugin from scratch: Cordis forms, host vs client face, the platform module table, local debugging, then shipping into the client or the server.'
 ---
 
-Plugins are extension packages that add capabilities to DSH — models, tools, interfaces, and workflows can all become plugins. PicoAide Harness **does not fork or modify the upstream source**: the desktop shell itself is a legitimate DSH plugin on the same official Cordis composition path as third-party plugins. This page is for second-party developers and maintainers: it covers the whole path from "write a plugin" through local debugging to shipping it inside the desktop client or into the enterprise server, and where the boundaries are at each step.
+Plugins are extension packages that add capabilities to DSH — models, tools, interfaces, and workflows can all become plugins. ZeoKeel Harness **does not fork or modify the upstream source**: the desktop shell itself is a legitimate DSH plugin on the same official Cordis composition path as third-party plugins. This page is for second-party developers and maintainers: it covers the whole path from "write a plugin" through local debugging to shipping it inside the desktop client or into the enterprise server, and where the boundaries are at each step.
 
 ## Design goal: why plugins instead of a fork
 
@@ -105,9 +105,9 @@ A plugin can have one half or both; the two halves are **not in the same process
 | Interface panels, slots, theme, locale dictionaries, client store, command palette | **Client face** | The renderer is a sandboxed web page with no Node access |
 | Sessions, login state | One view on each face | The host face has `sessionController` and its own session services; the client face has the client-side `sessions` — two different services |
 
-Between the two halves there is **exactly one channel: loopback HTTP and WebSocket**. The client face cannot read host services directly, and the product adds no preload or Electron IPC bridge for it. A plugin with a UI follows the ordinary DSH pattern — the host half registers same-origin HTTP routes (conventionally under `/api/pico/…`) and the client half consumes them with fetch; a write surface must attach its own proof of possession (same-origin checks) instead of assuming "a local request is trustworthy".
+Between the two halves there is **exactly one channel: loopback HTTP and WebSocket**. The client face cannot read host services directly, and the product adds no preload or Electron IPC bridge for it. A plugin with a UI follows the ordinary DSH pattern — the host half registers same-origin HTTP routes (conventionally under `/api/zeokeel/…`) and the client half consumes them with fetch; a write surface must attach its own proof of possession (same-origin checks) instead of assuming "a local request is trustworthy".
 
-One concrete trap: `ctx.locale` is a **client-face-only** service and the host face cannot reach it. When the host side needs user-visible copy (injected HTML pages, window titles, tray labels, error payloads), use `@picoaide/dsh-host-locale` (`hostLocaleFrom(...)` plus `hostCopy(locale, zh, en)`) and **resolve it per request** — never freeze the language in a module-level constant.
+One concrete trap: `ctx.locale` is a **client-face-only** service and the host face cannot reach it. When the host side needs user-visible copy (injected HTML pages, window titles, tray labels, error payloads), use `@zeokeel/dsh-host-locale` (`hostLocaleFrom(...)` plus `hostCopy(locale, zh, en)`) and **resolve it per request** — never freeze the language in a module-level constant.
 
 ### Why cross-package client imports are forbidden
 
@@ -118,7 +118,7 @@ A value import between client bundles breaks two invariants:
 
 So there is a **purity gate** at build time: any value import of `@deepseek-ai/*` inside a client bundle is allowed only when it is in the platform module table, explicitly requested through `dsh.client.external`, or part of an inlinable pure contract layer. Everything else fails the build (type imports are erased and never reach the gate). The upstream implementation lives in `deepseek-harness/packages/client/tsdown.client.ts`.
 
-**Cross-plugin collaboration has exactly two routes**: a Cordis service (preferred — for example panels register entries with the `ctx.picoFootMenu` service provided by `@picoaide/dsh-foot-menu`), or a shared slot contract.
+**Cross-plugin collaboration has exactly two routes**: a Cordis service (preferred — for example panels register entries with the `ctx.zeokeelFootMenu` service provided by `@zeokeel/dsh-foot-menu`), or a shared slot contract.
 
 ### Slots: the correct way to inject and register
 
@@ -214,7 +214,7 @@ What this chain means for plugin authors:
 
 ### Tray and desktop contract
 
-The desktop opens exactly two surfaces to third parties; see [`packages/host/desktop/docs/plugin-services.md`](https://github.com/picoaide/picoaide-harness/tree/master/packages/host/desktop/docs):
+The desktop opens exactly two surfaces to third parties; see [`packages/host/desktop/docs/plugin-services.md`](https://github.com/zeokeel/ZeoKeel-Harness/tree/master/packages/host/desktop/docs):
 
 ```ts
 export const inject = ['desktopRuntime']
@@ -248,7 +248,7 @@ The server is a Go program and **is not a Cordis host**: the runtime image has n
 
 | Category | Examples | How it takes effect |
 |---|---|---|
-| **Build-time injection** (changing content = rebuilding the image) | Channel content: product name, tagline, welcome copy, logo, theme colour, data root, deep-link scheme, app origin scheme, built-in server URL | Injected into the image's `/opt/picoaide/channel/` at build time; the client writes it into the relevant rows' config **during assembly** via `channelProfilePatches()` |
+| **Build-time injection** (changing content = rebuilding the image) | Channel content: product name, tagline, welcome copy, logo, theme colour, data root, deep-link scheme, app origin scheme, built-in server URL | Injected into the image's `/opt/zeokeel/channel/` at build time; the client writes it into the relevant rows' config **during assembly** via `channelProfilePatches()` |
 | **Runtime configuration** (admin console / database / environment variables) | Model catalogue and pricing, rate limits and peak windows, balance-gate policy, connector catalogue and delivery switches, capability approval and authorization, audit retention days, app-centre limits | Saved in the admin console and effective immediately; a few items (such as an app's per-instance memory) need a server restart |
 
 Why brand copy is not runtime-editable: it is a customer-visible deliverable that must be auditable and reproducible — the same configuration builds an image that renders identically on every machine. The client's bundled brand is a fallback (used when the server is unreachable); after login the channel content delivered by the server wins.
@@ -294,4 +294,4 @@ When debugging a plugin, first work out which class the failure belongs to — o
 - [System architecture](/en/architecture/) — the three-layer topology and the boot sequence
 - [Desktop client](/en/desktop/) — plugin management and bundled runtimes from the user's side
 - [API reference](/en/api-reference/) — the server-side interface contract
-- [Desktop plugin service contract (repo)](https://github.com/picoaide/picoaide-harness/tree/master/packages/host/desktop/docs/plugin-services.md) — types, lifecycle, and failure semantics
+- [Desktop plugin service contract (repo)](https://github.com/zeokeel/ZeoKeel-Harness/tree/master/packages/host/desktop/docs/plugin-services.md) — types, lifecycle, and failure semantics

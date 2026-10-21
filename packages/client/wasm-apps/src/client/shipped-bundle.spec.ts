@@ -13,8 +13,8 @@
  *   - `REMOVED_APP_CONFIG_FIELDS` 里**故意**留着 `'visible'` / `'login_required'`
  *     两个字符串（字段集合断言要用）⇒ 不能断言"产物里没有这两个词"；
  *   - `resolveAccess` 的**过渡兼容**分支会读 `row.login_required` ⇒ 同理。
- * 因此这里查的是**旧 UI 专有的类名与文案**：旧复选框的 `pico-app-center-visible` /
- * `pico-app-center-login-required` 类名、「在应用中心可见」/「需要登录」/「Login required」
+ * 因此这里查的是**旧 UI 专有的类名与文案**：旧复选框的 `zeokeel-app-center-visible` /
+ * `zeokeel-app-center-login-required` 类名、「在应用中心可见」/「需要登录」/「Login required」
  * 这些只有被删掉的那两个勾选框才会产生。它们缺席 = 旧控件真的没了。
  *
  * **陈旧产物闸**：产物比 `src/**` 旧就直接红（提示先 `yarn build`），
@@ -55,7 +55,7 @@ function readBundle(): string {
   try {
     return readFileSync(BUNDLE_PATH, 'utf8')
   } catch (cause) {
-    throw new Error(`读不到 ${BUNDLE_PATH}（${cause instanceof Error ? cause.message : String(cause)}）。先跑 \`corepack yarn workspace @picoaide/dsh-wasm-apps build\`。`)
+    throw new Error(`读不到 ${BUNDLE_PATH}（${cause instanceof Error ? cause.message : String(cause)}）。先跑 \`corepack yarn workspace @zeokeel/dsh-wasm-apps build\`。`)
   }
 }
 
@@ -72,8 +72,8 @@ describe('随包产物：发给客户端的 bundle 里是 access 三模式', () 
   })
 
   it('写侧二选一的访问级别控件在产物里（单选组类名前缀 + 两个取值），且没有"公开"选项', () => {
-    // 类名是模板拼出来的（`pico-app-center-access-${mode}`），因此查前缀。
-    expect(bundle).toContain('pico-app-center-access-')
+    // 类名是模板拼出来的（`zeokeel-app-center-access-${mode}`），因此查前缀。
+    expect(bundle).toContain('zeokeel-app-center-access-')
     // 两个选项的 zh 文案（2026-09-19：写侧只有 login | whitelist，冻结契约 §4.4）。
     expect(bundle).toContain('登录后使用（默认全员）')
     expect(bundle).toContain('仅白名单用户')
@@ -87,13 +87,13 @@ describe('随包产物：发给客户端的 bundle 里是 access 三模式', () 
 
   it('打开路径与分享形态在产物里（本机路由 + 渠道深链；没有入口链接/系统浏览器兜底）', () => {
     // 打开走本机路由（C3 的冻结接口），不是内置浏览器标签 + window.open 兜底。
-    expect(bundle).toContain('/api/pico/wasm-apps/open')
-    expect(bundle).not.toContain('/api/pico/browser/open')
+    expect(bundle).toContain('/api/zeokeel/wasm-apps/open')
+    expect(bundle).not.toContain('/api/zeokeel/browser/open')
     // `entry_url` 只允许出现在"它已经不存在"的注释里 —— 任何**读它/写它**的代码都是残留。
     expect(bundle).not.toMatch(/\.entry_url\b/u)
     expect(bundle).not.toContain("'entry_url'")
     expect(bundle).not.toContain('"entry_url"')
-    expect(bundle).not.toContain('pico-app-center-entry')
+    expect(bundle).not.toContain('zeokeel-app-center-entry')
     // 分享 = 渠道深链 `<scheme>://app/<app_id>`（scheme 由宿主渠道路由注入；
     // 未注入 ⇒ 不产出链接，**没有**官方值回落）。
     expect(bundle).toContain('appCenter.shareLink')
@@ -101,8 +101,8 @@ describe('随包产物：发给客户端的 bundle 里是 access 三模式', () 
 
   it('旧控件的专有类名与文案在产物里彻底消失（visible 勾选 / login_required 勾选）', () => {
     // 旧复选框的类名（旧实现里是字面量，新实现不可能产生）。
-    expect(bundle).not.toContain('pico-app-center-visible')
-    expect(bundle).not.toContain('pico-app-center-login-required')
+    expect(bundle).not.toContain('zeokeel-app-center-visible')
+    expect(bundle).not.toContain('zeokeel-app-center-login-required')
     // 旧控件的中英文案。
     expect(bundle).not.toContain('在应用中心可见')
     expect(bundle).not.toContain('Visible in the App Center')
@@ -141,11 +141,11 @@ describe('随包产物：发给客户端的 bundle 里是 access 三模式', () 
     // 异渠道深链的一次性 toast（§5.3 冻结文案）。
     expect(bundle).toContain('这个链接属于另一家企业的客户端')
     // 渠道参数来自宿主只读路由（scheme 参数化：产物里**不得**有写死的 app scheme）。
-    expect(bundle).toContain('/api/pico/wasm-apps/channel')
-    expect(bundle).not.toContain("'picoaide-app:'")
+    expect(bundle).toContain('/api/zeokeel/wasm-apps/channel')
+    expect(bundle).not.toContain("'zeokeel-app:'")
     // 本机持有性证明（R2-X-1，P0）：引导路径与请求头都必须在产物里 ——
-    // 少了它们，"点打开"必 401（本机路由要求 X-Pico-Host-Proof）。
-    expect(bundle).toContain('/api/pico/wasm-apps/host-proof')
-    expect(bundle).toContain('X-Pico-Host-Proof')
+    // 少了它们，"点打开"必 401（本机路由要求 X-ZeoKeel-Host-Proof）。
+    expect(bundle).toContain('/api/zeokeel/wasm-apps/host-proof')
+    expect(bundle).toContain('X-ZeoKeel-Host-Proof')
   })
 })

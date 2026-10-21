@@ -53,13 +53,13 @@ const SYSTEM_ROWS: readonly GateRow[] = [
   { target: '/ETC/definitely-missing/x', why: 'realpath 失败时回落拼写路径（宁严不宽）' },
   { target: '/private/etc', why: 'macOS 上 /etc 的真实路径（别名形态）' },
   { target: '/private/etc/passwd', why: 'macOS 别名形态的子路径' },
-  { target: '/private/var/lib/picoaide', why: 'macOS 上 /var 的真实路径' },
+  { target: '/private/var/lib/zeokeel', why: 'macOS 上 /var 的真实路径' },
   { target: 'C:\\Windows', why: 'Windows 系统根（Linux 上 resolve 会漂成 cwd 相对目录）' },
   { target: 'C:\\Windows\\System32', why: 'Windows 系统根子路径' },
   { target: 'C:/Windows', why: 'Windows 系统根的正斜杠形态' },
   { target: 'c:\\windows', why: '小写盘符' },
   { target: 'C:\\Windows\\', why: '尾随分隔符' },
-  { target: 'C:\\Program Files\\PicoAide', why: '内置默认 Program Files' },
+  { target: 'C:\\Program Files\\ZeoKeel', why: '内置默认 Program Files' },
   { target: 'C:\\ProgramData\\x', why: '内置默认 ProgramData' },
   { target: 'C:\\', why: '盘符根' },
   { target: 'C:/', why: '盘符根（正斜杠形态）' },
@@ -72,14 +72,14 @@ const SYSTEM_ROWS: readonly GateRow[] = [
   { target: '\\\\.\\C:', why: '设备命名空间' },
   { target: 'D:\\Win\\System32', why: 'env 声明的 SystemRoot（跨平台 seam）', env: { SystemRoot: 'D:\\Win' } },
   { target: 'D:\\Win\\System32\\drivers', why: 'env 声明的 windir 子路径', env: { windir: 'D:/Win' } },
-  { target: 'E:\\Apps\\picoaide', why: 'env 声明的 ProgramFiles', env: { ProgramFiles: 'E:\\Apps' } },
+  { target: 'E:\\Apps\\zeokeel', why: 'env 声明的 ProgramFiles', env: { ProgramFiles: 'E:\\Apps' } },
   { target: 'F:\\Apps32\\x', why: 'env 声明的 ProgramFiles(x86)', env: { 'ProgramFiles(x86)': 'F:\\Apps32' } },
   { target: '/srv/data/app', why: 'env 声明的根（POSIX 形态也进同一张表）', env: { ProgramData: '/srv/data' } },
 ]
 
 /** 必须被判成"普通路径"的取值。 */
 const SAFE_ROWS: readonly GateRow[] = [
-  { target: '/home/user/.picoaide-harness', why: '产品默认数据根' },
+  { target: '/home/user/.zeokeel-harness', why: '产品默认数据根' },
   { target: '/tmp', why: '/tmp 本身（e2e/沙箱用）' },
   { target: '/tmp/x', why: '/tmp 子目录' },
   { target: '/tmp/dsh-desktop-profile-abc', why: 'e2e 用的 /tmp 数据根' },
@@ -88,7 +88,7 @@ const SAFE_ROWS: readonly GateRow[] = [
   { target: '/tmp/a/../b', why: '.. 段仍落在 /tmp 内' },
   { target: '/home/user/projects/app', why: '普通项目目录' },
   { target: 'relative/project', why: '相对路径' },
-  { target: 'C:\\Users\\me\\.picoaide-harness', why: 'Windows 用户目录' },
+  { target: 'C:\\Users\\me\\.zeokeel-harness', why: 'Windows 用户目录' },
   { target: 'D:\\projects\\app', why: '非系统盘上的项目目录（env 只声明 C 盘系统根）', env: { SystemRoot: 'C:\\Windows' } },
 ]
 

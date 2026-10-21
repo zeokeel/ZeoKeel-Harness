@@ -35,7 +35,7 @@ func setRLimit(kind rlimitKind, value int64) {
 	if err := syscall.Setrlimit(res, &lim); err != nil {
 		lim.Max = ^uint64(0)
 		if err2 := syscall.Setrlimit(res, &lim); err2 != nil {
-			fmt.Fprintf(os.Stderr, "picoaide-app-compile: 设置 rlimit %d=%d 失败（继续，靠父侧超时兜底）: %v\n",
+			fmt.Fprintf(os.Stderr, "zeokeel-app-compile: 设置 rlimit %d=%d 失败（继续，靠父侧超时兜底）: %v\n",
 				res, value, err)
 		}
 	}

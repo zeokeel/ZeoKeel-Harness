@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile/testdata/wasmtest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 )
 
 // 本文件用手工拼装的 wasm 字节流覆盖静态校验器的全部分支。
@@ -325,7 +325,7 @@ func TestValidateRejectsBadCustomSectionName(t *testing.T) {
 func TestCustomSectionsExtractAndBytes(t *testing.T) {
 	m := validModule()
 	m = m.custom("producers", []byte("go"))
-	m = m.custom("picoaide.app.json", []byte(`{"visible":true}`))
+	m = m.custom("zeokeel.app.json", []byte(`{"visible":true}`))
 	m = m.custom("producers", []byte("dup")) // 重名：CustomSections 取第一个，counts 记 2
 	data := m.build()
 
@@ -333,9 +333,9 @@ func TestCustomSectionsExtractAndBytes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
-	got := string(info.CustomSections["picoaide.app.json"])
+	got := string(info.CustomSections["zeokeel.app.json"])
 	if got != `{"visible":true}` {
-		t.Fatalf("picoaide.app.json 内容 = %q", got)
+		t.Fatalf("zeokeel.app.json 内容 = %q", got)
 	}
 	if string(info.CustomSections["producers"]) != "go" {
 		t.Fatalf("重名自定义段应取第一个: %q", info.CustomSections["producers"])
@@ -345,7 +345,7 @@ func TestCustomSectionsExtractAndBytes(t *testing.T) {
 	}
 	// CustomBytes = 各自定义段负载之和（含段名字段）。
 	want := len(wasmName("producers")) + len("go") +
-		len(wasmName("picoaide.app.json")) + len(`{"visible":true}`) +
+		len(wasmName("zeokeel.app.json")) + len(`{"visible":true}`) +
 		len(wasmName("producers")) + len("dup")
 	if info.CustomBytes != want {
 		t.Fatalf("CustomBytes = %d，期望 %d", info.CustomBytes, want)
@@ -356,12 +356,12 @@ func TestCustomSectionsExtractAndBytes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractCustomSections: %v", err)
 	}
-	extracted["picoaide.app.json"][0] = 'X'
+	extracted["zeokeel.app.json"][0] = 'X'
 	again, err := ExtractCustomSections(data)
 	if err != nil {
 		t.Fatalf("ExtractCustomSections(2): %v", err)
 	}
-	if again["picoaide.app.json"][0] != '{' {
+	if again["zeokeel.app.json"][0] != '{' {
 		t.Fatalf("ExtractCustomSections 返回的切片与模块字节共享底层数组（改动污染了原数据）")
 	}
 }

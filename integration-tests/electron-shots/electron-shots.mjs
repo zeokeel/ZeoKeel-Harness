@@ -11,7 +11,7 @@
  *   `--help` 打印完整参数表。
  *
  * P2-60: 打包产物路径与截图目录改为按脚本位置推导(原来硬编码
- *   /data/picoaide-harness,换机器/换 clone 目录即失效)。
+ *   /data/zeokeel-harness,换机器/换 clone 目录即失效)。
  * P3: 补断言(原来只 console.log 不判定)——任一断言失败以非零退出。
  *
  * 2026-09-23(第四轮审计 R4-A-17 / R4-A-18)之后的两条结构性改动:
@@ -21,7 +21,7 @@
  *      现在门禁跑 `assertions.mjs --self-test`(每条判据都配正例 + 负例),并断言本文件
  *      **逐条引用**了表里的每个 id。
  *   ② **品牌断言改为渠道驱动**:Step2 品牌区断言的是服务端 `GET /api/client/v2/channel`
- *      的 `login.display_name`(缺失回落随包品牌 `PicoAide`),不再是已退役的旧夹具
+ *      的 `login.display_name`(缺失回落随包品牌 `ZeoKeel`),不再是已退役的旧夹具
  *      `Acme AI` —— 后者在当前实现里**永远不可能 PASS**(登录页品牌区只渲染渠道内容,
  *      见 `packages/host/enterprise/src/auth-gate.ts:433`/`:667`)。
  *
@@ -625,7 +625,7 @@ async function waitForLoginOutcome(send, budgetMs) {
  * `brand` 是同一份配置里的随包品牌(`copy.login_display_name` → `identity.short_name`),
  * 与服务端**没有**下发渠道内容时登录页渲染的那个名字同源(`auth-gate.ts:433` /
  * `desktop-channel.ts:398`)。旧实现的品牌断言只算服务端那一侧,在渠道包上会把期望值算成
- * `PicoAide` —— 而那条腿当时根本没被求值,所以这个洞一直没露出来。
+ * `ZeoKeel` —— 而那条腿当时根本没被求值,所以这个洞一直没露出来。
  * @returns `{ serverURL: string | null, brand: string | null } | undefined`。
  */
 function readPackageChannelProfile() {
@@ -662,7 +662,7 @@ function readPackageChannelProfile() {
 
 /**
  * 读服务端渠道内容(`GET /api/client/v2/channel`)—— Step2 的品牌断言以它为准。
- * 取不到时返回 undefined ⇒ 期望值回落随包品牌(`PicoAide`),而不是判据失效。
+ * 取不到时返回 undefined ⇒ 期望值回落随包品牌(`ZeoKeel`),而不是判据失效。
  */
 async function fetchChannel() {
   try {
@@ -837,7 +837,7 @@ try {
       // 打包版默认拒绝调试类开关（`--remote-debugging-port` 属受管开关，见
       // packages/host/desktop/src/debug-switches.ts）：本脚本**就是**用 CDP 驱动打包产物的
       // 自动化入口，必须显式走逃生门，否则 app 会在暴露 CDP 之前 exit 1。
-      PICOAI_ALLOW_DEBUG_SWITCHES: '1',
+      ZEOKEEL_ALLOW_DEBUG_SWITCHES: '1',
       // DISPLAY 的唯一真源就是上面解析出来的那个(旧实现这里写死 ':99')。
       DISPLAY,
       HOME: RUN_HOME,

@@ -1,11 +1,11 @@
 import { defineConfig } from 'tsdown'
 
-const PACKAGE_NAME = '@picoaide/dsh-host-locale'
+const PACKAGE_NAME = '@zeokeel/dsh-host-locale'
 
 /**
  * 零依赖叶子库。
  *
- * **这个包必须保持没有 `dependencies`**（连 `@picoaide/*` 也不能有）：它存在的
+ * **这个包必须保持没有 `dependencies`**（连 `@zeokeel/*` 也不能有）：它存在的
  * 唯一目的就是断掉真实构建环
  * `desktop → wasm-apps-host → browser → dsh-plugin-desktop/host-locale → desktop`
  * —— 只要它自己再引入任何构建期依赖，环就会以新的形状绕回来。同理，它刻意
@@ -18,7 +18,7 @@ const PACKAGE_NAME = '@picoaide/dsh-host-locale'
  * 只作为**子路径**导出，不并进 `index` —— 否则 `dsh-plugin-desktop/host-locale`
  * 的 `export *` 会把 `isLoopback*` 一并搬到桌面包的对外面上。
  *
- * 2026-09-24：新增第三个入口 `session-events`（`pico/session-changed` 的订阅契约：
+ * 2026-09-24：新增第三个入口 `session-events`（`zeokeel/session-changed` 的订阅契约：
  * 先订阅 + 用 `isRestored()` 补发"恢复型启动"那一次）。同样零依赖（上下文按结构最小面
  * 声明，不 import cordis），同样只作为子路径导出。它存在的理由同样是构建环：desktop
  * 不可能 import enterprise 的 `subscribeSession`，而这段顺序原本在仓里有**三份拷贝**。

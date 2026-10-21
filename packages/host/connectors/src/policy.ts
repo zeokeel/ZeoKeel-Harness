@@ -242,7 +242,7 @@ export const DENIED_ENV_KEYS: ReadonlySet<string> = new Set([
  * server's copy positionally (`TestConnectorDeniedEnvKeysMatchClientPolicy` sorts
  * only the server side), so a non-alphabetical order here reads as drift.
  */
-const DENIED_ENV_PREFIXES: readonly string[] = ['DSH_', 'ELECTRON_', 'GIT_CONFIG_KEY_', 'GIT_CONFIG_VALUE_', 'PICOAIDE_']
+const DENIED_ENV_PREFIXES: readonly string[] = ['DSH_', 'ELECTRON_', 'GIT_CONFIG_KEY_', 'GIT_CONFIG_VALUE_', 'ZEOKEEL_']
 
 /**
  * Env keys that are NOT denied but are handed to the LOCAL confirmation with

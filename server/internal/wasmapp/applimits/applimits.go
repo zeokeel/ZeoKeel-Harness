@@ -7,7 +7,7 @@
 // 2026-09-18 先做成了**部署档位**（memprofile，一个环境变量），但"控制台里看不到、
 // 改不了"这件事没解决。现在把它们变成**平台设置**（PG settings，键 wasm.limits）：
 //
-//	优先级：控制台保存的 JSON > 部署档位（PICOAI_WASM_MEMORY_PROFILE）> 编译期默认
+//	优先级：控制台保存的 JSON > 部署档位（ZEOKEEL_WASM_MEMORY_PROFILE）> 编译期默认
 //
 // 三条纪律（与既有 §5.5「数值单一真源」不冲突 —— limits 仍是**默认值**的唯一来源）：
 //  1. 模型只有这一份：校验、序列化、四笔账预览、重启判定都从这里出；
@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // Limits 是全部可配置限制项（JSON 形态即落库形态，字段名是**跨语言契约**：

@@ -37,7 +37,7 @@
  *
  * 用法：
  *   node scripts/verify-wasm-channels.mjs
- *   node scripts/verify-wasm-channels.mjs --channels-repo /path/to/picoaide-channels
+ *   node scripts/verify-wasm-channels.mjs --channels-repo /path/to/zeokeel-channels
  * 退出码：0 = 全部判据通过（跳过不是失败，但要如实回报）；1 = 有失败项（逐条打印，含文件与行号）。
  */
 
@@ -142,7 +142,7 @@ function fakeChannelRepo(specs) {
         app_id: `com.example.${id.replaceAll('-', '')}`,
         home_dir: `.${id}-harness`,
       }),
-      ...(id === 'beta' ? { home_dir: '.picoaide-harness' } : {}),
+      ...(id === 'beta' ? { home_dir: '.zeokeel-harness' } : {}),
       deep_link_scheme: deepLinkScheme,
       ...(spec.appOriginScheme === undefined || spec.appOriginScheme === null
         ? {}
@@ -205,8 +205,8 @@ function sameSet(actual, expected) {
 /** 夹具基线：三渠道，official/beta 共用命名空间，品牌渠道各自唯一。 */
 function baselineSpecs() {
   return [
-    { id: 'official', appOriginScheme: 'picoaide-app' },
-    { id: 'beta', appOriginScheme: 'picoaide-app' },
+    { id: 'official', appOriginScheme: 'zeokeel-app' },
+    { id: 'beta', appOriginScheme: 'zeokeel-app' },
     { id: 'example-brand', appOriginScheme: 'examplebrand-app' },
   ]
 }
@@ -327,39 +327,39 @@ section(`4. ${APP_SCHEME_FIELD} 负例（每条都必须让渠道 CI 非 0 退�
 
   expectAbort('official 缺字段（公共渠道没有豁免）', [
     { id: 'official', appOriginScheme: null },
-    { id: 'beta', appOriginScheme: 'picoaide-app' },
+    { id: 'beta', appOriginScheme: 'zeokeel-app' },
     { id: 'example-brand', appOriginScheme: 'examplebrand-app' },
-  ], ['picoaide-app'])
+  ], ['zeokeel-app'])
 
   expectAbort('非法形状（大写 + 分隔符位置不合法）', [
-    { id: 'official', appOriginScheme: 'Picoaide-App' },
-    { id: 'beta', appOriginScheme: 'picoaide-app' },
+    { id: 'official', appOriginScheme: 'ZeoKeel-App' },
+    { id: 'beta', appOriginScheme: 'zeokeel-app' },
     { id: 'example-brand', appOriginScheme: 'examplebrand-app' },
-  ], ['Picoaide-App'])
+  ], ['ZeoKeel-App'])
 
   expectAbort('超长（>32 字符，验证上界 {1,31} 真的生效）', [
     { id: 'official', appOriginScheme: `a${'b'.repeat(40)}` },
-    { id: 'beta', appOriginScheme: 'picoaide-app' },
+    { id: 'beta', appOriginScheme: 'zeokeel-app' },
     { id: 'example-brand', appOriginScheme: 'examplebrand-app' },
   ], [`a${'b'.repeat(40)}`])
 
   expectAbort('与 deep_link_scheme 同值（origin 与深链必须可分）', [
     { id: 'official', appOriginScheme: 'officiallink', deepLinkScheme: 'officiallink' },
-    { id: 'beta', appOriginScheme: 'picoaide-app' },
+    { id: 'beta', appOriginScheme: 'zeokeel-app' },
     { id: 'example-brand', appOriginScheme: 'examplebrand-app' },
   ], ['officiallink'])
 
   expectAbort('保留 scheme（https）', [
     { id: 'official', appOriginScheme: 'https' },
-    { id: 'beta', appOriginScheme: 'picoaide-app' },
+    { id: 'beta', appOriginScheme: 'zeokeel-app' },
     { id: 'example-brand', appOriginScheme: 'examplebrand-app' },
   ], [])
 
   expectAbort('跨渠道重复（品牌渠道与公共渠道撞名）', [
-    { id: 'official', appOriginScheme: 'picoaide-app' },
-    { id: 'beta', appOriginScheme: 'picoaide-app' },
-    { id: 'example-brand', appOriginScheme: 'picoaide-app' },
-  ], ['picoaide-app'])
+    { id: 'official', appOriginScheme: 'zeokeel-app' },
+    { id: 'beta', appOriginScheme: 'zeokeel-app' },
+    { id: 'example-brand', appOriginScheme: 'zeokeel-app' },
+  ], ['zeokeel-app'])
 }
 
 // ---------------------------------------------------------------------------

@@ -114,7 +114,7 @@ describe('B-1: a device row with an unusable definition fails loudly instead of 
 
 describe('conn-4: a refused verification address fails the connect instead of connecting', () => {
   it('leaves the row unauthorized, registers no MCP server and discloses no URL', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn4-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn4-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const harness = createHarness([deviceDef('javascript:alert(document.domain)//')], dir, {
       requestApproval: () => true,
@@ -129,7 +129,7 @@ describe('conn-4: a refused verification address fails the connect instead of co
       const res = { writeHead: () => {}, end: (text: string) => { body = text } }
       const req = {
         method: 'POST',
-        url: '/api/pico/connectors/dev/connect',
+        url: '/api/zeokeel/connectors/dev/connect',
         // R7-RV-3：写面要 BrowserAuth 持有性证明 —— 真页面（ConnectorsSection）恒持有。
         headers: { host: 'localhost:43120', origin: 'http://localhost:43120', cookie: 'dsh-auth-localhost:43120=v1.signature' },
         socket: { remoteAddress: '127.0.0.1' },
@@ -146,7 +146,7 @@ describe('conn-4: a refused verification address fails the connect instead of co
       const res = { writeHead: () => {}, end: (text: string) => { body = text } }
       const req = {
         method: 'GET',
-        url: '/api/pico/connectors/dev/state',
+        url: '/api/zeokeel/connectors/dev/state',
         // R7-RV-3：写面要 BrowserAuth 持有性证明 —— 真页面（ConnectorsSection）恒持有。
         headers: { host: 'localhost:43120', origin: 'http://localhost:43120', cookie: 'dsh-auth-localhost:43120=v1.signature' },
         socket: { remoteAddress: '127.0.0.1' },

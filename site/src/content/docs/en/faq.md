@@ -17,7 +17,7 @@ Your account, the model catalogue, balance, Capability Hub content, and the conn
 
 It splits in two, with a clear boundary:
 
-- **On the employee machine**: sessions and message logs, workspace files, tool execution, sandbox state, voice audio, connector credentials. The data root has a single authoritative definition (`~/.picoaide-harness`, with `DSH_HOME` taking precedence and a different directory per channel); credential directories are `0700`, files `0600`, written atomically.
+- **On the employee machine**: sessions and message logs, workspace files, tool execution, sandbox state, voice audio, connector credentials. The data root has a single authoritative definition (`~/.zeokeel-harness`, with `DSH_HOME` taking precedence and a different directory per channel); credential directories are `0700`, files `0600`, written atomically.
 - **On the customer's own server**: accounts, model usage and cost, the balance ledger, content and authorization, audit events. The server does **not** touch employee files or session logs.
 
 The vendor neither hosts a service nor relays your data. **Every path that leaves the machine is one you configure**: model requests go from the employee machine to your server, which forwards them to the upstream provider you chose, and connectors only reach the MCP endpoints you registered in the admin console. With a cloud model the content reaches that provider; with an intranet model it never leaves your network.
@@ -28,7 +28,7 @@ The vendor neither hosts a service nor relays your data. **Every path that leave
 
 ### Will an upgrade lose data? How do I roll back?
 
-An upgrade only swaps the image; all data lives in bind mounts under the deployment directory (`picoaide-data/`, `pg-data/`, `caddy-data/`, `certs/`). Rolling back means switching back to the previous image and running `docker compose up -d server` — but **database migrations are irreversible**: an older image cannot downgrade the schema, so you must back up before upgrading and confirm the backup is non-empty (`master.key` is unrecoverable, and without it the encrypted upstream keys in the database can never be decrypted).
+An upgrade only swaps the image; all data lives in bind mounts under the deployment directory (`zeokeel-data/`, `pg-data/`, `caddy-data/`, `certs/`). Rolling back means switching back to the previous image and running `docker compose up -d server` — but **database migrations are irreversible**: an older image cannot downgrade the schema, so you must back up before upgrading and confirm the backup is non-empty (`master.key` is unrecoverable, and without it the encrypted upstream keys in the database can never be decrypted).
 
 Four hard rules: never run `docker compose down -v` or `volume prune`; never use the `latest` tag; always back up before upgrading; never overwrite an existing deployment directory with `.env`. The full flow is in [Upgrade, backup & rollback](/en/deployment/upgrade/).
 
@@ -64,11 +64,11 @@ The local web port is randomly assigned by the OS by default (`dsh-desktop.port:
 
 ### Can the client use a system proxy?
 
-Not by default: system proxy settings, proxy environment variables, PAC files, and `--proxy-server` are all ignored. Only deployments where "an authenticated proxy is the sole route to the internet" should open the escape hatch — the channel field `desktop.allow_system_proxy`, or the **real process environment variable** `PICOAI_ALLOW_SYSTEM_PROXY=1` (setting it in the `.env` layer does not work). When enabled, the startup log prints `proxy system/<source>`; direct mode prints `proxy direct`.
+Not by default: system proxy settings, proxy environment variables, PAC files, and `--proxy-server` are all ignored. Only deployments where "an authenticated proxy is the sole route to the internet" should open the escape hatch — the channel field `desktop.allow_system_proxy`, or the **real process environment variable** `ZEOKEEL_ALLOW_SYSTEM_PROXY=1` (setting it in the `.env` layer does not work). When enabled, the startup log prints `proxy system/<source>`; direct mode prints `proxy direct`.
 
 ### Can I install third-party DSH plugins in the client?
 
-Yes, through the profile's **user patch layer**: edit `~/.picoaide-harness/cordis.patch.yml` (a different channel means a different data root), append one line in Loader patch syntax, and **restart the app** for it to take effect.
+Yes, through the profile's **user patch layer**: edit `~/.zeokeel-harness/cordis.patch.yml` (a different channel means a different data root), append one line in Loader patch syntax, and **restart the app** for it to take effect.
 
 You **cannot** use `dsh plugin --profile desktop …`: the `desktop` profile is managed exclusively by the desktop application, so the CLI rejects it outright (`profile "desktop" is managed exclusively by the Electron application`), and the app exposes no terminal or profile switcher.
 
@@ -134,17 +134,17 @@ No. Memory is **confirmation-first**: the AI files suggestions (through entries 
 
 ### Do apps in the app centre need a public entry point or a certificate?
 
-No. Employee-built WASM apps open only inside a **separate client window** (via a custom protocol), and the server's single entry point is `POST /api/client/v2/apps/wasm/:app_id/request` (forwarding execution with the employee token). So deployment needs **no** app subdomain, wildcard certificate, or extra port. The app's `picoaide.app.json` sets `access` to `public` / `login` / `whitelist` (default `login`), and the `whitelist` is read and enforced by **the app itself**; consents such as "allow the AI to read this app's data" are recorded per (user + server + app).
+No. Employee-built WASM apps open only inside a **separate client window** (via a custom protocol), and the server's single entry point is `POST /api/client/v2/apps/wasm/:app_id/request` (forwarding execution with the employee token). So deployment needs **no** app subdomain, wildcard certificate, or extra port. The app's `zeokeel.app.json` sets `access` to `public` / `login` / `whitelist` (default `login`), and the `whitelist` is read and enforced by **the app itself**; consents such as "allow the AI to read this app's data" are recorded per (user + server + app).
 
 ## Open source and licensing
 
-### What is the relationship between PicoAide Harness and DeepSeek Harness?
+### What is the relationship between ZeoKeel Harness and DeepSeek Harness?
 
 It is built on a fixed version of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (currently pinned at `dsh-v0.2.1-rc.2`; the source of truth is `upstream.json` at the repository root). Upstream provides the core agent, plugin system, and Web UI; this project provides the desktop packaging, local service management, and the enterprise control plane. **The upstream source runs unchanged, without modifications** — only a small number of guarded patches are kept, and upgrades only follow the upstream version number.
 
 ### Is this an official DeepSeek product?
 
-No. PicoAide Harness is an independent open-source community project (MIT License), with no affiliation to or endorsement from DeepSeek. DeepSeek is a trademark of DeepSeek AI.
+No. ZeoKeel Harness is an independent open-source community project (MIT License), with no affiliation to or endorsement from DeepSeek. DeepSeek is a trademark of DeepSeek AI.
 
 ### What is the licence? Can I use it commercially or build on it?
 
@@ -152,7 +152,7 @@ MIT License: you may use, modify, and distribute it freely (keeping the licence 
 
 ### Where do I report problems?
 
-Start with the troubleshooting section of [Desktop Client](/en/desktop/) and [Operations & troubleshooting](/en/deployment/operations/); if that does not resolve it, file a [GitHub Issue](https://github.com/picoaide/picoaide-harness/issues) with your OS, app version, reproduction steps, and error messages. If the app keeps crashing, use `--export-diagnostics` or "Export Diagnostics…" from the tray to produce a diagnostics archive (review it before sharing).
+Start with the troubleshooting section of [Desktop Client](/en/desktop/) and [Operations & troubleshooting](/en/deployment/operations/); if that does not resolve it, file a [GitHub Issue](https://github.com/zeokeel/ZeoKeel-Harness/issues) with your OS, app version, reproduction steps, and error messages. If the app keeps crashing, use `--export-diagnostics` or "Export Diagnostics…" from the tray to produce a diagnostics archive (review it before sharing).
 
 ## Related
 

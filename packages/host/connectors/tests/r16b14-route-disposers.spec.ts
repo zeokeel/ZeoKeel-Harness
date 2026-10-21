@@ -70,13 +70,13 @@ describe('R16B-14: a failed second route registration must not orphan the first 
     expect(
       () => apply(fake.ctx, { connectors: [], refreshSweepIntervalMs: 0 }),
       '注册失败必须抛出去（插件不能"看起来加载成功"却少一条路由）',
-    ).toThrow('register refused: prefix /api/pico/connectors')
+    ).toThrow('register refused: prefix /api/zeokeel/connectors')
 
-    expect(fake.registered).toEqual(['exact /api/pico/connectors'])
+    expect(fake.registered).toEqual(['exact /api/zeokeel/connectors'])
     expect(
       fake.disposed,
       '第二条注册抛错时，第一条（exact）的 disposer 必须被调用（否则路由留在已卸载的世代上）',
-    ).toEqual(['exact /api/pico/connectors'])
+    ).toEqual(['exact /api/zeokeel/connectors'])
     // 与真实 Cordis 同形：回调抛错 ⇒ 这个 effect 的 disposer **没有**被收集
     // （前面两个 effect 的 disposer 是各自正常返回时收集的，与本次失败无关）。
     // 判据 = 把 Cordis 手上的 disposer 全部跑一遍，也不会有人去动那条路由。
@@ -93,8 +93,8 @@ describe('R16B-14: a failed second route registration must not orphan the first 
     apply(fake.ctx, { connectors: [], refreshSweepIntervalMs: 0 })
 
     expect(fake.registered).toEqual([
-      'exact /api/pico/connectors',
-      'prefix /api/pico/connectors',
+      'exact /api/zeokeel/connectors',
+      'prefix /api/zeokeel/connectors',
     ])
     expect(fake.disposed).toEqual([])
 
@@ -102,8 +102,8 @@ describe('R16B-14: a failed second route registration must not orphan the first 
     expect(routes, '两条都注册成功时 effect 必须把 disposer 交给 Cordis').toBeTypeOf('function')
     routes?.()
     expect(fake.disposed.sort()).toEqual([
-      'exact /api/pico/connectors',
-      'prefix /api/pico/connectors',
+      'exact /api/zeokeel/connectors',
+      'prefix /api/zeokeel/connectors',
     ])
   })
 })

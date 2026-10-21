@@ -4,7 +4,7 @@
  * ## 为什么单独一个模块
  *
  * 窗口适配器是**服务**（`ctx.provide`），窗口管理器是**插件**（
- * `@picoaide/dsh-wasm-apps-host` 读 `wasmAppsWindowAdapter` + 自己的 `userDataDir`
+ * `@zeokeel/dsh-wasm-apps-host` 读 `wasmAppsWindowAdapter` + 自己的 `userDataDir`
  * 配置）。三处只要有一处缺失，症状都是同一句话 ——「点打开，回 `opened`，
  * 屏幕上什么都没有」：
  *
@@ -24,8 +24,8 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { WASM_APPS_WINDOW_ADAPTER_SERVICE } from '@picoaide/dsh-wasm-apps-host'
-import type { WasmAppsWindowAdapter } from '@picoaide/dsh-wasm-apps-host/windows'
+import { WASM_APPS_WINDOW_ADAPTER_SERVICE } from '@zeokeel/dsh-wasm-apps-host'
+import type { WasmAppsWindowAdapter } from '@zeokeel/dsh-wasm-apps-host/windows'
 
 /**
  * 把应用窗口适配器 `provide` 给插件（幂等：重复调用以后一次为准）。

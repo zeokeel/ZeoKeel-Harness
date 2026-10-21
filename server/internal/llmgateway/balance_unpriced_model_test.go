@@ -33,7 +33,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // unpricedProbeBody 与 admissionProbeBody 同形（短 prompt：兜底价方案在此形态下

@@ -17,7 +17,7 @@ import { hasUpdateFor, type CapabilityItem } from '../../capability-center/src/c
  */
 
 async function presetDirWithProvenance(name: string, version: string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'picoaide-preset-ver-'))
+  const root = await mkdtemp(join(tmpdir(), 'zeokeel-preset-ver-'))
   const dir = join(root, name)
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, 'preset.yml'), '- id: persona\n  name: x\n', 'utf8')
@@ -37,7 +37,7 @@ describe('共享 Agent 的已装版本(FIX-27)', () => {
   })
 
   it('无 provenance 时回落到 .install-version 标记', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'picoaide-preset-ver-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-preset-ver-'))
     const dir = join(root, 'legacy')
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, '.install-version'), '0.9.0\n', 'utf8')
@@ -45,7 +45,7 @@ describe('共享 Agent 的已装版本(FIX-27)', () => {
   })
 
   it('两者都没有 ⇒ undefined(保守:宁可不提示,不可误报)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'picoaide-preset-ver-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-preset-ver-'))
     const dir = join(root, 'bare')
     await mkdir(dir, { recursive: true })
     expect(await readInstalledPresetVersion(dir)).toBeUndefined()

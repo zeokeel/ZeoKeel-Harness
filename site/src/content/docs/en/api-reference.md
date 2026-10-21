@@ -1,6 +1,6 @@
 ---
 title: API Reference
-description: 'The PicoAide Harness server HTTP API: namespaces, authentication and sessions, endpoint tables by function, the error envelope, and version/compatibility commitments.'
+description: 'The ZeoKeel Harness server HTTP API: namespaces, authentication and sessions, endpoint tables by function, the error envelope, and version/compatibility commitments.'
 ---
 
 This page is the public reference for the server HTTP API. **The code is the single source of truth** — every path, method and authentication middleware is declared in one place, `server/internal/router/router.go`; where this page and that file disagree, the code wins.
@@ -152,7 +152,7 @@ Apps open only inside the desktop client: the client wraps requests to `<app ori
 | DELETE | `/api/client/v2/apps/wasm/uploads/:upload_id` | Bearer | Abandon the upload and reclaim disk |
 | POST | `/api/client/v2/apps/wasm/:app_id/request` | Bearer | **The single entry point for app execution**: the app request envelope is decoded and executed here, with identity injected by the client |
 | POST | `/api/client/v2/apps/wasm/proof` | Bearer | Issue a proof of possession binding "which employee + which token + which app" |
-| POST | `/api/client/v2/apps/wasm/:app_id/open` | Bearer | Open validation and counting; response header `X-PicoAide-App-Version` is the sole source of the client's content cache key |
+| POST | `/api/client/v2/apps/wasm/:app_id/open` | Bearer | Open validation and counting; response header `X-ZeoKeel-App-Version` is the sole source of the client's content cache key |
 | GET | `/api/client/v2/apps/wasm/:app_id/availability` | Bearer | Identifier availability pre-check (read-only: no compile, no version reservation) |
 | GET | `/api/client/v2/apps/wasm/:app_id/releases` | Bearer | The publisher's own version history and review verdicts (including rejection reasons). Non-publishers always get 404, byte-identical to "app does not exist" |
 | POST | `/api/client/v2/apps/wasm/:app_id/publish`, `/api/client/v2/apps/wasm/:app_id/unpublish` | Bearer | List / unlist (by the publisher) |

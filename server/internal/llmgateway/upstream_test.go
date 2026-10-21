@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestDeleteModelRemovesUpstreamRoute 覆盖 P1-8:删除模型必须同时从

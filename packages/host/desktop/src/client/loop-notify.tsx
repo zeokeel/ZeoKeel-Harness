@@ -64,7 +64,7 @@ async function pollLoopNotifySession(
  * in-memory `seenAt` dies with the renderer; without persistence a reload
  * re-opens the session the user just visited (P2-24).
  */
-const LOOP_NOTIFY_SEEN_AT_KEY = 'pico.desktop.loop-notify.seenAt'
+const LOOP_NOTIFY_SEEN_AT_KEY = 'zeokeel.desktop.loop-notify.seenAt'
 
 /** Read the persisted high-water mark (0 when storage is unavailable). */
 export function readLoopNotifySeenAt(): number {

@@ -7,12 +7,12 @@ import (
 	"os"
 	"unicode/utf8"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // EnsureBootstrapAdmin creates the first admin from --bootstrap-admin and
-// PICOAI_ADMIN_PASSWORD when no admin exists yet. It fails when the env
+// ZEOKEEL_ADMIN_PASSWORD when no admin exists yet. It fails when the env
 // password is missing (never prints or randomizes the password).
 func EnsureBootstrapAdmin(db *sql.DB, username string) error {
 	users, _, err := serverstore.ListUsers(db, 0, 100000, "")
@@ -24,14 +24,14 @@ func EnsureBootstrapAdmin(db *sql.DB, username string) error {
 			return nil // super_admin exists; ignore
 		}
 	}
-	password := os.Getenv("PICOAI_ADMIN_PASSWORD")
+	password := os.Getenv("ZEOKEEL_ADMIN_PASSWORD")
 	if password == "" {
-		return fmt.Errorf("PICOAI_ADMIN_PASSWORD environment variable is required to bootstrap admin %q", username)
+		return fmt.Errorf("ZEOKEEL_ADMIN_PASSWORD environment variable is required to bootstrap admin %q", username)
 	}
 	// C-16: enforce the same policy as admin-created users, or the
 	// --bootstrap-admin path would be a weak-password backdoor.
 	if utf8.RuneCountInString(password) < serverstore.AuthMinPasswordLength(db) {
-		return fmt.Errorf("PICOAI_ADMIN_PASSWORD must be at least %d characters", serverstore.AuthMinPasswordLength(db))
+		return fmt.Errorf("ZEOKEEL_ADMIN_PASSWORD must be at least %d characters", serverstore.AuthMinPasswordLength(db))
 	}
 	_, err = serverstore.GetUserByUsername(db, username)
 	if err == nil {

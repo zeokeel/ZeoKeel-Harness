@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // R7-F3-N2(P2,复核 2026-09-13):srvcore-2 的修复把上报端点变成**比读侧更强**的

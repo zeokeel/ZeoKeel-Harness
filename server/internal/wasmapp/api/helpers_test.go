@@ -23,12 +23,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appproof"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appproof"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
 )
 
 // 本文件是本包测试的**共享夹具**。
@@ -91,12 +91,12 @@ func testServerRoot(t *testing.T) string {
 func testCompileChild(t *testing.T) string {
 	t.Helper()
 	childOnce.Do(func() {
-		childDir, childErr = os.MkdirTemp("", "picoaide-api-compile-child-")
+		childDir, childErr = os.MkdirTemp("", "zeokeel-api-compile-child-")
 		if childErr != nil {
 			return
 		}
 		out := filepath.Join(childDir, compile.ChildBinaryName)
-		cmd := exec.Command("go", "build", "-o", out, "./cmd/picoaide-app-compile")
+		cmd := exec.Command("go", "build", "-o", out, "./cmd/zeokeel-app-compile")
 		cmd.Dir = testServerRoot(t)
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if b, err := cmd.CombinedOutput(); err != nil {
@@ -118,7 +118,7 @@ func testCompileChild(t *testing.T) string {
 func testGuestModule(t *testing.T) []byte {
 	t.Helper()
 	guestOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "picoaide-api-guest-")
+		dir, err := os.MkdirTemp("", "zeokeel-api-guest-")
 		if err != nil {
 			guestErr = err
 			return
@@ -283,7 +283,7 @@ var (
 func sharedCacheRoot(t *testing.T) string {
 	t.Helper()
 	cacheRootOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "picoaide-api-compile-cache-")
+		dir, err := os.MkdirTemp("", "zeokeel-api-compile-cache-")
 		if err != nil {
 			t.Fatalf("创建共享缓存目录失败: %v", err)
 		}

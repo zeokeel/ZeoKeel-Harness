@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/capapi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
 )
 
 // 本文件是 FIX-32（审计 P1-1）的门禁：**`WithNanosleep(真实实现)` 必须有判据**。

@@ -1,4 +1,4 @@
-# PicoAide 服务端安全审计报告（2026-09-13）
+# ZeoKeel 服务端安全审计报告（2026-09-13）
 
 - **审计对象**：`server/`（Go 服务端，114 个非测试文件 / 约 30,536 行；另有 130 个 `_test.go`）
 - **基线**：`master` @ `3db78e585a`（v2.7.2），工作区干净，未做任何代码修改
@@ -32,11 +32,11 @@
 | P2-4 | ✅ 已修 | OIDC 流程表满 **fail-closed**（拒绝新流程，不再驱逐在途）；`/auth/{oidc,openid}/login` 加 IP 限流 | `TestAuditFixOIDCFlowTableFullFailsClosed` |
 | P2-5 | ✅ 已修 | 预览上限统一到 `skillmanifest.MaxSkillMDBytes`（四处同值锁定）；渠道同步改打 **provider 自己的 base_url**（自建代理的 key 不再被发往厂商端点） | `preview_limit_single_source_test.go`（子代理 A）、`TestAuditFixProviderSyncUsesOwnBaseURL` |
 | P2-6 | ✅ 已修 | 包内 `author` 不再回写 `apps.owner`（只写展示名 `SetAppTitle`），官方 App 的空归属保持不变 | marketplace 新增用例（子代理 A 交付） |
-| P2-7 | ✅ 已修 | LDAP 拨号加连接期 IP 复检；**保存时**拒绝非回环明文 `ldap://`（逃生阀 `PICOAI_LDAP_ALLOW_PLAINTEXT=1`，存量配置不受影响） | `TestAuditFixLDAPDialGuardsMetadata`、`TestAuditFixPlaintextLDAPRejectedByDefault` |
+| P2-7 | ✅ 已修 | LDAP 拨号加连接期 IP 复检；**保存时**拒绝非回环明文 `ldap://`（逃生阀 `ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1`，存量配置不受影响） | `TestAuditFixLDAPDialGuardsMetadata`、`TestAuditFixPlaintextLDAPRejectedByDefault` |
 | P2-8 | ✅ 已修 | pending 行清理阈值 1h → 6h（远超 90s 空闲超时的流上限） | `TestAuditFixPendingUsageRetentionExceedsStreamLifetime` |
 | P2-9 | ✅ 已修 | 迁移 0067：`users.external_id/external_source`；外部身份绑定 IdP 主体（OIDC `sub` / LDAP DN），同名不同主体一律拒绝；组同步仅在 IdP **下发了组声明**时执行（不再跨源清空） | `TestAuditFixExternalIdentityIsBoundToSubject`、`TestAuditFixGroupsOnlySyncedWhenClaimPresent` |
 | P2-10 | ✅ 已修 | 上游错误体收敛为 `{error:{message,type,code}}`（≤2KB，非 JSON 给固定文案）；落账判定收紧为 2xx | `TestUpstreamErrorBodySanitized`、`TestSanitizeUpstreamErrorNonJSON` |
-| P2-11 | ✅ 已修 | 网关两个命名空间挂 `InFlightGuard`（单用户同时在跑请求 ≤32，可 `PICOAI_GATEWAY_MAX_INFLIGHT_PER_USER` 覆盖）；embedding client 改单例复用连接池 | `TestAuditFixPerUserInflightIsBounded` |
+| P2-11 | ✅ 已修 | 网关两个命名空间挂 `InFlightGuard`（单用户同时在跑请求 ≤32，可 `ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER` 覆盖）；embedding client 改单例复用连接池 | `TestAuditFixPerUserInflightIsBounded` |
 | P2-12 | ✅ 已修 | 渠道素材统一 `nosniff` + `default-src 'none'; …; sandbox` CSP，SVG 加脚本特征检查（命中即 404，官方 logo 实测放行） | channel 包 30 个用例 + 变异验证（子代理 B 交付） |
 | P3-1 | ✅ 已修 | `newEngine()` 统一 `RedirectTrailingSlash=false`：带尾斜杠的 API 请求从 307 变为 404 JSON（不再跳过限体中间件） | `TestAuditFixTrailingSlashNoRedirect` |
 | P3-2 | ✅ 已修 | 管理面限流键纳入 `dbLimiterScope` 命名空间，与客户端面真正共享同一失败预算 | `TestAuditFixLoginBudgetSharedAcrossSurfaces` |
@@ -49,7 +49,7 @@
 ### 升级与行为变更注意（运维必读）
 
 1. **迁移 0064–0067 自动应用**。`0066` 会让**现有管理会话全部失效**（旧行的会话凭证是明文，保留可用等于没修）——管理员升级后需重新登录一次。
-2. **P2-7**：新保存/修改 LDAP 配置时，非回环 `ldap://` 会被拒绝；内网目录必须用 `ldaps://`，或显式设置 `PICOAI_LDAP_ALLOW_PLAINTEXT=1` 放行（存量配置不受影响，登录路径不因升级而中断）。
+2. **P2-7**：新保存/修改 LDAP 配置时，非回环 `ldap://` 会被拒绝；内网目录必须用 `ldaps://`，或显式设置 `ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1` 放行（存量配置不受影响，登录路径不因升级而中断）。
 3. **P0-1 行为变更**：客户端传 `stream_options.include_usage=false` 不再被尊重（计量需要上游回报 usage）；若上游漏报，输入侧按请求体字节**低估**兜底并标记 `estimated=true`。
 4. **P2-10 行为变更**：上游 4xx 响应体只透传 `error.message/type/code`（其余字段丢弃），依赖上游自有错误字段的客户端需调整。
 5. **P3-1 行为变更**：带尾斜杠的 API 请求返回 404 JSON（此前 307）。
@@ -67,7 +67,7 @@
 | `router_probe_test.go`（P3-1） | 合成 engine 上复现 gin 的 307 行为 | 生产引擎由 `cmd/server` 的 `TestAuditFixTrailingSlashNoRedirect` 断言：`/api/client/v2/auth/login/` → **404 JSON**（不再 307、不再跳过限体中间件） |
 | P1-2 随机用户名放大 | 30 次随机用户名全部 401、无任何节流 | `TestAuditFixRandomUsernameStillRateLimitedByIP`：**第 61 个请求被单 IP 桶拦下**；并发闸另有 `TestAuditFixPasswordVerifyGateIsBounded` |
 
-> 注：`serverauth_probe_test.go` 的顺序段使用 `PICOAI_LOGIN_MAX_ATTEMPTS=10000` 的测试夹具（探针自身设置），"顺序 15 次无 429"是夹具产物；第二步限流的真实验证在 `TestAuditFixMFALoginIsRateLimited`（阈值 3，5 轮内必现 429）。
+> 注：`serverauth_probe_test.go` 的顺序段使用 `ZEOKEEL_LOGIN_MAX_ATTEMPTS=10000` 的测试夹具（探针自身设置），"顺序 15 次无 429"是夹具产物；第二步限流的真实验证在 `TestAuditFixMFALoginIsRateLimited`（阈值 3，5 轮内必现 429）。
 
 ---
 
@@ -296,7 +296,7 @@ ModelPrices(dup) 第 2 次 → 输入 100.00 输出 200.00
 2. **登录失败预算两入口仍分桶**（已复现：客户端面 3 次失败后第 4 次 429，管理面紧接着仍可继续尝试）→ `admin.go:243-244` 用裸 `ip|user`、`u:user`，客户端面用 `dbLimiterScope(db)+…` 前缀，`ratelimit.go:48-53` 注释宣称的"共享同一失败预算"未达成（同一账号每 5 分钟仍可双入口各 10 次）。建议统一键命名空间（这是**门禁/注释与实现不符**，非新漏洞）。
 3. **余额查询 client 跟随重定向**：`internal/llmgateway/balance.go:30` 未设 `CheckRedirect`（对照 `internal/reports/reports.go:47-49` 明确拒绝）。恶意/被劫持的"deepseek 系"上游可让服务端对内网发盲 GET（跨主机重定向会剥 Authorization）。建议统一拒绝重定向。
 4. **marketplace 用未校验的 `s.Version` 拼磁盘路径**：`internal/marketplace/admin.go:449-458`（`filepath.Join(cacheDir, s.Name+"-"+s.Version+ext)`）。仅存量 legacy 行（`archive IS NULL` 且 version 含 `..`）可达，且仅 super_admin、只能命中 `*.zip/*.tar.gz`。建议对 version 过 `SafePathSegment` 并断言 `Clean` 结果在 cacheDir 前缀内。
-5. **下载 URL 由请求 `Host`/`X-Forwarded-Proto` 决定**：`internal/clientrelease/clientrelease.go:196-239`。`no-store` 已挡住缓存投毒，但建议 `PICOAI_PUBLIC_BASE_URL` 之外不接受 Host 作为权威来源（或用可信代理白名单）。
+5. **下载 URL 由请求 `Host`/`X-Forwarded-Proto` 决定**：`internal/clientrelease/clientrelease.go:196-239`。`no-store` 已挡住缓存投毒，但建议 `ZEOKEEL_PUBLIC_BASE_URL` 之外不接受 Host 作为权威来源（或用可信代理白名单）。
 6. **归档单请求最多 4 次全量解压/扫描**（`archiveutil` Validate → ListContents → ExtractFileContent → normalize，16MB 原始 / 64MB 解包 / 10000 条目），需登录 + pendingCap=10，未见武器化价值；建议加压缩比与总遍数闸。
 7. **`server/go.mod` 残留未使用的 `github.com/go-git/go-git/v5` 依赖树**：全仓 `grep` 0 处 import（git 源模式已随 0052 移除），但 `require` 与 `go.sum` 仍带着 go-git 及其 12+ 个间接依赖（`ProtonMail/go-crypto`、`cloudflare/circl`、`skeema/knownhosts`、`xanzy/ssh-agent` 等）；本轮 `go build`（`-mod=mod`）会自动把它们剪掉，说明确为死依赖。属供应链面收敛（少一份需要跟踪 CVE 的依赖），建议跑一次 `go mod tidy` 并入下一个常规提交。
 
@@ -345,5 +345,5 @@ ModelPrices(dup) 第 2 次 → 输入 100.00 输出 200.00
 | `router_probe_test.go` | 生产/镜像管理路由数量、生产树权限申报=0、尾斜杠 307 跳过中间件 | `go test ./internal/router/ -run TestAuditProbe -v` |
 | `serverstore_probe_test.go` | 同名模型计价随物理行序翻转（1.00 → 100.00，一次 UPDATE）／未定价同名行 → 0 元 | `PG_DSN_TEST=… go test ./internal/serverstore/ -run TestAuditProbe -v` |
 
-工具链环境（本机）：`PATH=$PATH:/usr/local/go/bin`、`GOMODCACHE=$PWD/temp/gomodcache`、`GOPATH=$PWD/temp/gopath`、`GOCACHE=$PWD/temp/gocache-go`、`GOFLAGS=-mod=mod`、`PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/picoaide_test?sslmode=disable`（`pg-test` 容器）。
+工具链环境（本机）：`PATH=$PATH:/usr/local/go/bin`、`GOMODCACHE=$PWD/temp/gomodcache`、`GOPATH=$PWD/temp/gopath`、`GOCACHE=$PWD/temp/gocache-go`、`GOFLAGS=-mod=mod`、`PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test?sslmode=disable`（`pg-test` 容器）。
 CodeQL：`codeql database create temp/codeql-go-db --language=go --source-root server` → `codeql database analyze temp/codeql-go-db --format=sarif-latest --output=temp/codeql-go-results.sarif codeql/go-queries:codeql-suites/go-security-extended.qls`（扫描 114/244 文件 = 全部非测试文件；35 条查询；结果 0）。

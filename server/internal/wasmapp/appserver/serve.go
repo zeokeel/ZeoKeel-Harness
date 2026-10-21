@@ -9,18 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
-	"github.com/picoaide/picoaide/internal/wasmapp/edge"
-	"github.com/picoaide/picoaide/internal/wasmapp/hostcap"
-	"github.com/picoaide/picoaide/internal/wasmapp/logbuf"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
-	"github.com/picoaide/picoaide/internal/wasmapp/wasmmod"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/edge"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/hostcap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/logbuf"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/wasmmod"
 )
 
 // serveApp 是**客户端专属访问模型**的唯一请求管线（2026-09-19 决策
@@ -131,7 +131,7 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request, appLabel strin
 
 	// ===== ②b 版本头（契约 §5.1 / R1-DAT-12 / R2I-21）=====
 	// 客户端的内容缓存键是 `(session-scope, app_id, version, path)`，而 version 在
-	// 客户端此前**没有任何来源** ⇒ 平台在成功响应上写 `X-PicoAide-App-Version`。
+	// 客户端此前**没有任何来源** ⇒ 平台在成功响应上写 `X-ZeoKeel-App-Version`。
 	//
 	// 为什么用一层薄 writer 而不是在三个成功出口（静态 304 / 静态直出 / wasm 响应）
 	// 各写一遍：漏一个出口就是"某一类响应没有版本"，而缓存 bug 的形态是
@@ -147,7 +147,7 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request, appLabel strin
 	// ===== ④ 随包资源 + 应用配置（§4.2 / R24/R25）=====
 	// 随包资源（wasm 自定义段）**不再落盘**（2026-09-20 定案）：这里按
 	// (app_id, version, release_id) 取内存资源集 —— 未命中就读一次制品字节 + 抽自定义段
-	// （loadReleaseAssets），命中则零 IO。应用用 `assets.read("picoaide.app.json")` 读到的
+	// （loadReleaseAssets），命中则零 IO。应用用 `assets.read("zeokeel.app.json")` 读到的
 	// 与宿主判准入用的是**同一份**：配置来自库内 `config_json`，随资源集一起注入
 	// （决策文档 docs/decisions/2026-09-20-wasm-assets-in-memory.md）。
 	//
@@ -243,7 +243,7 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request, appLabel strin
 // 为什么在这里做"抽段"而不是发布期落到磁盘上（2026-09-20 定案，见
 // docs/decisions/2026-09-20-wasm-assets-in-memory.md）：段本来就在制品字节里，
 // 落盘只是把同一份内容抄一份到宿主盘上，代价是"两份权威 + 两处实现 + 一条磁盘攻击面"。
-// 配置从**库内** `config_json` 注入（保留资源名 `picoaide.app.json`，仍然永不直出），
+// 配置从**库内** `config_json` 注入（保留资源名 `zeokeel.app.json`，仍然永不直出），
 // 因此宿主判准入与应用 `assets.read` 读到的是同一份。
 func (s *Server) loadReleaseAssets(ctx context.Context, appID string,
 	rel *serverstore.WasmRelease) (*assets.Set, *apperr.Error) {
@@ -268,14 +268,14 @@ func (s *Server) loadReleaseAssets(ctx context.Context, appID string,
 	return set, nil
 }
 
-// loadAppConfig 解析 `picoaide.app.json`（§4.2 / R25）。
+// loadAppConfig 解析 `zeokeel.app.json`（§4.2 / R25）。
 //
 // 解析走 appcfg.Parse：它会落定 access 缺省（login）并把**旧 schema**
 // （login_required/visible，已发布版本里还是旧形态）映射成 access —— 因此
 // "宿主按旧配置判准入、应用按同一份文件的新 schema 判"两条口径始终一致。
 //
 // 配置的来源是**内存资源集里的保留资源**（由库内 `config_json` 注入）：应用自己是用
-// `assets.read("picoaide.app.json")` 读它的（§4.2），宿主必须与它读**同一份**，
+// `assets.read("zeokeel.app.json")` 读它的（§4.2），宿主必须与它读**同一份**，
 // 否则可能出现"宿主按 access=login 放进 wasm、应用按 whitelist 拒绝"这种双方各说各话
 // 的状态。资源缺失 = 平台故障 ⇒ 调用方按 500 处理（fail-loud）。
 func loadAppConfig(set *assets.Set) (appcfg.Config, *apperr.Error) {
@@ -414,7 +414,7 @@ func (s *Server) serveWasm(w http.ResponseWriter, r *http.Request, appID string,
 
 	// 宿主能力面（§5.1 封闭清单）：身份由宿主注入，应用伪造不了（§7.1 身份契约）。
 	// ⚠️ `ai.chat` 已随 §21 彻底删除：服务端 wasm **不再具备任何 AI 能力**，
-	// 应用要调模型必须走"前端 JS → 宿主保留路径 `/__picoaide/ai/chat` → 结果回传 wasm"
+	// 应用要调模型必须走"前端 JS → 宿主保留路径 `/__zeokeel/ai/chat` → 结果回传 wasm"
 	// （客户端 AI loop，见总纲 §21.2）。因此能力面里没有 AI 字段。
 	caps := &hostcap.Capabilities{
 		AppID:   appID,
@@ -455,7 +455,7 @@ func (s *Server) serveWasm(w http.ResponseWriter, r *http.Request, appID string,
 	// 服务端 AI 已删除，§21.4 的应用维度归因改由**客户端 AI loop** 的会话链路承担
 	// （隐藏会话 id 的 `app:` 前缀 ⇒ 上游出站头 `x-deepseek-harness-session-id` ⇒
 	// 网关 `internal/llmgateway/app_session_id.go` 派生 `usage.app_id`；初版设计的自报头
-	// `X-Pico-App-Id` 发不出来也不再被采信）。参数保留是因为 `ServeClientRequest` 把它作为
+	// `X-ZeoKeel-App-Id` 发不出来也不再被采信）。参数保留是因为 `ServeClientRequest` 把它作为
 	// 契约 §8.2 的显式传参（登出/改密后的吊销回调已随 aichat 一起消失）。
 	_ = sessionKey
 	started := s.now()

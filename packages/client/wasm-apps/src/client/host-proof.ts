@@ -4,15 +4,15 @@
  * ## 为什么必须有它（R2-X-1，P0）
  *
  * 宿主的本机路由面（`packages/host/wasm-apps-host/src/host-request.ts`）对 `open` 与
- * `channel` 都要求 **`X-Pico-Host-Proof` 请求头**：缺 ⇒ 401 `proof_required`、
+ * `channel` 都要求 **`X-ZeoKeel-Host-Proof` 请求头**：缺 ⇒ 401 `proof_required`、
  * 过期 ⇒ 401 `proof_expired`。这是零端口迁移纪律 R2 的实现 —— 授权**不得**依赖
  * Cookie / Host / Origin / 端口（零端口下这些都不存在），所以"页面在 loopback 上"
  * 本身不是凭据。
  *
  * 客户端这一半因此要做三件事：
  *
- *  1. **引导**：`GET /api/pico/wasm-apps/host-proof` 取一枚短时令牌（宿主 TTL 5 min）；
- *  2. **携带**：每个本机调用带 `X-Pico-Host-Proof: <token>`；
+ *  1. **引导**：`GET /api/zeokeel/wasm-apps/host-proof` 取一枚短时令牌（宿主 TTL 5 min）；
+ *  2. **携带**：每个本机调用带 `X-ZeoKeel-Host-Proof: <token>`；
  *  3. **过期重取一次**：调用收到 401 且错误码是 `proof_*` ⇒ 强制重取一枚并**重试一次**
  *     （仍失败就把可辨原因上抛，**绝不无限重试** —— 与平台 401 的"一次点击一次请求"
  *     同一纪律）。
@@ -25,23 +25,23 @@
  *
  * ## 与平台 app-proof 的分工
  *
- * `X-Pico-Host-Proof` = **本机面**的持有性证明（防本机其它进程/页面）；
- * `X-Pico-App-Proof`（§20/§23）= **平台面**的持有性证明（防拿到 bearer 的第三方，
+ * `X-ZeoKeel-Host-Proof` = **本机面**的持有性证明（防本机其它进程/页面）；
+ * `X-ZeoKeel-App-Proof`（§20/§23）= **平台面**的持有性证明（防拿到 bearer 的第三方，
  * 由宿主携带，客户端不拼不签）。两者不是同一个东西，别互相替代。
  *
- * @module @picoaide/dsh-wasm-apps/client/host-proof
+ * @module @zeokeel/dsh-wasm-apps/client/host-proof
  */
 
 /** 引导端点（宿主 `GET ${prefix}/host-proof`；冻结路径）。 */
-export const HOST_PROOF_PATH = '/api/pico/wasm-apps/host-proof'
+export const HOST_PROOF_PATH = '/api/zeokeel/wasm-apps/host-proof'
 
 /**
  * 本机持有性证明的请求头名（§22.2 R2 冻结）。
  *
- * 与宿主 `HOST_PROOF_HEADER`（`x-pico-host-proof`）**同一个头**（HTTP 头名大小写不敏感，
+ * 与宿主 `HOST_PROOF_HEADER`（`x-zeokeel-host-proof`）**同一个头**（HTTP 头名大小写不敏感，
  * 这里按惯例写标准形态）。`app-center.spec.tsx` 会与宿主源码逐字对拍。
  */
-export const HOST_PROOF_HEADER = 'X-Pico-Host-Proof'
+export const HOST_PROOF_HEADER = 'X-ZeoKeel-Host-Proof'
 
 /**
  * 提前量：本地认为快过期的令牌就重取，避免"发出去时刚好过期"。

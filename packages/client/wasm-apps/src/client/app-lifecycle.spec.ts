@@ -36,17 +36,17 @@ import {
 
 describe('本机路径：app_id 是路径段（必须编码），后缀与服务端判据一致', () => {
   it('上下架路径的后缀是 publish / unpublish（服务端 publishTarget 只认后缀）', () => {
-    expect(setPublishedPath('roster', true)).toBe('/api/pico/apps/wasm/roster/publish')
-    expect(setPublishedPath('roster', false)).toBe('/api/pico/apps/wasm/roster/unpublish')
-    expect(deletePath('roster')).toBe('/api/pico/apps/wasm/roster')
-    expect(diagnosticsPath('roster')).toBe('/api/pico/apps/wasm/roster/diagnostics')
+    expect(setPublishedPath('roster', true)).toBe('/api/zeokeel/apps/wasm/roster/publish')
+    expect(setPublishedPath('roster', false)).toBe('/api/zeokeel/apps/wasm/roster/unpublish')
+    expect(deletePath('roster')).toBe('/api/zeokeel/apps/wasm/roster')
+    expect(diagnosticsPath('roster')).toBe('/api/zeokeel/apps/wasm/roster/diagnostics')
   })
 
   it('app_id 里的非安全字符被编码（不制造第二个路径段）', () => {
     // 服务端的 app_id 形态本就只允许 [a-z0-9-]，但客户端不能依赖这一点：
     // 一个含 `/` 或 `?` 的值必须变成一个路径段，而不是改变路由。
     const path = setPublishedPath('a/b?c#d', false)
-    expect(path).toBe('/api/pico/apps/wasm/a%2Fb%3Fc%23d/unpublish')
+    expect(path).toBe('/api/zeokeel/apps/wasm/a%2Fb%3Fc%23d/unpublish')
     expect(path.split('/').at(-1)).toBe('unpublish')
   })
 })
@@ -112,7 +112,7 @@ describe('上下架：行状态只能来自服务端的 app.enabled', () => {
       }) as unknown as typeof fetch,
     })
     expect(result.ok).toBe(true)
-    expect(seen[0]!.url).toBe('/api/pico/apps/wasm/roster/unpublish')
+    expect(seen[0]!.url).toBe('/api/zeokeel/apps/wasm/roster/unpublish')
     expect(seen[0]!.init.method).toBe('POST')
     expect(seen[0]!.init.body).toBeUndefined()
   })
@@ -222,8 +222,8 @@ describe('诊断：只读投影（reason_code / hints / 计数）', () => {
 
 describe('作者数据面：路径与形状守卫（2026-09-21 新增）', () => {
   it('自省/数据路径与服务端申报逐字一致（后缀是唯一路由判据）', () => {
-    expect(schemaPath('roster')).toBe('/api/pico/apps/wasm/roster/schema')
-    expect(rowsPath('roster', { table: 'notes' })).toBe('/api/pico/apps/wasm/roster/rows?table=notes')
+    expect(schemaPath('roster')).toBe('/api/zeokeel/apps/wasm/roster/schema')
+    expect(rowsPath('roster', { table: 'notes' })).toBe('/api/zeokeel/apps/wasm/roster/rows?table=notes')
   })
 
   it('数据路径把 table 放进查询串并编码（表名是用户输入，不是路径段）', () => {
@@ -233,7 +233,7 @@ describe('作者数据面：路径与形状守卫（2026-09-21 新增）', () =>
     expect(path).toContain('limit=50')
     expect(path).toContain('offset=100')
     expect(path).toContain('unmask=1')
-    expect(path.split('?')[0]).toBe('/api/pico/apps/wasm/roster/rows')
+    expect(path.split('?')[0]).toBe('/api/zeokeel/apps/wasm/roster/rows')
   })
 
   it('unmask 缺省不发送（服务端按"未请求原值"处理，且这是审计分叉的唯一判据）', () => {

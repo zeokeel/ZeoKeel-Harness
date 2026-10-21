@@ -10,10 +10,10 @@ import {
  *
  * 现场（2026-09-11）：白标上线后左上角变成两行 —— 大号品牌字折行，侧边栏头部
  * 从 24px 撑到 48px。两个原因叠在一起：
- *  1. 显示的是**显示名**（"PicoAide Harness"）而不是短名（"PicoAide"）：
+ *  1. 显示的是**显示名**（"ZeoKeel Harness"）而不是短名（"ZeoKeel"）：
  *     `client.short_name` 是**随包品牌独有**的字段，服务端从不下发，一旦没人把
  *     随包品牌叠上去它就整条丢失。重构前的实现是硬编码
- *     `name === 'PicoAide Harness' ? 'PicoAide' : name`，重构后改靠 short_name —— 于是
+ *     `name === 'ZeoKeel Harness' ? 'ZeoKeel' : name`，重构后改靠 short_name —— 于是
  *     "服务端可达"这条最常见的路径丢了短名。
  *  2. 名字再长也**不截断**：上游槽位是 18px/24px 的定高行，折行会把行撑高。
  *
@@ -24,8 +24,8 @@ import {
 describe('resolveClientShortName', () => {
   it('prefers the channel short name over the display name', () => {
     expect(resolveClientShortName({
-      client: { display_name: 'PicoAide Harness', short_name: 'PicoAide', tagline: '' },
-    })).toBe('PicoAide')
+      client: { display_name: 'ZeoKeel Harness', short_name: 'ZeoKeel', tagline: '' },
+    })).toBe('ZeoKeel')
   })
 
   it('keeps a brand channel short name as-is', () => {
@@ -41,8 +41,8 @@ describe('resolveClientShortName', () => {
   })
 
   it('falls back to the built-in official short name with no channel content', () => {
-    expect(resolveClientShortName(null)).toBe('PicoAide')
-    expect(resolveClientShortName({})).toBe('PicoAide')
+    expect(resolveClientShortName(null)).toBe('ZeoKeel')
+    expect(resolveClientShortName({})).toBe('ZeoKeel')
   })
 
   it('treats a whitespace-only short name as absent', () => {

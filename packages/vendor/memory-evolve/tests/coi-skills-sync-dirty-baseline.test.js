@@ -12,7 +12,7 @@
  * 修复（两条都在本文件的判据里）：
  *   1. 同步侧在**每次自己写内容**之后（首次安装 / 随包升版 / 内容同一性采纳）写一份
  *      `archiveChecksum`，取值 = {@link skillContentChecksum} —— 与企业侧
- *      `computeSkillContentHash` **逐字节同源**的整树哈希（排除顶层 `.picoaide/`，
+ *      `computeSkillContentHash` **逐字节同源**的整树哈希（排除顶层 `.zeokeel/`，
  *      含 `.install-version`）；两实现的等价性由 enterprise 的
  *      `tests/skill-channel-parity.spec.ts` 用真实 fixture 对拍（跨包 import 禁止，
  *      所以是"各自实现 + 机器对拍"而不是共享模块）。
@@ -63,14 +63,14 @@ function entryFor(results) {
 
 /** 读落点里的安装器溯源（不存在返回 null）。 */
 function readProv(userSkills) {
-  const file = join(userSkills, NAME, '.picoaide', 'release.json')
+  const file = join(userSkills, NAME, '.zeokeel', 'release.json')
   if (!existsSync(file)) return null
   return JSON.parse(readFileSync(file, 'utf8'))
 }
 
 /* ---------------------------------------- 1) 基准的建立与"未改过"的正常升版 */
 
-test('首次安装：写下的 archiveChecksum 必须等于落点内容树的哈希（排除 .picoaide，含 .install-version）', () => {
+test('首次安装：写下的 archiveChecksum 必须等于落点内容树的哈希（排除 .zeokeel，含 .install-version）', () => {
   const dir = tempDir()
   try {
     const pluginSkills = join(dir, 'plugin-skills')
@@ -85,9 +85,9 @@ test('首次安装：写下的 archiveChecksum 必须等于落点内容树的哈
     assert.equal(
       info.archiveChecksum,
       skillContentChecksum(installed),
-      '基准必须等于"落盘后"的内容树哈希（写溯源本身不得让这份内容变脏：顶层 .picoaide 被排除）',
+      '基准必须等于"落盘后"的内容树哈希（写溯源本身不得让这份内容变脏：顶层 .zeokeel 被排除）',
     )
-    // `.install-version` 是内容树的一部分（企业侧只排除顶层 .picoaide）⇒ 它必须在
+    // `.install-version` 是内容树的一部分（企业侧只排除顶层 .zeokeel）⇒ 它必须在
     // 算基准之前就位，否则基准与盘上内容差一个文件 ⇒ 下一次比对恒"脏"。
     assert.equal(readFileSync(join(installed, '.install-version'), 'utf8'), '1')
     assert.equal(skillContentChecksum(installed), info.archiveChecksum, '写完 .install-version 之后基准仍须成立')
@@ -144,7 +144,7 @@ test('用户改过正文与文件后升版：refused + SKILL_LOCAL_CONTENT + 一
     seedPluginSkill(pluginSkills, { xVersion: 1 })
     syncBuiltinSkills(pluginSkills, userSkills)
     const installed = join(userSkills, NAME)
-    const provBefore = readFileSync(join(installed, '.picoaide', 'release.json'), 'utf8')
+    const provBefore = readFileSync(join(installed, '.zeokeel', 'release.json'), 'utf8')
 
     // 用户改正文 + 加自己的文件。
     writeFileSync(join(installed, 'SKILL.md'), `---\nname: ${NAME}\ndescription: mine\nx-version: 1\n---\n# USER EDITED\n`)
@@ -158,7 +158,7 @@ test('用户改过正文与文件后升版：refused + SKILL_LOCAL_CONTENT + 一
     assert.equal(existsSync(join(installed, 'MY-NOTES.md')), true, '用户自己的文件必须原样保留')
     assert.match(readFileSync(join(installed, 'SKILL.md'), 'utf8'), /USER EDITED/, '用户改过的正文必须原样保留')
     assert.equal(readFileSync(join(installed, 'scripts', 'helper.mjs'), 'utf8'), '// HELPER v1\n', '整树都不动')
-    assert.equal(readFileSync(join(installed, '.picoaide', 'release.json'), 'utf8'), provBefore, '溯源一字不动')
+    assert.equal(readFileSync(join(installed, '.zeokeel', 'release.json'), 'utf8'), provBefore, '溯源一字不动')
     assert.equal(readFileSync(join(installed, '.install-version'), 'utf8'), '1', '版本标记也不推进（内容没换，版本就不能动）')
     assert.match(String(entry.message), /本地修改/u, '日志/面板要能看出"你改过的东西我们没动"')
   } finally {
@@ -263,7 +263,7 @@ test('legacy 用例 1：有 plugin 溯源但缺基准、内容与随包逐字相
     // 模拟旧版本写下的溯源：有 plugin 渠道、没有 archiveChecksum。
     const prov = readProv(userSkills)
     delete prov.archiveChecksum
-    writeFileSync(join(installed, '.picoaide', 'release.json'), `${JSON.stringify(prov, null, 2)}\n`)
+    writeFileSync(join(installed, '.zeokeel', 'release.json'), `${JSON.stringify(prov, null, 2)}\n`)
 
     const entry = entryFor(syncBuiltinSkills(pluginSkills, userSkills))
     assert.equal(entry.action, 'unchanged', '版本没变 ⇒ 不换入')
@@ -288,7 +288,7 @@ test('legacy 用例 2：缺基准且内容已不是随包那一份 ⇒ 不拦（
     const installed = join(userSkills, NAME)
     const prov = readProv(userSkills)
     delete prov.archiveChecksum
-    writeFileSync(join(installed, '.picoaide', 'release.json'), `${JSON.stringify(prov, null, 2)}\n`)
+    writeFileSync(join(installed, '.zeokeel', 'release.json'), `${JSON.stringify(prov, null, 2)}\n`)
     writeFileSync(join(installed, 'SKILL.md'), '# SOMETHING ELSE\n') // 无基准 ⇒ 无从判定是谁写的
 
     seedPluginSkill(pluginSkills, { xVersion: 2 })

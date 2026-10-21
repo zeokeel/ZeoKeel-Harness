@@ -49,9 +49,9 @@ describe('CN-3: device mode must not report connected without an authorization a
     const h = createHarness([def] as never, base, { refreshSweepIntervalMs: 0, requestApproval: () => true })
     // The connect route answers immediately (the flow is deliberately
     // fire-and-forget); the ROW is the contract the user sees.
-    await callRoute(h, '/api/pico/connectors/dev/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/dev/connect', 'POST')
     await new Promise(resolve => setTimeout(resolve, 1500))
-    const state = JSON.parse((await callRoute(h, '/api/pico/connectors/dev/state', 'GET')).body) as { status: string, errorCode?: string }
+    const state = JSON.parse((await callRoute(h, '/api/zeokeel/connectors/dev/state', 'GET')).body) as { status: string, errorCode?: string }
     const stored = await new ConnectorStore({ baseDir: base }).readCredential('dev')
     expect(state.status, 'a device connector with no authorization material must not report connected').not.toBe('connected')
     expect(state.errorCode, 'the row names the action the user must take').toBe('auth-required')
@@ -61,7 +61,7 @@ describe('CN-3: device mode must not report connected without an authorization a
     // …and a restart must not turn the same empty credential into "connected".
     const h2 = createHarness([def] as never, base, { refreshSweepIntervalMs: 0, requestApproval: () => true })
     await new Promise(resolve => setTimeout(resolve, 800))
-    const restarted = JSON.parse((await callRoute(h2, '/api/pico/connectors/dev/state', 'GET')).body) as { status: string }
+    const restarted = JSON.parse((await callRoute(h2, '/api/zeokeel/connectors/dev/state', 'GET')).body) as { status: string }
     expect(restarted.status).not.toBe('connected')
     expect(h2.configs.length).toBe(0)
   })
@@ -86,16 +86,16 @@ describe('CN-3 follow-up (V3): a credential-less connector is NOT gated by the d
     ])
     expect(parsed.map(def => def.authMode), 'the parser must infer `device` for this shape').toEqual(['device'])
     const h = createHarness(parsed, base, { refreshSweepIntervalMs: 0, requestApproval: () => true })
-    await callRoute(h, '/api/pico/connectors/noauth/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/noauth/connect', 'POST')
     await waitFor(() => h.configs.length === 1, 5000)
-    const state = JSON.parse((await callRoute(h, '/api/pico/connectors/noauth/state', 'GET')).body) as { status: string, errorCode?: string }
+    const state = JSON.parse((await callRoute(h, '/api/zeokeel/connectors/noauth/state', 'GET')).body) as { status: string, errorCode?: string }
     expect(state.status, 'a connector whose MCP server needs no credential must stay usable').toBe('connected')
     expect(state.errorCode).toBeUndefined()
     expect(h.configs.length, 'its MCP server must actually be registered').toBe(1)
     // The restart path uses `credentialUsable` too: same verdict there.
     const h2 = createHarness(parsed, base, { refreshSweepIntervalMs: 0, requestApproval: () => true })
     await waitFor(() => h2.configs.length === 1, 5000)
-    const restarted = JSON.parse((await callRoute(h2, '/api/pico/connectors/noauth/state', 'GET')).body) as { status: string }
+    const restarted = JSON.parse((await callRoute(h2, '/api/zeokeel/connectors/noauth/state', 'GET')).body) as { status: string }
     expect(restarted.status).toBe('connected')
   })
 
@@ -106,9 +106,9 @@ describe('CN-3 follow-up (V3): a credential-less connector is NOT gated by the d
       mcp: [{ serverName: 'raw-mcp', transport: 'stdio', command: 'node', args: ['server.mjs'] }],
     }
     const h = createHarness([def] as never, base, { refreshSweepIntervalMs: 0, requestApproval: () => true })
-    await callRoute(h, '/api/pico/connectors/raw/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/raw/connect', 'POST')
     await waitFor(() => h.configs.length === 1, 5000)
-    const state = JSON.parse((await callRoute(h, '/api/pico/connectors/raw/state', 'GET')).body) as { status: string }
+    const state = JSON.parse((await callRoute(h, '/api/zeokeel/connectors/raw/state', 'GET')).body) as { status: string }
     expect(state.status).toBe('connected')
     expect(h.configs.length).toBe(1)
   })
@@ -129,11 +129,11 @@ describe('CN-4: two catalog rows sharing one serverName must not clobber each ot
       requestApproval: () => true,
     })
     await waitFor(() => h.configs.length >= 1, 5000).catch(() => undefined)
-    await callRoute(h, '/api/pico/connectors/conn-b/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/conn-b/connect', 'POST')
     await new Promise(resolve => setTimeout(resolve, 400))
 
-    const a = rowOf((await callRoute(h, '/api/pico/connectors', 'GET')).body, 'conn-a')
-    const b = rowOf((await callRoute(h, '/api/pico/connectors', 'GET')).body, 'conn-b')
+    const a = rowOf((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body, 'conn-a')
+    const b = rowOf((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body, 'conn-b')
     const aDisposals = h.fibers.filter((_fiber, index) => h.configs[index]?.command !== undefined
       && (h.configs[index]?.args ?? []).includes('conn-a.mjs')).reduce((total, fiber) => total + fiber.dispose.mock.calls.length, 0)
     // Exactly one of the two rows may own the name; whichever it is, the OTHER
@@ -190,7 +190,7 @@ describe('CN-5: a dead grant is terminal — the sweep stops re-presenting it', 
     // The grant is dead: every later sweep must be a no-op (terminal state).
     for (let round = 0; round < 4; round += 1) await sweep?.()
 
-    const state = JSON.parse((await callRoute(h, '/api/pico/connectors/dead/state', 'GET')).body) as {
+    const state = JSON.parse((await callRoute(h, '/api/zeokeel/connectors/dead/state', 'GET')).body) as {
       status: string
       errorCode?: string
     }

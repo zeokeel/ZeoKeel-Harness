@@ -11,7 +11,7 @@ import {
   PanelPage,
   SegmentedControl,
   icons,
-} from '@picoaide/dsh-panel-surface/client'
+} from '@zeokeel/dsh-panel-surface/client'
 import { t } from './locales.ts'
 import { compareVersions } from './version-compare.ts'
 import { builtinCardsForTab, planBuiltinCards, useBuiltinSkills, type BuiltinCard } from './BuiltinSkillsStrip.tsx'
@@ -169,7 +169,7 @@ type TypeFilter = 'all' | CapabilityKind
 /**
  * 类型筛选片（全部 / 技能 / 智能体）。
  *
- * 只给几何：颜色与 `[data-active]` / `:hover` 反馈由共享样式表的 `.pico-chipbtn`
+ * 只给几何：颜色与 `[data-active]` / `:hover` 反馈由共享样式表的 `.zeokeel-chipbtn`
  * 负责 —— 颜色写进行内联样式就再也做不出悬停态（本仓的既定分工）。
  */
 const FILTER: React.CSSProperties = {
@@ -321,7 +321,7 @@ export function applySectionRows(
 }
 
 /** 单测用：按（kind, source）解析安装端点。
- * 市场技能只存在于服务端 skills/marketplace 表,必须走 /api/pico/skills 代理
+ * 市场技能只存在于服务端 skills/marketplace 表,必须走 /api/zeokeel/skills 代理
  * (网关 marketplace /archive);共享技能走 shared-skills 代理(带版本);
  * 智能体走 agent-presets 代理。合并面板时(57aeffecbb)曾把市场技能误路由
  * 到 shared-skills 端点 → 网关 404 → 面板「操作失败:gateway error」。
@@ -335,10 +335,10 @@ export function installEndpoint(item: CapabilityItem, version: string): string {
   let base: string
   if (item.kind === 'skill') {
     base = item.source === 'market'
-      ? `/api/pico/skills/${encodeURIComponent(item.name)}/install`
-      : `/api/pico/shared-skills/${encodeURIComponent(item.name)}/${encodeURIComponent(version)}/install`
+      ? `/api/zeokeel/skills/${encodeURIComponent(item.name)}/install`
+      : `/api/zeokeel/shared-skills/${encodeURIComponent(item.name)}/${encodeURIComponent(version)}/install`
   } else {
-    base = `/api/pico/agent-presets/${encodeURIComponent(item.name)}/install`
+    base = `/api/zeokeel/agent-presets/${encodeURIComponent(item.name)}/install`
   }
   return base
 }
@@ -347,7 +347,7 @@ export function installEndpoint(item: CapabilityItem, version: string): string {
  * 「按版本安装」是否真的能装到指定版本（审计 2026-09-23 A11）。
  *
  * 只有**组织共享技能**的端点把版本写进路径
- * （`/api/pico/shared-skills/:name/:version/install`）。市场技能与智能体的端点
+ * （`/api/zeokeel/shared-skills/:name/:version/install`）。市场技能与智能体的端点
  * 都不带版本（市场归档端点只按"当前 approved 最高版"取），所以对它们渲染
  * 「v1 / v2」按钮是**假入口**：点 v1 装到的还是最新版，界面却按 v1 记账。
  * @param item - 能力中心的一行。
@@ -362,7 +362,7 @@ export function versionInstallSupported(item: CapabilityItem): boolean {
  *
  * 返回 true 时面板先出确认条、用户点过之后才把 `?overwrite=1` 发给宿主；
  * 宿主侧对同一种情形没有标记就 409 `LOCAL_CONTENT`（两端同一份规则，见
- * auth-gate 的 `/api/pico/skills` 分支注释与安装器的
+ * auth-gate 的 `/api/zeokeel/skills` 分支注释与安装器的
  * `requiresOverwriteConfirmation`）。
  *
  * 两档成因（**同一份事实的两种读法，不是两套判据**）：
@@ -498,9 +498,9 @@ export function installRequestUrl(
 /**
  * 本机技能库里那一份"来源是随包/平台"的技能，卸载走哪条端点（审计 A6 + 跨泳道契约 S2）。
  *
- *  - `builtin`（平台内置，服务端下发）⇒ `POST /api/pico/skills/builtin/:name/uninstall`
+ *  - `builtin`（平台内置，服务端下发）⇒ `POST /api/zeokeel/skills/builtin/:name/uninstall`
  *    —— 这条路由是本次新增的（此前内置技能只能装不能卸）；
- *  - `plugin`（随客户端内置，如随包插件同步进来的技能）⇒ `POST /api/pico/skills/:name/uninstall`
+ *  - `plugin`（随客户端内置，如随包插件同步进来的技能）⇒ `POST /api/zeokeel/skills/:name/uninstall`
  *    —— 该端点本就是纯本地删除。
  * @param item - 能力中心的一行。
  * @returns 端点路径；不适用（不是这两种来源）时为 undefined。
@@ -508,8 +508,8 @@ export function installRequestUrl(
 export function localRemoveEndpoint(item: CapabilityItem): string | undefined {
   if (item.kind !== 'skill') return undefined
   const name = encodeURIComponent(item.name)
-  if (item.originChannel === 'builtin') return `/api/pico/skills/builtin/${name}/uninstall`
-  if (item.originChannel === 'plugin') return `/api/pico/skills/${name}/uninstall`
+  if (item.originChannel === 'builtin') return `/api/zeokeel/skills/builtin/${name}/uninstall`
+  if (item.originChannel === 'plugin') return `/api/zeokeel/skills/${name}/uninstall`
   return undefined
 }
 
@@ -791,10 +791,10 @@ export function uninstallEndpoint(item: CapabilityItem, version: string): string
   if (local !== undefined) return local
   if (item.kind === 'skill') {
     return item.source === 'market'
-      ? `/api/pico/skills/${encodeURIComponent(item.name)}/uninstall`
-      : `/api/pico/shared-skills/${encodeURIComponent(item.name)}/${encodeURIComponent(version)}/uninstall`
+      ? `/api/zeokeel/skills/${encodeURIComponent(item.name)}/uninstall`
+      : `/api/zeokeel/shared-skills/${encodeURIComponent(item.name)}/${encodeURIComponent(version)}/uninstall`
   }
-  return `/api/pico/agent-presets/${encodeURIComponent(item.name)}/uninstall`
+  return `/api/zeokeel/agent-presets/${encodeURIComponent(item.name)}/uninstall`
 }
 
 /**
@@ -815,8 +815,8 @@ export function nameTakenError(displayName: string): string {
  * 上传被服务端拒绝时的用户可见文案（**按稳定错误码映射，不看 HTTP 状态码**）。
  *
  * 为什么判据必须是 `code` 而不是 `status`（R5-B-1 的客户端尾巴，2026-09-23 跨泳道
- * 补齐）：本机写面（`auth-gate` 的 `/api/pico/shared-skills/upload` 与
- * `/api/pico/agent-presets/upload`）会**透传服务端原始状态码**，而 409 同时是
+ * 补齐）：本机写面（`auth-gate` 的 `/api/zeokeel/shared-skills/upload` 与
+ * `/api/zeokeel/agent-presets/upload`）会**透传服务端原始状态码**，而 409 同时是
  * `NAME_TAKEN` / `VERSION_*` / `CONFLICT` / `ARCHIVE_CLEARED` / `APP_DELISTED`
  * 的码 —— 按 409 一律说「名称已被占用」会把「已下架冻结」说成重名（本仓踩过同形的坑）。
  * 因此只有 `APP_DELISTED` 走专用文案；**其它任何码都逐字沿用本函数引入前的行为**
@@ -1019,7 +1019,7 @@ type DetailTarget =
   | { kind: 'item', item: CapabilityItem }
   | { kind: 'builtin', card: BuiltinCard }
 
-/** 弹层骨架的几何（颜色由 `.pico-card` / 共享按钮类负责）。 */
+/** 弹层骨架的几何（颜色由 `.zeokeel-card` / 共享按钮类负责）。 */
 const DIALOG_MASK: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
@@ -1164,7 +1164,7 @@ export function CapabilityDetailDialog({ target, busy, blocked, onInstallVersion
           </div>
           <PanelButton variant="ghost" size="sm" aria-label={t('capability.close')} onClick={onClose}>{'✕'}</PanelButton>
         </div>
-        <div className="pico-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 12 }}>
+        <div className="zeokeel-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 12 }}>
           <div style={{ ...LABEL_SM }}>{t('capability.detailDescription')}</div>
           <p style={{ ...DESC, whiteSpace: 'pre-wrap', marginTop: 4 }} data-role="detail-description">
             {description === '' ? t('capability.detailNoDescription') : description}
@@ -1333,12 +1333,12 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     // loading 由两个分区各自的状态驱动（renderSection 按 tab 显示对应分区
     // 的 loading/错误/空态）；此处不再翻转全局 loading。
     void loadSection('market', async () => {
-      const res = await fetch('/api/pico/capabilities?source=market')
+      const res = await fetch('/api/zeokeel/capabilities?source=market')
       if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
       return (await res.json() as { items?: CapabilityItem[] }).items ?? []
     })
     void loadSection('mine', async () => {
-      const res = await fetch('/api/pico/capabilities?source=local')
+      const res = await fetch('/api/zeokeel/capabilities?source=local')
       if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
       return (await res.json() as { items?: CapabilityItem[] }).items ?? []
     })
@@ -1361,7 +1361,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
   //      所以陷阱与 `panelRef.current?.focus()` 都是死代码；而整页面板的键盘语义本来
   //      就不该把 Tab 圈死（侧边栏是同一个可键盘到达的面板出口）。
   //
-  // 现在的唯一权威是装载器 `@picoaide/dsh-panel-surface`：它在 document 上处理 Esc
+  // 现在的唯一权威是装载器 `@zeokeel/dsh-panel-surface`：它在 document 上处理 Esc
   // （检测到 `[role=dialog][aria-modal=true]` 时让给内层模态），并在激活时把焦点移到
   // 面板容器上。弹层自己负责它那一层的 Esc（见 CapabilityDetailDialog）。
 
@@ -1369,7 +1369,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const timer = setInterval(() => {
       const seq = loadSeqRef.current
-      void fetch('/api/pico/capabilities?source=market').then(async (res) => {
+      void fetch('/api/zeokeel/capabilities?source=market').then(async (res) => {
         if (!res.ok) return
         const data = await res.json() as { items?: CapabilityItem[] }
         if (seq !== loadSeqRef.current) return
@@ -1534,7 +1534,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     }
     setAction({ key, kind: 'uploading' })
     try {
-      const path = item.kind === 'skill' ? '/api/pico/shared-skills/upload' : '/api/pico/agent-presets/upload'
+      const path = item.kind === 'skill' ? '/api/zeokeel/shared-skills/upload' : '/api/zeokeel/agent-presets/upload'
       const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1651,7 +1651,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
       : t('capability.builtinInstall')
     const title = skill.title !== undefined && skill.title !== '' ? skill.title : skill.name
     return (
-      <Card key={key} interactive style={CARD} className="pico-skill-card">
+      <Card key={key} interactive style={CARD} className="zeokeel-skill-card">
         <div style={TITLE_ROW}>
           <IconTile size={38} radius={12} tone="brand" label={skill.name.charAt(0)} />
           <div style={NAME_COL}>
@@ -1734,7 +1734,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     const delisted = isDelistedItem(item)
     const transferred = isTransferredItem(item)
     return (
-      <Card key={key} interactive muted={item.status === 'rejected' || delisted} style={CARD} className="pico-skill-card">
+      <Card key={key} interactive muted={item.status === 'rejected' || delisted} style={CARD} className="zeokeel-skill-card">
         <div style={TITLE_ROW}>
           <IconTile size={38} radius={12} tone={item.kind === 'skill' ? 'brand' : 'neutral'} label={item.name.charAt(0)} />
           <div style={NAME_COL}>
@@ -1910,7 +1910,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
   const content = renderSection(tab === 'market' ? 'market' : 'mine', tab === 'market' ? t('capability.emptyMarket') : t('capability.emptyMine'))
 
   return (
-    <div className="pico-capability" data-role="capability-page">
+    <div className="zeokeel-capability" data-role="capability-page">
       <PanelPage
         icon={<icons.IconCapability size={16} />}
         title={t('capability.title')}
@@ -1939,7 +1939,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
                 <button
                   key={f}
                   type="button"
-                  className="pico-chipbtn"
+                  className="zeokeel-chipbtn"
                   data-active={filter === f ? 'true' : 'false'}
                   style={FILTER}
                   onClick={() => { setFilter(f) }}

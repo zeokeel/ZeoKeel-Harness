@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/assets"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
 )
 
 // ===== 模块头常量（§4.2 魔数 + 版本/层字段校验）=====

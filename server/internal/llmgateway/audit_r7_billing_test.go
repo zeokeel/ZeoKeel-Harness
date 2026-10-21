@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // r7Upstream 是按 OpenAI 规范行为的最小上游:只有

@@ -58,8 +58,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/updatecheck"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/updatecheck"
 )
 
 // r14oShadowSchema 是本判据专用的 shadow schema（与 r12n2 / r13ge / r14k 的分开，

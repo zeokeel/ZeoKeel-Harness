@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
 )
 
 // exportApp 读作者面的控制面导出（GET /:app_id/export）里的 app 段。

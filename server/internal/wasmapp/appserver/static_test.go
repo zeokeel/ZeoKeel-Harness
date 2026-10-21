@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // ===== 步骤⑨：静态资源（§4.2 / §4.6 响应缓存）=====
@@ -190,7 +190,7 @@ func TestStatic_NonIdempotentGoesToWasm(t *testing.T) {
 
 // TestStatic_ReservedAppConfigNeverServed 是 FIX-27 的回归判据。
 //
-// 审计结论：`GET /picoaide.app.json` 曾被匿名直出 200，body 是
+// 审计结论：`GET /zeokeel.app.json` 曾被匿名直出 200，body 是
 // `{"whitelist":["ceo","cfo"],…}` —— 名单本身成了可枚举资产（§10.5 第 56d 项刻意
 // 不校验账号存在性就是为了避免这个），R24 的"未授权请求进 wasm 由应用返回 403"
 // 与 R26"平台不提供员工目录"也一并被绕过。
@@ -210,19 +210,19 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 	e.publishApp(appSpec{appID: appID, config: cfg, assets: map[string]string{
 		"index.html":               "<html>public shell</html>",
 		"static/app.js":            "console.log(1)",
-		"assets/picoaide.app.json": `{"note":"作者误放在子目录里的同名文件也不直出"}`,
+		"assets/zeokeel.app.json": `{"note":"作者误放在子目录里的同名文件也不直出"}`,
 	}})
 
 	// (1) 历史 access=public（读取侧即 login）：不得拿到配置文件内容，必须交给 wasm。
 	for _, p := range []string{
-		"/picoaide.app.json",     // 根路径
-		"/./picoaide.app.json",   // dot 段被 path.Clean 归一
-		"//picoaide.app.json",    // 双斜杠被 path.Clean 归一
+		"/zeokeel.app.json",     // 根路径
+		"/./zeokeel.app.json",   // dot 段被 path.Clean 归一
+		"//zeokeel.app.json",    // 双斜杠被 path.Clean 归一
 		"/%70icoaide.app.json",   // 一次百分号编码（net/http 已解码）
 		"/%2570icoaide.app.json", // 双层编码（isReservedAsset 自己再解一次）
-		"/PicoAide.App.JSON",     // 大小写（macOS/Windows 文件系统不敏感）
-		"/PICOAIde.app.json",
-		"/assets/picoaide.app.json", // 子目录里的同名文件同样不直出
+		"/ZeoKeel.App.JSON",     // 大小写（macOS/Windows 文件系统不敏感）
+		"/ZEOKEEL.app.json",
+		"/assets/zeokeel.app.json", // 子目录里的同名文件同样不直出
 	} {
 		rec := e.get(appID, p)
 		if strings.Contains(rec.Body.String(), secretList) {
@@ -234,7 +234,7 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 		}
 	}
 	// 语义断言（不只是"没泄露"）：保留资源确实落到了 wasm 手里，路径原样传进帧。
-	for _, p := range []string{"/picoaide.app.json", "/%70icoaide.app.json"} {
+	for _, p := range []string{"/zeokeel.app.json", "/%70icoaide.app.json"} {
 		rec := e.get(appID, p)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("路径 %s 应交由 wasm 处理（200 + 应用自答），得到 %d", p, rec.Code)
@@ -243,8 +243,8 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 		if body["app_id"] != appID {
 			t.Fatalf("路径 %s：应由 wasm 处理，得到 %v", p, body)
 		}
-		if got, _ := body["path"].(string); !strings.EqualFold(got, "/picoaide.app.json") {
-			t.Fatalf("路径 %s：帧内路径=%q，want /picoaide.app.json（编码已归一）", p, got)
+		if got, _ := body["path"].(string); !strings.EqualFold(got, "/zeokeel.app.json") {
+			t.Fatalf("路径 %s：帧内路径=%q，want /zeokeel.app.json（编码已归一）", p, got)
 		}
 	}
 
@@ -255,7 +255,7 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 	e.publishApp(appSpec{appID: guardedID, config: guardedCfg, assets: map[string]string{
 		"index.html": "<html>guarded shell</html>",
 	}})
-	anon := e.doClient(guardedID, nil, http.MethodGet, "/picoaide.app.json", "", "")
+	anon := e.doClient(guardedID, nil, http.MethodGet, "/zeokeel.app.json", "", "")
 	if anon.Code != http.StatusUnauthorized {
 		t.Fatalf("无身份访问要求登录应用的保留资源应 401（客户端模型没有换票这一跳），得到 %d body=%.200s",
 			anon.Code, anon.Body.String())
@@ -268,7 +268,7 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 	// ⚠️ 判据必须是"配置文件的内容"，不能拿 `"whitelist"` 这个字符串当证据：
 	// 2026-09-18 收敛为 access 三模式后，帧内 auth.mode 就可能等于 `whitelist`
 	//（应用把模式回显出来时会被误判成泄露）。
-	authed := e.doClient(guardedID, e.clientUser("bob"), http.MethodGet, "/picoaide.app.json", "", "")
+	authed := e.doClient(guardedID, e.clientUser("bob"), http.MethodGet, "/zeokeel.app.json", "", "")
 	for _, leak := range []string{`"data_sensitivity"`, `"purpose"`, "作者误放在子目录"} {
 		if strings.Contains(authed.Body.String(), leak) {
 			t.Fatalf("未授权员工（bob）拿到了应用配置（命中 %s）⇒ 静态直出绕过了应用准入判断 body=%.200s",
@@ -289,11 +289,11 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 		t.Fatalf("入口文档不得由宿主直出（已交给 wasm），得到 %q", entry.Body.String())
 	}
 	// `/api` 保留前缀优先级高于保留资源名（回归：别把规则顺序写反）。
-	api := e.get(appID, "/api/picoaide.app.json")
+	api := e.get(appID, "/api/zeokeel.app.json")
 	if api.Code != http.StatusOK {
 		t.Fatalf("/api/* 一律交给 wasm，得到 %d", api.Code)
 	}
-	if body := decodeJSON(t, api.Body); body["path"] != "/api/picoaide.app.json" {
+	if body := decodeJSON(t, api.Body); body["path"] != "/api/zeokeel.app.json" {
 		t.Fatalf("/api/* 应由 wasm 处理，得到 %v", body)
 	}
 }
@@ -303,15 +303,15 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 // 变异验证：把 EqualFold 改成 ==（大小写敏感）或去掉"看最后一段"⇒ 对应用例必红。
 func TestStatic_ReservedAssetMatcher(t *testing.T) {
 	cases := map[string]bool{
-		"picoaide.app.json":            true,
-		"PicoAide.App.JSON":            true,
-		"assets/picoaide.app.json":     true,
-		"a/b/c/picoaide.app.json":      true,
-		"picoaide.app.json.bak":        false,
-		"not-picoaide.app.json":        false,
+		"zeokeel.app.json":            true,
+		"ZeoKeel.App.JSON":            true,
+		"assets/zeokeel.app.json":     true,
+		"a/b/c/zeokeel.app.json":      true,
+		"zeokeel.app.json.bak":        false,
+		"not-zeokeel.app.json":        false,
 		"index.html":                   false,
-		"picoaide.app.json/index.html": false, // 最后一段不是它
-		"api/picoaide.app.json":        true,  // 保留前缀由 staticLogicalPath 先拒，这里保持"是"
+		"zeokeel.app.json/index.html": false, // 最后一段不是它
+		"api/zeokeel.app.json":        true,  // 保留前缀由 staticLogicalPath 先拒，这里保持"是"
 		"":                             false,
 	}
 	for in, want := range cases {

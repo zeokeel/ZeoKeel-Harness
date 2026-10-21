@@ -1,9 +1,9 @@
 /**
  * 能力中心客户端插件（本包）的接线判据。
  *
- * 2026-10-13：本文件由 `@picoaide/dsh-enterprise` 的 `tests/client-foot-entry.spec.ts`
+ * 2026-10-13：本文件由 `@zeokeel/dsh-enterprise` 的 `tests/client-foot-entry.spec.ts`
  * **搬过来并改写**（能力中心的客户端面整包搬出）。搬过来的三条断言一条不少：
- *   - 「不从硬 inject 等 picoFootMenu，而是在子 fiber 里等」；
+ *   - 「不从硬 inject 等 zeokeelFootMenu，而是在子 fiber 里等」；
  *   - 「foot 行被禁用 ⇒ 面板与其余面照常（只有条目等不到）」；
  *   - 「登记 id/order/文案正确的条目，activate 就是面板装载器的开关」；
  *   - 「注销函数真的摘掉条目」「不再往 sidebar.footer.action 注册任何东西」
@@ -17,11 +17,11 @@
  * **极简 DOM 替身**，不引入 jsdom 依赖。
  *
  * ---- 变异验证 ----
- *   - 删掉 `ctx.picoFootMenu.add(…)` ⇒「登记条目」红（界面上能力中心入口消失）；
+ *   - 删掉 `ctx.zeokeelFootMenu.add(…)` ⇒「登记条目」红（界面上能力中心入口消失）；
  *   - `id` 改成 'capability-center'（旧槽位 id）⇒「id 是 PanelId」红；
  *   - `activate` 换成空函数 ⇒「activate 是面板装载器的开关」红；
  *   - 删掉 `mountCapabilityCenter()` 那条 effect ⇒「面板仍然挂载」红；
- *   - 把 `picoFootMenu` 写进硬 `inject` ⇒「容器被禁用时整条 fiber 还在等」红；
+ *   - 把 `zeokeelFootMenu` 写进硬 `inject` ⇒「容器被禁用时整条 fiber 还在等」红；
  *   - 删掉技能卡样式表那条 effect ⇒「卡片样式随面板一起注入」红。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -51,7 +51,7 @@ interface Harness {
 
 /**
  * 记录型上下文替身；effect 立刻执行（本包的 effect 只注册服务/槽位/样式表，不挂 React 树）。
- * @param options - `footRowEnabled: false` 模拟"提供 picoFootMenu 的那一行被禁用"。
+ * @param options - `footRowEnabled: false` 模拟"提供 zeokeelFootMenu 的那一行被禁用"。
  */
 function harness(options: { footRowEnabled?: boolean } = {}): Harness {
   const footEntries: RegisteredFootEntry[] = []
@@ -68,7 +68,7 @@ function harness(options: { footRowEnabled?: boolean } = {}): Harness {
       if (typeof dispose === 'function' && label !== undefined) disposers.set(label, dispose as () => void)
       return () => {}
     },
-    // 服务等待：`picoFootMenu` 到位时子 fiber 立刻跑；禁用时不跑（条目消失，其余面貌照常）。
+    // 服务等待：`zeokeelFootMenu` 到位时子 fiber 立刻跑；禁用时不跑（条目消失，其余面貌照常）。
     inject: (deps: string[], run: (scope: ClientContext) => void) => {
       serviceWaits.push(deps)
       if (options.footRowEnabled !== false) run(ctx as unknown as ClientContext)
@@ -88,7 +88,7 @@ function harness(options: { footRowEnabled?: boolean } = {}): Harness {
       inject: (slot: string, run: () => unknown) => { slots.push(slot); run(); return () => {} },
       register: () => () => {},
     },
-    picoFootMenu: {
+    zeokeelFootMenu: {
       add: (entry: RegisteredFootEntry) => {
         footEntries.push(entry)
         return () => {
@@ -150,7 +150,7 @@ afterEach(() => {
 
 /**
  * 跑一遍真 apply。
- * @param options - `footRowEnabled: false` 模拟提供 `picoFootMenu` 的那一行被禁用。
+ * @param options - `footRowEnabled: false` 模拟提供 `zeokeelFootMenu` 的那一行被禁用。
  */
 async function run(options: { footRowEnabled?: boolean } = {}): Promise<{ h: Harness, inject: readonly string[], openCapabilityCenter: () => void }> {
   vi.resetModules()
@@ -163,12 +163,12 @@ async function run(options: { footRowEnabled?: boolean } = {}): Promise<{ h: Har
 }
 
 describe('能力中心：客户端插件接线', () => {
-  it('不从硬 inject 等 picoFootMenu（它由可被禁用的一行提供），而是在子 fiber 里等', async () => {
+  it('不从硬 inject 等 zeokeelFootMenu（它由可被禁用的一行提供），而是在子 fiber 里等', async () => {
     const { h, inject } = await run()
     // 硬 inject 的后果：那一行被渠道覆盖层 / `$DSH_HOME/cordis.patch.yml` 禁用时，
     // 整条 fiber 永久 pending（无报错），能力中心面板一起消失（P1-7 教训）。
-    expect(inject).not.toContain('picoFootMenu')
-    expect(h.serviceWaits).toEqual([['picoFootMenu']])
+    expect(inject).not.toContain('zeokeelFootMenu')
+    expect(h.serviceWaits).toEqual([['zeokeelFootMenu']])
   })
 
   it('foot 行被禁用 ⇒ 面板与样式照常（只有条目等不到）', async () => {
@@ -213,14 +213,14 @@ describe('能力中心：客户端插件接线', () => {
     expect(h.effects).toContain('capability-center: skill card style')
     // 装载器自己也往 head 里注入一份面板容器样式（`data-dsh-panel-style`），所以这里按
     // **内容**收敛到技能卡那一条，而不是数 head 里的元素个数。
-    const cardStyles = h.styles.filter(css => css.includes('.pico-skill-card'))
+    const cardStyles = h.styles.filter(css => css.includes('.zeokeel-skill-card'))
     // 恰好一份：重复注入说明样式表被装了两次（企业包那份已被反向判据钉住不存在）。
     expect(cardStyles).toHaveLength(1)
     // 三条规则逐条在场（选择器与声明与搬出前一字未改）。
     const css = cardStyles[0]!
-    expect(css).toContain('.pico-skill-card {')
-    expect(css).toContain('.pico-skill-card:hover {')
-    expect(css).toContain('.pico-skill-card:focus-within {')
+    expect(css).toContain('.zeokeel-skill-card {')
+    expect(css).toContain('.zeokeel-skill-card:hover {')
+    expect(css).toContain('.zeokeel-skill-card:focus-within {')
     expect(css).toContain('border-color: var(--dsw-alias-brand-primary) !important;')
     expect(css).toContain('outline: 2px solid var(--dsw-alias-brand-primary);')
   })

@@ -277,7 +277,7 @@ describe('R10 N2 (production path): two connectors on one endpoint, one of them 
 
         // 甲（probe-a）的凭据变更 ⇒ 它重建、等满 grace、放弃。这一步**不得**动乙的记账。
         await announceNewToken(dir, 'connector-a', 'at-n2-a')
-        h.emit('pico/connector-credentials-changed', { id: 'connector-a' })
+        h.emit('zeokeel/connector-credentials-changed', { id: 'connector-a' })
         await waitFor(() => h.configs.length === 5, 15_000)
         expect(
           h.warns.filter(line => line.includes('probe-a') && line.includes('超时')).length,
@@ -291,7 +291,7 @@ describe('R10 N2 (production path): two connectors on one endpoint, one of them 
         // 乙 自己的凭据变更 ⇒ 它的重建必须**等**那个调用结算（grace 内），而不是读到
         // idle 直接掐断（那次结算由上面的 `SLOW_CALL_MS` 定时器触发）。
         await announceNewToken(dir, 'connector-b', 'at-n2-b')
-        h.emit('pico/connector-credentials-changed', { id: 'connector-b' })
+        h.emit('zeokeel/connector-credentials-changed', { id: 'connector-b' })
         await waitFor(() => h.configs.length === 6, 15_000)
         expect(
           h.warns.filter(line => line.includes('probe-b') && line.includes('等在途调用结束')).length,
@@ -316,11 +316,11 @@ describe('R10 N2 (production path): two connectors on one endpoint, one of them 
 
 /** Connect + authorize one connector through the plugin's own routes. */
 async function authorize(h: ReturnType<typeof createHarness>, id: string, expected: number): Promise<void> {
-  await callRoute(h, `/api/pico/connectors/${id}/connect`, 'POST')
+  await callRoute(h, `/api/zeokeel/connectors/${id}/connect`, 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline) {
-    const res = await callRoute(h, `/api/pico/connectors/${id}/state`, 'GET')
+    const res = await callRoute(h, `/api/zeokeel/connectors/${id}/state`, 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } }).request?.authorizeUrl
     if (url) break
     await new Promise(resolve => setTimeout(resolve, 25))

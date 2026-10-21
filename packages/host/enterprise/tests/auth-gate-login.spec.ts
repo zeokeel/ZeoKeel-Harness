@@ -75,9 +75,9 @@ describe('auth-gate LOGIN_HTML inline script', () => {
 
   it('reads channel content from the login-page channel proxy (brand config retired)', () => {
     const script = loginScript()
-    // 数据来源是渠道配置(服务端 /api/client/v2/channel, 经本地 /api/pico/channel 代理)。
-    expect(script).toContain("fetch('/api/pico/channel?server='")
-    expect(script).not.toContain('/api/pico/brand')
+    // 数据来源是渠道配置(服务端 /api/client/v2/channel, 经本地 /api/zeokeel/channel 代理)。
+    expect(script).toContain("fetch('/api/zeokeel/channel?server='")
+    expect(script).not.toContain('/api/zeokeel/brand')
     expect(script).toContain('renderChannel(currentChannel)')
     // 渠道内容总是生效: 不再有 enabled 开关判定。
     expect(script).not.toMatch(/\.enabled/u)
@@ -148,7 +148,7 @@ describe('auth-gate CHANGE_PASSWORD_HTML inline script', () => {
 
   it('submits old_password + new_password to the local API and returns to login on success', () => {
     const html = renderedChangePasswordHTML()
-    expect(html).toContain('/api/pico/auth/password')
+    expect(html).toContain('/api/zeokeel/auth/password')
     expect(html).toContain('old_password: oldpw')
     expect(html).toContain("location.replace('/login'")
   })
@@ -167,7 +167,7 @@ function servedLoginPage(config: Config): string {
   const ctx = {
     effect: (fn: () => unknown) => { fn() },
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
-    picoSession: { isRestored: () => true, isLoggedIn: () => false, getSession: () => null },
+    zeokeelSession: { isRestored: () => true, isLoggedIn: () => false, getSession: () => null },
     webServer: {
       tapIndex: (cb: (html: string) => string) => { index = cb; return () => {} },
       register: () => () => {},

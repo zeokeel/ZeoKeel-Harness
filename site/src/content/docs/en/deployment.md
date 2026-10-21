@@ -1,16 +1,16 @@
 ---
 title: Deployment overview
-description: "Private deployment of PicoAide Harness: why the deliverable is a single image, why data may only live in bind mounts, how to choose a certificate mode, and the four iron rules."
+description: "Private deployment of ZeoKeel Harness: why the deliverable is a single image, why data may only live in bind mounts, how to choose a certificate mode, and the four iron rules."
 ---
 
-PicoAide Harness is delivered **inside your own network**: one server runs the enterprise server,
+ZeoKeel Harness is delivered **inside your own network**: one server runs the enterprise server,
 employees install the desktop client on their own machines. Sessions, files and the sandbox stay on
 the employee machine; accounts, the model gateway, metering and approvals stay on your server.
 This page covers the deployment forms, the deliverable, and the design decisions that run through
 every other page; the concrete steps live in [container deployment](/en/deployment/compose/) and
 [upgrade, backup & rollback](/en/deployment/upgrade/).
 
-> [`docs/deploy/AI-DEPLOY.md`](https://github.com/picoaide/picoaide-harness/blob/master/docs/deploy/AI-DEPLOY.md)
+> [`docs/deploy/AI-DEPLOY.md`](https://github.com/zeokeel/ZeoKeel-Harness/blob/master/docs/deploy/AI-DEPLOY.md)
 > in the repository is the **authoritative deployment guide** (first install / upgrade / rollback /
 > troubleshooting) and can be handed to an AI agent as-is. This wiki is the same process written for
 > humans; where the two disagree, the repository document and the code win.
@@ -68,7 +68,7 @@ registries, so "fetch a zip over HTTPS" is the only distribution path that works
 The price is that the customer verifies the bytes, which is why every version directory carries
 `SHA256SUMS` (see [Where to get the image](#where-to-get-the-image)).
 
-**③ Data may only live in bind mounts, never in named volumes.** `picoaide-data/`, `pg-data/`,
+**③ Data may only live in bind mounts, never in named volumes.** `zeokeel-data/`, `pg-data/`,
 `caddy-data/` and `certs/` are all **host directories** under the deployment directory (bind mounts).
 Because a backup must be "pack one directory", an audit must be able to point at a host file, moving
 to another machine is a directory copy, and named volumes live and die with Docker
@@ -84,9 +84,9 @@ Always use a concrete version tag, and on a multi-stack host the **channel-speci
 
 **⑤ Back up before upgrading, and verify the backup is not empty.** Database migrations are
 **irreversible** (a new version moves the schema forward), so the only way back is the `pg_dump` and
-the `picoaide-data/` snapshot taken before the upgrade. "The file exists" is not "the content is
+the `zeokeel-data/` snapshot taken before the upgrade. "The file exists" is not "the content is
 valid": an empty file, a truncated tar and a failed `pg_dump` all leave a file behind, so the check
-is `[ -s … ]` (non-empty), not `ls`. `picoaide-data/master.key` is the worst case — lose it and
+is `[ -s … ]` (non-empty), not `ls`. `zeokeel-data/master.key` is the worst case — lose it and
 every encrypted upstream API key (AES-GCM ciphertext) in the database is **permanently
 undecryptable** and has to be re-entered.
 
@@ -103,18 +103,18 @@ deliverable = one container image
 ```
 
 One command exports the deployment files into the deployment directory (the image's built-in
-`PICOAI_UNPACK_STACK` entry point):
+`ZEOKEEL_UNPACK_STACK` entry point):
 
 ```sh
-mkdir -p /opt/picoaide
-docker run --rm -v /opt/picoaide:/out -e PICOAI_UNPACK_STACK=/out \
-  picoaide-harness-server:<version>
-ls -1 /opt/picoaide   # docker-compose.yml / Caddyfile.* / .env.example / VERSION / client/
+mkdir -p /opt/zeokeel
+docker run --rm -v /opt/zeokeel:/out -e ZEOKEEL_UNPACK_STACK=/out \
+  zeokeel-harness-server:<version>
+ls -1 /opt/zeokeel   # docker-compose.yml / Caddyfile.* / .env.example / VERSION / client/
 ```
 
 The export uses **replace semantics**: `docker-compose.yml`, `Caddyfile.*`, `.env.example`,
 `client/` and `VERSION` are cleared and rewritten (otherwise `client/` would keep installers from two
-versions and employees could download the old one). `.env`, `picoaide-data/`, `pg-data/`,
+versions and employees could download the old one). `.env`, `zeokeel-data/`, `pg-data/`,
 `caddy-data/` and `certs/` are **never touched**. The export needs no downtime and does not change
 the running containers — it only writes files; switching versions happens when you edit `.env` and
 run `docker compose up -d`.
@@ -122,9 +122,9 @@ run `docker compose up -d`.
 ## Where to get the image
 
 ```
-https://release.picoaide.com/<channel>/latest.json                             ← version manifest (the server's update check reads it too)
-https://release.picoaide.com/<channel>/releases/<version>/picoaide-server-<version>-amd64.zip
-https://release.picoaide.com/<channel>/releases/<version>/SHA256SUMS           ← always verify after downloading
+https://release.zeokeel.com/<channel>/latest.json                             ← version manifest (the server's update check reads it too)
+https://release.zeokeel.com/<channel>/releases/<version>/zeokeel-server-<version>-amd64.zip
+https://release.zeokeel.com/<channel>/releases/<version>/SHA256SUMS           ← always verify after downloading
 ```
 
 Key fields in `latest.json`:
@@ -140,7 +140,7 @@ Key fields in `latest.json`:
 | `published_at` | When this version was published (UTC) |
 
 - Each channel **keeps only the 2 most recent versions** (latest + previous) on the update server; older ones come from
-  the [GitHub Releases](https://github.com/picoaide/picoaide-harness/releases) page (the public
+  the [GitHub Releases](https://github.com/zeokeel/ZeoKeel-Harness/releases) page (the public
   channels' history);
 - GitHub Releases carry **only public channels** (official / pre-release) images and `SHA256SUMS`;
   branded channels are bespoke deliveries and never appear in a public release;
@@ -152,7 +152,7 @@ Key fields in `latest.json`:
 |---|---|
 | Server | Linux x64; Docker ≥ 24 with Compose v2 (`docker compose`, not `docker-compose`), `openssl`, `curl`, `unzip` |
 | Resources | ≥ 4 cores / 8 GB RAM / 50 GB free disk recommended (`pg-data/` keeps growing); a host with **less than ~4 GiB available memory must select the `small` profile explicitly**, otherwise the server's startup self-check refuses to start |
-| Network | The server must reach `https://release.picoaide.com` (update check + image download); **employee machines need no internet at all** |
+| Network | The server must reach `https://release.zeokeel.com` (update check + image download); **employee machines need no internet at all** |
 | Ports | Caddy takes host ports 80/443 (`CADDY_HTTP_PORT` / `CADDY_HTTPS_PORT`; changing them means editing the Caddyfile too) |
 | Clients | Windows x64 / macOS (Apple silicon) / Linux x64; employee machines need no Node.js, pnpm or DSH |
 
@@ -165,7 +165,7 @@ employee clients / browsers
    Caddy 2 (reverse proxy + TLS termination, fixed IP 172.28.0.2)
       │ HTTP:8080 (compose-private network only)
       ▼
-   Go server (the entrypoint fixes volume ownership as root, then drops to user picoaide; fixed IP 172.28.0.3)
+   Go server (the entrypoint fixes volume ownership as root, then drops to user zeokeel; fixed IP 172.28.0.3)
       │
       ▼
    PostgreSQL 18 (bundled container, fixed IP 172.28.0.4, data in ./pg-data)
@@ -181,7 +181,7 @@ employee clients / browsers
 
 | Directory | Content | If it is lost |
 |---|---|---|
-| `picoaide-data/` | Application data + **`master.key`** | Every encrypted upstream key in the database becomes **permanently undecryptable** |
+| `zeokeel-data/` | Application data + **`master.key`** | Every encrypted upstream key in the database becomes **permanently undecryptable** |
 | `pg-data/` | PostgreSQL 18 data | Accounts, usage, approvals and audit are all gone |
 | `caddy-data/` `caddy-config/` | Caddy certificate store and configuration | `auto` mode has to re-issue certificates |
 | `certs/` | Manual certificates (`manual` mode) | Certificates must be placed again |
@@ -195,7 +195,7 @@ entrypoint treats that as an "unused mount" and refuses to start.
 
 Employee-built WASM apps open **only inside the desktop client**: the client opens a dedicated window
 and loads a custom-protocol address `<channel app origin scheme>://<app_id>/` (the scheme comes from
-the channel configuration; official and beta use `picoaide-app`). The client's protocol handler
+the channel configuration; official and beta use `zeokeel-app`). The client's protocol handler
 forwards execution to the server's single entry point
 `POST /api/client/v2/apps/wasm/:app_id/request` (with the employee's bearer token).
 
@@ -231,7 +231,7 @@ switching is just editing `TLS_MODE` and running `docker compose up -d`.
 |---|---|---|
 | 1 | **Never run** `docker compose down -v`, `docker volume prune` or `docker system prune --volumes` | Such commands delete volumes and image layers; even though the data lives in bind mounts, they show up next to "tidying up" and are the most common unrecoverable accident in the field |
 | 2 | **Never use the `latest` tag** | Not reproducible and impossible to anchor a rollback to; always use a concrete version tag |
-| 3 | **Always back up before an upgrade**, and confirm the backup is **not empty** | `picoaide-data/` (including `master.key`) plus a `pg_dump`; lose `master.key` and every encrypted upstream key in the database can never be decrypted again |
+| 3 | **Always back up before an upgrade**, and confirm the backup is **not empty** | `zeokeel-data/` (including `master.key`) plus a `pg_dump`; lose `master.key` and every encrypted upstream key in the database can never be decrypted again |
 | 4 | **Never overwrite an existing deployment directory with `.env`** | An existing `.env` means the host is already deployed — that is an **upgrade**; follow the upgrade flow instead of reinstalling |
 
 Also:
@@ -250,10 +250,10 @@ A first deployment counts as successful only when every row passes:
 |---|---|---|
 | 1 | All three containers Up (postgres healthy) | `docker compose ps` |
 | 2 | The health probe returns 200 | `curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/healthz"` |
-| 3 | Running version == target version | `docker exec picoaide-server /app/picoaide-server --version` |
-| 4 | `master.key` exists | `ls -1 /opt/picoaide/picoaide-data/master.key` |
+| 3 | Running version == target version | `docker exec zeokeel-server /app/zeokeel-server --version` |
+| 4 | `master.key` exists | `ls -1 /opt/zeokeel/zeokeel-data/master.key` |
 | 5 | The manifest has `client.assets` with **absolute https** URLs | `curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/updates/manifest"` |
-| 6 | The stack's channel matches the image | `docker exec picoaide-server cat /opt/picoaide/CHANNEL` equals `channel_id` from `GET /api/client/v2/channel` |
+| 6 | The stack's channel matches the image | `docker exec zeokeel-server cat /opt/zeokeel/CHANNEL` equals `channel_id` from `GET /api/client/v2/channel` |
 
 **How it fails**: row 2 still not 200 after 120 seconds, row 3 the wrong version, row 5 showing
 `client_unavailable`, row 6 two different channels. If any of these holds, do **not** report
@@ -267,10 +267,10 @@ and during an upgrade go straight to [rollback](/en/deployment/upgrade/).
 | The server is up but employees cannot connect | In `internal` mode the client reports an untrusted certificate | Expected: distribute Caddy's local CA to employee machines, or switch to `manual` with a corporate certificate |
 | `auto` mode never obtains a certificate | Caddy logs show ACME validation failures | The domain must point **directly** at this host with 80/443 open; behind a CDN or with an IP only ⇒ use `manual` / `internal` |
 | The caddy container fails to create: `not a directory` | `docker compose ps` shows no caddy | `TLS_MODE` is misspelled (only `internal` / `auto` / `manual` exist) |
-| Containers keep restarting | `docker compose logs --tail=100 server` | Two common causes: the PostgreSQL password does not match `pg-data`; or available memory is below 4 GiB while the profile is still `default` (the log says the WASM platform self-check refused to start) ⇒ write `PICOAI_WASM_MEMORY_PROFILE=small` in `.env` |
+| Containers keep restarting | `docker compose logs --tail=100 server` | Two common causes: the PostgreSQL password does not match `pg-data`; or available memory is below 4 GiB while the profile is still `default` (the log says the WASM platform self-check refused to start) ⇒ write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env` |
 | healthz stays non-200 | `docker compose ps` to see whether postgres is healthy | The first start runs every migration and takes 1–2 minutes; if it still fails, read the server log |
-| `docker compose up` reports a port or subnet conflict | `ss -tlnp`, `docker network inspect` | Changing ports means editing the Caddyfile too; subnet conflicts need `NETWORK_SUBNET` plus the three fixed IPs; if `picoaide-net` already exists with a different subnet, **stop and confirm** instead of `docker network rm` |
-| Employees see "always up to date" | The manifest contains `client_unavailable` | The server cannot produce an absolute https download URL: set `PICOAI_PUBLIC_BASE_URL=https://<domain>` and run `docker compose up -d server` |
+| `docker compose up` reports a port or subnet conflict | `ss -tlnp`, `docker network inspect` | Changing ports means editing the Caddyfile too; subnet conflicts need `NETWORK_SUBNET` plus the three fixed IPs; if `zeokeel-net` already exists with a different subnet, **stop and confirm** instead of `docker network rm` |
+| Employees see "always up to date" | The manifest contains `client_unavailable` | The server cannot produce an absolute https download URL: set `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` and run `docker compose up -d server` |
 | Apps will not open / report unavailable | The client version is older than the server | Apps open only in the desktop client and require matching versions: upgrade the client; an old client being unable to open apps is expected behaviour, not a fault |
 | Ports 80/443 are taken by another service on the host | `ss -tlnp \| grep -E ':(80\|443)\b'` | Do not fight for the port: start only `server + postgres` behind the existing reverse proxy, see [Operations & troubleshooting](/en/deployment/operations/) |
 

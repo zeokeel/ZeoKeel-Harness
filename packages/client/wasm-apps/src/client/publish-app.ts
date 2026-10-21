@@ -1,5 +1,5 @@
 /**
- * 发布编排的**客户端半边**：应用中心面板 → 本机 `/api/pico/apps/wasm/publish`。
+ * 发布编排的**客户端半边**：应用中心面板 → 本机 `/api/zeokeel/apps/wasm/publish`。
  *
  * 为什么由页面发起（而不是给 AI 一条工具面）：页面是"经 launch token 换过票的浏览器
  * 页面"，**天然持有** `dsh-auth-*` 持有性证明 —— 本地写面的围栏对它是透明的（先例：
@@ -18,7 +18,7 @@
  *  4. 把服务端**结构化错误** `{error:{code,message,details,hints}}` 一字段不丢地解析出来
  *     —— 第一消费者是 AI，也是给员工看的：只显示"失败"等于把可自修的信息丢掉（§8）。
  *
- * @module @picoaide/dsh-wasm-apps/client/publish-app
+ * @module @zeokeel/dsh-wasm-apps/client/publish-app
  */
 
 import { t } from './locales.ts'
@@ -38,9 +38,9 @@ import {
 } from './appcfg-contract.ts'
 
 /** 本地发布入口（宿主路由；唯一的发布链路）。 */
-export const PUBLISH_PATH = '/api/pico/apps/wasm/publish'
+export const PUBLISH_PATH = '/api/zeokeel/apps/wasm/publish'
 
-/** 应用配置草稿（字段名与 `picoaide.app.json` 一一对应）。 */
+/** 应用配置草稿（字段名与 `zeokeel.app.json` 一一对应）。 */
 export interface PublishConfigDraft {
   /**
    * 访问模式（**写侧只有两值**：`login | whitelist`；缺省 `login`）。
@@ -285,7 +285,7 @@ export interface PublishSuccess {
   enabled: boolean
   /**
    * 2026-09-19（冻结契约 §4.5）：发布响应里**不再有** `entry_url` —— 应用只在客户端
-   * 内以 `picoaide-app://<app_id>/` 打开，可分享形态是深链
+   * 内以 `zeokeel-app://<app_id>/` 打开，可分享形态是深链
    * `<渠道 scheme>://app/<app_id>`（客户端按 `app_id` 自己拼，见 `deep-link.ts`）。
    */
   checksum: string
@@ -322,7 +322,7 @@ export type JsonOutcome =
  *  - 非 2xx：解析信封（`.text()` 兜底成 `request failed`），**不丢响应体**；
  *  - 2xx 但不是 JSON：回落 `UNEXPECTED_RESPONSE` + 原文前缀（不假装成功）；
  *  - 传输层失败：`NETWORK_ERROR`（AbortError ⇒ `ABORTED`，`transport: true`）。
- * @param path - 本机路径（`/api/pico/...`）。
+ * @param path - 本机路径（`/api/zeokeel/...`）。
  * @param init - method 与可选 body / headers。
  * @param deps - 可注入的 fetch / 取消信号。
  * @returns 成功载荷或结构化失败。
@@ -419,7 +419,7 @@ export function encodeBase64(bytes: Uint8Array): string {
 }
 
 /**
- * 拼发布请求体（宿主 `/api/pico/apps/wasm/publish` 的入参）。
+ * 拼发布请求体（宿主 `/api/zeokeel/apps/wasm/publish` 的入参）。
  *
  * `config` 只发 `access` / `whitelist` / `purpose` / `data_sensitivity` / `owner` 五个字段
  * —— **不发 `visible`**（字段已删除，服务端字段集合封闭，多发即拒）、
@@ -645,7 +645,7 @@ export function parsePublishOutcome(payload: unknown): PublishSuccess | PublishF
  * "这个标识没人用"的**反向**结论 —— 用户填完一整个包才在最后一步拿到 409。
  * @see {@link checkAppIdAvailability}
  */
-export const AVAILABILITY_PATH = '/api/pico/apps/wasm'
+export const AVAILABILITY_PATH = '/api/zeokeel/apps/wasm'
 
 /** 标识查重结论（服务端 `availability` 的字段子集；字段名是跨端契约）。 */
 export interface AppIdAvailability {
@@ -776,7 +776,7 @@ export async function checkAppIdAvailability(
 }
 
 /**
- * 提交一次发布：读文件 → base64 → `POST /api/pico/apps/wasm/publish` → 解析结果。
+ * 提交一次发布：读文件 → base64 → `POST /api/zeokeel/apps/wasm/publish` → 解析结果。
  *
  * 分片与 90 s 预算**不在这里**：那是宿主 `/publish` 的编排（`base64 > 8 MiB` 自动分片、
  * 断线续传）。本函数只负责"页面这一侧"的一次 fetch —— 复制一份分片逻辑等于制造第二个

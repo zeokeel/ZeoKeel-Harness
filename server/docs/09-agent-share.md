@@ -5,11 +5,11 @@
 ## 1. 数据流
 
 ```
-员工(创造模式创建本地 preset) → /api/pico/agent-presets/upload(client 本地代理打包)
+员工(创造模式创建本地 preset) → /api/zeokeel/agent-presets/upload(client 本地代理打包)
   → POST /api/client/v2/agent-presets(员工 Bearer,归档 base64) → agent_presets 表(status=pending)
 管理员(webadmin 能力中心 /capabilities) → approve / reject / delete(全审计)
 审核通过 → 管理员授权(用户/部门 grants,0036)→ GET /api/client/v2/agent-presets 可见
-  → /api/pico/agent-presets/:name/:version/install(下载归档,校验 x-preset-checksum)
+  → /api/zeokeel/agent-presets/:name/:version/install(下载归档,校验 x-preset-checksum)
   → 安全解包到 <DSH_HOME>/.agent-presets/<id> → 上游 dsh-agent-presets discover 为 user preset
 ```
 
@@ -24,7 +24,7 @@
 
 - 员工(Bearer):`GET /api/client/v2/agent-presets`、`POST /api/client/v2/agent-presets`(归档 base64 + display_name/description ≤500 字;version 缺省 1.0.0)、`GET /api/client/v2/agent-presets/:name/:version/archive`(仅 approved 且已授权;旧 `/:name/archive` 取最高版本)。
 - 管理端(Admin):`/api/server/admin/agent-presets`(列表/approve/reject(body reason)/delete/archive 核查/`preview`(composition + 文件清单));0037 起 `PUT /:name/:version/quality`(官方/精选质量标记,仅 approved 行,互斥,审计 `agent_preset_qualify`)。webadmin 经能力中心(`/api/server/admin/capabilities/approvals`)统一审核。
-- 客户端本地代理:`/api/pico/agent-presets`(+upload/install/uninstall/archive),loopback guard + session 校验。
+- 客户端本地代理:`/api/zeokeel/agent-presets`(+upload/install/uninstall/archive),loopback guard + session 校验。
 - 统一聚合(Bearer):`GET /api/client/v2/capabilities?source=market|org`(与共享技能/市场技能合并返回,见 03-api-reference.md §8c)。
 
 ## 4. 归档安全(服务端 + 客户端双侧校验)

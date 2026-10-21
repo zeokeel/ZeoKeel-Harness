@@ -1,13 +1,13 @@
 /**
- * C2-2（2026-10 审计）：`pico/session-changed` 的两次投递必须给出**同一个**"没有会话"
+ * C2-2（2026-10 审计）：`zeokeel/session-changed` 的两次投递必须给出**同一个**"没有会话"
  * 哨兵，且 `channel-sync` 不得静默吞掉同步失败。
  *
  * 缺陷形态（审计探针 `probe/session-undefined.probe.spec.ts`，跑 HEAD 真实模块）：
  *   ```
  *   {"seen":[null],"firstIsNull":false,"firstIsUndefined":true}   # JSON.stringify 把 undefined 印成 null
  *   ```
- * 叶子包 `@picoaide/dsh-host-locale/session-events` 在"探测不到 `picoSession`"这一档
- * 回调 `undefined`，而事件通道（`SessionService` 的 `pico/session-changed`）一直投
+ * 叶子包 `@zeokeel/dsh-host-locale/session-events` 在"探测不到 `zeokeelSession`"这一档
+ * 回调 `undefined`，而事件通道（`SessionService` 的 `zeokeel/session-changed`）一直投
  * `null`；enterprise 的包装层 `subscribeSession` 公开签名却是 `Session | null`，三处
  * 消费方（`bootstrap` / `channel-sync` / `error-reporting`）**只判 `=== null`** ⇒ 收到
  * `undefined` 时走进"已登录"分支、在字段读取上抛错。`channel-sync` 那次的失败还会被
@@ -18,7 +18,7 @@
  *     回调收到 `null`，且**不是** `undefined`；
  *  ② 消费方行为：真 `bootstrap.apply()` 在同一替身上必须走"未登录"分支
  *     （三个命名空间被 `replace(…, {})` 清回组装缺省）且**不**报错；收到 `undefined`
- *     时它会去打网关、失败、只留一条 `pico bootstrap sync failed`（这一条即红）；
+ *     时它会去打网关、失败、只留一条 `zeokeel bootstrap sync failed`（这一条即红）；
  *  ③ 失败出口：`channel-sync` 的非预期同步失败必须在 logger 上留下可检索的一行
  *     （旧实现 `.catch(() => undefined)` ⇒ 一条都没有）。
  *
@@ -38,9 +38,9 @@ const SESSION: Session = { serverURL: 'https://harness.example', username: 'alic
 
 /**
  * 「还没装配 enterprise 面」的结构替身（叶子包 JSDoc 点名的第三档）：
- * 只有 `on`，**没有** `get`、**没有** `picoSession` 属性 ⇒ `probeSession()` = undefined。
+ * 只有 `on`，**没有** `get`、**没有** `zeokeelSession` 属性 ⇒ `probeSession()` = undefined。
  *
- * 这一档在真实装配里出现在"host 起了、`picoSession` 服务还没注册"的窗口（以及本仓
+ * 这一档在真实装配里出现在"host 起了、`zeokeelSession` 服务还没注册"的窗口（以及本仓
  * 大量结构替身用例）；叶子包明确要求"也回调一次，让消费方知道现在没有会话"。
  */
 function ctxWithoutSessionService(): {
@@ -59,7 +59,7 @@ function ctxWithoutSessionService(): {
 }
 
 describe('C2-2 ①：订阅契约的"没有会话"哨兵只有一个（null）', () => {
-  it('探测不到 picoSession ⇒ 补发 `null`，不是 `undefined`', () => {
+  it('探测不到 zeokeelSession ⇒ 补发 `null`，不是 `undefined`', () => {
     const { ctx } = ctxWithoutSessionService()
     const seen: unknown[] = []
     subscribeSession(ctx, (session) => { seen.push(session) })
@@ -97,7 +97,7 @@ describe('C2-2 ②：消费方在"没有会话"这一档走未登录分支（不
       expect(replace).toHaveBeenCalledWith('web-search-deepseek', {})
       expect(update, '未登录分支不得写任何会话派生内容').not.toHaveBeenCalled()
       expect(fetchSpy, '未登录分支不得出网').not.toHaveBeenCalled()
-      expect(error, '未登录不是错误：不得留下 `pico bootstrap sync failed`').not.toHaveBeenCalled()
+      expect(error, '未登录不是错误：不得留下 `zeokeel bootstrap sync failed`').not.toHaveBeenCalled()
     } finally {
       globalThis.fetch = original
       vi.unstubAllGlobals()
@@ -106,7 +106,7 @@ describe('C2-2 ②：消费方在"没有会话"这一档走未登录分支（不
 })
 
 describe('C2-2 ③：channel-sync 的同步失败不得被静默吞掉', () => {
-  it('非预期失败（`pico/channel-changed` 的消费方抛错）必须留下可检索的一行日志', async () => {
+  it('非预期失败（`zeokeel/channel-changed` 的消费方抛错）必须留下可检索的一行日志', async () => {
     const error = vi.fn()
     const listeners: Array<(session: unknown) => void> = []
     const ctx = {
@@ -147,7 +147,7 @@ describe('C2-2 反向对照：真实会话照常投递', () => {
         listeners.push(listener)
         return () => { listeners.splice(listeners.indexOf(listener), 1) }
       },
-      picoSession: { isRestored: () => true, getSession: () => SESSION },
+      zeokeelSession: { isRestored: () => true, getSession: () => SESSION },
     } as unknown as Context
     const seen: unknown[] = []
     subscribeSession(ctx, (session) => { seen.push(session) })

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestMessagesBillSearchRequests 端到端覆盖 0085 的非流式路径：

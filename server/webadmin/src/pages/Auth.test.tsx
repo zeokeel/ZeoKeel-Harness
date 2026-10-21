@@ -24,7 +24,7 @@ const AUTH_SAMPLE = {
       issuer: 'https://idp.example.com',
       client_id: 'webadmin-client',
       client_secret: '***',
-      redirect_url: 'https://picoaide.example.com/api/auth/oidc/callback',
+      redirect_url: 'https://zeokeel.example.com/api/auth/oidc/callback',
     },
     openid: { issuer: '', client_id: '', client_secret: '', redirect_url: '' },
   },

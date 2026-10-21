@@ -32,7 +32,7 @@ import {
 import { writeValidMacBundle } from './helpers/mac-bundle-fixture.ts'
 
 const temporaryRoots: string[] = []
-const PRODUCT = 'PicoAide Harness'
+const PRODUCT = 'ZeoKeel Harness'
 
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -96,7 +96,7 @@ async function buildBundle(options: { readonly iconBytes?: Buffer, readonly patc
   const digest = asarHeaderDigest(readFileSync(asarPath), asarPath)
   const infoPlistPath = join(contents, 'Info.plist')
   const text = xmlPlist([
-    ['CFBundleIdentifier', 'ai.deepseek.dsh.desktop'],
+    ['CFBundleIdentifier', 'com.zeokeel.harness'],
     ['CFBundleExecutable', PRODUCT],
     ['CFBundleIconFile', 'icon.icns'],
     ['CFBundleName', PRODUCT],
@@ -325,7 +325,7 @@ describe('assertMacBundleConsistency', () => {
   it('accepts a real bundle and cross-checks the header digest against @electron/asar itself', async () => {
     const bundle = await buildBundle()
     const summary = assertMacBundleConsistency(bundle.appPath)
-    expect(summary.identifier).toBe('ai.deepseek.dsh.desktop')
+    expect(summary.identifier).toBe('com.zeokeel.harness')
     expect(summary.icon).toBe('icon.icns')
     expect(summary.asar?.packedEntries).toBeGreaterThan(0)
     expect(summary.asarIntegrity).toBe(bundle.asarDigest)
@@ -415,11 +415,11 @@ describe('assertMacBundleConsistency', () => {
 
     // 命中：同一份包，期望值取自"本次构建声明"。
     expect(
-      assertMacBundleConsistency(bundle.appPath, undefined, { expectedIdentifier: 'ai.deepseek.dsh.desktop' }).identifier,
-    ).toBe('ai.deepseek.dsh.desktop')
+      assertMacBundleConsistency(bundle.appPath, undefined, { expectedIdentifier: 'com.zeokeel.harness' }).identifier,
+    ).toBe('com.zeokeel.harness')
 
     // 不传期望值 = 不判身份（上线时行为，避免调用方漏传就变假红）。
-    expect(assertMacBundleConsistency(bundle.appPath).identifier).toBe('ai.deepseek.dsh.desktop')
+    expect(assertMacBundleConsistency(bundle.appPath).identifier).toBe('com.zeokeel.harness')
 
     // 不命中：包声称的身份与本次构建声明的身份不同 ⇒ 必须红，且文案点出两个值。
     expect(() => assertMacBundleConsistency(bundle.appPath, undefined, {

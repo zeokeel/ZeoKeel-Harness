@@ -91,7 +91,7 @@ func scanReportSubscription(scan func(dest ...any) error) (ReportSubscription, e
 //
 // 为什么必须是 **ctx** 形态、而且必须能落在 `*sql.Conn` 上：月报投递要在**认领连接**
 // 上做"锁内新读"（见 internal/reports 的 DispatchAll，R20A-S-04）。换成 `*sql.DB`
-// 就是"持着一条连接再向池里要第二条" —— 池上限可被配成 1（PICOAI_DB_MAX_OPEN_CONNS），
+// 就是"持着一条连接再向池里要第二条" —— 池上限可被配成 1（ZEOKEEL_DB_MAX_OPEN_CONNS），
 // 那时构成 hold-and-wait 且不可恢复（R14-K）。
 type reportSubscriptionReader interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row

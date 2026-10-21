@@ -4,7 +4,7 @@
  *
  * ## 为什么是工具而不是 curl
  *
- * 员工令牌只存在于 Host（`ctx.picoSession`）的内存里（红线 3：应用与 AI 都拿不到）。
+ * 员工令牌只存在于 Host（`ctx.zeokeelSession`）的内存里（红线 3：应用与 AI 都拿不到）。
  * 所以 AI 有两条路都走不通：直连服务端（没有令牌）、打本机写面（要求浏览器持有性
  * 证明，而 AI 的 bash/curl 拿不到那张票）。工具在宿主进程内执行，直接调用与本地路由
  * **同一批编排函数**（`wasm-apps.ts` 的 `publishApp` / `validateApp` / `listCatalog`），
@@ -29,7 +29,7 @@
  *    工具 deadline 若短于出站预算，模型只会看到一句笼统的 tool timeout
  *    （本仓已有"闸门 + 余量 < 工具预算"的教训，见 2026-09-16 浏览器用户闸诊断）。
  *
- * @module @picoaide/dsh-enterprise/wasm-app-tools
+ * @module @zeokeel/dsh-enterprise/wasm-app-tools
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -37,9 +37,9 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { hostCopy, type HostLocale } from './locale.ts'
 import { APP_BUILDER_SKILL, builtinSkillInstallHint, isBuiltinSkillInstalled } from './builtin-skills.ts'
-import type { Session } from '@picoaide/dsh-gateway-client/config'
+import type { Session } from '@zeokeel/dsh-gateway-client/config'
 import type { AiRowsConsentStore } from './wasm-apps-ai-rows-consent.ts'
-import { picoSessionOf } from './session.ts'
+import { zeokeelSessionOf } from './session.ts'
 import {
   CLIENT_UPLOAD_TIMEOUT_MS,
   errorEnvelopeOf,
@@ -82,7 +82,7 @@ export const WASM_APP_TOOL_NAMES = [
 export const WASM_APP_TOOL_TIMEOUT_MS = 120_000
 
 // ---------------------------------------------------------------------------
-// 配置字段规格（`picoaide.app.json`）
+// 配置字段规格（`zeokeel.app.json`）
 // ---------------------------------------------------------------------------
 //
 // **单一真源** = 服务端生成的机器可读字段表
@@ -93,13 +93,13 @@ export const WASM_APP_TOOL_TIMEOUT_MS = 120_000
 //
 // 为什么不 import：跨包 import 服务端 Go 包的产物不在任何 package exports 里，
 // 运行期解析不可靠；而工具的参数 schema 必须是编译期常量（`defineTool` 要它做
-// 类型推导）。客户端面板另有一份镜像（`@picoaide/dsh-wasm-apps` 的
+// 类型推导）。客户端面板另有一份镜像（`@zeokeel/dsh-wasm-apps` 的
 // `appcfg-contract.ts`），同样对拍那份 JSON —— 三处都指向同一个真源。
 
-/** `picoaide.app.json` 的**封闭**字段集合（多一个未知字段服务端即拒）。 */
+/** `zeokeel.app.json` 的**封闭**字段集合（多一个未知字段服务端即拒）。 */
 export const APP_CONFIG_FIELDS = ['access', 'whitelist', 'purpose', 'data_sensitivity', 'owner', 'window', 'sensitive_columns'] as const
 
-/** `picoaide.app.json` 的字段名类型。 */
+/** `zeokeel.app.json` 的字段名类型。 */
 export type AppConfigField = (typeof APP_CONFIG_FIELDS)[number]
 
 /**
@@ -146,7 +146,7 @@ export const APP_CONFIG_FIELD_DESCRIPTIONS: Record<AppConfigField, string> = {
  * 说明为什么标成"必填"而不是"首版必填"：JSON Schema 表达不了"仅首版必填"。
  * 取严格一侧（始终要求这三个声明）的代价是更新版本时要多写三行，收益是
  * **声明永远不会因为漏填而被服务端判成"空"**——而这三行本来就写在应用的
- * `picoaide.app.json` 里，模型手上就有。
+ * `zeokeel.app.json` 里，模型手上就有。
  */
 const APP_CONFIG_PROPERTIES = {
   access: {
@@ -195,7 +195,7 @@ const APP_CONFIG_PROPERTIES = {
 
 /** `config` 参数的说明（发布必填；字段集合封闭：多一个未知字段服务端即拒）。 */
 const APP_CONFIG_DESCRIPTION = [
-  '应用配置声明（`picoaide.app.json` 的内容；**发布必填**，服务端字段表里 `config` 就是必填项）。',
+  '应用配置声明（`zeokeel.app.json` 的内容；**发布必填**，服务端字段表里 `config` 就是必填项）。',
   '字段集合是**封闭**的：access / whitelist / purpose / data_sensitivity / owner —— ',
   '多一个**未知**字段服务端会直接拒。',
   '旧 schema 的 visible / login_required 是**兼容形态**，但它们**不参与"字段是否缺席"的判定**：',
@@ -211,7 +211,7 @@ const APP_CONFIG_DESCRIPTION = [
 
 /** `config` 参数的说明（validate 的可选形态：预检时带上会一起校验）。 */
 const APP_CONFIG_DESCRIPTION_OPTIONAL = [
-  '可选：应用配置声明（`picoaide.app.json` 的内容）。',
+  '可选：应用配置声明（`zeokeel.app.json` 的内容）。',
   '预检时带上它会**一起校验**：access 取值、access=whitelist 时的名单是否为空、首版三个声明是否齐全都能提前发现。',
   '字段集合是**封闭**的：access / whitelist / purpose / data_sensitivity / owner —— 多一个**未知**字段服务端会直接拒；',
   '旧 schema 的 visible / login_required 不参与"字段是否缺席"的判定（既有生效版本时照样沿用上一版的 access/whitelist），',
@@ -404,7 +404,7 @@ function aiRowsNotAuthorized(locale: HostLocale, appId: string): WasmResponse {
  * 调用方**必须**从插件 fiber（`ctx.effect`）里调用并回收返回的 disposer：
  * 注册表的 disposer 不跟着 effect 走，漏回收会让插件重载后留下指向旧闭包的
  * 工具（本仓已有同款教训，见 browser 的 `applyBrowserTools` 注释）。
- * @param ctx - Host 上下文（用到 `picoSession` / `tools` / `logger`）。
+ * @param ctx - Host 上下文（用到 `zeokeelSession` / `tools` / `logger`）。
  * @param options - 宿主依赖（语言解析器）。
  * @returns 注销全部工具的 disposer。
  */
@@ -415,7 +415,7 @@ export function registerWasmAppTools(ctx: Context, options: WasmAppToolOptions):
     // 无头嵌入）会缺席。此时**明确报错**而不是静默什么都不做 —— 静默会让
     // "工具没注册"表现成"模型说它没有这个工具"，而日志里一条线索都没有。
     ctx.logger?.error?.(
-      `pico: tools service is absent — ${WASM_APP_TOOL_NAMES.join('/')} were NOT registered`,
+      `zeokeel: tools service is absent — ${WASM_APP_TOOL_NAMES.join('/')} were NOT registered`,
     )
     return () => {}
   }
@@ -432,7 +432,7 @@ export function registerWasmAppTools(ctx: Context, options: WasmAppToolOptions):
     locale: HostLocale,
     kind: 'read' | 'write',
   ): { ok: true, session: Session } | { ok: false, response: WasmResponse } => {
-    const session = picoSessionOf(ctx)?.getSession() ?? null
+    const session = zeokeelSessionOf(ctx)?.getSession() ?? null
     if (session === null) {
       return {
         ok: false,

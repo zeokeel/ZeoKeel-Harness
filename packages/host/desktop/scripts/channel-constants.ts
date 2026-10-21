@@ -9,14 +9,14 @@
  *
  * 为什么单独一个文件（2026-09-28 一次真实 tag 事故的收口）：
  * 这两份清单此前直接写在 `scripts/channel-build.ts` 里，而那个模块**顶端** import 了
- * `../src/desktop-home.ts`（后者 `export * from '@picoaide/dsh-host-home'`，一个需要
+ * `../src/desktop-home.ts`（后者 `export * from '@zeokeel/dsh-host-home'`，一个需要
  * `node_modules` 链接 + 构建产物才能解析的工作区包）。于是三个 shell 侧探针
  * （`scripts/ci-channels.sh`、`scripts/ci-channel-transfer.sh`、
  * `scripts/ci-build-channel-images.sh`，它们用 `import(file://…/channel-build.ts)` 读这些常量）
  * **只在装了依赖、且工作区已构建的环境里能跑** —— Gate 与三个打包 job 都是这种环境，
  * 所以 PR/分支 CI 全绿；而 **release job 只 checkout、不 install 也不 build**
  * ⇒ `v2.8.2-beta.2` 的 tag 流水线红在 "Fetch channel packages"：
- * `Cannot find package '@picoaide/dsh-host-home' imported from …/src/desktop-home.ts`。
+ * `Cannot find package '@zeokeel/dsh-host-home' imported from …/src/desktop-home.ts`。
  * tag 之前没有任何 CI 能看到这一格（`release` job 只在 tag 上跑）。
  *
  * **不变量（改这个文件前先读）**：本文件必须**零 import**（相对、绝对、bare 一律不许）。
@@ -300,11 +300,11 @@ export function channelFeaturesVariantAssignment(features: ChannelFeatures): str
 }
 
 /** 哨兵串的固定前缀/后缀（见 {@link featureSentinel}）。 */
-export const FEATURE_SENTINEL_PREFIX = 'picoaide.feature.'
+export const FEATURE_SENTINEL_PREFIX = 'zeokeel.feature.'
 export const FEATURE_SENTINEL_VERSION = 'v1'
 
 /**
- * 一个功能模块的**端到端哨兵串**：`picoaide.feature.<module>.v1`。
+ * 一个功能模块的**端到端哨兵串**：`zeokeel.feature.<module>.v1`。
  *
  * 用途（**只是副证**，见 `docs/decisions/2026-10-13-channel-feature-modules.md`）：
  * 裁剪实现落地后，用来对产物做一次廉价的存在性抽查 —— 关闭的模块其哨兵不应出现在

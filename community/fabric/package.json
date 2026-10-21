@@ -10,12 +10,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/picoaide/picoaide-harness.git",
+    "url": "git+https://github.com/zeokeel/ZeoKeel-Harness.git",
     "directory": "community/fabric"
   },
-  "homepage": "https://github.com/picoaide/picoaide-harness/tree/master/community/fabric#readme",
+  "homepage": "https://github.com/zeokeel/ZeoKeel-Harness/tree/master/community/fabric#readme",
   "bugs": {
-    "url": "https://github.com/picoaide/picoaide-harness/issues"
+    "url": "https://github.com/zeokeel/ZeoKeel-Harness/issues"
   },
   "type": "module",
   "files": [

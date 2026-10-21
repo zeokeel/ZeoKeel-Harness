@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 修复轮 1(F-07)回归防线:库里存着**被新校验拒绝**的历史 DSN 时,

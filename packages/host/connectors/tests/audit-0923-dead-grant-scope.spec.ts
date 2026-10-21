@@ -60,7 +60,7 @@ interface Row {
 const storeDirOf = (username: string): string => scopeDir(username)
 
 async function rowOf(h: Harness, id: string): Promise<Row> {
-  const list = JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as { connectors: Row[] }
+  const list = JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as { connectors: Row[] }
   return list.connectors.find(entry => entry.id === id) as Row
 }
 

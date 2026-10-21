@@ -74,11 +74,11 @@ describe('channel speech deployment → sensevoice row', () => {
   it('skips the row when the profile has no voice bundle (web assembly)', () => {
     const patches = channelProfilePatches(
       profileWith({ speech_model_origin: 'https://mirror.example.com' }),
-      new Set(['pico-connectors']),
+      new Set(['zeokeel-connectors']),
       HOME,
     )
     // 只注入确实存在的行：web 组装没有 voice bundle，注入那行会被 loader 拒绝。
-    expect(patches.map(p => p.id)).toEqual(['pico-connectors'])
+    expect(patches.map(p => p.id)).toEqual(['zeokeel-connectors'])
   })
 
   it('restates every config key the upstream row declares (whole-key replacement)', () => {
@@ -95,11 +95,11 @@ describe('channel speech deployment → sensevoice row', () => {
 
   it('carries a pre-placed model directory and VAD file as absolute paths', () => {
     const config = speechConfig({
-      speech_model_dir: '/opt/picoaide/speech/sensevoice',
-      speech_vad_path: '/opt/picoaide/speech/silero_vad.onnx',
+      speech_model_dir: '/opt/zeokeel/speech/sensevoice',
+      speech_vad_path: '/opt/zeokeel/speech/silero_vad.onnx',
     })
-    expect(config.modelDirectory).toBe('/opt/picoaide/speech/sensevoice')
-    expect(config.vadModelPath).toBe('/opt/picoaide/speech/silero_vad.onnx')
+    expect(config.modelDirectory).toBe('/opt/zeokeel/speech/sensevoice')
+    expect(config.vadModelPath).toBe('/opt/zeokeel/speech/silero_vad.onnx')
     // 没配的字段不出现（不是 undefined 值）。
     expect(config).not.toHaveProperty('modelOrigin')
   })
@@ -107,14 +107,14 @@ describe('channel speech deployment → sensevoice row', () => {
   it('accepts a per-platform map and picks this platform, then default', () => {
     const config = speechConfig({
       speech_model_dir: {
-        default: '/opt/picoaide/speech/sensevoice',
-        win32: 'C:\\ProgramData\\PicoAide\\speech\\sensevoice',
-        linux: '/srv/picoaide/speech/sensevoice',
+        default: '/opt/zeokeel/speech/sensevoice',
+        win32: 'C:\\ProgramData\\ZeoKeel\\speech\\sensevoice',
+        linux: '/srv/zeokeel/speech/sensevoice',
       },
     })
     const expected = process.platform === 'win32'
-      ? 'C:\\ProgramData\\PicoAide\\speech\\sensevoice'
-      : process.platform === 'linux' ? '/srv/picoaide/speech/sensevoice' : '/opt/picoaide/speech/sensevoice'
+      ? 'C:\\ProgramData\\ZeoKeel\\speech\\sensevoice'
+      : process.platform === 'linux' ? '/srv/zeokeel/speech/sensevoice' : '/opt/zeokeel/speech/sensevoice'
     expect(config.modelDirectory).toBe(expected)
   })
 
@@ -141,19 +141,19 @@ describe('channel speech deployment → sensevoice row', () => {
       fileURLToPath(new URL('cordis.patch.yml', bundleRoot)),
     ) ?? []
     const channelPatches = channelProfilePatches(
-      profileWith({ speech_model_dir: '/opt/picoaide/speech/sensevoice' }),
+      profileWith({ speech_model_dir: '/opt/zeokeel/speech/sensevoice' }),
       VOICE_ROWS,
       HOME,
     )
     const rows = composeEntries([[bundlePatches, channelPatches].flat()]) as Array<{ id?: string, config?: Record<string, unknown> }>
     const sensevoice = rows.find(row => row.id === 'speech-to-text-sensevoice')
     expect(sensevoice?.config?.dataRoot).toBe(`${HOME}/speech-to-text/sensevoice`)
-    expect(sensevoice?.config?.modelDirectory).toBe('/opt/picoaide/speech/sensevoice')
+    expect(sensevoice?.config?.modelDirectory).toBe('/opt/zeokeel/speech/sensevoice')
   })
 
   it('keeps the vendor brand out of the injected config', () => {
     // 渠道 config 里不得出现厂商名（公开仓纪律 + 白标要求）。
-    expect(JSON.stringify(speechConfig({ speech_model_dir: '/opt/picoaide/speech/sensevoice' })))
-      .not.toContain('PicoAide')
+    expect(JSON.stringify(speechConfig({ speech_model_dir: '/opt/zeokeel/speech/sensevoice' })))
+      .not.toContain('ZeoKeel')
   })
 })

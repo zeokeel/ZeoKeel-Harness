@@ -43,9 +43,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/router"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	wasmregistry "github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	wasmregistry "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 var (
@@ -68,7 +68,7 @@ func s72GuestModule(t *testing.T) []byte {
 			s72GuestErr = fmt.Errorf("定位模块根失败（需要 go 工具链）: %w", err)
 			return
 		}
-		dir, err := os.MkdirTemp("", "picoaide-s72-guest-")
+		dir, err := os.MkdirTemp("", "zeokeel-s72-guest-")
 		if err != nil {
 			s72GuestErr = err
 			return

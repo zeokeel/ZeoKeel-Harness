@@ -24,7 +24,7 @@
  * 本模块**不 import React**，也不碰 `document`（选择器是字符串常量，DOM 查询函数
  * 接受注入的 `Document`），这样宿主侧也能安全地 import 它做断言。
  *
- * @module @picoaide/dsh-panel-surface
+ * @module @zeokeel/dsh-panel-surface
  */
 
 /**

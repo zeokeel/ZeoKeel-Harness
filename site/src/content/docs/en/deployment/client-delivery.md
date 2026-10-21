@@ -3,7 +3,7 @@ title: Client delivery & updates
 description: 'Client installers ship inside the server image: employees download and auto-upgrade from their own enterprise server, with no internet access required.'
 ---
 
-PicoAide Harness clients are **not released separately**: the installers for the three platforms are
+ZeoKeel Harness clients are **not released separately**: the installers for the three platforms are
 packaged into the server image and served by the server itself. Employee machines need no internet
 access at all, so the client version naturally follows the server version — a state where "the client
 was upgraded but the server was not" is structurally impossible.
@@ -20,7 +20,7 @@ in → how auto-upgrade works → criteria and failure behaviour.
 | Prerequisite | Notes |
 |---|---|
 | The server is deployed and `/healthz` returns 200 | See [Container deployment](/en/deployment/compose/) |
-| The server can produce an **absolute https** download URL for clients | Behind a reverse proxy, set `PICOAI_PUBLIC_BASE_URL`, otherwise the manifest refuses to emit the `client` section by design |
+| The server can produce an **absolute https** download URL for clients | Behind a reverse proxy, set `ZEOKEEL_PUBLIC_BASE_URL`, otherwise the manifest refuses to emit the `client` section by design |
 | Employee machines can reach the enterprise domain | That single address is all they need; no public internet |
 | The employee client and the server are on the **same version** | Apps (WASM) open only inside the client and require matching versions |
 
@@ -56,7 +56,7 @@ costs far more than upgrading a few minutes later.
 ## Distribution chain
 
 ```
-official update server release.picoaide.com/<channel>/   ← server images only (administrators upgrade the server)
+official update server release.zeokeel.com/<channel>/   ← server images only (administrators upgrade the server)
         │ administrator fetches the image and deploys
         ▼
 enterprise server (the target of this deployment)        ← the image already contains installers for the three platforms
@@ -87,9 +87,9 @@ Manifest structure (example; URLs are assembled by the server from the request):
   "client": {
     "version": "<version>",
     "assets": {
-      "win-x64":       { "url": "https://harness.example.com/updates/client/PicoAide-Harness-<version>-x64-Setup.exe", "sha256": "…", "size": 123456789 },
-      "mac-universal": { "url": "https://harness.example.com/updates/client/PicoAide-Harness-<version>-mac.dmg",        "sha256": "…", "size": 123456789 },
-      "linux-x64":     { "url": "https://harness.example.com/updates/client/PicoAide-Harness-<version>-x86_64.AppImage", "sha256": "…", "size": 123456789 }
+      "win-x64":       { "url": "https://harness.example.com/updates/client/ZeoKeel-Harness-<version>-x64-Setup.exe", "sha256": "…", "size": 123456789 },
+      "mac-universal": { "url": "https://harness.example.com/updates/client/ZeoKeel-Harness-<version>-mac.dmg",        "sha256": "…", "size": 123456789 },
+      "linux-x64":     { "url": "https://harness.example.com/updates/client/ZeoKeel-Harness-<version>-x86_64.AppImage", "sha256": "…", "size": 123456789 }
     }
   }
 }
@@ -116,7 +116,7 @@ publish separately.
 
 The server derives the client-reachable absolute address in this order:
 
-1. `PICOAI_PUBLIC_BASE_URL` (**when set, it is the only authority**);
+1. `ZEOKEEL_PUBLIC_BASE_URL` (**when set, it is the only authority**);
 2. the public address configured in the admin console (`settings: server.base_url`; an invalid value is
    ignored with a warning);
 3. `X-Forwarded-Proto: https` declared by the reverse proxy;
@@ -128,7 +128,7 @@ query or fragment** — the manifest **refuses** to emit the `client` section an
 
 ```json
 { "schema": 1, "channel_id": "official", "server": { "version": "<version>" },
-  "client_unavailable": "server origin is not https; set PICOAI_PUBLIC_BASE_URL" }
+  "client_unavailable": "server origin is not https; set ZEOKEEL_PUBLIC_BASE_URL" }
 ```
 
 **Post-deployment self-check** (especially important on `internal` self-signed intranets):
@@ -139,7 +139,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 ```
 
 - `client.assets` with `https://…` URLs → fine;
-- `client_unavailable` → add `PICOAI_PUBLIC_BASE_URL=https://<domain>` to `.env` and run
+- `client_unavailable` → add `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` to `.env` and run
   `docker compose up -d server`.
 
 ## How the client auto-upgrades
@@ -178,7 +178,7 @@ the next check.
 > variables, PAC and command-line switches are all ignored). Only deployments that can reach the
 > internet *solely* through a proxy need the escape hatch: the channel field
 > `desktop.allow_system_proxy`, or the **real process environment variable**
-> `PICOAI_ALLOW_SYSTEM_PROXY=1` (writing it into the `.env` layer does not work). With the hatch open
+> `ZEOKEEL_ALLOW_SYSTEM_PROXY=1` (writing it into the `.env` layer does not work). With the hatch open
 > the startup log prints `proxy system/<source>`; the default direct mode prints `proxy direct`.
 
 The standalone desktop form (no server) is described in [Desktop client](/en/desktop/); branded channel
@@ -188,7 +188,7 @@ content is described in [Channels & white-label](/en/deployment/channels/).
 
 | # | Criterion | How |
 |---|---|---|
-| 1 | The manifest is reachable and well-formed | `schema` is `1`, `channel_id` matches `/opt/picoaide/CHANNEL`, `server.version` is the running version |
+| 1 | The manifest is reachable and well-formed | `schema` is `1`, `channel_id` matches `/opt/zeokeel/CHANNEL`, `server.version` is the running version |
 | 2 | Download URLs are safe | `client.assets.*.url` is **absolute https**; `client_unavailable` is a failure — handle its stated reason |
 | 3 | The installer downloads completely | fetch it and compare against the `sha256` and `size` in the manifest |
 | 4 | Resume works | a request with `Range: bytes=0-99` returns **206** with a 100-byte body |
@@ -221,13 +221,13 @@ curl -sk -o /dev/null -w '%{http_code}\n' -H 'Range: bytes=0-99' \
 
 | Symptom | Criterion | Recovery |
 |---|---|---|
-| Employees see "always up to date" | The manifest contains `client_unavailable` | Set `PICOAI_PUBLIC_BASE_URL=https://<domain>` and run `docker compose up -d server`; mandatory behind a reverse proxy |
+| Employees see "always up to date" | The manifest contains `client_unavailable` | Set `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` and run `docker compose up -d server`; mandatory behind a reverse proxy |
 | The portal shows no download entry point | The manifest has no `client` section **and no** `client_unavailable` | The image carries no client assets (`CLIENT-RELEASE.json` unreadable): make sure this is a released package, not a locally built image. The other cause is the admin setting `portal.public=false` (the portal is not public, so the root path redirects to the admin sign-in page) — clear that setting |
 | A download dies midway | The client offers a retry | Expected: the file is large and links are slow; the client resumes over Range. Server-side the write deadline is max(5 minutes, size/64 KiB/s), capped at 1 hour |
 | Download returns 404 | The body is a JSON `NOT_FOUND` envelope | The file name is not in the asset manifest, or its extension is not whitelisted; use the `file` value from the manifest instead of assembling a name by hand |
 | Installer verification fails | The client UI reports a checksum failure | Corrupted transport or a half-cached file: download again; verify server-side with criterion 3 that the manifest's sha256 matches the bytes actually served |
 | Employees are on an old version and apps will not open | Client version < server version | Apps open only inside the client and require matching versions: ask employees to upgrade; an old client failing to open apps is expected |
-| The client cannot reach the server (internet only through a proxy) | The client log says `proxy direct` | Open the escape hatch: channel field `desktop.allow_system_proxy: true`, or the real process environment `PICOAI_ALLOW_SYSTEM_PROXY=1`, then restart the client |
+| The client cannot reach the server (internet only through a proxy) | The client log says `proxy direct` | Open the escape hatch: channel field `desktop.allow_system_proxy: true`, or the real process environment `ZEOKEEL_ALLOW_SYSTEM_PROXY=1`, then restart the client |
 | macOS says the developer cannot be verified | No notarisation ticket inside the package | Only **release** channel packages are notarised; pre-release packages are signed only. Point employees at the release build, or cut a proper release tag through the channel process |
 | Two clients ended up installed on one machine | Two different application identifiers | Different channels are **separate applications** (application id, data root and single-instance lock are all channel-scoped); reinstalling the same channel overwrites, a different channel coexists (see [Channels & white-label](/en/deployment/channels/)) |
 

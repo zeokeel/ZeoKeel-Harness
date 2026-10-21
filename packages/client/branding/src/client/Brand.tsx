@@ -11,7 +11,7 @@ import {
 
 // build-time 版本注入(tsdown define 替换为字符串字面量);浏览器编译面无
 // node types,声明最小面的 process 占位。
-declare const process: { env: { PICOAI_PRODUCT_VERSION?: string } }
+declare const process: { env: { ZEOKEEL_PRODUCT_VERSION?: string } }
 
 /**
  * Brace mark tile matching the brand folder icon (`brands/official/logo.svg`):
@@ -106,14 +106,14 @@ export function BraceMark({ size, className }: { size: number; className?: strin
  * Sidebar brand name occupant. The upstream brand-name container owns
  * typography; this component supplies only the product name text, plus a
  * small product-version label next to it (build-time injected via
- * `process.env.PICOAI_PRODUCT_VERSION` define in tsdown.config.ts).
+ * `process.env.ZEOKEEL_PRODUCT_VERSION` define in tsdown.config.ts).
  */
 export function BrandName() {
-  const version = process.env.PICOAI_PRODUCT_VERSION as string | undefined
+  const version = process.env.ZEOKEEL_PRODUCT_VERSION as string | undefined
   return createElement(
     'span',
     { style: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, letterSpacing: '0.3px' } },
-    'PicoAide',
+    'ZeoKeel',
     version != null && version !== ''
       ? createElement('span', {
           style: {

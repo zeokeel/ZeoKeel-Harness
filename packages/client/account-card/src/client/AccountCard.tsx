@@ -6,7 +6,7 @@ import { t } from './locales.ts'
 import { formatMoney } from './money.ts'
 import type { UsagePayload } from '../usage-contract.ts'
 
-/** `/api/pico/auth/state` body (enterprise auth-gate). */
+/** `/api/zeokeel/auth/state` body (enterprise auth-gate). */
 interface AuthState {
   loggedIn: boolean
   username?: string
@@ -19,7 +19,7 @@ interface AuthState {
   identity?: string
 }
 
-/** `/api/pico/account/usage` body (this plugin's host route).
+/** `/api/zeokeel/account/usage` body (this plugin's host route).
  *  data 的类型来自唯一契约 usage-contract.ts(不再就地重复声明)。 */
 interface UsageResponse {
   data: UsagePayload | null
@@ -30,7 +30,7 @@ interface UsageResponse {
   authExpired?: boolean
   /**
    * R16B-01：这份快照属于哪个会话身份（宿主用 `session-identity.ts` 的唯一实现
-   * 盖的章）。渲染判据 = 它必须与 `/api/pico/auth/state` 的 `identity` 相等。
+   * 盖的章）。渲染判据 = 它必须与 `/api/zeokeel/auth/state` 的 `identity` 相等。
    * 旧宿主不盖这个字段 ⇒ 退化成"取数时观察到的身份"（见下面的 `readUsage`）。
    */
   identity?: string
@@ -184,7 +184,7 @@ const REFRESH: CSSProperties = {
  * 34px 行高 + 同款负外边距（抵掉侧栏 12px 内边距，两端对齐）。
  *
  * 底色**故意不在这里**：行内联样式优先级高于样式表，写 `background` 会把注入的
- * `.pico-account-row:hover` 顶掉（hover 变成死规则）。基准底与 hover 一起由
+ * `.zeokeel-account-row:hover` 顶掉（hover 变成死规则）。基准底与 hover 一起由
  * `index.ts` 注入的样式表给（窄轨例外：它要保留着色头像底，见 ROW_RAIL）。
  */
 const ROW: CSSProperties = {
@@ -472,8 +472,8 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
   // `if (res.ok)`、非 2xx 静默（而路由**故意**会回三种 401），口径不一致。
   //
   // 更重要的是身份判据（R16B-01）：同服务端换号（A→B）后，宿主路由会在去抖窗口内
-  // 拒绝交付旧账号的余额，但客户端**不能只依赖对端**——`/api/pico/auth/state` 与
-  // `/api/pico/account/usage` 是两次独立请求，可能落在切换点的两侧。因此：
+  // 拒绝交付旧账号的余额，但客户端**不能只依赖对端**——`/api/zeokeel/auth/state` 与
+  // `/api/zeokeel/account/usage` 是两次独立请求，可能落在切换点的两侧。因此：
   //   ① 两份响应一起读，观察到的身份与上一轮不同（非空 → 另一个非空）时，
   //      **这一发 usage 一律不采纳**（宁可留白，下一轮 10s 后在新身份下重取）；
   //   ② 采纳时把身份记进 `usageIdentity`，渲染期再比一次（`identityMismatch`）。
@@ -481,8 +481,8 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
   const readUsage = useCallback(async (force: boolean, isCancelled: () => boolean): Promise<void> => {
     try {
       const [authRes, usageRes] = await Promise.all([
-        fetch('/api/pico/auth/state'),
-        fetch(force ? '/api/pico/account/usage?refresh=1' : '/api/pico/account/usage'),
+        fetch('/api/zeokeel/auth/state'),
+        fetch(force ? '/api/zeokeel/account/usage?refresh=1' : '/api/zeokeel/account/usage'),
       ])
       const [authBody, usageBody] = await Promise.all([
         authRes.json(),
@@ -537,7 +537,7 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
   // Esc 收起浮层并把焦点还给触发它的行 —— **这份浮层是"内层模态"，Esc 必须自己接住**
   // （2026-09-23 修复「按一次 Esc 弹层与整页面板一起关掉」）。
   //
-  // 整页面板的 Esc 唯一权威是装载器 `@picoaide/dsh-panel-surface`：它在 `document` 上
+  // 整页面板的 Esc 唯一权威是装载器 `@zeokeel/dsh-panel-surface`：它在 `document` 上
   // 按 `[role="dialog"][aria-modal="true"]`（或 alertdialog）**让位**给内层模态。
   // 本浮层此前只写了 `role="dialog"`、没有 `aria-modal` ⇒ 装载器不认它，同一次按键被
   // 两层各处理一次（两个监听器都在 `document` 上，装载器注册得更早 ⇒ 先关整页、
@@ -600,7 +600,7 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
     setLoggingOut(true)
     setLogoutError('')
     try {
-      const response = await fetch('/api/pico/auth/logout', { method: 'POST' })
+      const response = await fetch('/api/zeokeel/auth/logout', { method: 'POST' })
       if (!response.ok) {
         setLogoutError(t('account.logoutFailed', { error: `HTTP ${String(response.status)}` }))
         loggingOutRef.current = false
@@ -643,7 +643,7 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
   // 下一次成功轮询即恢复 —— 余额属于计费口径,宁可短暂留白不可展示错数。
   //
   // R16B-01（2026-09-25）：再加一条**渲染期**判据 —— 这一份余额取数时的会话身份
-  // 与此刻 `/api/pico/auth/state` 的身份不一致 ⇒ 无论它的 `state` 是什么都不可信
+  // 与此刻 `/api/zeokeel/auth/state` 的身份不一致 ⇒ 无论它的 `state` 是什么都不可信
   // （换号就是把上一个账号的数字渲染到新账号名下的那条路径）。
   const identityMismatch = identityOf(auth) !== '' && usageIdentity !== '' && identityOf(auth) !== usageIdentity
   const stale = identityMismatch || (usage !== null && (usage.state === 'error' || usage.authExpired === true))
@@ -697,7 +697,7 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
     <button
       ref={attachRow}
       type="button"
-      className="pico-account-row"
+      className="zeokeel-account-row"
       // 窄轨可观测：Tooltip 在测试里是替身，行本身得能自证处在窄轨形态。
       data-rail={wide ? undefined : 'true'}
       style={wide ? ROW : ROW_RAIL}

@@ -29,7 +29,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { PANEL_ACTIVE_ATTR } from '@picoaide/dsh-panel-surface/client'
+import { PANEL_ACTIVE_ATTR } from '@zeokeel/dsh-panel-surface/client'
 import { createFootMenuService, installFootMenu, type FootMenuEntry, type FootMenuService } from '../src/client/contract.ts'
 import { FootMenuRow } from '../src/client/FootMenuRow.tsx'
 import { setActiveLocale } from '../src/client/locales.ts'
@@ -53,7 +53,7 @@ function add(id: string, order: number, extra: Partial<FootMenuEntry> = {}): voi
 }
 
 const row = (): HTMLButtonElement => {
-  const element = document.querySelector<HTMLButtonElement>('.pico-foot-menu-trigger')
+  const element = document.querySelector<HTMLButtonElement>('.zeokeel-foot-menu-trigger')
   if (element === null) throw new Error('「更多」行不在 DOM 里')
   return element
 }
@@ -97,7 +97,7 @@ afterEach(async () => {
 describe('「更多」行：几何与无障碍', () => {
   it('条目为 0 时整行渲染 null（没有条目就没有这一行）', async () => {
     await render(true)
-    expect(document.querySelector('.pico-foot-menu-trigger')).toBeNull()
+    expect(document.querySelector('.zeokeel-foot-menu-trigger')).toBeNull()
     expect(document.querySelector('[role="menu"]')).toBeNull()
   })
 
@@ -122,7 +122,7 @@ describe('「更多」行：几何与无障碍', () => {
     // 上色靠类名 + 注入的样式表：**行内 background 会压死 `:hover`**
     //（2026-09-21 行查发现的真实缺陷）。
     expect(trigger.style.background).toBe('')
-    expect(trigger.classList.contains('pico-foot-menu-trigger')).toBe(true)
+    expect(trigger.classList.contains('zeokeel-foot-menu-trigger')).toBe(true)
     // 宽栏：glyph + chevron 两个 SVG。
     expect(trigger.querySelectorAll('svg').length).toBe(2)
   })
@@ -247,7 +247,7 @@ describe('浮层：打开、顺序、激活态', () => {
     expect(menu().style.position).toBe('fixed')
     expect(menu().style.zIndex).toBe('1100')
     // 条目同样不带行内背景（否则 hover / focus-visible 规则失效）。
-    expect(items()[0]!.classList.contains('pico-foot-menu-item')).toBe(true)
+    expect(items()[0]!.classList.contains('zeokeel-foot-menu-item')).toBe(true)
     expect(items()[0]!.style.background).toBe('')
   })
 
@@ -382,7 +382,7 @@ describe('浮层：关闭路径与"关闭 ≠ 卸载"', () => {
    * 审计 C-01 的同一个判据在本调用点也必须成立：`role="alertdialog"` 是
    * "需要用户立即确认"的正确角色（应用中心的下架/删除确认块用的就是它），而
    * `[role="dialog"]` 是精确值匹配、不命中它。这里与装载器共用
-   * `hasInnerModal`（`@picoaide/dsh-panel-surface/client`），**不许**各写一份。
+   * `hasInnerModal`（`@zeokeel/dsh-panel-surface/client`），**不许**各写一份。
    *
    * 变异验证：`hasInnerModal` 去掉 alertdialog 分支（或本文件改回内联选择器）⇒ 红。
    */

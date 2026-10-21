@@ -13,8 +13,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 func newTestAPI(t *testing.T) (*gin.Engine, *sql.DB, func()) {
@@ -249,12 +249,12 @@ func TestBootstrapAdmin(t *testing.T) {
 	defer cleanup()
 
 	// missing env -> error
-	t.Setenv("PICOAI_ADMIN_PASSWORD", "")
+	t.Setenv("ZEOKEEL_ADMIN_PASSWORD", "")
 	if err := EnsureBootstrapAdmin(db, "boss"); err == nil {
 		t.Fatal("expected error without password env")
 	}
 
-	t.Setenv("PICOAI_ADMIN_PASSWORD", "Secret@99x")
+	t.Setenv("ZEOKEEL_ADMIN_PASSWORD", "Secret@99x")
 	if err := EnsureBootstrapAdmin(db, "boss"); err != nil {
 		t.Fatalf("EnsureBootstrapAdmin: %v", err)
 	}

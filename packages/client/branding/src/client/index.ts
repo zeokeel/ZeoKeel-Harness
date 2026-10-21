@@ -17,7 +17,7 @@ import { AboutSection, OverlayBadge, applyBrandTheme, injectBrandShellStyles } f
 import { setActiveLocale, t } from './locales.ts'
 
 /** Stable Cordis plugin name for the branding client half. */
-export const name = 'picoaide-branding-client'
+export const name = 'zeokeel-branding-client'
 
 /** Services required: the slot registry for the brand holes, plus the theme runtime. */
 export const inject = ['slots', 'theme', 'locale']
@@ -59,7 +59,7 @@ function installFavicon(): void {
 }
 
 /**
- * Register the PicoAide brand surfaces for the web UI: the brace mark at the
+ * Register the ZeoKeel brand surfaces for the web UI: the brace mark at the
  * upstream brand slots (sidebar mark/name, hero mark) and the browser
  * favicon. These slots are single/root and unoccupied in the web
  * composition (the official brand package is not present), so these
@@ -84,57 +84,57 @@ export function apply(ctx: ClientContext): void {
     sync()
     if (typeof locale.subscribe !== 'function') return () => {}
     return locale.subscribe(sync)
-  }, 'picoaide-branding: follow active locale')
+  }, 'zeokeel-branding: follow active locale')
   ctx.effect(
     () => ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.register({
       name: 'sidebar.brand.mark',
     }, BraceMark)),
-    'picoaide-branding: sidebar brand mark',
+    'zeokeel-branding: sidebar brand mark',
   )
   ctx.effect(
     () => ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({
       name: 'sidebar.brand.name',
     }, BrandName)),
-    'picoaide-branding: sidebar brand name',
+    'zeokeel-branding: sidebar brand name',
   )
   ctx.effect(
     () => ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({
       name: 'conversation.hero.brand.mark',
     }, BraceMark)),
-    'picoaide-branding: hero brand mark',
+    'zeokeel-branding: hero brand mark',
   )
 
   ctx.effect(() => {
     installFavicon()
     return () => { /* favicon reverts on the next navigation */ }
-  }, 'picoaide-branding: favicon')
+  }, 'zeokeel-branding: favicon')
 
-  // --- Brand shell surfaces (merged from the retired @picoaide/dsh-shell) ---
+  // --- Brand shell surfaces (merged from the retired @zeokeel/dsh-shell) ---
 
   ctx.effect(() => {
     injectBrandShellStyles()
     // The theme layer disposer teardowns the token override on disposal.
     return applyBrandTheme(ctx) ?? (() => {})
-  }, 'picoaide-branding: shell styles + theme tokens')
+  }, 'zeokeel-branding: shell styles + theme tokens')
 
   ctx.effect(
     () => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
       name: 'shell.overlay',
-      id: 'picoaide-badge',
+      id: 'zeokeel-badge',
     }, OverlayBadge)),
-    'picoaide-branding: overlay badge',
+    'zeokeel-branding: overlay badge',
   )
 
   ctx.effect(
     () => ctx.slots.inject('settings.section', () => ctx.slots.register({
       name: 'settings.section',
-      id: 'picoaide-about',
+      id: 'zeokeel-about',
       order: 900,
       // A thunk, like the sibling sections: the settings shell re-evaluates it
       // per render, so the nav row follows the language (a static string kept
       // the English label in a Chinese UI — 2026-09-16 R9 audit).
       label: () => t('about.sectionLabel'),
     }, AboutSection)),
-    'picoaide-branding: about section',
+    'zeokeel-branding: about section',
   )
 }

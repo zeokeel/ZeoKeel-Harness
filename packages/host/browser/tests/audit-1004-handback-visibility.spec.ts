@@ -33,7 +33,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { HostLocale } from '@picoaide/dsh-host-locale'
+import type { HostLocale } from '@zeokeel/dsh-host-locale'
 import { BrowserRuntime } from '../src/runtime.ts'
 import { BrowserStore } from '../src/store.ts'
 import { applyBrowserTools } from '../src/tools.ts'

@@ -54,7 +54,7 @@ function compose(): { ctx: Injectable, composition: FullComposition } {
       return undefined
     },
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => false,
       getSession: () => null,

@@ -15,7 +15,7 @@ package clientrelease
 // 本文件的判据：
 //   - 条 1（能力级、真路由）：配置带 userinfo ⇒ 清单**不得**含凭据，且必须退回请求头
 //     推导的来源（配置正常的部署照常可用）；
-//   - 条 2：环境变量那条路径（`PICOAI_PUBLIC_BASE_URL`）非法时**明确拒绝**并给出原因；
+//   - 条 2：环境变量那条路径（`ZEOKEEL_PUBLIC_BASE_URL`）非法时**明确拒绝**并给出原因；
 //   - 条 3：`normalizeBaseURL` 的取值表 —— 正例逐字不变（这是"最小改动"的判据），
 //     带 userinfo 的各种形态一律拒绝；
 //   - 条 4：被忽略时的告警**不含原始取值**（否则告警本身成为第二条泄漏路径）。
@@ -145,8 +145,8 @@ func TestManifestNeverLeaksUserinfoFromConfiguredBaseURL(t *testing.T) {
 	// ⑤ 反向对照：**不带** userinfo 的同一形态配置照常生效（证明拒绝只针对凭据，
 	//    不是把整条配置路径关掉）。
 	resetWarnGates()
-	withConfiguredBase(t, "https://harness.example.com/picoaide/")
-	if got := assetURL(getManifest(t, r, secureReq), "win-x64"); got != "https://harness.example.com/picoaide/updates/client/Setup.exe" {
+	withConfiguredBase(t, "https://harness.example.com/zeokeel/")
+	if got := assetURL(getManifest(t, r, secureReq), "win-x64"); got != "https://harness.example.com/zeokeel/updates/client/Setup.exe" {
 		t.Fatalf("无 userinfo 的配置必须逐字照旧生效: %q", got)
 	}
 }
@@ -210,7 +210,7 @@ func TestNormalizeBaseURLRejectsUserinfo(t *testing.T) {
 	valid := []struct{ raw, want string }{
 		{"https://harness.example.com", "https://harness.example.com"},
 		{"https://harness.example.com/", "https://harness.example.com"},
-		{"https://harness.example.com/picoaide/", "https://harness.example.com/picoaide"},
+		{"https://harness.example.com/zeokeel/", "https://harness.example.com/zeokeel"},
 		{"http://127.0.0.1:9000", "http://127.0.0.1:9000"},
 	}
 	for _, tc := range valid {

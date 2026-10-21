@@ -63,11 +63,11 @@ function def(origin: string, declared: string): ConnectorDef {
 }
 
 async function connectAndAuthorize(h: ReturnType<typeof createHarness>): Promise<Record<string, unknown>> {
-  await callRoute(h, '/api/pico/connectors/probe-mcp/connect', 'POST')
+  await callRoute(h, '/api/zeokeel/connectors/probe-mcp/connect', 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline) {
-    const res = await callRoute(h, '/api/pico/connectors/probe-mcp/state', 'GET')
+    const res = await callRoute(h, '/api/zeokeel/connectors/probe-mcp/state', 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } }).request?.authorizeUrl
     if (url) break
     await new Promise(resolve => setTimeout(resolve, 25))

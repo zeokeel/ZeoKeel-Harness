@@ -84,12 +84,12 @@ function createHarness(defs: ConnectorDef[], dir: string, options: Record<string
   const fence = { requestRejection: (request: { headers: Record<string, unknown> }) => (request.headers['cookie'] === undefined ? (401 as const) : undefined) }
   const ctx = {
     get: (name: string) => {
-      if (name === 'picoSession') return { getSession: () => (username === null ? null : { username }) }
+      if (name === 'zeokeelSession') return { getSession: () => (username === null ? null : { username }) }
       if (name === 'connection') return fence
       return undefined
     },
     on: (event: string, handler: (next: unknown) => void) => {
-      if (event === 'pico/session-changed') sessionHandlers.push(handler)
+      if (event === 'zeokeel/session-changed') sessionHandlers.push(handler)
       return () => {}
     },
     plugin: vi.fn(async (_plugin: unknown, config: CapturedConfig) => {
@@ -123,7 +123,7 @@ function createHarness(defs: ConnectorDef[], dir: string, options: Record<string
 function request(method: string): IncomingMessage {
   return {
     method,
-    url: '/api/pico/connectors/evil/approve',
+    url: '/api/zeokeel/connectors/evil/approve',
     headers: {
       host: 'localhost:43120',
       origin: 'http://localhost:43120',
@@ -256,7 +256,7 @@ describe('FIX-02 parseServerConnectors: catalog entries are validated before use
 
 describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () => {
   it('does not spawn an unapproved local command and surfaces the pending confirmation', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-guard-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-guard-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const marker = join(dir, 'pwned.txt')
     const harness = createHarness([
@@ -275,7 +275,7 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
     expect(harness.configs).toEqual([])
     expect(existsSync(marker)).toBe(false)
 
-    const listed = await callRoute(harness, '/api/pico/connectors', 'GET')
+    const listed = await callRoute(harness, '/api/zeokeel/connectors', 'GET')
     expect(listed.status).toBe(200)
     const entry = (JSON.parse(listed.body) as { connectors: Array<{ id: string; request: { approval?: { fingerprint: string; command: string; args: string[] } } | null }> })
       .connectors.find(item => item.id === 'evil')
@@ -283,7 +283,7 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
   })
 
   it('spawns through the real MCP SDK transport only after the local confirmation', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-approve-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-approve-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const envFile = join(dir, 'child-env.json')
     const script = `require('node:fs').writeFileSync(${JSON.stringify(envFile)}, JSON.stringify(process.env))`
@@ -304,7 +304,7 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
     await new Promise(resolve => setTimeout(resolve, 120))
     expect(harness.configs).toEqual([])
 
-    const approved = await callRoute(harness, '/api/pico/connectors/evil/approve')
+    const approved = await callRoute(harness, '/api/zeokeel/connectors/evil/approve')
     expect(approved.status).toBe(200)
     await waitFor(() => harness.configs.length > 0)
 
@@ -321,12 +321,12 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
     expect(childEnv.LEAKED_FIELD).toBeUndefined()
     // ...while the declared credential fields and the framework's own keys stay.
     expect(childEnv.GLITCHTIP_TOKEN).toBe('SECRET-FIELD')
-    expect(childEnv.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe('SECRET-AT-1')
-    expect(childEnv.PICOAIDE_CONNECTOR_REFRESH_TOKEN).toBe('SECRET-RT-1')
+    expect(childEnv.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe('SECRET-AT-1')
+    expect(childEnv.ZEOKEEL_CONNECTOR_REFRESH_TOKEN).toBe('SECRET-RT-1')
   })
 
   it('denies the pending confirmation through the local route without spawning', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-deny-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-deny-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const marker = join(dir, 'pwned.txt')
     const harness = createHarness([
@@ -337,7 +337,7 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
     harness.emitSession({ username: 'user-a' })
     await new Promise(resolve => setTimeout(resolve, 120))
 
-    const denied = await callRoute(harness, '/api/pico/connectors/evil/deny')
+    const denied = await callRoute(harness, '/api/zeokeel/connectors/evil/deny')
     expect(denied.status).toBe(200)
     await new Promise(resolve => setTimeout(resolve, 60))
     expect(harness.configs).toEqual([])
@@ -345,7 +345,7 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
   })
 
   it('reconnects an approved command without prompting again (persisted per user)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-reconnect-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-reconnect-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const harness = createHarness([stdioDef()], dir)
     await seedCredential(dir, 'evil', { accessToken: 'SECRET-AT-1', fields: {} })
@@ -353,27 +353,27 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
     harness.emitSession({ username: 'user-a' })
     await new Promise(resolve => setTimeout(resolve, 120))
     expect(harness.configs).toEqual([])
-    await callRoute(harness, '/api/pico/connectors/evil/approve')
+    await callRoute(harness, '/api/zeokeel/connectors/evil/approve')
     await waitFor(() => harness.configs.length === 1)
 
     // A later session change (the app-restart path) must NOT prompt again:
     // the fingerprint is already approved for this user.
     harness.emitSession({ username: 'user-a' })
     await waitFor(() => harness.configs.length === 2)
-    const listed = await callRoute(harness, '/api/pico/connectors', 'GET')
+    const listed = await callRoute(harness, '/api/zeokeel/connectors', 'GET')
     const entry = (JSON.parse(listed.body) as { connectors: Array<{ id: string; request: unknown }> })
       .connectors.find(item => item.id === 'evil')
     expect(entry?.request).toBeNull()
   })
 
   it('re-prompts when the command changes (a re-issued definition is a new decision)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-refingerprint-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-refingerprint-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const first = createHarness([stdioDef()], dir)
     await seedCredential(dir, 'evil', { accessToken: 'SECRET-AT-1', fields: {} })
     first.emitSession({ username: 'user-a' })
     await new Promise(resolve => setTimeout(resolve, 120))
-    await callRoute(first, '/api/pico/connectors/evil/approve')
+    await callRoute(first, '/api/zeokeel/connectors/evil/approve')
     await waitFor(() => first.configs.length === 1)
 
     // The same connector id now ships a different command: the earlier
@@ -382,14 +382,14 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
     second.emitSession({ username: 'user-a' })
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(second.configs).toEqual([])
-    const listed = await callRoute(second, '/api/pico/connectors', 'GET')
+    const listed = await callRoute(second, '/api/zeokeel/connectors', 'GET')
     const entry = (JSON.parse(listed.body) as { connectors: Array<{ id: string; request: { approval?: { command: string } } | null }> })
       .connectors.find(item => item.id === 'evil')
     expect(entry?.request?.approval?.command).toBe('/bin/sh')
   })
 
   it('honours an explicit requestApproval callback (headless composition)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-callback-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-callback-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const marker = join(dir, 'approved.txt')
     const seen: string[] = []
@@ -408,7 +408,7 @@ describe('FIX-02 registerMcp: unapproved stdio commands never reach spawn', () =
 
 describe('FIX-02 registerMcp: streamable-http urls pass the outbound policy', () => {
   it('refuses to register an http (non-loopback) MCP endpoint', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-url-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-url-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const harness = createHarness([
       {
@@ -424,7 +424,7 @@ describe('FIX-02 registerMcp: streamable-http urls pass the outbound policy', ()
   })
 
   it('registers a loopback http MCP endpoint (development servers stay usable)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-conn-loopback-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-loopback-'))
     cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
     const harness = createHarness([
       {

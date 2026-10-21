@@ -3,7 +3,7 @@
  *
  * ## 缺陷形态（修复前）
  *
- * 面板每 2 秒轮询的 `/api/pico/connectors` 列表里，`canRefresh` 由两半合成：
+ * 面板每 2 秒轮询的 `/api/zeokeel/connectors` 列表里，`canRefresh` 由两半合成：
  *
  * ```text
  * canRefresh: (refreshable.has(def.id) || state.refreshToken === true) && oauthTargetOf(def) !== null
@@ -147,7 +147,7 @@ async function seedIn(dir: string, id: string, credential: Record<string, unknow
 
 /** Read the panel's list route and index it by connector id. */
 async function rows(harness: Harness): Promise<Map<string, Row>> {
-  const res = await callRoute(harness, '/api/pico/connectors', 'GET')
+  const res = await callRoute(harness, '/api/zeokeel/connectors', 'GET')
   expect(res.status, `列表路由必须成功：${res.body}`).toBe(200)
   const body = JSON.parse(res.body) as { connectors: Row[] }
   return new Map(body.connectors.map(row => [row.id, row]))

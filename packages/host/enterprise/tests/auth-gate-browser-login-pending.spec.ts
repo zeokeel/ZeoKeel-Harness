@@ -11,7 +11,7 @@ import type { Session } from '../src/server-connector/config.ts'
  * 缺陷:deep-link.ts 新增的「未登录时只接受本机登录页正在等待的那台服务端」
  * 守卫(`noteBrowserLoginStarted`)在真实构建里**没有任何生产调用方** ——
  * `loginPageReportsPending` 恒为 false、判定分支不可达,新 API 只有测试在
- * 调用。真实部署形态下(https 攻击者域名),伪造的 `picoaide://auth?token=…&
+ * 调用。真实部署形态下(https 攻击者域名),伪造的 `zeokeel://auth?token=…&
  * server=https://attacker.example` 仍把真 token 发给攻击者并采纳其会话,且零告警。
  *
  * 关键架构事实(决定了接线的形状):登录页 HTML 由**宿主进程**经本地 HTTP 服务
@@ -19,8 +19,8 @@ import type { Session } from '../src/server-connector/config.ts'
  * =false/sandbox=true),页面内联脚本**够不到**宿主模块作用域。所以接线不能是
  * "在页面脚本里直接调用 noteBrowserLoginStarted"(那是 ReferenceError,浏览器
  * 登录按钮整条链路失效),而必须经本地 HTTP 面登记:
- *   - 登录页发起浏览器 SSO 前 `POST /api/pico/auth/browser-login {server}`;
- *   - 取消/超时/返回上一步 `DELETE /api/pico/auth/browser-login`;
+ *   - 登录页发起浏览器 SSO 前 `POST /api/zeokeel/auth/browser-login {server}`;
+ *   - 取消/超时/返回上一步 `DELETE /api/zeokeel/auth/browser-login`;
  *   - 宿主路由(与 login 同口径:`required` 持有性证明)调用共享单例。
  *
  * 本文件钉住三件事:
@@ -154,13 +154,13 @@ describe('登录页浏览器 SSO 的待登录目标登记(srvcore-1 客户端一
     await h.browserLogin()
 
     // ① 登记请求确实发出过,且带的是用户填写的服务端(不是别的来源)。
-    const registration = h.fetchCalls.find((c) => c.url.startsWith('/api/pico/auth/browser-login'))
+    const registration = h.fetchCalls.find((c) => c.url.startsWith('/api/zeokeel/auth/browser-login'))
     expect(registration, '登录页必须在打开浏览器前登记待登录服务端').toBeDefined()
     expect(registration!.method).toBe('POST')
     expect(JSON.parse(registration!.body)).toEqual({ server: 'https://real-corp.example/' })
 
     // ② 顺序必须是"先登记、后 window.open":反过来就有竞态 —— 深链可能先回来。
-    const registrationIndex = h.events.findIndex((e) => e.startsWith('fetch POST /api/pico/auth/browser-login'))
+    const registrationIndex = h.events.findIndex((e) => e.startsWith('fetch POST /api/zeokeel/auth/browser-login'))
     const openIndex = h.events.findIndex((e) => e.startsWith('open '))
     expect(registrationIndex).toBeGreaterThanOrEqual(0)
     expect(openIndex).toBeGreaterThan(registrationIndex)
@@ -174,7 +174,7 @@ describe('登录页浏览器 SSO 的待登录目标登记(srvcore-1 客户端一
     await h.browserLogin()
     h.resetBrowserLogin()
 
-    const clearing = h.fetchCalls.find((c) => c.url.startsWith('/api/pico/auth/browser-login') && c.method === 'DELETE')
+    const clearing = h.fetchCalls.find((c) => c.url.startsWith('/api/zeokeel/auth/browser-login') && c.method === 'DELETE')
     expect(clearing, '取消/返回时必须清除待登录目标(否则迟到/伪造的回跳仍被接受)').toBeDefined()
   })
 
@@ -288,7 +288,7 @@ async function hostHarness(config: Partial<Config> = {}, current: Session | null
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? fence : undefined))),
     logger: { info: vi.fn(), warn: (m: string) => { warns.push(String(m)) }, error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => current !== null,
       getSession: () => current,
@@ -306,12 +306,12 @@ async function hostHarness(config: Partial<Config> = {}, current: Session | null
   let listener: ((url: unknown) => void) | null = null
   const linkCtx = {
     on: (event: string, cb: (url: unknown) => void) => {
-      if (event === 'pico/deep-link') listener = cb
+      if (event === 'zeokeel/deep-link') listener = cb
       return () => {}
     },
     logger: { info: () => {}, warn: (m: string) => { warns.push(String(m)) }, error: () => {} },
   } as unknown as Context
-  link.installDeepLinkListener(linkCtx, (session) => { applied.push(session) }, () => current, 'picoaide')
+  link.installDeepLinkListener(linkCtx, (session) => { applied.push(session) }, () => current, 'zeokeel')
 
   vi.stubGlobal('fetch', vi.fn(async (input: unknown, init?: { headers?: Record<string, string> }) => {
     const headers = init?.headers ?? {}
@@ -344,7 +344,7 @@ async function hostHarness(config: Partial<Config> = {}, current: Session | null
 
 /** 触发一次伪造深链并等它跑完(预验证是 fire-and-forget)。 */
 async function fireAndSettle(fire: (url: string) => void, server: string): Promise<void> {
-  fire(`picoaide://auth?token=REAL-EMPLOYEE-TOKEN&server=${encodeURIComponent(server)}&user=eve`)
+  fire(`zeokeel://auth?token=REAL-EMPLOYEE-TOKEN&server=${encodeURIComponent(server)}&user=eve`)
   await new Promise((r) => setTimeout(r, 60))
 }
 
@@ -360,8 +360,8 @@ describe('宿主侧的待登录目标登记(srvcore-1 客户端一半接线)', (
     const h = await hostHarness()
     // ① 真页面 (持 dsh-auth cookie) 登记 real-corp —— 宿主必须写进共享单例。
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/auth/browser-login')(
-      fakeReq('POST', '/api/pico/auth/browser-login', '{"server":"https://real-corp.example/"}', true), res)
+    await h.handler('/api/zeokeel/auth/browser-login')(
+      fakeReq('POST', '/api/zeokeel/auth/browser-login', '{"server":"https://real-corp.example/"}', true), res)
     expect(read().code).toBe(200)
     expect(h.pending()).toBe('https://real-corp.example')
 
@@ -380,8 +380,8 @@ describe('宿主侧的待登录目标登记(srvcore-1 客户端一半接线)', (
   it('refuses a local process that tries to register the pending server without browser proof', async () => {
     const h = await hostHarness()
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/auth/browser-login')(
-      fakeReq('POST', '/api/pico/auth/browser-login', '{"server":"https://attacker.example"}'), res)
+    await h.handler('/api/zeokeel/auth/browser-login')(
+      fakeReq('POST', '/api/zeokeel/auth/browser-login', '{"server":"https://attacker.example"}'), res)
     expect(read().code).toBe(403)
     expect(read().body.error).toBe('browser session proof required')
     // 没登记成功 ⇒ 守卫不能反过来被攻击者"预登记"自己的域名。
@@ -391,13 +391,13 @@ describe('宿主侧的待登录目标登记(srvcore-1 客户端一半接线)', (
   it('clears the pending target on DELETE so a late callback is refused', async () => {
     const h = await hostHarness()
     const post = fakeRes()
-    await h.handler('/api/pico/auth/browser-login')(
-      fakeReq('POST', '/api/pico/auth/browser-login', '{"server":"https://real-corp.example"}', true), post.res)
+    await h.handler('/api/zeokeel/auth/browser-login')(
+      fakeReq('POST', '/api/zeokeel/auth/browser-login', '{"server":"https://real-corp.example"}', true), post.res)
     expect(h.pending()).toBe('https://real-corp.example')
 
     const del = fakeRes()
-    await h.handler('/api/pico/auth/browser-login')(
-      fakeReq('DELETE', '/api/pico/auth/browser-login', undefined, true), del.res)
+    await h.handler('/api/zeokeel/auth/browser-login')(
+      fakeReq('DELETE', '/api/zeokeel/auth/browser-login', undefined, true), del.res)
     expect(del.read().code).toBe(200)
     expect(h.pending()).toBeNull()
 
@@ -422,8 +422,8 @@ describe('宿主侧的待登录目标登记(srvcore-1 客户端一半接线)', (
     const h = await hostHarness()
     for (const body of ['{"server":"file:///etc/passwd"}', '{"server":"  "}', '{"server":42}', 'not json']) {
       const { res, read } = fakeRes()
-      await h.handler('/api/pico/auth/browser-login')(
-        fakeReq('POST', '/api/pico/auth/browser-login', body, true), res)
+      await h.handler('/api/zeokeel/auth/browser-login')(
+        fakeReq('POST', '/api/zeokeel/auth/browser-login', body, true), res)
       expect(read().code, body).toBe(400)
     }
     expect(h.pending()).toBeNull()
@@ -491,8 +491,8 @@ describe('宿主侧的待登录目标登记(srvcore-1 客户端一半接线)', (
 
     // ② 真页面(持 dsh-auth cookie)登记。
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/auth/browser-login')(
-      fakeReq('POST', '/api/pico/auth/browser-login', '{"server":"https://corp.example/"}', true), res)
+    await h.handler('/api/zeokeel/auth/browser-login')(
+      fakeReq('POST', '/api/zeokeel/auth/browser-login', '{"server":"https://corp.example/"}', true), res)
     expect(read().code).toBe(200)
 
     // ③ 浏览器回跳(同一台,书写变体)被接受。
@@ -508,16 +508,16 @@ describe('宿主侧的待登录目标登记(srvcore-1 客户端一半接线)', (
     // 浏览器回跳到达 —— 证明官方构建下"登记先于深链"这条链路真的成立。
     const page = bootLoginPage({ server: 'https://corp.example/' })
     await page.browserLogin()
-    const registration = page.fetchCalls.find((c) => c.url.startsWith('/api/pico/auth/browser-login'))
+    const registration = page.fetchCalls.find((c) => c.url.startsWith('/api/zeokeel/auth/browser-login'))
     expect(registration?.method).toBe('POST')
     const openAt = page.events.findIndex((e) => e.startsWith('open '))
-    const registerAt = page.events.findIndex((e) => e.startsWith('fetch POST /api/pico/auth/browser-login'))
+    const registerAt = page.events.findIndex((e) => e.startsWith('fetch POST /api/zeokeel/auth/browser-login'))
     expect(openAt, '登记必须早于 window.open').toBeGreaterThan(registerAt)
 
     const h = await hostHarness()
     const { res, read } = fakeRes()
-    await h.handler('/api/pico/auth/browser-login')(
-      fakeReq('POST', '/api/pico/auth/browser-login', registration!.body, true), res)
+    await h.handler('/api/zeokeel/auth/browser-login')(
+      fakeReq('POST', '/api/zeokeel/auth/browser-login', registration!.body, true), res)
     expect(read().code).toBe(200)
 
     const callbackServer = new URL(page.openCalls[0]!).searchParams.get('server')!
@@ -543,8 +543,8 @@ describe('宿主侧的待登录目标登记(srvcore-1 客户端一半接线)', (
     expect(h.gateway.every((c) => new URL(c.url).hostname === 'harness.example')).toBe(true)
 
     // 缺 server / server 为空:token 无处可挂,同样必须拒绝且零出站。
-    h.fire('picoaide://auth?token=REAL-EMPLOYEE-TOKEN&user=eve')
-    h.fire('picoaide://auth?token=REAL-EMPLOYEE-TOKEN&server=&user=eve')
+    h.fire('zeokeel://auth?token=REAL-EMPLOYEE-TOKEN&user=eve')
+    h.fire('zeokeel://auth?token=REAL-EMPLOYEE-TOKEN&server=&user=eve')
     await new Promise((r) => setTimeout(r, 60))
     expect(h.applied).toHaveLength(3)
     expect(h.warns.join(' ')).toContain('without server/user')

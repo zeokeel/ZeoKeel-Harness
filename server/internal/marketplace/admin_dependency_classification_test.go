@@ -35,7 +35,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // captureMarketLogs 把标准 logger 的输出抓下来跑 fn（本仓的依赖故障分类都走 `log.Printf`）。

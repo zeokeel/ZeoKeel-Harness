@@ -11,7 +11,7 @@
 // 刻意覆盖了一篇应用代码必须处理好的八件事：
 //
 //  1. 读请求帧（RS + 十进制长度 + '\n' + JSON）→ 取当前使用者 `user`；
-//  2. 读自己的配置 `picoaide.app.json`（assets.read）→ 白名单判定；
+//  2. 读自己的配置 `zeokeel.app.json`（assets.read）→ 白名单判定；
 //  3. 无权限页**显示本人账号**（作者发现名单拼错的唯一途径）；
 //  4. 入口 `/` 由 wasm 自己答（先判名单，再 assets.read("index.html")），
 //     `/static/*` 由宿主直出（apps 里的资源存在就直出，不执行 wasm）；
@@ -45,7 +45,7 @@ import (
 	"time"
 )
 
-// ===== 帧协议（ABI picoaide-app/1）=====
+// ===== 帧协议（ABI zeokeel-app/1）=====
 
 // frameMagic 是帧起始字节：ASCII RS（Record Separator）。
 const frameMagic byte = 0x1e
@@ -54,7 +54,7 @@ const frameMagic byte = 0x1e
 const maxFrameBytes = 1 << 20
 
 // appConfigFile 是随包提交的配置文件名（平台在发布期把它抽到资源目录里）。
-const appConfigFile = "picoaide.app.json"
+const appConfigFile = "zeokeel.app.json"
 
 // indexFile 是入口页在包内的逻辑路径：入口**必须由 wasm 自己答**（先判名单），
 // 所以它不能用"宿主直出"那条路（宿主对入口文档一律交给 wasm）。
@@ -440,14 +440,14 @@ func allowed(cfg appConfig, u *user) bool {
 
 // ===== 路由与静态资源 =====
 
-// aiChatPath 是宿主保留的**客户端 AI loop** 路径（**双下划线** `__picoaide`）。
+// aiChatPath 是宿主保留的**客户端 AI loop** 路径（**双下划线** `__zeokeel`）。
 //
-// 它由客户端协议 handler **本地**处理、绝不转发服务端；整个 `__picoaide/` 是保留命名空间，
+// 它由客户端协议 handler **本地**处理、绝不转发服务端；整个 `__zeokeel/` 是保留命名空间，
 // 随包资源不得占用该前缀（发布期 ASSET_DENIED + reason=reserved_path_prefix），
 // 应用内部写同名路由也没用 —— 请求在宿主层就被截走。
 //
 // ⚠️ **唯一真源**：页面脚本里的路径由装配时从这里注入（见 pageScriptTag），别处不要再抄字面量。
-const aiChatPath = "/__picoaide/ai/chat"
+const aiChatPath = "/__zeokeel/ai/chat"
 
 // isEntry 判定入口文档路径。入口**必须由 wasm 自己答**：名单判定在应用手里，
 // 宿主对入口一律不直出（否则不在名单里的人只会看到一个空壳页面）。
@@ -465,7 +465,7 @@ func staticAsset(p string) (string, bool) {
 		return indexFile, true
 	}
 	rel := strings.TrimPrefix(clean, "/")
-	if rel == "" || strings.HasPrefix(rel, "api/") || strings.HasPrefix(rel, "__picoaide/") {
+	if rel == "" || strings.HasPrefix(rel, "api/") || strings.HasPrefix(rel, "__zeokeel/") {
 		return "", false
 	}
 	if strings.Contains(rel, "..") {
@@ -761,7 +761,7 @@ type assetsReadParams struct {
 	Path string `json:"path"`
 }
 
-// appConfig 是 picoaide.app.json 的结构（字段集合封闭：多一个字段平台就拒发布；
+// appConfig 是 zeokeel.app.json 的结构（字段集合封闭：多一个字段平台就拒发布；
 // 完整字段规格见 skill 的 references/app-config.md）。
 //
 // access 写侧只有两个取值（平台一律要求登录）：login 要求登录、登录后全员可用

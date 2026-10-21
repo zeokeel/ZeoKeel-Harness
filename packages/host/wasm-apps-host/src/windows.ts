@@ -28,7 +28,7 @@
  *    的 surface 注册表（`kind:'app'`，载荷含 `webContents`），关窗/登出注销
  *    （{@link AppSurfaceRegistrar}）。
  *
- * @module @picoaide/dsh-wasm-apps-host/windows
+ * @module @zeokeel/dsh-wasm-apps-host/windows
  */
 
 import { readFile } from 'node:fs/promises'
@@ -383,8 +383,8 @@ export interface AppWindowHealth {
  * 应用窗口 surface 的**注册面**（§16.1 冻结的 `kind:'app'` 那一半）。
  *
  * 归属说明（为什么是一个结构化接口而不是直接 import browser 包的类）：真实的注册表
- * 由 `@picoaide/dsh-browser` 经 Cordis 服务 `browserSurface` **provide** 出来
- * （`@picoaide/dsh-browser/surface` 的 `BROWSER_SURFACE_SERVICE`），而它可能晚于本插件
+ * 由 `@zeokeel/dsh-browser` 经 Cordis 服务 `browserSurface` **provide** 出来
+ * （`@zeokeel/dsh-browser/surface` 的 `BROWSER_SURFACE_SERVICE`），而它可能晚于本插件
  * apply（profile 里两个行同层、本插件在前）。窗口管理器只认这个最小形状：注册 / 注销，
  * 于是"建窗时注册、关窗时注销"这条接线可以在**纯 Node** 下被逐条钉住。
  */
@@ -694,7 +694,7 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
       surfaceIds.set(appId, surface.id)
     } catch (cause) {
       // 注册失败不得影响建窗（AI 能不能驱动它是能力，不是准入）。
-      warn(`pico-wasm-apps-host: registering the application surface for ${appId} failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: registering the application surface for ${appId} failed (${cause instanceof Error ? cause.message : String(cause)})`)
     }
   }
   /** 注销一个应用的 surface（窗口关闭/被用户关掉/登出）。 */
@@ -705,7 +705,7 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
     try {
       options.surfaces?.()?.unregister(id)
     } catch (cause) {
-      warn(`pico-wasm-apps-host: unregistering the application surface for ${appId} failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: unregistering the application surface for ${appId} failed (${cause instanceof Error ? cause.message : String(cause)})`)
     }
   }
 
@@ -722,7 +722,7 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
         apps: Object.fromEntries(memory),
       })
     } catch (cause) {
-      warn(`pico-wasm-apps-host: persisting the app window memory failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: persisting the app window memory failed (${cause instanceof Error ? cause.message : String(cause)})`)
     }
   }
 
@@ -765,7 +765,7 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
     try {
       options.surfaces?.()?.markAppCrashed?.(id, crashed)
     } catch (cause) {
-      warn(`pico-wasm-apps-host: reporting the crash state of ${appId} to the surface registry failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: reporting the crash state of ${appId} to the surface registry failed (${cause instanceof Error ? cause.message : String(cause)})`)
     }
   }
 
@@ -806,7 +806,7 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
       if (existing !== undefined && windowPartitions.get(appId) !== partition) {
         // WS-1 纵深防御：这个窗口是在**别的作用域**（上一个账号/上一个服务端）里建的。
         // 分区创建后不可改指 ⇒ 唯一正确的处理是关掉它，再按当前分区新建。
-        warn(`pico-wasm-apps-host: closing the application window for ${appId} — it was created in another user scope; rebuilding it in the current one`)
+        warn(`zeokeel-wasm-apps-host: closing the application window for ${appId} — it was created in another user scope; rebuilding it in the current one`)
         options.adapter.closeAppWindow(existing)
         forget(appId, existing)
         existing = undefined
@@ -864,7 +864,7 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
         // 建窗时记下来：窗口被原生销毁后适配器不再报 id（R16B-20），不记就删不掉。
         windowWebContentsIds.set(appId, wcId)
       } else {
-        warn('pico-wasm-apps-host: the window adapter did not report a webContents id; application-scheme subresource requests will be refused (fail-closed)')
+        warn('zeokeel-wasm-apps-host: the window adapter did not report a webContents id; application-scheme subresource requests will be refused (fail-closed)')
       }
       options.adapter.installAppWindowGuards?.(handle, appId)
       if (declaredRatio !== undefined) options.adapter.setAspectRatio(handle, declaredRatio, { width: 0, height: 0 })

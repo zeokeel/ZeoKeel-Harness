@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/llmgateway/channels"
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway/channels"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // deadUpstream accepts connections but closes them immediately (transport error).

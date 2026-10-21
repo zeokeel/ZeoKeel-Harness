@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 func TestConcurrencyTargetFromParams(t *testing.T) {
@@ -39,7 +39,7 @@ func TestConcurrencyStatusHandler(t *testing.T) {
 
 	// 建模型: flash target 2500, pro target 500
 	providerID, err := serverstore.AddGatewayProvider(db, &serverstore.GatewayProvider{
-		Name: "picoaide", BaseURL: "https://api.example.com", APIKeyEnc: "x", Models: []string{}, Enabled: 1,
+		Name: "zeokeel", BaseURL: "https://api.example.com", APIKeyEnc: "x", Models: []string{}, Enabled: 1,
 	})
 	if err != nil {
 		t.Fatal(err)

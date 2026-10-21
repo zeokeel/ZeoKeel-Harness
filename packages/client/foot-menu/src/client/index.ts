@@ -1,14 +1,14 @@
 /**
- * 客户端半边：字典 + 提供 `picoFootMenu` 服务 + 注册**唯一**一个底部座位占用者。
+ * 客户端半边：字典 + 提供 `zeokeelFootMenu` 服务 + 注册**唯一**一个底部座位占用者。
  *
  * 座位（`sidebar.footer.action`）以前有五个占用者（定时任务 / 能力中心 / 连接器 /
  * 浏览器 / 应用中心，各一整行）。现在只有这一个：它渲染「更多」行 + 向上浮层，
- * 条目由兄弟插件经 `picoFootMenu` 登记（见 `contract.ts`）。
+ * 条目由兄弟插件经 `zeokeelFootMenu` 登记（见 `contract.ts`）。
  *
  * 纪律：运行时的值导入只允许平台模块表里的包；`@deepseek-ai/*` 与兄弟包一律 type-only
  * 进入（跨插件协作只走 Cordis 服务与槽位）。
  *
- * @module @picoaide/dsh-foot-menu/client
+ * @module @zeokeel/dsh-foot-menu/client
  */
 
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -31,7 +31,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Stable Cordis plugin name for the foot lane client half. */
-export const name = 'picoaide-foot-menu-client'
+export const name = 'zeokeel-foot-menu-client'
 
 /** Locale namespace owning the foot lane copy. */
 const LOCALE_NS = 'foot-menu'
@@ -40,10 +40,10 @@ const LOCALE_NS = 'foot-menu'
 export const inject = ['slots', 'locale']
 
 // 类型出口（**必须显式再导出**）：消费者用 `import type {} from
-// '@picoaide/dsh-foot-menu/client'` 取 `declare module '@deepseek-ai/cordis'` 的
+// '@zeokeel/dsh-foot-menu/client'` 取 `declare module '@deepseek-ai/cordis'` 的
 // `Context` 合并，而那个合并住在 `./contract.ts`。`apply` 的实现体里对
 // contract 的引用会被声明生成擦掉，若不在这里再导出，`index.d.ts` 就不再引用
-// contract.d.ts —— 消费者编译期拿不到 `ctx.picoFootMenu`（TS2339），而运行时
+// contract.d.ts —— 消费者编译期拿不到 `ctx.zeokeelFootMenu`（TS2339），而运行时
 // 一切正常（最难查的一类漂移）。
 export type { FootMenuEntry, FootMenuService } from './contract.ts'
 
@@ -60,22 +60,22 @@ function openOfficialSettings(): void {
     .find(button => ['账号菜单', 'Account menu'].includes(button.getAttribute('aria-label') ?? '')) as HTMLButtonElement | undefined
   if (trigger === undefined) return
   const style = document.createElement('style')
-  style.setAttribute('data-pico-settings-bridge', '')
-  style.textContent = 'html[data-pico-settings-bridge] [role="menu"]{visibility:hidden !important}'
+  style.setAttribute('data-zeokeel-settings-bridge', '')
+  style.textContent = 'html[data-zeokeel-settings-bridge] [role="menu"]{visibility:hidden !important}'
   document.head.append(style)
-  document.documentElement.setAttribute('data-pico-settings-bridge', '')
+  document.documentElement.setAttribute('data-zeokeel-settings-bridge', '')
   let finished = false
   const cleanup = (): void => {
     if (finished) return
     finished = true
-    document.documentElement.removeAttribute('data-pico-settings-bridge')
+    document.documentElement.removeAttribute('data-zeokeel-settings-bridge')
     style.remove()
   }
   const clickItem = (attempt = 0): void => {
     // Scope to the official menu: our own foot menu also has a 设置 item and
-    // its id starts with `pico-foot-menu-`; clicking it here would recurse.
+    // its id starts with `zeokeel-foot-menu-`; clicking it here would recurse.
     const menu = [...document.querySelectorAll('[role="menu"]')]
-      .find(candidate => !candidate.id.startsWith('pico-foot-menu-'))
+      .find(candidate => !candidate.id.startsWith('zeokeel-foot-menu-'))
     const item = menu === undefined ? undefined : [...menu.querySelectorAll('[role="menuitem"]')]
       .find(candidate => /^(设置|Settings)(?:\s|$)/u.test((candidate.textContent ?? '').trim())) as HTMLElement | undefined
     if (item !== undefined) {
@@ -115,7 +115,7 @@ function openOfficialSchedulePanel(): void {
 }
 
 /**
- * Register the foot lane: the one sidebar foot occupant plus the `picoFootMenu`
+ * Register the foot lane: the one sidebar foot occupant plus the `zeokeelFootMenu`
  * registry every sibling panel entry registers into.
  * @param ctx - browser Cordis context.
  */
@@ -216,7 +216,7 @@ export function apply(ctx: ClientContext): void {
   }, 'foot-menu: follow active locale')
 
   // Hover/focus feedback for the row and the popover items (行内几何 + 注入的少量
-  // 全局样式：与浏览器/连接器插件原先的 `.pico-*-trigger:hover` 写法同源)。
+  // 全局样式：与浏览器/连接器插件原先的 `.zeokeel-*-trigger:hover` 写法同源)。
   //
   // **透明底必须与 hover 底同处一张样式表**：行内 `background: transparent` 的
   // 优先级高于任何选择器规则，写进行内联样式就等于把 `:hover` 永久压死
@@ -227,17 +227,17 @@ export function apply(ctx: ClientContext): void {
     if (typeof document === 'undefined') return () => {}
     const style = document.createElement('style')
     style.textContent = [
-      '.pico-foot-menu-trigger { background: transparent; }',
-      '.pico-foot-menu-trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }',
-      '.pico-foot-menu-item { background: transparent; }',
-      '.pico-foot-menu-item:hover, .pico-foot-menu-item:focus-visible { background: var(--dsw-alias-interactive-bg-hover); }',
+      '.zeokeel-foot-menu-trigger { background: transparent; }',
+      '.zeokeel-foot-menu-trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }',
+      '.zeokeel-foot-menu-item { background: transparent; }',
+      '.zeokeel-foot-menu-item:hover, .zeokeel-foot-menu-item:focus-visible { background: var(--dsw-alias-interactive-bg-hover); }',
     ].join('\n')
     document.head.appendChild(style)
     return () => { style.remove() }
   }, 'foot-menu: hover styles')
 
   // 登记表：条目跨 bundle 传数据（ReactNode 不过界），兄弟插件在各自的 apply 里
-  // 用 `ctx.picoFootMenu.add(...)` 登记，注销函数由它们的 `ctx.effect` 调用。
+  // 用 `ctx.zeokeelFootMenu.add(...)` 登记，注销函数由它们的 `ctx.effect` 调用。
   const service = createFootMenuService()
   ctx.effect(() => installFootMenu(ctx, service), 'foot-menu: menu registry')
 
@@ -267,7 +267,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(
     () => ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
       name: 'sidebar.footer.action',
-      id: 'pico-foot-menu',
+      id: 'zeokeel-foot-menu',
       order: 10,
     }, FootMenuRow)),
     'foot-menu: sidebar row',

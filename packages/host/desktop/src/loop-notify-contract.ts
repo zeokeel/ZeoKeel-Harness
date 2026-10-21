@@ -7,7 +7,7 @@
  */
 
 /** Same-origin endpoint serving the pending click-to-jump session. */
-export const DESKTOP_LOOP_NOTIFY_SESSION_PATH = '/api/pico/desktop/loop-notify/session'
+export const DESKTOP_LOOP_NOTIFY_SESSION_PATH = '/api/zeokeel/desktop/loop-notify/session'
 
 /** One-shot jump request published to the renderer. */
 export interface DesktopLoopNotifySessionResponse {

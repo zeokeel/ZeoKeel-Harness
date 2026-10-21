@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // testDB 建一个迁移到最新的临时库（无 PG 时由 serverstore.NewTestDB 自行 Skip）。

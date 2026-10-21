@@ -31,7 +31,7 @@ interface Harness {
 
 /** Real tool registration over a fake cordis context with a mutable account and locale. */
 function harness(): Harness {
-  const home = mkdtempSync(join(tmpdir(), 'pico-cron-remove-'))
+  const home = mkdtempSync(join(tmpdir(), 'zeokeel-cron-remove-'))
   let locale: 'zh' | 'en' = 'zh'
   const tools = new Map<string, ToolDefinition>()
   const disposers: Array<() => void> = []

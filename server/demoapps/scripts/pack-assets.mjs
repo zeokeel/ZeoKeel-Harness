@@ -13,7 +13,7 @@
  * 本脚本是这件事的**官方实现**，规则全部复用平台真源（不是"再定一套"）：
  *
  *   段名 = 包内逻辑路径        server/internal/wasmapp/api/publish.go 的 splitAssetSections / isLogicalAssetPath
- *   保留资源 `picoaide.app.json`  server/internal/limits/limits.go 的 AppConfigFileName（平台独占，模块里的同名段会被忽略）
+ *   保留资源 `zeokeel.app.json`  server/internal/limits/limits.go 的 AppConfigFileName（平台独占，模块里的同名段会被忽略）
  *   工具链元数据段             server/internal/wasmapp/api/publish.go 的 toolchainSections（平台忽略，不会成为资源）
  *   路径规则（长度/段/字符）    server/internal/wasmapp/assets/assets.go 的 validateLogicalPath（MaxPathBytes / MaxSegmentBytes）
  *   自定义段总量上限           server/internal/limits/limits.go 的 SectionTotalMaxBytes
@@ -62,7 +62,7 @@ const CORE_MODULE_VERSION = 1
 const WASM_MAGIC = Buffer.from([0x00, 0x61, 0x73, 0x6d])
 
 /** limits.AppConfigFileName：平台**独占**的保留资源。 */
-const RESERVED_ASSET_NAME = 'picoaide.app.json'
+const RESERVED_ASSET_NAME = 'zeokeel.app.json'
 
 /**
  * server/internal/wasmapp/assets 的 ToolchainSections：平台按"工具链元数据"分流掉，
@@ -427,7 +427,7 @@ function run(argv) {
   }
   if (opt.assets.length === 0) {
     fail('没有要追加的资源（至少要一个 SRC=DEST）', [
-      '只想改配置（access/whitelist…）不用打包：picoaide.app.json 是随包单独提交的，不是段',
+      '只想改配置（access/whitelist…）不用打包：zeokeel.app.json 是随包单独提交的，不是段',
     ])
   }
 
@@ -512,7 +512,7 @@ function run(argv) {
   if (ignoredDebugBytes > 0) {
     console.log(`  · 另有 ${ignoredDebugBytes} 字节 .debug_*（DWARF）段不计入段总量（平台发布期丢弃；仍计入 ${humanBytes(WASM_MAX_BYTES)} 的 .wasm 体积上限）`)
   }
-  console.log(`下一步：把 ${basename(outPath)} 与 picoaide.app.json 一起交给 wasm_app_validate / wasm_app_publish`)
+  console.log(`下一步：把 ${basename(outPath)} 与 zeokeel.app.json 一起交给 wasm_app_validate / wasm_app_publish`)
   return 0
 }
 

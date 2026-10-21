@@ -2,7 +2,7 @@
  * R8-B regressions (2026-09-24): what a credential change may and may not do to
  * the connectors it announces itself to.
  *
- * Two properties, both about the SAME seam (`pico/connector-credentials-changed`
+ * Two properties, both about the SAME seam (`zeokeel/connector-credentials-changed`
  * → re-registration and the `Authorization` a transport is constructed with):
  *
  *  R8-B-2 — a refresh must not kill the call that caused it. The listener used
@@ -76,7 +76,7 @@ interface RegisteredTransport {
 }
 
 async function state(h: ReturnType<typeof createHarness>, id: string): Promise<{ status: string, request?: { authorizeUrl?: string } | null }> {
-  const res = await callRoute(h, `/api/pico/connectors/${id}/state`, 'GET')
+  const res = await callRoute(h, `/api/zeokeel/connectors/${id}/state`, 'GET')
   return JSON.parse(res.body) as { status: string, request?: { authorizeUrl?: string } | null }
 }
 
@@ -135,7 +135,7 @@ async function register(
   id: string,
   expected: number,
 ): Promise<RegisteredTransport> {
-  await callRoute(h, `/api/pico/connectors/${id}/connect`, 'POST')
+  await callRoute(h, `/api/zeokeel/connectors/${id}/connect`, 'POST')
   await completeAuthorization(await awaitAuthorizeUrl(h, id))
   await waitFor(() => h.configs.length === expected, 8000)
   return h.configs[0] as unknown as RegisteredTransport
@@ -232,7 +232,7 @@ describe('R8-B-2: a credential change must not kill the 401 recovery it caused',
     servers.push(server)
     const dir = mkdtempSync(join(tmpdir(), 'r8b-cred-mixed-'))
     const h = createHarness([mixedDef(server.origin)], dir, { refreshSweepIntervalMs: 0, requestApproval: () => true })
-    await callRoute(h, '/api/pico/connectors/gated-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/gated-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'gated-mcp'))
     await waitFor(() => h.configs.length === 2, 8000)
     const configs = h.configs as unknown as RegisteredTransport[]
@@ -255,7 +255,7 @@ describe('R8-B-2: a credential change must not kill the 401 recovery it caused',
       await waitFor(() => h.configs.length === 3, 8000)
       const latest = h.configs[2] as unknown as RegisteredTransport
       expect(latest.transport, '凭据变更后必须重新注册的是 stdio 服务器').toBe('stdio')
-      expect(latest.env?.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe((await configs[httpIndex]!.authProvider?.tokens())?.access_token)
+      expect(latest.env?.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe((await configs[httpIndex]!.authProvider?.tokens())?.access_token)
       // … while the http transport was neither retired nor re-registered.
       expect(h.configs.filter(entry => (entry as unknown as RegisteredTransport).transport === 'streamable-http').length).toBe(1)
       expect(disposed, '混合连接器同样不得 dispose 活着的 http 传输').toEqual([])
@@ -322,7 +322,7 @@ describe('R8-B-1: a declared Authorization is the connector\'s own credential', 
       expect(mcp.seenTokens[0]).toBe('ApiKey sekret-1')
       // A token refresh must not turn that into a second report (the line
       // describes the definition, not the token), nor drop the header.
-      await callRoute(h, '/api/pico/connectors/apikey-mcp/refresh', 'POST')
+      await callRoute(h, '/api/zeokeel/connectors/apikey-mcp/refresh', 'POST')
       expect(h.warns.filter(line => line.includes('[declared-authorization]')).length).toBe(1)
     } finally {
       await client.close().catch(() => {})
@@ -433,8 +433,8 @@ describe('R8-B-1: a declared Authorization is the connector\'s own credential', 
       mcp: [{ serverName: 'apikey-static', transport: 'streamable-http', url: `${mcp.origin}/mcp`, headers: { Authorization: 'ApiKey ${API_KEY}' } }],
     }
     const h = createHarness([tokenDef], dir, { refreshSweepIntervalMs: 0 })
-    await callRoute(h, '/api/pico/connectors/apikey-static/connect', 'POST')
-    await callRoute(h, '/api/pico/connectors/apikey-static/auth-submit', 'POST', { fields: { API_KEY: 'sekret-3' } })
+    await callRoute(h, '/api/zeokeel/connectors/apikey-static/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/apikey-static/auth-submit', 'POST', { fields: { API_KEY: 'sekret-3' } })
     await waitFor(() => h.configs.length === 1, 8000)
     const config = h.configs[0] as unknown as RegisteredTransport
     expect(config.authProvider).toBeUndefined()
@@ -472,7 +472,7 @@ describe('V3A-N6: a provider-LESS http transport must still be rebuilt on a cred
   ): Promise<{ h: ReturnType<typeof createHarness>, dir: string, stale: string }> {
     const dir = mkdtempSync(join(tmpdir(), label))
     const h = createHarness([probeDef(server.origin)], dir, { refreshSweepIntervalMs: 0 })
-    await callRoute(h, '/api/pico/connectors/gated-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/gated-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'gated-mcp'))
     await waitFor(() => h.configs.length === 1, 8000)
     expect((h.configs[0] as unknown as RegisteredTransport).authProvider).toBeDefined()
@@ -500,7 +500,7 @@ describe('V3A-N6: a provider-LESS http transport must still be rebuilt on a cred
       // Discovery is healthy again: "refresh now" rotates the credential and the
       // listener must hand the new token to a transport that cannot read it.
       server.setMetadataFailure(0)
-      const refreshed = await callRoute(h, '/api/pico/connectors/gated-mcp/refresh', 'POST')
+      const refreshed = await callRoute(h, '/api/zeokeel/connectors/gated-mcp/refresh', 'POST')
       expect(refreshed.status).toBe(200)
       await waitFor(() => h.configs.length === 3, 15_000)
       const rebuilt = h.configs[2] as unknown as RegisteredTransport
@@ -533,7 +533,7 @@ describe('V3A-N6: a provider-LESS http transport must still be rebuilt on a cred
       server.setMetadataFailure(4)
       const store = new ConnectorStore({ baseDir: dir })
       await store.updateCredential('gated-mcp', { accessToken: 'at-fresh-direct', expiresAt: Date.now() + 30_000 })
-      h.emit('pico/connector-credentials-changed', { id: 'gated-mcp' })
+      h.emit('zeokeel/connector-credentials-changed', { id: 'gated-mcp' })
       await waitFor(() => h.configs.length === 3, 15_000)
       const rebuilt = h.configs[2] as unknown as RegisteredTransport
       expect(rebuilt.authProvider, '发现仍失败 ⇒ 重建后仍没有 provider').toBeUndefined()
@@ -552,7 +552,7 @@ describe('V3A-N6: a provider-LESS http transport must still be rebuilt on a cred
     const config = await register(h, 'gated-mcp', 1)
     expect(config.authProvider).toBeDefined()
     try {
-      const refreshed = await callRoute(h, '/api/pico/connectors/gated-mcp/refresh', 'POST')
+      const refreshed = await callRoute(h, '/api/zeokeel/connectors/gated-mcp/refresh', 'POST')
       expect(refreshed.status).toBe(200)
       // Let the (empty) re-registration work settle before counting.
       await new Promise(resolve => setTimeout(resolve, 150))
@@ -641,7 +641,7 @@ describe('V3A-N4: the name-conflict compensation honours the rebuild subset', ()
     servers.push(server)
     const dir = mkdtempSync(join(tmpdir(), 'r8b-n4-'))
     const h = createHarness([mixedDef(server.origin)], dir, { refreshSweepIntervalMs: 0, requestApproval: () => true })
-    await callRoute(h, '/api/pico/connectors/gated-mcp/connect', 'POST')
+    await callRoute(h, '/api/zeokeel/connectors/gated-mcp/connect', 'POST')
     await completeAuthorization(await awaitAuthorizeUrl(h, 'gated-mcp'))
     await waitFor(() => h.configs.length === 2, 8000)
     const configs = h.configs as unknown as RegisteredTransport[]
@@ -654,7 +654,7 @@ describe('V3A-N4: the name-conflict compensation honours the rebuild subset', ()
     try {
       const store = new ConnectorStore({ baseDir: dir })
       await store.updateCredential('gated-mcp', { accessToken: 'at-after-change', expiresAt: Date.now() + 3_600_000 })
-      h.emit('pico/connector-credentials-changed', { id: 'gated-mcp' })
+      h.emit('zeokeel/connector-credentials-changed', { id: 'gated-mcp' })
       // The rebuild is expected to fail (the name is still taken) — what matters
       // is WHICH transports the compensation touched.
       await new Promise(resolve => setTimeout(resolve, 250))

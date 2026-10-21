@@ -15,10 +15,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/sharedskills"
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 func marketAdminSetup(t *testing.T) (http.Handler, *sql.DB, map[string]string) {
@@ -34,8 +34,8 @@ func marketAdminSetupWithCache(t *testing.T) (http.Handler, *sql.DB, map[string]
 	// 登录限流器(10/5min/ip+user)是惰性单例:多个测试各自 login 同一账号
 	// 会触发 429。测试环境按 ratelimit.go 约定放宽(首次 login 前设置生效,
 	// 单例在整个测试二进制生命周期内保持该配置)。
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "1000")
-	t.Setenv("PICOAI_MASTER_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "1000")
+	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	db, cleanup := serverstore.NewTestDB(t)
 	t.Cleanup(cleanup)
 	if _, err := serverstore.CreateUserWithPassword(db, "boss", "pw123456"); err != nil {
@@ -61,11 +61,11 @@ func marketAdminSetupWithCache(t *testing.T) (http.Handler, *sql.DB, map[string]
 	csrf := out["csrf_token"].(string)
 	sess := ""
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "picoaide_session" {
+		if ck.Name == "zeokeel_session" {
 			sess = ck.Value
 		}
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 	return r, db, hdr, cacheDir
 }
 

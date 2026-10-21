@@ -3,11 +3,11 @@
  * enterprise session token, keeps one in-memory snapshot, and coalesces
  * refreshes (debounce + single flight) so agent-loop-complete notifications
  * and manual refreshes never stack duplicate gateway calls.
- * @module @picoaide/dsh-account-card/usage-service
+ * @module @zeokeel/dsh-account-card/usage-service
  */
 
-import { AuthError, fetchJSON } from '@picoaide/dsh-enterprise/server-connector/auth'
-import type { Session } from '@picoaide/dsh-enterprise/server-connector/config'
+import { AuthError, fetchJSON } from '@zeokeel/dsh-enterprise/server-connector/auth'
+import type { Session } from '@zeokeel/dsh-enterprise/server-connector/config'
 import { parseUsagePayload, type UsagePayload } from './usage-contract.js'
 
 // 契约(类型 + 键集合 + 运行时校验)统一在 usage-contract.ts —— 唯一真源。

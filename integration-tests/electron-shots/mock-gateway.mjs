@@ -27,7 +27,7 @@
  * 后一处是原夹具的硬编码 `local` —— 留着会让"改了参数却看不出哪一处在生效")。
  *
  * 职责:模拟企业网关 /api/client/v2/* 供登录与各面板取数;同时 e2e 把桌面
- *  app 整体指向本 fixture,enterprise host 的本地代理(如 /api/pico/*)与
+ *  app 整体指向本 fixture,enterprise host 的本地代理(如 /api/zeokeel/*)与
  *  DSH host 路由(如 /api/workspaces)打到此处时也返回空/固定模拟。
  *  注意:网关路由必须与 server/internal/router/router.go 的 registerClientV2
  *  一致(2026-09-01 已删除 /api/client/v2/models、/config/models、
@@ -179,8 +179,8 @@ function summarizeEvent(payload) {
         ? event.message
         : (typeof logentry?.message === 'string' ? logentry.message : null),
       exception_value: typeof exception?.value === 'string' ? exception.value : null,
-      process_tag: typeof tags?.['picoaide.process'] === 'string' ? tags['picoaide.process'] : null,
-      kind_tag: typeof tags?.['picoaide.kind'] === 'string' ? tags['picoaide.kind'] : null,
+      process_tag: typeof tags?.['zeokeel.process'] === 'string' ? tags['zeokeel.process'] : null,
+      kind_tag: typeof tags?.['zeokeel.kind'] === 'string' ? tags['zeokeel.kind'] : null,
       release: typeof event?.release === 'string' ? event.release : null,
       event_id: typeof event?.event_id === 'string' ? event.event_id : null,
     }
@@ -310,7 +310,7 @@ const server = createServer((req, res) => {
       default_model: 'deepseek-v4',
       models: [
         { id: 'deepseek-v4', name: 'DeepSeek V4', provider: 'deepseek' },
-        { id: 'pico-v4-pro', name: 'Pico AI V4 Pro', provider: 'picoai' },
+        { id: 'zeokeel-v4-pro', name: 'ZeoKeel AI V4 Pro', provider: 'zeokeel' },
       ],
       user: { username: 'admin', id: 1, department: 'dev' },
       usage: { balance: 100, quota: 1000 },
@@ -334,7 +334,7 @@ const server = createServer((req, res) => {
       // enterprise/error-reporting.ts 直接 initSentry),不经过 webadmin。
       web: {
         error_reporting_enabled: true,
-        // 正向心跳(P1-2):客户端**只在**本开关打开时才发那条带 `picoaide.heartbeat`
+        // 正向心跳(P1-2):客户端**只在**本开关打开时才发那条带 `zeokeel.heartbeat`
         // tag 的 info 自检 `客户端错误上报链路自检 (<release>)` —— 它是"链路活着"
         // 的唯一正向信号(2026-09-16 起,无条件发 info 自检已被移除:level=error 的
         // 部署不该被自检噪声打搅)。本 fixture 必须打开它,否则永远等不到事件。
@@ -350,7 +350,7 @@ const server = createServer((req, res) => {
   // 平台内置技能清单（**未安装**）：用来验证「未装 ⇒ 出现在市场分区」这条口径，
   // 以及长描述在卡片里被截成固定两行（全文进详情弹层）。
   // 形状来自 packages/host/capability-center/src/client/BuiltinSkillsStrip.tsx 的 BuiltinSkillsPayload。
-  if (url.pathname === '/api/pico/skills/builtin' || url.pathname === '/api/client/v2/skills/builtin') {
+  if (url.pathname === '/api/zeokeel/skills/builtin' || url.pathname === '/api/client/v2/skills/builtin') {
     res.end(JSON.stringify({
       skills: [
         {
@@ -377,7 +377,7 @@ const server = createServer((req, res) => {
     ]))
     return
   }
-  if (url.pathname === '/api/workspaces' || url.pathname === '/api/workspace' || url.pathname === '/api/pico/workspaces') {
+  if (url.pathname === '/api/workspaces' || url.pathname === '/api/workspace' || url.pathname === '/api/zeokeel/workspaces') {
     res.end(JSON.stringify({ workspaces: [
       { id: 'ws-1', name: '测试工作区', path: '/tmp/ws1', cwd: '/tmp/ws1' },
       { id: 'ws-2', name: '生产工作区', path: '/tmp/ws2', cwd: '/tmp/ws2' },
@@ -415,7 +415,7 @@ const server = createServer((req, res) => {
   // 连接器目录：给**四种状态各一条**，这样截图能证明卡片布局（状态徽章 / 头像块 /
   // 动作条分档）在真实数据下成立，而不是永远只看空态。字段形状来自
   // packages/host/connectors/src/client/ConnectorsSection.tsx 的 ConnectorEntry。
-  if (url.pathname === '/api/pico/connectors' || url.pathname === '/api/client/v2/connectors') {
+  if (url.pathname === '/api/zeokeel/connectors' || url.pathname === '/api/client/v2/connectors') {
     res.end(JSON.stringify({ connectors: [
       {
         id: 'dingtalk', name: '钉钉', description: '通讯录 / 群消息 / 日程与待办：连一次就能在对话里直接查人与发消息。',
@@ -445,7 +445,7 @@ const server = createServer((req, res) => {
 
   // 应用中心目录：三条不同可见性/归属的应用（含一条已下架），用来核对卡片网格。
   // 字段形状来自 packages/client/wasm-apps/src/client/AppCenterPanel.tsx 的 parseCatalog。
-  if (url.pathname === '/api/pico/apps/wasm' || url.pathname === '/api/client/v2/apps/wasm/catalog') {
+  if (url.pathname === '/api/zeokeel/apps/wasm' || url.pathname === '/api/client/v2/apps/wasm/catalog') {
     res.end(JSON.stringify({
       apps: [
         {
@@ -465,7 +465,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  if (url.pathname.startsWith('/api/admin') || url.pathname.startsWith('/api/pico')) {
+  if (url.pathname.startsWith('/api/admin') || url.pathname.startsWith('/api/zeokeel')) {
     res.end(JSON.stringify({ ok: true, items: [] }))
     return
   }

@@ -14,7 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // loginRateLimit bounds login attempts per key (ip+username).
@@ -35,7 +35,7 @@ type loginLimiter struct {
 	maxEntries  int
 	maxAttempts int
 	// maxAttemptsFn 实时计算阈值(F17 复核):共享单例不能在创建时固话
-	// PICOAI_LOGIN_MAX_ATTEMPTS —— 否则第一个测试设置的临时值会永久影响
+	// ZEOKEEL_LOGIN_MAX_ATTEMPTS —— 否则第一个测试设置的临时值会永久影响
 	// 后续用例(阈值过大 → 限流测试永不触发;过小 → 正常登录被误伤)。
 	// 生产环境变量进程内不变,实时读取只是多一次 getenv。
 	maxAttemptsFn func() int
@@ -86,7 +86,7 @@ const loginIPMaxAttempts = 60
 
 // sharedLoginLimiter 是**全服务端共享**的登录失败限流器(F17,审计
 // 2026-09-11):此前客户端面与管理面各持一个实例,同一账号可从两个入口
-// 各消耗一份失败预算(实际阈值翻倍)。PICOAI_LOGIN_MAX_ATTEMPTS 仍在首次
+// 各消耗一份失败预算(实际阈值翻倍)。ZEOKEEL_LOGIN_MAX_ATTEMPTS 仍在首次
 // 创建时读取(惰性单例,测试可先 t.Setenv)。
 var sharedLoginLimiterOnce sync.Once
 var sharedLoginLimiterVal *loginLimiter
@@ -111,13 +111,13 @@ func sharedLoginIPLimiter() *loginLimiter {
 }
 
 func newLoginLimiter() *loginLimiter {
-	// PICOAI_LOGIN_MAX_ATTEMPTS overrides the default 10/5min for test
+	// ZEOKEEL_LOGIN_MAX_ATTEMPTS overrides the default 10/5min for test
 	// environments (dev-env/E2E login repeatedly as the same user).
 	// 阈值在**每次判定时**读取(见 maxAttemptsFn),保证共享单例下测试
 	// 临时 env 不泄漏到其他用例。
 	l := newRateLimiter(10)
 	l.maxAttemptsFn = func() int {
-		if v := os.Getenv("PICOAI_LOGIN_MAX_ATTEMPTS"); v != "" {
+		if v := os.Getenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
 				return n
 			}

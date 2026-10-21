@@ -15,7 +15,7 @@
  * 判据（修复后）：
  *   1. `refused` + `SKILL_LOCAL_CONTENT`（不是 adopted）；
  *   2. 用户文件一字不动；
- *   3. 自己刚写的 `.picoaide/`（+ `.install-version`）被收回 —— 既不留"溯源已写、
+ *   3. 自己刚写的 `.zeokeel/`（+ `.install-version`）被收回 —— 既不留"溯源已写、
  *      内容被换"的中间态，也不能让下一次开机同步拿着刷出来的溯源去覆盖用户内容；
  *   4. 目录里**没有**任何 plugin 溯源。
  *

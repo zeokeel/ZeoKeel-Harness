@@ -1,6 +1,6 @@
 # GlitchTip 自托管运维手册：DSN 域名（`GLITCHTIP_DOMAIN`）与自检
 
-- 日期：2026-09-16 ｜ 适用对象：`https://glitchtip.example.com/`（自托管 GlitchTip **6.2.6**，org `picoaide`，project `picoaide-web`）
+- 日期：2026-09-16 ｜ 适用对象：`https://glitchtip.example.com/`（自托管 GlitchTip **6.2.6**，org `zeokeel`，project `zeokeel-web`）
 - 关联：决策 D9（[决策记录](../decisions/2026-09-16-glitchtip-error-collection.md)）· 验收标准 AC11 / AC15
 - **本文档是给人类运维的操作手册。** 仓库里的任何自动化（含 AI 代理、CI、脚本）**都不得执行本文的生产写操作**；
   代理对生产主机与 GlitchTip 实例只允许**只读**勘察（`SELECT` / `docker logs` / `docker inspect` / HTTP GET）。
@@ -58,14 +58,14 @@ GLITCHTIP_EMBED_WORKER=true
 后果一：后台 API 返回的 DSN 主机是 `localhost:8000`（管理员 cookie 只读 GET 实测）：
 
 ```
-GET https://glitchtip.example.com/api/0/projects/picoaide/picoaide-web/keys/
+GET https://glitchtip.example.com/api/0/projects/zeokeel/zeokeel-web/keys/
 → "dsn": { "public": "http://<glitchtip-public-key>@localhost:8000/1", ... }
 ```
 
 后果二：每条 issue 的 permalink 也是 `http://localhost:8000/...` —— 运维点开后台里的链接会被带到本机。
 
 ```
-issue 详情 → "permalink": "http://localhost:8000/picoaide-web/issues/14"
+issue 详情 → "permalink": "http://localhost:8000/zeokeel-web/issues/14"
 ```
 
 > 这两个都是**展示层缺陷**：已经入库的事件没有丢，收包链路（`POST /api/1/store/`）本身是好的。
@@ -111,9 +111,9 @@ https://<glitchtip-public-key>@glitchtip.example.com/1
 | 片段 | 值 | 说明 |
 | --- | --- | --- |
 | 协议 | `https://` | 公网域名必须走 TLS；`http://` 仅在内网自建无证书时才是合法选择 |
-| public key | `<glitchtip-public-key>` | 项目 `picoaide-web` 的公开 key（非机密，可对外展示） |
+| public key | `<glitchtip-public-key>` | 项目 `zeokeel-web` 的公开 key（非机密，可对外展示） |
 | 主机 | `glitchtip.example.com` | **`GLITCHTIP_DOMAIN` 修好之后**后台会自己显示出这个主机 |
-| 项目 id | `/1` | `picoaide-web` 的 project id |
+| 项目 id | `/1` | `zeokeel-web` 的 project id |
 
 > **重要**：`GLITCHTIP_DOMAIN` 修正**不会**改变 public key 与 project id —— 只会把主机从
 > `localhost:8000` 变成 `glitchtip.example.com`。所以修复动作是「先修容器 → 再从后台抄一次 DSN →
@@ -189,7 +189,7 @@ docker logs --tail 60 glitchtip-web-1
 ```bash
 # 用管理员会话（或直接在浏览器里打开 project 的「客户端密钥 / Client Keys」页）
 curl -s -b <你的管理员 cookie jar> \
-  'https://glitchtip.example.com/api/0/projects/picoaide/picoaide-web/keys/'
+  'https://glitchtip.example.com/api/0/projects/zeokeel/zeokeel-web/keys/'
 ```
 
 期望看到（AC15）：
@@ -198,7 +198,7 @@ curl -s -b <你的管理员 cookie jar> \
 "dsn": { "public": "https://<glitchtip-public-key>@glitchtip.example.com/1", ... }
 ```
 
-同时任取一条 issue，其 `permalink` 也应是 `https://glitchtip.example.com/picoaide-web/issues/...`。
+同时任取一条 issue，其 `permalink` 也应是 `https://glitchtip.example.com/zeokeel-web/issues/...`。
 
 然后登录 **webadmin → 错误监控**，把「错误上报 DSN」更新为 §3 的完整字符串并保存：
 
@@ -236,7 +236,7 @@ POST 上报端点。所以：
 **第 3 步（心跳开关）细节** —— `web.error_reporting_heartbeat`（默认 **off**）：
 
 - 打开后，**每个客户端在每次启动时发一条 `info` 等级的「链路心跳」事件**，带固定 tag
-  `picoaide.heartbeat`；
+  `zeokeel.heartbeat`；
 - 这条心跳**故意豁免** `error_reporting_level` 阈值：因为默认等级是 `error`，若不豁免，
   `info` 心跳会被客户端的 `beforeSend` 过滤掉，链路健康时后台照样一片空白（这正是缺陷藏了 20 天的机制，见 §6）；
 - 它**纯粹用于证明链路活着**，不是错误、不计入错误问题列表的语义；

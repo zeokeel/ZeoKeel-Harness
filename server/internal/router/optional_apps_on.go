@@ -10,8 +10,8 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverauth"
-	wasmapi "github.com/picoaide/picoaide/internal/wasmapp/api"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	wasmapi "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/api"
 )
 
 // WasmAPI 是 WASM 应用平台操作面的 handler 集合。
@@ -60,7 +60,7 @@ func registerWasm(r *gin.Engine, d Deps) {
 	// ===== 客户端专属访问模型（2026-09-19 决策）=====
 	//
 	// 应用只在桌面客户端内可用：客户端注册的自定义协议 handler 把
-	// `picoaide-app://<app_id>/…` 上的请求包成信封送到这里执行，
+	// `zeokeel-app://<app_id>/…` 上的请求包成信封送到这里执行，
 	// 身份由客户端注入（它持有员工 bearer）。旧的应用子域 + 换票链路在 W4 波次删除。
 	// 决策与架构：docs/decisions/2026-09-19-wasm-client-internal-origin.md。
 	//
@@ -79,7 +79,7 @@ func registerWasm(r *gin.Engine, d Deps) {
 	// 打开校验与计数（F16，契约 §5.1b / §8.9）：**每次打开动作调一次**。
 	//
 	// 顺序冻结：BearerAuth（本组中间件）→ app-proof → 应用反查。
-	// 响应头 `X-PicoAide-App-Version` 是客户端内容**缓存键的唯一来源**（R1-DAT-12）。
+	// 响应头 `X-ZeoKeel-App-Version` 是客户端内容**缓存键的唯一来源**（R1-DAT-12）。
 	wg.POST("/:app_id/open", d.Wasm.OpenApp)
 
 	// ---- 分片上传与续传（§4.2 / §7.3）----

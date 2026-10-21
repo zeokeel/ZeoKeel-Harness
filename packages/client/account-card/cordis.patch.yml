@@ -1,6 +1,6 @@
 # Account card row: the bottom sidebar account card (username + logout +
 # live usage balance). Loaded after the enterprise rows — the service it
-# injects (`picoSession`) is provided by picoaide-session.
+# injects (`zeokeelSession`) is provided by zeokeel-session.
 - insert:
-    - id: picoaide-account-card
-      name: '@picoaide/dsh-account-card'
+    - id: zeokeel-account-card
+      name: '@zeokeel/dsh-account-card'

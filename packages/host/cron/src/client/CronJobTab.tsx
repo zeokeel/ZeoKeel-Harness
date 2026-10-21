@@ -20,7 +20,7 @@ import {
   PanelPage,
   PanelStats,
   icons,
-} from '@picoaide/dsh-panel-surface/client'
+} from '@zeokeel/dsh-panel-surface/client'
 import type { JobRecord } from '../jobs.ts'
 import { jobIsRunning } from '../jobs.ts'
 import type { CronController, CronViewSnapshot } from './controller.ts'
@@ -272,7 +272,7 @@ export function CronJobTab({ controller, workspaces, api, openSession, page }: {
                 </h3>
                 {newButton}
               </header>
-              <div className="pico-scroll" style={{ ...styles.list, padding: 12 }}>{body}</div>
+              <div className="zeokeel-scroll" style={{ ...styles.list, padding: 12 }}>{body}</div>
             </div>
           )
         : (
@@ -325,7 +325,7 @@ function JobCard({ job, pending, controller, onEdit, openSession, now, zone }: {
         </IconTile>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span className="pico-clamp-1" title={job.name} style={{ fontSize: 13.5, fontWeight: 600, lineHeight: '20px' }}>
+            <span className="zeokeel-clamp-1" title={job.name} style={{ fontSize: 13.5, fontWeight: 600, lineHeight: '20px' }}>
               {job.name}
             </span>
             {!job.enabled && <Chip tone="neutral">{t('job.disabled')}</Chip>}
@@ -333,10 +333,10 @@ function JobCard({ job, pending, controller, onEdit, openSession, now, zone }: {
           </div>
           <div style={{ ...META_LINE, marginTop: 4 }}>
             <code style={CRON_CODE}>{job.cron}</code>
-            <span className="pico-clamp-1" title={nextRunText(job, now, zone)}>{nextRunText(job, now, zone)}</span>
+            <span className="zeokeel-clamp-1" title={nextRunText(job, now, zone)}>{nextRunText(job, now, zone)}</span>
           </div>
         </div>
-        <label className="pico-switch" title={t('job.enabled')} style={{ marginTop: 2 }}>
+        <label className="zeokeel-switch" title={t('job.enabled')} style={{ marginTop: 2 }}>
           <input
             type="checkbox"
             checked={job.enabled}

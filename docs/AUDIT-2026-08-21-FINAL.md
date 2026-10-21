@@ -1,4 +1,4 @@
-# PicoAide Harness 企业版整体审计报告
+# ZeoKeel Harness 企业版整体审计报告
 
 > 审计日期：2026-08-21
 > 审计方式：① 全量代码审计（Go 后端 + webadmin 前端 + Electron 客户端 + 9 个业务插件）② 真实客户端交互（Electron 43.4.0 + Xvfb :99 + CDP 驱动，登录 user001）

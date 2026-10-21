@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/queue"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 )
 
 // ===== 步骤①：应用反查（§4.8）=====
@@ -34,7 +34,7 @@ func TestServe_ClientUnknownAppIs404(t *testing.T) {
 	}
 	body := rec.Body.String()
 	// 404 页面是平台自有产物：门户/管理台/任何表单都不允许出现（也不允许它变成一处跳板）。
-	for _, forbidden := range []string{"PicoAide", "portal", "管理后台", "<form"} {
+	for _, forbidden := range []string{"ZeoKeel", "portal", "管理后台", "<form"} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("404 页面疑似回落到平台其它页面（含 %q）: %s", forbidden, body)
 		}
@@ -268,7 +268,7 @@ func TestServe_LoginModeAllowsEveryLoggedInUser(t *testing.T) {
 }
 
 // TestServe_LegacySchemaConfigStillWorks 守住**兼容 shim 的端到端**：
-// 已发布版本的随包 `picoaide.app.json` 还是旧 schema（`login_required` / `visible`），
+// 已发布版本的随包 `zeokeel.app.json` 还是旧 schema（`login_required` / `visible`），
 // 迁移 0071 只改写库里的 config_json，**随包资产是发布期快照、永远可能是旧的** ——
 // 平台升级后老应用必须照旧运行（映射规则见 appcfg 包注释）。
 //

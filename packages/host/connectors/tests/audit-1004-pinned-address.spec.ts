@@ -70,7 +70,7 @@ const REBINDING_INTERNAL_ANSWER = '127.0.0.1'
 const cleanups: Array<() => Promise<void> | void> = []
 /** Variables the ROUTE depends on (P8): an ambient proxy must not decide it. */
 const PROXY_ENV_NAMES: readonly string[] = [
-  'PICOAI_ALLOW_SYSTEM_PROXY', 'NODE_USE_ENV_PROXY',
+  'ZEOKEEL_ALLOW_SYSTEM_PROXY', 'NODE_USE_ENV_PROXY',
   'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy',
   'ALL_PROXY', 'all_proxy', 'NO_PROXY', 'no_proxy',
 ]

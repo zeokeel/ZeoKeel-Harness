@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 一份数据 | `db.define` / `db.query` / `db.exec` | 一张 `board_notes` 表，主键应用自己生成 |
 | 谁在操作 | 请求帧里的 `user{id,username,display_name,dept,is_publisher}` | 作者/部门直接落库，不做登录 |
-| 谁能进来 | `access` 模式 + 应用自己的 `picoaide.app.json` | `access=whitelist`，名单由**应用**比对（R24） |
+| 谁能进来 | `access` 模式 + 应用自己的 `zeokeel.app.json` | `access=whitelist`，名单由**应用**比对（R24） |
 | 一块界面 | 入口 `/` 走 wasm，`/static/*` 由宿主直出 | `index.html` 由 wasm 读，CSS/JS 走 `/static/*` |
 
 ## 文件
@@ -20,7 +20,7 @@ main.go              入口 + 四个 API + 名单判定 + 自制 403 页（唯�
 web/index.html       页面骨架（模板里只有一个空 <template>，用户数据全靠 textContent 填）
 web/app.css          全部样式（纯 CSS 渐变/玻璃拟态，无图片、无外链字体）
 web/app.js           页面脚本（vanilla JS，零依赖：计数、发布、删除、FLIP、骨架屏、轮询）
-picoaide.app.json    随包配置（access/whitelist/owner…）：平台侧由 appseed 依 demos.json 播种，
+zeokeel.app.json    随包配置（access/whitelist/owner…）：平台侧由 appseed 依 demos.json 播种，
                      本目录这份只给本地预览读（见 demoapps/README.md）
 ```
 
@@ -65,7 +65,7 @@ board_notes(
 
 ## 准入（`access = whitelist`）
 
-平台只把模式（`auth.mode`）与身份注入帧，**名单比对由应用读自己的 `picoaide.app.json`
+平台只把模式（`auth.mode`）与身份注入帧，**名单比对由应用读自己的 `zeokeel.app.json`
 完成**。本应用的实现：
 
 * `/` 里 `ok, reason, cfg := app.AccessAllowed()`；不通过 ⇒ **自制 403 页**（不是平台页）；
@@ -92,7 +92,7 @@ board_notes(
 
 ## 本地跑
 
-本目录自带一份 `picoaide.app.json`（**只服务本地预览**：生产环境里这份配置由 `appseed`
+本目录自带一份 `zeokeel.app.json`（**只服务本地预览**：生产环境里这份配置由 `appseed`
 依 `demos.json` 写进版本资源目录，见 `demoapps/README.md`）。
 
 ```bash
@@ -101,15 +101,15 @@ bash server/scripts/build-demo-apps.sh board
 
 # ② 假宿主跑一遍（按平台真实路由：/static/* 直出、/ 走 wasm、db.*/log/assets.read 有应答）
 node server/skills/app-builder/examples/go/preview.mjs temp/demo-build/board-packed.wasm \
-  --config server/demoapps/board/picoaide.app.json --path / --user zhangwei
+  --config server/demoapps/board/zeokeel.app.json --path / --user zhangwei
 node server/skills/app-builder/examples/go/preview.mjs temp/demo-build/board-packed.wasm \
-  --config server/demoapps/board/picoaide.app.json --path /api/me --user zhangwei
+  --config server/demoapps/board/zeokeel.app.json --path /api/me --user zhangwei
 node server/skills/app-builder/examples/go/preview.mjs temp/demo-build/board-packed.wasm \
-  --config server/demoapps/board/picoaide.app.json --path /api/notes --method POST \
+  --config server/demoapps/board/zeokeel.app.json --path /api/notes --method POST \
   --body '{"body":"第一条留言"}' --user zhangwei
 # 换一个不在名单里的账号看 403 页
 node server/skills/app-builder/examples/go/preview.mjs temp/demo-build/board-packed.wasm \
-  --config server/demoapps/board/picoaide.app.json --path / --user zhanwei
+  --config server/demoapps/board/zeokeel.app.json --path / --user zhanwei
 
 # ③ 浏览器里看效果（真 HTTP + 真跑 wasm）
 node temp/demo-host.mjs --wasm temp/demo-build/board-packed.wasm \

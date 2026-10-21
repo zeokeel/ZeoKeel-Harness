@@ -38,10 +38,10 @@
 | # | 动作 | 命令 | 期望 | 为什么 |
 |---|---|---|---|---|
 | PRE-1 | 确认基点未被推进 | `git fetch origin master && git log --oneline -1 origin/master` | 若已前进，先 `git merge origin/master` 再开工 | 本仓有并行会话，master 常被推进 |
-| PRE-2 | 确认构建产物不陈旧 | `ls -la --time-style=+%m-%d_%H:%M packages/host/enterprise/lib/ packages/host/enterprise/src/` | `lib/` 不早于 `src/`；否则 `corepack yarn workspace @picoaide/dsh-enterprise build` | 产物比源码旧是**假红**的头号来源 |
-| PRE-3 | 跑一遍基线门禁 | `corepack yarn workspace @picoaide/dsh-enterprise test` / `cd server/webadmin && npm test` / `cd server && go test ./internal/llmgateway/` | 记录**改动前**的通过/失败数量，作为归属基准 | 后续任何红都要能区分"我改坏的"还是"本来就红" |
+| PRE-2 | 确认构建产物不陈旧 | `ls -la --time-style=+%m-%d_%H:%M packages/host/enterprise/lib/ packages/host/enterprise/src/` | `lib/` 不早于 `src/`；否则 `corepack yarn workspace @zeokeel/dsh-enterprise build` | 产物比源码旧是**假红**的头号来源 |
+| PRE-3 | 跑一遍基线门禁 | `corepack yarn workspace @zeokeel/dsh-enterprise test` / `cd server/webadmin && npm test` / `cd server && go test ./internal/llmgateway/` | 记录**改动前**的通过/失败数量，作为归属基准 | 后续任何红都要能区分"我改坏的"还是"本来就红" |
 | PRE-4 | **判定 H3′（§PLAN 2.6）** | 只读：生产 `SELECT value FROM settings WHERE key='gateway.default_model'` + 模型表行数；或带客户端 token 的 `curl .../api/client/v2/config/bootstrap` | `models` **非空** ⇒ H3′ 排除；**为空** ⇒ 升格为 P0 | 只需一次查询，可能直接改变 P0 排序 |
-| PRE-5 | 确认 PG 测试库可用 | `psql postgres://postgres:postgres@127.0.0.1:5432/picoaide_test -c 'select 1'` | 成功 ⇒ DB 用例真跑；失败 ⇒ 相关用例会 SKIP，**不能当绿** | DB 用例必须看 `--- PASS` 而非 `--- SKIP` |
+| PRE-5 | 确认 PG 测试库可用 | `psql postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test -c 'select 1'` | 成功 ⇒ DB 用例真跑；失败 ⇒ 相关用例会 SKIP，**不能当绿** | DB 用例必须看 `--- PASS` 而非 `--- SKIP` |
 
 ---
 
@@ -49,7 +49,7 @@
 
 | 路径 | 用途 |
 |---|---|
-| `.glitchtip-recon/artifact/shipped/` | **生产 2.7.5-beta.2 解包树**（`package.json` version=2.7.5-beta.2）。可直接 `require('@sentry/node')` / `import('@picoaide/dsh-enterprise/error-reporting')`，是 H1 类问题的**权威对照组** |
+| `.glitchtip-recon/artifact/shipped/` | **生产 2.7.5-beta.2 解包树**（`package.json` version=2.7.5-beta.2）。可直接 `require('@sentry/node')` / `import('@zeokeel/dsh-enterprise/error-reporting')`，是 H1 类问题的**权威对照组** |
 | `.glitchtip-recon/artifact/shipped/probe.mjs`、`probe2.mjs` | 在发布树里跑的上报探针（`probe2` = `level=error` 盲区复现，对应 F11） |
 | `.glitchtip-recon/client-probe.mjs` | 用**仓库内已构建**的 `lib/error-reporting.js` 对真实 GlitchTip 发事件：`node client-probe.mjs <dsn> <label>` |
 | `.glitchtip-recon/c.txt` | GlitchTip 管理员 cookie jar（只读 API 复用；**禁止**用它做任何写操作/改远端状态） |
@@ -174,7 +174,7 @@
      | `initSentry` 失败 | `failed` | **`logger.warn`**（含 `reason`），并 `console.warn` 保留 |
      | 成功 | `ready` | **`logger.info`**（默认阈值 `info` ⇒ 会落盘），文案含 `dsnHost` + `release` |
   4. **绝不打印完整 DSN**：只打 `new URL(dsn).host` 与 `level`。
-  5. 保持 `inject = ['picoSession']`、`subscribeSession` 用法、`beforeSend` 语义不变。
+  5. 保持 `inject = ['zeokeelSession']`、`subscribeSession` 用法、`beforeSend` 语义不变。
 - **测试文件与用例名**
   - `packages/host/enterprise/tests/error-reporting.spec.ts`
     - **适配**：`:83-88` 「degrades silently when a prior instance is closed」的
@@ -187,8 +187,8 @@
       - `'reports ready with the dsn host and never logs the full DSN'`（断言 logger 收到的字符串**不含** public key）
 - **验证方式**
   ```bash
-  corepack yarn workspace @picoaide/dsh-enterprise typecheck   # 期望 exit 0
-  corepack yarn workspace @picoaide/dsh-enterprise test        # 期望全绿；error-reporting 由 7 → ≥12
+  corepack yarn workspace @zeokeel/dsh-enterprise typecheck   # 期望 exit 0
+  corepack yarn workspace @zeokeel/dsh-enterprise test        # 期望全绿；error-reporting 由 7 → ≥12
   ```
 - **依赖**：无（与 P0-1/P0-2 并行安全）。
 
@@ -212,8 +212,8 @@
      - 由 DSN 推导 store 端点 `{proto}://{host}[:{port}]{prefix}/api/{project_id}/store/`；
      - **必须**用 `util.SafeOutboundTransport()` 建 client，并在发请求前 `util.CheckOutboundTarget(ctx, host)`；
        `timeout 8s`（`context.WithTimeout`）；`redirect` 不跟随（或跟随但复检）；
-     - 请求头 `X-Sentry-Auth: Sentry sentry_version=7, sentry_key=<public>, sentry_client=picoaide-server/<BuildVersion>`；body 为最小事件
-       （`event_id`(32hex) / `timestamp` / `level:"error"` / `message:"PicoAide 管理端连通性自检"` / `platform:"other"` / `release`），
+     - 请求头 `X-Sentry-Auth: Sentry sentry_version=7, sentry_key=<public>, sentry_client=zeokeel-server/<BuildVersion>`；body 为最小事件
+       （`event_id`(32hex) / `timestamp` / `level:"error"` / `message:"ZeoKeel 管理端连通性自检"` / `platform:"other"` / `release`），
        **不含任何服务端机密**；
      - 错误分类 → `detail.kind ∈ {DNS, CONNECT, TLS, TIMEOUT, HTTP_4XX, HTTP_5XX}`（`net.DNSError`→DNS、
        `ECONNREFUSED/EHOSTUNREACH/ENETUNREACH`→CONNECT、`x509.*`/`tls:`→TLS、`context.DeadlineExceeded`→TIMEOUT）；
@@ -241,8 +241,8 @@
   cd server && go test ./internal/llmgateway/ -run TestErrorReportingTestEvent -v   # 期望逐条 --- PASS
   cd server/webadmin && npm test -- ErrorMonitoring
   # 真实验证（可选，需真实 GlitchTip 读取权限）：
-  #   点一次按钮后 GET /api/0/projects/picoaide/picoaide-web/issues/ 应新增一条
-  #   「PicoAide 管理端连通性自检」；用生产 DSN 与坏 DSN 各跑一次
+  #   点一次按钮后 GET /api/0/projects/zeokeel/zeokeel-web/issues/ 应新增一条
+  #   「ZeoKeel 管理端连通性自检」；用生产 DSN 与坏 DSN 各跑一次
   ```
 - **依赖**：P0-1（复用校验器）。**阻塞** P2-3（UI 打磨）。
 
@@ -291,7 +291,7 @@
 - **目标**：把 H1 类故障（SDK 或插件没进包）从"运行期静默"变成"打包期硬失败"。
 - **要改的文件:行号 / 锚点**
   - `packages/host/desktop/scripts/verify-packaged-runtime.ts`
-    - `:576-596` `REQUIRED_ASAR_EXPORTS` —— 补 `{ specifier: '@picoaide/dsh-enterprise/error-reporting', archivePath: 'node_modules/@picoaide/dsh-enterprise/lib/error-reporting.js' }`
+    - `:576-596` `REQUIRED_ASAR_EXPORTS` —— 补 `{ specifier: '@zeokeel/dsh-enterprise/error-reporting', archivePath: 'node_modules/@zeokeel/dsh-enterprise/lib/error-reporting.js' }`
       （同批补 `skill-telemetry` / `channel-sync` / `invariant` 三个同样存在的行，见锚点 `REQUIRED_ASAR_EXPORTS`）
     - `:857-1063` flock smoke 区域 —— 照抄范式新增 `SENTRY_SMOKE_SCRIPT` + `smokePackagedErrorReporting()`
       （锚点 `FLOCK_SMOKE_SCRIPT` / `smokePackagedFlockLock`）
@@ -306,7 +306,7 @@
      const sentryUrl = appRequire.resolve('@sentry/node')
      const sentry = appRequire('@sentry/node')
      if (typeof sentry.init !== 'function') throw new Error('@sentry/node.init is not a function')
-     const plugin = await import(pathToFileURL(appRequire.resolve('@picoaide/dsh-enterprise/error-reporting')).href)
+     const plugin = await import(pathToFileURL(appRequire.resolve('@zeokeel/dsh-enterprise/error-reporting')).href)
      for (const key of ['apply', 'initSentry', 'name']) {
        if (!(key in plugin)) throw new Error(`error-reporting plugin is missing export ${key}`)
      }
@@ -353,10 +353,10 @@
   - `server/webadmin/src/pages/ErrorMonitoring.tsx:104-107` 开关区 → 加第二个 Switch
 - **改动要点**
   1. 客户端 `initSentry(dsn, release, level, heartbeat = false)`：
-     - `beforeSend: (event) => { if (event.tags?.['picoaide.heartbeat']) return event; …原逻辑… }`
+     - `beforeSend: (event) => { if (event.tags?.['zeokeel.heartbeat']) return event; …原逻辑… }`
        —— **只对带 tag 的事件例外**，普通事件仍走原 `LEVEL_RANK` 过滤；
      - `heartbeat === true` 时在 init 成功后发
-       `captureMessage('客户端错误上报链路自检 (' + release + ')', { level:'info', tags:{ 'picoaide.heartbeat':'1' } })`；
+       `captureMessage('客户端错误上报链路自检 (' + release + ')', { level:'info', tags:{ 'zeokeel.heartbeat':'1' } })`；
      - **每进程只发一次**（模块级 `let heartbeatSent = false`，重 init 不重发）；
      - 注意 `SentryNode` 的类型 cast（`captureMessage` 第二参从 `string` 变为对象）。
   2. 服务端 settings 键 `web.error_reporting_heartbeat`，默认 `false`（= 与今天行为**完全一致**）。
@@ -376,7 +376,7 @@
   - `server/webadmin/src/pages/ErrorMonitoring.test.tsx`：`'心跳开关随保存提交'`
 - **验证方式**
   ```bash
-  corepack yarn workspace @picoaide/dsh-enterprise test
+  corepack yarn workspace @zeokeel/dsh-enterprise test
   cd server && go test ./internal/llmgateway/ -run Heartbeat -v && go test ./internal/bootstrap/ -run Heartbeat -v
   cd server/webadmin && npm test -- ErrorMonitoring
   # 真实验证：临时把生产 DSN 配到本地/测试部署，开心跳 → 客户端登录 → GlitchTip 应出现
@@ -420,10 +420,10 @@
   - `server/webadmin/src/pages/ErrorMonitoring.test.tsx`：`'展示客户端上报状态(含失败原因)'`、`'无数据时不显示为正常'`
 - **验证方式**
   ```bash
-  cd server && PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/picoaide_test \
+  cd server && PG_DSN_TEST=postgres://postgres:postgres@127.0.0.1:5432/zeokeel_test \
     go test ./internal/serverstore/ -run ErrorReportingStatus -v        # 期望 --- PASS（非 SKIP）
   cd server && go test ./internal/telemetry/ -run ErrorReporting -v
-  corepack yarn workspace @picoaide/dsh-enterprise test
+  corepack yarn workspace @zeokeel/dsh-enterprise test
   cd server/webadmin && npm test -- ErrorMonitoring
   ```
 - **依赖**：P0-3。**与 P0-1/P0-4 无耦合，可并行。**
@@ -474,7 +474,7 @@
   `'flushes the client on dispose'`（mock 记录 `close` 的调用与超时参数）
 - **验证方式**
   ```bash
-  corepack yarn workspace @picoaide/dsh-enterprise test
+  corepack yarn workspace @zeokeel/dsh-enterprise test
   # 复测 V6：注入未捕获异常 → GlitchTip/本地收包器必须收到（issue 计数 +1）
   ```
 - **依赖**：P0-3（状态机）。**风险**：改宿主退出路径影响面大，(b) 方案把风险限制在企业包内。

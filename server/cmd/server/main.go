@@ -18,25 +18,25 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/appstore"
-	"github.com/picoaide/picoaide/internal/auditchain"
-	"github.com/picoaide/picoaide/internal/auditretention"
-	"github.com/picoaide/picoaide/internal/bootstrap"
-	"github.com/picoaide/picoaide/internal/channel"
-	"github.com/picoaide/picoaide/internal/clientrelease"
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/llmgateway"
-	"github.com/picoaide/picoaide/internal/portal"
-	"github.com/picoaide/picoaide/internal/reports"
-	"github.com/picoaide/picoaide/internal/router"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/telemetry"
-	"github.com/picoaide/picoaide/internal/tokenretention"
-	"github.com/picoaide/picoaide/internal/updatecheck"
-	"github.com/picoaide/picoaide/internal/usageretention"
-	"github.com/picoaide/picoaide/internal/util"
-	"github.com/picoaide/picoaide/webadmin"
+	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/auditchain"
+	"github.com/zeokeel/zeokeel-harness/server/internal/auditretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
+	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
+	"github.com/zeokeel/zeokeel-harness/server/internal/reports"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/telemetry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/tokenretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/updatecheck"
+	"github.com/zeokeel/zeokeel-harness/server/internal/usageretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/webadmin"
 )
 
 // version is injectable at build time: go build -ldflags "-X main.version=x.y.z"
@@ -47,7 +47,7 @@ func main() {
 	dataDir := flag.String("data", "./data", "data directory (app data, not the DB — PG is external)")
 	dbDriver := flag.String("db-driver", "pg", "database backend: pg (default) or pg-external (alias)")
 	pgDSN := flag.String("pg-dsn", "", "PostgreSQL connection string (required, e.g. postgres://user:pass@host:5432/db)")
-	bootstrapAdmin := flag.String("bootstrap-admin", "", "username of the initial admin (password from PICOAI_ADMIN_PASSWORD)")
+	bootstrapAdmin := flag.String("bootstrap-admin", "", "username of the initial admin (password from ZEOKEEL_ADMIN_PASSWORD)")
 	resetMFA := flag.String("reset-mfa", "", "clear MFA for an admin username and revoke all their sessions (operation mode, no server started)")
 	opensRepair := flag.String("opens-rollup-repair-plan", "",
 		"print the offline SQL plan that rebuilds wasm_app_opens_daily from the details table, using this deployment's timezone (R20A-S-02); FROM,TO as YYYY-MM-DD, TO exclusive (operation mode, no DB and no server started)")
@@ -153,7 +153,7 @@ func main() {
 	// 仅从可信代理接受该头:外部攻击者伪造的 XFF 不会生效,只会被计为 Caddy 本身(更严格)。
 	//
 	// 地址来源的**唯一真源**是 trustedProxies(trusted_proxies.go):
-	// PICOAI_TRUSTED_PROXIES 显式值优先,未配置则从 compose 的 CADDY_IP 派生 ——
+	// ZEOKEEL_TRUSTED_PROXIES 显式值优先,未配置则从 compose 的 CADDY_IP 派生 ——
 	// 修前这里只读 env,而 compose 把 CADDY_IP 做成可配、信任列表的缺省却硬编码
 	// 172.28.0.2 ⇒ 改网段部署静默失去 XFF(限流桶坍缩成全组织共桶)。
 	trusted, trustedSource := trustedProxies(os.Getenv)
@@ -217,7 +217,7 @@ func main() {
 	defer wasmPlat.Close()
 
 	// 内置演示应用（随镜像发布，见 internal/wasmapp/appseed + cmd/server/wasmapp_demo.go）：
-	// 装在 /opt/picoaide/demo-apps，服务端每次启动播种**缺失**的那些。
+	// 装在 /opt/zeokeel/demo-apps，服务端每次启动播种**缺失**的那些。
 	// 已存在（含被管理员删除后仍在库里的行）一律跳过 ⇒ "可删除，删了不再回来"。
 	// 失败只记日志：演示应用播种不该挡住服务启动。
 	seedDemoApps(wasmCtx, db, *dataDir)
@@ -259,7 +259,7 @@ func main() {
 	fileServer := http.FileServer(http.FS(dist))
 	mountAPIGuards(r, db, fileServer, dist)
 
-	log.Printf("picoaide-server v%s listening on %s (data=%s)", version, *addr, *dataDir)
+	log.Printf("zeokeel-server v%s listening on %s (data=%s)", version, *addr, *dataDir)
 	// 显式超时(slowloris/慢体攻击防护);WriteTimeout 需覆盖 SSE 流(空闲流由网关侧
 	// 90s idle 判定终止),给足 5 分钟
 	// ⚠️ 主机名门控（edge.HostGate）已随 W4 删除（总纲 §8.4）：应用不再有对外主机名，
@@ -422,8 +422,8 @@ func main() {
 //  2. 镜像内的渠道内容(channel.json)与解析出的渠道不一致 —— 典型成因是
 //     部署侧用 .env / compose 覆盖了镜像自带的渠道声明,而这正是第 1 类错的
 //     入口(镜像里的品牌还是 acme,清单却按 official 比对);
-//  3. 品牌渠道漏配客户端深链 scheme —— 运行时会回落厂商 scheme(picoaide),
-//     客户在浏览器"打开 picoaide?"确认框里看到厂商名(白标失败)。
+//  3. 品牌渠道漏配客户端深链 scheme —— 运行时会回落厂商 scheme(zeokeel),
+//     客户在浏览器"打开 zeokeel?"确认框里看到厂商名(白标失败)。
 //
 // 抽成函数是为了可测:main 里的 log.Fatalf 无法在测试中观察。
 // @returns 校验通过的渠道 id,或错误。
@@ -451,7 +451,7 @@ func resolveStartupChannel() (string, error) {
 // validateDeepLinkScheme 校验品牌渠道必须自带合法的客户端深链 scheme。
 //
 // 深链 scheme 出现在浏览器"打开 <scheme>?"确认框与 OIDC 回调里:缺字段时
-// channel.DeepLinkScheme() 会回落厂商 scheme(picoaide),渠道客户就会看到
+// channel.DeepLinkScheme() 会回落厂商 scheme(zeokeel),渠道客户就会看到
 // 厂商名 —— 这正是白标要消除的东西。官方/beta 是保留渠道,缺字段仍按现状
 // 回落(向后兼容:既有官方部署不改配置也能升级)。
 // @returns 配置缺失或畸形时的明确错误。
@@ -553,7 +553,7 @@ func channelLogoDarkURL() string {
 //
 // 内置地址与更新清单**同一口径**(clientrelease.RequestOrigin):客户端只从
 // https 来源装包,来源不安全时门户也不显示内置入口,并把原因写进下载区
-// (运维据此配置 PICOAI_PUBLIC_BASE_URL),而不是让下载区静默空着。
+// (运维据此配置 ZEOKEEL_PUBLIC_BASE_URL),而不是让下载区静默空着。
 // @returns 下载项与补充说明(无补充说明时为空串)。
 func portalDownloads(c *gin.Context, settings map[string]string) ([]portal.Platform, string) {
 	legacy := settings["portal.client_download_url"]
@@ -686,7 +686,7 @@ type productionDeps struct {
 	Wasm *router.WasmAPI
 	// Ready 是 /readyz 探针（生产 = wasmPlat.Checker.Handler()）。
 	Ready http.Handler
-	// SkillSeed 是内置技能下发面（生产随镜像发布：/opt/picoaide/skills）。
+	// SkillSeed 是内置技能下发面（生产随镜像发布：/opt/zeokeel/skills）。
 	// 类型是 `router.SkillSeedAPI`（`skills` 打开时 = `skillseed.Handlers` 的别名）。
 	SkillSeed *router.SkillSeedAPI
 	// DataDir 是应用数据根（商城/共享内容的磁盘缓存挂在它下面）。
@@ -724,9 +724,9 @@ func registerProductionRoutes(r *gin.Engine, d productionDeps) {
 		// 客户端安装包随镜像发布:服务端把它所在的镜像目录直接对外提供
 		// (GET /api/client/v2/updates/manifest 与 /updates/client/<file>)。
 		ClientRelease: clientrelease.NewHandlers(func() string { return d.Version }, d.ChannelID),
-		// 内置技能下发面（随镜像发布：/opt/picoaide/skills）。
+		// 内置技能下发面（随镜像发布：/opt/zeokeel/skills）。
 		SkillSeed: d.SkillSeed,
-		// 渠道内容随镜像发布(channels/<id>/ → /opt/picoaide/channel/),服务端读文件下发。
+		// 渠道内容随镜像发布(channels/<id>/ → /opt/zeokeel/channel/),服务端读文件下发。
 		Channel: channel.NewHandlers(),
 		// 门户页配置:只管"是否公开 / 下载地址覆盖 / 说明文字"。
 		// 站点名与欢迎语来自渠道配置(上一行),因此没有在线编辑名称的入口。

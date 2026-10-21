@@ -99,8 +99,8 @@ describe('desktop profile composition', {
     // 承载（各自 `dsh.bundle.patch`），顺序就是下面这份清单 —— 它同时是
     // 「`readProfilePatches` 复算得出真实装配」的前提（见 `src/profile.ts` 的
     // `REQUIRED_BUNDLES` 注释）。历史 manifest 里的 `dsh-plugin-desktop` 条目仍然被丢弃
-    // （它无法把自己解析成 bundle，改由 `@picoaide/dsh-enterprise` 的 patch 列表携带桌面层）。
-    // 2026-10-13：第十一层 `@picoaide/dsh-capability-center`（能力中心的客户端面从
+    // （它无法把自己解析成 bundle，改由 `@zeokeel/dsh-enterprise` 的 patch 列表携带桌面层）。
+    // 2026-10-13：第十一层 `@zeokeel/dsh-capability-center`（能力中心的客户端面从
     // enterprise 拆出）插在 enterprise 与 account-card 之间 —— 它自己的补丁只插一行、
     // 不 patch 别人的行，位置对装配语义无影响；**这一层就是技能商店的开关**。
     expect(desktopBundleList([
@@ -111,14 +111,14 @@ describe('desktop profile composition', {
     ])).toEqual([
       '@deepseek-ai/dsh-base',
       '@deepseek-ai/dsh-web-app',
-      '@picoaide/dsh-enterprise',
-      '@picoaide/dsh-capability-center',
-      '@picoaide/dsh-account-card',
-      '@picoaide/dsh-wasm-apps',
-      '@picoaide/dsh-foot-menu',
-      '@picoaide/dsh-wasm-apps-host',
-      '@picoaide/dsh-connectors',
-      '@picoaide/dsh-browser',
+      '@zeokeel/dsh-enterprise',
+      '@zeokeel/dsh-capability-center',
+      '@zeokeel/dsh-account-card',
+      '@zeokeel/dsh-wasm-apps',
+      '@zeokeel/dsh-foot-menu',
+      '@zeokeel/dsh-wasm-apps-host',
+      '@zeokeel/dsh-connectors',
+      '@zeokeel/dsh-browser',
       'dsh-memory-evolve',
       '@deepseek-ai/dsh-experimental-voice-input-bundle',
       '@deepseek-ai/dsh-experimental-agent-team-profile',
@@ -155,14 +155,14 @@ describe('desktop profile composition', {
     expect(repaired.dsh.profile.bundles).toEqual([
       '@deepseek-ai/dsh-base',
       '@deepseek-ai/dsh-web-app',
-      '@picoaide/dsh-enterprise',
-      '@picoaide/dsh-capability-center',
-      '@picoaide/dsh-account-card',
-      '@picoaide/dsh-wasm-apps',
-      '@picoaide/dsh-foot-menu',
-      '@picoaide/dsh-wasm-apps-host',
-      '@picoaide/dsh-connectors',
-      '@picoaide/dsh-browser',
+      '@zeokeel/dsh-enterprise',
+      '@zeokeel/dsh-capability-center',
+      '@zeokeel/dsh-account-card',
+      '@zeokeel/dsh-wasm-apps',
+      '@zeokeel/dsh-foot-menu',
+      '@zeokeel/dsh-wasm-apps-host',
+      '@zeokeel/dsh-connectors',
+      '@zeokeel/dsh-browser',
       'dsh-memory-evolve',
       '@deepseek-ai/dsh-experimental-voice-input-bundle',
       '@deepseek-ai/dsh-experimental-agent-team-profile',
@@ -204,14 +204,14 @@ describe('desktop profile composition', {
     expect(repaired.dsh.profile.bundles).toEqual([
       '@deepseek-ai/dsh-base',
       '@deepseek-ai/dsh-web-app',
-      '@picoaide/dsh-enterprise',
-      '@picoaide/dsh-capability-center',
-      '@picoaide/dsh-account-card',
-      '@picoaide/dsh-wasm-apps',
-      '@picoaide/dsh-foot-menu',
-      '@picoaide/dsh-wasm-apps-host',
-      '@picoaide/dsh-connectors',
-      '@picoaide/dsh-browser',
+      '@zeokeel/dsh-enterprise',
+      '@zeokeel/dsh-capability-center',
+      '@zeokeel/dsh-account-card',
+      '@zeokeel/dsh-wasm-apps',
+      '@zeokeel/dsh-foot-menu',
+      '@zeokeel/dsh-wasm-apps-host',
+      '@zeokeel/dsh-connectors',
+      '@zeokeel/dsh-browser',
       'dsh-memory-evolve',
       '@deepseek-ai/dsh-experimental-voice-input-bundle',
       '@deepseek-ai/dsh-experimental-agent-team-profile',
@@ -321,23 +321,23 @@ describe('desktop profile composition', {
     // cordis.patch.yml 插入，深链 scheme 由组装期**注入**（官方构建 = 产品缺省；
     // 渠道构建 = 渠道包 desktop.deep_link_scheme）——缺这条注入，插件侧一律
     // fail-closed 丢弃深链，且只在真机上表现为"分享链接没反应"。
-    expect(rows.find(row => row.id === 'pico-wasm-apps-host')).toEqual(expect.objectContaining({
-      name: '@picoaide/dsh-wasm-apps-host',
+    expect(rows.find(row => row.id === 'zeokeel-wasm-apps-host')).toEqual(expect.objectContaining({
+      name: '@zeokeel/dsh-wasm-apps-host',
     }))
     // 三个值同源注入（§10/§16.1）：官方构建 = 产品缺省；渠道构建 = 渠道包字段。
     // 插件侧与渲染层都不得自己读随包 channel.json（tsdown 内联后那条路径不成立）。
     expect(patches).toContainEqual(expect.objectContaining({
-      id: 'pico-wasm-apps-host',
+      id: 'zeokeel-wasm-apps-host',
       config: {
-        deepLinkScheme: 'picoaide',
-        appOriginScheme: 'picoaide-app',
-        productName: 'PicoAide Harness',
+        deepLinkScheme: 'zeokeel',
+        appOriginScheme: 'zeokeel-app',
+        productName: 'ZeoKeel Harness',
       },
     }))
     // 浏览器面也要拿到应用源 scheme（导航闸门按 surface 分流要用它）。
     expect(patches).toContainEqual(expect.objectContaining({
-      id: 'pico-browser',
-      config: expect.objectContaining({ appOriginScheme: 'picoaide-app' }),
+      id: 'zeokeel-browser',
+      config: expect.objectContaining({ appOriginScheme: 'zeokeel-app' }),
     }))
   })
 

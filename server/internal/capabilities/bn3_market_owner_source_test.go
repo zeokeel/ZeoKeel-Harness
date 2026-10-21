@@ -30,7 +30,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // bn3MarketItem 取市场分区里指定 kind+name 的行（不存在返回 ok=false）。

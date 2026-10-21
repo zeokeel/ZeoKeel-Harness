@@ -561,7 +561,7 @@ describe('Gateway 保存面(F-07)', () => {
           error_reporting_level: 'error',
           error_reporting_heartbeat: false,
           glitchtip_base_url: 'https://glitchtip.example.com',
-          glitchtip_organization: 'picoaide',
+          glitchtip_organization: 'zeokeel',
         }
       }
       return baseImpl(path, init)

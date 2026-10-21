@@ -6,7 +6,7 @@ description: 把业务同事的一句话想法做成应用平台上的 WASM 应�
 author: 平台内置
 category: 应用开发
 x-version: 1
-x-abi-version: picoaide-app/1
+x-abi-version: zeokeel-app/1
 ---
 
 # 应用构建（WASM 应用）
@@ -161,7 +161,7 @@ x-abi-version: picoaide-app/1
   GET /static/app.js    ──────────►  宿主**直出**（不经过 wasm）
   GET  /api/notes       ──────────►  wasm: db.query → JSON
   POST /api/notes       ──────────►  wasm: db.exec → JSON
-  POST /__picoaide/ai/chat ───────►  客户端 AI loop（本地处理，不经服务端）—— 见专节
+  POST /__zeokeel/ai/chat ───────►  客户端 AI loop（本地处理，不经服务端）—— 见专节
 ```
 
 **路由约定（照着做，不要自创）**
@@ -172,7 +172,7 @@ x-abi-version: picoaide-app/1
 | `/static/*`、`/*.css`、`/*.js`、图片 | **宿主直出** | 命中包内资源就直出；写的时候仍要留一条 wasm 兜底分支（见下） |
 | `/api/*` | **wasm** | 宿主**永不**直出这个前缀，即使包里真有 `api/x.json` |
 | 其它路径 | 先资源后 wasm | 宿主先试直出（存在才直出），否则交给 wasm 走 404 分支 |
-| `/__picoaide/*` | **客户端** | 保留命名空间：只有 AI 桥一条路径存在，其余一律 404，**不会**进到你的应用 |
+| `/__zeokeel/*` | **客户端** | 保留命名空间：只有 AI 桥一条路径存在，其余一律 404，**不会**进到你的应用 |
 
 **错误信封**：API 一律回 JSON，失败也回 JSON（**不要回 HTML**）：
 
@@ -200,12 +200,12 @@ x-abi-version: picoaide-app/1
 ### 第 5 阶段：脚手架与实现
 
 1. **拷骨架**：把 `examples/go/` 整个目录拷到会话工作区（含 `web/`、`preview.mjs`、
-   `picoaide.app.json`、`go.mod`），在它上面改。
+   `zeokeel.app.json`、`go.mod`），在它上面改。
 2. **改 `web/`**：`index.html` 只放结构，`app.css` 放样式，`app.js` 放取数与渲染。
    页面里引用资源一律写**绝对路径**（`/static/app.css`），不要写相对路径。
 3. **改 `main.go`**：保留帧读写、宿主调用、`assets.read` 读配置这三块（它们容易写错），
    只改路由分支、表结构与业务 SQL。
-4. **改 `picoaide.app.json`**：`access`（写侧只有 `login` / `whitelist`）、`whitelist`（名单）、
+4. **改 `zeokeel.app.json`**：`access`（写侧只有 `login` / `whitelist`）、`whitelist`（名单）、
    `purpose`（一句话用途）、`data_sensitivity`、`owner`。**字段名与取值只在生成物
    `references/app-config.md` 里维护**，不要凭记忆写。
 5. **数据表设计规则**（细节见 `references/abi.md` §3.1）：
@@ -262,7 +262,7 @@ node scripts/pack-assets.mjs --in shared-notes.wasm --out dist/shared-notes-pack
 
 `scripts/pack-assets.mjs` 就在技能目录里（与 `references/` 同级）；若当前目录不是技能目录，
 把 `scripts/pack-assets.mjs` 换成技能目录下的绝对路径。规则：
-`--out` **不得与 `--in` 同路径**；`picoaide.app.json` 与工具链元数据段名会被直接拒；
+`--out` **不得与 `--in` 同路径**；`zeokeel.app.json` 与工具链元数据段名会被直接拒；
 路径不超过 256 字节、单段不超过 255 字节；自定义段总量不超过 4 MiB。
 
 > 打包器与演示应用用的是**同一份实现**：唯一源在平台仓库的中性位置
@@ -294,8 +294,8 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
 ### 第 8 阶段：交付与验收
 
 1. **给深链**：`<渠道 deep link scheme>://app/<app_id>`（例如官方/预发客户端是
-   `picoaide-app`，其他渠道由渠道配置决定；**永远不要写死某个 scheme**）。
-   scheme 由客户端本机只读路由 `GET /api/pico/wasm-apps/channel` 给出
+   `zeokeel-app`，其他渠道由渠道配置决定；**永远不要写死某个 scheme**）。
+   scheme 由客户端本机只读路由 `GET /api/zeokeel/wasm-apps/channel` 给出
    （`{appOriginScheme, deepLinkScheme, productName}`）——**拿不到时分享入口 fail-closed
    （不渲染，也不要编链接）**。
 2. **核对名单**：提醒用户"不在名单里的人打开会看到一页『你不在名单里』+ 他的账号"，
@@ -334,11 +334,11 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
    **事务里只允许 `db.query` / `db.exec` 与两个出口 `tx_commit` / `tx_rollback`**：
    `log` / `assets.read` / `db.define` 与再开一个事务一律 `DB_DENIED`，事务超时（5 秒）强制回滚。
 5. **服务端 wasm 侧没有任何 AI 能力**：八个宿主方法里没有 AI。应用里的 AI 只能由
-   **应用前端**调保留路径 `POST /__picoaide/ai/chat`（**双下划线**，客户端本地处理、
+   **应用前端**调保留路径 `POST /__zeokeel/ai/chat`（**双下划线**，客户端本地处理、
    绝不转发平台），结果再 POST 回应用自己的路由落库。老写法 `ai.chat` 不存在。
 6. **不能主动发起网络请求、不能读文件、不能开线程**（**不要对外说成"不能联网"**：
    CSP 不约束顶层导航与弹窗）；HTML/CSS/JS/图片都必须编进 wasm（外链与对外 `fetch` 一律失败）。
-7. **准入由你自己判**：入口第一件事就是 `assets.read("picoaide.app.json")` 读 `whitelist`
+7. **准入由你自己判**：入口第一件事就是 `assets.read("zeokeel.app.json")` 读 `whitelist`
    并比对 `user.username` / `user.id`；无权限页**必须显示本人账号**，这是作者发现名单
    拼错的唯一途径。平台只把 `auth.mode` 注入帧，**不比对名单**。
 8. **平台不提供员工名录**：名单只能手填已知账号；**改名单 = 发一个新版本**，运行期改不了。
@@ -348,7 +348,7 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
     （`preview.mjs`，数据落本地库、可用 `--dump-tables` 看），通过后再走
     `wasm_app_validate` → `wasm_app_publish`。
 11. **应用名就是标识**：`app_id` 同时是应用 origin 的 host 段（`<渠道 app 源 scheme>://<app_id>/`，
-    渠道参数化：official/beta 取值 `picoaide-app`）；小写字母/数字/连字符、不超过 63 个字符、
+    渠道参数化：official/beta 取值 `zeokeel-app`）；小写字母/数字/连字符、不超过 63 个字符、
     不能纯数字、不能 `xn--` 开头、不能是平台保留字；**一经发布不能改名**，也不能与别人的
     应用重名（同名不同人是不同的应用）。
 
@@ -357,7 +357,7 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
 **权威链路**（术语统一叫 **客户端 AI loop**，"前端桥"只是其中一段）：
 
 ```
-应用前端 JS  —— POST /__picoaide/ai/chat（双下划线保留路径）
+应用前端 JS  —— POST /__zeokeel/ai/chat（双下划线保留路径）
         │
         ▼  宿主协议 handler **本地**处理，绝不转发平台
    ① 首次授权闸门（按 用户 × 应用 记录）
@@ -366,9 +366,9 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
    ④ assistant 增量以 SSE 回给应用页
 ```
 
-- **路径**：`POST /__picoaide/ai/chat`（**双下划线**）。整个 `__picoaide/` 是宿主保留命名空间：
+- **路径**：`POST /__zeokeel/ai/chat`（**双下划线**）。整个 `__zeokeel/` 是宿主保留命名空间：
   只有这一条路径存在，其余一律 404，**不会**进到你的 wasm（请求在宿主层就被截走）。
-  ⇒ **随包资源不得占用 `__picoaide/` 前缀**：发布期直接拒（`ASSET_DENIED` +
+  ⇒ **随包资源不得占用 `__zeokeel/` 前缀**：发布期直接拒（`ASSET_DENIED` +
   `details.reason = "reserved_path_prefix"`）。应用内部就算写了同名路由也没用 ——
   它永远收不到那个请求。
 - **请求契约**：`{"messages":[{"role":"user"|"assistant","content":"…"}],"stream":true|false}`；
@@ -386,7 +386,7 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
   **撤销的唯一入口是应用详情页的 AI 面板里的「撤销授权」按钮**（客户端设置页里**没有**
   这个入口）。未授权/已撤销 ⇒ 403 `app_ai_denied`，且**不消耗任何 token**。
 - **计费与归因**：走**使用者本人**既有的 LLM 链路（扣他自己的余额）、用平台统一默认模型。
-  ⚠️ **应用维度用量归因尚未接通**：客户端/宿主不出站 `X-Pico-App-Id` 头，服务端只按该头
+  ⚠️ **应用维度用量归因尚未接通**：客户端/宿主不出站 `X-ZeoKeel-App-Id` 头，服务端只按该头
   归因 ⇒ **不要向用户承诺"能在应用详情页看到这个应用的 AI 用量"**（应用详情页也不显示）。
   唯一能看到的是管理端 webadmin 的应用中心看板，它在窗口内没有归因数据时显示
   「统计尚未上线：暂无应用归因」——那不是"零调用"，是"还没开始统计"。
@@ -428,12 +428,12 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
 
 ## 包内资源与保密（放机密之前必读）
 
-- **保留资源只有一个：`picoaide.app.json`**（平台在发布期写入，**永不直出**）。
+- **保留资源只有一个：`zeokeel.app.json`**（平台在发布期写入，**永不直出**）。
 - **其余包内文件会被宿主按路径直出给任何能打开应用的人** —— HTML/JS/CSS/图片/字体/数据文件
   都是如此，**与 `access` 无关**（登录只决定**谁**能打开应用）。
   ⇒ **不要把机密、账号名单、内部说明、口令、内网地址放进非保留资源**：
   `GET /data/users.json` 任何能打开应用的人都能拿到。
-- **名单放 `picoaide.app.json`**（`whitelist` 字段）：它是保留资源，只有应用自己用
+- **名单放 `zeokeel.app.json`**（`whitelist` 字段）：它是保留资源，只有应用自己用
   `assets.read` 读得到。用 `pack-assets.mjs` 加不进去（脚本直接拒）。
 - `assets.read` 的结果**必带判别字段 `encoding`**（`text` / `base64` / `empty`），
   按它决定读哪个字段，不要用 `size == 0` 猜。
@@ -459,7 +459,7 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
 
 ## 窗口尺寸（`window.*`，可选）
 
-`picoaide.app.json` 的 `config` 里可以声明窗口：
+`zeokeel.app.json` 的 `config` 里可以声明窗口：
 
 | 字段 | 取值 | 语义 |
 | --- | --- | --- |
@@ -483,7 +483,7 @@ wasm_app_publish({appId:"shared-notes", version:"1.0.0", title:"共享便签",
 - `references/publishing.md` —— 本地编译与预览、打包、validate、publish、上下架、诊断、自省、**数据查看（schema/rows）**
 - `references/diagnostics.md` —— 怎么读诊断、常见失败码怎么处理
 - `examples/go/` —— 一个能直接编译发布的前后端分离示例（`main.go` + `web/` + `preview.mjs`
-  + `picoaide.app.json`）
+  + `zeokeel.app.json`）
 - `scripts/pack-assets.mjs` —— 把 `web/` 打进 wasm 自定义段的官方打包器（用法见
   `scripts/README.md`；唯一源在平台仓库的 `server/demoapps/scripts/pack-assets.mjs`，
   镜像构建期注入到这里）

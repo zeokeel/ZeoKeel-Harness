@@ -3,7 +3,7 @@
  *
  * 现场症状（Windows 客户机 v2.7.3）：登录后在内置浏览器里点「我来操作」没有任何
  * 反应，主机日志刷
- * `pico-browser: refused a local write without browser proof (401) [POST /api/pico/browser/takeover]`。
+ * `zeokeel-browser: refused a local write without browser proof (401) [POST /api/zeokeel/browser/takeover]`。
  *
  * 当时的根因链（真机探针 temp/browser-takeover-proof-probe.mjs 复现过）：
  *   1. 开机 prewarm 在**任何会话之前**建窗口，蒙版 WebContentsView 于是拿

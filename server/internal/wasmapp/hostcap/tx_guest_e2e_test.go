@@ -20,10 +20,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/appdb"
-	"github.com/picoaide/picoaide/internal/wasmapp/hostcap"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appdb"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/hostcap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 )
 
 // ===== 夹具 =====
@@ -47,7 +47,7 @@ func refappModule(t *testing.T) []byte {
 			return
 		}
 		root := strings.TrimSpace(string(out))
-		dir, err := os.MkdirTemp("", "picoaide-hostcap-guest-")
+		dir, err := os.MkdirTemp("", "zeokeel-hostcap-guest-")
 		if err != nil {
 			refappErr = err
 			return
@@ -69,17 +69,17 @@ func refappModule(t *testing.T) []byte {
 	return refappWasm
 }
 
-// stubAssets 提供一份"存在 picoaide.app.json"的包内资源面。
+// stubAssets 提供一份"存在 zeokeel.app.json"的包内资源面。
 type stubAssets struct{}
 
 func (stubAssets) Read(p string) (string, []byte, error) {
-	if p != "picoaide.app.json" {
+	if p != "zeokeel.app.json" {
 		return "", nil, os.ErrNotExist
 	}
 	return "application/json", []byte(`{"login_required":true}`), nil
 }
 
-func (stubAssets) List() []string { return []string{"picoaide.app.json"} }
+func (stubAssets) List() []string { return []string{"zeokeel.app.json"} }
 
 type stubSink struct{ lines []string }
 

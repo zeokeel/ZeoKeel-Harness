@@ -22,16 +22,16 @@ describe('desktopLocaleFromLanguageTag', () => {
 
 describe('desktopTrayLabel', () => {
   it('renders the en locale labels with interpolation', () => {
-    expect(desktopTrayLabel('en', 'openDesktop', 'PicoAide Harness')).toBe('Open PicoAide Harness')
-    expect(desktopTrayLabel('en', 'updateAvailable', '2.5.9')).toBe('PicoAide Harness 2.5.9 Available')
-    expect(desktopTrayLabel('en', 'downloadingUpdate', '2.5.9')).toBe('Downloading PicoAide Harness 2.5.9…')
+    expect(desktopTrayLabel('en', 'openDesktop', 'ZeoKeel Harness')).toBe('Open ZeoKeel Harness')
+    expect(desktopTrayLabel('en', 'updateAvailable', '2.5.9')).toBe('ZeoKeel Harness 2.5.9 Available')
+    expect(desktopTrayLabel('en', 'downloadingUpdate', '2.5.9')).toBe('Downloading ZeoKeel Harness 2.5.9…')
     expect(desktopTrayLabel('en', 'exportDiagnostics')).toBe('Export Diagnostics…')
   })
 
   it('renders the zh locale labels with interpolation', () => {
-    expect(desktopTrayLabel('zh', 'openDesktop', 'PicoAide Harness')).toBe('打开 PicoAide Harness')
-    expect(desktopTrayLabel('zh', 'updateAvailable', '2.5.9')).toBe('PicoAide Harness 2.5.9 可用')
-    expect(desktopTrayLabel('zh', 'downloadingUpdate', '2.5.9')).toBe('正在下载 PicoAide Harness 2.5.9…')
+    expect(desktopTrayLabel('zh', 'openDesktop', 'ZeoKeel Harness')).toBe('打开 ZeoKeel Harness')
+    expect(desktopTrayLabel('zh', 'updateAvailable', '2.5.9')).toBe('ZeoKeel Harness 2.5.9 可用')
+    expect(desktopTrayLabel('zh', 'downloadingUpdate', '2.5.9')).toBe('正在下载 ZeoKeel Harness 2.5.9…')
     expect(desktopTrayLabel('zh', 'exportDiagnostics')).toBe('导出诊断信息…')
   })
 
@@ -92,15 +92,15 @@ describe('desktop tray labels use the resolved product name', () => {
   it('never leaks a vendor name for a channel build', () => {
     for (const locale of ['zh', 'en'] as const) {
       for (const key of ['updateAvailable', 'downloadingUpdate'] as const) {
-        expect(desktopTrayLabel(locale, key, '9.9.9', 'Zephyr AI')).not.toContain('PicoAide')
+        expect(desktopTrayLabel(locale, key, '9.9.9', 'Zephyr AI')).not.toContain('ZeoKeel')
       }
     }
   })
 
   it('falls back to the official product name when the caller passes none', () => {
     // 本地开发/未渠道化构建:与改造前逐字节一致。
-    expect(desktopTrayLabel('zh', 'updateAvailable', '2.7.0')).toBe('PicoAide Harness 2.7.0 可用')
-    expect(desktopTrayLabel('en', 'downloadingUpdate', '2.7.0', '')).toBe('Downloading PicoAide Harness 2.7.0…')
+    expect(desktopTrayLabel('zh', 'updateAvailable', '2.7.0')).toBe('ZeoKeel Harness 2.7.0 可用')
+    expect(desktopTrayLabel('en', 'downloadingUpdate', '2.7.0', '')).toBe('Downloading ZeoKeel Harness 2.7.0…')
   })
 })
 

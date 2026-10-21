@@ -14,7 +14,7 @@
 #
 # 之后可以用假宿主看效果：
 #   node server/skills/app-builder/examples/go/preview.mjs /tmp/demo-forum-packed.wasm \
-#     --config server/demoapps/forum/picoaide.app.json --path / --user zhangwei
+#     --config server/demoapps/forum/zeokeel.app.json --path / --user zhangwei
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -48,7 +48,7 @@ for app in "${APPS[@]}"; do
   [ -f "$src/web/index.html" ] || fail "$app 缺 web/index.html"
   [ -f "$src/web/app.css" ] || fail "$app 缺 web/app.css"
   [ -f "$src/web/app.js" ] || fail "$app 缺 web/app.js"
-  [ -f "$src/picoaide.app.json" ] || fail "$app 缺 picoaide.app.json（本地预览要读它；平台侧由 demos.json 播种）"
+  [ -f "$src/zeokeel.app.json" ] || fail "$app 缺 zeokeel.app.json（本地预览要读它；平台侧由 demos.json 播种）"
 
   # 产物落在工作区的 temp/ 下（`/tmp` 在本机沙箱里不跨命令保留，跨步骤复核会踩空）。
   out_dir="$ROOT/temp/demo-build"
@@ -72,5 +72,5 @@ echo
 echo "预览（假宿主，按平台路由规则直出 /static/*、入口 / 走 wasm）："
 for app in "${APPS[@]}"; do
   echo "  node server/skills/app-builder/examples/go/preview.mjs temp/demo-build/$app-packed.wasm \\"
-  echo "    --config server/demoapps/$app/picoaide.app.json --path / --user zhangwei"
+  echo "    --config server/demoapps/$app/zeokeel.app.json --path / --user zhangwei"
 done

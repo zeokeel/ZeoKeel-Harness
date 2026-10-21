@@ -7,7 +7,7 @@ import { fetchJSON } from './server-connector/auth.ts'
 import type { Session } from './server-connector/config.ts'
 
 // 类型与内置值住在 channel-content.ts（纯数据，客户端面也能值导入）；
-// 这里**转出**它们，保持 `@picoaide/dsh-enterprise/channel-sync` 这个既有入口
+// 这里**转出**它们，保持 `@zeokeel/dsh-enterprise/channel-sync` 这个既有入口
 // 的对外形状不变（消费方与测试都在用）。
 export { brandChannel, DEFAULT_CHANNEL, mergeChannel, type BrandConfig, type ChannelConfig }
 
@@ -39,7 +39,7 @@ export const Config: z<Config> = z.object({
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /** Emitted whenever the server channel config changes (login/logout/restore). */
-    'pico/channel-changed'(channel: ChannelConfig | null): void
+    'zeokeel/channel-changed'(channel: ChannelConfig | null): void
   }
 }
 
@@ -47,12 +47,12 @@ declare module '@deepseek-ai/cordis' {
 export const name = 'channel-sync'
 
 /** Services consumed: session + web server (for the login page channel fetch). */
-export const inject = ['picoSession']
+export const inject = ['zeokeelSession']
 
 /**
  * Sync the server channel content on session changes: login → fetch
  * /api/client/v2/channel with the session token; logout → reset to
- * DEFAULT_CHANNEL. Emits 'pico/channel-changed' so client slots re-render with
+ * DEFAULT_CHANNEL. Emits 'zeokeel/channel-changed' so client slots re-render with
  * the server-driven channel content.
  *
  * 2026-09: 服务端下发的 logo_url/favicon_url 是相对路径(如
@@ -62,7 +62,7 @@ export const inject = ['picoSession']
  */
 function absolutizeURLs(channel: ChannelConfig, serverURL: string): ChannelConfig {
   // 单一实现见 channel-content.ts 的 absolutizeChannelAssets:同一份口径被
-  // 本地端点(/api/pico/channel)与这里共用,避免"两处各拼一次、其中一处漏字段"
+  // 本地端点(/api/zeokeel/channel)与这里共用,避免"两处各拼一次、其中一处漏字段"
   // (2026-09-10:该函数此前重建 client 对象时丢掉了 logo_url_dark)。
   return absolutizeChannelAssets(channel, serverURL)
 }
@@ -84,7 +84,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   const sync = async (session: Session | null): Promise<void> => {
     const epoch = epochs.begin()
     if (session === null) {
-      ctx.emit('pico/channel-changed', builtIn)
+      ctx.emit('zeokeel/channel-changed', builtIn)
       return
     }
     try {
@@ -92,7 +92,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (!epochs.isCurrent(epoch)) return
       // 服务端内容**叠在**随包品牌之上:服务端缺的字段由随包品牌补齐,消费方
       // 就不会回落到内置的厂商文案(渠道构建下那是白标事故)。
-      ctx.emit('pico/channel-changed', (channel as ChannelConfig)
+      ctx.emit('zeokeel/channel-changed', (channel as ChannelConfig)
         ? mergeChannel(builtIn, absolutizeURLs(channel as ChannelConfig, session.serverURL))
         : builtIn)
     } catch {
@@ -100,12 +100,12 @@ export function apply(ctx: Context, config: Config = {}): void {
       // 会把当前会话的品牌重置成随包品牌（同样是跨租户串台，只是方向相反）。
       if (!epochs.isCurrent(epoch)) return
       // Unreachable server: keep the packaged brand (never the vendor's).
-      ctx.emit('pico/channel-changed', builtIn)
+      ctx.emit('zeokeel/channel-changed', builtIn)
     }
   }
 
   // `sync` 自己已经收口了两条**预期**失败（服务端不可达、迟到响应），所以走到下面
-  // 这个 `.catch` 的一律是**非预期**失败（会话载荷畸形、`pico/channel-changed` 的消费方
+  // 这个 `.catch` 的一律是**非预期**失败（会话载荷畸形、`zeokeel/channel-changed` 的消费方
   // 抛错、`ctx.emit` 自身失败）。此前是 `.catch(() => undefined)`：整份吞掉 ——
   // 界面停在随包品牌，而日志里**一个字都没有**，现场只能靠"品牌没更新"猜
   // （2026-10 审计 C2-2 的第二半）。这里与兄弟投影同档（`error-reporting` 的

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // seedMarketAgent 播种一个市场渠道的已上架智能体，并授权给 alice。

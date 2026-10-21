@@ -2,8 +2,8 @@
 #
 # The row carries the client bundle (`dsh.client`) that registers the sidebar
 # entry and the catalog panel. The local API it consumes
-# (`/api/pico/apps/wasm/*`) is owned by `@picoaide/dsh-enterprise`'s wasm-apps
+# (`/api/zeokeel/apps/wasm/*`) is owned by `@zeokeel/dsh-enterprise`'s wasm-apps
 # module — one local route registration, not two.
 - insert:
-    - id: picoaide-wasm-apps
-      name: '@picoaide/dsh-wasm-apps'
+    - id: zeokeel-wasm-apps
+      name: '@zeokeel/dsh-wasm-apps'

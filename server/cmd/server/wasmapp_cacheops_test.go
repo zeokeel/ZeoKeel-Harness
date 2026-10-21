@@ -7,7 +7,7 @@ package main
 
 // 本文件是**执行侧缓存运维兜底**（R5-A-1）与**两包回收口径一致性**的装配级判据。
 //
-// 现场形态（R5-A-1）：编译子系统缺席（auto 档下缺 `picoaide-app-compile` 只 log 后置 nil）
+// 现场形态（R5-A-1）：编译子系统缺席（auto 档下缺 `zeokeel-app-compile` 只 log 后置 nil）
 // 时，执行侧照写 `_compile-cache`（`runtime/cache_mode_test.go` 的 `wantDiskWrites: true`），
 // 而周期回收不启动、`/readyz` 的 `compile_cache_bytes` 恒为 0、全仓没有第二个回收者
 // ⇒ 这棵树只涨不降且**不可见**。
@@ -38,11 +38,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
-	"github.com/picoaide/picoaide/internal/wasmapp/runtime"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 )
 
 // execSideWasmModule 是"合法但什么都不做"的最小模块（装配级判据用它驱动**执行侧**真的写盘）。

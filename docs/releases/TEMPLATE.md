@@ -8,8 +8,8 @@ GitHub Release 页是**公开面**：客户、运维与同事都在这里判断�
 
 - 文件：`docs/releases/<tag>.md`，与 git tag 逐字一致（含 `v`，例如 `v2.7.1.md`）。
 - **Release 名 = tag 本身**（`v2.7.1`），不加产品名前缀。
-  Releases 页左侧列表宽度固定，`PicoAide Harness v2.6.9-beta.5` 这类长名会被截断成
-  `PicoAide Harness v2.6…` —— 一页十几个版本号全都看不见，只剩重复的前缀。
+  Releases 页左侧列表宽度固定，`ZeoKeel Harness v2.6.9-beta.5` 这类长名会被截断成
+  `ZeoKeel Harness v2.6…` —— 一页十几个版本号全都看不见，只剩重复的前缀。
   产品名由仓库名与页面标题承载，Release 名只回答一个问题：**是哪个版本**。
 - **正式 tag 与预发 tag 一律要求**（2026-09-23 定案）：缺 `docs/releases/<tag>.md` 时
   1) `gate` 第一步直接失败（不必等三平台构建 40 分钟），2) `release` job 在**任何对外上传
@@ -88,6 +88,6 @@ GitHub Release 页是**公开面**：客户、运维与同事都在这里判断�
 
 ## 附件与校验
 
-- `picoaide-server-X.Y.Z-amd64.zip`：服务端镜像压缩包（`docker load` 后使用）；
+- `zeokeel-server-X.Y.Z-amd64.zip`：服务端镜像压缩包（`docker load` 后使用）；
 - `SHA256SUMS`：`sha256sum -c SHA256SUMS` 校验后再解压。
 ````

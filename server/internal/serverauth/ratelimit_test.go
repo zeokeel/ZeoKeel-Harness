@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // 2026-09-23 E-01:allow 的语义是**判定并原子记账**;本文件里所有"填充预算"
@@ -258,7 +258,7 @@ func burstLogin(n int, r http.Handler, username, password string) (n401, n429, o
 // 20 并发错密:10 次失败预算必须是**硬上限**(401 恰好 10 次,其余 429)。
 // 修复前(allow 只判定、失败分支才 record)实测 401=16。
 func TestLoginBurstCannotPierceFailureBudget(t *testing.T) {
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "10")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "10")
 	r, db, cleanup := newTestAPI(t)
 	defer cleanup()
 	createUser(t, db, "burstuser", "pw1234567890", false)
@@ -279,7 +279,7 @@ func TestLoginBurstCannotPierceFailureBudget(t *testing.T) {
 
 // 200 并发错密:同一上限仍然只能是 10(审计实测修复前为 16~18)。
 func TestLoginBurst200CannotPierceFailureBudget(t *testing.T) {
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "10")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "10")
 	r, db, cleanup := newTestAPI(t)
 	defer cleanup()
 	createUser(t, db, "ampuser", "pw1234567890", false)
@@ -301,7 +301,7 @@ func TestLoginBurst200CannotPierceFailureBudget(t *testing.T) {
 // 正确口令不受影响:预算未打满时正常用户必须能登录,成功登录清空预算
 // (限流语义仍是"按失败次数"计,不能把正常用户锁死)。
 func TestLoginBudgetResetOnSuccessKeepsCorrectPassword(t *testing.T) {
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "10")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "10")
 	r, db, cleanup := newTestAPI(t)
 	defer cleanup()
 	createUser(t, db, "resetboss", "pw1234567890", false)
@@ -330,7 +330,7 @@ func TestLoginBudgetResetOnSuccessKeepsCorrectPassword(t *testing.T) {
 // 40 张票据并发错码只允许 10 次走到 TOTP 校验。旧实现靠"第二次判定在若干次
 // DB 往返之后"的意外串行化侥幸没被穿透(审计探针 B),这里把它钉成不变量。
 func TestMFABurstCannotPierceFailureBudget(t *testing.T) {
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "10")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "10")
 	ensureTestMasterKey(t)
 	resetSharedLimitersForTest()
 	db := mustDB(t)

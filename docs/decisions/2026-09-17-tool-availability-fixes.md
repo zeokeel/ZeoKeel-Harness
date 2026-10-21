@@ -4,7 +4,7 @@
 `patches/dsh-sandbox-windows-acl@0.1.5-rc.2.patch`）
 
 来源：用户提供的 Windows 客户端自检报告（会话 `session-77720e3e-9280-4c95-8053-e44f2e984c6e`，
-PicoAide Harness `2.7.5-beta.4` / Electron 43.4.0 / Windows，工作区 `D:\project\urlfy`）。
+ZeoKeel Harness `2.7.5-beta.4` / Electron 43.4.0 / Windows，工作区 `D:\project\urlfy`）。
 报告逐工具做了真实无害调用，列出三个"需要关注"的问题：`pwsh` 必须提权、`browser_screenshot`
 连续两次 30s 超时、cron 缺少删除工具。
 

@@ -41,7 +41,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // bobHdr 取 bob 的 Bearer 头（bob 是市场内容的**被授权人**，不是归属人 ——

@@ -22,7 +22,7 @@
 //	IMPORT_NOT_ALLOWED             导入模块名或符号不在白名单（422，§10.2 第 17 项）
 //	IMPORT_SIGNATURE_MISMATCH      符号在名单内但类型不符（422，§10.2 第 18 项）
 //
-// 导入面白名单是**生成产物**（imports_gen.go），由 cmd/picoaide-wasm-imports-gen 真编译
+// 导入面白名单是**生成产物**（imports_gen.go），由 cmd/zeokeel-wasm-imports-gen 真编译
 // 全部来源程序后 dump 导入集、取**并集**得到——手写清单即门禁测试红（§5.5）。
 // 覆盖性另有一条**独立于生成来源**的门禁（imports_coverage_test.go）：它真编译
 // testdata/stdrender（html/template 渲染 + (*os.File).ReadAt/WriteAt 的最小程序），

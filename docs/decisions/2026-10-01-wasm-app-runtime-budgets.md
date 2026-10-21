@@ -100,7 +100,7 @@
 - `diag`：新增 `TestBudgetTokensAppearInTable` —— 占位符是两处字面量（渲染器常量 +
   表里的 token），只改一处时替换静默无效、其余断言全绿，所以这条必须单独钉。
 - 生成物：`limits.json` / `limits.md` / 内置技能 `references/limits.md` 由
-  `cmd/picoaide-limits-gen` 重生成，`limits_gen_test` 逐字节对拍。
+  `cmd/zeokeel-limits-gen` 重生成，`limits_gen_test` 逐字节对拍。
 - 作者手册（`server/skills/app-builder/`）里引用这几个数字的 5 处一并更新，
   并注明"默认值、控制台可调"；技能内容变 ⇒ `SKILL.md` version 2.10.0 → **2.11.0**
   + `seededSkillDigests` / `seededSkillVersion` 同步（R1-pm-8，四处缺一即红）。

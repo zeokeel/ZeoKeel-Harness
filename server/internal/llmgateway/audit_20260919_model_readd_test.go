@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // TestReAddExcludedChannelModelSurvivesNextSync:"重新添加"必须真的恢复模型,

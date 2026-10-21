@@ -120,7 +120,7 @@ function benignDef(defId = 'glitchtip'): ConnectorDef {
 
 describe('residual A — definition-declared credential keys are a spawn vector', () => {
   it('refuses a catalog definition whose settings/tokenFields key names a protected env key', () => {
-    for (const key of ['NODE_OPTIONS', 'PATH', 'DSH_HOME', 'ELECTRON_RUN_AS_NODE', 'PICOAIDE_X']) {
+    for (const key of ['NODE_OPTIONS', 'PATH', 'DSH_HOME', 'ELECTRON_RUN_AS_NODE', 'ZEOKEEL_X']) {
       expect(
         parseServerConnectors([row('sneaky', { settings: [{ key, label: 'x', type: 'text' }], mcp: [{ serverName: 'sneaky', transport: 'stdio', command: 'npx', args: [] }] })]),
         `settings.${key} must be refused at the catalog boundary`,
@@ -133,7 +133,7 @@ describe('residual A — definition-declared credential keys are a spawn vector'
   })
 
   it('does not execute a NODE_OPTIONS payload smuggled through a settings key (real spawn)', async () => {
-    const base = await tempDir('pico-conn-a1e-')
+    const base = await tempDir('zeokeel-conn-a1e-')
     const proof = join(base, 'pwn-proof.txt')
     const harness = createHarness([poisonedDef(proof)], base)
     await seedCredential(base, 'sneaky-crm', {
@@ -151,7 +151,7 @@ describe('residual A — definition-declared credential keys are a spawn vector'
     // Nothing is spawned before the local confirmation.
     expect(harness.configs).toEqual([])
 
-    const approved = await callRoute(harness, '/api/pico/connectors/sneaky-crm/approve')
+    const approved = await callRoute(harness, '/api/zeokeel/connectors/sneaky-crm/approve')
     expect(approved.status).toBe(200)
     await waitFor(() => harness.configs.length > 0)
 
@@ -169,7 +169,7 @@ describe('residual A — definition-declared credential keys are a spawn vector'
   })
 
   it('discloses every env key it is about to inject — including credential field keys', async () => {
-    const base = await tempDir('pico-conn-a1d-')
+    const base = await tempDir('zeokeel-conn-a1d-')
     const harness = createHarness([benignDef()], base, {
       requestApproval: () => true,
     })
@@ -203,7 +203,7 @@ describe('residual A — definition-declared credential keys are a spawn vector'
   })
 
   it('discloses the credential keys on the panel path too (what the desktop UI renders)', async () => {
-    const base = await tempDir('pico-conn-a1-panel-')
+    const base = await tempDir('zeokeel-conn-a1-panel-')
     const harness = createHarness([benignDef()], base)
     await seedCredential(base, 'glitchtip', {
       accessToken: 'SECRET-AT',
@@ -215,7 +215,7 @@ describe('residual A — definition-declared credential keys are a spawn vector'
     // Interactive deployment: nothing is spawned until the panel is answered.
     expect(harness.configs).toEqual([])
 
-    const listed = await callRoute(harness, '/api/pico/connectors', 'GET')
+    const listed = await callRoute(harness, '/api/zeokeel/connectors', 'GET')
     const entry = (JSON.parse(listed.body) as {
       connectors: Array<{ id: string; request: { approval?: { envKeys: string[]; servers: string[] } } | null }>
     }).connectors.find(item => item.id === 'glitchtip')
@@ -239,12 +239,12 @@ describe('residual A — definition-declared credential keys are a spawn vector'
   })
 
   it('re-prompts when a definition starts declaring a new credential key', async () => {
-    const base = await tempDir('pico-conn-a1f-')
+    const base = await tempDir('zeokeel-conn-a1f-')
     const first = createHarness([benignDef()], base)
     await seedCredential(base, 'glitchtip', { accessToken: 'TOK', fields: { CONNECTOR_PROBE_TOKEN: 't' } })
     first.emitSession({ username: 'user-a' })
     await new Promise(resolve => setTimeout(resolve, 150))
-    expect(await callRoute(first, '/api/pico/connectors/glitchtip/approve')).toMatchObject({ status: 200 })
+    expect(await callRoute(first, '/api/zeokeel/connectors/glitchtip/approve')).toMatchObject({ status: 200 })
     await waitFor(() => first.configs.length === 1)
 
     // The same command, but the definition now also injects a new field name:
@@ -258,7 +258,7 @@ describe('residual A — definition-declared credential keys are a spawn vector'
   })
 
   it('keeps an ordinary connector fully working: approve -> connect -> callTool', async () => {
-    const base = await tempDir('pico-conn-a1-ok-')
+    const base = await tempDir('zeokeel-conn-a1-ok-')
     const harness = createHarness([benignDef()], base)
     await seedCredential(base, 'glitchtip', {
       accessToken: 'SECRET-AT',
@@ -269,14 +269,14 @@ describe('residual A — definition-declared credential keys are a spawn vector'
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(harness.configs).toEqual([])
 
-    expect(await callRoute(harness, '/api/pico/connectors/glitchtip/approve')).toMatchObject({ status: 200 })
+    expect(await callRoute(harness, '/api/zeokeel/connectors/glitchtip/approve')).toMatchObject({ status: 200 })
     await waitFor(() => harness.configs.length > 0)
 
     const call = await realMcpCall(harness.configs[0]!, 'round-trip')
     expect(call.toolNames).toContain('probe_echo')
     expect(call.text).toBe('echo:round-trip|token:SECRET-FIELD')
     expect(call.childEnv.BENIGN_KEY).toBe('yes')
-    expect(call.childEnv.PICOAIDE_CONNECTOR_ACCESS_TOKEN).toBe('SECRET-AT')
+    expect(call.childEnv.ZEOKEEL_CONNECTOR_ACCESS_TOKEN).toBe('SECRET-AT')
   })
 })
 
@@ -327,7 +327,7 @@ describe('R6 — env keys containing "=" (trailing included) are refused', () =>
    * negative control below, so the guarded assertion cannot pass vacuously).
    */
   it('CONTROL: a raw spawn whose KEY is "NODE_OPTIONS=…" runs the payload in the child', async () => {
-    const base = await tempDir('pico-conn-eq-control-')
+    const base = await tempDir('zeokeel-conn-eq-control-')
     const proof = join(base, 'pwn-key-eq.txt')
     const envOut = join(base, 'raw-child-env.json')
     const transport = new StdioClientTransport({
@@ -352,7 +352,7 @@ describe('R6 — env keys containing "=" (trailing included) are refused', () =>
   })
 
   it('never hands such a key to the child: the payload cannot run (real spawn)', async () => {
-    const base = await tempDir('pico-conn-eq-')
+    const base = await tempDir('zeokeel-conn-eq-')
     const proof = join(base, 'pwn-key-eq-guarded.txt')
     const def = benignDef()
     def.mcp[0]!.env = {
@@ -388,7 +388,7 @@ describe('R6 — env keys containing "=" (trailing included) are refused', () =>
 
 describe('residual B — whitespace variants of a protected env key', () => {
   it('denies keys whose trimmed name is protected, case-insensitively', () => {
-    for (const key of ['PATH ', ' PATH', '\tPATH', 'NODE_OPTIONS\t', ' node_options ', 'Path ', 'DSH_HOME\t', ' electron_run_as_node', 'PICOAIDE_X ']) {
+    for (const key of ['PATH ', ' PATH', '\tPATH', 'NODE_OPTIONS\t', ' node_options ', 'Path ', 'DSH_HOME\t', ' electron_run_as_node', 'ZEOKEEL_X ']) {
       expect(isDeniedEnvKey(key), JSON.stringify(key)).toBe(true)
     }
     for (const key of ['GLITCHTIP_TOKEN', ' REGION ', 'MY_KEY']) {
@@ -411,7 +411,7 @@ describe('residual B — whitespace variants of a protected env key', () => {
   })
 
   it('never hands a whitespace variant to the child process (real spawn)', async () => {
-    const base = await tempDir('pico-conn-b-')
+    const base = await tempDir('zeokeel-conn-b-')
     const def = benignDef()
     def.mcp[0]!.env = {
       ...def.mcp[0]!.env,
@@ -423,13 +423,13 @@ describe('residual B — whitespace variants of a protected env key', () => {
     await seedCredential(base, 'glitchtip', { accessToken: 'TOK', fields: { CONNECTOR_PROBE_TOKEN: 't' } })
     harness.emitSession({ username: 'user-a' })
     await new Promise(resolve => setTimeout(resolve, 150))
-    expect(await callRoute(harness, '/api/pico/connectors/glitchtip/approve')).toMatchObject({ status: 200 })
+    expect(await callRoute(harness, '/api/zeokeel/connectors/glitchtip/approve')).toMatchObject({ status: 200 })
     await waitFor(() => harness.configs.length > 0)
 
     const call = await realMcpCall(harness.configs[0]!, 'x')
     // No padded spelling may survive into the child environment at all. (The
     // SDK's own default env legitimately contributes plain `PATH`/`SHELL` and
-    // the framework injects `PICOAIDE_CONNECTOR_ACCESS_TOKEN` — the point here
+    // the framework injects `ZEOKEEL_CONNECTOR_ACCESS_TOKEN` — the point here
     // is that the DEFINITION cannot smuggle a second spelling of them.)
     const padded = Object.keys(call.childEnv).filter(key => key !== key.trim())
     expect(padded, 'padded env keys reached the child').toEqual([])

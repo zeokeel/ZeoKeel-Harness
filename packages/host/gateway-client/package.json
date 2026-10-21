@@ -1,7 +1,7 @@
 {
-  "name": "@picoaide/dsh-gateway-client",
+  "name": "@zeokeel/dsh-gateway-client",
   "version": "0.1.0",
-  "description": "Host-side gateway client shared by every PicoAide host plugin: gateway fetch, auth error taxonomy, and the persisted session/bootstrap shapes",
+  "description": "Host-side gateway client shared by every ZeoKeel host plugin: gateway fetch, auth error taxonomy, and the persisted session/bootstrap shapes",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -37,7 +37,7 @@
     "check": "yarn run build && yarn run test"
   },
   "dependencies": {
-    "@picoaide/dsh-host-locale": "workspace:*"
+    "@zeokeel/dsh-host-locale": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

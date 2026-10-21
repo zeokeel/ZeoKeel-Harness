@@ -80,7 +80,7 @@ describe('渲染与一次性', () => {
     expect(toast!.textContent).toContain('这个链接属于另一家企业的客户端')
     expect(toast!.getAttribute('role')).toBe('status')
     // 关闭按钮是真实 button（键盘可达）。
-    const close = container.querySelector<HTMLButtonElement>('.pico-app-toast-dismiss')
+    const close = container.querySelector<HTMLButtonElement>('.zeokeel-app-toast-dismiss')
     expect(close).not.toBeNull()
     await act(async () => { close!.click() })
     expect(container.querySelector('[data-role="app-toast"]')).toBeNull()

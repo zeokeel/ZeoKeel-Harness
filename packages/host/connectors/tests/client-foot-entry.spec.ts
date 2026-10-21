@@ -1,6 +1,6 @@
 /**
  * 连接器中心的底部入口（2026-09-21 并道改造）：从"自己注册一整行到
- * `sidebar.footer.action`"改成"往 `picoFootMenu` 登记一个条目"。
+ * `sidebar.footer.action`"改成"往 `zeokeelFootMenu` 登记一个条目"。
  *
  * 跑**真 apply**：条目是在 apply 里内联构造的，只有真跑一遍才拿得到 id/order/title/
  * activate；同时验证"面板仍然挂载"与"每个已连接连接器的斜杠命令还在"（不许丢行为）。
@@ -8,7 +8,7 @@
  * 因此这份用例是纯 node 环境。
  *
  * ---- 变异验证 ----
- *   - 删掉 `ctx.picoFootMenu.add(…)` ⇒「登记条目」红；
+ *   - 删掉 `ctx.zeokeelFootMenu.add(…)` ⇒「登记条目」红；
  *   - `id` 改成 'connector-center'（旧槽位 id）⇒「id 是 PanelId」红；
  *   - `activate` 换成空函数 ⇒「activate 是面板装载器的开关」红；
  *   - 删掉 `mountConnectorCenter()` 那条 effect ⇒「面板仍然挂载」红。
@@ -37,7 +37,7 @@ interface Harness {
 
 /**
  * 记录型上下文替身；effect 立刻执行。
- * @param options - `footRowEnabled: false` 模拟"提供 picoFootMenu 的那一行被禁用"。
+ * @param options - `footRowEnabled: false` 模拟"提供 zeokeelFootMenu 的那一行被禁用"。
  */
 function harness(options: { footRowEnabled?: boolean } = {}): Harness {
   const footEntries: RegisteredFootEntry[] = []
@@ -53,7 +53,7 @@ function harness(options: { footRowEnabled?: boolean } = {}): Harness {
       if (typeof dispose === 'function' && label !== undefined) disposers.set(label, dispose as () => void)
       return () => {}
     },
-    // 服务的等待：`picoFootMenu` 到位时子 fiber 立刻跑起来；禁用时不跑（条目消失，
+    // 服务的等待：`zeokeelFootMenu` 到位时子 fiber 立刻跑起来；禁用时不跑（条目消失，
     // 但 apply 的其余面貌照常 —— 这正是子 fiber 存在的理由）。
     inject: (deps: string[], run: (scope: ClientContext) => void) => {
       serviceWaits.push(deps)
@@ -72,7 +72,7 @@ function harness(options: { footRowEnabled?: boolean } = {}): Harness {
       inject: (slot: string, run: () => unknown) => { slots.push(slot); run(); return () => {} },
       register: () => () => {},
     },
-    picoFootMenu: {
+    zeokeelFootMenu: {
       add: (entry: RegisteredFootEntry) => {
         footEntries.push(entry)
         return () => {
@@ -90,7 +90,7 @@ function harness(options: { footRowEnabled?: boolean } = {}): Harness {
 
 /**
  * 跑一遍真 apply。
- * @param options - `footRowEnabled: false` 模拟提供 `picoFootMenu` 的那一行被禁用。
+ * @param options - `footRowEnabled: false` 模拟提供 `zeokeelFootMenu` 的那一行被禁用。
  */
 async function run(options: { footRowEnabled?: boolean } = {}): Promise<{ h: Harness, inject: string[], openConnectorCenter: () => void }> {
   vi.resetModules()
@@ -107,13 +107,13 @@ afterEach(() => {
 })
 
 describe('连接器：foot menu 条目', () => {
-  it('不从硬 inject 等 picoFootMenu（它由可被禁用的一行提供），而是在子 fiber 里等', async () => {
+  it('不从硬 inject 等 zeokeelFootMenu（它由可被禁用的一行提供），而是在子 fiber 里等', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ connectors: [] }), { status: 200 })))
     const { h, inject } = await run()
     // 硬 inject 的后果：那一行被渠道覆盖层 / `$DSH_HOME/cordis.patch.yml` 禁用时，
     // 整条 fiber 永久 pending（无报错），连接器面板与斜杠命令一起消失（P1-7 教训）。
-    expect(inject).not.toContain('picoFootMenu')
-    expect(h.serviceWaits).toEqual([['picoFootMenu']])
+    expect(inject).not.toContain('zeokeelFootMenu')
+    expect(h.serviceWaits).toEqual([['zeokeelFootMenu']])
   })
 
   it('foot 行被禁用 ⇒ 面板与斜杠命令照常（只有条目等不到）', async () => {
@@ -125,7 +125,7 @@ describe('连接器：foot menu 条目', () => {
     expect(h.effects).toContain('connectors: connector center surface')
     for (let index = 0; index < 12 && h.commands.length === 0; index += 1) await Promise.resolve()
     expect(h.commands).toEqual(['crm'])
-    h.disposers.get('pico-connectors-client: per-connector slash commands')?.()
+    h.disposers.get('zeokeel-connectors-client: per-connector slash commands')?.()
     h.disposers.get('connectors: connector center surface')?.()
   })
 
@@ -168,7 +168,7 @@ describe('连接器：foot menu 条目', () => {
     for (let index = 0; index < 12 && h.commands.length === 0; index += 1) await Promise.resolve()
     expect(h.commands).toEqual(['crm'])
     // 卸载不留定时器（轮询 effect 的 disposer）。
-    h.disposers.get('pico-connectors-client: per-connector slash commands')?.()
+    h.disposers.get('zeokeel-connectors-client: per-connector slash commands')?.()
     h.disposers.get('connectors: connector center surface')?.()
   })
 })

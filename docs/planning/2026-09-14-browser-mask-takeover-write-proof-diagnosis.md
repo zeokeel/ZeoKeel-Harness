@@ -1,6 +1,6 @@
 # 2026-09-14「我来操作」完全点不动诊断报告（内置浏览器写面证明与蒙版分区）
 
-诊断对象：桌面产品 **PicoAide Harness v2.7.3**（客户渠道客户端，win32，Electron 43.4.0）。
+诊断对象：桌面产品 **ZeoKeel Harness v2.7.3**（客户渠道客户端，win32，Electron 43.4.0）。
 数据源：客户诊断包 `diagnostics-1789381602891-…zip`（含 2 天 dsh 日志）+ 会话内截图 +
 **本地打包版真机复现**（`temp/browser-takeover-proof-probe.mjs`，Linux 打包版 + mock gateway 登录 + CDP 读各自 cookie jar）。
 
@@ -20,10 +20,10 @@ WebContents 分区创建即固定 ⇒ R7 写面证明要求的 BrowserAuth 票�
 `dsh-2026-09-14.error.log`：进程 17:34:30 启动（run header），**18:23:42 → 18:26:36 共 17 条**：
 
 ```
-2026-09-14 18:23:42.416 [W] [pico-browser] refused a local write without browser proof (401)
-2026-09-14 18:23:43.135 [W] [pico-browser] refused a local write without browser proof (401)
+2026-09-14 18:23:42.416 [W] [zeokeel-browser] refused a local write without browser proof (401)
+2026-09-14 18:23:43.135 [W] [zeokeel-browser] refused a local write without browser proof (401)
 …
-2026-09-14 18:26:36.659 [W] [pico-browser] refused a local write without browser proof (401)
+2026-09-14 18:26:36.659 [W] [zeokeel-browser] refused a local write without browser proof (401)
 ```
 
 时间点与用户反复点「我来操作」完全重合；其余日志（`agent/disposed listener`、`session-title-llm`）与本问题无关。
@@ -33,7 +33,7 @@ WebContents 分区创建即固定 ⇒ R7 写面证明要求的 BrowserAuth 票�
 
 1. 开机 prewarm（2026-09-08 产品决定：窗口、面板、蒙版开机即建、隐藏）发生在**任何会话存在之前**，
    蒙版视图按当时的 `partition` 创建 = `persist:agent-browser-anonymous`。
-2. 登录 / 会话恢复 → `pico/session-changed` → `runtime.setPartition(browserPartitionFor(user))` ——
+2. 登录 / 会话恢复 → `zeokeel/session-changed` → `runtime.setPartition(browserPartitionFor(user))` ——
    注释与实现都只承诺"**新建** tab 视图"使用新分区（`runtime.ts` 原注释：*Swap the partition used by NEW tab views*）。
 3. Electron 的 `WebContents` 分区在创建时固定，之后无法改指；窗口在会话切换时只被 `hideWindow()`（不销毁），
    蒙版视图于是**整个进程生命周期**留在旧 jar。
@@ -47,7 +47,7 @@ WebContents 分区创建即固定 ⇒ R7 写面证明要求的 BrowserAuth 票�
 ## 3. 真机复现与对照（修复前 → 修复后）
 
 `temp/browser-takeover-proof-probe.mjs`：打包版 + 全新区 `HOME`/`DSH_HOME` + mock gateway 登录，
-CDP 分别连 `/browser-shell` 与 `/browser-overlay`，POST `/api/pico/browser/takeover`，并用
+CDP 分别连 `/browser-shell` 与 `/browser-overlay`，POST `/api/zeokeel/browser/takeover`，并用
 `Network.getAllCookies` 读**各自 jar** 对拍。
 
 | 页面 | 修复前 jar | 修复前 POST | 修复后 jar | 修复后 POST |

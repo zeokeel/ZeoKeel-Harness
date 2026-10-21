@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // FIX-07(审计 2026-09-12,CC-P1-1):LDAP 重同步 goroutine 读已回收的 *gin.Context。

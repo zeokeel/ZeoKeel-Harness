@@ -43,7 +43,7 @@
  *    串行执行同文件用例，本包未开 `sequence.shuffle`；若将来开启，见证格会以"一条都没见证到"
  *    的形式失败（响亮的假红，不是假绿）。
  *
- * @module @picoaide/dsh-browser/tests/helpers/model-source-anchors
+ * @module @zeokeel/dsh-browser/tests/helpers/model-source-anchors
  */
 
 import type { ModelSourceScan } from './model-source-scan.ts'

@@ -48,15 +48,15 @@ func TestFileDownloadHeadersAreExplicit(t *testing.T) {
 	// 而平台必须按**扩展名**声明安装包类型。
 	const htmlBytes = "<html><script>alert(1)</script></html>"
 	withReleaseDir(t, testInfo(t, "2.7.0", nil), map[string]string{
-		"PicoAide-2.7.0.dmg": htmlBytes,
+		"ZeoKeel-2.7.0.dmg": htmlBytes,
 		"Setup-2.7.0.exe":    htmlBytes,
 		"app.AppImage":       htmlBytes,
-		"picoaide.deb":       htmlBytes,
+		"zeokeel.deb":       htmlBytes,
 		"win.zip":            htmlBytes,
 		"pkg.tar.gz":         htmlBytes,
 		"installer.msi":      htmlBytes,
 		"mac.pkg":            htmlBytes,
-		"PicoAide-2.7.0.DMG": htmlBytes, // 扩展名大小写不敏感
+		"ZeoKeel-2.7.0.DMG": htmlBytes, // 扩展名大小写不敏感
 	})
 	r := newRouter("2.7.0")
 
@@ -64,11 +64,11 @@ func TestFileDownloadHeadersAreExplicit(t *testing.T) {
 		name     string
 		wantType string
 	}{
-		{"PicoAide-2.7.0.dmg", "application/x-apple-diskimage"},
-		{"PicoAide-2.7.0.DMG", "application/x-apple-diskimage"},
+		{"ZeoKeel-2.7.0.dmg", "application/x-apple-diskimage"},
+		{"ZeoKeel-2.7.0.DMG", "application/x-apple-diskimage"},
 		{"Setup-2.7.0.exe", "application/vnd.microsoft.portable-executable"},
 		{"app.AppImage", "application/vnd.appimage"},
-		{"picoaide.deb", "application/vnd.debian.binary-package"},
+		{"zeokeel.deb", "application/vnd.debian.binary-package"},
 		{"win.zip", "application/zip"},
 		{"pkg.tar.gz", "application/gzip"},
 		{"installer.msi", "application/x-msi"},

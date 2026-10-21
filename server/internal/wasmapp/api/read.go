@@ -15,13 +15,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/appdb"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
-	"github.com/picoaide/picoaide/internal/wasmapp/diag"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appdb"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/diag"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // 本文件是 §8 的**只读面**：诊断 / 自省 / 应用中心目录 / 导出。
@@ -657,7 +657,7 @@ func (h *Handlers) catalog(c *gin.Context) {
 		if a.FrozenAt != nil && !ownedByViewer {
 			continue
 		}
-		// 负责人 = picoaide.app.json 的 owner（§4.2 的"负责人"声明）；平台归属
+		// 负责人 = zeokeel.app.json 的 owner（§4.2 的"负责人"声明）；平台归属
 		// （apps.owner）只是兜底 —— 两者同名不同物，不做互相推导（appcfg 包注释）。
 		var cfg appcfg.Config
 		if a.ConfigJSON != "" {
@@ -886,7 +886,7 @@ func (h *Handlers) export(c *gin.Context) {
 		appConfig = json.RawMessage(app.ConfigJSON)
 	}
 	body := gin.H{"export": gin.H{
-		"format":      "picoaide.wasm-app-export/1",
+		"format":      "zeokeel.wasm-app-export/1",
 		"exported_at": h.now().UTC(),
 		"app": gin.H{
 			"app_id": app.AppID,
@@ -898,7 +898,7 @@ func (h *Handlers) export(c *gin.Context) {
 			//   release            = apps.title 是**生效版本**标题的投影（唯一可信的标题来源）；
 			//   app_id_placeholder = 还没有生效版本，title 是 app_id 占位（不是真实标题）；
 			//   empty              = 没有生效版本且行里也没有标题（历史残渣）。
-			// 加字段不改值 ⇒ format 仍是 picoaide.wasm-app-export/1。
+			// 加字段不改值 ⇒ format 仍是 zeokeel.wasm-app-export/1。
 			"title_source":       exportTitleSource(app),
 			"description":        app.Description,
 			"owner":              app.Owner,

@@ -1,7 +1,7 @@
 /**
- * R7-RV-3 回归（第三轮对抗复核）：`/api/pico/connectors` 写面的持有性证明。
+ * R7-RV-3 回归（第三轮对抗复核）：`/api/zeokeel/connectors` 写面的持有性证明。
  *
- * 缺陷面：`packages/host/connectors/src/index.ts` 的 `/api/pico/connectors`
+ * 缺陷面：`packages/host/connectors/src/index.ts` 的 `/api/zeokeel/connectors`
  * 前缀此前只有 `guard()`（同源标记 + 回环），而 `loopback.ts:60-64` 自述"伪造
  * Origin 的 curl 也能过"。实测副作用（不是复述实现）：
  *   - `POST /<id>/auth-submit` → 200，把攻击者 token 写进**本地连接器凭据库**
@@ -27,7 +27,7 @@ const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => { while (cleanups.length > 0) await cleanups.pop()?.() })
 
 async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-rv3-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-rv3-'))
   cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
   return dir
 }
@@ -52,12 +52,12 @@ function tokenDef(): ConnectorDef {
 
 /** 伪造进程能打到的每一条写面。 */
 const WRITE_ROUTES = [
-  '/api/pico/connectors/glitchtip/connect',
-  '/api/pico/connectors/glitchtip/cancel',
-  '/api/pico/connectors/glitchtip/auth-submit',
-  '/api/pico/connectors/glitchtip/disconnect',
-  '/api/pico/connectors/glitchtip/approve',
-  '/api/pico/connectors/glitchtip/deny',
+  '/api/zeokeel/connectors/glitchtip/connect',
+  '/api/zeokeel/connectors/glitchtip/cancel',
+  '/api/zeokeel/connectors/glitchtip/auth-submit',
+  '/api/zeokeel/connectors/glitchtip/disconnect',
+  '/api/zeokeel/connectors/glitchtip/approve',
+  '/api/zeokeel/connectors/glitchtip/deny',
 ]
 
 describe('R7-RV-3 connectors:本地写路由要求持有性证明', () => {
@@ -70,11 +70,11 @@ describe('R7-RV-3 connectors:本地写路由要求持有性证明', () => {
     await new Promise((resolve) => setTimeout(resolve, 1200))
 
     // ① 凭据注入：auth-submit 之前是 200 且 token 落盘（复核实测），现在必须被拒。
-    const submit = await callRouteForged(h, '/api/pico/connectors/glitchtip/auth-submit')
+    const submit = await callRouteForged(h, '/api/zeokeel/connectors/glitchtip/auth-submit')
     expect(submit.status).toBe(403)
     expect(JSON.parse(submit.body).error).toBe('browser session proof required')
     // ② 持久化执行审批：approve 同样必须被拒，且台账未出现。
-    const approve = await callRouteForged(h, '/api/pico/connectors/glitchtip/approve')
+    const approve = await callRouteForged(h, '/api/zeokeel/connectors/glitchtip/approve')
     expect(approve.status).toBe(403)
     // ③ 其余写面一并被拒（同族，不是只修报告点名的那一条）。
     for (const path of WRITE_ROUTES) {
@@ -104,13 +104,13 @@ describe('R7-RV-3 connectors:本地写路由要求持有性证明', () => {
     // 真页面：connect/auth-submit 必须照常走 handler（不是 403）。harness 的
     // 请求对象没有 body 流，auth-submit 因读不到 body 走到自己的 400 分支 ——
     // 关键是它**没有**撞上持有性证明（否则就是误伤真页面）。
-    const connect = await callRoute(h, '/api/pico/connectors/glitchtip/connect')
+    const connect = await callRoute(h, '/api/zeokeel/connectors/glitchtip/connect')
     expect(connect.status).not.toBe(403)
-    const submit = await callRoute(h, '/api/pico/connectors/glitchtip/auth-submit')
+    const submit = await callRoute(h, '/api/zeokeel/connectors/glitchtip/auth-submit')
     expect(submit.status).not.toBe(403)
     expect(submit.body).not.toContain('browser session proof')
     // GET 读面（状态轮询）对两边都开放。
-    const state = await callRoute(h, '/api/pico/connectors/glitchtip/state', 'GET')
+    const state = await callRoute(h, '/api/zeokeel/connectors/glitchtip/state', 'GET')
     expect(state.status).toBe(200)
     h.dispose()
   })
@@ -119,7 +119,7 @@ describe('R7-RV-3 connectors:本地写路由要求持有性证明', () => {
     const dir = await tempDir()
     const h = createHarness([tokenDef()], dir, { connectionFence: null })
     h.emitSession({ username: 'user-a' })
-    const out = await callRoute(h, '/api/pico/connectors/glitchtip/connect')
+    const out = await callRoute(h, '/api/zeokeel/connectors/glitchtip/connect')
     expect(out.status).toBe(503)
     expect(JSON.parse(out.body).error).toBe('browser session proof unavailable')
     h.dispose()
@@ -130,7 +130,7 @@ describe('R7-RV-3 connectors:本地写路由要求持有性证明', () => {
     const h = createHarness([tokenDef()], dir, {})
     h.emitSession({ username: 'user-a' })
     for (const method of ['PUT', 'PATCH', 'DELETE', 'HEAD', 'post', 'get']) {
-      const out = await callRouteForged(h, '/api/pico/connectors/glitchtip/auth-submit', method)
+      const out = await callRouteForged(h, '/api/zeokeel/connectors/glitchtip/auth-submit', method)
       expect([403, 405], `${method} must not reach the handler`).toContain(out.status)
     }
     h.dispose()
@@ -154,7 +154,7 @@ describe('R7-RV-3 connectors:等价伪造形态（同族绕过面）', () => {
     // 伪造请求：同源头齐全（Origin/Host/Sec-Fetch-Site 都能造假），只差证明。
     const original = fence.requestRejection
     expect(original({ headers: { cookie } })).toBe(401)
-    const forged = await callRouteForged(h, '/api/pico/connectors/glitchtip/auth-submit')
+    const forged = await callRouteForged(h, '/api/zeokeel/connectors/glitchtip/auth-submit')
     expect(forged.status).toBe(403)
     h.dispose()
   })

@@ -23,19 +23,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/router"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/applimits"
-	"github.com/picoaide/picoaide/internal/wasmapp/appserver"
-	"github.com/picoaide/picoaide/internal/wasmapp/compile"
-	"github.com/picoaide/picoaide/internal/wasmapp/memprofile"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/router"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appserver"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // 本文件覆盖 cmd/server 侧的**装配期判据**回归（审计 P2-1 / P2-5 / P2-8 与接线缺失）：
-//   - FIX-18：`PICOAI_COMPILE_ISOLATION=require` 必须真的拒绝启动；
+//   - FIX-18：`ZEOKEEL_COMPILE_ISOLATION=require` 必须真的拒绝启动；
 //   - FIX-23：`http.Server.ReadTimeout` 必须与 limits.ServerReadTimeout 同源；
 //   - FIX-24：内存四笔账自检只在启用应用子域时执行（未启用时不再挡住 4 GiB 容器）；
 //   - FIX-47：过期分片上传会话的周期回收必须**真的启动**（装配级判据，不是源码文本）；
@@ -307,7 +307,7 @@ func ensureCompileChildNextToTestBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("定位模块根失败（需要 go 工具链）: %v", err)
 	}
-	cmd := exec.Command("go", "build", "-o", out, "./cmd/picoaide-app-compile")
+	cmd := exec.Command("go", "build", "-o", out, "./cmd/zeokeel-app-compile")
 	cmd.Dir = strings.TrimSpace(string(rootOut))
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if b, berr := cmd.CombinedOutput(); berr != nil {
@@ -719,7 +719,7 @@ func refAppModule(t *testing.T) []byte {
 			refAppErr = err
 			return
 		}
-		dir, err := os.MkdirTemp("", "picoaide-cmdserver-refapp-")
+		dir, err := os.MkdirTemp("", "zeokeel-cmdserver-refapp-")
 		if err != nil {
 			refAppErr = err
 			return

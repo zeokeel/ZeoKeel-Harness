@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // 本文件是 `edge` 包在 W4 之后**保留下来的原语**的行为判据。
@@ -34,7 +34,7 @@ func TestWriteAppNotFoundWritesSecurityHeaders(t *testing.T) {
 	req := httptest.NewRequest("GET", "http://missing."+testBase+"/", nil)
 	req.Host = "missing." + testBase
 	w := httptest.NewRecorder()
-	WriteAppNotFound(w, req, "missing", "picoaide-app://missing")
+	WriteAppNotFound(w, req, "missing", "zeokeel-app://missing")
 	if w.Code != 404 {
 		t.Fatalf("code=%d", w.Code)
 	}
@@ -51,7 +51,7 @@ func TestWriteAppNotFoundAPIUsesJSONEnvelope(t *testing.T) {
 	req := httptest.NewRequest("GET", "http://missing."+testBase+"/api/x", nil)
 	req.Host = "missing." + testBase
 	w := httptest.NewRecorder()
-	WriteAppNotFound(w, req, "missing", "picoaide-app://missing")
+	WriteAppNotFound(w, req, "missing", "zeokeel-app://missing")
 	var env map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
 		t.Fatalf("API 404 必须是 JSON 信封，body=%q err=%v", w.Body.String(), err)
@@ -76,12 +76,12 @@ func TestIsIdempotent(t *testing.T) {
 
 // TestIsOriginShaped：客户端管线的跨源写判据第一道闸（总纲 §8.1 步骤 ⑦）。
 //
-// 形态判定**不能**靠"剥掉多余部分再比"：那会把 `picoaide-app://demo/x`、
-// `picoaide-app://demo?x=1`、`user@demo` 这类伪造型当成合法源放行。
+// 形态判定**不能**靠"剥掉多余部分再比"：那会把 `zeokeel-app://demo/x`、
+// `zeokeel-app://demo?x=1`、`user@demo` 这类伪造型当成合法源放行。
 func TestIsOriginShaped(t *testing.T) {
 	for _, ok := range []string{
-		"picoaide-app://demo-a",
-		"picoaide-app://demo-a/",
+		"zeokeel-app://demo-a",
+		"zeokeel-app://demo-a/",
 		"https://apps.example.com",
 		"https://apps.example.com:8443",
 		"https://[::1]:8443",
@@ -94,11 +94,11 @@ func TestIsOriginShaped(t *testing.T) {
 		"",
 		"null",
 		"demo-a",
-		"picoaide-app://",
-		"picoaide-app://demo-a/x",
-		"picoaide-app://demo-a?x=1",
-		"picoaide-app://demo-a#f",
-		"picoaide-app://user@demo-a",
+		"zeokeel-app://",
+		"zeokeel-app://demo-a/x",
+		"zeokeel-app://demo-a?x=1",
+		"zeokeel-app://demo-a#f",
+		"zeokeel-app://user@demo-a",
 		"https://apps.example.com/x",
 	} {
 		if IsOriginShaped(bad) {
@@ -124,7 +124,7 @@ func TestNormalizeOrigin(t *testing.T) {
 		"ftp://harness.example.com":        "",
 		// 自定义协议**不**走它（客户端应用的源由 appserver.normalizeCustomOrigin 归一）：
 		// 走进来只会得到空串，这正是"两种源各有且只有一处实现"的分界。
-		"picoaide-app://demo-a": "",
+		"zeokeel-app://demo-a": "",
 	}
 	for raw, want := range cases {
 		if got := NormalizeOrigin(raw); got != want {
@@ -138,15 +138,15 @@ func TestNormalizeOrigin(t *testing.T) {
 func TestOriginDiagFieldsExcludesCredentials(t *testing.T) {
 	req := httptest.NewRequest("POST", "https://b."+testBase+"/note", nil)
 	req.Host = "b." + testBase
-	req.Header.Set("Origin", "picoaide-app://b")
+	req.Header.Set("Origin", "zeokeel-app://b")
 	req.Header.Set("Referer", "https://b."+testBase+"/")
 	req.Header.Set("X-Forwarded-Proto", "https")
 	// 哨兵：应用会话明文绝不能被日志带出来。
-	req.Header.Set("Cookie", "picoaide_app=secret-token-sentinel")
+	req.Header.Set("Cookie", "zeokeel_app=secret-token-sentinel")
 	got := OriginDiagFields(req)
 	for _, want := range []string{
 		`host="b.` + testBase + `"`,
-		`origin="picoaide-app://b"`,
+		`origin="zeokeel-app://b"`,
 		`referer="https://b.` + testBase + `/"`,
 		`x-forwarded-proto="https"`,
 	} {
@@ -203,7 +203,7 @@ func TestMaxBodyBytesFromLimits(t *testing.T) {
 
 func TestSecurityHeadersIncludeFrameAncestors(t *testing.T) {
 	h := http.Header{}
-	ApplyHostSecurityHeaders(h, "picoaide-app://demo-a")
+	ApplyHostSecurityHeaders(h, "zeokeel-app://demo-a")
 	if !strings.Contains(h.Get("Content-Security-Policy"), "frame-ancestors 'none'") {
 		t.Fatal("必须禁止被嵌帧（§4.8）")
 	}

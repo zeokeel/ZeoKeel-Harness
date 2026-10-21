@@ -6,7 +6,7 @@
  * numbers ONCE so the React surfaces do not each re-transcribe the paths
  * (audit 2026-09-08 P2-39 counted 4 hand-copied sites). `tests/channel-geometry.spec.ts`
  * parses the SVG and fails if any constant drifts from it.
- * @module @picoaide/dsh-branding/channel-geometry
+ * @module @zeokeel/dsh-branding/channel-geometry
  */
 
 /** Canvas size of the authoritative artwork (square). */

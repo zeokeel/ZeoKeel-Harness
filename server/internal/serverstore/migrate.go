@@ -330,9 +330,9 @@ const (
 // 三个 env：只用来**调整**缺省预算（毫秒）。非法/非正值一律回落缺省并告警 ——
 // 不许用一条 env（写 0 或写错）把预算变成"无预算"，那正是本修复要消灭的形态。
 const (
-	migrationDDLLockBudgetEnv      = "PICOAI_MIGRATION_LOCK_TIMEOUT_MS"
-	migrationAdvisoryLockBudgetEnv = "PICOAI_MIGRATION_ADVISORY_TIMEOUT_MS"
-	migrationSlowWarnEnv           = "PICOAI_MIGRATION_SLOW_MS"
+	migrationDDLLockBudgetEnv      = "ZEOKEEL_MIGRATION_LOCK_TIMEOUT_MS"
+	migrationAdvisoryLockBudgetEnv = "ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS"
+	migrationSlowWarnEnv           = "ZEOKEEL_MIGRATION_SLOW_MS"
 )
 
 // migrationDurationEnv 读一个毫秒级预算/阈值（见上）。
@@ -461,7 +461,7 @@ func formatSlowMigration(ob migrationObservation) string {
 		msg += fmt.Sprintf(" — waited on locks for %s", ob.LockWait.Round(time.Millisecond))
 	}
 	return msg + "; concurrent readers/writers of those tables were blocked for the same window" +
-		" (raise PICOAI_MIGRATION_SLOW_MS to silence, or move the data backfill out of the structural migration)"
+		" (raise ZEOKEEL_MIGRATION_SLOW_MS to silence, or move the data backfill out of the structural migration)"
 }
 
 // migrationObservationSinkDefault 是生产出口：两条可检索日志行（慢迁移时两条）。
@@ -742,7 +742,7 @@ func migrationExecError(m migration, err error, ob migrationObservation, lockBud
 	if hasCode && code == pgSQLStateLockNotAvailable {
 		return fmt.Errorf("migration %04d %s: 等表锁超时（SQLSTATE %s，预算 %s，已等 %s）%s —— "+
 			"有会话对该迁移要改的表持冲突锁（备份/长查询/idle in transaction 都可能）；"+
-			"停掉阻塞者后重试，或用 PICOAI_MIGRATION_LOCK_TIMEOUT_MS 调整预算: %w",
+			"停掉阻塞者后重试，或用 ZEOKEEL_MIGRATION_LOCK_TIMEOUT_MS 调整预算: %w",
 			m.version, m.name, code, lockBudget, ob.Elapsed.Round(time.Millisecond), blocked, err)
 	}
 	if hasCode {
@@ -805,7 +805,7 @@ func applyMigrations(db *sql.DB, sink migrationObservationSink) error {
 		if code, ok := pgErrorCode(lockErr); ok && code == pgSQLStateLockNotAvailable {
 			return fmt.Errorf("migration lock: 等待迁移互斥锁超时（预算 %s 内没拿到 pg_advisory_lock(%d)，SQLSTATE %s）—— "+
 				"另一个实例可能正在迁移、或上一次迁移留下了未释放的会话；确认没有其它实例在迁移后重试"+
-				"（可用 PICOAI_MIGRATION_ADVISORY_TIMEOUT_MS 调整预算）: %w",
+				"（可用 ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS 调整预算）: %w",
 				advisoryBudget, migrationLockKey, code, lockErr)
 		}
 		return fmt.Errorf("acquire migration lock: %w", lockErr)

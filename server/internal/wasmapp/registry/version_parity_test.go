@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 // A-10（2026-09-23 R3-A 审计，P2）的对拍门禁：**同一个版本对，两个调用点必须给出同一个
@@ -75,8 +75,8 @@ func TestVersionComparatorsAgreeOnSharedCorpus(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("共享语料不是合法 JSON：%v", err)
 	}
-	if doc.Schema != "picoaide-semver-corpus/1" {
-		t.Fatalf("共享语料 schema=%q，want picoaide-semver-corpus/1", doc.Schema)
+	if doc.Schema != "zeokeel-semver-corpus/1" {
+		t.Fatalf("共享语料 schema=%q，want zeokeel-semver-corpus/1", doc.Schema)
 	}
 	if len(doc.Cases) < 20 {
 		t.Fatalf("共享语料只有 %d 对，至少 20 对（R4-D-1）", len(doc.Cases))

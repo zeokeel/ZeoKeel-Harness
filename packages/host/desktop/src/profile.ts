@@ -73,31 +73,31 @@ const BIN_NAME = DESKTOP_PACKAGE_NAME
 // + home 补丁 + `context.overlays`。把这十层塞进 `context.overlays` 也不行：`overlays`
 // 追加在**最后**，于是 `- insert:` 的行会晚于设置文档建立，`config-editor.edit()` 收尾的
 // 断言 `Configuration for "<id>" is overridden by a home patch or command-line overlay`
-// 会直接抛错（模型网关行 `picoaide-gateway-llm` 每次登录都要写 baseURL ⇒ 模型面全灭）。
+// 会直接抛错（模型网关行 `zeokeel-gateway-llm` 每次登录都要写 baseURL ⇒ 模型面全灭）。
 // 放进 `profile.layers` 是唯一同时满足"复算得到"与"早于设置文档"的位置。
 const REQUIRED_BUNDLES = [
   ...requiredWebBundles(),
   // 十个自有组装补丁层（本包的 `cordis.patch.yml` + 下列九个包各自的
   // `cordis.patch.yml`）以 **bundle 层**身份进入组合，顺序 = 这里列出的顺序。
-  // 本包自己的那一层由 `@picoaide/dsh-enterprise` 的 `dsh.bundle.patch` 首项
+  // 本包自己的那一层由 `@zeokeel/dsh-enterprise` 的 `dsh.bundle.patch` 首项
   // `../../../cordis.patch.yml` 携带 —— `resolveBundleDir` 用 `resolve.paths()` 找包，
   // **不含包自身目录**，所以 `dsh-plugin-desktop` 无法把自己解析成 bundle；企业包是
   // 这十层里第一个、且它的层本来就依赖桌面层先落地（它 patch `desktop-shell` 行）。
-  '@picoaide/dsh-enterprise',
+  '@zeokeel/dsh-enterprise',
   // 能力中心（技能商店）的 **host + client 双面**（2026-10-13 从企业包整块搬出；
   // 同日 P0-b 把四条本机路由与技能遥测行也搬了进来）。它排在企业包之后、其余层之前：
   // 自己的补丁只插两行，不 patch 别人的行 —— 但**必须晚于企业包**，因为它的宿主行
-  // `inject` 的 `picoLocalRoutes` 服务由 `picoaide-auth-gate` 提供。
+  // `inject` 的 `zeokeelLocalRoutes` 服务由 `zeokeel-auth-gate` 提供。
   // **这一层就是"关掉技能商店"的开关**：把它从本清单里去掉（P2 还要同时摘
   // `dsh-plugin-desktop.dependencies` 的条目），客户端 bundle、面板、底部条目、
   // `capability.*` 文案、四条本机路由与技能遥测一起不进产物。
-  '@picoaide/dsh-capability-center',
-  '@picoaide/dsh-account-card',
-  '@picoaide/dsh-wasm-apps',
-  '@picoaide/dsh-foot-menu',
-  '@picoaide/dsh-wasm-apps-host',
-  '@picoaide/dsh-connectors',
-  '@picoaide/dsh-browser',
+  '@zeokeel/dsh-capability-center',
+  '@zeokeel/dsh-account-card',
+  '@zeokeel/dsh-wasm-apps',
+  '@zeokeel/dsh-foot-menu',
+  '@zeokeel/dsh-wasm-apps-host',
+  '@zeokeel/dsh-connectors',
+  '@zeokeel/dsh-browser',
   'dsh-memory-evolve',
   // 语音输入（2026-09-29 产品决策：**默认开启**）。上游从 0.1.7 起把
   // `@deepseek-ai/dsh-experimental-voice-input-bundle` 作为 `@deepseek-ai/dsh`
@@ -130,7 +130,7 @@ const REQUIRED_BUNDLES = [
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',
 ]
 /** 携带桌面自身组装补丁层的 bundle（见 `REQUIRED_BUNDLES` 的说明）。 */
-const DESKTOP_LAYER_CARRIER_BUNDLE = '@picoaide/dsh-enterprise'
+const DESKTOP_LAYER_CARRIER_BUNDLE = '@zeokeel/dsh-enterprise'
 
 /**
  * 安装面**自有**的 bundle 层 = 必需层 ∪ 全部功能模块层（不论开关）。
@@ -191,15 +191,15 @@ const INSTALL_ANCHOR = fileURLToPath(new URL('../package.json', import.meta.url)
 // `dsh.bundle.patch` 列表（见 `package.json` 的 `dsh.bundle`），由上游 `loadProfileDirectory`
 // 逐层读进来。理由见 `REQUIRED_BUNDLES` 上方的长注释。
 //
-// ⚠️ **禁用危害（2026-09-21 对抗审计，仍然有效）**：`picoaide-foot-menu` 那一行是
+// ⚠️ **禁用危害（2026-09-21 对抗审计，仍然有效）**：`zeokeel-foot-menu` 那一行是
 // **五个面板入口的唯一承载行**。渠道覆盖层或 `$DSH_HOME/cordis.patch.yml` 把它
 // `disabled: true` 时不会有任何报错 —— 消费者等的服务永远不出现，于是底部功能区
 // **安静地**少掉自动化任务 / 能力中心 / 连接器 / 浏览器 / 应用中心。因此它进了
 // `REQUIRED_DESKTOP_ROWS`（boot 后断言 ACTIVE，缺席即抛错并走桌面的致命路径）。
 /** 宿主行 id：scheme / 产品名注入点（见 prepareDesktopProfile 末尾）。 */
-const WASM_APPS_HOST_ROW_ID = 'pico-wasm-apps-host'
+const WASM_APPS_HOST_ROW_ID = 'zeokeel-wasm-apps-host'
 /** 浏览器行 id：应用源 scheme 注入点（导航闸门按 surface 分流要用它）。 */
-const BROWSER_ROW_ID = 'pico-browser'
+const BROWSER_ROW_ID = 'zeokeel-browser'
 const DIRECTORY_PICKER_ROW_ID = 'directory-picker'
 const AUTO_PICKER_PACKAGE = '@deepseek-ai/dsh-host-directory-picker-auto'
 const BROWSE_PICKER_BACKEND = '@deepseek-ai/dsh-host-directory-picker-browse'
@@ -268,9 +268,9 @@ export function channelProfilePatches(
   const out: Array<Record<string, unknown>> = []
   // 服务端地址与品牌文案合成**一次** patch：同一行 patch 两次时后一条会整体
   // 覆盖前一条的 config（丢域名或多丢品牌）。
-  if (rows.has('picoaide-auth-gate')) {
+  if (rows.has('zeokeel-auth-gate')) {
     out.push({
-      id: 'picoaide-auth-gate',
+      id: 'zeokeel-auth-gate',
       config: {
         ...(channelProfile.defaultServerURL === undefined ? {} : { defaultServer: channelProfile.defaultServerURL }),
         brand: channelProfile.brand,
@@ -279,17 +279,17 @@ export function channelProfilePatches(
   }
   // 客户端界面（侧边栏/顶栏/登录后品牌）的随包兜底：服务端可达时以服务端下发的
   // 渠道内容为准，不可达/未登录时用它 —— 绝不回落厂商品牌。
-  if (rows.has('picoaide-channel-sync')) {
+  if (rows.has('zeokeel-channel-sync')) {
     out.push({
-      id: 'picoaide-channel-sync',
+      id: 'zeokeel-channel-sync',
       config: { brand: channelProfile.brand },
     })
   }
   // 连接器 OAuth 的客户端名会显示在**客户自己的 IdP 授权同意页**上，
   // 渠道构建下必须是该渠道的产品名（缺省是中性名，绝不含厂商品牌）。
-  if (channelProfile.productName !== undefined && rows.has('pico-connectors')) {
+  if (channelProfile.productName !== undefined && rows.has('zeokeel-connectors')) {
     out.push({
-      id: 'pico-connectors',
+      id: 'zeokeel-connectors',
       config: { clientName: `${channelProfile.productName} Connector` },
     })
   }
@@ -298,9 +298,9 @@ export function channelProfilePatches(
   // `../build/channel.json` 在那里指向不存在的路径（asar 里只有应用根的
   // `/build/`），于是浏览器 SSO 回调永远按官方 scheme 校验、渠道客户端的登录
   // 回调被当成畸形链接丢掉（2026-09-11 真机复现）。
-  if (rows.has('picoaide-session')) {
+  if (rows.has('zeokeel-session')) {
     out.push({
-      id: 'picoaide-session',
+      id: 'zeokeel-session',
       config: { deepLinkScheme: channelProfile.deepLinkScheme },
     })
   }
@@ -333,10 +333,10 @@ export function channelProfilePatches(
 /**
  * 旧目录式智能体预设的**本地存储格式**常量。
  *
- * 格式权威在 `@picoaide/dsh-enterprise` 的 `agent-preset-install.ts`
+ * 格式权威在 `@zeokeel/dsh-enterprise` 的 `agent-preset-install.ts`
  * （`resolvePresetsDir()` / `PRESET_ID_PATTERN` / `COMPOSITION_FILE` /
  * `METADATA_FILE` / `MAX_PRESET_META_LEN`）。**这里只镜像字面量、不能 import 它**：
- * enterprise 已经依赖 `dsh-plugin-desktop`（`@picoaide/dsh-enterprise` 的
+ * enterprise 已经依赖 `dsh-plugin-desktop`（`@zeokeel/dsh-enterprise` 的
  * `needs: ['dsh-plugin-desktop', …]`），反向 import 会构成**构建环**，
  * `scripts/check-workspaces.mjs` 与 `temp/wasm-client-only/cycle-check.mjs`
  * 会当场判红（"实测边不在声明表里 / 实测边有环"）。
@@ -573,7 +573,7 @@ export function materializeLegacyAgentPresets(
   for (const entry of [...entries].sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0))) {
     const name = entry.name
     // 点开头 = 本产品自己的东西（`installPresetArchive` 的 `.install-<id>-XXXX` staging
-    // 目录、`.picoaide` 溯源标记的命名空间…）。它们不是用户预设，也不该被点名。
+    // 目录、`.zeokeel` 溯源标记的命名空间…）。它们不是用户预设，也不该被点名。
     if (name.startsWith('.')) continue
     // 只认目录（`statSync` 跟随符号链接：用户用软链指到别处的预设目录是合法用法，
     // 上游 `listInstalledPresets` 用 `entry.isDirectory()` 会漏掉它）。
@@ -1284,7 +1284,7 @@ export async function prepareDesktopProfile(
   // 深链 scheme 必须**注入**应用协议插件行，不能让插件自己去读随包 channel.json
   // （enterprise 的 same 教训：tsdown 内联后 `../build/channel.json` 指向不存在的
   // 目录，渠道客户端的深链会被官方 scheme 的严格闸门丢掉）。官方构建没有渠道包，
-  // 这里补上产品缺省 scheme —— 注入点唯一，插件侧不写死 `picoaide://`。
+  // 这里补上产品缺省 scheme —— 注入点唯一，插件侧不写死 `zeokeel://`。
   if (rows.has(WASM_APPS_HOST_ROW_ID)) {
     patches.push({
       id: WASM_APPS_HOST_ROW_ID,
@@ -1302,7 +1302,7 @@ export async function prepareDesktopProfile(
       },
     })
   }
-  // 渲染层经本机只读路由 `GET /api/pico/wasm-apps/channel` 取渠道 scheme（§16.1）：
+  // 渲染层经本机只读路由 `GET /api/zeokeel/wasm-apps/channel` 取渠道 scheme（§16.1）：
   // 浏览器面也要知道应用源 scheme 才能按 surface 分流导航闸门（应用窗口放行自己的
   // origin、浏览器标签一律拒）。同一个值、同一个注入点，两处消费。
   if (rows.has(BROWSER_ROW_ID)) {

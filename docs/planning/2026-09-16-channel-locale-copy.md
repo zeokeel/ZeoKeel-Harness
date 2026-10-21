@@ -112,7 +112,7 @@
 
 ## 6. 建议动作
 
-1. **现在（低成本、修可见缺陷）**：把 `copy.login_tagline` 改成映射形态并给 official / beta 补英文——**今天英文登录页显示中文标语**，这是已存在的缺陷。渠道仓（私有 `picoaide/channels`）同步。
+1. **现在（低成本、修可见缺陷）**：把 `copy.login_tagline` 改成映射形态并给 official / beta 补英文——**今天英文登录页显示中文标语**，这是已存在的缺陷。渠道仓（私有 `zeokeel/channels`）同步。
 2. **随后**：`defaults.locale` + CI 校验 + 两侧解析实现 + 回归用例。
 3. **门户 i18n 立项时**：再接通 `portal_welcome` 的语言选择（服务端需 `Accept-Language` 或渠道默认语言）。
 

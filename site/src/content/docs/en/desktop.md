@@ -213,7 +213,7 @@ to **one standard MCP configuration plus a title and description** — a transpo
 
 | Case | Result |
 |---|---|
-| Declaring process-bootstrap variables (`PATH`, `NODE_OPTIONS`, `LD_PRELOAD`, `PYTHONPATH`, `BASH_ENV`, …) | Refused. The `DSH_` / `ELECTRON_` / `PICOAIDE_` / `GIT_CONFIG_KEY_` / `GIT_CONFIG_VALUE_` **prefixes** are refused as whole families |
+| Declaring process-bootstrap variables (`PATH`, `NODE_OPTIONS`, `LD_PRELOAD`, `PYTHONPATH`, `BASH_ENV`, …) | Refused. The `DSH_` / `ELECTRON_` / `ZEOKEEL_` / `GIT_CONFIG_KEY_` / `GIT_CONFIG_VALUE_` **prefixes** are refused as whole families |
 | The command-hook family (`GIT_SSH_COMMAND`, `GIT_ASKPASS`, `BROWSER`, `LESSOPEN`, `PERL5OPT`, `JAVA_TOOL_OPTIONS`, …) | Refused: the name looks like configuration, but the value is a command template that gets **executed** |
 | Selectors such as `PAGER` / `EDITOR` / `GIT_EDITOR` | Allowed, but the **value** passes a shape gate: a single program-name shape only (no whitespace, no shell metacharacters), and the basename may not be an interpreter such as `sh` or `python` |
 | An outbound target resolving to a private, reserved, loopback or cloud-metadata address | Not sent. A failed resolution always **fails closed** (codes `resolution-failed` / `resolution-timeout` / `resolution-empty`) |
@@ -233,8 +233,8 @@ to **one standard MCP configuration plus a title and description** — a transpo
   path ever opens a browser for you in the background**.
 - There are five row states: disconnected / connecting / connected / unauthorized / error.
 
-The connector panel is a set of loopback routes: `GET /api/pico/connectors` lists, and
-`/api/pico/connectors/<id>/<action>` runs `connect` / `cancel` / `auth-submit` / `state` / `disconnect` /
+The connector panel is a set of loopback routes: `GET /api/zeokeel/connectors` lists, and
+`/api/zeokeel/connectors/<id>/<action>` runs `connect` / `cancel` / `auth-submit` / `state` / `disconnect` /
 `approve` / `deny` / `refresh`. **Every action except state polling requires a proof of possession**; without
 it the handler is never entered.
 
@@ -261,7 +261,7 @@ them, and deliver their prompt back to that session.
   quitting the app stops delivery.
 - On the next launch, due tasks for the **currently signed-in account** are delivered (not all
   historical occurrences).
-- Catalog, history, updates, and deletes are filtered by the current Pico account
+- Catalog, history, updates, and deletes are filtered by the current ZeoKeel account
   (server + username). Other accounts' tasks are invisible, immutable, and never delivered;
   unowned legacy rows are also hidden in an account-aware host.
 - A task is never delivered to another account's session.
@@ -413,18 +413,18 @@ Cross-session long-term memory, built into the product (vendored community plugi
   **custom protocol** `<scheme>://<app id>`, and every outbound request the page makes is enveloped by the
   client and forwarded to the platform. Therefore **the server needs no public entry point or certificate for
   apps**, and there is no "app subdomain" layer at all.
-- **How it opens**: the client's local route `POST /api/pico/wasm-apps/open`; on the platform the single entry
+- **How it opens**: the client's local route `POST /api/zeokeel/wasm-apps/open`; on the platform the single entry
   point is `POST /api/client/v2/apps/wasm/:app_id/request`, forwarded with the employee token.
 - **Window isolation**: app windows run in a **per-user partition**; navigation, sub-frame navigation and 302
   redirects **share exactly one origin criterion** — cross-app and external destinations are always refused,
   same-app destinations pass.
-- **Reserved surface**: the `/__picoaide/` prefix inside an app page is a host-reserved namespace. Today
-  **only** `/__picoaide/ai/chat` exists (handled locally by the client and never forwarded to the platform);
+- **Reserved surface**: the `/__zeokeel/` prefix inside an app page is a host-reserved namespace. Today
+  **only** `/__zeokeel/ai/chat` exists (handled locally by the client and never forwarded to the platform);
   everything else is a 404.
 
 ### Access modes
 
-The `access` field of an app's `picoaide.app.json` decides who can open it:
+The `access` field of an app's `zeokeel.app.json` decides who can open it:
 
 | Value | Meaning |
 |---|---|
@@ -504,7 +504,7 @@ keeps it distinct from a network error.
     in again;
   - After an administrator resets a password they can force a change at next sign-in; the server then blocks
     other requests with `403 PASSWORD_CHANGE_REQUIRED`.
-- **Signing out**: `POST /api/pico/auth/logout`. After signing out the update source disappears (see the
+- **Signing out**: `POST /api/zeokeel/auth/logout`. After signing out the update source disappears (see the
   previous section) and every panel re-resolves against the new session identity.
 
 ## Update mechanism
@@ -634,7 +634,7 @@ directly.
 
 | Layer | Switch | Meaning |
 |---|---|---|
-| Real process environment | `PICOAI_ALLOW_SYSTEM_PROXY=1` | Allows the host proxy; an explicit `0` / `false` also takes effect (it is a two-way switch) |
+| Real process environment | `ZEOKEEL_ALLOW_SYSTEM_PROXY=1` | Allows the host proxy; an explicit `0` / `false` also takes effect (it is a two-way switch) |
 | Channel package | `desktop.allow_system_proxy: true` | Allows it (strict boolean `true` only) |
 | Default | — | Denied |
 

@@ -9,7 +9,7 @@
  * 逐字断言在 `src/app-window-copy.spec.ts`：这些串是 §7.2/§19 Q3/Q9 冻结文案的落地形态，
  * 任一侧（本包或客户端包）被改写都必须各红一次。
  *
- * @module @picoaide/dsh-wasm-apps-host/app-window-copy
+ * @module @zeokeel/dsh-wasm-apps-host/app-window-copy
  */
 
 import { hostCopy, type HostLocale } from './locale.ts'

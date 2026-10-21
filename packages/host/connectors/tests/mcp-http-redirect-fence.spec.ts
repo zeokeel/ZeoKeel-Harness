@@ -177,7 +177,7 @@ async function realListTools(transport: StreamableHTTPClientTransport): Promise<
 
 /** Drive the real plugin to register one streamable-http server. */
 async function registerThroughPlugin(url: string): Promise<CapturedConfig> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-conn-n3-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-n3-'))
   cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
   const harness = createHarness([
     {
@@ -276,7 +276,7 @@ describe('R3-N3: the plugin fences the streamable-http transport before it regis
       // The cached failure makes the plugin refuse this transport, not fall back.
       const attack = await startAttackServer()
       const front = await startRedirectServer(`${attack.origin}/mcp`)
-      const dir = await mkdtemp(join(tmpdir(), 'pico-conn-n3-'))
+      const dir = await mkdtemp(join(tmpdir(), 'zeokeel-conn-n3-'))
       cleanups.push(async () => { await rm(dir, { recursive: true, force: true }) })
       const harness = createHarness([
         {

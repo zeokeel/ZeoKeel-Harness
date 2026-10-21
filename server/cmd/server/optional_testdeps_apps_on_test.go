@@ -9,8 +9,8 @@ import (
 	"database/sql"
 	"testing"
 
-	wasmapi "github.com/picoaide/picoaide/internal/wasmapp/api"
-	"github.com/picoaide/picoaide/internal/wasmapp/readyz"
+	wasmapi "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/api"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 )
 
 // fillAppsProductionDeps 填 apps 面的 productionDeps 字段（与 main() 同形）。

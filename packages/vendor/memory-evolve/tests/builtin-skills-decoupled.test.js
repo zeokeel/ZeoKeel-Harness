@@ -7,7 +7,7 @@
  * 「随插件分发的内置技能同步到用户技能库」被一个毫不相干的 COI 调度开关挡住了。
  *
  * 第二次修正（本文件现在钉的契约，来源 = 用户口径 + 独立审计 P1-1）：同步的
- * **只有本插件自己的技能**。平台技能 `app-builder`（原名 `picoaide-app-builder`）
+ * **只有本插件自己的技能**。平台技能 `app-builder`（原名 `zeokeel-app-builder`）
  * 随**服务端镜像**发布，由员工在客户端「能力中心 → 平台内置技能」**按需安装**；
  * 只要还有一条开机自动把它写进技能库的旁路，「按需」就名存实亡（实测：apply()
  * 一次之后它已在库里，面板直接显示"已安装"，安装按钮永远走不到，且没有能力中心
@@ -122,11 +122,11 @@ test('本插件的技能在 coiEnabled 缺省(false) 时仍然同步，且落点
     // 整目录逐字节一致（正文 + 辅助文件一起走）。
     //
     // A9（2026-09-23 独立审计）：落盘目录里现在**多出安装器标记**
-    // （`.picoaide/release.json` = 本插件来源的 provenance，channel: 'plugin'；
+    // （`.zeokeel/release.json` = 本插件来源的 provenance，channel: 'plugin'；
     // `.install-version` = 版本），它们是同步补写的"非技能内容"，不属于被同步的
     // 技能树。所以判据是「技能文件集合一致 + 逐个字节一致 + 多出来的只能是这两个
     // 安装器标记」，而不是"目录里一个文件都不能多"。
-    const INSTALLER_MARKERS = ['.picoaide/release.json', '.install-version']
+    const INSTALLER_MARKERS = ['.zeokeel/release.json', '.install-version']
     const sourceFiles = listFiles(join(PACKAGE_ROOT, 'skills', 'memory-consolidate'))
     const landedFiles = listFiles(join(home, 'skills', 'memory-consolidate'))
     assert.deepEqual(
@@ -142,7 +142,7 @@ test('本插件的技能在 coiEnabled 缺省(false) 时仍然同步，且落点
       )
     }
     // 多出来的两个标记必须是我们自己的来源（否则能力中心会把随包技能当"用户自制"）。
-    const provenance = JSON.parse(readFileSync(join(home, 'skills', 'memory-consolidate', '.picoaide', 'release.json'), 'utf8'))
+    const provenance = JSON.parse(readFileSync(join(home, 'skills', 'memory-consolidate', '.zeokeel', 'release.json'), 'utf8'))
     assert.equal(provenance.channel, 'plugin')
     assert.equal(provenance.appId, 'memory-consolidate')
     // 版本口径 = SKILL.md 的 `x-version`（随包技能声明了它；没声明时写空串）。
@@ -230,7 +230,7 @@ test('平台技能的新源目录在服务端仓库里：镜像下发的那棵�
   // **没有**副本、且 Dockerfile 真的从那一个源 COPY 进了技能目录。
   assert.ok(existsSync(SERVER_SKILLS_DIR), `找不到服务端技能目录：${SERVER_SKILLS_DIR}（仓库布局变了？）`)
   const dockerfile = readFileSync(join(REPO_ROOT, 'server', 'Dockerfile'), 'utf8')
-  const SEED_DIR = '/opt/picoaide/skills'
+  const SEED_DIR = '/opt/zeokeel/skills'
   // 镜像里那一棵树 = 磁盘树 + 这些注入文件（rel = 技能目录内相对路径）。
   const INJECTED = [
     { skill: 'app-builder', rel: 'scripts/pack-assets.mjs', source: 'server/demoapps/scripts/pack-assets.mjs' },
@@ -278,7 +278,7 @@ test('平台技能的新源目录在服务端仓库里：镜像下发的那棵�
       'references/publishing.md',
       'examples/go/go.mod',
       'examples/go/main.go',
-      'examples/go/picoaide.app.json',
+      'examples/go/zeokeel.app.json',
       'examples/go/preview.mjs',
       'examples/go/README.md',
     ]) {
@@ -306,7 +306,7 @@ test('新源目录的 SKILL.md frontmatter：服务端必填字段齐全，且 n
     assert.ok((value('category') ?? '').length > 0)
     // 客户端 COI 同步链用的 x-version 必须**保留**（两套版本语义，不合并）。
     assert.match(value('x-version') ?? '', /^\d+$/u)
-    assert.equal(value('x-abi-version'), 'picoaide-app/1')
+    assert.equal(value('x-abi-version'), 'zeokeel-app/1')
   }
 })
 

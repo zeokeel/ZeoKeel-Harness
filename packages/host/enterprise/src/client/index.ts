@@ -17,7 +17,7 @@ import type { ChannelConfig } from '../channel-content.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'pico/channel-changed'(channel: ChannelConfig | null): void
+    'zeokeel/channel-changed'(channel: ChannelConfig | null): void
   }
 }
 import { AccountSection } from './AccountSection.tsx'
@@ -37,7 +37,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Stable Cordis plugin name for the enterprise client half. */
-export const name = 'picoaide-enterprise-client'
+export const name = 'zeokeel-enterprise-client'
 
 /** Locale namespace owning the enterprise client copy. */
 const LOCALE_NS = 'enterprise'
@@ -57,8 +57,8 @@ export const inject = ['slots', 'locale']
  * cannot override them — give the upstream ui-conversation a configurable
  * headline and delete the two `headlineText`/`previewBadge` rules below.
  *
- * 能力中心的技能卡样式（`.pico-skill-card`）随面板一起搬到了
- * `@picoaide/dsh-capability-center`（见那里的 `client/skill-card-style.ts`）——
+ * 能力中心的技能卡样式（`.zeokeel-skill-card`）随面板一起搬到了
+ * `@zeokeel/dsh-capability-center`（见那里的 `client/skill-card-style.ts`）——
  * 本表只保留企业自有面（侧栏底栏容器、hero 文案）。
  *
  * 兜底字面量（`content: var(…, "…")` 的第二参）由 `brandCss()` 按**当前**界面
@@ -77,12 +77,12 @@ const brandCss = (tagline: string): string => `
  * 包了两层：\`<span class="_titleGroup_…"><span>{headline}</span><span class="_previewBadge_…">\`。
  * 只改类名不够 —— 必须命中的是**第一个内层 span**，否则 \`font-size: 0\` 会把
  * 「企业版」徽标一起吃掉（2026-09-12 打包版真机复现：规则空匹配时首屏显示上游
- * 文案「探索未至之境」，而 \`--pico-hero-headline\` 明明有值）。
+ * 文案「探索未至之境」，而 \`--zeokeel-hero-headline\` 明明有值）。
  * 兼容旧类名：两个选择器并存，任一版本升级都不会静默失效。 */
 [class$="_headlineText"], [class$="_titleGroup"] > span:first-child { font-size: 0; }
-[class$="_headlineText"]::after, [class$="_titleGroup"] > span:first-child::after { content: var(--pico-hero-headline, "PicoAide Harness"); font-size: 26px; line-height: 32px; font-weight: 500; }
+[class$="_headlineText"]::after, [class$="_titleGroup"] > span:first-child::after { content: var(--zeokeel-hero-headline, "ZeoKeel Harness"); font-size: 26px; line-height: 32px; font-weight: 500; }
 [class$="_previewBadge"] { font-size: 0; }
-[class$="_previewBadge"]::after { content: var(--pico-hero-tagline, ${JSON.stringify(tagline)}); font-size: 12px; line-height: 18px; font-weight: 500; font-family: var(--ds-font-family-code); }
+[class$="_previewBadge"]::after { content: var(--zeokeel-hero-tagline, ${JSON.stringify(tagline)}); font-size: 12px; line-height: 18px; font-weight: 500; font-family: var(--ds-font-family-code); }
 `
 
 /** 品牌兜底样式表元素（`paintBrandStyle` 注入/重绘，随语言变化）。 */
@@ -100,7 +100,7 @@ function applyChannelVars(channel: ChannelConfig | null): void {
  * 注入/重绘品牌兜底样式表。
  *
  * CSS `content: var(…)` 的**兜底字面量**是样式表求值那一刻定死的（CSS 读不到
- * 界面语言），所以必须可重绘：否则 `--pico-hero-tagline` 缺失时徽章会停在旧
+ * 界面语言），所以必须可重绘：否则 `--zeokeel-hero-tagline` 缺失时徽章会停在旧
  * 语言。实际渲染值走 CSS 变量（`applyChannelVars` 写入，本就是按语言取的）。
  */
 function paintBrandStyle(): void {
@@ -119,7 +119,7 @@ function paintBrandStyle(): void {
  *
  * The skill center (Capability Hub) panel and its sidebar foot action are
  * **not** registered here any more: since 2026-10-13 that whole client face
- * lives in `@picoaide/dsh-capability-center` (see that package's
+ * lives in `@zeokeel/dsh-capability-center` (see that package's
  * `src/client/index.ts`).
  * @param ctx - browser Cordis context.
  */
@@ -131,13 +131,13 @@ export function apply(ctx: ClientContext): void {
       // 第 112 行又启动一次 → 双订阅,首个 disposer 永不释放)。
       const offStore = startChannelStore(ctx)
       // v3b §4.2: hero CSS 变量注入(渠道配置变化时更新)。
-      // 注意: --pico-hero-headline/--pico-hero-tagline 被 brandCss() 的
+      // 注意: --zeokeel-hero-headline/--zeokeel-hero-tagline 被 brandCss() 的
       // `content: var(…)` 消费, content 只接受字符串字面量, 值必须带引号
       // 写入(buildChannelCSSVars 内 JSON.stringify), 否则整条声明非法、
       // hero 标题文字不可见(2026-09 实测)。渠道色已下线(2026-09 决策)。
       applyChannelVars(readChannelSync())
       // 渠道变更驱动 hero 变量(与 channel-store 同事件;此处仅应用 CSS 变量)。
-      const off = ctx.on('pico/channel-changed', (channel) => applyChannelVars(channel))
+      const off = ctx.on('zeokeel/channel-changed', (channel) => applyChannelVars(channel))
       // 播种(本地)同样要驱动变量:否则 hero 标题停在回落文案上。
       const offStoreValue = subscribeChannel((channel) => applyChannelVars(channel))
       return () => { off(); offStoreValue(); offStore() }
@@ -210,14 +210,14 @@ export function apply(ctx: ClientContext): void {
   )
 
   // 桌面 favicon: 替换上游 DeepSeek 鱼为官方花括号 mark(brands/official/logo.svg)。
-  // 桌面组装不含 @picoaide/dsh-branding, 本面是 desktop 唯一 favicon 覆盖点。
+  // 桌面组装不含 @zeokeel/dsh-branding, 本面是 desktop 唯一 favicon 覆盖点。
   ctx.effect(() => {
     installFavicon()
     return () => { /* favicon reverts on the next navigation */ }
   }, 'enterprise: desktop favicon')
 
   // 底部「更多」浮层条目与能力中心面板**不再在这里注册**（2026-10-13）：技能商店
-  // 的客户端面整块搬到 `@picoaide/dsh-capability-center`，条目 id（`capability`）、
+  // 的客户端面整块搬到 `@zeokeel/dsh-capability-center`，条目 id（`capability`）、
   // order（-1）、文案与 `activate` 都随面板一起过去，行为逐字不变。本包只保留基础面
   // （账号 / 渠道 / 品牌 / favicon / 文档标题）。
 
@@ -275,7 +275,7 @@ export function apply(ctx: ClientContext): void {
       }
     }
     apply(readChannelSync())
-    const off = ctx.on('pico/channel-changed', (channel) => apply(channel))
+    const off = ctx.on('zeokeel/channel-changed', (channel) => apply(channel))
     // 随包品牌的播种不经过 Host 事件,必须直接订阅 store 的值变化。
     const offStoreValue = subscribeChannel((channel) => apply(channel))
     const observer = new MutationObserver(() => apply(readChannelSync()))

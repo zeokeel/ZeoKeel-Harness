@@ -3,10 +3,10 @@
  *
  * 这是"页面在 DOM 里、用户点得到"的**第一层**证据（真实 DOM 点击证据在 CDP 探针里，
  * `temp/wasm-l/app-center-probe.mjs`）：如果这里没把应用中心条目登记进
- * `picoFootMenu`（底部唯一的「更多」行由 `@picoaide/dsh-foot-menu` 拥有）、
+ * `zeokeelFootMenu`（底部唯一的「更多」行由 `@zeokeel/dsh-foot-menu` 拥有）、
  * 或者没给 toast 宿主留下常驻挂载点，后面所有组件测试都可能全绿而产品里什么都没有。
  *
- * 变异验证：把 `ctx.picoFootMenu.add(…)` 删掉（或改 id/order）→ 本文件对应的
+ * 变异验证：把 `ctx.zeokeelFootMenu.add(…)` 删掉（或改 id/order）→ 本文件对应的
  * 登记断言红；把 toast 宿主的槽位注册删掉 →「toast 宿主仍有常驻挂载点」红。
  */
 import { afterEach, describe, expect, it } from 'vitest'
@@ -51,7 +51,7 @@ interface Fixture {
 }
 
 /**
- * @param options - `footRowEnabled: false` 模拟"提供 picoFootMenu 的那一行被禁用"。
+ * @param options - `footRowEnabled: false` 模拟"提供 zeokeelFootMenu 的那一行被禁用"。
  */
 function fixture(options: { footRowEnabled?: boolean } = {}): Fixture {
   const registered: Registered[] = []
@@ -77,7 +77,7 @@ function fixture(options: { footRowEnabled?: boolean } = {}): Fixture {
       effectRuns.push({ label, dispose: typeof dispose === 'function' ? dispose as () => void : () => {} })
       return () => {}
     },
-    // 宿主事件订阅（客户端半边用 `ctx.on('pico/…')` 接收宿主广播）。
+    // 宿主事件订阅（客户端半边用 `ctx.on('zeokeel/…')` 接收宿主广播）。
     on: (event: string, handler: (payload?: unknown) => void) => {
       events.push(event)
       const list = handlers.get(event) ?? []
@@ -101,8 +101,8 @@ function fixture(options: { footRowEnabled?: boolean } = {}): Fixture {
         return () => {}
       },
     },
-    // foot menu 登记表（`@picoaide/dsh-foot-menu` 提供；这里只记录调用）。
-    picoFootMenu: {
+    // foot menu 登记表（`@zeokeel/dsh-foot-menu` 提供；这里只记录调用）。
+    zeokeelFootMenu: {
       add: (entry: RegisteredFootEntry) => {
         footEntries.push(entry)
         return () => {
@@ -155,16 +155,16 @@ describe('客户端半边：异渠道深链 toast 的接缝（§5.3/§19 Q5）',
   it('别的宿主事件（打开应用 / 渠道变化）不得弹 toast', () => {
     const f = fixture()
     apply(f.ctx)
-    f.emit('pico/wasm-app-open', { app_id: 'x' })
-    f.emit('pico/channel-changed', null)
+    f.emit('zeokeel/wasm-app-open', { app_id: 'x' })
+    f.emit('zeokeel/channel-changed', null)
     expect(currentAppToast()).toBeNull()
   })
 })
 
 describe('客户端半边：apply 注册面', () => {
-  it('声明插件名与服务依赖（picoFootMenu 走子 fiber，不写进硬 inject）', () => {
-    expect(name).toBe('picoaide-wasm-apps-client')
-    // 硬 inject 的后果：提供 `picoFootMenu` 的那一行被渠道覆盖层 /
+  it('声明插件名与服务依赖（zeokeelFootMenu 走子 fiber，不写进硬 inject）', () => {
+    expect(name).toBe('zeokeel-wasm-apps-client')
+    // 硬 inject 的后果：提供 `zeokeelFootMenu` 的那一行被渠道覆盖层 /
     // `$DSH_HOME/cordis.patch.yml` 禁用时，整条 fiber 永久 pending（无报错），
     // 应用中心面板与 toast 挂载点一起消失（P1-7 教训）⇒ 只在子 fiber 里等它。
     expect(inject).toEqual(['slots', 'locale'])
@@ -173,7 +173,7 @@ describe('客户端半边：apply 注册面', () => {
   it('在子 fiber 里等服务到位后再登记条目', () => {
     const f = fixture()
     apply(f.ctx)
-    expect(f.serviceWaits).toEqual([['picoFootMenu']])
+    expect(f.serviceWaits).toEqual([['zeokeelFootMenu']])
   })
 
   it('foot 行被禁用 ⇒ 面板与 toast 挂载点照常（只有条目等不到）', () => {
@@ -186,7 +186,7 @@ describe('客户端半边：apply 注册面', () => {
     expect(f.effectRuns.map(item => item.label)).toContain('wasm-apps: foreign deep-link toast')
   })
 
-  it('把应用中心条目登记到 picoFootMenu（用户点得到的那个浮层）', () => {
+  it('把应用中心条目登记到 zeokeelFootMenu（用户点得到的那个浮层）', () => {
     const f = fixture()
     apply(f.ctx)
     expect(f.footEntries).toHaveLength(1)

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/skillmanifest"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
 )
 
 // AgentPresetStatus is the review state of one shared agent preset.

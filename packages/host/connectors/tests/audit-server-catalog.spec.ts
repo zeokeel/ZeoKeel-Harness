@@ -4,7 +4,7 @@ import { parseServerConnectors } from '../src/index.ts'
 /**
  * Contract test with the PRODUCTION catalog (captured 2026-09-14 from the beta
  * environment's `connectors` table, enabled rows only). 客户自有 MCP 端点已按仓库规则
- * 换成占位符主机 `mcp.example.com` —— 真实端点属私有仓 `picoaide/channels` 与部署侧
+ * 换成占位符主机 `mcp.example.com` —— 真实端点属私有仓 `zeokeel/channels` 与部署侧
  * 配置，**不得**写回本文件（`node scripts/check-no-real-domains.mjs` 会拦）。The bootstrap route
  * emits exactly `{id,name,description,auth_mode,definition}` and the client
  * parser must accept every real definition: a drift here means "the admin saved

@@ -47,13 +47,13 @@ const APP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.-]*$/u
 
 /** 官方渠道的编译期默认值 = 改造前 package.json build 块里的字面量。 */
 export const OFFICIAL_BUILD_DEFAULTS = {
-  productName: 'PicoAide Harness',
-  appId: 'ai.deepseek.dsh.desktop',
-  slug: 'PicoAide-Harness',
-  shortcutName: 'PicoAide Harness',
-  linuxMaintainer: 'picoaide',
-  linuxSynopsis: 'PicoAide Harness',
-  deepLinkScheme: 'picoaide',
+  productName: 'ZeoKeel Harness',
+  appId: 'com.zeokeel.harness',
+  slug: 'ZeoKeel-Harness',
+  shortcutName: 'ZeoKeel Harness',
+  linuxMaintainer: 'zeokeel',
+  linuxSynopsis: 'ZeoKeel Harness',
+  deepLinkScheme: 'zeokeel',
 } as const
 
 /** 安装包名模板：`${version}`/`${arch}`/`${ext}` 由 electron-builder 展开。 */
@@ -72,7 +72,7 @@ export interface ChannelArtifactNames {
  * 用 `import(file://…/channel-constants.ts)` 读这两份清单，而它们要在
  * **只 checkout、不 install 也不 build** 的 release job 里跑（2026-09-28 的 tag 事故：
  * 常量曾经写在本模块里，而本模块顶端 import `../src/desktop-home.ts`
- * ⇒ `Cannot find package '@picoaide/dsh-host-home'` ⇒ 整个 tag 发布链在取渠道包那一步红，
+ * ⇒ `Cannot find package '@zeokeel/dsh-host-home'` ⇒ 整个 tag 发布链在取渠道包那一步红，
  * 而 PR/分支 CI 看不见，因为 release job 只在 tag 上跑）。细节见该文件头注释。
  *
  * 这里 re-export，打包链路的既有 import 面不变。
@@ -476,7 +476,7 @@ export function prepareChannelBuilderOverrides(
  * 用官方默认值。
  *
  * **为什么验证脚本必须走它**：窗口标题/应用名是白标最直观的一面，历史上
- * 多处验证脚本硬编码 `'PicoAide Harness'` 或只读 `package.json` —— 渠道构建下
+ * 多处验证脚本硬编码 `'ZeoKeel Harness'` 或只读 `package.json` —— 渠道构建下
  * 那是客户的名字，于是这些"门禁"要么永远红（渠道矩阵被卡死），要么把厂商名
  * 反向锁进发布链。断言应当对齐"这次构建声明了什么"，而不是某个具体品牌。
  * @param buildDir - `packages/host/desktop/build` 目录（默认仓库内该目录）。

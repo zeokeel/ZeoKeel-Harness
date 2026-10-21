@@ -1,6 +1,6 @@
 /**
  * Browser surface seam（§16.1「surface 抽象」冻结）—— 浏览器插件对外的**唯一**
- * 目标注册面，`@picoaide/dsh-browser/surface` 子路径导出。
+ * 目标注册面，`@zeokeel/dsh-browser/surface` 子路径导出。
  *
  * 背景（W-C 裁决）：应用窗口是**独立 `BrowserWindow`**，但它要和内置浏览器**共享
  * 同一套工具实现与胶囊/遮罩** —— 否则 `browser_*` 工具面会长出第二份实现，两份
@@ -22,11 +22,11 @@
  * `webContents` 当不透明句柄传进来。
  *
  * 第四件东西也在这里：**分区名公式的唯一实现**（{@link browserPartitionFor}）。
- * `persist:` 分区名跨包镜像过一次（`@picoaide/dsh-wasm-apps-host/partition` 是同一
+ * `persist:` 分区名跨包镜像过一次（`@zeokeel/dsh-wasm-apps-host/partition` 是同一
  * 公式的副本），两份实现发散的症状是"协议 handler 注册在一个没人用的分区上 ⇒ 应用
  * 页面空白"。把公式放在本子路径导出，宿主侧才可以只保留一份。
  *
- * @module @picoaide/dsh-browser/surface
+ * @module @zeokeel/dsh-browser/surface
  */
 
 import { createHash } from 'node:crypto'
@@ -41,7 +41,7 @@ export const MAX_BROWSER_TABS = 16
 export const BROWSER_SURFACE_SERVICE = 'browserSurface'
 
 /**
- * 分区名里一个段的编码（与 `@picoaide/dsh-connectors` 的 `user-scope.ts`
+ * 分区名里一个段的编码（与 `@zeokeel/dsh-connectors` 的 `user-scope.ts`
  * `encodeSegment` 逐字一致）：`A-Za-z0-9_-` 原样、其余 `~<HEX>~`，空输入回落
  * `anonymous`。编码必须是**单射**：两个用户名编码成同一个段会让两个人的分区相撞。
  * @param segment - 原始用户名（或空）。
@@ -92,7 +92,7 @@ export function serverPartitionHash(serverURL: string | null | undefined): strin
  * 匿名（未登录）没有租户可隔离 ⇒ **不带**后缀（`persist:agent-browser-anonymous`
  * 逐字节不变：应用窗口与浏览器标签共用它，改一个字两边就落在不同 session 上）。
  *
- * `@picoaide/dsh-wasm-apps-host/partition` 是同一公式的镜像（该包不允许反向依赖
+ * `@zeokeel/dsh-wasm-apps-host/partition` 是同一公式的镜像（该包不允许反向依赖
  * 本包）；`tests/partition-parity.spec.ts` 用真实 Node 跑那份实现并逐例对拍，漂移
  * 即红。
  * @param username - 当前登录用户名；null/undefined/空串 = 未登录。
@@ -183,7 +183,7 @@ export interface BrowserSurface {
   /**
    * 应用窗口是否处于**崩溃 / 加载失败**状态（R16B-19；`kind:'app'`）。
    *
-   * 唯一写入点是宿主（`@picoaide/dsh-wasm-apps-host` 的 `windows.ts`，它订阅原生
+   * 唯一写入点是宿主（`@zeokeel/dsh-wasm-apps-host` 的 `windows.ts`，它订阅原生
    * `render-process-gone` / `did-fail-load`）。**缺省 = 健康**：浏览器标签的崩溃态
    * 来自池子（`BrowserTabState.crashed`），不走这个字段。
    *
@@ -440,7 +440,7 @@ export function createSurfaceRegistry(options: SurfaceRegistryOptions): SurfaceR
         if (address.tab !== undefined) {
           // 同时给了 tab 与 app_id 是矛盾的寻址：宁可拒绝，也不要"随便挑一个"
           // （工具面宁可让模型重问一次，也不要在错的窗口上执行动作）。
-          warn(`pico-browser: refusing an ambiguous surface address (tab=${String(address.tab)} app_id=${address.appId})`)
+          warn(`zeokeel-browser: refusing an ambiguous surface address (tab=${String(address.tab)} app_id=${address.appId})`)
           return { ok: false, reason: 'app-not-addressable-by-tab' }
         }
         return { ok: true, surface }

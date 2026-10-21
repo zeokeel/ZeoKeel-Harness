@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // startEnable 走 enable 第一步（主密码 → secret + ticket）。

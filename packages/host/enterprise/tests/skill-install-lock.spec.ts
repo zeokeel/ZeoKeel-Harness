@@ -2,7 +2,7 @@
  * tests/skill-install-lock.spec.ts — 独立复审 r3 **F3** 的回归（安装器侧 + 跨端）：
  * 「随包同步」与「能力中心安装器」必须**互斥**，否则并发下会落到
  *
- *   内容是插件版 + `.picoaide` 是市场版 + 市场内容被删
+ *   内容是插件版 + `.zeokeel` 是市场版 + 市场内容被删
  *
  * 这个终态（复审 temp/verify-skill-r3 实测 5/5、真实体量 20 轮 15 轮），而且此后
  * 插件侧永久 `SKILL_CHANNEL_CONFLICT` 拒收该目录 ⇒ **不会自愈**。
@@ -101,10 +101,10 @@ async function seedSyncPair(root: string): Promise<{ pluginSkills: string; userS
   await mkdir(join(pluginSkills, MARKER, 'scripts'), { recursive: true })
   await writeFile(join(pluginSkills, MARKER, 'SKILL.md'), `---\nname: ${MARKER}\ndescription: bundled\nx-version: 2\n---\n# BUNDLED\n`)
   await writeFile(join(pluginSkills, MARKER, 'scripts', 'helper.mjs'), '// HELPER\n')
-  await mkdir(join(userSkills, MARKER, '.picoaide'), { recursive: true })
+  await mkdir(join(userSkills, MARKER, '.zeokeel'), { recursive: true })
   await writeFile(join(userSkills, MARKER, 'SKILL.md'), `---\nname: ${MARKER}\ndescription: installed\nx-version: 1\n---\n# INSTALLED-OLD\n`)
   await writeFile(
-    join(userSkills, MARKER, '.picoaide', 'release.json'),
+    join(userSkills, MARKER, '.zeokeel', 'release.json'),
     `${JSON.stringify({ appId: MARKER, version: '1', channel: 'plugin', installedAt: '2026-09-01T00:00:00.000Z' }, null, 2)}\n`,
   )
   return { pluginSkills, userSkills }

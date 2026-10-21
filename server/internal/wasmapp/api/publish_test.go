@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/wasmapp/appcfg"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // ===========================================================================
@@ -120,7 +120,7 @@ func TestPublishHappyPath(t *testing.T) {
 		t.Fatalf("assets_dir 应留空（资源不再落盘）：%q", rel.AssetsDir)
 	}
 
-	// 应用自己读到的那份配置（宿主注入内存资源集的 picoaide.app.json）= **库内**版本行
+	// 应用自己读到的那份配置（宿主注入内存资源集的 zeokeel.app.json）= **库内**版本行
 	// 的 config_json。资源不落盘以后这是唯一权威副本，所以断言改在这里。
 	var cfg appcfg.Config
 	if jerr := json.Unmarshal([]byte(rel.ConfigJSON), &cfg); jerr != nil {
@@ -820,7 +820,7 @@ func TestPublishAssetLimitsRejectBeforeCommit(t *testing.T) {
 		t.Fatalf("总量超限应给出 details.total: %v", eb.Details)
 	}
 
-	// ③ 平台注入的 picoaide.app.json 也占额度（口径与 assets.Build 逐字一致）。
+	// ③ 平台注入的 zeokeel.app.json 也占额度（口径与 assets.Build 逐字一致）。
 	eb = checkPublishAssets(map[string][]byte{"a.png": make([]byte, max-8)}, make([]byte, 64))
 	if eb == nil || eb.Code != apperr.CodeAssetOversize {
 		t.Fatalf("配置文件也让总量越界时必须被拒，得到 %+v", eb)
@@ -905,7 +905,7 @@ func TestPublishDuplicateAssetSectionRejected(t *testing.T) {
 }
 
 // TestPublishDuplicateNonAssetSectionsStillAllowed 是上一条的**反向控制**：
-// 工具链元数据段（`producers`）与平台独占的 `picoaide.app.json` 重复出现**不得**被
+// 工具链元数据段（`producers`）与平台独占的 `zeokeel.app.json` 重复出现**不得**被
 // 重名闸门误伤（它们本来就可能重复/被忽略，判据只罩保留下来的资源段）。
 func TestPublishDuplicateNonAssetSectionsStillAllowed(t *testing.T) {
 	e := newTestEnv(t)
@@ -921,7 +921,7 @@ func TestPublishDuplicateNonAssetSectionsStillAllowed(t *testing.T) {
 		got[fmt.Sprint(name)] = true
 	}
 	if !got["producers"] || !got[limits.AppConfigFileName] {
-		t.Fatalf("工具链段与 picoaide.app.json 应被忽略并报告，得到 %v", ignored)
+		t.Fatalf("工具链段与 zeokeel.app.json 应被忽略并报告，得到 %v", ignored)
 	}
 	// 资源只有段里真正的那份配置被注入 ⇒ 库内 config_json 是**平台解析后的**配置。
 	r, err := serverstore.GetWasmRelease(t.Context(), e.db, "dup-meta-tool", "1.0.0")

@@ -1,7 +1,7 @@
 /**
  * 窄接口契约的**判据**（2026-10-13，"去连接器耦合"）。
  *
- * 背景：`src/index.ts` 原先用 `as typeof import('@picoaide/dsh-connectors/store')`
+ * 背景：`src/index.ts` 原先用 `as typeof import('@zeokeel/dsh-connectors/store')`
  * 把连接器包的类型嵌进本包的编译期 —— 那是真边，代价是**连接器模块被关掉之后
  * 浏览器包连编译都过不去**（干净态实测：connectors/lib 不在时 tsc 报 2 条 TS2307）。
  * 现在契约在 `src/connectors-contract.ts` 本地声明（窄接口），编译期那层"对面的
@@ -38,7 +38,7 @@ let home: string
 let previousHome: string | undefined
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'pico-browser-contract-'))
+  home = mkdtempSync(join(tmpdir(), 'zeokeel-browser-contract-'))
   previousHome = process.env['DSH_HOME']
   process.env['DSH_HOME'] = home
 })

@@ -67,11 +67,11 @@ function def(origin: string, headers: Record<string, string>): ConnectorDef {
 }
 
 async function connectAndAuthorize(h: ReturnType<typeof createHarness>): Promise<Record<string, unknown>> {
-  await callRoute(h, '/api/pico/connectors/probe-mcp/connect', 'POST')
+  await callRoute(h, '/api/zeokeel/connectors/probe-mcp/connect', 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline) {
-    const res = await callRoute(h, '/api/pico/connectors/probe-mcp/state', 'GET')
+    const res = await callRoute(h, '/api/zeokeel/connectors/probe-mcp/state', 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } }).request?.authorizeUrl
     if (url) break
     await new Promise(resolve => setTimeout(resolve, 25))
@@ -314,7 +314,7 @@ describe('R10-B-05: prototype-named headers are ordinary entries; __proto__ is r
         updatedAt: Date.now(),
         ...(current?.fields === undefined ? {} : { fields: current.fields }),
       })
-      h.emit('pico/connector-credentials-changed', { id: 'probe-mcp' })
+      h.emit('zeokeel/connector-credentials-changed', { id: 'probe-mcp' })
 
       // The contrast header proves the deletion sweep really ran (otherwise the
       // second assertion could be vacuous), and the record must not be replaced:

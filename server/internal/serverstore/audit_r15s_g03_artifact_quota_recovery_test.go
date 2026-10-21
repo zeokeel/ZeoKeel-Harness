@@ -26,8 +26,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/registry"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
 // r15sInsertBigRelease 直接落一行带**逻辑大**制品的版本：PG 的 TOAST 会把

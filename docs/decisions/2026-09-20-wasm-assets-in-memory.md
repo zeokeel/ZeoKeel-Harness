@@ -17,11 +17,11 @@
 
 1. **两条链路必须各写一遍"抽段落盘"**。演示应用不走 HTTP 发布链路（启动时由
    `appseed` 直接落 `apps` / `app_releases` 行），于是它也必须自己把段抽到磁盘 ——
-   而它只写了 `picoaide.app.json`，三个新演示（前后端分离，页面在 `web/`）的
+   而它只写了 `zeokeel.app.json`，三个新演示（前后端分离，页面在 `web/`）的
    `index.html` / `static/*` 从未落盘 ⇒ 入口页 `assets.read("index.html")` 500。
    这不是"忘了写一行"，而是"同一件事有两处实现"的必然结果。
 2. **磁盘与库两份权威**。应用配置同时存在于 `app_releases.config_json` 与磁盘
-   `<release>/picoaide.app.json`，必须写一致性判据（`releaseAssetsIncompleteReason`）
+   `<release>/zeokeel.app.json`，必须写一致性判据（`releaseAssetsIncompleteReason`）
    并做半成品自愈，否则会出现"库说 A、盘说 B"。这是纯粹由冗余引入的复杂度。
 3. **磁盘即攻击面**。路径要逐段 `Lstat` 拒符号链接、要 realpath 前缀比对、要
    原子写（temp + fsync + rename）防半写、要防"抽取目录自身是指向根外的链接"。
@@ -46,7 +46,7 @@
 | --- | --- |
 | 资源上限 | 不变：单文件与段总量同源 `limits.SectionTotalMaxBytes`（4 MiB/版本） |
 | 逻辑路径规则 | 不变：相对、`/` 分隔、无 `..`/冒号/控制字符、`MaxPathBytes`/`MaxSegmentBytes` |
-| 保留资源 | `picoaide.app.json` 仍由平台独占：模块里的同名段忽略，运行期由**库内** `config_json` 注入内存资源集，仍然永不直出 |
+| 保留资源 | `zeokeel.app.json` 仍由平台独占：模块里的同名段忽略，运行期由**库内** `config_json` 注入内存资源集，仍然永不直出 |
 | 工具链元数据段 | 仍不作为资源（`name` / `producers` / `go:buildid` …），判据与打包脚本同源 |
 | 响应缓存 | ETag 仍 = `hash(app_id ‖ version ‖ path ‖ content)`，`Cache-Control: private, max-age=5min`，`If-None-Match` 304 不重算 |
 | 准入与状态 | 冻结/下架/删除/未登记/无 approved 版本的行为一字不变 |

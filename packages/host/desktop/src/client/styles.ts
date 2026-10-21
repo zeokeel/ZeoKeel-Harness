@@ -28,13 +28,13 @@ body[data-dsh-desktop-mode="advanced"] { margin: 0; background: transparent !imp
    模态关闭立刻回到透明，原生材质照旧透出；宿主必须**卸载**模态节点（:has() 不看可见性，
    隐藏而不卸载会让左栏一直不透明）。
    选择器只用 html:has() 加我们自己的稳定类名，绝不写上游 CSS-module 的哈希类名；
-   role=dialog 与 aria-modal 同时要求，与 @picoaide/dsh-panel-surface 的模态判据同形。
+   role=dialog 与 aria-modal 同时要求，与 @zeokeel/dsh-panel-surface 的模态判据同形。
 
    两条必须知道的耦合（2026-09-23 审计 D1/D2/D6）：
    1) 面板内的内联确认块之所以不触发，是它的 role="alertdialog" 与本判据的 role="dialog"
       **不同名** —— 与"有没有整视口蒙版"无关（合成场景已证：无蒙版的
       role="dialog" aria-modal="true" 照样命中）。而 aria-modal="true" 在本仓兼作 **Esc
-      协议信号**：@picoaide/dsh-panel-surface 与 foot-menu 都只看 dialog+aria-modal 决定
+      协议信号**：@zeokeel/dsh-panel-surface 与 foot-menu 都只看 dialog+aria-modal 决定
       Esc 是否让位，account-card 反过来因此故意不加它。所以后人给一个**没有蒙版**的浮层
       写上 role="dialog" aria-modal="true"，左栏就会在没有任何蒙版时静默放弃原生材质 ——
       新增模态时必须连带考虑本条规则。

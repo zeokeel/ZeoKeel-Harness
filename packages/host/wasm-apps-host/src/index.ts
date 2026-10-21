@@ -3,7 +3,7 @@
  *
  * 契约：`docs/planning/2026-09-19-wasm-client-only-design.md`（§5/§7/§16.1/§20/§21/§22）。
  * 本插件只拥有**传输与生命周期**：把应用页发出的每个请求转成平台 JSON 信封、带员工
- * 令牌与 `X-Pico-App-Proof` POST 到 `/api/client/v2/apps/wasm/:app_id/request`、再把
+ * 令牌与 `X-ZeoKeel-App-Proof` POST 到 `/api/client/v2/apps/wasm/:app_id/request`、再把
  * 响应还原成 `Response`；准入/静态/执行/计量全部在服务端 `serveApp`，这里**不复制
  * 任何业务逻辑**。
  *
@@ -13,20 +13,20 @@
  * `registerAppScheme(appOriginScheme)`（scheme 来自渠道包，见 `src/main.ts`）。
  *
  * 本机路由（**全部经 {@link createHostRequestSurface} 这一个 seam**，§22.2 R1/R2）：
- *   GET  /api/pico/wasm-apps/host-proof  引导：签发本机持有性令牌
- *   POST /api/pico/wasm-apps/open        {app_id, path?} -> {window, app_id, url}
- *   GET  /api/pico/wasm-apps/channel     {appOriginScheme, deepLinkScheme, productName}
- * 除引导外都要求请求头 `X-Pico-Host-Proof`（不用 Cookie/Host/Origin/端口）。
+ *   GET  /api/zeokeel/wasm-apps/host-proof  引导：签发本机持有性令牌
+ *   POST /api/zeokeel/wasm-apps/open        {app_id, path?} -> {window, app_id, url}
+ *   GET  /api/zeokeel/wasm-apps/channel     {appOriginScheme, deepLinkScheme, productName}
+ * 除引导外都要求请求头 `X-ZeoKeel-Host-Proof`（不用 Cookie/Host/Origin/端口）。
  *
- * @module @picoaide/dsh-wasm-apps-host
+ * @module @zeokeel/dsh-wasm-apps-host
  */
 
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { BROWSER_SURFACE_SERVICE } from '@picoaide/dsh-browser/surface'
-import { createSessionEpoch } from '@picoaide/dsh-host-locale/session-events'
+import { BROWSER_SURFACE_SERVICE } from '@zeokeel/dsh-browser/surface'
+import { createSessionEpoch } from '@zeokeel/dsh-host-locale/session-events'
 import { DEFAULT_APP_SCHEME, appOrigin, appSchemePrefix, isValidAppId } from './app-protocol.ts'
 import { AI_CHAT_PATH, handleAiChat, type AiChatAuthorization, type AiChatTurnRunner } from './ai-chat.ts'
 import { AI_CONSENT_FILE_NAME, createAiChatAuthorization, isAiConsentScopeError } from './ai-authorization.ts'
@@ -43,7 +43,7 @@ import { registerAppRoutes, type HostLocalRouteFence } from './app-routes.ts'
 import { hostCopy, hostLocaleFrom, type HostLocale } from './locale.ts'
 import { browserPartitionFor, serverPartitionHash } from './partition.ts'
 import { createScopeReset } from './scope-reset.ts'
-import { readAppSession, subscribePicoSession, type PicoSessionLike } from './session.ts'
+import { readAppSession, subscribeZeoKeelSession, type ZeoKeelSessionLike } from './session.ts'
 import { createWindowCatalog } from './window-catalog.ts'
 import {
   createWasmAppsWindows,
@@ -53,7 +53,7 @@ import {
 } from './windows.ts'
 
 /** Cordis 插件名（loader 诊断用）。 */
-export const name = 'pico-wasm-apps-host'
+export const name = 'zeokeel-wasm-apps-host'
 
 /**
  * 渠道功能模块 `apps` 的**端到端哨兵串**（契约见
@@ -68,7 +68,7 @@ export const name = 'pico-wasm-apps-host'
  * 打进去），而且哨兵判据必须**双侧** —— 开启变体里必须也存在，这个量具才算数。
  * 串的命名规则唯一真源是 `channel-constants.ts` 的 `featureSentinel()`。
  */
-export const WASM_APPS_FEATURE_SENTINEL = 'picoaide.feature.apps.v1'
+export const WASM_APPS_FEATURE_SENTINEL = 'zeokeel.feature.apps.v1'
 
 /**
  * 本插件需要的服务：员工会话（enterprise 提供）与本机 webServer（本机路由）。
@@ -76,7 +76,7 @@ export const WASM_APPS_FEATURE_SENTINEL = 'picoaide.feature.apps.v1'
  * 适配器**不进 inject**：它是桌面壳 `provide` 进来的普通值，且允许缺席（纯 Node
  * 宿主/单测）—— 缺席时协议注册是 no-op 并记一条 warn，本机路由 fail-closed。
  */
-export const inject = ['picoSession', 'webServer', 'picoLocalRoutes']
+export const inject = ['zeokeelSession', 'webServer', 'zeokeelLocalRoutes']
 
 /** 桌面壳 `provide` 适配器用的服务名。 */
 export const WASM_APPS_HOST_ADAPTER_SERVICE = 'wasmAppsHostAdapter'
@@ -97,7 +97,7 @@ export const WASM_APPS_AI_AUTHORIZATION_SERVICE = 'wasmAppsAiAuthorization'
  * 本机应用面路由前缀（**唯一入口**）：写面（打开）与只读面（渠道 scheme、本机证明
  * 引导）都挂在这一个前缀下，seam 内按 pathname + method 分发。
  */
-export const WASM_APPS_LOCAL_PREFIX = '/api/pico/wasm-apps'
+export const WASM_APPS_LOCAL_PREFIX = '/api/zeokeel/wasm-apps'
 
 /** 本机"打开应用"路由（**冻结路径**；契约 §5.2）。 */
 export const WASM_APP_OPEN_ROUTE = `${WASM_APPS_LOCAL_PREFIX}/open`
@@ -115,7 +115,7 @@ export const WASM_APP_CHANNEL_ROUTE = `${WASM_APPS_LOCAL_PREFIX}/channel`
 export const WASM_APP_AI_CONSENT_ROUTE = `${WASM_APPS_LOCAL_PREFIX}/ai/consent`
 
 /** 打开一个应用时在宿主内部广播的事件（客户端面据此给反馈/开面板）。 */
-export const WASM_APP_OPEN_EVENT = 'pico/wasm-app-open'
+export const WASM_APP_OPEN_EVENT = 'zeokeel/wasm-app-open'
 
 /**
  * **异渠道**应用深链事件（接缝 J13，事件名逐字冻结）：链接形状是应用深链、app_id 合法，
@@ -125,7 +125,7 @@ export const WASM_APP_OPEN_EVENT = 'pico/wasm-app-open'
  * 谁都不会红（本仓历史上 5 个 P0 的同一失效模式）。客户端面收到后弹一次性 toast
  * （§19 Q5 的冻结文案由客户端包持有）。
  */
-export const WASM_APP_DEEP_LINK_FOREIGN_EVENT = 'pico/wasm-app-deep-link-foreign'
+export const WASM_APP_DEEP_LINK_FOREIGN_EVENT = 'zeokeel/wasm-app-deep-link-foreign'
 
 /** 本机路由请求体上限（只有一个 app_id + path，不需要更多）。 */
 const OPEN_REQUEST_BODY_MAX_BYTES = 64 * 1024
@@ -194,12 +194,12 @@ declare module '@deepseek-ai/cordis' {
      * 载荷是**内部 URL**（`<scheme>://<app_id>/`）：消费者（客户端面的入口提示）
      * 可直接用它做展示或对账。
      */
-    'pico/wasm-app-open'(request: { app_id: string, url: string }): void
+    'zeokeel/wasm-app-open'(request: { app_id: string, url: string }): void
     /**
      * 收到**另一家企业/渠道**客户端的应用深链（接缝 J13）。
      * 客户端面据此弹一次性提示；载荷只用于诊断，不用于拼接任何 URL。
      */
-    'pico/wasm-app-deep-link-foreign'(request: { app_id: string, scheme: string }): void
+    'zeokeel/wasm-app-deep-link-foreign'(request: { app_id: string, scheme: string }): void
   }
 }
 
@@ -238,15 +238,15 @@ function parseJsonBody(body: Uint8Array): unknown {
 
 /**
  * 注册协议 origin 插件。
- * @param ctx - Cordis 上下文（注入 `picoSession` 与 `webServer`）。
+ * @param ctx - Cordis 上下文（注入 `zeokeelSession` 与 `webServer`）。
  * @param config - scheme / 产品名 / 分区覆盖 / 出站预算。
  */
 export function apply(ctx: Context, config: Config = {}): void {
   // 渠道功能模块 `apps` 的装配哨兵（见 WASM_APPS_FEATURE_SENTINEL 的说明）：
   // 一行 info 日志，让"这个模块在这次装配里真的到位了"在端到端产物里有一条可查的痕迹。
-  ctx.logger?.info?.(`pico-wasm-apps-host: registered (${WASM_APPS_FEATURE_SENTINEL})`)
+  ctx.logger?.info?.(`zeokeel-wasm-apps-host: registered (${WASM_APPS_FEATURE_SENTINEL})`)
   const warn = (message: string): void => { ctx.logger?.warn?.(message) }
-  const service = (): PicoSessionLike | undefined => ctx.get('picoSession') as PicoSessionLike | undefined
+  const service = (): ZeoKeelSessionLike | undefined => ctx.get('zeokeelSession') as ZeoKeelSessionLike | undefined
   const currentSession = (): ReturnType<typeof readAppSession> => readAppSession(service())
   /**
    * 宿主语言**按调用**解析（`desktopRuntime.locale` → `Accept-Language` → zh）：
@@ -261,7 +261,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     : DEFAULT_APP_SCHEME
   const productName = config.productName !== undefined && config.productName !== ''
     ? config.productName
-    : 'PicoAide Harness'
+    : 'ZeoKeel Harness'
   const deepLinkScheme = config.deepLinkScheme
 
   const adapter = ctx.get(WASM_APPS_HOST_ADAPTER_SERVICE) as WasmAppsHostAdapter | undefined
@@ -361,7 +361,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     return session === null ? null : `${session.serverURL}\u0000${session.username ?? ''}`
   }
   /**
-   * 会话**代际**（唯一实现 = `@picoaide/dsh-host-locale/session-events` 的
+   * 会话**代际**（唯一实现 = `@zeokeel/dsh-host-locale/session-events` 的
    * `createSessionEpoch`；第二十六轮 Z2-01 / 第二十七轮 AA3-01 建立的收口口径）。
    *
    * 为什么需要它（第三十三轮 FIX-49 ④ / AD1-02 的 `requestOpen` 顺序面）：
@@ -434,7 +434,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       try {
         service()?.clear?.()
       } catch (cause) {
-        warn(`pico-wasm-apps-host: clearing the session failed (${cause instanceof Error ? cause.message : String(cause)})`)
+        warn(`zeokeel-wasm-apps-host: clearing the session failed (${cause instanceof Error ? cause.message : String(cause)})`)
       }
     },
     hostLocale,
@@ -475,7 +475,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       adapter.installAppSchemeRequestGate?.(appScheme, isAppSurfaceWebContents)
       defaultRegistered = true
     } catch (cause) {
-      warn(`pico-wasm-apps-host: registering the app protocol on the default session failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: registering the app protocol on the default session failed (${cause instanceof Error ? cause.message : String(cause)})`)
     }
     return defaultRegistered
   }
@@ -494,7 +494,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       registeredPartitions.add(partition)
       return true
     } catch (cause) {
-      warn(`pico-wasm-apps-host: registering the app protocol on partition ${JSON.stringify(partition)} failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: registering the app protocol on partition ${JSON.stringify(partition)} failed (${cause instanceof Error ? cause.message : String(cause)})`)
       return false
     }
   }
@@ -516,7 +516,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   const currentPartition = (): string => partitionFor(currentSession())
 
   if (adapter === undefined) {
-    warn('pico-wasm-apps-host: no Electron adapter was provided; the application protocol stays unregistered')
+    warn('zeokeel-wasm-apps-host: no Electron adapter was provided; the application protocol stays unregistered')
   } else {
     registerDefault()
   }
@@ -531,7 +531,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   /**
    * browser runtime 的应用窗口 surface 注册表（§16.1，`kind:'app'`）。
    *
-   * 取值方式是 `inject`（不是 `ctx.get`）：`browserSurface` 由 `@picoaide/dsh-browser`
+   * 取值方式是 `inject`（不是 `ctx.get`）：`browserSurface` 由 `@zeokeel/dsh-browser`
    * **provide**，而 profile 里 browser 行在本插件**之后**加载 —— 用 `ctx.get` 会永久拿到
    * `undefined`（这正是"`registerApp` 零生产调用点"的结构性原因之一）。`inject` 的回调
    * 在服务出现时执行；回调里补注册已经开着的窗口（深链可以在那之前就把窗口开出来）。
@@ -588,7 +588,7 @@ export function apply(ctx: Context, config: Config = {}): void {
    *
    * 为什么闸门必须在这一层（R4-B-16，审计 2026-09-23）：`openGate.check` 此前只有本机
    * 路由调，深链与队列消费完全绕过它 ⇒ ① 拿不到 `changed`，不清该应用在本 session-scope
-   * 下的版本缓存，而 `handler.ts` 会把宿主的旧版本写进 `X-PicoAide-App-Version` **覆盖
+   * 下的版本缓存，而 `handler.ts` 会把宿主的旧版本写进 `X-ZeoKeel-App-Version` **覆盖
    * 平台下发的版本头**；② 不产生打开计数（PV/UV 偏低）；③ 404/410 的生命周期反应（关窗 +
    * 清缓存）与"版本无法确认则不打开"的硬闸门都不执行。冻结设计 §5.1b 明写「每次「打开」
    * 动作调一次；**深链打开同样调用**」，因此判据只能是"这一层调了"，不是"路由里调了"。
@@ -655,20 +655,20 @@ export function apply(ctx: Context, config: Config = {}): void {
         if (!sessionEpochs.isCurrent(generation)) return { kind: 'unavailable' }
         knownVersions.delete(appId)
         knownTitles.delete(appId)
-        warn(`pico-wasm-apps-host: the platform reported ${appId} as unavailable (HTTP ${String(gate.status)} ${gate.code}); closing its window and dropping its cache`)
+        warn(`zeokeel-wasm-apps-host: the platform reported ${appId} as unavailable (HTTP ${String(gate.status)} ${gate.code}); closing its window and dropping its cache`)
         await windows?.close(appId)
         // 换代检查点 ③b（关窗之后）：`refused` 携带的是**上一代**平台答复的结论 ——
         // 换代之后不能再把它当成当前会话的结论交回调用方。
         if (!sessionEpochs.isCurrent(generation)) return { kind: 'unavailable' }
       } else if (frozen) {
         // 窗口与缓存一律保留（只读快照仍是可看的内容）；只记一条诊断。
-        warn(`pico-wasm-apps-host: the platform reported ${appId} as frozen (HTTP ${String(gate.status)} ${gate.code}); keeping its window and cache`)
+        warn(`zeokeel-wasm-apps-host: the platform reported ${appId} as frozen (HTTP ${String(gate.status)} ${gate.code}); keeping its window and cache`)
       }
       return { kind: 'refused', gate }
     }
     if (gate.kind === 'unreachable' && !alreadyOpen) {
       // 硬闸门：连平台都问不到版本就不建窗（深链/队列同样不打开，只记一条 warn）。
-      warn(`pico-wasm-apps-host: refusing to open ${appId}: the app version could not be confirmed (${gate.detail})`)
+      warn(`zeokeel-wasm-apps-host: refusing to open ${appId}: the app version could not be confirmed (${gate.detail})`)
       return { kind: 'refused', gate }
     }
     if (gate.kind === 'ok') {
@@ -725,16 +725,16 @@ export function apply(ctx: Context, config: Config = {}): void {
       const next = pendingLinks.shift()
       if (next === undefined) return
       void requestOpen(next.appId, next.path).catch((cause: unknown) => {
-        warn(`pico-wasm-apps-host: opening a queued app link failed (${cause instanceof Error ? cause.message : String(cause)})`)
+        warn(`zeokeel-wasm-apps-host: opening a queued app link failed (${cause instanceof Error ? cause.message : String(cause)})`)
       })
     }
   }
 
   // ---- 深链：<渠道 scheme>://app/<app_id>[?path=]（严格校验，未知一律丢弃） ----
   if (deepLinkScheme === undefined || deepLinkScheme === '') {
-    warn('pico-wasm-apps-host: no deep-link scheme was injected; app deep links will be ignored')
+    warn('zeokeel-wasm-apps-host: no deep-link scheme was injected; app deep links will be ignored')
   }
-  ctx.on('pico/deep-link', (url: unknown) => {
+  ctx.on('zeokeel/deep-link', (url: unknown) => {
     if (typeof url !== 'string') return
     if (deepLinkScheme === undefined || deepLinkScheme === '') return
     const link = parseAppDeepLink(url, deepLinkScheme, appScheme)
@@ -743,17 +743,17 @@ export function apply(ctx: Context, config: Config = {}): void {
       // （J13），而不是让"点了没反应"。跨渠道深链不工作属预期（§5.3）。
       const foreign = parseForeignAppDeepLink(url)
       if (foreign !== null && foreign.scheme !== deepLinkScheme.toLowerCase()) {
-        warn(`pico-wasm-apps-host: a deep link for another channel's client was received (scheme mismatch)`)
+        warn(`zeokeel-wasm-apps-host: a deep link for another channel's client was received (scheme mismatch)`)
         ctx.emit(WASM_APP_DEEP_LINK_FOREIGN_EVENT, { app_id: foreign.appId, scheme: foreign.scheme })
         return
       }
       // 未知 host 或畸形路径：丢弃，**不回落**任何默认动作。
-      warn(`pico-wasm-apps-host: ignored a deep link that is not an app link (${url.slice(0, 200)})`)
+      warn(`zeokeel-wasm-apps-host: ignored a deep link that is not an app link (${url.slice(0, 200)})`)
       return
     }
     // §23.2 N8：深链同样过闸门（未登录 ⇒ 入队，登录后消费）。
     void requestOpen(link.appId, link.path).catch((cause: unknown) => {
-      warn(`pico-wasm-apps-host: opening a deep link failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      warn(`zeokeel-wasm-apps-host: opening a deep link failed (${cause instanceof Error ? cause.message : String(cause)})`)
     })
   })
 
@@ -768,7 +768,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   // A 在该应用里的 cookie/localStorage/IndexedDB）。
   //
   let lastScope = scopeKey()
-  ctx.effect(() => subscribePicoSession(ctx, service, () => {
+  ctx.effect(() => subscribeZeoKeelSession(ctx, service, () => {
     // **代际推进点（唯一）**：会话一变就推进一代，`requestOpen` 里那些还在飞的
     // `await` 续体因此会在下一个检查点整份丢弃（见 `sessionEpochs` 的注释）。
     // 必须放在回调的第一句：晚于任何 await 的话，"这次换代"与"旧续体的检查点"
@@ -803,7 +803,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     // 窗口一起关掉 —— 深链在未登录时入队，登录后应立即打开一次），也必须放在
     // **清理落地之后**（否则新账号的应用页加载会写进正在被 `rm` 的缓存根）。
     void scopeReset.settled().then(() => { drainPendingLinks() })
-  }), 'pico wasm apps host: partition follow')
+  }), 'zeokeel wasm apps host: partition follow')
 
   // ---- 本机请求面（唯一 seam；§22.2 R1/R2） ----
   ctx.effect(() => {
@@ -1004,7 +1004,7 @@ export function apply(ctx: Context, config: Config = {}): void {
               // 还是不行"），而那看起来像 AI 坏了。读不动（非 ENOENT）或**内容不可信**
               // （坏 JSON / 顶层非对象 / 版本或条目形状不符）的记录文件也走这一支 ——
               // 覆盖它们会静默销毁其它账号/应用的授权（FIX-17）。
-              warn(`pico-wasm-apps-host: persisting the app AI consent failed (${cause instanceof Error ? cause.message : String(cause)})`)
+              warn(`zeokeel-wasm-apps-host: persisting the app AI consent failed (${cause instanceof Error ? cause.message : String(cause)})`)
               json(reply, 500, {
                 error: {
                   code: 'CONSENT_NOT_PERSISTED',
@@ -1019,25 +1019,25 @@ export function apply(ctx: Context, config: Config = {}): void {
       ],
     })
     return () => { surface.dispose() }
-  }, 'pico wasm apps host: local request surface')
+  }, 'zeokeel wasm apps host: local request surface')
 
-  // ---- 应用中心（应用平台）的宿主面：`/api/pico/apps/wasm*` + 宿主工具面 ----
+  // ---- 应用中心（应用平台）的宿主面：`/api/zeokeel/apps/wasm*` + 宿主工具面 ----
   //
-  // 2026-10-13（P0-b）自 `@picoaide/dsh-enterprise` 的 auth-gate 搬入：那一整块
+  // 2026-10-13（P0-b）自 `@zeokeel/dsh-enterprise` 的 auth-gate 搬入：那一整块
   // （目录 / 预检 / 发布编排 / 生命周期代理 / `wasm_app_*` 工具）是**应用模块**的
   // 内容，留在必需包里就等于"关掉应用中心它的代码照样进产物"。
   //
-  // 围栏不在这里重实现：auth-gate 经服务 `picoLocalRoutes` 交出同一批闭包
+  // 围栏不在这里重实现：auth-gate 经服务 `zeokeelLocalRoutes` 交出同一批闭包
   // （回环 + 同源 + 持有性证明、审计只读、按请求解析的语言），本行只做结构探测。
   ctx.effect(() => {
-    const fence = ctx.get('picoLocalRoutes') as HostLocalRouteFence | undefined
+    const fence = ctx.get('zeokeelLocalRoutes') as HostLocalRouteFence | undefined
     if (fence === undefined) {
       // 组合被改坏时的**可见**失败：安静地少掉整块本机 API 正是本仓要消灭的形态。
-      ctx.logger?.error?.('pico-wasm-apps-host: picoLocalRoutes is absent — the /api/pico/apps/wasm* routes and the wasm_app_* tools were NOT registered')
+      ctx.logger?.error?.('zeokeel-wasm-apps-host: zeokeelLocalRoutes is absent — the /api/zeokeel/apps/wasm* routes and the wasm_app_* tools were NOT registered')
       return () => {}
     }
     return registerAppRoutes(ctx, fence)
-  }, 'pico wasm apps host: app store routes')
+  }, 'zeokeel wasm apps host: app store routes')
 }
 
 /** 应用源 scheme 前缀（导出给跨包对拍用例：渲染层拼接分享链接时必须用它）。 */

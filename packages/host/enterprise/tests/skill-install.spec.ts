@@ -60,7 +60,7 @@ async function packDir(dir: string): Promise<Buffer> {
 
 /** Build a gzipped tar from the given files ({ path -> content }). */
 async function makeArchive(files: Record<string, string>): Promise<Buffer> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-skill-archive-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-archive-'))
   try {
     for (const [path, content] of Object.entries(files)) {
       const full = join(dir, path)
@@ -84,7 +84,7 @@ function makeZipArchive(files: Record<string, string>): Buffer {
 
 /** Build a tar whose entries use a leading `../` name via a fileList entry. */
 async function makeTraversalArchive(): Promise<Buffer> {
-  const dir = await mkdtemp(join(tmpdir(), 'pico-skill-archive-'))
+  const dir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-archive-'))
   const outsideName = `evil-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   try {
     // Pack a file from OUTSIDE the cwd: tar.c records the entry path as
@@ -133,7 +133,7 @@ describe('validateSkillName', () => {
 
 describe('installSkillArchive', () => {
   it('installs a valid archive and places SKILL.md at the target', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       const archive = await makeArchive({
         'SKILL.md': SKILL_MD,
@@ -155,7 +155,7 @@ describe('installSkillArchive', () => {
   })
 
   it('installs a zip archive (preferred new format) with the same result', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       const archive = makeZipArchive({
         'SKILL.md': SKILL_MD,
@@ -173,7 +173,7 @@ describe('installSkillArchive', () => {
   })
 
   it('installs a zip archive carrying a `./` root directory entry (zip -r . style)', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       // `zip -r skill.zip .` 类打包的典型产物: 根目录条目以 `./` 出现。
       const z = new AdmZip()
@@ -190,7 +190,7 @@ describe('installSkillArchive', () => {
   })
 
   it('refuses a checksum mismatch', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       const archive = await makeArchive({ 'SKILL.md': SKILL_MD })
       await expect(installSkillArchive({ name: 'demo', archive, checksum: '0'.repeat(64), skillsDir }))
@@ -202,7 +202,7 @@ describe('installSkillArchive', () => {
   })
 
   it('refuses an archive without SKILL.md', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       const archive = await makeArchive({ 'readme.txt': 'no skill here' })
       await expect(installSkillArchive({ name: 'demo', archive, skillsDir }))
@@ -213,7 +213,7 @@ describe('installSkillArchive', () => {
   })
 
   it('refuses parent-traversal entries', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       const archive = await makeTraversalArchive()
       await expect(installSkillArchive({ name: 'demo', archive, skillsDir }))
@@ -225,7 +225,7 @@ describe('installSkillArchive', () => {
   })
 
   it('replaces an existing installation on reinstall', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       const v1 = await makeArchive({ 'SKILL.md': '# v1\n' })
       await installSkillArchive({ name: 'demo', archive: v1, skillsDir, server: STORE_SERVER })
@@ -240,7 +240,7 @@ describe('installSkillArchive', () => {
   })
 
   it('rejects oversized archives', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       const big = Buffer.alloc(MAX_ARCHIVE_BYTES + 1, 0x61)
       await expect(installSkillArchive({ name: 'demo', archive: big, skillsDir }))
@@ -252,13 +252,13 @@ describe('installSkillArchive', () => {
 
   it('resolves the skill root from DSH_HOME with a product fallback', () => {
     expect(resolveSkillsDir({ DSH_HOME: '/tmp/home' })).toBe('/tmp/home/skills')
-    expect(resolveSkillsDir({ DSH_HOME: '  ' })).toContain('.picoaide-harness')
+    expect(resolveSkillsDir({ DSH_HOME: '  ' })).toContain('.zeokeel-harness')
   })
 })
 
 describe('synthesizeSkillFrontmatter', () => {
   it('prepends frontmatter from metadata.yaml when SKILL.md lacks it', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-skill-fm-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-fm-'))
     try {
       await writeFile(join(dir, 'SKILL.md'), '# 代码审查技能\n\n正文\n')
       await writeFile(join(dir, 'metadata.yaml'), 'name: code-review\ndescription: 代码审查\nversion: 1.0.0\n')
@@ -273,7 +273,7 @@ describe('synthesizeSkillFrontmatter', () => {
   })
 
   it('leaves a SKILL.md that already has frontmatter untouched', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-skill-fm-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-fm-'))
     try {
       const existing = '---\nname: keep\ndescription: keep me\n---\n# Body\n'
       await writeFile(join(dir, 'SKILL.md'), existing)
@@ -286,7 +286,7 @@ describe('synthesizeSkillFrontmatter', () => {
   })
 
   it('falls back to the archive name without metadata.yaml', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'pico-skill-fm-'))
+    const dir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-fm-'))
     try {
       await writeFile(join(dir, 'SKILL.md'), '# Body\n')
       const m = await import('../../capability-center/src/host/skill-install.ts')
@@ -299,7 +299,7 @@ describe('synthesizeSkillFrontmatter', () => {
   })
 
   it('install end-to-end produces a discoverable SKILL.md with frontmatter', async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), 'pico-skill-skills-'))
+    const skillsDir = await mkdtemp(join(tmpdir(), 'zeokeel-skill-skills-'))
     try {
       const archive = await makeArchive({
         'SKILL.md': '# 代码审查技能\n\n按规范审查。\n',
@@ -319,7 +319,7 @@ describe('synthesizeSkillFrontmatter', () => {
 
 describe('listInstalledSkills', () => {
   it('lists skill directories carrying SKILL.md, sorted', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-skill-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-skill-root-'))
     try {
       await mkdir(join(root, 'alpha'), { recursive: true })
       await writeFile(join(root, 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: demo\n---\n# a\n')
@@ -336,13 +336,13 @@ describe('listInstalledSkills', () => {
   })
 
   it('returns an empty list for a missing or unreadable root', async () => {
-    expect(await listInstalledSkills(join(tmpdir(), 'no-such-pico-skills-dir'))).toEqual([])
+    expect(await listInstalledSkills(join(tmpdir(), 'no-such-zeokeel-skills-dir'))).toEqual([])
   })
 })
 
 describe('uninstallSkill', () => {
   it('removes an installed skill directory (商店来源无需确认)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-skill-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-skill-root-'))
     try {
       await mkdir(join(root, 'alpha'), { recursive: true })
       await writeFile(join(root, 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: demo\n---\n# a\n')
@@ -359,7 +359,7 @@ describe('uninstallSkill', () => {
   })
 
   it('本机自制同名技能必须显式确认才能卸载(审计 A3)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-skill-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-skill-root-'))
     try {
       await mkdir(join(root, 'self-made'), { recursive: true })
       await writeFile(join(root, 'self-made', 'SKILL.md'), '---\nname: self-made\ndescription: demo\n---\n# mine\n')
@@ -376,7 +376,7 @@ describe('uninstallSkill', () => {
   })
 
   it('refuses to uninstall a skill that is not installed', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-skill-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-skill-root-'))
     try {
       await expect(uninstallSkill(root, 'missing')).rejects.toThrow(/not installed/)
       // A directory without SKILL.md is not an installed skill.
@@ -391,7 +391,7 @@ describe('uninstallSkill', () => {
   })
 
   it('refuses invalid names', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-skill-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-skill-root-'))
     try {
       await expect(uninstallSkill(root, '../evil')).rejects.toThrow(/invalid skill name/)
       await expect(uninstallSkill(root, '')).rejects.toThrow(/invalid skill name/)
@@ -407,7 +407,7 @@ describe('packSkill', () => {
     `description: 用于单测的技能包描述,需满足最短长度。\nauthor: tester\ncategory: 测试\n---\n\n本技能用于单元测试:正文需要足够长才能通过空壳校验,因此这里补充两句完整的说明文字,确保长度稳稳超过五十字的下限要求。\n`
 
   it('takes the version from the package frontmatter (包内即真相)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-pack-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-pack-'))
     try {
       await mkdir(join(root, 'demo-skill'), { recursive: true })
       await writeFile(join(root, 'demo-skill', 'SKILL.md'), skillMd('demo-skill', '2.3.0'))
@@ -421,7 +421,7 @@ describe('packSkill', () => {
   })
 
   it('refuses to pack a skill whose SKILL.md has no version', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-pack-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-pack-'))
     try {
       await mkdir(join(root, 'demo-skill'), { recursive: true })
       await writeFile(join(root, 'demo-skill', 'SKILL.md'), skillMd('demo-skill'))
@@ -432,7 +432,7 @@ describe('packSkill', () => {
   })
 
   it('still honours an explicit version override', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-pack-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-pack-'))
     try {
       await mkdir(join(root, 'demo-skill'), { recursive: true })
       await writeFile(join(root, 'demo-skill', 'SKILL.md'), skillMd('demo-skill', '1.0.0'))
@@ -454,8 +454,8 @@ describe('溯源标记与本地改动检测', () => {
     return zip.toBuffer()
   }
 
-  it('安装后写入 .picoaide/release.json,可回答「来自哪个应用哪个版本」', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-prov-'))
+  it('安装后写入 .zeokeel/release.json,可回答「来自哪个应用哪个版本」', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-prov-'))
     try {
       await installSkillArchive({
         name: 'demo-skill', archive: makeArchive('demo-skill'), skillsDir: root,
@@ -473,7 +473,7 @@ describe('溯源标记与本地改动检测', () => {
   })
 
   it('本地改动会让内容哈希与安装时记录不一致(dirty 判定)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-prov-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-prov-'))
     try {
       await installSkillArchive({ name: 'demo-skill', archive: makeArchive('demo-skill'), skillsDir: root, version: '1.2.0' })
       const prov = await readProvenance(join(root, 'demo-skill'))
@@ -487,13 +487,13 @@ describe('溯源标记与本地改动检测', () => {
     }
   })
 
-  it('打包时排除 .picoaide/,避免重新上传被服务端判为伪造归属', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-prov-'))
+  it('打包时排除 .zeokeel/,避免重新上传被服务端判为伪造归属', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-prov-'))
     try {
       await installSkillArchive({ name: 'demo-skill', archive: makeArchive('demo-skill'), skillsDir: root, version: '1.2.0' })
       const packed = await packSkill(root, 'demo-skill')
       const names = new AdmZip(packed.archive).getEntries().map((e) => e.entryName)
-      expect(names.some((n) => n.startsWith('.picoaide'))).toBe(false)
+      expect(names.some((n) => n.startsWith('.zeokeel'))).toBe(false)
       expect(names).toContain('SKILL.md')
       // 版本仍取自包内 frontmatter。
       expect(packed.version).toBe('1.2.0')
@@ -523,7 +523,7 @@ async function makeStoreSkill(root: string, name: string, channel: 'market' | 'o
 
 describe('A1 安装期"可加载性"门禁（装得上就必须加载得到）', () => {
   let root: string
-  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'pico-a1-')) })
+  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'zeokeel-a1-')) })
   afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 
   it('名字规则与 pinned 上游 isSkillName 逐字一致（运行时规则单一真源）', async () => {
@@ -585,7 +585,7 @@ describe('A1 安装期"可加载性"门禁（装得上就必须加载得到）',
 
 describe('A2/A3 覆盖与删除按 provenance 判定（本机自制内容必须显式确认）', () => {
   let root: string
-  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'pico-a23-')) })
+  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'zeokeel-a23-')) })
   afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 
   it('安装到同名本机自制目录 ⇒ 无 overwrite 一律拒绝，且用户内容一字不动', async () => {
@@ -630,7 +630,7 @@ describe('A2/A3 覆盖与删除按 provenance 判定（本机自制内容必须�
   it('跨渠道覆盖（市场 × 随包插件技能）无 overwrite 一律拒绝，内容与溯源一字不动', async () => {
     const dir = await makeStoreSkill(root, 'memory-consolidate', 'plugin')
     const skillBefore = await readFile(join(dir, 'SKILL.md'), 'utf8')
-    const provenanceBefore = await readFile(join(dir, '.picoaide', 'release.json'), 'utf8')
+    const provenanceBefore = await readFile(join(dir, '.zeokeel', 'release.json'), 'utf8')
     await writeFile(join(dir, 'extra-notes.md'), 'vendor-owned extra\n')
 
     const archive = await makeArchive({ 'SKILL.md': skillMdWith('memory-consolidate', 'version: 3.0.0\n') })
@@ -638,7 +638,7 @@ describe('A2/A3 覆盖与删除按 provenance 判定（本机自制内容必须�
       installSkillArchive({ name: 'memory-consolidate', archive, skillsDir: root, version: '3.0.0' }),
     ).rejects.toThrow(/another channel/u)
     expect(await readFile(join(dir, 'SKILL.md'), 'utf8')).toBe(skillBefore)
-    expect(await readFile(join(dir, '.picoaide', 'release.json'), 'utf8')).toBe(provenanceBefore)
+    expect(await readFile(join(dir, '.zeokeel', 'release.json'), 'utf8')).toBe(provenanceBefore)
     expect(await readFile(join(dir, 'extra-notes.md'), 'utf8')).toBe('vendor-owned extra\n')
 
     // 用户确认后才真的换渠道：内容换成市场版，溯源也必须跟着变成 market（内容与归属一致）。
@@ -680,7 +680,7 @@ describe('A2/A3 覆盖与删除按 provenance 判定（本机自制内容必须�
 
 describe('A7 并发与残留目录（备份目录不再污染技能库）', () => {
   let root: string
-  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'pico-a7-')) })
+  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'zeokeel-a7-')) })
   afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 
   it('staging 残留在 .skill-tmp 之下：listInstalledSkills 与运行时都看不到它们', async () => {
@@ -788,12 +788,12 @@ describe('A7 并发与残留目录（备份目录不再污染技能库）', () =
 
 describe('A8 tar 通道与 zip 通道权限口径一致（剥掉 setuid/setgid/sticky）', () => {
   let root: string
-  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'pico-a8-')) })
+  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'zeokeel-a8-')) })
   afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 
   it('归档里的 0o4755 / 0o2755 / 0o1777 落盘后不含 0o7000 位（两条通道同判据）', async () => {
     // tar：真实文件带 setuid/setgid/sticky 位 → tar.c 记录进头。
-    const src = await mkdtemp(join(tmpdir(), 'pico-a8-src-'))
+    const src = await mkdtemp(join(tmpdir(), 'zeokeel-a8-src-'))
     try {
       await writeFile(join(src, 'SKILL.md'), skillMdWith('mode-skill', 'version: 1.0.0\n'))
       await writeFile(join(src, 'suid.sh'), '#!/bin/sh\necho hi\n', { mode: 0o4755 })
@@ -822,7 +822,7 @@ describe('A8 tar 通道与 zip 通道权限口径一致（剥掉 setuid/setgid/s
 
 describe('A12 失败文案脱敏 + 陈旧 staging 清扫', () => {
   it('sanitizeArchiveErrorText 去掉本机路径、保留 errno 与原因', () => {
-    const raw = "ENOTEMPTY: directory not empty, rename '/home/user/.picoaide-harness/skills/.install-x/unpacked' -> '/home/user/.picoaide-harness/skills/zeta'"
+    const raw = "ENOTEMPTY: directory not empty, rename '/home/user/.zeokeel-harness/skills/.install-x/unpacked' -> '/home/user/.zeokeel-harness/skills/zeta'"
     const clean = sanitizeArchiveErrorText(raw)
     expect(clean).toBe('ENOTEMPTY: target directory not empty (a concurrent install/uninstall may be running)')
     expect(clean).not.toContain('/home')
@@ -842,13 +842,13 @@ describe('A12 失败文案脱敏 + 陈旧 staging 清扫', () => {
     expect(describeArchiveFailure(new ArchiveInstallRefusal('CHECKSUM_MISMATCH', 'archive checksum mismatch; refused'))).toMatchObject({ status: 422 })
     // archive-util 的普通 Error 也是拒绝（关键词兜底），不是上游 502。
     expect(describeArchiveFailure(new Error('parent traversal in archive: ../evil'))).toMatchObject({ status: 422, refusal: true })
-    const system = describeArchiveFailure(new Error("EACCES: permission denied, mkdir '/home/u/.picoaide-harness/skills'"))
+    const system = describeArchiveFailure(new Error("EACCES: permission denied, mkdir '/home/u/.zeokeel-harness/skills'"))
     expect(system).toMatchObject({ status: 502, refusal: false })
     expect(system.message).not.toContain('/home/u')
   })
 
   it('系统级失败的裸错误不把本机绝对路径透给 UI（真实安装失败用例）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-a12-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-a12-'))
     try {
       // skillsDir 指向一个**文件**：mkdir/mkdtemp 必然失败，错误里带本机路径。
       const asFile = join(root, 'not-a-dir')
@@ -865,7 +865,7 @@ describe('A12 失败文案脱敏 + 陈旧 staging 清扫', () => {
   })
 
   it('安装入口顺手清掉陈旧的 .install-* 残留（SIGKILL 遗留）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'pico-a12sweep-'))
+    const root = await mkdtemp(join(tmpdir(), 'zeokeel-a12sweep-'))
     try {
       const stale = join(root, '.install-legacy-zzz')
       await mkdir(stale, { recursive: true })
@@ -883,7 +883,7 @@ describe('A12 失败文案脱敏 + 陈旧 staging 清扫', () => {
 
 describe('A13 安装器自有标记文件净化（打包与安装两端）', () => {
   let root: string
-  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'pico-a13-')) })
+  beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'zeokeel-a13-')) })
   afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 
   it('packSkill 不再把 .install-version 打进上传包', async () => {
@@ -908,14 +908,14 @@ describe('A13 安装器自有标记文件净化（打包与安装两端）', () 
     const names = new AdmZip(packed.archive).getEntries().map(e => e.entryName)
     expect(names).toContain('SKILL.md')
     expect(names).not.toContain('.install-version')
-    expect(names.some(n => n.startsWith('.picoaide'))).toBe(false)
+    expect(names.some(n => n.startsWith('.zeokeel'))).toBe(false)
   })
 
-  it('归档自带的 .install-version / .picoaide 会被安装器丢弃（不能伪造版本与来源）', async () => {
+  it('归档自带的 .install-version / .zeokeel 会被安装器丢弃（不能伪造版本与来源）', async () => {
     const archive = await makeArchive({
       'SKILL.md': skillMdWith('forged-skill', 'version: 1.0.0\n'),
       '.install-version': '9.9.9',
-      '.picoaide/release.json': JSON.stringify({ appId: 'forged-skill', version: '9.9.9', channel: 'builtin', installedAt: '' }),
+      '.zeokeel/release.json': JSON.stringify({ appId: 'forged-skill', version: '9.9.9', channel: 'builtin', installedAt: '' }),
     })
     // 服务端没给版本头（x-skill-version 缺失是可能状态，见 A11 调查）。
     await installSkillArchive({ name: 'forged-skill', archive, skillsDir: root, channel: 'market' })

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/abi"
-	"github.com/picoaide/picoaide/internal/wasmapp/edge"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/edge"
 )
 
 // assertHostSecurityHeaders 断言宿主独占的响应安全头（§4.8；含 4xx/5xx）。
@@ -138,7 +138,7 @@ func TestServe_FrameHeadersAreAllowlisted(t *testing.T) {
 	req.Header.Set("Accept-Language", "zh-CN")
 	req.Header.Set("Accept", "application/json")
 	// 下面这些**绝不能**进帧（凭证 + 部署拓扑 + 与业务无关）。
-	req.Header.Set("Cookie", "picoaide_emp=secret")
+	req.Header.Set("Cookie", "zeokeel_emp=secret")
 	req.Header.Set("Authorization", "Bearer app-token")
 	req.Header.Set("X-Forwarded-For", "203.0.113.7")
 	req.Header.Set("X-Real-IP", "203.0.113.7")
@@ -163,7 +163,7 @@ func TestServe_FrameHeadersAreAllowlisted(t *testing.T) {
 			t.Fatalf("头 %q 不得进帧（红线 3 / 拓扑泄露）: %v", forbidden, headers)
 		}
 	}
-	if strings.Contains(rec.Body.String(), "Bearer app-token") || strings.Contains(rec.Body.String(), "picoaide_emp=secret") {
+	if strings.Contains(rec.Body.String(), "Bearer app-token") || strings.Contains(rec.Body.String(), "zeokeel_emp=secret") {
 		t.Fatal("响应体里出现了凭证字样（凭证绝不能被应用看到）")
 	}
 }

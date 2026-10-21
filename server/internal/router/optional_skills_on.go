@@ -11,12 +11,12 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/agentshare"
-	"github.com/picoaide/picoaide/internal/capabilities"
-	"github.com/picoaide/picoaide/internal/marketplace"
-	"github.com/picoaide/picoaide/internal/serverauth"
-	"github.com/picoaide/picoaide/internal/sharedskills"
-	"github.com/picoaide/picoaide/internal/skillseed"
+	"github.com/zeokeel/zeokeel-harness/server/internal/agentshare"
+	"github.com/zeokeel/zeokeel-harness/server/internal/capabilities"
+	"github.com/zeokeel/zeokeel-harness/server/internal/marketplace"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/sharedskills"
+	"github.com/zeokeel/zeokeel-harness/server/internal/skillseed"
 )
 
 // 技能面的五个 handler 类型（`skills` 打开时都是**别名**：Deps 字段名、复合
@@ -65,7 +65,7 @@ func registerMarketClientRoutes(cli *gin.RouterGroup, d Deps) {
 
 // registerBuiltinSkillsRoutes 注册平台内置技能下发面。
 //
-// 内容在镜像层(/opt/picoaide/skills),随镜像升级而更新;客户端在能力中心
+// 内容在镜像层(/opt/zeokeel/skills),随镜像升级而更新;客户端在能力中心
 // 按需安装(下载 → sha256 对照 → 整树解包 → <dshHome>/skills)。
 // 认证口径与市场/共享技能一致:**BearerAuth** —— 未登录时连"平台内置了
 // 哪些技能"都不该被枚举,而客户端本来就得先登录才有意义。

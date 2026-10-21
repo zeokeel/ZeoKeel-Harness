@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 type User struct {
@@ -90,7 +90,7 @@ func CreateUserWithPassword(db *sql.DB, username, password string) (int64, error
 // dummyPasswordHash is verified against when the account is missing,
 // non-local, or disabled, so response time does not reveal username/state.
 var dummyPasswordHash = func() string {
-	h, err := util.HashPassword("picoaide-dummy-constant")
+	h, err := util.HashPassword("zeokeel-dummy-constant")
 	if err != nil {
 		panic(err)
 	}

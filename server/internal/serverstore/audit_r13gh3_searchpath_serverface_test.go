@@ -189,9 +189,9 @@ const (
 var searchPathGuardPackages = map[string]searchPathPkgClass{
 	"internal/serverstore":          searchPathPkgFamilyBearing,
 	"internal/llmgateway":           searchPathPkgFamilyBearing,
-	"cmd/picoaide-app-compile":      searchPathPkgNoFamilySQL,
-	"cmd/picoaide-limits-gen":       searchPathPkgNoFamilySQL,
-	"cmd/picoaide-wasm-imports-gen": searchPathPkgNoFamilySQL,
+	"cmd/zeokeel-app-compile":      searchPathPkgNoFamilySQL,
+	"cmd/zeokeel-limits-gen":       searchPathPkgNoFamilySQL,
+	"cmd/zeokeel-wasm-imports-gen": searchPathPkgNoFamilySQL,
 	"cmd/server":                    searchPathPkgNoFamilySQL,
 	"cmd/wasm-app-headers-gen":      searchPathPkgNoFamilySQL,
 	"demoapps/board":                searchPathPkgNoFamilySQL,

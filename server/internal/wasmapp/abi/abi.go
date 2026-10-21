@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // FrameMagic 是帧起始字节：ASCII RS（Record Separator）= 0x1e（设计文档写作 "RS"）。
@@ -46,10 +46,10 @@ const FrameMagic byte = 0x1e
 // bump 的代价反而更大：它会让所有合法老应用在"什么都没坏"的情况下被拒。
 //
 // 反过来说清楚**其余什么时候必须 bump**：帧头/长度前缀语义、导入面、错误码取值、
-// 或任何"按 /1 写的 guest 会读错"的结构性变化 —— 那时 bump 到 `picoaide-app/2`
+// 或任何"按 /1 写的 guest 会读错"的结构性变化 —— 那时 bump 到 `zeokeel-app/2`
 // 并同步 SKILL 的 `references/abi.md`、`examples/`、预览脚本
 // （`examples/go/preview.mjs`）。这条口径与 `AuthMode` 的类型注释成对。
-const ABIVersion = "picoaide-app/1"
+const ABIVersion = "zeokeel-app/1"
 
 // MaxFrameBytes 是单帧 JSON 负载上限（§4.6：协议帧单行上限 1 MiB）。
 const MaxFrameBytes = limits.ProtocolLineMaxBytes
@@ -272,7 +272,7 @@ const (
 	AuthModeLogin AuthMode = "login"
 	// AuthModeWhitelist 表示要求登录 + 名单准入：**平台不比对名单**（R24）——
 	// 它只把模式告诉应用；名单在应用配置文件的 `whitelist` 里，由应用
-	// `assets.read("picoaide.app.json")` 读出来自己判。
+	// `assets.read("zeokeel.app.json")` 读出来自己判。
 	AuthModeWhitelist AuthMode = "whitelist"
 )
 
@@ -619,7 +619,7 @@ const (
 	MethodAssetsRead = "assets.read"
 	// ⚠️ `MethodAIChat = "ai.chat"` 已随 W4 **删除**（总纲 §21.3）：服务端 wasm
 	// 不再具备任何 AI 能力；应用要调模型必须走"前端 JS → 宿主保留路径
-	// `/__picoaide/ai/chat` → 结果回传 wasm 落库"（客户端 AI loop，§21.2）。
+	// `/__zeokeel/ai/chat` → 结果回传 wasm 落库"（客户端 AI loop，§21.2）。
 	// 老应用在**导入期/发布校验**即被拒（`IMPORT_NOT_ALLOWED` + 迁移指引），不静默。
 	// MethodPing 仅供 validate 干跑使用：不属于能力面（见 HostMethods）。
 	MethodPing = "abi.ping"
@@ -762,7 +762,7 @@ type TxResult struct {
 
 // ⚠️ W4 删除（总纲 §21.3）：消息 / 参数 / 结果 / 用量四个 ABI 载荷类型随服务端
 // 宿主 AI 能力一起消失（它们只在那一个方法的参数与结果里出现）。应用侧的新形态是
-// **客户端 AI loop**（§21.2）：请求/响应结构由宿主保留路径 `/__picoaide/ai/chat`
+// **客户端 AI loop**（§21.2）：请求/响应结构由宿主保留路径 `/__zeokeel/ai/chat`
 // 定义，不经过帧协议，因此这里不再有任何 AI 载荷类型。
 //
 // 注意：本注释**刻意不写被删类型的标识符** —— 同一个包里的

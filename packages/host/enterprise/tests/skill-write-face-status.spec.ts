@@ -8,9 +8,9 @@
  *
  * ## R4-B-6：非法技能名必须是 400（不是 422）
  *
- * `/api/pico/skills/:name/{install,uninstall}`、`/api/pico/skills/builtin/:name/
+ * `/api/zeokeel/skills/:name/{install,uninstall}`、`/api/zeokeel/skills/builtin/:name/
  * {install,uninstall}` 都在进安装器**之前** `validateSkillName` → 400；只有
- * `/api/pico/shared-skills/:name/:version/uninstall` 把校验留给 `uninstallSkill`
+ * `/api/zeokeel/shared-skills/:name/:version/uninstall` 把校验留给 `uninstallSkill`
  * 内部抛，于是走 `describeArchiveFailure` 的 typed 分支 → **422 + code**。同一个
  * 客户端面板对同一类输入看到两种状态码。判据：四条写面在同一个非法名下一律 400
  * （且都属于"请求有问题"，不是"内容有问题"）。
@@ -96,7 +96,7 @@ function harness(session: Session | null): { call: (url: string, method?: string
     provide: (name: string, value: unknown) => { (ctx as unknown as Record<string, unknown>)[`__svc_${name}`] = value },
     get: (name: string) => ((ctx as unknown as Record<string, unknown>)[`__svc_${name}`] ?? ((name === 'connection' ? browserFence() : undefined))),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    picoSession: {
+    zeokeelSession: {
       isRestored: () => true,
       isLoggedIn: () => session !== null,
       getSession: () => session,
@@ -140,9 +140,9 @@ afterEach(async () => {
 /** 造一份本机已装技能（能力中心聚合面据它以磁盘事实补 installed/origin）。 */
 async function seedInstalled(name: string): Promise<void> {
   const dir = join(home, 'skills', name)
-  await mkdir(join(dir, '.picoaide'), { recursive: true })
+  await mkdir(join(dir, '.zeokeel'), { recursive: true })
   await writeFile(join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: mine\n---\n\nbody\n`)
-  await writeFile(join(dir, '.picoaide', 'release.json'), `${JSON.stringify({
+  await writeFile(join(dir, '.zeokeel', 'release.json'), `${JSON.stringify({
     appId: name, version: '1.0.0', channel: 'org', installedAt: '2026-09-01T00:00:00.000Z',
   }, null, 2)}\n`)
 }
@@ -153,12 +153,12 @@ describe('R4-B-6 四条写面对非法技能名的状态码收敛到 400', () =>
   it('同一个非法名：四条写面一律 400（不是 422），且都不落盘', async () => {
     const h = harness(SESSION)
     const faces: Array<[string, string]> = [
-      ['市场安装', `POST /api/pico/skills/${encodeURIComponent(BAD)}/install`],
-      ['市场卸载', `POST /api/pico/skills/${encodeURIComponent(BAD)}/uninstall`],
-      ['内置安装', `POST /api/pico/skills/builtin/${encodeURIComponent(BAD)}/install`],
-      ['内置卸载', `POST /api/pico/skills/builtin/${encodeURIComponent(BAD)}/uninstall`],
-      ['共享卸载（R4-B-6 的缺口）', `POST /api/pico/shared-skills/${encodeURIComponent(BAD)}/1.0.0/uninstall`],
-      ['共享安装（R4-B-6 的缺口）', `POST /api/pico/shared-skills/${encodeURIComponent(BAD)}/1.0.0/install`],
+      ['市场安装', `POST /api/zeokeel/skills/${encodeURIComponent(BAD)}/install`],
+      ['市场卸载', `POST /api/zeokeel/skills/${encodeURIComponent(BAD)}/uninstall`],
+      ['内置安装', `POST /api/zeokeel/skills/builtin/${encodeURIComponent(BAD)}/install`],
+      ['内置卸载', `POST /api/zeokeel/skills/builtin/${encodeURIComponent(BAD)}/uninstall`],
+      ['共享卸载（R4-B-6 的缺口）', `POST /api/zeokeel/shared-skills/${encodeURIComponent(BAD)}/1.0.0/uninstall`],
+      ['共享安装（R4-B-6 的缺口）', `POST /api/zeokeel/shared-skills/${encodeURIComponent(BAD)}/1.0.0/install`],
     ]
     for (const [label, spec] of faces) {
       const [method, url] = spec.split(' ') as [string, string]
@@ -170,7 +170,7 @@ describe('R4-B-6 四条写面对非法技能名的状态码收敛到 400', () =>
 
   it('合法名但未安装：仍是 404 NOT_INSTALLED（收敛不把别的语义改坏）', async () => {
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/shared-skills/not-installed/1.0.0/uninstall', 'POST')
+    const res = await h.call('/api/zeokeel/shared-skills/not-installed/1.0.0/uninstall', 'POST')
     expect(res.code).toBe(404)
     expect(res.body.code).toBe('NOT_INSTALLED')
   })
@@ -194,7 +194,7 @@ describe('R4-B-14 `?source=local` 的商店行必须带 isOwner（作者上传�
     stubCatalog()
     await seedInstalled('codeql')
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     expect(res.code).toBe(200)
     const storeRows = (res.body.items as Array<Record<string, unknown>>).filter(i => i.source !== 'local')
     expect(storeRows.length, '已装的商店行必须出现在「我的」里').toBeGreaterThan(0)
@@ -212,7 +212,7 @@ describe('R4-B-14 `?source=local` 的商店行必须带 isOwner（作者上传�
     }), { status: 200, headers: { 'content-type': 'application/json' } })))
     await seedInstalled('codeql')
     const h = harness(SESSION)
-    const res = await h.call('/api/pico/capabilities?source=local')
+    const res = await h.call('/api/zeokeel/capabilities?source=local')
     const storeRows = (res.body.items as Array<Record<string, unknown>>).filter(i => i.source !== 'local')
     expect(storeRows.every(row => row.isOwner === false)).toBe(true)
   })

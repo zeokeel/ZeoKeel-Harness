@@ -34,7 +34,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 // oidcFlowTestAPI 装一个只注册了浏览器方式（桩 provider）的 API。

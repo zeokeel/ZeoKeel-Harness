@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/capapi"
-	"github.com/picoaide/picoaide/internal/wasmapp/events"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/events"
 )
 
 // R2-L1-5（P2，2026-09-20）：OPS-6 的**准入级可观测性**必须有行为级判据。

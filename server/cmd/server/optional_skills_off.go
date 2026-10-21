@@ -13,7 +13,7 @@ package main
 //   - **DB 不变**：迁移与 schema 一个字都不改，`apps` / `app_grants` /
 //     `capability_locks` 等表照建、照空着（数据面不随变体分叉）。
 
-import "github.com/picoaide/picoaide/internal/router"
+import "github.com/zeokeel/zeokeel-harness/server/internal/router"
 
 // buildSkillSeedHandlers 在 skills 关闭时不构造任何 handler（恒 nil）。
 //

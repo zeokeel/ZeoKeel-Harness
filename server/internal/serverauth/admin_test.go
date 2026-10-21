@@ -12,8 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/picoaide/picoaide/internal/serverstore"
-	"github.com/picoaide/picoaide/internal/util"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
 func TestAdminSession(t *testing.T) {
@@ -89,11 +89,11 @@ func TestAdminAPIs(t *testing.T) {
 		t.Fatal("cookie not HttpOnly")
 	}
 	hdr := func() map[string]string {
-		return map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+		return map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 	}
 
 	// /me returns a fresh csrf_token so a reloaded admin SPA can keep writing
-	w, me := doJSON(t, r, "GET", "/api/server/admin/me", "", map[string]string{"Cookie": "picoaide_session=" + sess})
+	w, me := doJSON(t, r, "GET", "/api/server/admin/me", "", map[string]string{"Cookie": "zeokeel_session=" + sess})
 	if w.Code != http.StatusOK {
 		t.Fatalf("me: %d %s", w.Code, w.Body.String())
 	}
@@ -117,7 +117,7 @@ func TestAdminAPIs(t *testing.T) {
 		t.Fatalf("update user: %d %s", w.Code, w.Body.String())
 	}
 	// CSRF missing → 403
-	if w, _ := doJSON(t, r, "POST", "/api/server/admin/users", `{"username":"eve","password":"x"}`, map[string]string{"Cookie": "picoaide_session=" + sess}); w.Code != http.StatusForbidden {
+	if w, _ := doJSON(t, r, "POST", "/api/server/admin/users", `{"username":"eve","password":"x"}`, map[string]string{"Cookie": "zeokeel_session=" + sess}); w.Code != http.StatusForbidden {
 		t.Fatalf("create without csrf: %d", w.Code)
 	}
 	// delete user
@@ -155,7 +155,7 @@ func TestAdminPasswordPolicy(t *testing.T) {
 			sess = ck.Value
 		}
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 
 	// short password -> VALIDATION
 	w, out = doJSON(t, r, "POST", "/api/server/admin/users", `{"username":"shorty","password":"tooshort"}`, hdr)
@@ -194,7 +194,7 @@ func TestAdminUsage(t *testing.T) {
 			sess = ck.Value
 		}
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 
 	// record some usage for user 1
 	recordUsage(t, db, 1, "deepseek-chat", 10, 20)
@@ -241,7 +241,7 @@ func TestAdminUsageRangeValidation(t *testing.T) {
 			sess = ck.Value
 		}
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 
 	// 1) to < from → 400
 	if w, _ := doJSON(t, r, "GET", "/api/server/admin/usage?group=day&from=2026-08-10&to=2026-08-01", "", hdr); w.Code != http.StatusBadRequest {
@@ -316,7 +316,7 @@ func TestAdminTokens(t *testing.T) {
 			sess = ck.Value
 		}
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 
 	uid, err := createUserDB(db, "tokadmin", "pw123456", false)
 	if err != nil {
@@ -334,7 +334,7 @@ func TestAdminTokens(t *testing.T) {
 		t.Fatalf("tokens without session: %d", w.Code)
 	}
 	// list
-	w, out = doJSON(t, r, "GET", fmt.Sprintf("/api/server/admin/users/%d/tokens", uid), "", map[string]string{"Cookie": "picoaide_session=" + sess})
+	w, out = doJSON(t, r, "GET", fmt.Sprintf("/api/server/admin/users/%d/tokens", uid), "", map[string]string{"Cookie": "zeokeel_session=" + sess})
 	if w.Code != http.StatusOK {
 		t.Fatalf("list: %d %s", w.Code, w.Body.String())
 	}
@@ -354,11 +354,11 @@ func TestAdminTokens(t *testing.T) {
 	tid := int64(toks[0].(map[string]any)["id"].(float64))
 
 	// unknown user -> 404
-	if w, _ := doJSON(t, r, "GET", "/api/server/admin/users/999999/tokens", "", map[string]string{"Cookie": "picoaide_session=" + sess}); w.Code != http.StatusNotFound {
+	if w, _ := doJSON(t, r, "GET", "/api/server/admin/users/999999/tokens", "", map[string]string{"Cookie": "zeokeel_session=" + sess}); w.Code != http.StatusNotFound {
 		t.Fatalf("unknown user list: %d", w.Code)
 	}
 	// revoke requires CSRF
-	if w, _ := doJSON(t, r, "POST", fmt.Sprintf("/api/server/admin/tokens/%d/revoke", tid), "", map[string]string{"Cookie": "picoaide_session=" + sess}); w.Code != http.StatusForbidden {
+	if w, _ := doJSON(t, r, "POST", fmt.Sprintf("/api/server/admin/tokens/%d/revoke", tid), "", map[string]string{"Cookie": "zeokeel_session=" + sess}); w.Code != http.StatusForbidden {
 		t.Fatalf("revoke without csrf: %d", w.Code)
 	}
 	// revoke
@@ -366,7 +366,7 @@ func TestAdminTokens(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("revoke: %d %s", w.Code, w.Body.String())
 	}
-	w, out = doJSON(t, r, "GET", fmt.Sprintf("/api/server/admin/users/%d/tokens", uid), "", map[string]string{"Cookie": "picoaide_session=" + sess})
+	w, out = doJSON(t, r, "GET", fmt.Sprintf("/api/server/admin/users/%d/tokens", uid), "", map[string]string{"Cookie": "zeokeel_session=" + sess})
 	toks = out["tokens"].([]any)
 	if toks[0].(map[string]any)["revoked"].(float64) != 1 {
 		t.Fatal("token not revoked in listing")
@@ -432,17 +432,17 @@ func TestCreateAdminSessionCleansExpired(t *testing.T) {
 }
 
 // C-16: bootstrap admin password must satisfy the same 10-char policy as
-// admin-created users (PICOAI_ADMIN_PASSWORD is the only gate).
+// admin-created users (ZEOKEEL_ADMIN_PASSWORD is the only gate).
 func TestEnsureBootstrapAdminPasswordPolicy(t *testing.T) {
 	db := mustDB(t)
 	defer db.Close()
 
-	t.Setenv("PICOAI_ADMIN_PASSWORD", "short")
+	t.Setenv("ZEOKEEL_ADMIN_PASSWORD", "short")
 	if err := EnsureBootstrapAdmin(db, "admin"); err == nil {
 		t.Fatal("short bootstrap password accepted")
 	}
 
-	t.Setenv("PICOAI_ADMIN_PASSWORD", "this-is-long-enough")
+	t.Setenv("ZEOKEEL_ADMIN_PASSWORD", "this-is-long-enough")
 	if err := EnsureBootstrapAdmin(db, "admin"); err != nil {
 		t.Fatalf("bootstrap with valid password: %v", err)
 	}
@@ -505,7 +505,7 @@ func TestAdminRoleChangeRevokesTokens(t *testing.T) {
 			sess = ck.Value
 		}
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 
 	id, err := createUserDB(db, "employee", "pw123456", false)
 	if err != nil {
@@ -554,7 +554,7 @@ func adminRouter(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
 	// 与 llmgateway 测试同因:adminLoginLimiter 包级共享且惰性创建,
 	// 测试登录 boss 多次,默认 10 次/5min 会限流 → 放宽。
-	t.Setenv("PICOAI_LOGIN_MAX_ATTEMPTS", "10000")
+	t.Setenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS", "10000")
 	db := mustDB(t)
 	if _, err := createUserDB(db, "boss", "pw123456", true); err != nil {
 		t.Fatal(err)
@@ -598,7 +598,7 @@ func TestAdminUserGroupsAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	RegisterAdminRoutes(r, db)
@@ -734,7 +734,7 @@ func TestAdminDepartmentsAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	RegisterAdminRoutes(r, db)
@@ -835,7 +835,7 @@ func TestExternalUserPasswordRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess.ID, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess.ID, "X-CSRF-Token": csrf}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	RegisterAdminRoutes(r, db)
@@ -870,7 +870,7 @@ func TestAdminUsageCost(t *testing.T) {
 		}
 	}
 	hdr := func() map[string]string {
-		return map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+		return map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 	}
 
 	w, out = doJSON(t, r, "POST", "/api/server/admin/users", `{"username":"alice","password":"alicepw123","is_admin":false}`, hdr())
@@ -920,7 +920,7 @@ func TestAdminCreateReturnsCreated(t *testing.T) {
 		}
 	}
 	hdr := func() map[string]string {
-		return map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+		return map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 	}
 	// POST /users → 201
 	w, _ = doJSON(t, r, "POST", "/api/server/admin/users", `{"username":"alice","password":"alicepw123"}`, hdr())
@@ -960,7 +960,7 @@ func TestAdminDeleteEveryoneDept(t *testing.T) {
 		}
 	}
 	hdr := func() map[string]string {
-		return map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+		return map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 	}
 	w, out = doJSON(t, r, "GET", "/api/server/admin/departments", "", hdr())
 	if w.Code != http.StatusOK {
@@ -1006,7 +1006,7 @@ func TestAdminAuthConfig(t *testing.T) {
 			sess = ck.Value
 		}
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sess, "X-CSRF-Token": csrf}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sess, "X-CSRF-Token": csrf}
 
 	// 1. 保存 ldap 模式(带密码)
 	w, _ = doJSON(t, r, "PUT", "/api/server/admin/auth",
@@ -1095,7 +1095,7 @@ func TestAdminAuthMinPasswordLength(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("login: %d", w.Code)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sessionCookie(t, w), "X-CSRF-Token": out["csrf_token"].(string)}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sessionCookie(t, w), "X-CSRF-Token": out["csrf_token"].(string)}
 
 	// 默认 10
 	_, a0 := doJSON(t, r, "GET", "/api/server/admin/auth", "", hdr)
@@ -1138,7 +1138,7 @@ func TestAdminAuditSettings(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("login: %d", w.Code)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sessionCookie(t, w), "X-CSRF-Token": out["csrf_token"].(string)}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sessionCookie(t, w), "X-CSRF-Token": out["csrf_token"].(string)}
 
 	// 默认 180
 	_, s0 := doJSON(t, r, "GET", "/api/server/admin/audit/settings", "", hdr)
@@ -1187,7 +1187,7 @@ func TestAdminUsageAggregateModelKindFilter(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("login: %d", w.Code)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sessionCookie(t, w), "X-CSRF-Token": out["csrf_token"].(string)}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sessionCookie(t, w), "X-CSRF-Token": out["csrf_token"].(string)}
 	w, out = doJSON(t, r, "POST", "/api/server/admin/users", `{"username":"alice","password":"alicepw123","role":"user"}`, hdr)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create user: %d", w.Code)

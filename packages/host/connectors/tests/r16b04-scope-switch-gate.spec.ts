@@ -3,7 +3,7 @@
  *
  * 被判缺陷的窗口（本文件用一个**永不 settle 的 bootstrap fetch** 把它固定住）：
  *
- *   pico/session-changed(A→B)
+ *   zeokeel/session-changed(A→B)
  *     → runLifecycle(async () => {
  *         await teardownAll()          // 面板每张卡立刻变「未连接」= 邀请点击
  *         await syncServerDefs()       // ← 一次真实网络往返（最长 30s 预算）
@@ -11,7 +11,7 @@
  *         await restoreAll(epoch)
  *       })
  *
- * `POST /api/pico/connectors/:id/connect` 走的是 HTTP 路由，**不在**这条生命周期队列里，
+ * `POST /api/zeokeel/connectors/:id/connect` 走的是 HTTP 路由，**不在**这条生命周期队列里，
  * 所以窗口内它读到的是 `store` 仍指向的 A 的凭据目录：token 模式的连接器会带着 A 的
  * `fields`/令牌直接 `registerMcp`，OAuth 模式的连接器会用 A 的 refresh token 去换票
  * —— 新账号的会话里跑着旧账号凭据的 MCP 传输。
@@ -170,16 +170,16 @@ describe('R16B-04: the credential scope is a precondition of CONNECT, not a foll
 
     // The panel's own view of the world right now: every card is "disconnected",
     // which is exactly the state that invites the click below.
-    const listed = JSON.parse((await callRoute(harness, '/api/pico/connectors', 'GET')).body) as {
+    const listed = JSON.parse((await callRoute(harness, '/api/zeokeel/connectors', 'GET')).body) as {
       connectors: Array<{ id: string; status: string; request: { authorizeUrl?: string } | null }>
     }
     expect(listed.connectors.find(entry => entry.id === 'example-mcp')?.status).toBe('disconnected')
 
     const produced = harness.configs.length
-    const res = await callRoute(harness, '/api/pico/connectors/example-mcp/connect', 'POST')
+    const res = await callRoute(harness, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     // The OAuth arm goes through the same gate: no authorization flow may start
     // (which is what would hand A's tokens/client to the IdP) either.
-    const oauth = await callRoute(harness, '/api/pico/connectors/oauth-mcp/connect', 'POST')
+    const oauth = await callRoute(harness, '/api/zeokeel/connectors/oauth-mcp/connect', 'POST')
     await new Promise(resolve => setTimeout(resolve, 250))
 
     expect(
@@ -196,7 +196,7 @@ describe('R16B-04: the credential scope is a precondition of CONNECT, not a foll
     expect(oauth.status, 'OAuth 模式的 connect 走同一条闸门').toBe(409)
     expect((JSON.parse(oauth.body) as { error?: string }).error).toBe(body.error)
     // The OAuth row never even got an authorize URL: the flow never started.
-    const during = JSON.parse((await callRoute(harness, '/api/pico/connectors', 'GET')).body) as {
+    const during = JSON.parse((await callRoute(harness, '/api/zeokeel/connectors', 'GET')).body) as {
       connectors: Array<{ id: string; request: { authorizeUrl?: string } | null }>
     }
     expect(during.connectors.find(entry => entry.id === 'oauth-mcp')?.request?.authorizeUrl).toBeUndefined()
@@ -227,7 +227,7 @@ describe('R16B-04: the credential scope is a precondition of CONNECT, not a foll
     bootstrap.hang()
     harness.emitSession({ username: USER_B, serverURL: SERVER, token: 'token-b' })
     await waitForTeardown(harness)
-    expect((await callRoute(harness, '/api/pico/connectors/example-mcp/connect', 'POST')).status).toBe(409)
+    expect((await callRoute(harness, '/api/zeokeel/connectors/example-mcp/connect', 'POST')).status).toBe(409)
 
     // The round trip completes: `reconfigureUser()` runs and the restore pass
     // registers B's OWN credential. The gate must open again (an over-eager
@@ -237,7 +237,7 @@ describe('R16B-04: the credential scope is a precondition of CONNECT, not a foll
     await waitFor(() => harness.configs.length > afterSwitch)
     expect(harness.configs.at(-1)?.env?.API_KEY).toBe(SECRET_B)
 
-    const res = await callRoute(harness, '/api/pico/connectors/example-mcp/connect', 'POST')
+    const res = await callRoute(harness, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
     expect(res.status).toBe(200)
     await new Promise(resolve => setTimeout(resolve, 200))
     for (const config of harness.configs.slice(afterSwitch)) {

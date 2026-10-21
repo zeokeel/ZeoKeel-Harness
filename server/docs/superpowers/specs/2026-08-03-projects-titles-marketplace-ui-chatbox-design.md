@@ -1,4 +1,4 @@
-# 设计:PicoAide-Next 项目体系 + 自动标题 + 技能/MCP 入口 + ChatBox 增强
+# 设计:ZeoKeel-Next 项目体系 + 自动标题 + 技能/MCP 入口 + ChatBox 增强
 
 > **2026-08-19 注记**:自研 Electron 客户端(desktop/)与浏览器插件已下线删除,仓库仅保留服务端接口与 webadmin 管理端。本文档为历史设计与计划,服务端相关部分仍有效,客户端相关部分不再适用。
 

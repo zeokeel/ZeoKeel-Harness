@@ -29,7 +29,7 @@ package main
 //     （后者挡不住"挪进 `if false { … }`"，R21C-04）。
 
 import (
-	"github.com/picoaide/picoaide/internal/serverauth"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 )
 
 // assembleAuthAPI 把 `ConfigureProviders` 解析出来的 browser provider 注册进 API ——

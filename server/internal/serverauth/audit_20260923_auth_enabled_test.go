@@ -32,7 +32,7 @@ func TestAuthEnabledRequiresAtLeastOneProvider(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("login: %d", w.Code)
 	}
-	hdr := map[string]string{"Cookie": "picoaide_session=" + sessionCookie(t, w), "X-CSRF-Token": out["csrf_token"].(string)}
+	hdr := map[string]string{"Cookie": "zeokeel_session=" + sessionCookie(t, w), "X-CSRF-Token": out["csrf_token"].(string)}
 
 	cases := []struct {
 		name    string

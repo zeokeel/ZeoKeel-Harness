@@ -22,7 +22,7 @@ demoapps/<app>/{main.go, web/}                 源码（前端资源在 web/）
    <app>.wasm  ── scripts/pack-assets.mjs ──►  <app>.wasm（前端资源进了自定义段）
         │                                     ↑ 宿主按路径直出 /static/*，入口 / 由 wasm 读 index.html 返回
         ▼
-/opt/picoaide/demo-apps/  ← Dockerfile 的 demoassets 阶段产出（wasm + demos.json）
+/opt/zeokeel/demo-apps/  ← Dockerfile 的 demoassets 阶段产出（wasm + demos.json）
         │  服务端启动时 appseed 播种（**只落 apps/app_releases 行**：随包资源在制品字节里，
         │  运行期由宿主解析自定义段后常驻内存 —— 2026-09-20 起宿主盘不再有版本资源目录）
         ▼
@@ -33,7 +33,7 @@ demoapps/<app>/{main.go, web/}                 源码（前端资源在 web/）
   `index.html` / `static/app.css` / `static/app.js` 三个自定义段）；`main.go` 只做 JSON API。
 - **入口 `/` 必须由 wasm 处理**：非保留资源会被宿主**按路径直出**（`/static/*` 不经过 wasm），
   所以"先判名单再给页面"只有让 `/` 走应用才成立。
-- **`picoaide.app.json` 是平台保留资源**，宿主永不直出。生产环境里它由平台按库内
+- **`zeokeel.app.json` 是平台保留资源**，宿主永不直出。生产环境里它由平台按库内
   `config_json`（`appseed` 依 `demos.json` 折算写入）随资源集注入；本目录里每个应用各带一份
   同名文件，**只服务本地预览**（预览工具要读它才能演示 `access` / `whitelist`）。
 
@@ -42,7 +42,7 @@ demoapps/<app>/{main.go, web/}                 源码（前端资源在 web/）
 打包器 `scripts/pack-assets.mjs` 放在**这里**（`server/demoapps/scripts/`）是有意的：演示应用
 与随技能分发的打包器**必须是同一份实现**，所以源树只有这一份、不属于任何一侧；镜像构建时
 Dockerfile 用两条 COPY 从这同一个源分别落到演示应用打包阶段与技能目录
-（`/opt/picoaide/skills/app-builder/scripts/pack-assets.mjs`，技能源码目录里**没有**副本）。
+（`/opt/zeokeel/skills/app-builder/scripts/pack-assets.mjs`，技能源码目录里**没有**副本）。
 注入关系登记在 `internal/skillseed` 的 `skillFileInjections`，由
 `TestBuiltinSkillInventoryMatchesDiskDockerfileAndDigests` 核对"同源 + 两个落点 + 摘要一致"
 （落点必须在**最后一个构建阶段**、最终阶段的 RUN 不许碰技能目录），并由同文件的
@@ -56,9 +56,9 @@ bash server/scripts/build-demo-apps.sh forum      # 单个
 # 假宿主跑一遍（按平台真实路由规则：/static/* 直出、/ 走 wasm、db.*/log/assets.read 有应答）
 # 注意：假宿主直接从**制品里的自定义段**取资源，与生产一致（生产也是内存直出，不落盘）
 node server/skills/app-builder/examples/go/preview.mjs /tmp/demo-forum-packed.wasm \
-  --config server/demoapps/forum/picoaide.app.json --path / --user zhangwei
+  --config server/demoapps/forum/zeokeel.app.json --path / --user zhangwei
 node server/skills/app-builder/examples/go/preview.mjs /tmp/demo-forum-packed.wasm \
-  --config server/demoapps/forum/picoaide.app.json --path /api/bootstrap --user zhangwei
+  --config server/demoapps/forum/zeokeel.app.json --path /api/bootstrap --user zhangwei
 ```
 
 浏览器里看效果（真实的 HTTP + 真跑 wasm）：
@@ -77,7 +77,7 @@ node temp/demo-host.mjs --wasm /tmp/demo-forum-packed.wasm \
   且**值一律用 `?` 占位**（平台不替你参数化）；**平台保留列 `_row_id` 不能出现在 SQL 或列名里**。
 - 事务里只允许数据库读写；`log` / `assets.read` / `db.define` 放进事务会 `DB_DENIED`。
 - 只有 6 个宿主原语，**没有文件、没有网络、没有 AI 宿主调用**；应用里的 AI 走前端
-  `POST /__picoaide/ai/chat`（客户端 AI loop）。
+  `POST /__zeokeel/ai/chat`（客户端 AI loop）。
 - 静态资源总量 ≤4 MiB，别放二进制素材（图片/字体）；用内联 SVG + CSS。
 - 加了新演示：`demos.json` 补一条（含 `wasm` 与 `window`），Dockerfile 的 `for app in …`
   与 `server/scripts/build-demo-apps.sh` 的 `ALL_APPS` 同步加名字 —— 三处不一致会出现

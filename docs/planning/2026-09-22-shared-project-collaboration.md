@@ -78,7 +78,7 @@
 
 - Electron 桌面壳 + Cordis 插件树。桌面装配在 `packages/host/desktop/cordis.patch.yml`（host 侧 insert 行）与 `packages/host/enterprise/cordis.patch.yml`（企业面行）。
 - 自研 host 插件包现有：`packages/host/{enterprise,connectors,cron,browser,wasm-apps-host,desktop}`；自研 client 插件包：`packages/client/{account-card,branding,foot-menu,panel-surface,wasm-apps}`。
-- **本地 HTTP 面**：host 插件通过上游 webServer 注册 exact/prefix 路由，客户端页面用 `fetch` 调用；`packages/host/enterprise/src/auth-gate.ts` 是最大的路由表（`/api/pico/*`），并带**持有性证明**（`requireWriteProof`，非 GET 需要浏览器 cookie 证明）。`packages/host/desktop/src/loop-notify-route.ts` 是"单个 GET 路由"的最小样板（同源校验 + JSON 信封）。
+- **本地 HTTP 面**：host 插件通过上游 webServer 注册 exact/prefix 路由，客户端页面用 `fetch` 调用；`packages/host/enterprise/src/auth-gate.ts` 是最大的路由表（`/api/zeokeel/*`），并带**持有性证明**（`requireWriteProof`，非 GET 需要浏览器 cookie 证明）。`packages/host/desktop/src/loop-notify-route.ts` 是"单个 GET 路由"的最小样板（同源校验 + JSON 信封）。
 - **全页面板**：`packages/client/panel-surface` 提供 `mountPanelSurface()`；面板入口通过 `ctx.slots.inject(...) + ctx.slots.register(...)` 注册（先例 `packages/client/wasm-apps/src/client/index.ts`，`id: 'apps'` 即 panel id，另有 `sidebar.footer.action` 槽）。
 - **与服务器的通信**：`packages/host/enterprise/src/server-connector/` 提供会话与服务端地址；登录态落 `$DSH_HOME/session.json`（0600），见 `session-service.ts`；服务端调用一律带员工 Bearer token。**当前没有任何 WebSocket 客户端**（全量 `grep` 为空）。
 
@@ -115,7 +115,7 @@
 | **文件变更流 `workspaceFiles.changes()`** | 上游 `packages/api/workspace-files/src/{index.ts:364,changes.ts}`（`ready`/`change` 帧，含 absolutePath；客户端有多路复用先例 `client/change-feed.ts:118-175`） | **现成的文件监听**，同步引擎不需要自己引 chokidar |
 | 会话逐事件 firehose `ctx.on('session/event')` | 上游 `packages/core/session/src/index.ts:61-72`（全局收需 `{global:true}`） | 轻量钩子（状态机派生）；重活走 `follow()` |
 | **持有性证明 ticket 模板 `appproof`** | `server/internal/wasmapp/appproof`（Ed25519 + KID 轮换 + 15min TTL + jti 防重放 + TOFU 安装注册表） | **P2P peer ticket 照它的形状重写**（把 `App` 换成 `project_id`） |
-| 本地 `/api/pico/*` 路由 + 持有性证明 | `enterprise/src/auth-gate.ts`、`cron/src/write-proof.ts` | 客户端面板读写项目状态的通道 |
+| 本地 `/api/zeokeel/*` 路由 + 持有性证明 | `enterprise/src/auth-gate.ts`、`cron/src/write-proof.ts` | 客户端面板读写项目状态的通道 |
 | 本地 SSE 先例 | `packages/host/browser/src/index.ts:730-750`、`cron/src/host-routes.ts:108-137` | "signals only + re-pull /state"的现成形态（**尚未**用 `id:`/`Last-Event-ID`） |
 | **本地 WebSocket 升级入口** | 上游 `packages/host/webserver/src/index.ts:180-186`（`registerUpgrade`，精确路径，未注册即 `socket.destroy()`） | 若"客户端↔本机宿主"需要双向流，用它；**它不是服务端↔客户端的通道** |
 | 分片上传 + 断点续传 | `wasmapp/api` 的上传路由 | 中继上传文件块的模板 |
@@ -307,7 +307,7 @@ SessionView {
 
 - **块化**（单向复制侧）：内容寻址（FastCDC 或固定 4–8MiB 分块），块哈希即块 id，天然去重与断点续传。
 - **块存储**：服务端对象仓（密文）+ PG 元数据；配额按"项目去重后字节数"计。P2P 直连时块可以不走服务端，但**服务端仍记录 manifest**，以便离线成员补齐。
-- **监听与写入纪律（上游契约，必须遵守）**：①用 `workspaceFiles.changes()` 拿变更（来源 `fs/observed`），**不要**按 inode 监听——世代发布用 `link()`、`storages/*.json` 用 `rename()`，都会换 inode；②应用快照时写入必须**临时文件 + 原子替换**，**临时文件必须建在目标文件所在目录**（见 §4.6.6 的 Windows ACL 风险）；③**不得改变会话文件 0600 / 目录 0700 权限**；④同步引擎元数据放 `<project>/.picoaide/` 并加进忽略规则。
+- **监听与写入纪律（上游契约，必须遵守）**：①用 `workspaceFiles.changes()` 拿变更（来源 `fs/observed`），**不要**按 inode 监听——世代发布用 `link()`、`storages/*.json` 用 `rename()`，都会换 inode；②应用快照时写入必须**临时文件 + 原子替换**，**临时文件必须建在目标文件所在目录**（见 §4.6.6 的 Windows ACL 风险）；③**不得改变会话文件 0600 / 目录 0700 权限**；④同步引擎元数据放 `<project>/.zeokeel/` 并加进忽略规则。
 
 #### 4.5.1 路径不一致（跨平台必然发生，必须显式设计）
 
@@ -383,7 +383,7 @@ PRIMARY KEY (project_id, path)
 
 #### 4.6.3 跟随副本上的本地改动 = 冲突
 
-落 `<project>/.picoaide/conflicts/<member>-<时间戳>/<相对路径>`，原文件恢复为权威版本，面板提示"你的本地改动已保存到 conflicts/，可手工对比"。**绝不**"以本地为准"或"以后写覆盖"——那会在多人场景里丢掉别人的工作。
+落 `<project>/.zeokeel/conflicts/<member>-<时间戳>/<相对路径>`，原文件恢复为权威版本，面板提示"你的本地改动已保存到 conflicts/，可手工对比"。**绝不**"以本地为准"或"以后写覆盖"——那会在多人场景里丢掉别人的工作。
 
 #### 4.6.4 驾驶位切换时的陈旧副本
 
@@ -393,9 +393,9 @@ PRIMARY KEY (project_id, path)
 
 1. **`.git/`**：主流同步工具明确不推荐同步它（Mutagen 官方列出多条理由，含安全风险）。git 元数据要么整体排除、要么走"git 中心仓"这条独立路径。
 2. **`node_modules/`、`target/`、`.venv/`、构建输出**：同步没有意义，且会打爆文件监视器配额。
-3. **同步引擎自己的元数据/临时文件**（`.picoaide/`、`*.picoaide-sync-tmp-*`）：必须在忽略规则里自认，且崩溃后可清理。
+3. **同步引擎自己的元数据/临时文件**（`.zeokeel/`、`*.zeokeel-sync-tmp-*`）：必须在忽略规则里自认，且崩溃后可清理。
 
-⇒ 默认忽略规则 = `.gitignore` 语义 + 上述内置条目，落 `<project>/.picoaideignore`（与服务端分发的默认规则合并，项目内可覆盖）。
+⇒ 默认忽略规则 = `.gitignore` 语义 + 上述内置条目，落 `<project>/.zeokeelignore`（与服务端分发的默认规则合并，项目内可覆盖）。
 
 #### 4.6.6 Windows 沙箱 ACL 与"搬入文件"的冲突（**P0，需真机验证**）
 
@@ -730,7 +730,7 @@ CREATE TABLE project_bindings (
 
 | 包 | 面 | 职责 |
 | --- | --- | --- |
-| `packages/host/projects`（新） | host | 控制面客户端（SSE 重连/补齐/游标）、会话观察与复制、镜像会话物化、文件同步引擎、驾驶位状态机、P2P 传输管理（直连 + 中继降级）、本地 `/api/pico/projects/*` 路由 |
+| `packages/host/projects`（新） | host | 控制面客户端（SSE 重连/补齐/游标）、会话观察与复制、镜像会话物化、文件同步引擎、驾驶位状态机、P2P 传输管理（直连 + 中继降级）、本地 `/api/zeokeel/projects/*` 路由 |
 | `packages/client/projects`（新） | client | "项目"面板：项目列表/成员/在线状态/同事会话实时视图/文件同步状态/驾驶位操作/冲突提示；侧边栏入口 |
 
 装配与登记（**新增一个包要动 9 处**，漏一处分别对应一种"本地绿、CI/打包红"）：
@@ -742,10 +742,10 @@ CREATE TABLE project_bindings (
 | 3 | `scripts/verify-layout.mjs` | `packageNameTable`（:53）目录→包名严格对拍 |
 | 4 | `.github/workflows/ci.yml` | `workspace-build.tgz` 归档清单（:150）加 `<新包>/lib` |
 | 5 | `packages/host/desktop/scripts/verify-packaged-runtime.ts` | `REQUIRED_PACKAGED_RUNTIME_ENTRIES`（:44）／`REQUIRED_UNPACKED_RUNTIME_ENTRIES`（:217）／`REQUIRED_PROFILE_PATCH_ANCHORS`（:934）**三张表** |
-| 6 | `packages/host/desktop/package.json` | `dependencies` 加 `"@picoaide/<pkg>": "workspace:*"`（**必须进 dependencies 才随包**） |
+| 6 | `packages/host/desktop/package.json` | `dependencies` 加 `"@zeokeel/<pkg>": "workspace:*"`（**必须进 dependencies 才随包**） |
 | 7 | `.gitignore` | 逐包列 `lib/`（:50） |
 | 8 | `packages/host/desktop/src/profile.ts` | 模块级 `X_PATCH_PATH` 常量（模板 :66-91）+ 循环内 `bundlePatches.push(...)`（模板 :566-579） |
-| 9 | 测试断言 | `tests/profile.spec.ts`（新行必须被断言）、`tests/verify-packaged-runtime.spec.ts`（每个 `@picoaide` 依赖必须有必需条目） |
+| 9 | 测试断言 | `tests/profile.spec.ts`（新行必须被断言）、`tests/verify-packaged-runtime.spec.ts`（每个 `@zeokeel` 依赖必须有必需条目） |
 
 自动兜底门禁：`scripts/verify-inventories.mjs`（有 `build` 脚本但不在 prebuild 表 → fail；不在 PACKAGES → fail；三张包表互为对拍）。**但"漏登记"仍要自己记**，门禁只兜一部分。
 
@@ -758,7 +758,7 @@ projects/
   files/       目录扫描 + 忽略规则 + 分块 + manifest + 快照提交/应用 + 占用处置 + 冲突归档
   transport/   连接管理器：直连（WebRTC/libp2p）↔ 中继（443）；统一信封与去重/序号
   lease/       驾驶位状态机（获取/续租/释放/抢占拒绝）
-  routes.ts    本地 /api/pico/projects/*（同源 + 写面持有性证明）
+  routes.ts    本地 /api/zeokeel/projects/*（同源 + 写面持有性证明）
 ```
 
 ### 6.3 与上游的接缝（全部都用上游既有面，不自己造）

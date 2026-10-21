@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/picoaide/picoaide/internal/limits"
-	"github.com/picoaide/picoaide/internal/wasmapp/apperr"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 )
 
 // 本文件是 §4.5「单语句闸门 + 语句种类白名单 + 保留列拒绝」的实现。

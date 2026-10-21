@@ -3,7 +3,7 @@ title: Plugin Ecosystem
 description: How the upstream ecosystem relates to this product, the bundled plugin inventory, the four extension paths, and what plugins cannot do.
 ---
 
-PicoAide Harness's plugin ecosystem is not a marketplace — it is **a set of composition conventions plus one bundled inventory**: upstream provides the framework and the module table, this product composes its capabilities in as plugins, and third-party authors take the same path. This page answers three questions: which plugins are installed right now, which of the four extension paths a new capability should take, and what plugins cannot do.
+ZeoKeel Harness's plugin ecosystem is not a marketplace — it is **a set of composition conventions plus one bundled inventory**: upstream provides the framework and the module table, this product composes its capabilities in as plugins, and third-party authors take the same path. This page answers three questions: which plugins are installed right now, which of the four extension paths a new capability should take, and what plugins cannot do.
 
 ## How the upstream ecosystem relates to this product
 
@@ -38,19 +38,19 @@ Every plugin the desktop client assembles is listed below. The **Face** column s
 | Package | Capability it provides | Face | Main rows |
 |---|---|---|---|
 | `dsh-plugin-desktop` | The desktop shell: window and navigation policy, tray, update checks and install handoff, diagnostics export, completion/question/approval notifications, the asar filesystem and its read guidance, and the advanced presentation's layout and theme projection | both | `desktop-shell`, `desktop-diagnostics`, `desktop-updates`, `desktop-loop-notify`, `desktop-asar-fs` |
-| `@picoaide/dsh-enterprise` | The enterprise login gate (pre-auth page, server URL, login methods), sessions and tokens, gateway model catalogue wiring, bootstrapping, error reporting, skill telemetry, channel content sync, and the capability hub entry | both | `picoaide-auth-gate`, `picoaide-session`, `picoaide-gateway-llm`, `picoaide-bootstrap`, `picoaide-channel-sync` |
-| `@picoaide/dsh-connectors` | The connector framework (MCP registration, authentication, credential storage and renewal), the connector centre panel, and one slash command per connected connector | both | `pico-connectors` |
+| `@zeokeel/dsh-enterprise` | The enterprise login gate (pre-auth page, server URL, login methods), sessions and tokens, gateway model catalogue wiring, bootstrapping, error reporting, skill telemetry, channel content sync, and the capability hub entry | both | `zeokeel-auth-gate`, `zeokeel-session`, `zeokeel-gateway-llm`, `zeokeel-bootstrap`, `zeokeel-channel-sync` |
+| `@zeokeel/dsh-connectors` | The connector framework (MCP registration, authentication, credential storage and renewal), the connector centre panel, and one slash command per connected connector | both | `zeokeel-connectors` |
 | `@deepseek-ai/dsh-schedule` (upstream, enabled in 0.2.1) | Automation tasks: task catalog, delivery, and four model tools (`schedule_create` / `schedule_list` / `schedule_update` / `schedule_delete`); enabled by the desktop profile and account-scoped | host + client | `schedule` / `ui-schedule` |
-| `@picoaide/dsh-browser` | The built-in browser: a separate window (`WebContentsView` + CDP), the control-handover model, the op log, the `browser_*` tool group, and the sidebar entry with its status hints | both | `pico-browser` |
-| `@picoaide/dsh-wasm-apps-host` | The host side of app windows: the custom protocol handler, request forwarding to the platform, and window lifecycle and partitioning | host | `pico-wasm-apps-host` |
-| `@picoaide/dsh-wasm-apps` | The app centre panel: the catalogue, opening an app, and the publish entry | client | `picoaide-wasm-apps` |
-| `@picoaide/dsh-foot-menu` | The sidebar's bottom "⋯ More" row and the popover host (the single carrying row for all five panel entries) | client | `picoaide-foot-menu` |
-| `@picoaide/dsh-account-card` | The bottom sidebar account card: username, logout, and gateway usage balance | client | `picoaide-account-card` |
+| `@zeokeel/dsh-browser` | The built-in browser: a separate window (`WebContentsView` + CDP), the control-handover model, the op log, the `browser_*` tool group, and the sidebar entry with its status hints | both | `zeokeel-browser` |
+| `@zeokeel/dsh-wasm-apps-host` | The host side of app windows: the custom protocol handler, request forwarding to the platform, and window lifecycle and partitioning | host | `zeokeel-wasm-apps-host` |
+| `@zeokeel/dsh-wasm-apps` | The app centre panel: the catalogue, opening an app, and the publish entry | client | `zeokeel-wasm-apps` |
+| `@zeokeel/dsh-foot-menu` | The sidebar's bottom "⋯ More" row and the popover host (the single carrying row for all five panel entries) | client | `zeokeel-foot-menu` |
+| `@zeokeel/dsh-account-card` | The bottom sidebar account card: username, logout, and gateway usage balance | client | `zeokeel-account-card` |
 | `dsh-memory-evolve` | Five-track memory (user profile / global facts / project key memory / project log / daily log) plus four todo tracks and skill self-evolution; a **vendored community plugin**, upgraded by three-way merge | both | `dsh-memory-evolve` |
 | `@deepseek-ai/dsh-experimental-voice-input-bundle` | Voice input: SenseVoiceSmall plus Silero VAD in a local child process, with audio never leaving the machine; an upstream optional bundle that this product assembles by default | both | the four rows that upstream bundle inserts |
-| `@picoaide/dsh-host-locale`, `@picoaide/dsh-host-home` | Host-side locale resolution and data-root derivation; **zero-dependency leaf packages** (Node built-ins only), libraries rather than rows | host | none (imported by other packages) |
-| `@picoaide/dsh-panel-surface` | The centre-column full-page panel container and shared visual language (two plugins mount panels with it) | client | none (imported by other packages) |
-| `@picoaide/dsh-branding` | Brand mark, favicon, and theme injection; **web assembly only — the desktop composition does not mount it** (the enterprise client face owns the desktop favicon) | client | none (absent from the desktop profile) |
+| `@zeokeel/dsh-host-locale`, `@zeokeel/dsh-host-home` | Host-side locale resolution and data-root derivation; **zero-dependency leaf packages** (Node built-ins only), libraries rather than rows | host | none (imported by other packages) |
+| `@zeokeel/dsh-panel-surface` | The centre-column full-page panel container and shared visual language (two plugins mount panels with it) | client | none (imported by other packages) |
+| `@zeokeel/dsh-branding` | Brand mark, favicon, and theme injection; **web assembly only — the desktop composition does not mount it** (the enterprise client face owns the desktop favicon) | client | none (absent from the desktop profile) |
 
 What is *not* in the inventory matters just as much: there is **no plugin marketplace** (no market page, no installer, no reviewed catalogue), and the **upstream UI plugin-manager page is not mounted** (that row is explicitly disabled — the panel seats it occupies do not interoperate with our own four panels' DOM takeover).
 
@@ -60,7 +60,7 @@ Before adding a capability, decide which class it belongs to. The four paths do 
 
 | | Plugin | Connector (MCP) | Skill (SKILL.md) | App (WASM) |
 |---|---|---|---|---|
-| **What you write** | An npm package: `dsh.bundle.patch` plus an optional `dsh.client` browser bundle | One standard MCP config (`type` + `url`, or `command`/`args`/`env`) with a title, and no code | A directory with a `SKILL.md` carrying frontmatter | A static front end, a `wasm32-wasip1` module, and `picoaide.app.json` |
+| **What you write** | An npm package: `dsh.bundle.patch` plus an optional `dsh.client` browser bundle | One standard MCP config (`type` + `url`, or `command`/`args`/`env`) with a title, and no code | A directory with a `SKILL.md` carrying frontmatter | A static front end, a `wasm32-wasip1` module, and `zeokeel.app.json` |
 | **Where it runs** | The employee machine: the DSH Host inside the Electron main process plus the sandboxed renderer | The MCP server's own machine; the client connects as an MCP client | Nowhere; the model reads the file and then calls **existing** tools | The server's wazero sandbox; the employee opens it in a separate client window |
 | **What it can do** | Register model tools and system-prompt text, add same-origin HTTP routes, add interface panels and slots, reach local capabilities (subprocess / files / tray), and provide Cordis services other plugins reuse | Give the model an external system's capabilities as tools; authentication is decided automatically (tokenFields → static token, streamable-http → OAuth with dynamic registration, otherwise credential-free) with automatic renewal | Fix processes, conventions, wording, and checklists into reusable guidance; project-level and user-level skill roots are all scanned; upload, review, and per-department authorization via the capability hub | Give a business colleague a self-built tool: one app database, one bundled static asset tree, host calls (read assets / log / SQL), plus the client AI loop |
 | **What it cannot do** | Cross-package client value imports; widening its own privileges; bypassing server authentication or metering; shipping an unregistered native dependency | Only offer what the MCP server already implements; the client applies hard policy to its outbound traffic and credentials (denied environment-variable keys, governed address ranges) | A skill adds no capability by itself: no new tools, no permission changes, no dependency installs | No outbound network requests, no file access, no threads or timers; data inside one app is shared by every user; changing the access list means publishing a new release |
@@ -89,4 +89,4 @@ This list is deliberate — do not expect a plugin to work around any of these s
 - [Plugin Development](/en/plugin-development/) — write a plugin from scratch, debug it locally, ship it into the client or the server
 - [System architecture](/en/architecture/) — the three-layer topology and the boot sequence
 - [Desktop client](/en/desktop/) — plugin management, bundled runtimes, and outbound policy from the user's side
-- [Community Fabric (RFC drafts, repo)](https://github.com/picoaide/picoaide-harness/tree/master/community/fabric) — draft plugin Manifest, Capability, Host Descriptor, and events
+- [Community Fabric (RFC drafts, repo)](https://github.com/zeokeel/ZeoKeel-Harness/tree/master/community/fabric) — draft plugin Manifest, Capability, Host Descriptor, and events

@@ -13,14 +13,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/picoaide/picoaide/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // 本文件是**执行侧自持**的磁盘编译缓存运维组件（水位 + 回收 + 周期循环）。
 //
 // 为什么需要它（审计 R5-A-1，P1）：回收与水位可见性此前**整体挂在编译子系统上** ——
-// `cmd/server` 在编译子系统缺席时（默认档 `PICOAI_COMPILE_ISOLATION=auto` 下，缺
-// `picoaide-app-compile` 就只打一行日志并把 compiler 置 nil）：
+// `cmd/server` 在编译子系统缺席时（默认档 `ZEOKEEL_COMPILE_ISOLATION=auto` 下，缺
+// `zeokeel-app-compile` 就只打一行日志并把 compiler 置 nil）：
 //
 //	① 周期回收循环不启动（`startWasmCompileReclaimLoop` 对 nil 直接 return）；
 //	② `/readyz` 的 `compile_cache_bytes` / `compile_cache_files` 恒为 0（探针拿到的是

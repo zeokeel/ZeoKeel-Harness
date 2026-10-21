@@ -1258,7 +1258,7 @@ export class HostCronLedger {
   }
 
   /**
-   * Service-owned upsert (used by sibling plugins via picoCronService).
+   * Service-owned upsert (used by sibling plugins via zeokeelCronService).
    * Preserves execution history; re-seeds nextRunAt when the cron changed or
    * the job just became enabled.
    */

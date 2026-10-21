@@ -101,11 +101,11 @@ function stallingFetch(): { fetch: typeof fetch, entered: Promise<void>, release
 
 /** Connect + authorize one connector through the plugin's own routes. */
 async function authorize(h: ReturnType<typeof createHarness>, id: string, expected: number): Promise<void> {
-  await callRoute(h, `/api/pico/connectors/${id}/connect`, 'POST')
+  await callRoute(h, `/api/zeokeel/connectors/${id}/connect`, 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline) {
-    const res = await callRoute(h, `/api/pico/connectors/${id}/state`, 'GET')
+    const res = await callRoute(h, `/api/zeokeel/connectors/${id}/state`, 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } }).request?.authorizeUrl
     if (url) break
     await new Promise(resolve => setTimeout(resolve, 25))
@@ -215,7 +215,7 @@ describe('R10 N2: the exclusive proof and the ticket key are one normalization',
 
       // 甲 的凭据变更 ⇒ 甲重建、等满 grace、放弃。这一步**不得**动乙的记账。
       await announceNewToken(dir, 'connector-a', 'at-h2-a')
-      h.emit('pico/connector-credentials-changed', { id: 'connector-a' })
+      h.emit('zeokeel/connector-credentials-changed', { id: 'connector-a' })
       await waitFor(() => h.warns.some(line => line.includes('probe-a') && line.includes('超时')), 15_000)
       expect(
         isMcpOutboundBusy(bucket),
@@ -254,7 +254,7 @@ describe('R10 N2: the exclusive proof and the ticket key are one normalization',
       expect(isMcpOutboundBusy(bucket)).toBe(true)
 
       await announceNewToken(dir, 'connector-a', 'at-h2-solo')
-      h.emit('pico/connector-credentials-changed', { id: 'connector-a' })
+      h.emit('zeokeel/connector-credentials-changed', { id: 'connector-a' })
       await waitFor(() => h.warns.some(line => line.includes('probe-a') && line.includes('超时')), 15_000)
       expect(isMcpOutboundBusy(bucket), '真独占时的放弃必须仍然归还记账（阀门不退化）').toBe(false)
 

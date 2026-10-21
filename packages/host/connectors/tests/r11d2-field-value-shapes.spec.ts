@@ -72,11 +72,11 @@ function def(origin: string, declared: string): ConnectorDef {
 
 /** Connect + authorize through the plugin's own routes; returns the captured registration. */
 async function connectAndAuthorize(h: ReturnType<typeof createHarness>): Promise<Record<string, unknown>> {
-  await callRoute(h, `/api/pico/connectors/${ID}/connect`, 'POST')
+  await callRoute(h, `/api/zeokeel/connectors/${ID}/connect`, 'POST')
   const deadline = Date.now() + 8_000
   let url: string | undefined
   while (Date.now() < deadline) {
-    const res = await callRoute(h, `/api/pico/connectors/${ID}/state`, 'GET')
+    const res = await callRoute(h, `/api/zeokeel/connectors/${ID}/state`, 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } }).request?.authorizeUrl
     if (url !== undefined) break
     await new Promise(resolve => setTimeout(resolve, 25))
@@ -148,7 +148,7 @@ describe('R11-D-02: a `fields` VALUE that is not a string must not take the refr
       expect(onDisk.fields, 'precondition: the file really carries a null VALUE').toEqual({ API_KEY: null })
 
       // ① The refresh must succeed — a throwing CAS fingerprint answered 500 here.
-      const refreshed = await callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+      const refreshed = await callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
       expect(refreshed.status, `the refresh route must answer 200, not 500: ${refreshed.body.slice(0, 300)}`).toBe(200)
 
       // ② The rotation must really have been persisted (proves the CAS write ran,
@@ -209,7 +209,7 @@ describe('R11-D-07: a non-string field value must not steal the authorization sl
 
       // A credential change is what re-renders the live record; the panel refresh
       // is the production route that drives it (and the one the user has).
-      const refreshed = await callRoute(h, `/api/pico/connectors/${ID}/refresh`, 'POST')
+      const refreshed = await callRoute(h, `/api/zeokeel/connectors/${ID}/refresh`, 'POST')
       expect(refreshed.status, `the refresh route must answer 200: ${refreshed.body.slice(0, 300)}`).toBe(200)
       const token = await liveToken(config)
       const authorization = (config.headers as Record<string, string>).Authorization

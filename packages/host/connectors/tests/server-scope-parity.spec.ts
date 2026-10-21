@@ -3,9 +3,9 @@
  *
  * "One machine, two deployments, two tenants" is a single threat model, and the
  * repo already answers it with `sha256(normalized server address)[:32]` in two
- * places: `@picoaide/dsh-browser/surface` (`serverPartitionHash`, the authority
+ * places: `@zeokeel/dsh-browser/surface` (`serverPartitionHash`, the authority
  * for browser/application partitions) and its mirror
- * `@picoaide/dsh-wasm-apps-host/partition` (that package may not depend on
+ * `@zeokeel/dsh-wasm-apps-host/partition` (that package may not depend on
  * browser). Connector credentials now use the SAME digest — `./user-scope.ts`
  * is the connectors-side mirror — so a user switching servers lands on one
  * coherent set of scopes instead of three different answers.
@@ -92,12 +92,12 @@ describe('server scope hash: connectors mirrors the browser/application formula'
     }
   })
 
-  it('agrees with `@picoaide/dsh-browser/surface` example by example', () => {
+  it('agrees with `@zeokeel/dsh-browser/surface` example by example', () => {
     const theirs = runMirror(MIRRORS.browser, SERVERS)
     expect(theirs).toEqual(SERVERS.map(server => enc(serverScopeHash(server))))
   })
 
-  it('agrees with the `@picoaide/dsh-wasm-apps-host/partition` mirror example by example', () => {
+  it('agrees with the `@zeokeel/dsh-wasm-apps-host/partition` mirror example by example', () => {
     const theirs = runMirror(MIRRORS.wasmAppsHost, SERVERS)
     expect(theirs).toEqual(SERVERS.map(server => enc(serverScopeHash(server))))
   })

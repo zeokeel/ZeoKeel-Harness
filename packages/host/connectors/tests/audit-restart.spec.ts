@@ -40,7 +40,7 @@ function def(origin: string): ConnectorDef {
 }
 
 async function row(h: ReturnType<typeof createHarness>, id: string): Promise<{ status: string, error?: string }> {
-  const body = JSON.parse((await callRoute(h, '/api/pico/connectors', 'GET')).body) as
+  const body = JSON.parse((await callRoute(h, '/api/zeokeel/connectors', 'GET')).body) as
     { connectors: Array<{ id: string, status: string, error?: string }> }
   return body.connectors.find(c => c.id === id) ?? { status: '?' }
 }
@@ -63,11 +63,11 @@ async function awaitRow(
 /** One full "open the client, authorize, then quit" cycle on a directory. */
 async function authorizeOnce(dir: string, server: RealMcpServer): Promise<void> {
   const first = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
-  await callRoute(first, '/api/pico/connectors/example-mcp/connect', 'POST')
+  await callRoute(first, '/api/zeokeel/connectors/example-mcp/connect', 'POST')
   const deadline = Date.now() + 8000
   let url: string | undefined
   while (Date.now() < deadline && url === undefined) {
-    const res = await callRoute(first, '/api/pico/connectors/example-mcp/state', 'GET')
+    const res = await callRoute(first, '/api/zeokeel/connectors/example-mcp/state', 'GET')
     url = (JSON.parse(res.body) as { request?: { authorizeUrl?: string } | null }).request?.authorizeUrl
     if (url === undefined) await new Promise(r => setTimeout(r, 25))
   }

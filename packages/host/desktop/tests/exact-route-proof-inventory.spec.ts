@@ -29,7 +29,7 @@
  *
  * - **能**：`proof` 行的**闸门调用点**必须真实存在（声明的文件里必须真的出现
  *   `acceptWriteProof(` / `requireWriteProof(` / … 的调用），且那个文件必须接在
- *   某份 `write-proof.ts` 或规范实现 `@picoaide/dsh-host-locale/loopback` 上；
+ *   某份 `write-proof.ts` 或规范实现 `@zeokeel/dsh-host-locale/loopback` 上；
  *   接不上的（三处历史遗留的本地闭包）必须逐条写明 `localGate` 理由。
  * - **不能**：静态判据证明不了"伪造请求真的会被拒" —— 那要按包起各自的 ctx 才能跑，
  *   见下面的 `BEHAVIOUR_COVERAGE`：**已经行为验证的包**写 `verifiedBy`（判据断言那份
@@ -70,7 +70,7 @@ interface ExactRouteRow {
   /**
    * `all` / `consuming-only` 必填：**闸门调用点** = `<仓库相对文件>#<符号>`。
    * 判据断言那个文件里真的出现 `<符号>(`，且该文件接在某份 `write-proof.ts` 或
-   * `@picoaide/dsh-host-locale/loopback` 上。
+   * `@zeokeel/dsh-host-locale/loopback` 上。
    */
   readonly gate?: string
   /**
@@ -145,50 +145,50 @@ const REPO_EXACT_ROUTE_POLICY: ReadonlyMap<string, ExactRouteRow> = new Map<stri
   }],
 
   // ── account-card（FIX-42②；行为级判据见 tests/audit-r28-consumption-proof.spec.ts）──
-  ['packages/client/account-card/src/index.ts#\'/api/pico/account/usage\'', {
+  ['packages/client/account-card/src/index.ts#\'/api/zeokeel/account/usage\'', {
     proof: 'consuming-only',
     reason: '纯读分支不挂：不带 `?refresh` 时只交付缓存快照、不触网关；`?refresh=1`（往返网关）与 `authExpired`（清会话）两支是写 ⇒ 走证明。',
     // 规范实现在零依赖叶子包里：account-card 不可能 import desktop 那份
-    // （`dsh-plugin-desktop` 的 needs 里含 `@picoaide/dsh-account-card` ⇒ 反向成环），
-    // 而 `@picoaide/dsh-enterprise/loopback` 是它**既有**的依赖与子路径。
+    // （`dsh-plugin-desktop` 的 needs 里含 `@zeokeel/dsh-account-card` ⇒ 反向成环），
+    // 而 `@zeokeel/dsh-enterprise/loopback` 是它**既有**的依赖与子路径。
     gate: 'packages/host/host-locale/src/loopback.ts#acceptWriteProof',
   }],
 
   // ── browser ──
-  ['packages/host/browser/src/index.ts#\'/api/pico/browser/state\'', {
+  ['packages/host/browser/src/index.ts#\'/api/zeokeel/browser/state\'', {
     proof: 'none',
     reason: '纯读：只回吐 shell 状态快照（GET），无状态变更。',
   }],
-  ['packages/host/browser/src/index.ts#\'/api/pico/browser/ops\'', {
+  ['packages/host/browser/src/index.ts#\'/api/zeokeel/browser/ops\'', {
     proof: 'none',
     reason: '纯读：只回吐动作时间线（GET），无状态变更。',
   }],
-  ['packages/host/browser/src/index.ts#\'/api/pico/browser/stream\'', {
+  ['packages/host/browser/src/index.ts#\'/api/zeokeel/browser/stream\'', {
     proof: 'none',
     reason: '纯读：SSE 信号流（GET，只推事件、不落状态；客户端收到后自己回拉 /state）。',
   }],
-  ['packages/host/browser/src/index.ts#\'/api/pico/browser/bookmarks\'', {
+  ['packages/host/browser/src/index.ts#\'/api/zeokeel/browser/bookmarks\'', {
     proof: 'consuming-only',
     reason: '纯读分支不挂：GET 只列书签；POST/DELETE 改书签库 ⇒ 走证明。',
     gate: 'packages/host/browser/src/index.ts#requireWriteProof',
-    localGate: '该 `requireWriteProof` 是本文件内的局部闭包（第三轮写的同形实现），尚未收敛到 `@picoaide/dsh-host-locale/loopback`；它逐字等价（403/503 + 同一份 hint + fence 缺席 fail-closed）。收敛属独立改动。',
+    localGate: '该 `requireWriteProof` 是本文件内的局部闭包（第三轮写的同形实现），尚未收敛到 `@zeokeel/dsh-host-locale/loopback`；它逐字等价（403/503 + 同一份 hint + fence 缺席 fail-closed）。收敛属独立改动。',
   }],
-  ['packages/host/browser/src/index.ts#\'/api/pico/browser/history\'', {
+  ['packages/host/browser/src/index.ts#\'/api/zeokeel/browser/history\'', {
     proof: 'none',
     reason: '纯读：只查询浏览历史（GET，带 q/limit 过滤），无状态变更。',
   }],
-  ['packages/host/browser/src/index.ts#\'/api/pico/browser/downloads\'', {
+  ['packages/host/browser/src/index.ts#\'/api/zeokeel/browser/downloads\'', {
     proof: 'consuming-only',
     reason: '纯读分支不挂：GET 只列下载记录；DELETE 删记录 ⇒ 走证明。',
     gate: 'packages/host/browser/src/index.ts#requireWriteProof',
     localGate: '该 `requireWriteProof` 是本文件内的局部闭包（第三轮写的同形实现），尚未收敛到 '
-      + '`@picoaide/dsh-host-locale/loopback`；它逐字等价（403/503 + 同一份 hint + fence 缺席 fail-closed）。收敛属独立改动。',
+      + '`@zeokeel/dsh-host-locale/loopback`；它逐字等价（403/503 + 同一份 hint + fence 缺席 fail-closed）。收敛属独立改动。',
   }],
-  ['packages/host/browser/src/index.ts#\'/api/pico/browser/downloads/open\'', {
+  ['packages/host/browser/src/index.ts#\'/api/zeokeel/browser/downloads/open\'', {
     proof: 'all',
     gate: 'packages/host/browser/src/index.ts#requireWriteProof',
     localGate: '该 `requireWriteProof` 是本文件内的局部闭包（第三轮写的同形实现），尚未收敛到 '
-      + '`@picoaide/dsh-host-locale/loopback`；它逐字等价（403/503 + 同一份 hint + fence 缺席 fail-closed）。收敛属独立改动。',
+      + '`@zeokeel/dsh-host-locale/loopback`；它逐字等价（403/503 + 同一份 hint + fence 缺席 fail-closed）。收敛属独立改动。',
   }],
   ['packages/host/browser/src/index.ts#\'/browser-shell\'', {
     proof: 'none',
@@ -200,7 +200,7 @@ const REPO_EXACT_ROUTE_POLICY: ReadonlyMap<string, ExactRouteRow> = new Map<stri
   }],
 
   // ── connectors（exact 只服务列表；写动作全在 prefix 路由上挂证明）──
-  ['packages/host/connectors/src/index.ts#\'/api/pico/connectors\'', {
+  ['packages/host/connectors/src/index.ts#\'/api/zeokeel/connectors\'', {
     proof: 'none',
     reason: '纯读：exact 这一条只列连接器（GET）；connect/approve/refresh 等**写动作**全部走同路径的 prefix 路由，那里挂 `requireWriteProof`。',
   }],
@@ -230,37 +230,37 @@ const REPO_EXACT_ROUTE_POLICY: ReadonlyMap<string, ExactRouteRow> = new Map<stri
   }],
   ['packages/host/enterprise/src/auth-gate.ts#\'/change-password\'', {
     proof: 'none',
-    reason: '纯读：改密页 HTML（页面本身不改状态，提交走 /api/pico/auth/password 那条挂证明的路由）。',
+    reason: '纯读：改密页 HTML（页面本身不改状态，提交走 /api/zeokeel/auth/password 那条挂证明的路由）。',
   }],
-  ['packages/host/enterprise/src/auth-gate.ts#\'/api/pico/auth/login\'', {
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/auth/login\'', {
     proof: 'all',
     gate: 'packages/host/enterprise/src/auth-gate.ts#proofOfPossession',
-    localGate: '该 `proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@picoaide/dsh-host-locale/loopback`；它多一个 `level` 参数（`required`/`best-effort`），本路由用 `required`（fence 缺席 fail-closed 503）。收敛属独立改动。',
+    localGate: '该 `proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@zeokeel/dsh-host-locale/loopback`；它多一个 `level` 参数（`required`/`best-effort`），本路由用 `required`（fence 缺席 fail-closed 503）。收敛属独立改动。',
   }],
-  ['packages/host/enterprise/src/auth-gate.ts#\'/api/pico/auth/password\'', {
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/auth/password\'', {
     proof: 'all',
     gate: 'packages/host/enterprise/src/auth-gate.ts#proofOfPossession',
     localGate: '同上：`proofOfPossession` 是 `apply()` 内的局部闭包，尚未收敛到规范实现；本路由用 `best-effort` 档 —— 改密必须先交出旧密码，本机伪造 Origin 的进程拿不出凭据。',
   }],
-  ['packages/host/enterprise/src/auth-gate.ts#\'/api/pico/auth/state\'', {
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/auth/state\'', {
     proof: 'none',
     reason: '纯读：单次读取会话快照（GET），无状态变更。',
   }],
-  ['packages/host/enterprise/src/auth-gate.ts#\'/api/pico/auth/logout\'', {
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/auth/logout\'', {
     proof: 'all',
     gate: 'packages/host/enterprise/src/auth-gate.ts#proofOfPossession',
-    localGate: '同上：`proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@picoaide/dsh-host-locale/loopback`；本路由用 `required` 档（fence 缺席 fail-closed 503）。',
+    localGate: '同上：`proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@zeokeel/dsh-host-locale/loopback`；本路由用 `required` 档（fence 缺席 fail-closed 503）。',
   }],
-  ['packages/host/enterprise/src/auth-gate.ts#\'/api/pico/auth/methods\'', {
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/auth/methods\'', {
     proof: 'none',
     reason: '纯读：查询服务端启用的登录方式（GET，服务端该端点本就是公开端），无状态变更。',
   }],
-  ['packages/host/enterprise/src/auth-gate.ts#\'/api/pico/auth/browser-login\'', {
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/auth/browser-login\'', {
     proof: 'all',
     gate: 'packages/host/enterprise/src/auth-gate.ts#proofOfPossession',
-    localGate: '同上：`proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@picoaide/dsh-host-locale/loopback`；本路由用 `required` 档（fence 缺席 fail-closed 503）。',
+    localGate: '同上：`proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@zeokeel/dsh-host-locale/loopback`；本路由用 `required` 档（fence 缺席 fail-closed 503）。',
   }],
-  ['packages/host/enterprise/src/auth-gate.ts#\'/api/pico/channel\'', {
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/channel\'', {
     proof: 'none',
     reason: '纯读：回吐渠道内容（GET，登录页未登录时也要用），无状态变更。',
   }],
@@ -339,7 +339,7 @@ function collectSources(): string[] {
  * R29-AC1-04 之前只认字面量形式（`{ kind: 'exact', path: …, handler: … }`），于是两种
  * 写法**完全失明**（合成树里新包注册 3 条 exact 路由 ⇒ 发现 0 条）：
  *   - 工厂函数 + 简写属性：`return { kind: 'exact', path, handler }`，路径只出现在调用点
- *     （`exactRoute('/api/pico/x', handler)`）；
+ *     （`exactRoute('/api/zeokeel/x', handler)`）；
  *   - 对象展开：`const base = { kind: 'exact', path: '/a', handler }; register({ ...base, path: '/b' })`。
  * 现在两种都进面 —— "发现器看不见"正是这条判据要消灭的东西。
  *
@@ -617,7 +617,7 @@ describe('仓库级判据：每一个 exact 路由都挂了持有性证明，或
         `${key}：声明的闸门 ${gate} 在 ${gateFile} 里根本没有被调用`,
       ).toBe(true)
       // 闸门必须接在**某一份写面判定实现**上：各自包的 `write-proof.ts`，或规范实现
-      // `@picoaide/dsh-host-locale/loopback`。接不上的（局部闭包）必须写明 localGate。
+      // `@zeokeel/dsh-host-locale/loopback`。接不上的（局部闭包）必须写明 localGate。
       const onImplementation = gateFile.endsWith('write-proof.ts')
         || gateText.includes('write-proof')
         || gateText.includes('host-locale/loopback')

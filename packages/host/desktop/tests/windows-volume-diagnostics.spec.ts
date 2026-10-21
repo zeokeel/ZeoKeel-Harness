@@ -28,12 +28,12 @@ describe('Windows volume diagnostics', () => {
   })
 
   it('accepts fixed NTFS and ReFS volumes', () => {
-    expect(diagnoseWindowsVolumes('win32', [{ label: 'install', path: 'C:\\App\\PicoAide Harness.exe' }], query({
+    expect(diagnoseWindowsVolumes('win32', [{ label: 'install', path: 'C:\\App\\ZeoKeel Harness.exe' }], query({
       root: 'C:\\',
       fileSystem: 'NTFS',
       driveType: 3,
     }))).toEqual([])
-    expect(diagnoseWindowsVolumes('win32', [{ label: 'install', path: 'D:\\App\\PicoAide Harness.exe' }], query({
+    expect(diagnoseWindowsVolumes('win32', [{ label: 'install', path: 'D:\\App\\ZeoKeel Harness.exe' }], query({
       root: 'D:\\',
       fileSystem: 'REFS',
       driveType: 3,

@@ -8,17 +8,17 @@
  * 替换了 `window.fetch`，把目录数据换成自造数据）。本文件把两半接起来跑：
  *
  *   真 `AppCenterPanel`（createRoot + act ⇒ `useEffect` 真的执行）
- *     → 真的 fetch 调用（断言 URL 是 `/api/pico/apps/wasm`）
+ *     → 真的 fetch 调用（断言 URL 是 `/api/zeokeel/apps/wasm`）
  *     → 真 `parseCatalog`
  *     → 真 DOM（断言条目文本出现在容器里）
  *
  * 另外覆盖发布入口（FIX-38）：真点击 → 表单出现 → 填表 → 提交 → 断言页面发出的
- * `POST /api/pico/apps/wasm/publish` 请求体，以及成功/失败两种结果的 DOM。
+ * `POST /api/zeokeel/apps/wasm/publish` 请求体，以及成功/失败两种结果的 DOM。
  *
  * ---- 变异验证 ----
  *   - 删掉 `AppCenterPanel` 里 `useEffect(() => { void load() }, [load])` ⇒
  *     「挂载后真的取数」「加载失败显示错误」「目录展示全部应用」三条红；
- *   - 把 fetch 的 URL 改成别的路径 ⇒ 「请求的是 /api/pico/apps/wasm」红；
+ *   - 把 fetch 的 URL 改成别的路径 ⇒ 「请求的是 /api/zeokeel/apps/wasm」红；
  *   - `parseCatalog` 里按 `visible` / `access` / `enabled` 加一条 continue ⇒
  *     「目录展示全部应用」与「已下架标状态」红；
  *   - 访问级别选择器改回「visible 勾选 + login_required 勾选」⇒
@@ -41,7 +41,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PANEL_ACTIVE_ATTR, PANEL_SURFACE_ATTR, activePanelId } from '@picoaide/dsh-panel-surface/client'
+import { PANEL_ACTIVE_ATTR, PANEL_SURFACE_ATTR, activePanelId } from '@zeokeel/dsh-panel-surface/client'
 import { AppCenterPanel } from './AppCenterPanel.tsx'
 import { APP_CENTER_PANEL_ID, mountAppCenterPanel, openAppCenterPanel } from './app-center-surface.tsx'
 import { PublishForm } from './PublishForm.tsx'
@@ -59,8 +59,8 @@ import { setActiveLocale } from './locales.ts'
  * （应用 AI 的授权作用域）。下面的 stub 默认把渠道与身份两条**本机只读路由**
  * 直接答掉，用例只需要关心自己那条业务路由。
  */
-const APP_SCHEME = 'picoaide-app'
-const OFFICIAL_CHANNEL: AppChannel = { appOriginScheme: APP_SCHEME, deepLinkScheme: 'picoaide', productName: 'PicoAide' }
+const APP_SCHEME = 'zeokeel-app'
+const OFFICIAL_CHANNEL: AppChannel = { appOriginScheme: APP_SCHEME, deepLinkScheme: 'zeokeel', productName: 'ZeoKeel' }
 /** 一条应用协议 URL（scheme 从 fixture 来）。 */
 const appURL = (appId: string, path = '/'): string => `${APP_SCHEME}://${appId}${path}`
 
@@ -71,7 +71,7 @@ const appURL = (appId: string, path = '/'): string => `${APP_SCHEME}://${appId}$
 const QUOTA_PATTERN = /quota|balance|budget|usage|credit|额度|用量|余额|计费/iu
 
 /**
- * 宿主 `/api/pico/apps/wasm` 的**真实输出形状**（由 enterprise 侧的
+ * 宿主 `/api/zeokeel/apps/wasm` 的**真实输出形状**（由 enterprise 侧的
  * `wasm-apps.spec.ts` 在另一端钉住：相对 `entry_url` 已被绝对化、未知字段不增删）。
  * 这里复用它，是为了让"路由输出 → 面板渲染"这条跨包链路在两侧各钉一半，
  * 任一侧漂移都会被看见。
@@ -189,16 +189,16 @@ async function typeIntoPublishForm(values: {
   appId?: string, version?: string, title?: string, changelog?: string, access?: 'login' | 'whitelist',
   whitelist?: string, purpose?: string, owner?: string, sensitivity?: string,
 }): Promise<void> {
-  if (values.appId !== undefined) await type('.pico-app-center-app-id', values.appId)
-  if (values.version !== undefined) await type('.pico-app-center-version', values.version)
-  if (values.title !== undefined) await type('.pico-app-center-title', values.title)
-  if (values.changelog !== undefined) await type('.pico-app-center-changelog', values.changelog)
+  if (values.appId !== undefined) await type('.zeokeel-app-center-app-id', values.appId)
+  if (values.version !== undefined) await type('.zeokeel-app-center-version', values.version)
+  if (values.title !== undefined) await type('.zeokeel-app-center-title', values.title)
+  if (values.changelog !== undefined) await type('.zeokeel-app-center-changelog', values.changelog)
   // 访问级别先选：名单输入只在 whitelist 模式下存在，顺序不能反。
-  if (values.access !== undefined) await click(`.pico-app-center-access-${values.access}`)
-  if (values.whitelist !== undefined) await type('.pico-app-center-whitelist', values.whitelist)
-  if (values.purpose !== undefined) await type('.pico-app-center-purpose', values.purpose)
-  if (values.sensitivity !== undefined) await type('.pico-app-center-data-sensitivity', values.sensitivity)
-  if (values.owner !== undefined) await type('.pico-app-center-owner', values.owner)
+  if (values.access !== undefined) await click(`.zeokeel-app-center-access-${values.access}`)
+  if (values.whitelist !== undefined) await type('.zeokeel-app-center-whitelist', values.whitelist)
+  if (values.purpose !== undefined) await type('.zeokeel-app-center-purpose', values.purpose)
+  if (values.sensitivity !== undefined) await type('.zeokeel-app-center-data-sensitivity', values.sensitivity)
+  if (values.owner !== undefined) await type('.zeokeel-app-center-owner', values.owner)
 }
 
 /**
@@ -229,17 +229,17 @@ afterEach(async () => {
 })
 
 describe('FIX-42：面板挂载后真的取数（useEffect 真的跑）', () => {
-  it('挂载即 GET /api/pico/apps/wasm，并渲染出解析后的条目', async () => {
+  it('挂载即 GET /api/zeokeel/apps/wasm，并渲染出解析后的条目', async () => {
     stubFetch(() => jsonResponse(200, CATALOG_FROM_ROUTE))
     await mount()
     // ① 真的调用了宿主取数路由（不是注入的假数据）。
-    expect(calls.map(call => call.url)).toContain('/api/pico/apps/wasm')
-    expect(businessCalls().map(call => call.url)).toEqual(['/api/pico/apps/wasm'])
+    expect(calls.map(call => call.url)).toContain('/api/zeokeel/apps/wasm')
+    expect(businessCalls().map(call => call.url)).toEqual(['/api/zeokeel/apps/wasm'])
     // ② 解析出的条目真的进了 DOM。
     expect(container.textContent).toContain('共享便签')
     expect(container.textContent).toContain('值班记录')
     expect(container.textContent).toContain('负责人: alice')
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(3)
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(3)
   })
 
   it('目录展示全部应用：白名单应用与已下架的条目都由这条取数链路渲染出来', async () => {
@@ -249,7 +249,7 @@ describe('FIX-42：面板挂载后真的取数（useEffect 真的跑）', () => 
     expect(container.textContent).toContain('隐藏工具')
     // 下架的条目也在，并标出状态。
     expect(container.textContent).toContain('已下线的工具')
-    expect(container.querySelectorAll('.pico-app-center-card')).toHaveLength(3)
+    expect(container.querySelectorAll('.zeokeel-app-center-card')).toHaveLength(3)
     expect(container.querySelector('[data-role="app-disabled"]')).not.toBeNull()
   })
 
@@ -328,7 +328,7 @@ describe('FIX-42：面板挂载后真的取数（useEffect 真的跑）', () => 
     })
     await mount()
     expect(container.querySelector('[data-role="catalog-error"]')!.textContent).toContain('boom')
-    await click('.pico-app-center-retry')
+    await click('.zeokeel-app-center-retry')
     expect(businessCalls()).toHaveLength(2)
     expect(container.textContent).toContain('共享便签')
   })
@@ -369,7 +369,7 @@ describe('FIX-42：面板挂载后真的取数（useEffect 真的跑）', () => 
 
 /**
  * 2026-09-19（冻结契约 §4.5）：应用中心"打开"走**本机路由**
- * `POST /api/pico/wasm-apps/open`，成功即本机确认 `picoaide-app://<app_id>/` 已就绪；
+ * `POST /api/zeokeel/wasm-apps/open`，成功即本机确认 `zeokeel-app://<app_id>/` 已就绪；
  * 没有入口链接、没有系统浏览器兜底。失败必须**分别可辨**（未登录 / 应用不存在 /
  * 协议未就绪），不是一句"打开失败"。
  *
@@ -385,19 +385,19 @@ describe('打开应用：本机路由 + 失败原因可辨（2026-09-19）', () 
     ],
   }
 
-  it('点"打开" ⇒ POST /api/pico/wasm-apps/open（只发这一次请求）', async () => {
+  it('点"打开" ⇒ POST /api/zeokeel/wasm-apps/open（只发这一次请求）', async () => {
     stubFetch((url) => {
       if (url === OPEN_APP_PATH) return jsonResponse(200, { url: appURL('roster') })
       return jsonResponse(200, CATALOG_ONE)
     })
     await mount()
-    await click('.pico-app-center-open')
+    await click('.zeokeel-app-center-open')
 
     const open = calls.filter(call => call.url === OPEN_APP_PATH)
     expect(open).toHaveLength(1)
     expect(open[0]!.init.method).toBe('POST')
     expect(JSON.parse(String(open[0]!.init.body))).toEqual({ app_id: 'roster' })
-    // 没有任何别的出站路径（旧的 /api/pico/browser/open 与 show 都不该出现）。
+    // 没有任何别的出站路径（旧的 /api/zeokeel/browser/open 与 show 都不该出现）。
     expect(calls.map(call => call.url).filter(url => url.includes('/browser/'))).toEqual([])
     // 成功 ⇒ 不显示任何错误块。
     expect(container.querySelector('[data-role="lifecycle-error"]')).toBeNull()
@@ -413,7 +413,7 @@ describe('打开应用：本机路由 + 失败原因可辨（2026-09-19）', () 
       stubFetch((url) => (url === OPEN_APP_PATH ? jsonResponse(status, { error: 'x' }) : jsonResponse(200, CATALOG_ONE)))
       await mount()
       const before = calls.filter(call => call.url === OPEN_APP_PATH).length
-      await click('.pico-app-center-open')
+      await click('.zeokeel-app-center-open')
       const block = container.querySelector('[data-role="lifecycle-error"]')
       expect(block, String(status)).not.toBeNull()
       expect(block!.textContent, String(status)).toContain('打开失败')
@@ -431,7 +431,7 @@ describe('打开应用：本机路由 + 失败原因可辨（2026-09-19）', () 
       ? jsonResponse(200, { url: 'https://roster.apps.example.com/' })
       : jsonResponse(200, CATALOG_ONE)))
     await mount()
-    await click('.pico-app-center-open')
+    await click('.zeokeel-app-center-open')
     const block = container.querySelector('[data-role="lifecycle-error"]')
     expect(block).not.toBeNull()
     expect(block!.textContent).toContain('响应与预期不一致')
@@ -445,9 +445,9 @@ describe('打开应用：本机路由 + 失败原因可辨（2026-09-19）', () 
           apps: [{ app_id: 'gone', title: '已下线的工具', access: 'login', enabled: false }],
         })))
     await mount()
-    const button = container.querySelector<HTMLButtonElement>('.pico-app-center-open')!
+    const button = container.querySelector<HTMLButtonElement>('.zeokeel-app-center-open')!
     expect(button.disabled).toBe(true)
-    await click('.pico-app-center-open')
+    await click('.zeokeel-app-center-open')
     expect(calls.filter(call => call.url === OPEN_APP_PATH)).toEqual([])
   })
 })
@@ -456,24 +456,24 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
   it('目录视图有发布入口（真实 button），点击后出现发布表单', async () => {
     stubFetch(() => jsonResponse(200, { apps: [] }))
     await mount()
-    const entry = container.querySelector<HTMLButtonElement>('.pico-app-center-publish')
+    const entry = container.querySelector<HTMLButtonElement>('.zeokeel-app-center-publish')
     expect(entry).not.toBeNull()
     expect(entry!.tagName).toBe('BUTTON')
     expect(entry!.textContent).toBe('发布')
-    await click('.pico-app-center-publish')
-    expect(container.querySelector('.pico-app-center-publish-form')).not.toBeNull()
+    await click('.zeokeel-app-center-publish')
+    expect(container.querySelector('.zeokeel-app-center-publish-form')).not.toBeNull()
     expect(container.textContent).toContain('发布应用')
   })
 
-  it('填表提交 ⇒ POST /api/pico/apps/wasm/publish，请求体含产物与五个配置字段（access 而非 visible/login_required）', async () => {
+  it('填表提交 ⇒ POST /api/zeokeel/apps/wasm/publish，请求体含产物与五个配置字段（access 而非 visible/login_required）', async () => {
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, { apps: [] })))
     await mount()
-    await click('.pico-app-center-publish')
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
+    await click('.zeokeel-app-center-publish')
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({
       ...FILLED, changelog: '首版', access: 'whitelist', whitelist: 'alice, bob', sensitivity: 'internal',
     })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
 
     const publish = calls.filter(call => call.url === PUBLISH_PATH)
     expect(publish).toHaveLength(1)
@@ -501,29 +501,29 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
   it('访问级别缺省是 login（"登录后使用"），写侧只有两个真实单选框（无"公开"）', async () => {
     stubFetch(() => jsonResponse(200, { apps: [] }))
     await mount()
-    await click('.pico-app-center-publish')
+    await click('.zeokeel-app-center-publish')
     const radios = [...container.querySelectorAll<HTMLInputElement>('input[type="radio"][data-field="access"]')]
     expect(radios.map(r => r.getAttribute('data-access'))).toEqual(['login', 'whitelist'])
     expect(radios.map(r => r.checked)).toEqual([true, false])
     // 默认不显示名单输入（只有选了"仅白名单用户"才需要它）。
-    expect(container.querySelector('.pico-app-center-whitelist')).toBeNull()
+    expect(container.querySelector('.zeokeel-app-center-whitelist')).toBeNull()
   })
 
   it('选中 whitelist ⇒ 名单输入出现且标为必填；空名单提交被就地拦下（不发请求）', async () => {
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, { apps: [] })))
     await mount()
-    await click('.pico-app-center-publish')
-    await pickFile('.pico-app-center-file', 'x.wasm', new Uint8Array([1]))
+    await click('.zeokeel-app-center-publish')
+    await pickFile('.zeokeel-app-center-file', 'x.wasm', new Uint8Array([1]))
     await typeIntoPublishForm({ ...FILLED, access: 'whitelist' })
 
-    const whitelist = container.querySelector<HTMLInputElement>('.pico-app-center-whitelist')
+    const whitelist = container.querySelector<HTMLInputElement>('.zeokeel-app-center-whitelist')
     expect(whitelist).not.toBeNull()
     expect(whitelist!.required).toBe(true)
     expect(whitelist!.getAttribute('aria-required')).toBe('true')
     // 名单旁的"必填"标记真的渲染出来（用户看得到为什么被拦）。
     expect(container.textContent).toContain('选中「仅白名单用户」时必填')
 
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     const local = container.querySelector('[data-role="local-error"]')
     expect(local).not.toBeNull()
     expect(local!.textContent).toContain('必须填至少一个账号')
@@ -533,14 +533,14 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
 
     // 填上名单后同一个表单可以正常提交（拦截不是死胡同）。
     await typeIntoPublishForm({ whitelist: 'alice' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(1)
   })
 
   it('访问级别每个选项都有帮助文字（写侧两个选项），whitelist 的写明"平台不比对名单、由应用自己判"', async () => {
     stubFetch(() => jsonResponse(200, { apps: [] }))
     await mount()
-    await click('.pico-app-center-publish')
+    await click('.zeokeel-app-center-publish')
     // 匿名面已删除（冻结契约 §4.4）⇒ 没有"公开"选项，也就没有它的帮助文字。
     expect(container.querySelector('[data-role="access-hint-public"]')).toBeNull()
     expect(container.querySelector('[data-role="access-hint-login"]')!.textContent).toContain('登录后全员可用（默认）')
@@ -553,10 +553,10 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
   it('本地预校验：app_id 形态 / version 形态 / 首版声明字段都在发请求之前拦下', async () => {
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, { apps: [] })))
     await mount()
-    await click('.pico-app-center-publish')
-    await pickFile('.pico-app-center-file', 'x.wasm', new Uint8Array([1]))
+    await click('.zeokeel-app-center-publish')
+    await pickFile('.zeokeel-app-center-file', 'x.wasm', new Uint8Array([1]))
     await typeIntoPublishForm({ appId: 'Demo--App', version: '1.0', title: '', purpose: 'p' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     const local = container.querySelector('[data-role="local-error"]')!
     const codes = [...local.querySelectorAll('li')].map(li => li.getAttribute('data-code'))
     expect(codes).toContain('app_id_shape')
@@ -569,10 +569,10 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
   it('成功 ⇒ 显示版本、已生效与分享深链，并刷新目录', async () => {
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, { apps: [] })))
     await mount()
-    await click('.pico-app-center-publish')
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
+    await click('.zeokeel-app-center-publish')
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm(FILLED)
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
 
     const success = container.querySelector('[data-role="publish-success"]')
     expect(success).not.toBeNull()
@@ -583,11 +583,11 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
     // （服务端已不再下发 `entry_url`；RELEASE_OK 里那个字段是迁移期残留，被忽略）。
     const share = container.querySelector('[data-role="published-share"]')
     expect(share).not.toBeNull()
-    expect(share!.textContent).toBe('分享链接: picoaide://app/shift-notes')
+    expect(share!.textContent).toBe('分享链接: zeokeel://app/shift-notes')
     expect(success!.textContent).not.toContain('shift-notes.apps.example.com')
     expect(success!.textContent).not.toContain('入口')
     // 发布成功后重新拉一次目录（结果立即可见）。
-    expect(calls.filter(call => call.url === '/api/pico/apps/wasm').length).toBeGreaterThanOrEqual(2)
+    expect(calls.filter(call => call.url === '/api/zeokeel/apps/wasm').length).toBeGreaterThanOrEqual(2)
   })
 
   it('待审 ⇒ 明说"线上仍是旧版本"（不假装已生效，R17）', async () => {
@@ -595,10 +595,10 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
       ? jsonResponse(201, { ...RELEASE_OK, release: { ...RELEASE_OK.release, status: 'pending', current: false }, review_required: true })
       : jsonResponse(200, { apps: [] })))
     await mount()
-    await click('.pico-app-center-publish')
-    await pickFile('.pico-app-center-file', 'x.wasm', new Uint8Array([1]))
+    await click('.zeokeel-app-center-publish')
+    await pickFile('.zeokeel-app-center-file', 'x.wasm', new Uint8Array([1]))
     await typeIntoPublishForm({ ...FILLED, appId: 'x', version: '2.0.0' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     const success = container.querySelector('[data-role="publish-success"]')!
     expect(success.textContent).toContain('待审核')
     expect(success.textContent).not.toContain('已生效')
@@ -616,10 +616,10 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
         })
       : jsonResponse(200, { apps: [] })))
     await mount()
-    await click('.pico-app-center-publish')
-    await pickFile('.pico-app-center-file', 'x.wasm', new Uint8Array([1]))
+    await click('.zeokeel-app-center-publish')
+    await pickFile('.zeokeel-app-center-file', 'x.wasm', new Uint8Array([1]))
     await typeIntoPublishForm({ ...FILLED, appId: 'x', access: 'whitelist', whitelist: 'alice' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
 
     const block = container.querySelector('[data-role="publish-error"]')
     expect(block).not.toBeNull()
@@ -634,9 +634,9 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
   it('本地校验：没选文件就提交 ⇒ 就地提示，且不发请求', async () => {
     stubFetch(() => jsonResponse(200, { apps: [] }))
     await mount()
-    await click('.pico-app-center-publish')
+    await click('.zeokeel-app-center-publish')
     await typeIntoPublishForm(FILLED)
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     expect(container.querySelector('[data-role="local-error"]')!.textContent).toContain('请先选择 .wasm 文件')
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(0)
   })
@@ -651,25 +651,25 @@ describe('FIX-38：面板里的发布入口可达并真的发出发布请求', (
       })
     })
     await mount()
-    await click('.pico-app-center-publish')
-    await pickFile('.pico-app-center-file', 'x.wasm', new Uint8Array([1]))
+    await click('.zeokeel-app-center-publish')
+    await pickFile('.zeokeel-app-center-file', 'x.wasm', new Uint8Array([1]))
     await typeIntoPublishForm(FILLED)
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
 
     expect(container.querySelector('[data-role="phase"]')!.textContent).toContain('上传中 / 编译中')
-    expect(container.querySelector<HTMLButtonElement>('.pico-app-center-submit')!.disabled).toBe(true)
+    expect(container.querySelector<HTMLButtonElement>('.zeokeel-app-center-submit')!.disabled).toBe(true)
 
-    await click('.pico-app-center-cancel')
+    await click('.zeokeel-app-center-cancel')
     expect(container.querySelector('[data-role="phase"]')).toBeNull()
     expect(container.querySelector('[data-role="publish-error"]')).toBeNull()
-    expect(container.querySelector<HTMLButtonElement>('.pico-app-center-submit')!.disabled).toBe(false)
+    expect(container.querySelector<HTMLButtonElement>('.zeokeel-app-center-submit')!.disabled).toBe(false)
   })
 
   it('R36：目录视图与发布视图都不含额度/用量词', async () => {
     stubFetch(() => jsonResponse(200, CATALOG_FROM_ROUTE))
     await mount()
     expect(QUOTA_PATTERN.test(container.textContent ?? '')).toBe(false)
-    await click('.pico-app-center-publish')
+    await click('.zeokeel-app-center-publish')
     expect(QUOTA_PATTERN.test(container.textContent ?? '')).toBe(false)
   })
 })
@@ -702,8 +702,8 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
 
   /** 从目录进入"发新版"（第一行是发布者本人的应用）。 */
   async function openPublishNewVersion(): Promise<void> {
-    const button = container.querySelector<HTMLButtonElement>('.pico-app-center-card .pico-app-center-publish-new')
-    if (button === null) throw new Error('missing element: .pico-app-center-publish-new')
+    const button = container.querySelector<HTMLButtonElement>('.zeokeel-app-center-card .zeokeel-app-center-publish-new')
+    if (button === null) throw new Error('missing element: .zeokeel-app-center-publish-new')
     await act(async () => { button.click() })
   }
 
@@ -713,7 +713,7 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
   it('目录行给出"发新版"入口，且只给发布者本人（非发布者的发布必然 404）', async () => {
     stubFetch(() => jsonResponse(200, CATALOG_OWNED))
     await mount()
-    const buttons = [...container.querySelectorAll('.pico-app-center-publish-new')]
+    const buttons = [...container.querySelectorAll('.zeokeel-app-center-publish-new')]
     expect(buttons).toHaveLength(1)
     expect(buttons[0]!.getAttribute('aria-label')).toContain('隐藏工具')
     // 第二行（is_owner=false）没有这个入口。
@@ -729,17 +729,17 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
     //    旧实现会把它显示成"公开"单选（那个取值现在连选项都没有了）。
     expect(access()).toBe('login')
     // 不能只靠 type=radio 的 checked 断言（React 受控组件要真的选中）。
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-access-login')!.checked).toBe(true)
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-access-whitelist')!.checked).toBe(false)
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-access-login')!.checked).toBe(true)
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-access-whitelist')!.checked).toBe(false)
     // ② 其余字段逐项预填。
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-app-id')!.value).toBe('hidden-tool')
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-title')!.value).toBe('隐藏工具')
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-owner')!.value).toBe('carol')
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-purpose')!.value).toBe('值班排班')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-app-id')!.value).toBe('hidden-tool')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-title')!.value).toBe('隐藏工具')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-owner')!.value).toBe('carol')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-purpose')!.value).toBe('值班排班')
     // whitelist 只在选中白名单模式时才渲染 —— 先切过去看预填值（发布是整体替换配置，
     // 名单拿不回来就只能凭空重填，而空名单会被服务端一律拒）。
-    await click('.pico-app-center-access-whitelist')
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-whitelist')!.value).toBe('carol, dave')
+    await click('.zeokeel-app-center-access-whitelist')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-whitelist')!.value).toBe('carol, dave')
     // ③ 上下文条：当前版本可见（新版本号必须严格大于它）。
     expect(container.querySelector('[data-role="publish-target"]')!.textContent).toContain('3.1.0')
     expect(container.querySelector('[data-role="current-access"]')!.textContent).toContain('登录后使用')
@@ -749,7 +749,7 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
     stubFetch(() => jsonResponse(200, CATALOG_OWNED))
     await mount()
     await openPublishNewVersion()
-    const input = container.querySelector<HTMLInputElement>('.pico-app-center-data-sensitivity')!
+    const input = container.querySelector<HTMLInputElement>('.zeokeel-app-center-data-sensitivity')!
     expect(input.value).toBe('')
     expect(container.querySelector('[data-role="data-sensitivity-note"]')!.textContent).toContain('没有平台默认值')
   })
@@ -758,9 +758,9 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, CATALOG_OWNED)))
     await mount()
     await openPublishNewVersion()
-    await pickFile('.pico-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
+    await pickFile('.zeokeel-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
     await typeIntoPublishForm({ version: '3.2.0' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
 
     const local = container.querySelector('[data-role="local-error"]')!
     expect([...local.querySelectorAll('li')].map(li => li.getAttribute('data-code'))).toContain('data_sensitivity_required')
@@ -771,42 +771,42 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, CATALOG_OWNED)))
     await mount()
     await openPublishNewVersion()
-    await pickFile('.pico-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
+    await pickFile('.zeokeel-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
     await typeIntoPublishForm({ version: '3.2.0', sensitivity: 'internal' })
 
     // 没改访问范围 ⇒ 没有确认框（不给正常发版加无谓的摩擦）。
     expect(container.querySelector('[data-role="access-change"]')).toBeNull()
 
-    await click('.pico-app-center-access-whitelist')
+    await click('.zeokeel-app-center-access-whitelist')
     const confirm = container.querySelector('[data-role="access-change"]')
     expect(confirm).not.toBeNull()
     expect(confirm!.querySelector('[data-role="access-change-detail"]')!.textContent).toContain('登录后使用')
     expect(confirm!.querySelector('[data-role="access-change-detail"]')!.textContent).toContain('仅白名单用户')
 
     // 未勾选 ⇒ 就地拦下（不发请求）。
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     const local = container.querySelector('[data-role="local-error"]')!
     expect([...local.querySelectorAll('li')].map(li => li.getAttribute('data-code'))).toContain('access_change_unconfirmed')
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(0)
 
     // 换了取值 ⇒ 上一次的确认作废（确认的是"登录后使用 → 仅白名单用户"这一对具体取值，
     // 不是"随便改点什么"）。
-    const checkbox = container.querySelector<HTMLInputElement>('.pico-app-center-access-confirm')!
+    const checkbox = container.querySelector<HTMLInputElement>('.zeokeel-app-center-access-confirm')!
     await act(async () => {
       checkbox.click()
     })
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-access-confirm')!.checked).toBe(true)
-    await click('.pico-app-center-access-login')
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-access-confirm')!).toBeNull()
-    await click('.pico-app-center-access-whitelist')
-    await click('.pico-app-center-submit')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-access-confirm')!.checked).toBe(true)
+    await click('.zeokeel-app-center-access-login')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-access-confirm')!).toBeNull()
+    await click('.zeokeel-app-center-access-whitelist')
+    await click('.zeokeel-app-center-submit')
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(0)
 
     // 重新勾选确认后可以提交，且提交的是**新值**。
     await act(async () => {
-      container.querySelector<HTMLInputElement>('.pico-app-center-access-confirm')!.click()
+      container.querySelector<HTMLInputElement>('.zeokeel-app-center-access-confirm')!.click()
     })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     const publish = calls.filter(call => call.url === PUBLISH_PATH)
     expect(publish).toHaveLength(1)
     const body = JSON.parse(String(publish[0]!.init.body)) as { config: Record<string, unknown> }
@@ -821,9 +821,9 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, CATALOG_OWNED)))
     await mount()
     await openPublishNewVersion()
-    await pickFile('.pico-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
+    await pickFile('.zeokeel-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
     await typeIntoPublishForm({ version: '3.2.0', sensitivity: 'internal' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
 
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(1)
     const success = container.querySelector('[data-role="publish-success"]')!
@@ -858,8 +858,8 @@ describe('P1-10：超限文件在选文件时就被本地拦下（不读字节�
     stubFetch(() => jsonResponse(200, { apps: [] }))
     let reads = 0
     await mount()
-    await click('.pico-app-center-publish')
-    await pickFile('.pico-app-center-file', 'huge.wasm', new Uint8Array([1]), { size: OVERSIZE, onRead: () => { reads += 1 } })
+    await click('.zeokeel-app-center-publish')
+    await pickFile('.zeokeel-app-center-file', 'huge.wasm', new Uint8Array([1]), { size: OVERSIZE, onRead: () => { reads += 1 } })
 
     const local = container.querySelector('[data-role="local-error"]')!
     expect(local.querySelector('[data-field="wasm_file"]')!.getAttribute('data-code')).toBe('wasm_file_too_large')
@@ -874,10 +874,10 @@ describe('P1-10：超限文件在选文件时就被本地拦下（不读字节�
   it('刚好 32 MiB 的文件仍然可提交（边界：> 而不是 >=）', async () => {
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, { apps: [] })))
     await mount()
-    await click('.pico-app-center-publish')
+    await click('.zeokeel-app-center-publish')
     // 用 size 声明 32 MiB 但只给 4 字节真实载荷：断言的是**闸门的边界**，
     // 不是再搬一次 32 MiB（那会让这条用例本身变成"搬大载荷"的耗时用例）。
-    await pickFile('.pico-app-center-file', 'exact.wasm', new Uint8Array([0, 97, 115, 109]), { size: 32 * 1024 * 1024 })
+    await pickFile('.zeokeel-app-center-file', 'exact.wasm', new Uint8Array([0, 97, 115, 109]), { size: 32 * 1024 * 1024 })
     expect(container.querySelector('[data-role="local-error"]')).toBeNull()
     expect(container.querySelector('[data-role="file-state"]')!.textContent).toContain('exact.wasm')
   })
@@ -885,7 +885,7 @@ describe('P1-10：超限文件在选文件时就被本地拦下（不读字节�
 
 /** 找一张目录卡片（同一个选择器会命中多行，必须按标题锚定）。 */
 function cardOf(title: string): HTMLElement {
-  const card = [...container.querySelectorAll<HTMLElement>('.pico-app-center-card')]
+  const card = [...container.querySelectorAll<HTMLElement>('.zeokeel-app-center-card')]
     .find(node => (node.textContent ?? '').includes(title))
   if (card === undefined) throw new Error(`missing card: ${title}`)
   return card
@@ -942,9 +942,9 @@ describe('R1-uxc-1：下架应用发新版（成功文案按服务端 enabled �
 
   /** 填好必填项并提交。 */
   async function submitRelease(): Promise<void> {
-    await pickFile('.pico-app-center-file', 'gone-tool.wasm', new Uint8Array([0, 97, 115, 109]))
+    await pickFile('.zeokeel-app-center-file', 'gone-tool.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({ version: '1.1.0', sensitivity: 'internal' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
   }
 
   it('(a) 服务端回 enabled=false ⇒ 成功块没有"已生效"，有下架说明 + 上架指引（并回显版本）', async () => {
@@ -983,7 +983,7 @@ describe('R1-uxc-1：下架应用发新版（成功文案按服务端 enabled �
     await mount()
 
     const disabledRow = cardOf('已下线的工具')
-    const button = disabledRow.querySelector<HTMLButtonElement>('.pico-app-center-publish-new')
+    const button = disabledRow.querySelector<HTMLButtonElement>('.zeokeel-app-center-publish-new')
     // ① 按钮还在（静默隐藏会让作者以为"这个应用不能发新版"）。
     expect(button).not.toBeNull()
     expect(button!.disabled).toBe(true)
@@ -995,7 +995,7 @@ describe('R1-uxc-1：下架应用发新版（成功文案按服务端 enabled �
     expect(reason).toContain('上架')
 
     // ③ 上架的应用行为不变：按钮可点。
-    expect(cardOf('隐藏工具').querySelector<HTMLButtonElement>('.pico-app-center-publish-new')!.disabled).toBe(false)
+    expect(cardOf('隐藏工具').querySelector<HTMLButtonElement>('.zeokeel-app-center-publish-new')!.disabled).toBe(false)
     expect(cardOf('隐藏工具').querySelector('[data-role="publish-new-disabled-reason"]')).toBeNull()
   })
 })
@@ -1026,11 +1026,11 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
 
   it('下架：二次确认（确认前 0 请求、确认后可键盘操作）⇒ 行按服务端 enabled 变已下架，并可再上架', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
-      if (url === '/api/pico/apps/wasm/roster/unpublish') {
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm/roster/unpublish') {
         return jsonResponse(200, { app: { app_id: 'roster', enabled: false, changed: true } })
       }
-      if (url === '/api/pico/apps/wasm/roster/publish') {
+      if (url === '/api/zeokeel/apps/wasm/roster/publish') {
         return jsonResponse(200, { app: { app_id: 'roster', enabled: true, changed: true, entry_url: 'https://roster.apps.example.com/' } })
       }
       throw new Error(`unexpected url: ${url}`)
@@ -1040,7 +1040,7 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
     // 非发布者一个管理按钮都没有（服务端 ownedApp 对非发布者一律 404）。
     expect(cardOf('别人的应用').querySelector('[data-role="row-actions"]')).toBeNull()
 
-    await clickIn('值班表', '.pico-app-center-take-offline')
+    await clickIn('值班表', '.zeokeel-app-center-take-offline')
     const confirmBlock = cardOf('值班表').querySelector('[data-role="confirm-take-offline"]')
     expect(confirmBlock).not.toBeNull()
     // 说明里必须写清后果（所有访问者立刻 410）。
@@ -1048,56 +1048,56 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
     // ① **确认前不许发请求** —— 这就是"二次确认"的行为判据（去掉确认步骤即红）。
     expect(lifecycleCalls('/unpublish')).toHaveLength(0)
     // ② 键盘可达：确认按钮是真 <button>，出现后自动获得焦点。
-    const confirmButton = cardOf('值班表').querySelector<HTMLButtonElement>('.pico-app-center-confirm-take-offline')
+    const confirmButton = cardOf('值班表').querySelector<HTMLButtonElement>('.zeokeel-app-center-confirm-take-offline')
     expect(confirmButton!.tagName).toBe('BUTTON')
     expect(document.activeElement).toBe(confirmButton)
 
-    await clickIn('值班表', '.pico-app-center-confirm-take-offline')
+    await clickIn('值班表', '.zeokeel-app-center-confirm-take-offline')
     const unpublish = lifecycleCalls('/unpublish')
     expect(unpublish).toHaveLength(1)
     expect(unpublish[0]!.init.method).toBe('POST')
     // ③ 行状态 = 服务端返回的 enabled（不是"我点了下架"）。
     expect(cardOf('值班表').querySelector('[data-role="app-disabled"]')).not.toBeNull()
-    expect(cardOf('值班表').querySelector('.pico-app-center-bring-online')).not.toBeNull()
-    expect(cardOf('值班表').querySelector('.pico-app-center-take-offline')).toBeNull()
+    expect(cardOf('值班表').querySelector('.zeokeel-app-center-bring-online')).not.toBeNull()
+    expect(cardOf('值班表').querySelector('.zeokeel-app-center-take-offline')).toBeNull()
     // 下架状态下"发新版"被禁用（发完仍是 410）。
-    expect(cardOf('值班表').querySelector<HTMLButtonElement>('.pico-app-center-publish-new')!.disabled).toBe(true)
+    expect(cardOf('值班表').querySelector<HTMLButtonElement>('.zeokeel-app-center-publish-new')!.disabled).toBe(true)
 
     // ④ 可再上架：服务端说 enabled=true 才回到上架态。
-    await clickIn('值班表', '.pico-app-center-bring-online')
+    await clickIn('值班表', '.zeokeel-app-center-bring-online')
     expect(lifecycleCalls('/publish')).toHaveLength(1)
     expect(cardOf('值班表').querySelector('[data-role="app-disabled"]')).toBeNull()
-    expect(cardOf('值班表').querySelector('.pico-app-center-take-offline')).not.toBeNull()
-    expect(cardOf('值班表').querySelector<HTMLButtonElement>('.pico-app-center-publish-new')!.disabled).toBe(false)
+    expect(cardOf('值班表').querySelector('.zeokeel-app-center-take-offline')).not.toBeNull()
+    expect(cardOf('值班表').querySelector<HTMLButtonElement>('.zeokeel-app-center-publish-new')!.disabled).toBe(false)
   })
 
   it('下架：服务端返回"状态没变"（changed=false, enabled=true）时行不得跟着请求走', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
       // 服务端幂等分支：状态本来就一致（api/release.go:69-73）。
       return jsonResponse(200, { app: { app_id: 'roster', enabled: true, changed: false } })
     })
     await mount()
-    await clickIn('值班表', '.pico-app-center-take-offline')
-    await clickIn('值班表', '.pico-app-center-confirm-take-offline')
+    await clickIn('值班表', '.zeokeel-app-center-take-offline')
+    await clickIn('值班表', '.zeokeel-app-center-confirm-take-offline')
     // 请求发出去了，但服务端说它仍然是上架的 ⇒ 行必须保持上架（乐观更新会在这里变已下架）。
     expect(lifecycleCalls('/unpublish')).toHaveLength(1)
     expect(cardOf('值班表').querySelector('[data-role="app-disabled"]')).toBeNull()
-    expect(cardOf('值班表').querySelector('.pico-app-center-take-offline')).not.toBeNull()
+    expect(cardOf('值班表').querySelector('.zeokeel-app-center-take-offline')).not.toBeNull()
   })
 
   it('删除：二次确认后才发 DELETE；服务端确认 deleted 后行消失，并显示服务端说明与保留期', async () => {
     const NOTE = 'R37 的"真删"由后台任务执行（当前未实现）：在此之前资源目录与应用库都会保留'
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
-      if (url === '/api/pico/apps/wasm/roster') {
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm/roster') {
         return jsonResponse(200, { app: { app_id: 'roster', deleted: true, deleted_at: '2026-09-19T00:00:00Z' }, retention_days: 90, note: NOTE })
       }
       throw new Error(`unexpected url: ${url}`)
     })
     await mount()
 
-    await clickIn('值班表', '.pico-app-center-delete')
+    await clickIn('值班表', '.zeokeel-app-center-delete')
     const confirm = cardOf('值班表').querySelector('[data-role="confirm-delete"]')
     expect(confirm).not.toBeNull()
     // 说明里必须写清"不可恢复"与"保留期以服务端为准"。
@@ -1107,8 +1107,8 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
     // ① 确认前 0 请求。
     expect(lifecycleCalls('/roster')).toHaveLength(0)
 
-    await clickIn('值班表', '.pico-app-center-confirm-delete')
-    const deletes = calls.filter(call => call.url === '/api/pico/apps/wasm/roster')
+    await clickIn('值班表', '.zeokeel-app-center-confirm-delete')
+    const deletes = calls.filter(call => call.url === '/api/zeokeel/apps/wasm/roster')
     expect(deletes).toHaveLength(1)
     expect(deletes[0]!.init.method).toBe('DELETE')
     // ② 行消失（按服务端确认的结果，不是本地先抹掉）。
@@ -1124,12 +1124,12 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
 
   it('删除：服务端没确认 deleted ⇒ 行不消失，且信封可见（不假装删掉了）', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
       return jsonResponse(500, { error: { code: 'INTERNAL', message: '删除失败', hints: ['稍后重试'] } })
     })
     await mount()
-    await clickIn('值班表', '.pico-app-center-delete')
-    await clickIn('值班表', '.pico-app-center-confirm-delete')
+    await clickIn('值班表', '.zeokeel-app-center-delete')
+    await clickIn('值班表', '.zeokeel-app-center-confirm-delete')
     // 行还在（服务端拒绝了），并显示了服务端信封。
     expect(container.textContent).toContain('值班表')
     const failure = cardOf('值班表').querySelector('[data-role="lifecycle-error"]')
@@ -1147,14 +1147,14 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
    */
   it('确认块的 Esc：只收起确认块、不关面板、发 0 个请求，焦点回到触发按钮', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
       throw new Error(`unexpected url: ${url}`)
     })
     await mount()
     const closesBefore = closeCount
 
-    await clickIn('值班表', '.pico-app-center-take-offline')
-    const trigger = cardOf('值班表').querySelector<HTMLButtonElement>('.pico-app-center-take-offline')!
+    await clickIn('值班表', '.zeokeel-app-center-take-offline')
+    const trigger = cardOf('值班表').querySelector<HTMLButtonElement>('.zeokeel-app-center-take-offline')!
     expect(cardOf('值班表').querySelector('[data-role="confirm-take-offline"]')).not.toBeNull()
     // 确认块声明成模态（装载器据此让出 Esc）。
     expect(cardOf('值班表').querySelector('[data-role="confirm-take-offline"]')!.getAttribute('aria-modal')).toBe('true')
@@ -1168,13 +1168,13 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
   })
 
   /**
-   * Esc 的唯一权威是面板装载器（`@picoaide/dsh-panel-surface`）。面板自己再注册一份
+   * Esc 的唯一权威是面板装载器（`@zeokeel/dsh-panel-surface`）。面板自己再注册一份
    * document 级 Esc 会把"搜索框里按 Esc 清空输入""发布表单填一半按 Esc"都变成关面板。
    * 变异验证：把那段 `document.addEventListener('keydown', ...)` 加回来 ⇒ 本用例红。
    */
   it('面板自身不再监听 Esc：Esc 不会从面板内部关掉它（交给装载器）', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
       throw new Error(`unexpected url: ${url}`)
     })
     await mount()
@@ -1185,8 +1185,8 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
 
   it('诊断：只读展示服务端的最近失败（reason_code）与 hints，不改行状态', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
-      if (url === '/api/pico/apps/wasm/roster/diagnostics') {
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm/roster/diagnostics') {
         return jsonResponse(200, {
           diagnostics: {
             app_id: 'roster', app_enabled: true, app_frozen: false, app_deleted: false,
@@ -1203,11 +1203,11 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
     })
     await mount()
 
-    const toggle = cardOf('值班表').querySelector<HTMLButtonElement>('.pico-app-center-diagnostics-toggle')
+    const toggle = cardOf('值班表').querySelector<HTMLButtonElement>('.zeokeel-app-center-diagnostics-toggle')
     expect(toggle!.getAttribute('aria-expanded')).toBe('false')
-    await clickIn('值班表', '.pico-app-center-diagnostics-toggle')
+    await clickIn('值班表', '.zeokeel-app-center-diagnostics-toggle')
     // aria-expanded 与面板同步（键盘/读屏用户要知道它展开了）。
-    expect(cardOf('值班表').querySelector<HTMLButtonElement>('.pico-app-center-diagnostics-toggle')!.getAttribute('aria-expanded')).toBe('true')
+    expect(cardOf('值班表').querySelector<HTMLButtonElement>('.zeokeel-app-center-diagnostics-toggle')!.getAttribute('aria-expanded')).toBe('true')
 
     const panel = cardOf('值班表').querySelector('[data-role="diagnostics"]')
     expect(panel).not.toBeNull()
@@ -1222,7 +1222,7 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
 
   it('诊断：服务端拒绝时错误可见（code/message/hints 逐字段，不只说"失败"）', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
       return jsonResponse(404, {
         error: {
           code: 'NOT_FOUND',
@@ -1232,7 +1232,7 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
       })
     })
     await mount()
-    await clickIn('值班表', '.pico-app-center-diagnostics-toggle')
+    await clickIn('值班表', '.zeokeel-app-center-diagnostics-toggle')
 
     const block = cardOf('值班表').querySelector('[data-role="diagnostics-error"]')
     expect(block).not.toBeNull()
@@ -1257,7 +1257,7 @@ describe('R1-pm-1：作者自服务（下架/上架、删除、诊断）', () =>
  * 真 DOM（理由 + 「被拒后升版本号重发」的出路）。
  *
  * ---- 变异验证 ----
- *   - 面板不传 `onReleases`（或不渲染 `.pico-app-center-releases-toggle`）⇒ 第 1 条红；
+ *   - 面板不传 `onReleases`（或不渲染 `.zeokeel-app-center-releases-toggle`）⇒ 第 1 条红；
  *   - 请求路径写错（少 `/releases` 后缀）⇒ 第 1 条的 URL 断言红；
  *   - `ReleasesBlock` 不渲染 `release-reason` / `release-resubmit-hint` ⇒ 第 1 条红
  *     （这正是"写了没人读"的界面形态）；
@@ -1284,17 +1284,17 @@ describe('R1-pm-3：版本历史（发布者拿到被拒理由与下一步）', 
 
   it('点「版本历史」⇒ GET …/roster/releases，逐版渲染状态、被拒理由与"升版本号重发"的出路', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
-      if (url === '/api/pico/apps/wasm/roster/releases') return jsonResponse(200, RELEASES)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm/roster/releases') return jsonResponse(200, RELEASES)
       throw new Error(`unexpected url: ${url}`)
     })
     await mount()
 
     // 只给发布者本人（服务端 ownedApp 对非发布者一律 404 —— 不给必然失败的按钮）。
-    expect(cardOf('别人的应用').querySelector('.pico-app-center-releases-toggle')).toBeNull()
+    expect(cardOf('别人的应用').querySelector('.zeokeel-app-center-releases-toggle')).toBeNull()
 
-    await clickIn('值班表', '.pico-app-center-releases-toggle')
-    const fetched = calls.filter(call => call.url === '/api/pico/apps/wasm/roster/releases')
+    await clickIn('值班表', '.zeokeel-app-center-releases-toggle')
+    const fetched = calls.filter(call => call.url === '/api/zeokeel/apps/wasm/roster/releases')
     expect(fetched).toHaveLength(1)
     expect(fetched[0]!.init.method).toBe('GET')
 
@@ -1328,13 +1328,13 @@ describe('R1-pm-3：版本历史（发布者拿到被拒理由与下一步）', 
 
   it('读失败 ⇒ 既有错误块逐字段显示服务端信封（不显示成"没有被拒"）', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
       return jsonResponse(404, {
         error: { code: 'NOT_FOUND', message: '应用不存在', hints: ['只有发布者本人（或平台管理员）能管理该应用'] },
       })
     })
     await mount()
-    await clickIn('值班表', '.pico-app-center-releases-toggle')
+    await clickIn('值班表', '.zeokeel-app-center-releases-toggle')
 
     const block = cardOf('值班表').querySelector('[data-role="releases-error"]')
     expect(block).not.toBeNull()
@@ -1347,11 +1347,11 @@ describe('R1-pm-3：版本历史（发布者拿到被拒理由与下一步）', 
 
   it('服务端下发真正的空清单 ⇒ 明确的空态（与读失败区分开）', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, OWNED_CATALOG)
       return jsonResponse(200, { app_id: 'roster', current_version: '', review_required: false, releases: [] })
     })
     await mount()
-    await clickIn('值班表', '.pico-app-center-releases-toggle')
+    await clickIn('值班表', '.zeokeel-app-center-releases-toggle')
     expect(cardOf('值班表').querySelector('[data-role="releases-empty"]')!.textContent).toContain('还没有版本记录')
     expect(cardOf('值班表').querySelector('[data-role="releases-error"]')).toBeNull()
   })
@@ -1372,7 +1372,7 @@ describe('R1-pm-3：版本历史（发布者拿到被拒理由与下一步）', 
 //   - 查重失败当成"被占用"处理 ⇒「问不成不阻断」红；
 //   - 防抖 effect 里去掉 `setAvailability({kind:'checking'})` 或结论渲染 ⇒ 第 1 条红。
 // ---------------------------------------------------------------------------
-const AVAILABILITY_URL = (appId: string): string => `/api/pico/apps/wasm/${appId}/availability`
+const AVAILABILITY_URL = (appId: string): string => `/api/zeokeel/apps/wasm/${appId}/availability`
 
 /** 一条查重判词（服务端 `availability` 的真实形状）。 */
 const availabilityPayload = (
@@ -1405,8 +1405,8 @@ const availabilityPayload = (
 
 /** 打开发布表单并等到它挂载完。 */
 async function openPublishForm(): Promise<void> {
-  await click('.pico-app-center-publish')
-  expect(container.querySelector('.pico-app-center-publish-form')).not.toBeNull()
+  await click('.zeokeel-app-center-publish')
+  expect(container.querySelector('.zeokeel-app-center-publish-form')).not.toBeNull()
 }
 
 /** 读查重结论那一行的 `data-availability`（结论的稳定钩子）与文案。 */
@@ -1450,7 +1450,7 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     })
     await mount()
     await openPublishForm()
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]), { onRead: () => { fileRead += 1 } })
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]), { onRead: () => { fileRead += 1 } })
     await typeIntoPublishForm({ ...FILLED, appId: 'taken-tool' })
     // 等防抖窗口过去，结论才落地（此刻界面先显示"正在检查"）。
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 600)) })
@@ -1460,7 +1460,7 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     expect(availabilityLine().text).toContain('名称已被占用')
 
     const before = fileRead
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
 
     // ① 没有发出发布请求 —— 名字被占就不该让用户白等一次上传。
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(0)
@@ -1482,9 +1482,9 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     })
     await mount()
     await openPublishForm()
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({ ...FILLED, appId: 'free-tool' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
 
     const publish = calls.filter(call => call.url === PUBLISH_PATH)
     expect(publish).toHaveLength(1)
@@ -1502,11 +1502,11 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     })
     await mount()
     await openPublishForm()
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({ ...FILLED, appId: 'first-name' })
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 600)) })
     await typeIntoPublishForm({ appId: 'second-name' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(0)
   })
 
@@ -1518,12 +1518,12 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     })
     await mount()
     await openPublishForm()
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({ ...FILLED, appId: 'free-tool' })
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 600)) })
     // 界面明说"暂时无法确认"，**不**伪装成可用。
     expect(['unknown', 'checking']).toContain(availabilityLine().state)
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     // 但提交照旧放行：权威判据是服务端发布那一刻的 409。
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(1)
   })
@@ -1543,15 +1543,15 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
   it('对已有应用发新版：app_id 不可改，不做唯一性拦截（自己的应用不被误拦）', async () => {
     // 目录行带 is_owner=true ⇒ 面板给出"发新版"入口，app_id 是既成事实。
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, MY_APP_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, MY_APP_CATALOG)
       if (url === PUBLISH_PATH) return jsonResponse(201, RELEASE_OK)
       return jsonResponse(200, { apps: [] })
     })
     await mount()
-    await clickIn('值班表', '.pico-app-center-publish-new')
-    await pickFile('.pico-app-center-file', 'roster.wasm', new Uint8Array([0, 97, 115, 109]))
+    await clickIn('值班表', '.zeokeel-app-center-publish-new')
+    await pickFile('.zeokeel-app-center-file', 'roster.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({ version: '2.0.0', changelog: '加了导出', sensitivity: 'internal' })
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     // 既有应用的 app_id 不做查重（它必然"存在"），提交直接走发布。
     expect(calls.filter(call => call.url.includes('/availability'))).toHaveLength(0)
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(1)
@@ -1585,7 +1585,7 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     })
     await mount()
     await openPublishForm()
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]), { onRead: () => { fileRead += 1 } })
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]), { onRead: () => { fileRead += 1 } })
     await typeIntoPublishForm({ ...FILLED, appId })
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 600)) })
 
@@ -1594,7 +1594,7 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     expect(availabilityLine().text).toContain(message)
 
     const before = fileRead
-    await click('.pico-app-center-submit')
+    await click('.zeokeel-app-center-submit')
     // ③ 提交被拦下：没有发布请求。
     expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(0)
     // ④ 连文件都没再读一次（产物根本没被编码）。
@@ -1627,7 +1627,7 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     })
     await mount()
     await openPublishForm()
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({ ...FILLED, appId: 'future-tool' })
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 600)) })
 
@@ -1658,13 +1658,13 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     })
     await mount()
     await openPublishForm()
-    await pickFile('.pico-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
+    await pickFile('.zeokeel-app-center-file', 'shift-notes.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({ ...FILLED })
     // 窗口行**最后**填（与真实填写顺序一致）。
-    await type('.pico-app-center-window-ratio', '16:9')
-    await type('.pico-app-center-window-width', '1280')
-    await type('.pico-app-center-window-height', '720')
-    await click('.pico-app-center-submit')
+    await type('.zeokeel-app-center-window-ratio', '16:9')
+    await type('.zeokeel-app-center-window-width', '1280')
+    await type('.zeokeel-app-center-window-height', '720')
+    await click('.zeokeel-app-center-submit')
     const publish = calls.filter(call => call.url === PUBLISH_PATH)
     expect(publish).toHaveLength(1)
     const body = JSON.parse(String(publish[0]!.init.body)) as { config?: { window?: unknown } }
@@ -1683,18 +1683,18 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
       ],
     }
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, catalogWithWindow)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, catalogWithWindow)
       if (url === PUBLISH_PATH) return jsonResponse(201, RELEASE_OK)
       return jsonResponse(200, { apps: [] })
     })
     await mount()
-    await clickIn('值班表', '.pico-app-center-publish-new')
-    await pickFile('.pico-app-center-file', 'roster.wasm', new Uint8Array([0, 97, 115, 109]))
+    await clickIn('值班表', '.zeokeel-app-center-publish-new')
+    await pickFile('.zeokeel-app-center-file', 'roster.wasm', new Uint8Array([0, 97, 115, 109]))
     await typeIntoPublishForm({ version: '2.0.0', changelog: '改了窗口', sensitivity: 'internal' })
     // 上一版是 1.5（预填）；作者最后改成 2。
-    expect(container.querySelector<HTMLInputElement>('.pico-app-center-window-ratio')!.value).toBe('1.5')
-    await type('.pico-app-center-window-ratio', '2')
-    await click('.pico-app-center-submit')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-window-ratio')!.value).toBe('1.5')
+    await type('.zeokeel-app-center-window-ratio', '2')
+    await click('.zeokeel-app-center-submit')
     const publish = calls.filter(call => call.url === PUBLISH_PATH)
     expect(publish).toHaveLength(1)
     const body = JSON.parse(String(publish[0]!.init.body)) as { config?: { window?: { ratio?: number } } }
@@ -1731,7 +1731,7 @@ describe('装载器层（审计 C-01）：确认框上的 Esc 只收起确认框
 
   it('role=alertdialog aria-modal=true 的内层模态让装载器让位', async () => {
     stubFetch((url) => {
-      if (url === '/api/pico/apps/wasm') return jsonResponse(200, LOADER_CATALOG)
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, LOADER_CATALOG)
       throw new Error(`unexpected url: ${url}`)
     })
     // 装载器把面板插进**中列**，所以中列必须先存在（真实壳里它由框架挂载）。
@@ -1751,7 +1751,7 @@ describe('装载器层（审计 C-01）：确认框上的 Esc 只收起确认框
 
       const surfaceEl = column.querySelector<HTMLElement>(`[${PANEL_SURFACE_ATTR}="${APP_CENTER_PANEL_ID}"]`)
       expect(surfaceEl, '装载器应把面板容器插进中列').not.toBeNull()
-      const trigger = surfaceEl!.querySelector<HTMLButtonElement>('.pico-app-center-take-offline')
+      const trigger = surfaceEl!.querySelector<HTMLButtonElement>('.zeokeel-app-center-take-offline')
       expect(trigger, '目录里应渲染出下架按钮').not.toBeNull()
       await act(async () => { trigger!.click() })
 

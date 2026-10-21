@@ -419,6 +419,8 @@
       "build/web-brand/official.svg",
       "cordis.patch.yml",
       "lib/**",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
       "package.json",
       "!**/*.map",
       "!*.map",
@@ -533,7 +535,6 @@
       "icon": "build/app-icon.png"
     },
     "nsis": {
-      "license": "THIRD_PARTY_NOTICES.md",
       "oneClick": true,
       "perMachine": false,
       "allowElevation": false,

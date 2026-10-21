@@ -324,7 +324,6 @@ describe('published package surface', () => {
     }])
     expect(manifest.build?.win?.artifactName).toBe('ZeoKeel-Harness-${version}-${arch}-Portable.${ext}')
     expect(manifest.build?.nsis).toEqual({
-      license: 'THIRD_PARTY_NOTICES.md',
       oneClick: true,
       perMachine: false,
       allowElevation: false,

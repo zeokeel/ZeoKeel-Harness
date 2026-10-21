@@ -160,12 +160,19 @@ export function safeModeCandidates(bundles: readonly string[]): string[] {
 }
 
 /**
- * Safe mode: leave every third-party bundle out of the next composition, and
- * back the user's patch up so a broken patch cannot re-break that same boot.
+ * Safe mode: leave every third-party bundle out of the next composition.
  *
- * Ordering matters: the marker is written **before** the patch is moved, so a
- * failed marker write leaves the profile untouched. If a patch move then fails,
- * the marker survives and the next launch still composes in safe mode.
+ * The marker is the **only** change when there is a third-party bundle to skip —
+ * user patches stay untouched (the profile patch holds SettingsForms data and the
+ * home patch is shared with the CLI). Two fallbacks exist so the exit is never a
+ * dead end:
+ *  - no third-party bundle to skip → back the user patches up instead
+ *    (`degradedToPatchBackup`);
+ *  - a marker from a previous failed boot is still present → keep it **and** back
+ *    the patches up (`escalated`), because skipping plugins alone did not fix
+ *    that failure. With no patches left, the caller reports a real failure.
+ * The marker is written before anything is moved, so a failed write leaves the
+ * profile untouched.
  * @param targets - profile and marker locations.
  * @param now - injectable clock (tests).
  * @returns what was moved and which bundles the marker filters.
@@ -237,10 +244,21 @@ export function backupUserPatches(targets: FatalRecoveryTargets, now: Date = new
   try {
     homeBackupPath = backupProfilePatch(homePatch, now)
   } catch (cause) {
+    let rollbackProblem: string | undefined
     if (backupPath !== undefined) {
       // Roll back the profile-patch move so the next boot still sees the user's
       // settings rather than a half-migrated state.
-      try { renameSync(backupPath, profilePatch) } catch { /* keep the backup; report below */ }
+      try { renameSync(backupPath, profilePatch) } catch (rollbackCause) {
+        // 回滚失败意味着真的半执行了：把两个路径都写进错误，支持人员才能手工恢复
+        // （N11：此前被静默吞掉，用户只看到 home 补丁的错误）。
+        rollbackProblem = rollbackCause instanceof Error ? rollbackCause.message : String(rollbackCause)
+      }
+    }
+    if (rollbackProblem !== undefined) {
+      throw new Error(
+        `fatal recovery: could not back up ${homePatch} (${describe(cause)}) and the rollback of `
+        + `${profilePatch} also failed (${rollbackProblem}); backup kept at ${String(backupPath)}`,
+      )
     }
     throw cause
   }
@@ -274,4 +292,8 @@ export async function performFatalRecovery(
     return report
   }
   return { disabledBundles: [], ...backupUserPatches(targets, now) }
+}
+
+function describe(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
 }

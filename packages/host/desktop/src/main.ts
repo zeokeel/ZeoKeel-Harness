@@ -370,7 +370,9 @@ async function runFatalRecovery(
     return 0
   } catch (recoveryCause) {
     const message = recoveryCause instanceof Error ? recoveryCause.message : String(recoveryCause)
-    logger.error(`${BIN_NAME}: fatal recovery ${action} failed: ${message}`)
+    // 日志本身也可能抛（磁盘满/句柄坏），而这里已经是致命路径的最后一段：
+    // 绝不允许 logger 的异常把"恢复失败→非零退出"变成逸出 start() 的 catch。
+    try { logger.error(`${BIN_NAME}: fatal recovery ${action} failed: ${message}`) } catch { /* fall through */ }
     // The dialog already closed; this is the only way left to tell the user the
     // chosen exit did not work (and it must never throw on the fatal path).
     try {

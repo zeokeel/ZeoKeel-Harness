@@ -110,7 +110,13 @@ export function readSafeModeBundles(markerPath: string): ReadSafeModeResult {
   if (!existsSync(markerPath)) return { bundles: new Set() }
   // 读侧也要先看形态：FIFO/设备文件会让 readFileSync **永久阻塞**启动
   // （2026-10-21 反证审查 A 的 R2-1 实测 timeout=124），"绝不抛错"不等于"绝不阻塞"。
-  const stat = lstatSync(markerPath)
+  let stat
+  try {
+    stat = lstatSync(markerPath)
+  } catch (cause) {
+    // existsSync→lstat 之间的竞态或 EACCES：报告而不是抛穿（N10）。
+    return { bundles: new Set(), problem: `safe-mode marker is unreadable: ${describe(cause)}` }
+  }
   if (!stat.isFile() || stat.isSymbolicLink()) {
     return { bundles: new Set(), problem: 'safe-mode marker is not a regular file', removable: true }
   }

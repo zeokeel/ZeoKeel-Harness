@@ -27,19 +27,32 @@ describe('安装器迁移垫片（scripts/installer-shim.nsh）', () => {
     expect(manifest.build?.nsis?.perMachine).toBe(false)
   })
 
-  it('customInit 读旧的 per-machine 注册表项（与 electron-builder 写入面一致）', () => {
+  it('customInit 同时读当前与改名前的 GUID（HKLM + HKCU）', () => {
     expect(shim).toContain('!macro customInit')
-    expect(shim).toContain('ReadRegStr $0 HKLM "Software\\${APP_GUID}" "InstallLocation"')
+    // 当前产品 per-machine
+    expect(shim).toContain('ReadRegStr $1 HKLM "Software\\${APP_GUID}" "InstallLocation"')
+    // 改名前的 PicoAide（真实存量版本用的 appId 派生 GUID）
+    expect(shim).toContain('!define ZK_LEGACY_APP_GUID "85820364-4c28-594e-b046-8896b3669248"')
+    expect(shim).toContain('ReadRegStr $1 HKLM "Software\\${ZK_LEGACY_APP_GUID}" "InstallLocation"')
+    expect(shim).toContain('ReadRegStr $1 HKCU "Software\\${ZK_LEGACY_APP_GUID}" "InstallLocation"')
     // 没有命中时必须继续安装，而不是无条件中止。
-    expect(shim).toMatch(/StrCmp \$0 "" zk_no_legacy_install/)
+    expect(shim).toContain('Goto zk_no_legacy_install')
   })
 
-  it('命中后写诊断、可见提示并退出（绝不静默装出第二份）', () => {
+  it('命中后写诊断 + 非零退出码；静默模式不弹框也不阻塞', () => {
     expect(shim).toContain('zeokeel-harness-legacy-install.txt')
     expect(shim).toContain('FileWrite')
-    expect(shim).toContain('MessageBox MB_ICONEXCLAMATION|MB_OK')
-    expect(shim).toContain('Quit')
-    // Quit 必须在提示之后：顺序反了用户什么都看不到。
-    expect(shim.indexOf('Quit')).toBeGreaterThan(shim.indexOf('MessageBox MB_ICONEXCLAMATION|MB_OK'))
+    // 静默更新必须直接走 abort 标签，否则 NSIS 会弹框并永久挂住无人值守更新。
+    expect(shim).toContain('IfSilent zk_legacy_abort')
+    expect(shim).toContain('SetErrorLevel 2')
+    // 诊断先写、再决定是否弹框、最后 Quit。
+    const fileWrite = shim.indexOf('FileWrite')
+    const silentBranch = shim.indexOf('IfSilent zk_legacy_abort')
+    const dialog = shim.indexOf('MessageBox MB_ICONEXCLAMATION|MB_OK')
+    const quit = shim.indexOf('Quit')
+    expect(silentBranch).toBeGreaterThan(fileWrite)
+    expect(dialog).toBeGreaterThan(silentBranch)
+    expect(quit).toBeGreaterThan(dialog)
+    expect(shim).toContain('Uninstall it first')
   })
 })

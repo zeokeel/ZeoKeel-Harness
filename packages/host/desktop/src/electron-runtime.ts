@@ -57,6 +57,7 @@ import {
   desktopUpdateDialogCopy,
 } from './tray-locale.ts'
 import { downloadDesktopUpdate } from './update-download.ts'
+import { findLegacyWindowsInstall } from './windows-legacy-install.ts'
 import {
   canInstallMacosInPlace,
   clearMacosUpdateFailures,
@@ -781,6 +782,23 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     }
 
     const copy = desktopUpdateDialogCopy(this.currentLocale)
+    // 改名前的 PicoAide 安装不在新安装器的 legacy 检测面里（不同 appId ⇒ 不同
+    // NSIS GUID）。安装器静默模式下只能写诊断 + exit 2，用户看不到；所以应用在
+    // 交接前自己查一次注册表，能弹原生框并且不退出（下载好的安装包保留，可重试）。
+    const legacy = await findLegacyWindowsInstall()
+    if (legacy !== undefined) {
+      await dialog.showMessageBox({
+        type: 'warning',
+        title: copy.legacyInstallTitle(this.productName),
+        message: copy.legacyInstallMessage(this.productName),
+        detail: copy.legacyInstallDetail(legacy.installLocation),
+        buttons: [copy.confirm],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      })
+      return
+    }
     const result = await dialog.showMessageBox({
       type: 'info',
       title: copy.downloadedTitle(this.productName),

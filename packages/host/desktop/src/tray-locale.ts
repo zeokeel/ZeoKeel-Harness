@@ -150,6 +150,10 @@ export interface DesktopUpdateDialogCopy {
   readonly darwinUpdateFailureReason: (reason: string) => string
   /** Windows: confirm restarting into the NSIS installer. */
   readonly winInstallDetail: (product: string) => string
+  /** Windows: a pre-rebrand (PicoAide) installation exists; the update must stop. */
+  readonly legacyInstallTitle: (product: string) => string
+  readonly legacyInstallMessage: (product: string) => string
+  readonly legacyInstallDetail: (installLocation: string) => string
   /**
    * 安装确认框的肯定按钮。Windows 用它确认"重启并运行安装程序"，macOS 的原点更新
    * （2026-10-09）用它确认"重启并替换"—— 语义相同，故共用一条文案。
@@ -254,6 +258,13 @@ const updateDialogCopy: Record<DesktopLocale, DesktopUpdateDialogCopy> = {
       `Reason: ${macosUpdateFailureText.en(reason)}\nLog: ${logPath}${backupPath === '' ? '' : `\nBackup: ${backupPath}`}`,
     darwinUpdateFailureReason: reason => macosUpdateFailureText.en(reason),
     winInstallDetail: product => `Restart ${product} and run the installer now?`,
+    legacyInstallTitle: product => `${product} needs a manual migration`,
+    legacyInstallMessage: product => `An older ${product} installation (pre-rebrand, PicoAide) is still installed.`,
+    legacyInstallDetail: installLocation =>
+      `Installed at: ${installLocation}\n\n`
+      + 'This update cannot replace it in place. Uninstall the old version from '
+      + 'Settings → Apps, then check for updates again. Your sessions and settings '
+      + 'are not deleted by this step.',
     winRestart: 'Restart and Install',
     winLater: 'Later',
     checkFailedTitle: () => 'Unable to Check for Updates',
@@ -289,6 +300,12 @@ const updateDialogCopy: Record<DesktopLocale, DesktopUpdateDialogCopy> = {
       `原因：${macosUpdateFailureText.zh(reason)}\n日志：${logPath}${backupPath === '' ? '' : `\n旧版本备份：${backupPath}`}`,
     darwinUpdateFailureReason: reason => macosUpdateFailureText.zh(reason),
     winInstallDetail: product => `现在重启 ${product} 并运行安装程序吗？`,
+    legacyInstallTitle: product => `${product} 需要手动迁移`,
+    legacyInstallMessage: product => `检测到旧版（改名前 PicoAide）${product} 仍安装在本机。`,
+    legacyInstallDetail: installLocation =>
+      `安装位置：${installLocation}\n\n`
+      + '本次更新无法原地替换旧版本。请先在「设置 → 应用」中卸载旧版本，再重新检查更新；'
+      + '该步骤不会删除你的会话与设置。',
     winRestart: '重启并安装',
     winLater: '稍后',
     checkFailedTitle: () => '无法检查更新',

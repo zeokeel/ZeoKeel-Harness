@@ -55,6 +55,15 @@ vi.mock('../src/update-download.ts', () => ({
   downloadDesktopUpdate: updater.download,
 }))
 
+/** 改名前的 PicoAide 安装检测（P2 打包反证：应用侧必须先弹框而不是静默交接）。 */
+const legacyInstall = vi.hoisted(() => ({
+  findLegacyWindowsInstall: vi.fn(async (): Promise<{ registryPath: string, installLocation: string } | undefined> => undefined),
+}))
+vi.mock('../src/windows-legacy-install.ts', () => ({
+  findLegacyWindowsInstall: legacyInstall.findLegacyWindowsInstall,
+  LEGACY_WINDOWS_APP_GUID: '85820364-4c28-594e-b046-8896b3669248',
+}))
+
 /**
  * macOS 原地更新的替身（真逻辑在 `tests/macos-update-install.spec.ts` 与
  * `tests/macos-update-helper.integration.spec.ts` 里判）。这里只判**接线**：
@@ -391,6 +400,8 @@ async function appliedContentSecurityPolicy(): Promise<string> {
 
 describe('Electron compatibility runtime', () => {
   beforeEach(() => {
+    legacyInstall.findLegacyWindowsInstall.mockReset()
+    legacyInstall.findLegacyWindowsInstall.mockResolvedValue(undefined)
     electron.ipcMain.on.mockClear()
     electron.ipcMain.removeListener.mockClear()
     electron.app.isPackaged = false
@@ -1127,6 +1138,26 @@ describe('Electron compatibility runtime', () => {
     })
     const notification = electron.notifications[0]
     expect(notification?.once).not.toHaveBeenCalled()
+  })
+
+  it('改名前的 PicoAide 全局安装仍在时：弹原生框并拒绝交接安装包（P2）', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    legacyInstall.findLegacyWindowsInstall.mockResolvedValueOnce({
+      registryPath: 'HKLM\\Software\\85820364-4c28-594e-b046-8896b3669248',
+      installLocation: 'C:\\Program Files\\PicoAide Harness',
+    })
+    updater.download.mockResolvedValueOnce('C:\\Updates\\DSH-Desktop-2.1.0-windows.exe')
+    const requestQuit = vi.fn()
+    const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
+    const runtime = new ElectronDesktopRuntime(async () => {})
+    runtime.schedule({ ...spec, requestQuit })
+
+    await runtime.updates.downloadUpdate('2.1.0', UPDATE_SOURCE, new AbortController().signal)
+    await runtime.updates.installUpdate('2.1.0', 'C:\\Updates\\DSH-Desktop-2.1.0-windows.exe')
+
+    expect(electron.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({ type: 'warning' }))
+    expect(childProcess.spawn).not.toHaveBeenCalled()
+    expect(requestQuit).not.toHaveBeenCalled()
   })
 
   it('starts the downloaded Windows installer before requesting orderly exit', async () => {

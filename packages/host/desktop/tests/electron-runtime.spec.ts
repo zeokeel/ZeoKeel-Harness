@@ -1143,7 +1143,7 @@ describe('Electron compatibility runtime', () => {
     await vi.waitFor(() => { expect(childProcess.spawn).toHaveBeenCalledOnce() }, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS })
     expect(childProcess.spawn).toHaveBeenCalledWith(
       'C:\\Updates\\DSH-Desktop-2.1.0-windows.exe',
-      ['--updated', '--force-run'],
+      ['/S', '--updated', '--force-run'],
       {
         detached: true,
         stdio: 'ignore',

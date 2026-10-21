@@ -1028,7 +1028,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     await new Promise<void>((resolve, reject) => {
       let child: ReturnType<typeof spawn>
       try {
-        child = spawn(installerPath, ['--updated', '--force-run'], {
+        child = spawn(installerPath, ['/S', '--updated', '--force-run'], {
           detached: true,
           stdio: 'ignore',
           shell: false,

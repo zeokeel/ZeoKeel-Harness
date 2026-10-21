@@ -534,12 +534,17 @@
     },
     "nsis": {
       "license": "THIRD_PARTY_NOTICES.md",
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": true,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
       "differentialPackage": false,
       "useZip": true,
       "shortcutName": "ZeoKeel Harness",

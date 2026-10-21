@@ -5,7 +5,7 @@
 --             换票端点 POST + Origin == 主站源 + next 白名单
 --   §6.1      请求链路①–⑤：无应用 Cookie ⇒ 302 主站换票 ⇒ 302 回子域 ⇒ 兑换 ⇒ 干净 URL
 --   §10.4     第 39/40/41/42/43/46/49 项（会话、身份与准入）
---   §13       「员工浏览器会话（R16）不存在（zeokeel_session 是管理员专属；员工只有
+--   §13       「员工浏览器会话（R16）不存在（picoaide_session 是管理员专属；员工只有
 --             Bearer）」⇒ 本迁移就是 R16 的落地：员工会话表 + 应用子域会话表
 --
 -- 为什么是两张表（而不是把 app_id 塞进一张表）：
@@ -27,7 +27,7 @@
 
 -- ===== 1) 员工浏览器会话（R16） =====
 -- 一行 = 一次「主站登录」在一个浏览器里的一份会话。
--- Cookie 名 zeokeel_emp：host-only（不设 Domain）+ HttpOnly + Path=/ +
+-- Cookie 名 picoaide_emp：host-only（不设 Domain）+ HttpOnly + Path=/ +
 -- SameSite=Lax + 仅 https 才 Secure（fail-closed，§10.4 第 49 项）。
 -- TTL = limits.AppSessionTTL（8 h），过期判断在读取路径上做（不依赖定时清理）。
 CREATE TABLE IF NOT EXISTS employee_sessions (
@@ -57,7 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_employee_sessions_expires ON employee_sessions(ex
 
 -- ===== 2) 应用子域会话 =====
 -- 一行 = 一次换票兑换出的、属于**某一个应用子域**的会话。
--- Cookie 名 zeokeel_app：host-only（每个 <app_id>.<基域> 各自一份，天然不共享）
+-- Cookie 名 picoaide_app：host-only（每个 <app_id>.<基域> 各自一份，天然不共享）
 -- + HttpOnly + Path=/ + SameSite=Strict（§15.1 第 3 条：同站跨源写必须靠 Strict
 -- 之外的最外层 Origin 校验，这里 Strict 是纵深）+ 仅 https 才 Secure。
 -- TTL = limits.AppSessionTTL（8 h），与员工会话一致：应用会话不活得比它长。

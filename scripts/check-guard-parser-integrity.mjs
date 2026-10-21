@@ -409,7 +409,7 @@ const REGISTERED_INSTALL_INTEGRITY_BODIES = [
     // 凭据检查器（R12-D-03 / C-P0-2②）：它把"通过凭据"从流属性抬成"步骤独占文件 + 一次性
     // nonce"。它自己也是判据执行体 ⇒ 同样按内容摘要登记（改动必须进 diff、可评审）。
     path: 'scripts/check-verdict-credential.mjs',
-    sha256: '402ec25d13178f638768bd57325308795e1ac91e7c874f9baa6afef9a01f1650',
+    sha256: '03d3eb3ed140c5460e13fb001b666acf339e9a4664dc05d8d2ed270b4f1c21f6',
     methods: [
       'credential-exactly-once',
       'credential-counter-semantics',
@@ -446,7 +446,7 @@ const REGISTERED_GUARD_JUDGE_BODIES = [
     path: 'scripts/doc-claims-passline-child.mjs',
     guard: 'check:doc-claims',
     // 由 `node scripts/check-guard-parser-integrity.mjs --print-digests` 打印（粘贴回本行）。
-    sha256: '64f9ffc8436eaeb73205f39822d308d11c1d43a4bbb907e6c84ce7d4cb7b48cf',
+    sha256: '9c21665f4315701b1b7da24cbcf7463767cb3b4ffa2afa7274cf996caadd32ab',
     methods: [
       'passline-child-imports-main-module',
       'passline-child-prints-main-module-pass-line',

@@ -12,7 +12,7 @@
 --      **jsonb 往返**（`::jsonb` 解析 + `jsonb_set` 改写），形状差异由 jsonb 归一化吸收。
 --
 --   ② **运行期权威在磁盘资产，但读侧的 public 已经等同 login**：应用真正读的是
---      `<data_root>/apps/<app_id>/assets/<release_id>/zeokeel.app.json`（磁盘资产），
+--      `<data_root>/apps/<app_id>/assets/<release_id>/picoaide.app.json`（磁盘资产），
 --      而 `appcfg` 读侧早已把历史 public 映射成 login（`Config.AuthMode/RequiresLogin`）。
 --      所以改写**磁盘**的真实意义不是"改权限"（权限早已不生效），而是让应用自己
 --      `assets.read` 时**不再看到 public**、口径彻底退场 —— 否则应用可能照着配置里的

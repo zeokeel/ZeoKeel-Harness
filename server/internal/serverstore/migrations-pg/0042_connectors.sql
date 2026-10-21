@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS connectors (
 -- 覆盖客户端此前全部硬编码连接器(0042 核查 2026-08-28:sales-easy 曾随
 -- dedupeById 注册但未入表,现补齐)。
 -- 远程 MCP 行的 id/名称/描述/端点一律为占位符(mcp.example.com):真实取值、产品名与
--- 文案属渠道/客户身份,按仓库规则只允许出现在私有仓 zeokeel/channels 与部署侧配置,
+-- 文案属渠道/客户身份,按仓库规则只允许出现在私有仓 picoaide/channels 与部署侧配置,
 -- 不进公开仓(0042 已上线的库不受影响,改的是新建库的种子值;管理员可在连接器页
 -- 改成实际服务的取值)。
 -- glitchtip 的 DEFAULT 字段值由服务端设置页(web.glitchtip_base_url/
@@ -47,7 +47,7 @@ INSERT INTO connectors (id, name, description, auth_mode, definition) VALUES
 ('glitchtip', 'GlitchTip',
  'GlitchTip(Sentry 兼容错误追踪):查询 issue 与最新事件堆栈,用于错误排查与监控告警',
  'token',
- '{"tokenFields":[{"key":"GLITCHTIP_BASE_URL","label":"服务地址(必填,如自部署地址或 app.glitchtip.com)","type":"text","required":true},{"key":"GLITCHTIP_TOKEN","label":"API Token(Auth Tokens 页创建,需 org:read / project:read / event:read)","type":"password","required":true},{"key":"GLITCHTIP_ORGANIZATION","label":"组织 slug(如 zeokeel)","type":"text","required":true}],"examples":["查询当前未解决的错误 issue","查看最近一次异常的堆栈详情","列出错误追踪中的高优先级问题"],"mcp":[{"serverName":"glitchtip","transport":"stdio","command":"npx","args":["-y","glitchtip-mcp"],"env":{}}]}'),
+ '{"tokenFields":[{"key":"GLITCHTIP_BASE_URL","label":"服务地址(必填,如自部署地址或 app.glitchtip.com)","type":"text","required":true},{"key":"GLITCHTIP_TOKEN","label":"API Token(Auth Tokens 页创建,需 org:read / project:read / event:read)","type":"password","required":true},{"key":"GLITCHTIP_ORGANIZATION","label":"组织 slug(如 picoaide)","type":"text","required":true}],"examples":["查询当前未解决的错误 issue","查看最近一次异常的堆栈详情","列出错误追踪中的高优先级问题"],"mcp":[{"serverName":"glitchtip","transport":"stdio","command":"npx","args":["-y","glitchtip-mcp"],"env":{}}]}'),
 ('sales-easy', '销售易',
  '销售易 NeoCRM 官方 MCP:查询客户、线索、商机、联系人,执行 XOQL 查询与元数据操作',
  'oauth',

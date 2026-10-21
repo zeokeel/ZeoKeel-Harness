@@ -162,6 +162,6 @@ function createSessionEpoch() {
 	};
 }
 //#endregion
-export { ZEOKEEL_SESSION_SERVICE, SESSION_CHANGED_EVENT, createSessionEpoch, subscribeSessionChanges };
+export { SESSION_CHANGED_EVENT, ZEOKEEL_SESSION_SERVICE, createSessionEpoch, subscribeSessionChanges };
 
 //# sourceMappingURL=session-events.js.map

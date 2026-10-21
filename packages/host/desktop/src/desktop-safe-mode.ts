@@ -51,6 +51,12 @@ export interface ReadSafeModeResult {
   readonly bundles: ReadonlySet<string>
   /** Why the marker could not be used; absent when it was absent or valid. */
   readonly problem?: string
+  /**
+   * Whether the problematic marker may be deleted. False for markers that are
+   * structurally valid JSON but carry an unknown version — those may come from a
+   * newer build and must not be destroyed by an older one (R3-7).
+   */
+  readonly removable?: boolean
 }
 
 /** Path of the marker for one userData directory. */
@@ -106,28 +112,29 @@ export function readSafeModeBundles(markerPath: string): ReadSafeModeResult {
   // （2026-10-21 反证审查 A 的 R2-1 实测 timeout=124），"绝不抛错"不等于"绝不阻塞"。
   const stat = lstatSync(markerPath)
   if (!stat.isFile() || stat.isSymbolicLink()) {
-    return { bundles: new Set(), problem: 'safe-mode marker is not a regular file' }
+    return { bundles: new Set(), problem: 'safe-mode marker is not a regular file', removable: true }
   }
   if (stat.size > MAX_SAFE_MODE_BYTES) {
-    return { bundles: new Set(), problem: 'safe-mode marker is too large' }
+    return { bundles: new Set(), problem: 'safe-mode marker is too large', removable: true }
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(readFileSync(markerPath, 'utf8')) as unknown
   } catch (cause) {
-    return { bundles: new Set(), problem: `safe-mode marker is unreadable: ${describe(cause)}` }
+    return { bundles: new Set(), problem: `safe-mode marker is unreadable: ${describe(cause)}`, removable: true }
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { bundles: new Set(), problem: 'safe-mode marker is not an object' }
+    return { bundles: new Set(), problem: 'safe-mode marker is not an object', removable: true }
   }
   const record = parsed as Record<string, unknown>
   if (record.version !== SAFE_MODE_VERSION) {
+    // 版本不认识 ⇒ 可能是更新版本写的：只报告，不删除。
     return { bundles: new Set(), problem: `safe-mode marker version is ${String(record.version)}` }
   }
   const bundles = record.bundles
   if (!Array.isArray(bundles) || bundles.some(value => typeof value !== 'string')
     || bundles.length > MAX_SAFE_MODE_BUNDLES) {
-    return { bundles: new Set(), problem: 'safe-mode marker bundle list is invalid' }
+    return { bundles: new Set(), problem: 'safe-mode marker bundle list is invalid', removable: true }
   }
   return { bundles: new Set((bundles as string[]).sort(stableCompare)) }
 }
@@ -183,8 +190,10 @@ export function beginSafeModeBoot(markerPath: string, log: (message: string) => 
   const result = readSafeModeBundles(markerPath)
   if (result.problem !== undefined) {
     log(`safe-mode marker ignored: ${result.problem}`)
-    // 坏标记不能永远躺在那里（R2-10）：删不掉也只是每次启动多一条日志。
-    if (!clearSafeModeMarker(markerPath)) log('safe-mode marker could not be removed')
+    // 坏标记不能永远躺在那里（R2-10）；未知版本留给更新版本自己处理（R3-7）。
+    if (result.removable === true && !clearSafeModeMarker(markerPath)) {
+      log('safe-mode marker could not be removed')
+    }
   }
   return result.bundles
 }

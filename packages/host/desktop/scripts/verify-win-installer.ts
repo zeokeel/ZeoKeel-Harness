@@ -119,7 +119,7 @@ export function verifyWindowsInstaller(
       throw new Error(`packaged application is missing ${notice} (extraResources): ${noticePath}`)
     }
     if (!stat.isFile() || stat.size === 0) {
-      throw new Error(`packaged application has an empty ${notice}: ${noticePath}`)
+      throw new Error(`packaged application is missing a non-empty ${notice}: ${noticePath}`)
     }
   }
   return { installerPath, applicationPath }

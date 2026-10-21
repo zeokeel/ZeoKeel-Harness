@@ -237,6 +237,52 @@ export function readDesktopDisabledBundles(
   return new Set(profile?.disabledBundles ?? [])
 }
 
+/**
+ * Rewrite one profile's disabled set, dropping names the caller no longer keeps.
+ *
+ * 启动期会把"安装面层"从持久禁用集合里过滤掉（否则 carrier 层消失、组合必抛）；
+ * 如果只过滤不回写，state 里会留下永远生效不了的幽灵条目：每次启动重复告警，插件
+ * 管理面还把它们报成 disabled（没有 enable 操作可解）。这里把清理结果原子写回。
+ * @param statePath - Desktop-private plugin-management state file.
+ * @param profileName - profile whose disabled set is reconciled.
+ * @param keep - package names that must remain disabled.
+ * @returns true when the state file changed.
+ */
+export async function pruneDesktopDisabledBundles(
+  statePath: string,
+  profileName: string,
+  keep: ReadonlySet<string>,
+): Promise<boolean> {
+  assertDesktopProfileName(profileName)
+  const kept = [...keep].filter(name => safePackageName(name)).sort(stableCompare)
+  if (kept.length !== keep.size) throw new Error(`${BIN_NAME}: disabled bundle name is invalid`)
+  let changed = false
+  await withFileLock(statePath, async () => {
+    const state = readState(statePath)
+    const existing = state.profiles.find(candidate => candidate.profileName === profileName)
+    if (existing === undefined) return
+    if (existing.disabledBundles.length === kept.length
+      && existing.disabledBundles.every((name, index) => name === kept[index])) return
+    const profiles = state.profiles
+      .filter(candidate => candidate.profileName !== profileName)
+    if (kept.length > 0) profiles.push({ profileName, disabledBundles: kept })
+    const next = parseState({
+      version: STATE_VERSION,
+      profiles: profiles.sort((left, right) => stableCompare(left.profileName, right.profileName)),
+    })
+    const rendered = renderState(next)
+    if (Buffer.byteLength(rendered, 'utf8') > MAX_STATE_BYTES) {
+      throw new Error(`${BIN_NAME}: plugin-management state is too large`)
+    }
+    await writeFileAtomic(statePath, rendered, {
+      mode: STATE_FILE_MODE,
+      dirMode: STATE_DIRECTORY_MODE,
+    })
+    changed = true
+  })
+  return changed
+}
+
 /** Only explicit product bundles are immutable; every other resolved direct layer is user-disableable. */
 export function desktopPluginBundleMutable(packageName: string): boolean {
   return safePackageName(packageName) && !IMMUTABLE_BUNDLES.has(packageName)

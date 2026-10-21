@@ -140,8 +140,9 @@ describe('真实 profile 数据面（2026-10-21 P0 回归）', () => {
   })
 
   it('组合消费侧的并集过滤：安全模式集合里的安装面层会被剔除', () => {
-    const persistent = new Set(['@acme/old-disabled'])
+    const persistent = new Set(['@acme/old-disabled', IMMUTABLE])
     const safeMode = new Set([CARRIER, FEATURE, IMMUTABLE, THIRD_PARTY])
+    // 两侧都过滤：persistent 里的 immutable 层同样不得生效（R3-4）。
     expect([...effectiveDisabledBundles(persistent, safeMode)].sort())
       .toEqual(['@acme/old-disabled', THIRD_PARTY])
   })
@@ -253,14 +254,16 @@ describe('补丁形态与备份名额', () => {
   it('补丁是目录或符号链接时拒绝"备份"（避免假装搬走了设置）', async () => {
     const targets = sandbox()
     mkdirSync(profilePatchPath(targets), { recursive: true })
-    expect(() => backupProfilePatch(profilePatchPath(targets))).toThrow(/not a regular file/u)
+    expect(() => backupProfilePatch(profilePatchPath(targets))).toThrow(/not a patch file/u)
 
     const second = sandbox()
     mkdirSync(desktopProfileDirectory(second), { recursive: true })
     writeFileSync(join(desktopProfileDirectory(second), 'real.yml'), '- insert: []\n')
     symlinkSync(join(desktopProfileDirectory(second), 'real.yml'), profilePatchPath(second))
-    expect(() => backupProfilePatch(profilePatchPath(second))).toThrow(/not a regular file/u)
-    // 链接目标必须原地不动。
+    // 符号链接可以被整体搬走（链接目标原地不动）：拒绝它会让两个恢复出口都死胡同（R3-5）。
+    const backup = backupProfilePatch(profilePatchPath(second))
+    expect(backup).toBeDefined()
+    expect(existsSync(profilePatchPath(second))).toBe(false)
     expect(existsSync(join(desktopProfileDirectory(second), 'real.yml'))).toBe(true)
   })
 
@@ -286,5 +289,32 @@ describe('补丁形态与备份名额', () => {
     expect(report.disabledBundles).toEqual([THIRD_PARTY])
     expect(report.backupPath).toBeUndefined()
     expect(markerBundles(targets)).toEqual([THIRD_PARTY])
+  })
+})
+
+
+describe('重复安全模式失败后的升级（R3-1）', () => {
+  it('上一跳安全模式没救回来时：同时备份补丁并标记 escalated', async () => {
+    const targets = sandbox()
+    writeManifest(targets, [CARRIER, THIRD_PARTY])
+    writePatch(profilePatchPath(targets), '- insert: []\n')
+    // 第一次：写 marker，成功返回（不改补丁）。
+    const first = await performFatalRecovery('safe-mode', targets)
+    expect(first.disabledBundles).toEqual([THIRD_PARTY])
+    expect(first.escalated).toBeUndefined()
+    expect(existsSync(profilePatchPath(targets))).toBe(true)
+    // 第二次（标记仍在 ⇒ 上一次启动仍失败）：升级为同时备份补丁。
+    const second = await performFatalRecovery('safe-mode', targets)
+    expect(second.escalated).toBe(true)
+    expect(second.backupPath).toBeDefined()
+    expect(existsSync(profilePatchPath(targets))).toBe(false)
+    expect(markerBundles(targets)).toEqual([THIRD_PARTY])
+  })
+
+  it('上一跳失败且没有任何补丁可备份时明确报错（不再假装成功）', async () => {
+    const targets = sandbox()
+    writeManifest(targets, [CARRIER, THIRD_PARTY])
+    await performFatalRecovery('safe-mode', targets)
+    await expect(performFatalRecovery('safe-mode', targets)).rejects.toThrow(/nothing to back up/u)
   })
 })

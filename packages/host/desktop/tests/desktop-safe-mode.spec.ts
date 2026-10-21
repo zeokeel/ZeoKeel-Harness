@@ -161,3 +161,37 @@ describe('读取侧的形态守卫与自愈', () => {
     expect(existsSync(markerPath)).toBe(false)
   })
 })
+
+
+describe('读侧边界（R2-1/R3-7）', () => {
+  it('未知版本的标记只报告、不被删除（可能是更新版本写的）', () => {
+    const { markerPath } = sandbox()
+    mkdirSync(join(markerPath, '..'), { recursive: true })
+    writeFileSync(markerPath, '{"version":99,"bundles":[]}')
+    const log = vi.fn()
+    expect([...beginSafeModeBoot(markerPath, log)]).toEqual([])
+    expect(existsSync(markerPath)).toBe(true)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('ignored'))
+  })
+
+  it('指向 FIFO 的标记不会被读取（启动不被永久阻塞）', async () => {
+    const { markerPath } = sandbox()
+    mkdirSync(join(markerPath, '..'), { recursive: true })
+    const { execFileSync } = await import('node:child_process')
+    try {
+      execFileSync('mkfifo', [markerPath])
+    } catch {
+      return // 平台没有 mkfifo：跳过（CI 上 Linux 有）
+    }
+    expect(readSafeModeBundles(markerPath).problem).toContain('not a regular file')
+  })
+
+  it('读侧遇到符号链接只报告、不跟随（不读链接目标）', () => {
+    const { root, markerPath } = sandbox()
+    mkdirSync(join(markerPath, '..'), { recursive: true })
+    const target = join(root, 'outside.json')
+    writeFileSync(target, '{"version":1,"bundles":["@acme/plugin"]}')
+    symlinkSync(target, markerPath)
+    expect(readSafeModeBundles(markerPath).problem).toContain('not a regular file')
+  })
+})

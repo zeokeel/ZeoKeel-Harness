@@ -43,6 +43,7 @@ import { bundledPackageManager, type BundledRuntimes } from './bundled-runtimes.
 import {
   activeDesktopProfileLayers,
   desktopPluginBundleMutable,
+  pruneDesktopDisabledBundles,
   readDesktopDisabledBundles,
 } from './desktop-plugins.ts'
 
@@ -161,10 +162,11 @@ export function desktopInstallationBundle(packageName: string): boolean {
 /**
  * Union the persisted plugin disables with the one-boot safe-mode set.
  *
- * Exported for the P0 regression test (2026-10-21): a marker written by an older
- * build — or a hand-edited plugin state — must not be able to filter out an
- * installation-owned layer, because `prepareDesktopProfile` fails hard when the
- * carrier layer is missing.
+ * Both sides are filtered here: a marker written by an older build **and** a
+ * hand-edited `state.json` must not be able to filter out an installation-owned
+ * layer, because `prepareDesktopProfile` fails hard when the carrier layer is
+ * missing (2026-10-21 反证审查 C 的 R3-4：此前只有 safe-mode 一侧过滤，注释却
+ * 声称两侧都挡得住，实现与文档错位)。
  * @param persistent - package names disabled through the plugin manager.
  * @param safeMode - package names listed by the one-boot safe-mode marker.
  * @returns the disabled set the composition should use.
@@ -173,9 +175,9 @@ export function effectiveDisabledBundles(
   persistent: ReadonlySet<string>,
   safeMode?: ReadonlySet<string>,
 ): Set<string> {
-  const filtered = [...(safeMode ?? [])]
+  const filter = (names: Iterable<string>): string[] => [...names]
     .filter(name => desktopPluginBundleMutable(name) && !desktopInstallationBundle(name))
-  return new Set<string>([...persistent, ...filtered])
+  return new Set<string>([...filter(persistent), ...filter(safeMode ?? [])])
 }
 
 /**
@@ -1090,6 +1092,15 @@ export async function prepareDesktopProfile(
       persistentDisabled.add(name)
     } else {
       warnings.push(`ignoring persisted disable outside the third-party set: ${name}`)
+    }
+  }
+  if (persistentDisabled.size !== storedDisabled.size && pluginStatePath !== undefined) {
+    // 只过滤不回写会留下幽灵条目（每次启动告警 + 插件管理面报 disabled 却实际在跑）。
+    try {
+      const pruned = await pruneDesktopDisabledBundles(pluginStatePath, profileName, persistentDisabled)
+      if (pruned) warnings.push('removed persisted plugin disables outside the third-party set')
+    } catch (cause) {
+      warnings.push(`could not prune plugin-management state: ${cause instanceof Error ? cause.message : String(cause)}`)
     }
   }
   // Safe mode is one-boot only (`desktop-safe-mode.ts` proves why a persistent

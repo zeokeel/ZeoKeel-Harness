@@ -112,3 +112,23 @@ describe('许可证声明随包（一键安装器无 license 页）', () => {
     expect(() => verifyWindowsInstaller(options)).toThrow(/missing THIRD_PARTY_NOTICES\.md/u)
   })
 })
+
+
+describe('许可证声明的空/非文件形态（反证审查 D 的 K7/K9）', () => {
+  it('LICENSE 为空文件或目录时验证失败', () => {
+    const { root } = fixture()
+    const options: WindowsInstallerVerificationOptions = {
+      desktopRoot: root,
+      version: '2.0.0',
+      installerName: 'ZeoKeel-Harness-2.0.0-x64-Setup.exe',
+      applicationName: 'ZeoKeel Harness.exe',
+    }
+    const notice = join(root, 'dist', 'win-unpacked', 'resources', 'LICENSE')
+    writeFileSync(notice, '')
+    expect(() => verifyWindowsInstaller(options)).toThrow(/non-empty LICENSE/u)
+
+    rmSync(notice)
+    mkdirSync(notice)
+    expect(() => verifyWindowsInstaller(options)).toThrow(/non-empty LICENSE/u)
+  })
+})

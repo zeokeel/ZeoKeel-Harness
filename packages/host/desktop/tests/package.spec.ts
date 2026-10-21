@@ -326,6 +326,11 @@ describe('published package surface', () => {
       { from: 'THIRD_PARTY_NOTICES.md', to: 'THIRD_PARTY_NOTICES.md' },
     ]))
     expect(manifest.build?.files).not.toContain('LICENSE')
+    // extraResources 的 from 源文件必须真实存在：只断言 to 会让"源文件被删"依然全绿
+    // （2026-10-21 反证审查 D 的 P1-④）。
+    for (const source of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
+      expect(existsSync(new URL(source, packageRoot)), `extraResources 源文件缺失: ${source}`).toBe(true)
+    }
     expect(manifest.build?.mac?.icon).toBe('build/app-icon-mac.png')
     expect(manifest.build?.win?.icon).toBe('build/app-icon.png')
     expect(manifest.build?.win?.target).toEqual([{

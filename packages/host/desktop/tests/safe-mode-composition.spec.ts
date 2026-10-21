@@ -146,3 +146,25 @@ describe('安全模式在组合层的真实消费', () => {
     expect(prepared.warnings.join('\n')).toContain(`ignoring persisted disable outside the third-party set: ${CARRIER}`)
   })
 })
+
+
+describe('持久禁用集合的清理回写（R3-2）', () => {
+  it('state.json 里的安装面名被过滤后回写，不再每次启动重复告警/幽灵条目', async () => {
+    const home = join(root(), 'home')
+    ensureDesktopProfile(home)
+    const pluginStatePath = statePath(root())
+    mkdirSync(join(pluginStatePath, '..'), { recursive: true })
+    writeFileSync(pluginStatePath, `${JSON.stringify({
+      version: 1,
+      profiles: [{ profileName: 'desktop', disabledBundles: [CARRIER] }],
+    })}\n`)
+    const prepared = await prepareDesktopProfile(undefined, home, 'linux', pluginStatePath)
+    expect(prepared.profile.layers.some(layer => layer.packageName === CARRIER)).toBe(true)
+    expect(prepared.warnings.join('\n')).toContain('removed persisted plugin disables')
+
+    const persisted = JSON.parse(readFileSync(pluginStatePath, 'utf8')) as {
+      profiles: { profileName: string, disabledBundles: string[] }[]
+    }
+    expect(persisted.profiles).toEqual([])
+  })
+})

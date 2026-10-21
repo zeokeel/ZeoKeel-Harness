@@ -58,6 +58,12 @@ export interface FatalRecoveryReport {
    * patches up instead (so the exit is never a dead end).
    */
   readonly degradedToPatchBackup?: boolean
+  /**
+   * True when a previous safe-mode boot also failed: this attempt kept the
+   * marker **and** backed the user patches up, because skipping plugins alone
+   * did not fix that failure (2026-10-21 反证审查 C 的 R3-1).
+   */
+  readonly escalated?: boolean
 }
 
 /** Directory of the user-editable Desktop profile. */
@@ -94,11 +100,11 @@ export function homePatchPath(targets: FatalRecoveryTargets): string {
 export function backupProfilePatch(patchPath: string, now: Date = new Date()): string | undefined {
   if (!existsSync(patchPath)) return undefined
   const stat = lstatSync(patchPath)
-  // 只搬普通文件：目录会被 renameSync 当成"备份"（内容却是目录），符号链接则只
-  // 搬走链接、目标文件原地不动 —— 两种情况下用户都会以为设置已经备份
-  // （2026-10-21 反证审查 D 的 P2/P3 实测）。
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error(`fatal recovery: ${patchPath} is not a regular file`)
+  // 普通文件与符号链接都可以搬：搬链接就是把"这个用户补丁"整体移出组合，链接目标
+  // 原样保留，是可恢复的（2026-10-21 反证审查 C 的 R3-5：此前拒绝 symlink 让两个出口
+  // 都变成死胡同，而 symlink 补丁在启动期本来是可用的）。目录不能被当成补丁搬走。
+  if (stat.isDirectory() || (!stat.isFile() && !stat.isSymbolicLink())) {
+    throw new Error(`fatal recovery: ${patchPath} is not a patch file`)
   }
   const stamp = now.toISOString().replace(/[:.]/gu, '-')
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -180,12 +186,18 @@ export async function enterFatalSafeMode(
   }
 
   const candidates = safeModeCandidates(bundles)
+  const previousSafeModeFailed = existsSync(targets.safeModePath)
   if (candidates.length > 0) {
     // 只写标记：**不搬补丁**。安全模式解决的是"第三方插件"，用户的设置补丁
     // （SettingsForms 就写在 profile 补丁里，home 补丁还与 CLI 共享）不该被一次
     // 插件故障顺手移走（2026-10-21 反证审查 A 的 R2-5）。要重置补丁请用另一个出口。
     await writeSafeModeMarker(targets.safeModePath, candidates, now)
-    return { disabledBundles: candidates }
+    if (!previousSafeModeFailed) return { disabledBundles: candidates }
+    // 标记还在 ⇒ 上一次"跳过插件"的启动同样没救回来（失败跳不会清标记）。
+    // 继续重复同一个动作只会无限循环（反证审查 C 的 R3-1），所以升级为"同时备份
+    // 补丁"；连补丁都没有时明确失败，让调用方显示错误而非假装成功。
+    const backups = backupUserPatches(targets, now)
+    return { disabledBundles: candidates, ...backups, escalated: true }
   }
 
   // 没有第三方插件可跳过时，安全模式不能是死胡同（R2-4）：退化为备份用户补丁。
@@ -216,8 +228,8 @@ export function backupUserPatches(targets: FatalRecoveryTargets, now: Date = new
   for (const patch of [profilePatch, homePatch]) {
     if (!existsSync(patch)) continue
     const stat = lstatSync(patch)
-    if (!stat.isFile() || stat.isSymbolicLink()) {
-      throw new Error(`fatal recovery: ${patch} is not a regular file`)
+    if (stat.isDirectory() || (!stat.isFile() && !stat.isSymbolicLink())) {
+      throw new Error(`fatal recovery: ${patch} is not a patch file`)
     }
   }
   const backupPath = backupProfilePatch(profilePatch, now)

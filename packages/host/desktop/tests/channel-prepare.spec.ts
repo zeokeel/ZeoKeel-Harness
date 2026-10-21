@@ -356,6 +356,72 @@ describe('prepareChannelPackaging', () => {
   })
 })
 
+/**
+ * 权威 logo 里的**平坦方块** `<rect ... fill="#RRGGBB" ...>`（与生成器同一判据形态）。
+ *
+ * 测试不写死任何旧几何/旧颜色：方块色与强调色都从 `brands/official/logo.svg` /
+ * `brands/official/brand.json` 派生（2026-10-21 品牌换成白底 + 全彩 mark 后，
+ * 任何"官方方块必须是黑色"的硬编码都会立刻失效）。
+ */
+const TILE_RECT = /<rect\b[^>]*\bfill="(#[0-9A-Fa-f]{6})"[^>]*\/>/u
+
+/** 权威 logo 的几何，只改方块填充色（渠道 logo 必须由它派生，夹具同样遵守）。 */
+function officialLogoWithTile(fill: string): string {
+  const source = readFileSync(officialLogo, 'utf8')
+  const tile = TILE_RECT.exec(source)
+  if (tile === null) throw new Error('brands/official/logo.svg: 找不到平坦方块 <rect>')
+  return source.replace(tile[0], tile[0].replace(tile[1]!, fill))
+}
+
+/** `brands/official/brand.json` 声明的强调色（权威配置，不在测试里写死）。 */
+function officialAccent(): string {
+  const brand = JSON.parse(readFileSync(join(repoRoot, 'brands', 'official', 'brand.json'), 'utf8')) as
+    { assets?: { accent?: string } }
+  const accent = brand.assets?.accent
+  if (typeof accent !== 'string') throw new Error('brands/official/brand.json 缺 assets.accent')
+  return accent
+}
+
+/** 把一份 logo 写进一个**只有它自己**的临时目录（渠道目录没有 brand.json 的形态）。 */
+function loneLogoDir(svg: string): string {
+  const dir = tempDir('dsh-tray-src-')
+  writeFileSync(join(dir, 'logo.svg'), svg)
+  return dir
+}
+
+/**
+ * 不透明像素（alpha=255）里出现最多的颜色 —— 即方块被替换成的强调色。
+ *
+ * 方块是平坦填充，占不透明面积的大头；mark 的渐变颜色分散，不会喧宾夺主。
+ */
+async function dominantOpaqueColor(path: string): Promise<string> {
+  const { data, info } = await sharp(path).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const counts = new Map<string, number>()
+  for (let i = 0; i < data.length; i += info.channels) {
+    if (data[i + 3] !== 255) continue
+    const key = `#${[data[i]!, data[i + 1]!, data[i + 2]!]
+      .map(value => value.toString(16).padStart(2, '0')).join('')}`.toUpperCase()
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (top === undefined) throw new Error(`${path}: 没有完全不透明的像素`)
+  return top[0]
+}
+
+/** 统计满足条件的不透明像素数（像素级判据用：证明 mark 还在、没被染掉）。 */
+async function countOpaquePixels(
+  path: string,
+  predicate: (rgb: [number, number, number]) => boolean,
+): Promise<number> {
+  const { data, info } = await sharp(path).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  let count = 0
+  for (let i = 0; i < data.length; i += info.channels) {
+    if (data[i + 3] !== 255) continue
+    if (predicate([data[i]!, data[i + 1]!, data[i + 2]!])) count += 1
+  }
+  return count
+}
+
 describe('generateTrayIcons', () => {
   /** 一份"渠道用自己的品牌色"的 logo：平坦 #006AFF 方块 + 白 mark。 */
   function brandColorLogo(color = '#006AFF'): string {
@@ -366,67 +432,80 @@ describe('generateTrayIcons', () => {
     return path
   }
 
-  it('渠道用自己的品牌色画 logo 也能派生托盘位图（不再硬要求 #000000）', async () => {
-    // 2026-09-11 实测：托盘派生此前硬性要求源文件里出现 fill="#000000"，
-    // 于是"渠道 logo 用客户的品牌色"直接打包失败，报错还只说"必须用 #000000"。
+  it('渠道用自己的品牌色画 logo 也能派生托盘位图（不再硬要求某个具体底色）', async () => {
+    // 2026-09-11 实测：托盘派生此前硬性要求源文件里出现 fill="#000000"，于是
+    // "渠道 logo 用客户的品牌色"直接打包失败；2026-10-21 官方换成白底后，连官方源
+    // 都不再是黑色 —— 派生前提只能是"方块用一个平坦十六进制色"。
+    // 目录里没有任何品牌配置 ⇒ 非中性方块色**就是**强调色（不硬塞兜底的蓝）。
     const out = tempDir('dsh-tray-out-')
     await generateTrayIcons({ source: brandColorLogo(), buildRoot: out })
 
     const meta = await sharp(join(out, 'tray-icon-blue@2x.png')).metadata()
     expect(meta.width).toBe(32)
-    // 方块被换成托盘变体色（固定黑），mark 仍是白色 —— 证明替换的是方块自身颜色。
-    const { data, info } = await sharp(join(out, 'tray-icon-blue@2x.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-    let dark = 0
-    let white = 0
-    for (let i = 0; i < data.length; i += info.channels) {
-      const [r, g, b, a] = [data[i]!, data[i + 1]!, data[i + 2]!, data[i + 3]!]
-      if (a < 40) continue
-      if (r < 60 && g < 60 && b < 60) dark += 1
-      if (r > 200 && g > 200 && b > 200) white += 1
-    }
-    expect(dark).toBeGreaterThan(500)
-    expect(white).toBeGreaterThan(0)
+    const path = join(out, 'tray-icon-blue@2x.png')
+    expect(await dominantOpaqueColor(path)).toBe('#006AFF')
+    // 白 mark 仍在：全蓝 = mark 被吞掉/被方块色染掉。
+    expect(await countOpaquePixels(path, ([r, g, b]) => r > 200 && g > 200 && b > 200)).toBeGreaterThan(0)
   })
 
-  it('官方 logo 的 Windows/Linux 位图与"替换方块色"的旧行为逐字节一致', async () => {
-    // 改造只放宽了输入约束，官方路径的**非模板**产物不能变一丝一毫
-    // （macOS 模板图是刻意改的，见下一条用例）。
-    //
-    // 旧实现是 `source.replaceAll(BRAND_COLOR, 变体色)`，其中 BRAND_COLOR 硬编码
-    // 为 `#000000`；官方 logo 的方块本来就是 `#000000`，默认变体色（托盘渲染色）
-    // 也是 `#000000` —— 所以旧产物 == "源 SVG 直接缩放"。下面先钉住这个前提，
-    // 再逐字节比对（而不是写一句 replaceAll('#000000', '#000000') 的恒等替换：
-    // 那种写法既无信息量，又会被 CodeQL js/identity-replacement 判为笔误）。
+  it('官方 logo 的 Windows/Linux 位图 = 只把方块色换成 brand.json 的强调色（mark 不动）', async () => {
+    // 非模板产物的语义没变：完整品牌图形，唯一差异是**方块填充色**。期望值从
+    // 权威 logo + brand.json **派生**（方块色来自 logo.svg 的平坦 <rect fill>，
+    // 强调色来自 assets.accent），不写死路径/颜色。任何"顺手改 mark/几何/渐变"
+    // 的实现都会在这里红。
+    const source = readFileSync(officialLogo, 'utf8')
+    const tile = TILE_RECT.exec(source)
+    expect(tile).not.toBeNull()
+    const accent = officialAccent()
+    // 前提：官方日间底板是白色、强调色不是它 —— 否则下面的比对是恒等的、没有信息量。
+    expect(accent.toUpperCase()).not.toBe(tile![1]!.toUpperCase())
+    const tinted = source.replace(tile![0], tile![0].replace(tile![1]!, accent))
+
     const out = tempDir('dsh-tray-official-')
     await generateTrayIcons({ source: officialLogo, buildRoot: out })
-    const source = readFileSync(officialLogo, 'utf8')
-    expect(source).toContain('fill="#000000"')
     for (const [file, size] of [['tray-icon-blue.png', 16], ['tray-icon-blue@2x.png', 32]] as const) {
-      const legacy = await sharp(Buffer.from(source))
+      const expected = await sharp(Buffer.from(tinted))
         .resize({ width: size, height: size, fit: 'contain' })
         .png({ compressionLevel: 9 })
         .toBuffer()
-      expect(readFileSync(join(out, file)).equals(legacy)).toBe(true)
+      expect(readFileSync(join(out, file)).equals(expected)).toBe(true)
     }
+    // 像素面复核：方块确实是强调色（不是黑/白），且 mark 的渐变颜色也还在。
+    const path = join(out, 'tray-icon-blue@2x.png')
+    expect(await dominantOpaqueColor(path)).toBe(accent.toUpperCase())
+    const accentRgb = [1, 3, 5].map(index => Number.parseInt(accent.slice(index, index + 2), 16)) as
+      [number, number, number]
+    expect(await countOpaquePixels(path, ([r, g, b]) =>
+      Math.abs(r - accentRgb[0]) > 8 || Math.abs(g - accentRgb[1]) > 8 || Math.abs(b - accentRgb[2]) > 8,
+    )).toBeGreaterThan(100)
   })
 
-  it('macOS 模板图只有 mark：背景透明、落墨处字面黑、不含不透明底板', async () => {
-    // 2026-09-16 真机 P1：模板图此前是"满画布不透明的方块 + 白 mark"，而 AppKit 对
-    // 模板图**只拿 alpha 通道当遮罩**（RGB 一律忽略）⇒ 菜单栏里只剩一个实心方块
-    // （暗色菜单栏实测是白方块），花括号 mark 永远画不出来。
-    // 判据钉在像素上：背景必须 clear、落墨处必须字面黑、mark 确实存在。
+  it('macOS 模板图 = 完整 mark 的 alpha：背景透明、落墨处字面黑、形状一个不少', async () => {
+    // 2026-09-16 真机 P1：模板图此前是"满画布不透明的方块 + mark"，而 AppKit 对
+    // 模板图**只拿 alpha 通道当遮罩**（RGB 一律忽略）⇒ 菜单栏里只剩一个实心方块，
+    // mark 永远画不出来。
+    // 判据 1（形状完整）：alpha **逐像素等于**"权威 logo 去掉方块后的完整 mark"
+    //   —— 任何"简化 mark / 换图形/少画一个形状"的实现都会在这里红。
+    // 判据 2（模板规范）：背景必须 clear、落墨处必须字面黑。
+    const source = readFileSync(officialLogo, 'utf8')
+    const tile = TILE_RECT.exec(source)
+    expect(tile).not.toBeNull()
+    const markOnly = source.replace(tile![0], '')
+
     const out = tempDir('dsh-tray-template-')
     await generateTrayIcons({ source: officialLogo, buildRoot: out })
 
-    for (const file of ['tray-iconTemplate.png', 'tray-iconTemplate@2x.png'] as const) {
+    for (const [file, size] of [['tray-iconTemplate.png', 16], ['tray-iconTemplate@2x.png', 32]] as const) {
       const { data, info } = await sharp(join(out, file))
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true })
+      const alpha: number[] = []
       let clear = 0
       let inked = 0
       let nonBlackInk = 0
       for (let i = 0; i < data.length; i += info.channels) {
+        alpha.push(data[i + 3]!)
         if (data[i + 3] === 0) {
           clear += 1
           continue
@@ -434,6 +513,15 @@ describe('generateTrayIcons', () => {
         inked += 1
         if (data[i] !== 0 || data[i + 1] !== 0 || data[i + 2] !== 0) nonBlackInk += 1
       }
+      const expected = await sharp(Buffer.from(markOnly))
+        .resize({ width: size, height: size, fit: 'contain' })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      const expectedAlpha: number[] = []
+      for (let i = 0; i < expected.data.length; i += expected.info.channels) expectedAlpha.push(expected.data[i + 3]!)
+      expect(alpha).toEqual(expectedAlpha)
+
       // 底板占满整张画布：留着它时 clear 恒为 0（16px 旧产物实测 0/256）。
       expect(clear / (info.width * info.height)).toBeGreaterThan(0.5)
       // 全透明 = 菜单栏里什么都没有。
@@ -441,6 +529,52 @@ describe('generateTrayIcons', () => {
       // 模板图规范是 black + clear；出现彩色/白色墨点说明又在当普通位图渲染。
       expect(nonBlackInk).toBe(0)
     }
+  })
+
+  it('强调色优先取渠道包 channel.json 的 assets.accent（渠道目录不需要 brand.json）', async () => {
+    // 渠道构建的源 logo 在 channels/<id>/，品牌配置就是 channel.json 的
+    // assets.accent（渠道包的模板键）；官方那种 brand.json 目录形状不适用于渠道。
+    const dir = loneLogoDir(officialLogoWithTile('#FFFFFF'))
+    writeFileSync(join(dir, 'channel.json'), JSON.stringify({ assets: { accent: '#106040' } }))
+    const out = tempDir('dsh-tray-channel-accent-out-')
+    await generateTrayIcons({ source: join(dir, 'logo.svg'), buildRoot: out })
+    expect(await dominantOpaqueColor(join(out, 'tray-icon-blue@2x.png'))).toBe('#106040')
+  })
+
+  it('channel.json 的 accent 优先于同目录 brand.json（渠道覆盖 > 品牌目录）', async () => {
+    const dir = loneLogoDir(officialLogoWithTile('#FFFFFF'))
+    writeFileSync(join(dir, 'brand.json'), JSON.stringify({ assets: { accent: '#123456' } }))
+    writeFileSync(join(dir, 'channel.json'), JSON.stringify({ assets: { accent: '#654321' } }))
+    const out = tempDir('dsh-tray-accent-order-out-')
+    await generateTrayIcons({ source: join(dir, 'logo.svg'), buildRoot: out })
+    expect(await dominantOpaqueColor(join(out, 'tray-icon-blue@2x.png'))).toBe('#654321')
+  })
+
+  it('没有品牌配置时：彩色方块用自己的颜色，纯白/纯黑底板用兜底强调色', async () => {
+    // 规则（见 generate-tray-icons.mjs 的 resolveTintColor）：纯白/纯黑是**底板**
+    // （日间/夜间），不是品牌色 —— 拿它派生会把白底原样画进托盘（浅色托盘上等于
+    // 看不见），所以这两种中性色落到兜底 #2563eb。
+    const FALLBACK_ACCENT = '#2563EB'
+    const coloredDir = loneLogoDir(officialLogoWithTile('#106040'))
+    const coloredOut = tempDir('dsh-tray-tint-colored-out-')
+    await generateTrayIcons({ source: join(coloredDir, 'logo.svg'), buildRoot: coloredOut })
+    expect(await dominantOpaqueColor(join(coloredOut, 'tray-icon-blue@2x.png'))).toBe('#106040')
+
+    for (const fill of ['#FFFFFF', '#000000'] as const) {
+      const dir = loneLogoDir(officialLogoWithTile(fill))
+      const out = tempDir('dsh-tray-tint-neutral-out-')
+      await generateTrayIcons({ source: join(dir, 'logo.svg'), buildRoot: out })
+      expect(await dominantOpaqueColor(join(out, 'tray-icon-blue@2x.png')), `${fill} 底板`).toBe(FALLBACK_ACCENT)
+    }
+  })
+
+  it('非法 accent 取值按"没配置"处理（配色缺失不该让打包失败）', async () => {
+    const dir = loneLogoDir(officialLogoWithTile('#FFFFFF'))
+    writeFileSync(join(dir, 'brand.json'), JSON.stringify({ assets: { accent: 'blue' } }))
+    writeFileSync(join(dir, 'channel.json'), JSON.stringify({ assets: { accent: null } }))
+    const out = tempDir('dsh-tray-accent-invalid-out-')
+    await generateTrayIcons({ source: join(dir, 'logo.svg'), buildRoot: out })
+    expect(await dominantOpaqueColor(join(out, 'tray-icon-blue@2x.png'))).toBe('#2563EB')
   })
 
   it('方块之外没有任何 mark 的 logo 直接 fail-loud（否则模板图会全透明）', async () => {

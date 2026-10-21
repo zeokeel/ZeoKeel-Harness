@@ -1,78 +1,169 @@
 /**
- * Authoritative brand-mark geometry for the enterprise (desktop) surfaces.
+ * Authoritative brand artwork for the enterprise (desktop) surfaces.
  *
- * The single authority is `brands/official/logo.svg` (AGENTS.md: never
- * hand-draw, never copy geometry from memory). The desktop assembly does NOT
- * include `@zeokeel/dsh-branding` (web-only), and client bundles must not
- * import another package's client code, so this package keeps its own parsed
- * copy — `tests/channel-geometry.spec.ts` parses the SVG and fails on any drift
- * (audit 2026-09-08 P2-39).
+ * The single authority is `brands/official/` (see AGENTS.md: every mark must be
+ * derived from it — never hand-drawn, never recoloured). This module holds the
+ * three checked-in SVGs verbatim as raw strings:
+ *
+ *  - `BRAND_TILE_SVG`      — `brands/official/logo.svg` (white tile, full-colour mark)
+ *  - `BRAND_TILE_SVG_DARK` — `brands/official/logo-dark.svg` (black tile, same mark)
+ *  - `BRAND_MARK_SVG`      — `logo.svg` with the tile `<rect>` removed (transparent,
+ *                            full colour), for themed sidebar/hero/login surfaces
+ *
+ * The React surfaces inject these strings instead of re-transcribing geometry, and
+ * `tests/channel-geometry.spec.ts` compares them back against the brand folder —
+ * any drift in the authority fails the suite.
  * @module @zeokeel/dsh-enterprise/channel-geometry
  */
 
 /** Canvas size of the authoritative artwork (square). */
 export const BRAND_TILE_SIZE = 1254
 
-/** `viewBox` of the tile. */
-export const BRAND_TILE_VIEWBOX = `0 0 ${String(BRAND_TILE_SIZE)} ${String(BRAND_TILE_SIZE)}`
+/** `viewBox` of the full day/night tile. */
+export const BRAND_TILE_VIEWBOX = `0 0 ${BRAND_TILE_SIZE} ${BRAND_TILE_SIZE}`
 
-/** Corner radius of the rounded square (px in the 1254 canvas). */
+/** Corner radius of the rounded-square tile (px in the 1254 canvas). */
 export const BRAND_TILE_RADIUS = 180
 
-/** Corner-radius ratio for percentage-based styling (React surfaces). */
+/** Corner-radius ratio for percentage-based styling. */
 export const BRAND_TILE_RADIUS_RATIO = BRAND_TILE_RADIUS / BRAND_TILE_SIZE
 
-/** The approved 1.25× enlargement around the canvas center. */
-export const BRAND_MARK_TRANSFORM = 'translate(627 627) scale(1.25) translate(-627 -627)'
+/** `viewBox` of the mark-only artwork (same canvas, no tile `<rect>`). */
+export const BRAND_MARK_VIEWBOX = `0 0 ${BRAND_TILE_SIZE} ${BRAND_TILE_SIZE}`
 
-/** The two brace paths (left, right) in logo.svg coordinates. */
-export const BRAND_MARK_BRACES = [
-  'M 334 409 C 300 409 273 431 273 466 V 548 C 273 582 254 607 220 620 C 254 633 273 658 273 692 V 775 C 273 810 300 843 334 843',
-  'M 920 409 C 954 409 981 431 981 466 V 548 C 981 582 1000 607 1034 620 C 1000 633 981 658 981 692 V 775 C 981 810 954 843 920 843',
-] as const
+/** Full day logo — verbatim `brands/official/logo.svg` (white tile). */
+export const BRAND_TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254">
+  <defs>
+    <linearGradient id="id0" gradientUnits="userSpaceOnUse" x1="7922.8" y1="2323.94" x2="3933.94" y2="3812.65">
+   <stop offset="0" style="stop-opacity:1; stop-color:#37E7FE"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#0946EF"/>
+  </linearGradient>
+    <linearGradient id="id1" gradientUnits="userSpaceOnUse" x1="7028.19" y1="4022.04" x2="7480.85" y2="5217.12">
+   <stop offset="0" style="stop-opacity:1; stop-color:#CFE5FF"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#9BB7FA"/>
+  </linearGradient>
+    <linearGradient id="id2" gradientUnits="userSpaceOnUse" x1="4252.12" y1="5286.62" x2="2203.34" y2="5821.97">
+   <stop offset="0" style="stop-opacity:1; stop-color:#0D44F6"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#3CBBFA"/>
+  </linearGradient>
+    <linearGradient id="id3" gradientUnits="userSpaceOnUse" x1="8902.42" y1="5347.82" x2="9602.13" y2="4535.25">
+   <stop offset="0" style="stop-opacity:1; stop-color:#1D32FD"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#2ECCFB"/>
+  </linearGradient>
+    <linearGradient id="id4" gradientUnits="userSpaceOnUse" x1="5651.57" y1="8185.22" x2="7918.39" y2="6359.98">
+   <stop offset="0" style="stop-opacity:1; stop-color:#755BFD"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#3935FB"/>
+  </linearGradient>
+    <linearGradient id="id5" gradientUnits="userSpaceOnUse" x1="6624.84" y1="5795.31" x2="5118.57" y2="6830.28">
+   <stop offset="0" style="stop-opacity:1; stop-color:#A2BBFE"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#F0F8FB"/>
+  </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1254" height="1254" rx="180" fill="#FFFFFF"/>
+  <g transform="translate(627.00 627.00) scale(0.10709006) translate(-5943.7880 -4987.8288)">
+    <circle fill="url(#id3)" cx="9224.03" cy="4964.39" r="652.68"/>
+    <path fill="#37E7FE" d="M1377.95 4878.86c847.22,135.9 1554.82,139.98 2214.3,98.59 -51.21,113.37 -102.42,226.73 -153.62,340.11 -501.56,-41.69 -1003.12,-83.38 -1504.69,-125.07 -148.51,-78.17 -297.03,-156.33 -445.55,-234.5 -36.81,-26.38 -73.63,-52.76 -110.44,-79.13z"/>
+    <path fill="url(#id5)" d="M5844.62 5467.93c757.95,469.26 1552.04,683.09 2221.4,646.89 669.36,-36.2 -1817.36,1145.13 -1840.8,1141.22 -23.45,-3.91 -956.05,-77.76 -961.44,-101.62 -5.39,-23.85 -7.68,-34 -18.46,-81.71 -439.89,-170.27 -873.07,-499.71 -1271.27,-868.01 377.81,-184.98 755.6,-369.99 1133.4,-554.97 241.4,-60.44 495.78,-121.37 737.17,-181.8z"/>
+    <path fill="url(#id4)" d="M3215.44 6298.59c444.07,294.74 912.19,496.81 1403.19,610.57 737.11,170.77 1194.41,154.09 1892.6,-118.06 757.58,-295.29 1202.13,-663.47 2046.14,-854.28 687.99,-155.54 1337.36,-149.85 1943.37,37.01 -554.27,40.43 -1004.09,268.63 -1439.47,529.44 -815.66,488.62 -1298.69,1200.94 -1980.71,1693.24 -500.08,360.99 -1045.01,469.48 -1631.48,263.34 -577.43,-202.96 -942.26,-741.49 -1340.9,-1179.78 -297.58,-327.17 -595.16,-654.33 -892.74,-981.48z"/>
+    <path fill="url(#id1)" d="M3556.31 4989.74c453.23,-152.91 887.19,-385.7 1309.81,-665.41 585.37,-387.43 1079.34,-895.66 1781.89,-1063.56 361.3,-86.36 802.18,-83.72 1409.2,104.8 229.77,35.92 459.53,71.84 689.31,107.77 273.58,191.5 547.16,383.01 820.74,574.51 61.89,47.51 123.77,95.03 185.65,142.53 -307.55,-77.01 -591.22,-108.92 -858.34,-109.56 -743.14,-1.78 -1293.87,181.35 -1923.62,554.19 -391.64,231.88 -763.63,512.88 -1118.02,837.89 -765.54,-161.05 -1531.08,-322.11 -2296.62,-483.16z"/>
+    <path fill="url(#id2)" d="M4299.89 4964.58c422.05,49.48 876.7,170.15 1260.04,351.55 102.42,48.46 199.9,100.87 293.01,156.77 -96.22,66.61 -193.58,132.09 -292.18,196.3 -467.78,304.68 -808.46,525.93 -1381.48,582.84 -373.22,37.07 -768.66,-19.89 -1198.92,-224.16 -691.25,-343.74 -1202.99,-732.34 -1602.4,-1149.03 659.67,225.7 1230.83,277.67 1734.44,197.06 540.06,-86.45 572.82,-183.39 1187.5,-111.34z"/>
+    <path fill="url(#id0)" d="M1693.56 4906.35c469.34,-56.45 865.04,-294.66 1227.26,-608.1 299.85,-259.47 506.05,-521.09 757.48,-823.41 351.19,-422.26 689.51,-834.41 1036.68,-1197.99 358.51,-375.45 650.28,-677.4 1170.22,-807.58 868.38,-217.43 1561.4,274.36 2150.59,820.4 500.62,463.94 1014.16,1145.1 1717.12,1900.71 -427.16,-246.86 -827.38,-434.82 -1282.29,-636.27 -710.51,-314.63 -1267.88,-652.82 -2054.04,-494.05 -824.36,166.47 -1579.98,690.15 -2276.31,1106.23 -533.08,318.54 -1088.17,522.3 -1698.4,652.7 -258.58,55.25 -507.58,83.13 -748.31,87.36z"/>
+  </g>
+</svg>`
 
-/** Stroke width of the braces. */
-export const BRAND_MARK_STROKE_WIDTH = 40
+/** Full dark logo — verbatim `brands/official/logo-dark.svg` (black tile). */
+export const BRAND_TILE_SVG_DARK = `<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254">
+  <defs>
+    <linearGradient id="id0" gradientUnits="userSpaceOnUse" x1="7922.8" y1="2323.94" x2="3933.94" y2="3812.65">
+   <stop offset="0" style="stop-opacity:1; stop-color:#37E7FE"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#0946EF"/>
+  </linearGradient>
+    <linearGradient id="id1" gradientUnits="userSpaceOnUse" x1="7028.19" y1="4022.04" x2="7480.85" y2="5217.12">
+   <stop offset="0" style="stop-opacity:1; stop-color:#CFE5FF"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#9BB7FA"/>
+  </linearGradient>
+    <linearGradient id="id2" gradientUnits="userSpaceOnUse" x1="4252.12" y1="5286.62" x2="2203.34" y2="5821.97">
+   <stop offset="0" style="stop-opacity:1; stop-color:#0D44F6"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#3CBBFA"/>
+  </linearGradient>
+    <linearGradient id="id3" gradientUnits="userSpaceOnUse" x1="8902.42" y1="5347.82" x2="9602.13" y2="4535.25">
+   <stop offset="0" style="stop-opacity:1; stop-color:#1D32FD"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#2ECCFB"/>
+  </linearGradient>
+    <linearGradient id="id4" gradientUnits="userSpaceOnUse" x1="5651.57" y1="8185.22" x2="7918.39" y2="6359.98">
+   <stop offset="0" style="stop-opacity:1; stop-color:#755BFD"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#3935FB"/>
+  </linearGradient>
+    <linearGradient id="id5" gradientUnits="userSpaceOnUse" x1="6624.84" y1="5795.31" x2="5118.57" y2="6830.28">
+   <stop offset="0" style="stop-opacity:1; stop-color:#A2BBFE"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#F0F8FB"/>
+  </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1254" height="1254" rx="180" fill="#000000"/>
+  <g transform="translate(627.00 627.00) scale(0.10709006) translate(-5943.7880 -4987.8288)">
+    <circle fill="url(#id3)" cx="9224.03" cy="4964.39" r="652.68"/>
+    <path fill="#37E7FE" d="M1377.95 4878.86c847.22,135.9 1554.82,139.98 2214.3,98.59 -51.21,113.37 -102.42,226.73 -153.62,340.11 -501.56,-41.69 -1003.12,-83.38 -1504.69,-125.07 -148.51,-78.17 -297.03,-156.33 -445.55,-234.5 -36.81,-26.38 -73.63,-52.76 -110.44,-79.13z"/>
+    <path fill="url(#id5)" d="M5844.62 5467.93c757.95,469.26 1552.04,683.09 2221.4,646.89 669.36,-36.2 -1817.36,1145.13 -1840.8,1141.22 -23.45,-3.91 -956.05,-77.76 -961.44,-101.62 -5.39,-23.85 -7.68,-34 -18.46,-81.71 -439.89,-170.27 -873.07,-499.71 -1271.27,-868.01 377.81,-184.98 755.6,-369.99 1133.4,-554.97 241.4,-60.44 495.78,-121.37 737.17,-181.8z"/>
+    <path fill="url(#id4)" d="M3215.44 6298.59c444.07,294.74 912.19,496.81 1403.19,610.57 737.11,170.77 1194.41,154.09 1892.6,-118.06 757.58,-295.29 1202.13,-663.47 2046.14,-854.28 687.99,-155.54 1337.36,-149.85 1943.37,37.01 -554.27,40.43 -1004.09,268.63 -1439.47,529.44 -815.66,488.62 -1298.69,1200.94 -1980.71,1693.24 -500.08,360.99 -1045.01,469.48 -1631.48,263.34 -577.43,-202.96 -942.26,-741.49 -1340.9,-1179.78 -297.58,-327.17 -595.16,-654.33 -892.74,-981.48z"/>
+    <path fill="url(#id1)" d="M3556.31 4989.74c453.23,-152.91 887.19,-385.7 1309.81,-665.41 585.37,-387.43 1079.34,-895.66 1781.89,-1063.56 361.3,-86.36 802.18,-83.72 1409.2,104.8 229.77,35.92 459.53,71.84 689.31,107.77 273.58,191.5 547.16,383.01 820.74,574.51 61.89,47.51 123.77,95.03 185.65,142.53 -307.55,-77.01 -591.22,-108.92 -858.34,-109.56 -743.14,-1.78 -1293.87,181.35 -1923.62,554.19 -391.64,231.88 -763.63,512.88 -1118.02,837.89 -765.54,-161.05 -1531.08,-322.11 -2296.62,-483.16z"/>
+    <path fill="url(#id2)" d="M4299.89 4964.58c422.05,49.48 876.7,170.15 1260.04,351.55 102.42,48.46 199.9,100.87 293.01,156.77 -96.22,66.61 -193.58,132.09 -292.18,196.3 -467.78,304.68 -808.46,525.93 -1381.48,582.84 -373.22,37.07 -768.66,-19.89 -1198.92,-224.16 -691.25,-343.74 -1202.99,-732.34 -1602.4,-1149.03 659.67,225.7 1230.83,277.67 1734.44,197.06 540.06,-86.45 572.82,-183.39 1187.5,-111.34z"/>
+    <path fill="url(#id0)" d="M1693.56 4906.35c469.34,-56.45 865.04,-294.66 1227.26,-608.1 299.85,-259.47 506.05,-521.09 757.48,-823.41 351.19,-422.26 689.51,-834.41 1036.68,-1197.99 358.51,-375.45 650.28,-677.4 1170.22,-807.58 868.38,-217.43 1561.4,274.36 2150.59,820.4 500.62,463.94 1014.16,1145.1 1717.12,1900.71 -427.16,-246.86 -827.38,-434.82 -1282.29,-636.27 -710.51,-314.63 -1267.88,-652.82 -2054.04,-494.05 -824.36,166.47 -1579.98,690.15 -2276.31,1106.23 -533.08,318.54 -1088.17,522.3 -1698.4,652.7 -258.58,55.25 -507.58,83.13 -748.31,87.36z"/>
+  </g>
+</svg>`
 
-/** The connector line between the two node circles. */
-export const BRAND_CONNECTOR = { x1: 435, y1: 627, x2: 817, y2: 627, strokeWidth: 20 } as const
+/** Mark only, transparent background, full colour — day logo minus the tile `<rect>`. */
+export const BRAND_MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254">
+  <defs>
+    <linearGradient id="id0" gradientUnits="userSpaceOnUse" x1="7922.8" y1="2323.94" x2="3933.94" y2="3812.65">
+   <stop offset="0" style="stop-opacity:1; stop-color:#37E7FE"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#0946EF"/>
+  </linearGradient>
+    <linearGradient id="id1" gradientUnits="userSpaceOnUse" x1="7028.19" y1="4022.04" x2="7480.85" y2="5217.12">
+   <stop offset="0" style="stop-opacity:1; stop-color:#CFE5FF"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#9BB7FA"/>
+  </linearGradient>
+    <linearGradient id="id2" gradientUnits="userSpaceOnUse" x1="4252.12" y1="5286.62" x2="2203.34" y2="5821.97">
+   <stop offset="0" style="stop-opacity:1; stop-color:#0D44F6"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#3CBBFA"/>
+  </linearGradient>
+    <linearGradient id="id3" gradientUnits="userSpaceOnUse" x1="8902.42" y1="5347.82" x2="9602.13" y2="4535.25">
+   <stop offset="0" style="stop-opacity:1; stop-color:#1D32FD"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#2ECCFB"/>
+  </linearGradient>
+    <linearGradient id="id4" gradientUnits="userSpaceOnUse" x1="5651.57" y1="8185.22" x2="7918.39" y2="6359.98">
+   <stop offset="0" style="stop-opacity:1; stop-color:#755BFD"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#3935FB"/>
+  </linearGradient>
+    <linearGradient id="id5" gradientUnits="userSpaceOnUse" x1="6624.84" y1="5795.31" x2="5118.57" y2="6830.28">
+   <stop offset="0" style="stop-opacity:1; stop-color:#A2BBFE"/>
+   <stop offset="1" style="stop-opacity:1; stop-color:#F0F8FB"/>
+  </linearGradient>
+  </defs>
+  <g transform="translate(627.00 627.00) scale(0.10709006) translate(-5943.7880 -4987.8288)">
+    <circle fill="url(#id3)" cx="9224.03" cy="4964.39" r="652.68"/>
+    <path fill="#37E7FE" d="M1377.95 4878.86c847.22,135.9 1554.82,139.98 2214.3,98.59 -51.21,113.37 -102.42,226.73 -153.62,340.11 -501.56,-41.69 -1003.12,-83.38 -1504.69,-125.07 -148.51,-78.17 -297.03,-156.33 -445.55,-234.5 -36.81,-26.38 -73.63,-52.76 -110.44,-79.13z"/>
+    <path fill="url(#id5)" d="M5844.62 5467.93c757.95,469.26 1552.04,683.09 2221.4,646.89 669.36,-36.2 -1817.36,1145.13 -1840.8,1141.22 -23.45,-3.91 -956.05,-77.76 -961.44,-101.62 -5.39,-23.85 -7.68,-34 -18.46,-81.71 -439.89,-170.27 -873.07,-499.71 -1271.27,-868.01 377.81,-184.98 755.6,-369.99 1133.4,-554.97 241.4,-60.44 495.78,-121.37 737.17,-181.8z"/>
+    <path fill="url(#id4)" d="M3215.44 6298.59c444.07,294.74 912.19,496.81 1403.19,610.57 737.11,170.77 1194.41,154.09 1892.6,-118.06 757.58,-295.29 1202.13,-663.47 2046.14,-854.28 687.99,-155.54 1337.36,-149.85 1943.37,37.01 -554.27,40.43 -1004.09,268.63 -1439.47,529.44 -815.66,488.62 -1298.69,1200.94 -1980.71,1693.24 -500.08,360.99 -1045.01,469.48 -1631.48,263.34 -577.43,-202.96 -942.26,-741.49 -1340.9,-1179.78 -297.58,-327.17 -595.16,-654.33 -892.74,-981.48z"/>
+    <path fill="url(#id1)" d="M3556.31 4989.74c453.23,-152.91 887.19,-385.7 1309.81,-665.41 585.37,-387.43 1079.34,-895.66 1781.89,-1063.56 361.3,-86.36 802.18,-83.72 1409.2,104.8 229.77,35.92 459.53,71.84 689.31,107.77 273.58,191.5 547.16,383.01 820.74,574.51 61.89,47.51 123.77,95.03 185.65,142.53 -307.55,-77.01 -591.22,-108.92 -858.34,-109.56 -743.14,-1.78 -1293.87,181.35 -1923.62,554.19 -391.64,231.88 -763.63,512.88 -1118.02,837.89 -765.54,-161.05 -1531.08,-322.11 -2296.62,-483.16z"/>
+    <path fill="url(#id2)" d="M4299.89 4964.58c422.05,49.48 876.7,170.15 1260.04,351.55 102.42,48.46 199.9,100.87 293.01,156.77 -96.22,66.61 -193.58,132.09 -292.18,196.3 -467.78,304.68 -808.46,525.93 -1381.48,582.84 -373.22,37.07 -768.66,-19.89 -1198.92,-224.16 -691.25,-343.74 -1202.99,-732.34 -1602.4,-1149.03 659.67,225.7 1230.83,277.67 1734.44,197.06 540.06,-86.45 572.82,-183.39 1187.5,-111.34z"/>
+    <path fill="url(#id0)" d="M1693.56 4906.35c469.34,-56.45 865.04,-294.66 1227.26,-608.1 299.85,-259.47 506.05,-521.09 757.48,-823.41 351.19,-422.26 689.51,-834.41 1036.68,-1197.99 358.51,-375.45 650.28,-677.4 1170.22,-807.58 868.38,-217.43 1561.4,274.36 2150.59,820.4 500.62,463.94 1014.16,1145.1 1717.12,1900.71 -427.16,-246.86 -827.38,-434.82 -1282.29,-636.27 -710.51,-314.63 -1267.88,-652.82 -2054.04,-494.05 -824.36,166.47 -1579.98,690.15 -2276.31,1106.23 -533.08,318.54 -1088.17,522.3 -1698.4,652.7 -258.58,55.25 -507.58,83.13 -748.31,87.36z"/>
+  </g>
+</svg>`
 
-/** The two node circles on the connector line. */
-export const BRAND_NODES = [
-  { cx: 435, cy: 627, r: 65 },
-  { cx: 817, cy: 627, r: 65 },
-] as const
+/** The full day tile (favicon artwork): white tile + full-colour mark. */
+export function brandTileSvg(): string {
+  return BRAND_TILE_SVG
+}
 
-/** The mark's inner elements (braces + connector + nodes), no <svg> wrapper.
- * `color` is a CSS colour or `currentColor` (React/CSS surfaces). The layout
- * (newlines + 2-space indent) mirrors `brands/official/logo.svg` so the
- * authored artwork and the generated markup compare equal after whitespace
- * normalization (tests/favicon.spec.ts). */
-function markInner(color: string, indent: string): string {
-  const braces = BRAND_MARK_BRACES
-    .map(path => `${indent}  <path d="${path}" fill="none" stroke="${color}" stroke-width="${String(BRAND_MARK_STROKE_WIDTH)}" stroke-linecap="round" stroke-linejoin="round"/>`)
-    .join('\n')
-  const nodes = BRAND_NODES
-    .map(node => `${indent}  <circle cx="${String(node.cx)}" cy="${String(node.cy)}" r="${String(node.r)}" fill="${color}"/>`)
-    .join('\n')
-  return `${indent}<g transform="${BRAND_MARK_TRANSFORM}">\n${braces}\n`
-    + `${indent}  <line x1="${String(BRAND_CONNECTOR.x1)}" y1="${String(BRAND_CONNECTOR.y1)}" x2="${String(BRAND_CONNECTOR.x2)}" y2="${String(BRAND_CONNECTOR.y2)}" stroke="${color}" stroke-width="${String(BRAND_CONNECTOR.strokeWidth)}" stroke-linecap="round"/>\n`
-    + `${nodes}\n${indent}</g>`
+/** The full dark tile: black tile + the same full-colour mark. */
+export function brandTileSvgDark(): string {
+  return BRAND_TILE_SVG_DARK
 }
 
 /**
- * The mark as a standalone inline SVG string. The mark uses `currentColor` so
- * the caller supplies the colour (white on the dark tile, black on the light
- * tile) — never a third chromatic variant.
+ * The mark-only artwork: transparent background, its own gradient fills.
+ * Callers must NOT recolour it with `currentColor` or a design token.
  */
-export function brandMarkSvg(color = 'currentColor'): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${BRAND_TILE_VIEWBOX}" width="100%" height="100%" fill="none" aria-hidden="true">\n`
-    + markInner(color, '') + '\n</svg>'
-}
-
-/** The full tile (rounded square + mark) as an inline SVG string. */
-export function brandTileSvg(markColor = '#FFFFFF'): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${String(BRAND_TILE_SIZE)}" height="${String(BRAND_TILE_SIZE)}" viewBox="${BRAND_TILE_VIEWBOX}">\n`
-    + `  <rect x="0" y="0" width="${String(BRAND_TILE_SIZE)}" height="${String(BRAND_TILE_SIZE)}" rx="${String(BRAND_TILE_RADIUS)}" fill="#000000"/>\n`
-    + markInner(markColor, '  ') + '\n</svg>'
+export function brandMarkSvg(): string {
+  return BRAND_MARK_SVG
 }

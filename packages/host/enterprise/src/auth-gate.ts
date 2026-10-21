@@ -166,8 +166,6 @@ export function renderLoginPage(locale: HostLocale): string {
     /* 实心强调按钮上的文字色：暗色 --accent 是浅蓝 #3b82f6，白字只有 3.68:1，
        所以暗色改用深墨（6.23:1）。亮色保持白字（5.17:1）。 */
     --accent-fg: #ffffff;
-    --brand-tile-bg: #0f1115;
-    --brand-tile-fg: #ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -178,8 +176,6 @@ export function renderLoginPage(locale: HostLocale): string {
       --err: #f87171;
       --accent: #3b82f6;
       --accent-fg: #0b1220;
-      --brand-tile-bg: #f9fafb;
-      --brand-tile-fg: #0f1115;
     }
   }
   body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: var(--bg); color: var(--fg); }
@@ -197,10 +193,14 @@ export function renderLoginPage(locale: HostLocale): string {
   .back { background: transparent; color: var(--accent); border: none; font-size: 12px; cursor: pointer; padding: 6px 12px; margin: 0 0 14px; width: auto; }
   /* Step2 渠道区(名称/标语/logo 来自服务端 /api/client/v2/channel) */
   .brand { margin-bottom: 18px; min-height: 92px; }
-  .brand img, .brand .fallback { width: 64px; height: 64px; border-radius: 14px; object-fit: contain; margin-bottom: 8px; }
-  /* 品牌兜底方块：亮=深底白 mark，暗=浅底深 mark（与 logo-dark.svg 的配对方向一致）。
-     原先写死 #0f1115，暗色下与页面底色 1.00:1（方块轮廓彻底消失）。 */
-  .brand .fallback { display: inline-flex; align-items: center; justify-content: center; background: var(--brand-tile-bg); color: var(--brand-tile-fg); font-size: 28px; font-weight: 700; }
+  .brand img, .brand .fallback { width: 64px; height: 64px; margin-bottom: 8px; }
+  .brand img { border-radius: 14px; object-fit: contain; }
+  /* 品牌兜底 = mark-only 图形（logo.svg 去掉方块 rect：透明底 + 自带彩色渐变）。
+     不能再给底色/前景色/字号：mark 有 6 个 linearGradient 填充，任何 token 染色都会
+     变成第三色变体；透明底在亮/暗登录页上都可直接使用。图形本身是 1254×1254 画布，
+     由子 svg 撑满这 64px 的槽位。 */
+  .brand .fallback { display: inline-flex; align-items: center; justify-content: center; }
+  .brand .fallback svg { display: block; width: 100%; height: 100%; }
   .brand-name { font-size: 20px; font-weight: 700; }
   .brand-tag { font-size: 12px; color: var(--fg); opacity: 0.6; }
   .welcome { font-size: 13px; margin-top: 6px; white-space: pre-wrap; }
@@ -272,10 +272,10 @@ export function renderLoginPage(locale: HostLocale): string {
     while (s.charAt(s.length - 1) === '/') s = s.slice(0, -1)
     return s
   }
-  // 渠道兜底图形:权威源为 brands/official/logo.svg(黑色圆角方块 + 白色花括号桥形,
-  // 花括号 1.25x 放大)。任何 logo 兜底都必须与 logo.svg 一致,禁止字母 P 等
-  // 编造图形(旧版 P 字 logo 已退役)。
-  var BRACE_MARK_SVG = ${JSON.stringify(brandMarkSvg('currentColor'))}
+  // 渠道兜底图形:权威源为 brands/official/logo.svg 的 **mark-only** 版本(去掉方块
+  // rect:透明底 + 自带彩色渐变,不做任何 token/currentColor 染色)。任何 logo 兜底
+  // 都必须与 logo.svg 的 mark 一致,禁止字母 P 等编造图形(旧版 P 字 logo 已退役)。
+  var BRAND_MARK_SVG = ${JSON.stringify(brandMarkSvg())}
 
   // 随包分发的品牌文案(channel.json 的 identity/copy,由 profile 组装期注入)。
   // 登录页要在这里就显示品牌 —— 此刻还没有服务端可问。__BRAND_JSON__ 由
@@ -375,9 +375,9 @@ export function renderLoginPage(locale: HostLocale): string {
 
   function renderChannel(ch) {
     if (!ch) {
-      // 兜底:官方花括号 mark(与 logo.svg 一致), 而非字母/编造图形。
+      // 兜底:官方 mark(logo.svg 去掉 tile rect 的 mark-only 版), 而非字母/编造图形。
       // 文案取随包品牌(渠道构建下即渠道自己的名字)。
-      var fallback = '<span class="fallback">' + BRACE_MARK_SVG + '</span>'
+      var fallback = '<span class="fallback">' + BRAND_MARK_SVG + '</span>'
       var fbTag = BRAND.login.tagline ? '<div class="brand-tag">' + esc(BRAND.login.tagline) + '</div>' : ''
       return fallback + '<div class="brand-name">' + esc(BRAND.login.displayName) + '</div>' + fbTag
     }
@@ -391,10 +391,10 @@ export function renderLoginPage(locale: HostLocale): string {
     // 于是白标客户的登录页又回到厂商兜底图形（2026-09-11 实测）。
     var rawLogo = login.logo_url || ''
     var logoUrl = rawLogo === '' ? '' : (/^(https?:|data:)/.test(rawLogo) ? rawLogo : server + rawLogo)
-    // logo 加载失败时保留花括号兜底(与无渠道内容时同款)。
+    // logo 加载失败时保留 mark-only 兜底(与无渠道内容时同款)。
     // 安全:logoUrl 来自网关数据(管理员可控),仍须属性转义——旧实现直接拼
     // <img src="...">,网关被劫持/注入时可在登录页(认证前)形成 XSS(2026-09-01 审计)。
-    var logo = logoUrl ? '<img src="' + esc(logoUrl) + '" alt="logo" onerror="this.style.display=&quot;none&quot;;this.nextElementSibling.style.display=&quot;inline-flex&quot;"><span class="fallback" style="display:none">' + BRACE_MARK_SVG + '</span>' : '<span class="fallback">' + BRACE_MARK_SVG + '</span>'
+    var logo = logoUrl ? '<img src="' + esc(logoUrl) + '" alt="logo" onerror="this.style.display=&quot;none&quot;;this.nextElementSibling.style.display=&quot;inline-flex&quot;"><span class="fallback" style="display:none">' + BRAND_MARK_SVG + '</span>' : '<span class="fallback">' + BRAND_MARK_SVG + '</span>'
     // 服务端没给名字时用随包品牌:同一个渠道包驱动镜像与客户端,两者同名。
     var name = login.display_name || BRAND.login.displayName
     var tagline = login.tagline || BRAND.login.tagline

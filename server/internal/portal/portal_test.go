@@ -1,6 +1,8 @@
 package portal
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,19 +11,22 @@ import (
 	"testing"
 )
 
-// markRe 抓取品牌标记区块的 inner HTML(模板里唯一 span class="mark")。
-var markRe = regexp.MustCompile(`(?s)<span class="mark">(.*?)</span>`)
-
-// R7-RV-6:回落的品牌标记同时下发**两个配色变体**(同一份几何、仅颜色翻转),
-// 用 class 区分,由 CSS 按 prefers-color-scheme 显隐;测试必须能分别抓到两版,
-// 才能各自与权威文件对拍。
+// ---------------------------------------------------------------------------
+// 品牌标记形态(2026-10-21:品牌真源更换,回落不再是内联手抄几何):
+//   - 渠道配了 logo → <span class="mark"><picture>…</picture></span>
+//   - 未配 logo     → 两个变体各自成块(每块本身就是一个 .mark):
+//     <span class="mark mark-light"><img alt="" src="data:image/svg+xml;base64,…"></span>
+//     <span class="mark mark-dark">…</span>
+//
+// 两块由 CSS 按 prefers-color-scheme 显隐;data URI 解码后与 brands/official/*
+// 逐字节对拍。
+// ---------------------------------------------------------------------------
 var (
-	markLightRe = regexp.MustCompile(`(?s)<svg[^>]*class="mark-light"[^>]*>.*?</svg>`)
-	markDarkRe  = regexp.MustCompile(`(?s)<svg[^>]*class="mark-dark"[^>]*>.*?</svg>`)
-	// svgAttrRe 抓 SVG 属性对(与权威文件逐属性对拍用)。
-	svgAttrRe = regexp.MustCompile(`[a-zA-Z-]+="[^"]*"`)
-	// svgColorRe 抓颜色值(几何比对时抹掉,只留形状/坐标)。
-	svgColorRe = regexp.MustCompile(`"#[0-9A-Fa-f]{3,8}"`)
+	// markLightRe/markDarkRe 抓回落变体的 data URI(捕获组 1 = 完整 data URI)。
+	markLightRe = regexp.MustCompile(`<span class="mark mark-light"><img alt="" src="(data:image/svg\+xml;base64,[^"]+)"></span>`)
+	markDarkRe  = regexp.MustCompile(`<span class="mark mark-dark"><img alt="" src="(data:image/svg\+xml;base64,[^"]+)"></span>`)
+	// channelMarkRe 抓渠道 logo 形态(LogoURL 非空时唯一的 .mark)。
+	channelMarkRe = regexp.MustCompile(`(?s)<span class="mark"><picture>.*?</picture></span>`)
 	// schemeAnyRe 抓所有 prefers-color-scheme 块,返回 (scheme, body)。
 	// 变体显隐必须与 token 集**同一条件**;两处规则在文件里可以分块声明
 	// (CSS 不接受把后面的选择器写进前面的块而不被后面的默认值覆盖),
@@ -213,10 +218,10 @@ func TestRenderDownloadFirstAndNoAdminCallToAction(t *testing.T) {
 	}
 }
 
-// 深色主题必须换用**暗色版 logo**:浅色版是黑底白 mark,贴在深色背景上几乎
-// 看不见(2026-09-14 用户指出)。门户跟随系统深浅色,所以用 <picture> 的
-// <source media="(prefers-color-scheme: dark)"> 让浏览器自己挑 —— 服务端渲染时
-// 并不知道访客用哪个主题。
+// 渠道配了深浅两版 logo 时必须按主题下发**对应那一版**(AGENTS.md:浅色面
+// logo.svg / 深色面 logo-dark.svg,不得用同一版硬顶)。门户跟随系统深浅色,
+// 所以用 <picture> 的 <source media="(prefers-color-scheme: dark)"> 让浏览器
+// 自己挑 —— 服务端渲染时并不知道访客用哪个主题。
 func TestRenderLogoThemeVariants(t *testing.T) {
 	const light, dark = "/api/client/v2/channel/logo", "/api/client/v2/channel/logo-dark"
 	both := Render(View{Name: "ZeoKeel", AdminURL: "/admin/", LogoURL: light, LogoDarkURL: dark})
@@ -237,9 +242,14 @@ func TestRenderLogoThemeVariants(t *testing.T) {
 	if !strings.Contains(onlyLight, `src="`+light+`"`) {
 		t.Fatal("只有浅色版时应照常渲染")
 	}
-	// 完全没配 logo:退回文字标识,不能出现空 img
-	if noLogo := Render(View{Name: "ZeoKeel", AdminURL: "/admin/"}); strings.Contains(noLogo, "<img") {
-		t.Fatal("未配 logo 时应使用文字标识")
+	// 完全没配 logo:回落到**权威 SVG 文件本身**(两个 data URI 变体),
+	// 且不得引用任何渠道 logo 地址(否则访客会拿到 404)。
+	noLogo := Render(View{Name: "ZeoKeel", AdminURL: "/admin/"})
+	if strings.Contains(noLogo, "/api/client/v2/channel/logo") {
+		t.Fatal("未配 logo 时不应引用渠道 logo 地址")
+	}
+	if !markLightRe.MatchString(noLogo) || !markDarkRe.MatchString(noLogo) {
+		t.Fatal("未配 logo 时应回落到官方双色标记(两个内嵌变体)")
 	}
 }
 
@@ -264,215 +274,219 @@ func TestRenderFeatures(t *testing.T) {
 	}
 }
 
-// markVariant 从渲染出的标记区块里取指定配色变体(缺失即 fatal)。
-func markVariant(t *testing.T, mark, name string, re *regexp.Regexp) string {
+// decodeSVGDataURI 解码回落标记里的 SVG data URI,返回原始 SVG 字节。
+func decodeSVGDataURI(t *testing.T, uri string) []byte {
 	t.Helper()
-	v := re.FindString(mark)
-	if v == "" {
-		t.Fatalf("标记区块缺 %s 变体(主题切换缺一半): %q", name, mark)
+	const prefix = "data:image/svg+xml;base64,"
+	if !strings.HasPrefix(uri, prefix) {
+		t.Fatalf("回落标记的 img 源应以 %q 开头,实际: %q", prefix, preview(uri))
 	}
-	return v
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(uri, prefix))
+	if err != nil {
+		t.Fatalf("data URI 的 base64 负载无法解码: %v", err)
+	}
+	return raw
 }
 
-// markGeometry 抹掉颜色后返回变体的标记本体(去掉根 <svg> 标签:两版的分支
-// 只允许 class 与颜色不同)。归一化后两版必须逐字节相同 —— 这直接证明
-// "同一份几何、只有配色翻转"(AGENTS.md:logo.svg ↔ logo-dark.svg 的关系)。
-func markGeometry(t *testing.T, variant string) string {
+// fallbackVariant 从渲染结果里取出指定配色变体,解码成 SVG 字节。
+func fallbackVariant(t *testing.T, html, name string, re *regexp.Regexp) []byte {
 	t.Helper()
-	gt := strings.Index(variant, ">")
-	if gt < 0 {
-		t.Fatalf("变体不是完整 SVG: %q", variant)
+	m := re.FindStringSubmatch(html)
+	if m == nil {
+		t.Fatalf("门户未渲染 %s 变体(回落的双色标记缺一半): %q", name, preview(html))
 	}
-	body := variant[gt+1:]
-	if !svgColorRe.MatchString(body) {
-		t.Fatalf("变体里没有颜色属性,无法建立配色关系: %q", variant)
-	}
-	return svgColorRe.ReplaceAllString(body, `"#COLOR"`)
+	return decodeSVGDataURI(t, m[1])
 }
 
-// authorityAttrs 抽取权威 SVG 中**标记本体**(<rect> 起)的全部属性对。
-// 根 <svg> 的 xmlns/width/height/viewBox 不参与:权威文件是 1254 定尺寸,
-// 内联版按 100% 自适应,那几个不是几何真源的一部分。
-func authorityAttrs(t *testing.T, file, source string) []string {
+// readAuthority 读品牌真源;模块副本(无 brands/)里 Skip,与旧用例口径一致。
+func readAuthority(t *testing.T, file string) []byte {
 	t.Helper()
-	i := strings.Index(source, "<rect")
-	if i < 0 {
-		t.Fatalf("%s 里找不到 <rect>(权威文件结构已变,测试需同步)", file)
-	}
-	attrs := svgAttrRe.FindAllString(source[i:], -1)
-	if len(attrs) < 10 {
-		t.Fatalf("%s 只抽到 %d 个属性,太少(测试正则已过期)", file, len(attrs))
-	}
-	return attrs
-}
-
-// ---------------------------------------------------------------------------
-// 审计 R7 branding-5:渠道未配 logo 时,品牌标记必须是**官方几何**(内联 SVG),
-// 不得是文字字形(旧版本输出「A/H/P」+ 自造渐变方块)。
-// 审计 R7-RV-6:官方几何必须是**双色变体** —— 浅色面用 logo.svg(黑底白标记),
-// 深色面用 logo-dark.svg(白底黑标记)且几何完全相同。
-//
-// AGENTS.md 品牌铁律:任何 logo/品牌标记都必须派生自 brands/official/logo.svg
-// (never a text glyph, no `P` letters, no invented shapes);因此这里不仅断言
-// "有 SVG",还把**两个内联变体分别**与两份权威文件**逐属性对拍** —— 几何漂移
-// (手画了新图形、忘了带 1.25× 变换)或配色写反(深色底仍是黑方块)都会当场红。
-// ---------------------------------------------------------------------------
-func TestRenderBrandMarkDerivesFromOfficialLogo(t *testing.T) {
-	official, err := os.ReadFile(filepath.Join("..", "..", "..", "brands", "official", "logo.svg"))
+	src, err := os.ReadFile(filepath.Join("..", "..", "..", "brands", "official", file))
 	if err != nil {
 		// 只在仓库根可见时可跑(module-only 副本里没有 brands/)。
-		t.Skipf("brands/official/logo.svg 不可见(%v):请在仓库内运行 go test", err)
+		t.Skipf("brands/official/%s 不可见(%v):请在仓库内运行 go test", file, err)
 	}
-	officialDark, err := os.ReadFile(filepath.Join("..", "..", "..", "brands", "official", "logo-dark.svg"))
-	if err != nil {
-		t.Skipf("brands/official/logo-dark.svg 不可见(%v):请在仓库内运行 go test", err)
-	}
+	return src
+}
 
-	html := Render(View{Name: "Acme", AdminURL: "/admin/"})
-	m := markRe.FindStringSubmatch(html)
-	if m == nil {
-		t.Fatalf("门户未渲染品牌标记区块: %s", html[:200])
+// preview 截断长 HTML 便于失败信息可读。
+func preview(s string) string {
+	if len(s) > 300 {
+		return s[:300] + "…"
 	}
-	mark := m[1]
+	return s
+}
 
-	// 1) 回落的必须是内联 SVG 几何(两个配色变体),不是文字字形。
-	if !strings.Contains(mark, "<svg") {
-		t.Fatalf("渠道未配 logo 时品牌标记应为内联 SVG(官方几何),实际: %q", mark)
-	}
-	// 旧行为:{{initial .Name}} 会把名称首字母(或空名时的字面量 P)当标记。
-	for _, glyph := range []string{">A<", ">H<", ">P<", ">a<", ">p<"} {
-		if strings.Contains(mark, glyph) {
-			t.Fatalf("品牌标记出现文字字形 %q(品牌铁律禁止): %q", glyph, mark)
+// ---------------------------------------------------------------------------
+// 品牌标记(2026-10-21:品牌真源更换,旧括号几何退役)
+//
+// 回落标记不再内联手抄几何,而是把 brands/official/logo.svg 与 logo-dark.svg
+// **逐字节复制**进 server/internal/portal/brand-assets/ 后用 //go:embed 下发
+// (见 brandassets.go)。因此断言从"逐属性对拍内联几何"升级为:
+//   1) 内嵌副本 == 权威文件(逐字节);
+//   2) 门户渲染的两个 data URI 解码后 == 两份权威文件(逐字节);
+//   3) 两个变体的方块底色/渐变填充与权威文件一致(白底 vs 黑底,同一全彩标记)。
+// 手抄漂移、颜色写反、忘了同步上游 logo 都会当场红。
+// ---------------------------------------------------------------------------
+
+// 内嵌的两份素材必须与品牌真源逐字节相同(禁止手改、禁止重新导出)。
+func TestEmbeddedBrandAssetsMatchAuthority(t *testing.T) {
+	for _, c := range []struct {
+		file     string
+		embedded []byte
+	}{
+		{"logo.svg", brandLogoLightSVG},
+		{"logo-dark.svg", brandLogoDarkSVG},
+	} {
+		authority := readAuthority(t, c.file)
+		if !bytes.Equal(c.embedded, authority) {
+			t.Fatalf("内嵌的 brand-assets/%s 与 brands/official/%s 不是逐字节相同(内嵌 %d 字节,权威 %d 字节):请用 cp 重新复制权威文件,禁止手改",
+				c.file, c.file, len(c.embedded), len(authority))
 		}
 	}
-	light := markVariant(t, mark, "mark-light", markLightRe)
-	dark := markVariant(t, mark, "mark-dark", markDarkRe)
+}
 
-	// 2) 每个变体与其权威文件逐属性对拍:几何与配色都必须 verbatim 派生。
+// 门户回落的两个变体必须**逐字节派生**自权威文件:浅色面 = logo.svg,
+// 深色面 = logo-dark.svg(AGENTS.md 品牌双色对),且不得是文字字形/手绘几何。
+func TestRenderBrandMarkDerivesFromOfficialLogo(t *testing.T) {
+	official := readAuthority(t, "logo.svg")
+	officialDark := readAuthority(t, "logo-dark.svg")
+
+	html := Render(View{Name: "Acme", AdminURL: "/admin/"})
+	light := fallbackVariant(t, html, "mark-light", markLightRe)
+	dark := fallbackVariant(t, html, "mark-dark", markDarkRe)
+
+	// 1) 解码 data URI 后与权威文件逐字节相同 ⇒ 不存在第二份几何真源。
+	if !bytes.Equal(light, official) {
+		t.Fatalf("mark-light 变体必须逐字节等于 brands/official/logo.svg(白底 + 全彩渐变标记)")
+	}
+	if !bytes.Equal(dark, officialDark) {
+		t.Fatalf("mark-dark 变体必须逐字节等于 brands/official/logo-dark.svg(黑底 + 同一标记)")
+	}
+	// 2) 两版确实不同(权威文件唯一差异是方块底色),否则主题切换没有意义。
+	if bytes.Equal(light, dark) {
+		t.Fatal("两个变体完全相同:浅色/深色主题切换失去意义(必须用 logo.svg / logo-dark.svg)")
+	}
+	// 3) 品牌铁律:不得出现文字字形(旧回落是首字母/字面量 P)与 <text> 节点。
+	for _, glyph := range []string{">A<", ">H<", ">P<", ">a<", ">p<", "<text"} {
+		if strings.Contains(string(light), glyph) || strings.Contains(string(dark), glyph) {
+			t.Fatalf("品牌标记出现文字字形 %q(品牌铁律禁止)", glyph)
+		}
+	}
+	// 4) 标记由 <img alt=""> 承载(装饰性图片),不是内联手抄的 SVG 几何。
+	if !strings.Contains(html, `<span class="mark mark-light"><img alt="" src="data:image/svg+xml;base64,`) {
+		t.Fatalf("回落标记应以 <img alt=\"\"> 下发权威素材: %q", preview(html))
+	}
+}
+
+// 两份权威素材的可验证差异 = 方块底色;共同部分 = 全彩渐变标记。
+// 这里钉住:light = 白底(logo.svg)、dark = 黑底(logo-dark.svg),且 6 条
+// linearGradient 与渐变填充都还在(不得被压平成单色/currentColor)。
+func TestRenderBrandMarkKeepsOfficialTilesAndGradients(t *testing.T) {
+	html := Render(View{Name: "Acme", AdminURL: "/admin/"})
+	light := fallbackVariant(t, html, "mark-light", markLightRe)
+	dark := fallbackVariant(t, html, "mark-dark", markDarkRe)
+
+	const tile = `<rect x="0" y="0" width="1254" height="1254" rx="180" fill="%s"/>`
 	for _, c := range []struct {
-		name    string
-		variant string
-		file    string
-		source  string
+		name string
+		svg  []byte
+		fill string
 	}{
-		{"mark-light", light, "brands/official/logo.svg", string(official)},
-		{"mark-dark", dark, "brands/official/logo-dark.svg", string(officialDark)},
+		{"mark-light(logo.svg)", light, "#FFFFFF"},
+		{"mark-dark(logo-dark.svg)", dark, "#000000"},
 	} {
-		for _, a := range authorityAttrs(t, c.file, c.source) {
-			if !strings.Contains(c.variant, a) {
-				t.Fatalf("%s 变体缺 %s 的属性 %q —— 标记必须逐字派生自品牌真源", c.name, c.file, a)
+		if !strings.Contains(string(c.svg), fmt.Sprintf(tile, c.fill)) {
+			t.Fatalf("%s 的圆角方块底应为 %s(权威文件逐字节派生)", c.name, c.fill)
+		}
+		if n := strings.Count(string(c.svg), "<linearGradient"); n != 6 {
+			t.Fatalf("%s 应保留 6 条 linearGradient 渐变(实际 %d 条)", c.name, n)
+		}
+		if n := strings.Count(string(c.svg), `fill="url(#`); n < 5 {
+			t.Fatalf("%s 的渐变填充缺失:只找到 %d 处 fill=\"url(#…)\"", c.name, n)
+		}
+		// 渐变停靠色(青→蓝→紫系)也必须保留:被压平成单色即红。
+		for _, stop := range []string{"#37E7FE", "#0946EF", "#3935FB"} {
+			if !strings.Contains(string(c.svg), stop) {
+				t.Fatalf("%s 缺少渐变停靠色 %s(标记被改色/压平)", c.name, stop)
 			}
 		}
 	}
-
-	// 3) 1.25× 中心放缩是批准设计的一部分,两个变体都不得丢。
-	for _, c := range []struct{ name, variant string }{{"mark-light", light}, {"mark-dark", dark}} {
-		if !strings.Contains(c.variant, `transform="translate(627 627) scale(1.25) translate(-627 -627)"`) {
-			t.Fatalf("%s 变体缺 1.25× 中心放缩变换", c.name)
-		}
-	}
-
-	// 4) 两版必须**同一份几何**,只允许 fill/stroke 颜色不同。
-	if lg, dg := markGeometry(t, light), markGeometry(t, dark); lg != dg {
-		t.Fatalf("两个配色变体的几何不一致(只允许颜色翻转):\n light = %s\n dark  = %s", lg, dg)
-	}
-	if light == dark {
-		t.Fatal("两个变体完全相同:深色底会继续显示黑方块(必须翻转底色)")
-	}
-
-	// 5) 深色变体 = 白底黑标记(logo-dark.svg);浅色变体 = 黑底白标记(logo.svg)。
-	const tile = `<rect x="0" y="0" width="1254" height="1254" rx="180" fill="%s"/>`
-	if !strings.Contains(dark, fmt.Sprintf(tile, "#FFFFFF")) {
-		t.Fatalf("深色变体的方块底应为 #FFFFFF: %q", dark)
-	}
-	if !strings.Contains(dark, `stroke="#000000"`) || !strings.Contains(dark, `fill="#000000"`) {
-		t.Fatalf("深色变体的标记应为 #000000: %q", dark)
-	}
-	if !strings.Contains(light, fmt.Sprintf(tile, "#000000")) {
-		t.Fatalf("浅色变体的方块底应为 #000000: %q", light)
-	}
-	if !strings.Contains(light, `stroke="#FFFFFF"`) || !strings.Contains(light, `fill="#FFFFFF"`) {
-		t.Fatalf("浅色变体的标记应为 #FFFFFF: %q", light)
-	}
 }
 
 // ---------------------------------------------------------------------------
-// 审计 R7-RV-6:门户的默认 token 集是深色底(rgb(8,10,15)),旧实现只下发
-// logo.svg 那一版(黑底白标记)—— 黑方块在深色底上几乎不可见。修法是同一份
-// 几何下发两版,由 CSS 按主题选边。
+// 审计 R7-RV-6:门户的默认 token 集是深色底(rgb(8,10,15)),标记必须默认给
+// 深色变体(logo-dark.svg),在**同一条 light 查询**里切到浅色变体(logo.svg)。
 //
 // 本用例钉住的是**选边条件必须与 token 集同源**:本页默认(无媒体查询)是深色
-// token,浅色 token 在 @media (prefers-color-scheme: light) 里生效 —— 所以
-// 标记也必须默认给深色变体,在**同一条 light 查询**里切到浅色变体。写成
-// "默认浅色 + dark 查询翻转"会让"未声明偏好"的 UA 拿到深色底 + 黑方块,
-// 也就是这条 finding 的原症状原样复发(这类 UA 包括部分内嵌 webview)。
+// token,浅色 token 在 @media (prefers-color-scheme: light) 里生效 —— 写反会让
+// "未声明偏好"的 UA 拿到深色底 + 深色变体,主题切换形同虚设。
 // 变异测试:把两条规则换回 dark 查询 → 第 2 步当场红。
 // ---------------------------------------------------------------------------
 func TestRenderBrandMarkSwitchesTileColorWithColorScheme(t *testing.T) {
 	html := Render(View{Name: "Acme", AdminURL: "/admin/"})
 
-	// 1) 默认(未声明偏好):深色变体(白底黑标记)可见,与默认的深色 token 配套。
-	if !strings.Contains(html, `.brand .mark .mark-dark{display:block}`) {
-		t.Fatal("默认 token 是深色底,CSS 就必须默认显示深色变体(否则黑方块落在深色底上)")
+	// 1) 默认(未声明偏好):深色变体(logo-dark.svg)可见,与默认的深色 token 配套。
+	if !strings.Contains(html, `.brand .mark.mark-dark{display:flex}`) {
+		t.Fatal("默认 token 是深色底,CSS 就必须默认显示深色变体(logo-dark.svg)")
 	}
-	if !strings.Contains(html, `.brand .mark .mark-light{display:none}`) {
-		t.Fatal("CSS 未默认隐藏浅色变体")
+	if !strings.Contains(html, `.brand .mark.mark-light{display:none}`) {
+		t.Fatal("CSS 未默认隐藏浅色变体(logo.svg)")
 	}
 	// 2) 浅色偏好:与 --bg/--fg 等 token **同一条**媒体查询里切到浅色变体。
-	//    (两处规则因为层叠顺序必须分块声明,所以对拍的是查询名一致 ——
-	//    写成 dark 查询 = 未声明偏好的 UA 拿到深色底 + 黑方块,当场红。)
 	tokenScheme := schemeOf(t, html, "--bg:#f7f8fb", "浅色 token 覆盖块")
 	if tokenScheme != "light" {
 		t.Fatalf("token 集的浅色覆盖应挂在 light 查询上,实际 %q", tokenScheme)
 	}
-	markScheme := schemeOf(t, html, ".brand .mark .mark-light{display:block}", "浅色标记变体的显示规则")
+	markScheme := schemeOf(t, html, `.brand .mark.mark-light{display:flex}`, "浅色标记变体的显示规则")
 	if markScheme != tokenScheme {
 		t.Fatalf("标记选边挂在 %q 查询上,而 token 翻转挂在 %q 上:两者必须同源", markScheme, tokenScheme)
 	}
-	light := schemeAnyRe.FindStringSubmatch(html)
+	lightBlock := schemeAnyRe.FindStringSubmatch(html)
 	for _, m := range schemeAnyRe.FindAllStringSubmatch(html, -1) {
-		if strings.Contains(m[2], ".brand .mark .mark-light{display:block}") {
-			light = m
+		if strings.Contains(m[2], `.brand .mark.mark-light{display:flex}`) {
+			lightBlock = m
 		}
 	}
-	if !strings.Contains(light[2], `.brand .mark .mark-dark{display:none}`) {
-		t.Fatalf("浅色偏好下未隐藏深色变体: %q", light[2])
+	if !strings.Contains(lightBlock[2], `.brand .mark.mark-dark{display:none}`) {
+		t.Fatalf("浅色偏好下未隐藏深色变体: %q", lightBlock[2])
 	}
-	// 3) 两版都在同一个标记区块里(不是只留一版),且共用 38px 方框尺寸规则。
-	m := markRe.FindStringSubmatch(html)
-	if m == nil {
-		t.Fatalf("门户未渲染品牌标记区块: %s", html[:200])
+	// 3) 两版都在同一个标记区块里(不是只留一版),且共用 38px 方框与 100% 尺寸规则。
+	if !markLightRe.MatchString(html) || !markDarkRe.MatchString(html) {
+		t.Fatalf("标记区块应同时含两个配色变体: %q", preview(html))
 	}
-	if !markLightRe.MatchString(m[1]) || !markDarkRe.MatchString(m[1]) {
-		t.Fatalf("标记区块应同时含两个配色变体: %q", m[1])
+	if !strings.Contains(html, `.brand .mark{width:38px;height:38px;border-radius:11px;overflow:hidden;flex:0 0 auto;`) {
+		t.Fatal("两个变体必须共用 .brand .mark 的 38px 方框规则")
 	}
-	if !strings.Contains(html, `.brand .mark img,.brand .mark svg{width:100%;height:100%;object-fit:contain;display:block}`) {
-		t.Fatal("两个变体必须共用 .brand .mark svg 的 100%/100% 尺寸规则")
+	if !strings.Contains(html, `.brand .mark img{width:100%;height:100%;object-fit:contain;display:block}`) {
+		t.Fatal("两个变体必须共用 .brand .mark img 的 100%/100% 尺寸规则")
 	}
 
-	// 4) 渠道配了 logo:两个内联变体都必须让位给 <img>。
+	// 4) 渠道配了 logo:两个内嵌变体都必须让位给渠道 <img>。
 	withLogo := Render(View{Name: "Acme", AdminURL: "/admin/", LogoURL: "/api/client/v2/channel/logo"})
-	lm := markRe.FindStringSubmatch(withLogo)
-	if lm == nil {
-		t.Fatalf("门户未渲染品牌标记区块: %s", withLogo[:200])
+	if markLightRe.MatchString(withLogo) || markDarkRe.MatchString(withLogo) {
+		t.Fatalf("配置了渠道 logo 时两个内嵌变体都应被抑制: %q", preview(withLogo))
 	}
-	if markLightRe.MatchString(lm[1]) || markDarkRe.MatchString(lm[1]) {
-		t.Fatalf("配置了渠道 logo 时两个内联变体都应被抑制: %q", lm[1])
+	if !channelMarkRe.MatchString(withLogo) {
+		t.Fatalf("配置了渠道 logo 时应渲染 <span class=\"mark\"><picture>: %q", preview(withLogo))
+	}
+	if strings.Contains(withLogo, "data:image/svg+xml;base64") {
+		t.Fatal("配置了渠道 logo 时不应再下发内嵌素材")
 	}
 }
 
-// 有 LogoURL 时仍走渠道素材(<img>),不注入内联几何(渠道品牌优先于回落)。
+// 有 LogoURL 时仍走渠道素材(<img>),不叠加内嵌权威素材(渠道品牌优先于回落)。
 func TestRenderUsesChannelLogoWhenConfigured(t *testing.T) {
 	html := Render(View{Name: "Acme", AdminURL: "/admin/", LogoURL: "/api/client/v2/channel/logo"})
-	m := markRe.FindStringSubmatch(html)
-	if m == nil {
-		t.Fatalf("门户未渲染品牌标记区块: %s", html[:200])
+	m := channelMarkRe.FindString(html)
+	if m == "" {
+		t.Fatalf("门户未渲染品牌标记区块: %q", preview(html))
 	}
-	if !strings.Contains(m[1], `<img src="/api/client/v2/channel/logo"`) {
-		t.Fatalf("配置了渠道 logo 时应下发 <img>: %q", m[1])
+	if !strings.Contains(m, `<img src="/api/client/v2/channel/logo"`) {
+		t.Fatalf("配置了渠道 logo 时应下发 <img>: %q", m)
 	}
-	if strings.Contains(m[1], "<svg") {
-		t.Fatalf("配置了渠道 logo 时不应注入内联回落几何: %q", m[1])
+	if strings.Contains(html, "data:image/svg+xml;base64") {
+		t.Fatalf("配置了渠道 logo 时不应注入内嵌回落素材: %q", preview(html))
 	}
 }
 
@@ -480,6 +494,6 @@ func TestRenderUsesChannelLogoWhenConfigured(t *testing.T) {
 func TestRenderBrandMarkHasNoInventedGradientTile(t *testing.T) {
 	html := Render(View{Name: "Acme", AdminURL: "/admin/"})
 	if strings.Contains(html, "linear-gradient(140deg") {
-		t.Fatal("品牌标记不得使用自造渐变方块(须用官方几何/渠道素材)")
+		t.Fatal("品牌标记不得使用自造渐变方块(须用权威 SVG / 渠道素材)")
 	}
 }

@@ -1,7 +1,7 @@
 {
   "name": "@zeokeel/dsh-branding",
   "version": "0.2.0",
-  "description": "ZeoKeel brand surfaces for the web UI: brace mark at the sidebar/hero brand slots, browser favicon, brand theme token override, floating overlay badge, and the About settings section",
+  "description": "ZeoKeel brand surfaces for the web UI: brand mark at the sidebar/hero brand slots, browser favicon, brand theme token override, floating overlay badge, and the About settings section",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",

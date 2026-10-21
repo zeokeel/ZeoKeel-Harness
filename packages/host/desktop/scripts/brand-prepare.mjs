@@ -3,12 +3,15 @@
  *
  *   brands/official/          (authority for the official channel, committed)
  *     ├─ logo.svg             → generate-tray-icons   → build/tray-icon*.png
+ *     │                         （macOS 模板图 = 完整 mark 的 alpha；Windows/Linux =
+ *     │                          方块换成品牌强调色，强调色取自本目录 brand.json 的
+ *     │                          assets.accent —— 渠道构建改取 channels/<id>/channel.json）
  *     │                       → build/web-brand/favicon.svg（本次构建的品牌）
  *     │                       → build/web-brand/official.svg（官方几何兜底,P1-12）
  *     ├─ logo-dark.svg        → (dark theme surface; not rasterized here)
  *     ├─ app-icon.png         → build/app-icon.png (win/linux icon + mac pipeline)
  *     │                       → generate-mac-app-icon → build/app-icon-mac.png
- *     └─ brand.json           → validated (schema marker)
+ *     └─ brand.json           → validated (schema marker) + 托盘强调色（assets.accent）
  *
  * 渠道化构建（`DSH_BUILD_CHANNEL=<id>`）改用私有仓里该渠道的目录
  * `channels/<id>/`：**公共渠道**（official/beta）逐文件回落到 `brands/official/`
@@ -94,7 +97,7 @@ export async function prepareBrandAssets(options = {}) {
   // 品牌渠道必须**声明** `assets.logo`（与 ci-channels.sh 的输入侧判据同一条规则）：
   // 随包内联（channel-build.ts 的 inlineChannelAssets）只认这个字段，不声明时包里
   // 没有 `logo_inline` ⇒ 服务端不可达 / 服务端还是旧版时，登录页与侧边栏回落
-  // 编译期内置的**厂商花括号 mark**（2026-09-11 在客户线上实测过的形态）。
+  // 编译期内置的**厂商 mark**（2026-09-11 在客户线上实测过的形态）。
   const declaredLogo = context.official || !publicChannel
     ? readDeclaredAssetFileName(context.channelDir, 'logo')
     : undefined
@@ -180,7 +183,13 @@ export async function prepareBrandAssets(options = {}) {
     join(outputDir, 'app-icon-mac.png'),
   )
 
-  // Tray bitmaps (mac template + fixed-color windows/linux).
+  // Tray bitmaps：
+  //   - macOS 模板图 = 权威 logo **去掉方块**后的完整 mark（alpha 当遮罩，黑+透明）；
+  //   - Windows/Linux = 完整品牌图形，方块色换成**品牌强调色**。
+  // 强调色由生成器按源 logo 所在目录解析（官方 → brands/official/brand.json 的
+  // `assets.accent`；渠道 → channels/<id>/channel.json 的 `assets.accent`，渠道目录
+  // 不需要 brand.json），规则与兜底见 scripts/generate-tray-icons.mjs 的
+  // `resolveTintColor`。
   const trayFiles = await generateTrayIcons({ source: sources[CHANNEL_ASSET_FILES.logo], buildRoot: outputDir })
 
   // 浏览器面品牌资源（favicon 源文件）：客户端前端 dist 里那份 favicon 是上游

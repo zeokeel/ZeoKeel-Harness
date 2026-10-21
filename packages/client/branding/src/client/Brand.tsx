@@ -1,83 +1,49 @@
 import { createElement } from 'react'
-import {
-  BRAND_CONNECTOR,
-  BRAND_MARK_BRACES,
-  BRAND_MARK_STROKE_WIDTH,
-  BRAND_MARK_TRANSFORM,
-  BRAND_NODES,
-  BRAND_TILE_RADIUS_RATIO,
-  BRAND_TILE_VIEWBOX,
-} from './channel-geometry.ts'
+import { BRAND_MARK_SVG, BRAND_TILE_SIZE } from './channel-geometry.ts'
 
 // build-time 版本注入(tsdown define 替换为字符串字面量);浏览器编译面无
 // node types,声明最小面的 process 占位。
 declare const process: { env: { ZEOKEEL_PRODUCT_VERSION?: string } }
 
 /**
- * Brace mark tile matching the brand folder icon (`brands/official/logo.svg`):
- * a rounded square carrying the two braces, connector line, and node circles.
- * Rendered at the upstream brand slots (`sidebar.brand.mark`,
- * `conversation.hero.brand.mark`) as a single declarative occupant.
+ * 品牌 mark（仅图形、透明底、**自带完整彩色渐变**）。
  *
- * NOTE: this component is intentionally duplicated from
- * `packages/host/enterprise/src/client/Channel.tsx` (same artwork, same tokens):
- * the web profile deploys this package standalone and cross-package client
- * imports are disallowed by the plugin convention. Keep both in sync.
+ * 2026-10-21 品牌真源换成 `brands/official/logo.svg` 的渐变波形 mark 后，这里的
+ * 图形不再是"用 token 反色的花括号"，而是直接注入权威 `logo.svg` 去掉方块
+ * `<rect>` 后的原样字符串（见 `channel-geometry.ts`）：mark 自带 `linearGradient`
+ * 填充，**绝不能**再用 `currentColor` / 设计 token 染色（染了就是第三色变体）。
  *
- * Theme adaptation uses design tokens instead of a dark-theme body hook: the
- * tile takes the foreground ink (black on light, white on dark) and the
- * braces take the base surface, so the tile flips with the skin system.
- *
- * Artwork matches `brands/official/logo.svg` exactly: the
- * braces sit on a full-bleed rounded square and are enlarged 1.25× around
- * the canvas center (translate/scale/translate of the source paths).
+ * 注入的是 1254×1254 的画布（保留文件原有的 width/height 属性，drift 测试要求
+ * mark-only 常量逐字等于 logo.svg 去掉 `<rect>`），因此外面套一层按槽位尺寸缩放
+ * 的绝对定位容器：外层固定 `size` 并裁剪，内层按 `size / 1254` 缩放。
  */
-const BRACE_TILE_VIEWBOX = BRAND_TILE_VIEWBOX
-const BRACE_TILE_RADIUS_RATIO = BRAND_TILE_RADIUS_RATIO
-
-/** Braces + connector + nodes in brands/official/logo.svg coordinates, enlarged 1.25×. */
-function BraceGlyph() {
-  return createElement(
-    'svg',
-    {
-      viewBox: BRACE_TILE_VIEWBOX,
-      width: '100%',
-      height: '100%',
-      fill: 'none',
-      stroke: 'currentColor',
-      'aria-hidden': true,
+function BrandMarkGlyph({ size }: { size: number }) {
+  return createElement('span', {
+    'aria-hidden': true,
+    style: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: BRAND_TILE_SIZE,
+      height: BRAND_TILE_SIZE,
+      lineHeight: 0,
+      transform: `scale(${String(size / BRAND_TILE_SIZE)})`,
+      transformOrigin: 'top left',
     },
-    createElement(
-      'g',
-      { transform: BRAND_MARK_TRANSFORM },
-      ...BRAND_MARK_BRACES.map(brace => createElement('path', {
-        key: brace,
-        d: brace,
-        strokeWidth: BRAND_MARK_STROKE_WIDTH,
-        strokeLinecap: 'round',
-        strokeLinejoin: 'round',
-      })),
-      createElement('line', {
-        x1: BRAND_CONNECTOR.x1,
-        y1: BRAND_CONNECTOR.y1,
-        x2: BRAND_CONNECTOR.x2,
-        y2: BRAND_CONNECTOR.y2,
-        strokeWidth: BRAND_CONNECTOR.strokeWidth,
-        strokeLinecap: 'round',
-      }),
-      ...BRAND_NODES.map(node => createElement('circle', {
-        key: `${node.cx}-${node.cy}`,
-        cx: node.cx,
-        cy: node.cy,
-        r: node.r,
-        fill: 'currentColor',
-        stroke: 'none',
-      })),
-    ),
-  )
+    dangerouslySetInnerHTML: { __html: BRAND_MARK_SVG },
+  })
 }
 
-/** The brace-mark tile; `className` rides along (upstream slot geometry). */
+/**
+ * Brand mark at the upstream brand slots (`sidebar.brand.mark`,
+ * `conversation.hero.brand.mark`): the authoritative full-colour mark only, on
+ * a transparent background so it reads on both light and dark surfaces.
+ *
+ * NOTE: this component is intentionally duplicated from
+ * `packages/host/enterprise/src/client/Channel.tsx` (same artwork, same
+ * authority): the web profile deploys this package standalone and cross-package
+ * client imports are disallowed by the plugin convention. Keep both in sync.
+ */
 export function BraceMark({ size, className }: { size: number; className?: string | undefined }) {
   return createElement(
     'span',
@@ -88,17 +54,13 @@ export function BraceMark({ size, className }: { size: number; className?: strin
         flex: 'none',
         alignItems: 'center',
         justifyContent: 'center',
+        position: 'relative',
+        overflow: 'hidden',
         width: size,
         height: size,
-        borderRadius: Math.max(4, Math.round(size * BRACE_TILE_RADIUS_RATIO)),
-        // 与 enterprise 的 Channel.tsx 同款（两份拷贝必须一致）：
-        // 方块取会翻转的正文墨色，mark 取反色墨 —— `--dsw-alias-fg-primary` 上游不存在，
-        // 用它会让底色恒为 #000000，而 mark 在暗色下变成近黑（黑底黑 mark = 看不见）。
-        backgroundColor: 'var(--dsw-alias-label-primary, #000000)',
-        color: 'var(--dsw-alias-label-primary-inverted, #ffffff)',
       },
     },
-    BraceGlyph(),
+    BrandMarkGlyph({ size }),
   )
 }
 

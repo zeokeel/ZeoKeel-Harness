@@ -2,9 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { BrandName, BraceMark } from '../src/client/Brand.tsx'
 import { AboutSection, OverlayBadge, applyBrandTheme } from '../src/client/brand-shell.tsx'
+import { BRAND_MARK_SVG } from '../src/client/channel-geometry.ts'
 
-/** Props the brand components actually carry (children text + inline styles). */
-type BrandElement = ReactElement<{ children?: ReactNode; style?: Record<string, unknown> }>
+/** Props the brand components actually carry (children text, inline styles, injected SVG). */
+type BrandElement = ReactElement<{
+  children?: ReactNode
+  style?: Record<string, unknown>
+  dangerouslySetInnerHTML?: { __html?: string }
+}>
 
 /**
  * 2026-09-17 S08-04 审计：本包没有 react-dom / test renderer 依赖（也不能为一个
@@ -23,6 +28,15 @@ function elementsOf(node: ReactNode, out: BrandElement[] = []): BrandElement[] {
   const element = node as BrandElement
   out.push(element)
   return elementsOf(element.props.children, out)
+}
+
+/** The authoritative mark-only SVG injected by the brand mark (never re-drawn here). */
+function glyphHtmlOf(node: ReactNode): string {
+  for (const element of elementsOf(node)) {
+    const html = element.props.dangerouslySetInnerHTML?.__html
+    if (typeof html === 'string' && html.includes('<svg')) return html
+  }
+  throw new Error('brand mark must inject the authoritative mark-only SVG')
 }
 
 function textOf(node: ReactNode): string {
@@ -65,11 +79,27 @@ describe('branding BrandName version label', () => {
     expect(elementsOf(BrandName()).filter(element => element.props.children === 'v')).toEqual([])
   })
 
-  it('keeps the brace tile on the same token pair as the pill', () => {
-    expect(BraceMark({ size: 20 }).props.style).toMatchObject({
-      backgroundColor: 'var(--dsw-alias-label-primary, #000000)',
-      color: 'var(--dsw-alias-label-primary-inverted, #ffffff)',
-    })
+  it('renders the mark-only artwork: transparent, full colour, no token inversion', () => {
+    const tree = BraceMark({ size: 20 })
+    // 槽位容器只负责尺寸与裁剪：没有底色、没有前景色（mark 自带 6 个渐变，
+    // 用 token / currentColor 染色就等于制造第三色变体）。
+    expect(tree.props.style).toMatchObject({ width: 20, height: 20 })
+    expect(tree.props.style).not.toHaveProperty('backgroundColor')
+    expect(tree.props.style).not.toHaveProperty('color')
+    // 注入的就是权威常量本身（不是在这里重画几何）。
+    const html = glyphHtmlOf(tree)
+    expect(html).toBe(BRAND_MARK_SVG)
+    expect(html.match(/<linearGradient\b/gu)).toHaveLength(6)
+    expect(html).toContain('url(#id0)')
+    // mark-only = 去掉 tile rect 的 logo.svg：透明底，且无 currentColor。
+    expect(html).not.toContain('<rect')
+    expect(html).not.toContain('currentColor')
+    // 1254 画布按槽位尺寸缩放（保留文件原始 width/height 属性）。
+    const scaled = elementsOf(tree).find(element =>
+      typeof element.props.style?.transform === 'string'
+      && String(element.props.style.transform).includes('scale('))
+    expect(scaled, 'the injected 1254 canvas must be scaled to the slot size').toBeDefined()
+    expect(String(scaled!.props.style?.transform)).toContain(String(20 / 1254))
   })
 })
 

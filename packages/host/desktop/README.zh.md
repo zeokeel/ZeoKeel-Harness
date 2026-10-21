@@ -139,7 +139,7 @@ ZeoKeel Harness 将 UTF-8 日志写入 Electron 用户数据目录：Windows 位
 
 ## 打包
 
-`yarn package:dir` 为当前宿主平台创建未封装目录。如果应用归档缺少 desktop 更新与诊断模块、DSH CLI bootstrap、内置 Node runtime 入口或物理 deployment package，packaged-runtime gate 会拒绝该产物。Electron Builder 会把根 manifest、desktop runtime 与完整依赖树输出到 `app.asar.unpacked`；Host profile boot 与 CLI bootstrap 都会使用这棵物理树，因此 DSH profile fallback 的符号链接不会指向虚拟 ASAR 目录。**品牌唯一事实源是 `brands/official/` 文件夹**（`logo.svg` 黑块白花括号 mark、反色 `logo-dark.svg` 成对、`app-icon.png`、`brand.json`、`assistedMessages.yml`）。构建时由 `scripts/brand-prepare.mjs` 派生 `build/` 下的全部图标（不入库）：`app-icon.png` 复制为 Windows 与 Linux 应用图标；`generate-mac-app-icon.mjs` 把该图缩放为 824 × 824 像素并居中放入透明的 1024 × 1024 画布生成 macOS Dock 图标（`build/app-icon-mac.png`）；`generate-tray-icons.mjs` 从 `logo.svg` 派生 macOS 系统自动着色的模板图，以及固定黑色的 Windows 与 Linux 托盘图。
+`yarn package:dir` 为当前宿主平台创建未封装目录。如果应用归档缺少 desktop 更新与诊断模块、DSH CLI bootstrap、内置 Node runtime 入口或物理 deployment package，packaged-runtime gate 会拒绝该产物。Electron Builder 会把根 manifest、desktop runtime 与完整依赖树输出到 `app.asar.unpacked`；Host profile boot 与 CLI bootstrap 都会使用这棵物理树，因此 DSH profile fallback 的符号链接不会指向虚拟 ASAR 目录。**品牌唯一事实源是 `brands/official/` 文件夹**（`logo.svg` 白块 + 彩色渐变 mark、`logo-dark.svg` 黑块 + 同一彩色 mark、`app-icon.png`、`brand.json`、`assistedMessages.yml`）。构建时由 `scripts/brand-prepare.mjs` 派生 `build/` 下的全部图标（不入库）：`app-icon.png` 复制为 Windows 与 Linux 应用图标；`generate-mac-app-icon.mjs` 把该图缩放为 824 × 824 像素并居中放入透明的 1024 × 1024 画布生成 macOS Dock 图标（`build/app-icon-mac.png`）；`generate-tray-icons.mjs` 从 `logo.svg` 去掉方块后按完整 mark 的 alpha 派生 macOS 系统自动着色的模板图，并把方块色替换为品牌 accent 派生 Windows 与 Linux 托盘图。
 
 ### packaged-runtime gate（afterPack）
 

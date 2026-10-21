@@ -1,13 +1,5 @@
 import { createElement, useState, type ReactElement } from 'react'
-import {
-  BRAND_CONNECTOR,
-  BRAND_MARK_BRACES,
-  BRAND_MARK_STROKE_WIDTH,
-  BRAND_MARK_TRANSFORM,
-  BRAND_NODES,
-  BRAND_TILE_RADIUS_RATIO,
-  BRAND_TILE_VIEWBOX,
-} from '../channel-geometry.ts'
+import { BRAND_MARK_SVG, BRAND_TILE_RADIUS_RATIO, BRAND_TILE_SIZE } from '../channel-geometry.ts'
 import { DEFAULT_CHANNEL, nonEmpty, type ChannelConfig } from '../channel-content.ts'
 import { useChannel } from './channel-store.ts'
 import { UpdateIndicator, useUpdateState } from './UpdateIndicator.tsx'
@@ -17,61 +9,46 @@ import { UpdateIndicator, useUpdateState } from './UpdateIndicator.tsx'
 declare const process: { env: { ZEOKEEL_PRODUCT_VERSION?: string } }
 
 /**
- * Brace mark tile matching the app/tray icon: a rounded square carrying the
- * two braces, connector line, and node circles. Rendered at the upstream
- * brand slots (`sidebar.brand.mark`, `conversation.hero.brand.mark`) as a
- * single declarative occupant, so the upstream layout owns geometry and
- * fallbacks while this component owns only the artwork.
+ * 品牌 mark（仅图形、透明底、**自带完整彩色渐变**）。
  *
- * Artwork matches `brands/official/logo.svg` exactly: the
- * braces sit on a full-bleed rounded square and are enlarged 1.25× around
- * the canvas center (translate/scale/translate of the source paths).
+ * 2026-10-21 品牌真源换成 `brands/official/logo.svg` 的渐变波形 mark 后，这里不再
+ * 手绘花括号、也不再按主题 token 反色：直接注入权威 `logo.svg` 去掉方块 `<rect>`
+ * 后的原样字符串（见 `../channel-geometry.ts`）。mark 自带 `linearGradient` 填充，
+ * **绝不能**再用 `currentColor` / 设计 token 染色。
  *
- * Theme adaptation uses design tokens instead of a dark-theme body hook: the
- * tile takes the foreground ink (black on light, white on dark) and the
- * braces take the base surface, so the tile flips with the skin system.
+ * 注入的画布固定 1254×1254（drift 测试要求 mark-only 常量逐字等于 logo.svg 去掉
+ * `<rect>`），所以外面套一层按槽位尺寸缩放的绝对定位容器：外层固定 `size` 并裁剪，
+ * 内层按 `size / 1254` 缩放。
  */
-/** Braces + connector + nodes in brands/official/logo.svg coordinates, enlarged 1.25×.
- * The numbers come from ../channel-geometry.ts (drift-guarded against the SVG). */
-function BraceGlyph() {
-  return createElement(
-    'svg',
-    {
-      viewBox: BRAND_TILE_VIEWBOX,
-      width: '100%',
-      height: '100%',
-      fill: 'none',
-      stroke: 'currentColor',
-      'aria-hidden': true,
+function BraceGlyph({ size }: { size: number }) {
+  return createElement('span', {
+    'aria-hidden': true,
+    style: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: BRAND_TILE_SIZE,
+      height: BRAND_TILE_SIZE,
+      lineHeight: 0,
+      transform: `scale(${String(size / BRAND_TILE_SIZE)})`,
+      transformOrigin: 'top left',
     },
-    createElement(
-      'g',
-      { transform: BRAND_MARK_TRANSFORM },
-      ...BRAND_MARK_BRACES.map(path => createElement('path', {
-        key: path,
-        d: path,
-        strokeWidth: BRAND_MARK_STROKE_WIDTH,
-        strokeLinecap: 'round',
-        strokeLinejoin: 'round',
-      })),
-      createElement('line', {
-        x1: BRAND_CONNECTOR.x1,
-        y1: BRAND_CONNECTOR.y1,
-        x2: BRAND_CONNECTOR.x2,
-        y2: BRAND_CONNECTOR.y2,
-        strokeWidth: BRAND_CONNECTOR.strokeWidth,
-        strokeLinecap: 'round',
-      }),
-      ...BRAND_NODES.map(node => createElement('circle', {
-        key: `${String(node.cx)}-${String(node.cy)}`,
-        cx: node.cx,
-        cy: node.cy,
-        r: node.r,
-        fill: 'currentColor',
-        stroke: 'none',
-      })),
-    ),
-  )
+    dangerouslySetInnerHTML: { __html: BRAND_MARK_SVG },
+  })
+}
+
+/** Brand-mark slot container: fixed slot size, transparent, clipping the scaled mark. */
+function markSeatStyle(size: number): Record<string, string | number> {
+  return {
+    display: 'inline-flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+    width: size,
+    height: size,
+  }
 }
 
 /**
@@ -79,7 +56,7 @@ function BraceGlyph() {
  *
  * **加载失败必须回落**（2026-09-10）：服务端地址不可达（离线/内网 VPN 未连/
  * 服务端换域名）时，`<img>` 会留一个裂图图标 —— 品牌位是渠道客户第一眼看到的
- * 东西，宁可显示内置的花括号 mark，也不要一个破图。登录页早有同款兜底
+ * 东西，宁可显示内置的品牌 mark，也不要一个破图。登录页早有同款兜底
  * （auth-gate 的 `onerror` 隐藏 img 换成 fallback），客户端这两处此前没有。
  *
  * 失败状态按 **URL** 记（不是布尔）：渠道内容换了新 logo 就该重试，而不是把
@@ -119,9 +96,10 @@ export const BRAND_SEAT_ATTR = 'data-brand-mark'
 export const BRAND_SEAT_OWNER = 'app'
 
 /**
- * The brace-mark tile; `className` rides along (upstream slot geometry).
- * When a server logo_url is provided (dynamic channel content), an <img> is
- * rendered instead of the brace artwork; failures fall back to the brace.
+ * The brand mark at the upstream brand slots; `className` rides along (upstream
+ * slot geometry). When a server logo_url is provided (dynamic channel content),
+ * an <img> is rendered instead of the built-in mark; failures fall back to the
+ * mark-only artwork (transparent, full colour).
  */
 export function BraceMark({ size, className }: { size: number; className?: string | undefined }) {
   const channel = useChannel()
@@ -129,30 +107,13 @@ export function BraceMark({ size, className }: { size: number; className?: strin
   const name = resolveClientName(channel)
   const radius = Math.max(4, Math.round(size * BRAND_TILE_RADIUS_RATIO))
   const seat = { [BRAND_SEAT_ATTR]: BRAND_SEAT_OWNER } as const
-  // 内置品牌图形（权威 brands/official/logo.svg 的几何，见 channel-geometry.ts）：
-  // 既是"渠道没配 logo"时的显示内容，也是 logo 加载失败时的兜底 —— 两者同款。
-  const tile = createElement(
+  // 内置品牌图形（权威 brands/official/logo.svg 的 mark-only 版本，见
+  // ../channel-geometry.ts）：既是"渠道没配 logo"时的显示内容，也是 logo 加载
+  // 失败时的兜底 —— 两者同款。透明底 + 自带彩色渐变，亮/暗侧边栏都能看清。
+  const mark = createElement(
     'span',
-    {
-      className,
-      ...seat,
-      style: {
-        display: 'inline-flex',
-        flex: 'none',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: size,
-        height: size,
-        borderRadius: radius,
-        // 品牌方块 = 反色胶囊：底色取**正文墨色**（亮=近黑 / 暗=近白），mark 取反色墨。
-        // 2026-09-16 修：原先用 `--dsw-alias-fg-primary`（上游**不存在**这个 token）
-        // ⇒ 底色永远是 fallback 的 #000000，而 mark 用的 `--dsw-alias-bg-base` 在暗色
-        // 下变成近黑 → 暗色侧边栏里"黑块上的黑 mark"，等于看不见品牌图形。
-        backgroundColor: 'var(--dsw-alias-label-primary, #000000)',
-        color: 'var(--dsw-alias-label-primary-inverted, #ffffff)',
-      },
-    },
-    BraceGlyph(),
+    { className, ...seat, style: markSeatStyle(size) },
+    BraceGlyph({ size }),
   )
   if (logoUrl !== undefined) {
     return createElement(
@@ -162,10 +123,10 @@ export function BraceMark({ size, className }: { size: number; className?: strin
         ...seat,
         style: { display: 'inline-flex', flex: 'none', alignItems: 'center', justifyContent: 'center', width: size, height: size },
       },
-      createElement(ChannelLogo, { url: logoUrl, size, alt: name, radius, fallback: () => tile }),
+      createElement(ChannelLogo, { url: logoUrl, size, alt: name, radius, fallback: () => mark }),
     )
   }
-  return tile
+  return mark
 }
 
 /**

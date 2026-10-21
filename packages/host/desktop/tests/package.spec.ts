@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -428,10 +427,15 @@ describe('published package surface', () => {
     expect(macosJob).toContain('dist/mac-smoke/*.dmg')
   })
 
-  it('keeps one fixed brand-black tray source (brand folder authority) for generated native assets', () => {
+  it('keeps one flat brand tile (brand folder authority) for generated native assets', () => {
     const source = readFileSync(new URL('brands/official/logo.svg', workspaceRoot), 'utf8')
 
-    expect(source.match(/#000000/gu)).toHaveLength(1)
+    // 托盘派生的前提（不是"官方方块必须是某个具体颜色"）：权威 logo 用**一个**
+    // 平坦十六进制填充的底板 <rect>（生成器靠它找到方块并只替换它的填充色），
+    // 且不依赖 <style>（sharp/librsvg 只可靠读内联属性）。
+    // 2026-10-21 品牌换成白底 + 全彩 mark 后，"`#000000` 恰好出现 1 次"这条断言
+    // 在这份权威源上已不成立 —— 改为**从权威源派生**形态约束。
+    expect([...source.matchAll(/<rect\b[^>]*\bfill="#[0-9A-Fa-f]{6}"[^>]*\/>/gu)]).toHaveLength(1)
     expect(source).not.toMatch(/<style\b|prefers-color-scheme/iu)
     for (const filename of [
       'tray-iconTemplate.png',
@@ -449,7 +453,9 @@ describe('published package surface', () => {
     // 2026-09-16 真机 P1：随包模板图曾是满画布不透明的方块，AppKit 只用 alpha 当遮罩
     // ⇒ 菜单栏只剩一个实心方块（暗色菜单栏实测白方块）。这条**直接读随包产物**：
     // 生成脚本的用例证明"怎么生成"，这条证明"发出去的就是对的"。
-    const stats = async (filename: string): Promise<{ clear: number, inked: number, nonBlackInk: number }> => {
+    const stats = async (
+      filename: string,
+    ): Promise<{ clear: number, inked: number, nonBlackInk: number, dominant: string }> => {
       const { data, info } = await sharp(readFileSync(new URL(`build/${filename}`, packageRoot)))
         .ensureAlpha()
         .raw()
@@ -457,6 +463,7 @@ describe('published package surface', () => {
       let clear = 0
       let inked = 0
       let nonBlackInk = 0
+      const counts = new Map<string, number>()
       for (let i = 0; i < data.length; i += info.channels) {
         if (data[i + 3] === 0) {
           clear += 1
@@ -464,8 +471,14 @@ describe('published package surface', () => {
         }
         inked += 1
         if (data[i] !== 0 || data[i + 1] !== 0 || data[i + 2] !== 0) nonBlackInk += 1
+        if (data[i + 3] === 255) {
+          const key = `#${[data[i]!, data[i + 1]!, data[i + 2]!]
+            .map(value => value.toString(16).padStart(2, '0')).join('')}`.toUpperCase()
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+        }
       }
-      return { clear, inked, nonBlackInk }
+      const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
+      return { clear, inked, nonBlackInk, dominant }
     }
 
     for (const filename of ['tray-iconTemplate.png', 'tray-iconTemplate@2x.png']) {
@@ -474,19 +487,25 @@ describe('published package surface', () => {
       expect(inked).toBeGreaterThan(0)
       expect(nonBlackInk).toBe(0)
     }
-    // 非模板位图仍原样绘制品牌图形（不透明方块 + 白 mark）：只有圆角几像素透明
-    // （32px 实测 4 px），其余全不透明；对比模板图 86% 是 clear。
+    // 非模板位图仍原样绘制品牌图形（不透明方块 + **完整 mark**）：只有圆角几像素
+    // 透明（32px 实测 4 px），其余全不透明；对比模板图 86% 是 clear。
+    // 方块填充色 = 品牌强调色（brands/official/brand.json 的 assets.accent），
+    // 不是固定黑 —— 强调色是"发出去的位图"这一侧唯一的颜色判据，从权威配置派生。
+    const brand = JSON.parse(readFileSync(new URL('brands/official/brand.json', workspaceRoot), 'utf8')) as
+      { assets: { accent: string } }
     const blue = await stats('tray-icon-blue@2x.png')
     expect(blue.clear).toBeLessThan(20)
     expect(blue.inked).toBeGreaterThan(900)
+    expect(blue.dominant).toBe(brand.assets.accent.toUpperCase())
   })
 
-  it('keeps the iOS Default source icon unmodified', () => {
-    const digest = createHash('sha256')
-      .update(readFileSync(new URL('build/app-icon.png', packageRoot)))
-      .digest('hex')
-
-    expect(digest).toBe('ee0b1c199f8403b38ed2721425b021418edda629c843b4baf74e9770c0d5a1d8')
+  it('keeps the iOS Default source icon unmodified (byte copy of the brand authority)', () => {
+    // 期望值**从品牌权威派生**，不写死摘要：brands/official/app-icon.png 是唯一
+    // 权威源，build/app-icon.png 必须是它的逐字节副本（没有重新编码/重新上色）。
+    // 写死 sha256 会让每次正常的品牌更新都得改测试，而它真正要守的是"没被再加工"。
+    const built = readFileSync(new URL('build/app-icon.png', packageRoot))
+    const authority = readFileSync(new URL('brands/official/app-icon.png', workspaceRoot))
+    expect(built.equals(authority)).toBe(true)
   })
 
   it('generates a centered macOS icon with a 100-pixel visual inset', async () => {

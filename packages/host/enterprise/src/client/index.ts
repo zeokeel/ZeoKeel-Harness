@@ -112,7 +112,7 @@ function paintBrandStyle(): void {
 }
 
 /**
- * Register the enterprise surfaces: the brace brand at the upstream brand
+ * Register the enterprise surfaces: the brand mark at the upstream brand
  * slots (sidebar mark/name, hero mark), the account page (username + logout)
  * at the bottom of settings, the branded document title, and the layout-only
  * brand chrome above.

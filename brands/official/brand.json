@@ -3,7 +3,7 @@
   "channel_id": "official",
   "meta": {
     "description": "官方渠道品牌配置（唯一事实源）。所有品牌文案/图标/标识从本目录派生；渠道化时复制目录为 brands/<channel-id>/ 并修改值（结构不变）。",
-    "updated": "2026-09-04"
+    "updated": "2026-10-21"
   },
   "identity": {
     "display_name": "ZeoKeel Harness",
@@ -13,8 +13,15 @@
     "company": "ZeoKeel",
     "copyright": "© 2026 ZeoKeel",
     "description": "ZeoKeel Harness: an Electron shell composed as a DeepSeek Harness Cordis plugin",
-    "deep_link": { "name": "ZeoKeel Harness Deep Link", "scheme": "zeokeel" },
-    "linux": { "maintainer": "zeokeel", "synopsis": "ZeoKeel Harness", "category": "Development" },
+    "deep_link": {
+      "name": "ZeoKeel Harness Deep Link",
+      "scheme": "zeokeel"
+    },
+    "linux": {
+      "maintainer": "zeokeel",
+      "synopsis": "ZeoKeel Harness",
+      "category": "Development"
+    },
     "data_dir_name": "ZeoKeel Harness",
     "product_home_dir": ".zeokeel-harness",
     "telemetry_release": "zeokeel-desktop"
@@ -27,12 +34,30 @@
     "tray": {
       "source": "logo.svg",
       "variants": [
-        { "file": "tray-iconTemplate.png", "size": 16 },
-        { "file": "tray-iconTemplate@2x.png", "size": 32 },
-        { "file": "tray-icon-blue.png", "size": 16 },
-        { "file": "tray-icon-blue@1.25x.png", "size": 20 },
-        { "file": "tray-icon-blue@1.5x.png", "size": 24 },
-        { "file": "tray-icon-blue@2x.png", "size": 32 }
+        {
+          "file": "tray-iconTemplate.png",
+          "size": 16
+        },
+        {
+          "file": "tray-iconTemplate@2x.png",
+          "size": 32
+        },
+        {
+          "file": "tray-icon-blue.png",
+          "size": 16
+        },
+        {
+          "file": "tray-icon-blue@1.25x.png",
+          "size": 20
+        },
+        {
+          "file": "tray-icon-blue@1.5x.png",
+          "size": 24
+        },
+        {
+          "file": "tray-icon-blue@2x.png",
+          "size": 32
+        }
       ]
     },
     "mac_app_icon": {
@@ -71,7 +96,10 @@
     "errors": {
       "engine_load_title": "{product} could not load all plugins.",
       "engine_load_detail": "Failed plugins:\n{plugins}\n\n{error}\n\nRestart {product} after resolving the failing plugin.",
-      "engine_load_buttons": ["Restart {product}", "Dismiss"],
+      "engine_load_buttons": [
+        "Restart {product}",
+        "Dismiss"
+      ],
       "folder_picker_open": "{product} could not open the system folder picker",
       "folder_picker_response": "{product} received an invalid response from the system folder picker"
     },
@@ -86,34 +114,91 @@
     "repository": "zeokeel/ZeoKeel-Harness",
     "asset_template": "{slug}-{version}-{platform}.{ext}",
     "assets": {
-      "mac": { "pattern": "{slug}-{version}-mac.dmg", "ext": "dmg" },
-      "win": { "pattern": "{slug}-{version}-x64-Setup.exe", "ext": "exe" },
-      "linux": { "pattern": "{slug}-{version}-x86_64.AppImage", "ext": "AppImage" }
+      "mac": {
+        "pattern": "{slug}-{version}-mac.dmg",
+        "ext": "dmg"
+      },
+      "win": {
+        "pattern": "{slug}-{version}-x64-Setup.exe",
+        "ext": "exe"
+      },
+      "linux": {
+        "pattern": "{slug}-{version}-x86_64.AppImage",
+        "ext": "AppImage"
+      }
     },
     "sha256": true
   },
   "sources": {
     "copy": {
-      "window_title": ["packages/host/desktop/src/main.ts:55", "packages/host/desktop/src/index.ts:97-98", "packages/host/desktop/src/electron-runtime.ts:108"],
-      "product_name": ["packages/host/desktop/package.json {build.productName}", "packages/host/desktop/package.json {nsis.shortcutName}"],
-      "login_title": ["packages/host/enterprise/src/auth-gate.ts:43"],
-      "login_fallback_name": ["packages/host/enterprise/src/auth-gate.ts:204,215"],
-      "login_fallback_tagline": ["packages/host/enterprise/src/auth-gate.ts:204"],
-      "session_title_zh": ["packages/host/enterprise/src/client/locales.ts:153"],
-      "session_title_en": ["packages/host/enterprise/src/client/locales.ts:302"],
-      "hero_headline": ["packages/host/enterprise/src/client/index.ts:65", "packages/host/enterprise/src/client/channel-vars.ts:11"],
-      "default_brand": ["packages/host/enterprise/src/channel-sync.ts:19-24", "packages/host/enterprise/src/client/Channel.tsx:112,152"],
-      "tray_update": ["packages/host/desktop/src/tray-locale.ts:23-46"],
-      "installer_installing": ["packages/host/desktop/build/assistedMessages.yml"],
-      "update_version_label": ["packages/host/enterprise/src/client/UpdateSection.tsx:55"],
-      "errors": ["packages/host/desktop/src/electron-runtime.ts:364-366", "packages/host/desktop/src/client/directory-picker.ts:30,32"],
-      "diagnostics_help": ["packages/host/desktop/src/bin.ts:16"]
+      "window_title": [
+        "packages/host/desktop/src/main.ts:55",
+        "packages/host/desktop/src/index.ts:97-98",
+        "packages/host/desktop/src/electron-runtime.ts:108"
+      ],
+      "product_name": [
+        "packages/host/desktop/package.json {build.productName}",
+        "packages/host/desktop/package.json {nsis.shortcutName}"
+      ],
+      "login_title": [
+        "packages/host/enterprise/src/auth-gate.ts:43"
+      ],
+      "login_fallback_name": [
+        "packages/host/enterprise/src/auth-gate.ts:204,215"
+      ],
+      "login_fallback_tagline": [
+        "packages/host/enterprise/src/auth-gate.ts:204"
+      ],
+      "session_title_zh": [
+        "packages/host/enterprise/src/client/locales.ts:153"
+      ],
+      "session_title_en": [
+        "packages/host/enterprise/src/client/locales.ts:302"
+      ],
+      "hero_headline": [
+        "packages/host/enterprise/src/client/index.ts:65",
+        "packages/host/enterprise/src/client/channel-vars.ts:11"
+      ],
+      "default_brand": [
+        "packages/host/enterprise/src/channel-sync.ts:19-24",
+        "packages/host/enterprise/src/client/Channel.tsx:112,152"
+      ],
+      "tray_update": [
+        "packages/host/desktop/src/tray-locale.ts:23-46"
+      ],
+      "installer_installing": [
+        "packages/host/desktop/build/assistedMessages.yml"
+      ],
+      "update_version_label": [
+        "packages/host/enterprise/src/client/UpdateSection.tsx:55"
+      ],
+      "errors": [
+        "packages/host/desktop/src/electron-runtime.ts:364-366",
+        "packages/host/desktop/src/client/directory-picker.ts:30,32"
+      ],
+      "diagnostics_help": [
+        "packages/host/desktop/src/bin.ts:16"
+      ]
     },
     "assets": {
-      "logo_primary": ["AGENTS.md（单一权威规则）", "site/src/layouts/Layout.astro/Hero/Header（官网引用）", "packages/host/enterprise/src/auth-gate.ts:142-143,202（BRACE_MARK_SVG 兜底）", "packages/host/enterprise/src/client/index.ts:159,188（BraceMark/favicon）"],
-      "logo_dark": ["site（暗色官网/主题面，引用 brands/official）"],
-      "app_icon": ["packages/host/desktop/package.json {build.win.icon} {build.linux.icon}", "generate-mac-app-icon 输入"],
-      "app_icon_mac": ["packages/host/desktop/package.json {build.mac.icon}"]
+      "logo_primary": [
+        "brands/official/logo.svg（唯一权威：白底 + 彩色渐变 mark）",
+        "site/src/layouts/Layout.astro / Header.astro / Footer.astro（官网引用）",
+        "packages/host/enterprise/src/channel-geometry.ts、packages/client/branding/src/client/channel-geometry.ts（标记透明版 + 权威校验）",
+        "packages/host/enterprise/src/auth-gate.ts（登录页兜底：透明彩色 mark）"
+      ],
+      "logo_dark": [
+        "brands/official/logo-dark.svg（同一彩色 mark + 黑底）",
+        "site（暗色官网/主题面，引用 brands/official）"
+      ],
+      "app_icon": [
+        "brands/official/app-icon.png（1024 黑底 + 彩色 mark）",
+        "packages/host/desktop/package.json {build.win.icon} {build.linux.icon}",
+        "generate-mac-app-icon 输入"
+      ],
+      "app_icon_mac": [
+        "packages/host/desktop/package.json {build.mac.icon}"
+      ]
     }
   }
 }

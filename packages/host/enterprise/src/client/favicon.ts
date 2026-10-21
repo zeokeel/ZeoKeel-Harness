@@ -1,7 +1,10 @@
 /**
- * Desktop favicon replacement: the exact brand mark (`brands/official/logo.svg` —
- * black rounded square, white brace mark, uniformly enlarged 1.25×; single
- * brand authority), inlined as a data URI for the `<link rel=icon>` element.
+ * Desktop favicon replacement: the exact brand tile (`brands/official/logo.svg` —
+ * white rounded square carrying the full-colour gradient mark; single brand
+ * authority), inlined as a data URI for the `<link rel=icon>` element.
+ *
+ * 2026-10-21：favicon 用**完整日间 tile**（不是 mark-only）—— 标签页背景不受页面
+ * 主题影响，tile 由 `logo.svg` 原样提供。
  *
  * 2026-09-12 起 manifest **不再在这里改**：从前那段 `fetch(manifest.href)` 之后
  * 改 `icons[].src` 的代码是**死代码**（改的是 `fetch()` 解析出来的副本，浏览器
@@ -19,7 +22,7 @@ import { brandTileSvg } from '../channel-geometry.ts'
 
 const FAVICON_SVG = brandTileSvg()
 
-/** Replace every `<link rel=icon>` href with the brace mark. */
+/** Replace every `<link rel=icon>` href with the day brand tile. */
 export function installFavicon(): void {
   const href = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
   for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]')) {

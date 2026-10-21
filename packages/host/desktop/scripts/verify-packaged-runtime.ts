@@ -401,7 +401,7 @@ export const REQUIRED_UNPACKED_RUNTIME_ENTRIES = [
 /**
  * Brand geometry staged by `brand-prepare.mjs` (official build: a byte copy of
  * `brands/official/logo.svg`; channel build: that channel's own mark, which is
- * a completely different drawing — a white-label mark has no `scale(1.25)`).
+ * a completely different drawing and must not be compared to the official transform).
  */
 export const PACKAGED_WEB_BRAND_FAVICON = 'build/web-brand/favicon.svg'
 

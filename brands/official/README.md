@@ -6,9 +6,9 @@
 
 | 文件 | 说明 |
 |---|---|
-| `logo.svg` | 权威主 logo：黑色圆角方块（1254² rx=180 `#000000`）+ 白色花括号/连接线标记（1.25× 放大）。浅色/日常主题、默认场景使用。 |
-| `logo-dark.svg` | 权威反色 logo：白色圆角方块 + 黑色标记。**几何与 logo.svg 完全一致，仅颜色翻转**——深色/夜间主题使用（`site`、客户端暗色界面）。 |
-| `app-icon.png` | 应用图标权威位图（1024² RGBA16 + ICC，由 logo.svg 高质量导出）。Windows/Linux 应用图标直接使用；macOS Dock 图标经 `scripts/generate-mac-app-icon.mjs` 派生。 |
+| `logo.svg` | 权威主 logo：白色圆角方块（1254² rx=180 `#FFFFFF`）+ 彩色渐变波浪标记（1 圆点 + 6 条路径 + 6 条 linearGradient）。浅色/日常主题、默认场景使用。 |
+| `logo-dark.svg` | 权威暗色 logo：黑色圆角方块（`#000000`）+ **同一彩色标记**。**标记几何与颜色完全一致，只有方块底色不同**——深色/夜间主题使用（`site`、客户端暗色界面）。 |
+| `app-icon.png` | 应用图标权威位图（1024² RGBA16 + ICC，黑底 + 彩色标记）。Windows/Linux 应用图标直接使用；macOS Dock 图标经 `scripts/generate-mac-app-icon.mjs` 派生。 |
 | `brand.json` | 品牌配置（schema v1）：identity（名称/app id/版权）、assets（双色 logo/图标）、copy（全部品牌文案，支持 `{product}`/`{version}` 模板）、defaults、updates、sources（每个键→当前源码位置映射，供归一化改造跟踪）。 |
 | `assistedMessages.yml` | NSIS 安装器引导文案（3 语言）。 |
 
@@ -28,19 +28,20 @@ brands/official/ (入库，唯一事实源)
 - `packages/host/desktop/build/` 下的图标均为派生产物，**不入库**（见根 `.gitignore`）。
 - 派生产物不得手动修改；改图形只改本目录权威源。
 
-## 双色约定（必须遵守）
+## 日/夜双色约定（必须遵守）
 
-- `logo.svg`：黑 tile + 白 mark —— **日常/浅色背景**。
-- `logo-dark.svg`：白 tile + 黑 mark —— **深色背景/夜间模式**。
-- 两文件**几何严格一致**（同一 SVG 几何，仅填充色互换）；任何新派生必须从一个源执行颜色翻转，禁止手绘/改几何。
-- 兜底图形（登录页/门户/favicon 等）必须与 logo.svg 几何一致（见 AGENTS.md 单一权威规则）。
+- `logo.svg`：**白 tile + 彩色 mark** —— 日常/浅色背景。
+- `logo-dark.svg`：**黑 tile + 同一份彩色 mark** —— 深色背景/夜间模式。
+- 两文件**标记几何与标记颜色严格一致**，只允许方块底色不同；禁止手绘/改几何。
+- 图形本身是**彩色渐变**，不得改成 `currentColor`/单色；唯一例外是 macOS 菜单栏 template —— 构建期由 `generate-tray-icons.mjs` 去掉方块、只取 alpha，系统自动染成黑/白。
+- 客户端兜底（登录页/sidebar）使用从 `logo.svg` 去掉方块后的**透明彩色 mark**；服务端门户与 favicon/app icon 使用带方块底的彩色版本（浅色面 logo.svg / 深色面 logo-dark.svg）—— 除 macOS 菜单栏模板外，任何面都不得使用单色/currentColor 图形。
 
 ## 渠道化（企业定制）
 
 ```
 brands/<channel-id>/          # 复制 brands/official/ 后修改：
   ├── logo.svg                #   企业 logo（须方形、有安全边距，SVG 优先）
-  ├── logo-dark.svg           #   企业 logo 反色（几何一致、颜色翻转）
+  ├── logo-dark.svg           #   企业 logo 暗色版（同一 mark、仅换黑/白底）
   ├── app-icon.png            #   1024² RGBA16+ICC（mac 管道要求）
   ├── brand.json              #   channel_id/identity/copy/defaults/updates 改值
   └── assistedMessages.yml    #   安装文案

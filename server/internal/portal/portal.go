@@ -8,10 +8,11 @@
 //   - **动效全部用 CSS**:入场淡入上浮(逐项延迟形成节奏)、渐变光晕呼吸、
 //     卡片悬停抬升与箭头位移;并遵守 `prefers-reduced-motion`。
 //   - **不画 logo**:管理员/渠道配置了 brand logo 时用图片;没有配置时用
-//     **内联的官方几何**(brands/official/logo.svg 的括号 + 连接线 + 双节点),
-//     且按品牌双色铁律同时下发浅色/深色两个变体,由 CSS 按 prefers-color-scheme
-//     选边。绝不画文字字形或自造图形(AGENTS.md 品牌铁律:any brand mark must be
-//     derived from brands/official/logo.svg —— never a text glyph / no P letters)。
+//     **权威 SVG 文件本身**(brands/official/logo.svg 与 logo-dark.svg 的逐字节
+//     副本,以 data URI 作为 <img> 源;见 brandassets.go),按品牌双色铁律同时
+//     下发两个变体,由 CSS 按 prefers-color-scheme 选边。绝不画文字字形、绝不
+//     手抄/重绘几何(AGENTS.md 品牌铁律:every brand mark must be derived from
+//     brands/official/logo.svg —— never invented / never a text glyph)。
 //   - **下载链接指向本服务端**:安装包随服务端镜像发布,由
 //     GET /updates/client/<file> 下发(见 internal/clientrelease),门户不需要
 //     任何外网地址;管理员仍可用 portal.client_download_* 覆盖。
@@ -26,56 +27,33 @@
 package portal
 
 import (
-	"fmt"
 	"html/template"
 	"strconv"
 	"strings"
 )
 
-// brandMarkSVGTemplate 内联品牌标记的**唯一几何真源**(两个配色变体共用)。
+// brandMarkHTML 渠道未配 logo 时的回落标记:两个配色变体,内容都是权威文件的
+// **data URI**(见 brandassets.go),因此不存在"手抄几何"的第二份真源。
 //
-// 几何**逐字**派生自 brands/official/logo.svg(唯一权威):圆角方块
-// (1254×1254, rx=180)+ 括号/连接线/双节点,并保留 1.25× 中心放缩变换。
-// %[1]s = 方块底色,%[2]s = 标记(描边/节点)颜色,%[3]s = 主题 class ——
-// 两个变体**只允许**这三个占位符不同,几何一个字节都不许动。
-// `TestRenderBrandMarkDerivesFromOfficialLogo` 会把两个变体分别与
-// brands/official/logo.svg / logo-dark.svg 逐属性对拍 —— 改这里必须同步改
-// 权威文件(或反过来),不允许手绘新图形。
+// 结构:`<span class="mark mark-light|mark-dark"><img alt="" src="data:…">`
+// —— 每个变体自己就是 .mark(38px 方框规则直接生效),CSS 用
+// `.brand .mark.mark-light/.mark-dark` 按 prefers-color-scheme 显隐。
 //
 // 2026-09-13(审计 R7 branding-5):此前这里是 {{initial .Name}} —— 输出文字
 // 字形「A/H/P」加一个自造渐变方块,直接违反品牌铁律(旧版本是文字 P 的 tile,
-// 已retired,任何回落位都不许再出现)。
+// 已 retired,任何回落位都不许再出现)。
 //
-// 2026-09-13(审计 R7-RV-6):此前只有**单色**常量(黑底白标记 = logo.svg),
-// 而门户默认是深色底(rgb(8,10,15))—— 黑方块在深色底上几乎不可见。现在同时
-// 下发两个变体,由 CSS 按 prefers-color-scheme 选边(AGENTS.md 双色铁律:
-// 浅色面 logo.svg / 深色面 logo-dark.svg,几何完全相同,只翻转底色与标记色)。
-const brandMarkSVGTemplate = `<svg viewBox="0 0 1254 1254" width="100%%" height="100%%" role="img" aria-hidden="true" focusable="false" class="%[3]s">` +
-	`<rect x="0" y="0" width="1254" height="1254" rx="180" fill="%[1]s"/>` +
-	`<g transform="translate(627 627) scale(1.25) translate(-627 -627)">` +
-	`<path d="M 334 409 C 300 409 273 431 273 466 V 548 C 273 582 254 607 220 620 C 254 633 273 658 273 692 V 775 C 273 810 300 843 334 843" fill="none" stroke="%[2]s" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>` +
-	`<path d="M 920 409 C 954 409 981 431 981 466 V 548 C 981 582 1000 607 1034 620 C 1000 633 981 658 981 692 V 775 C 981 810 954 843 920 843" fill="none" stroke="%[2]s" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>` +
-	`<line x1="435" y1="627" x2="817" y2="627" stroke="%[2]s" stroke-width="20" stroke-linecap="round"/>` +
-	`<circle cx="435" cy="627" r="65" fill="%[2]s"/>` +
-	`<circle cx="817" cy="627" r="65" fill="%[2]s"/>` +
-	`</g></svg>`
-
-// 品牌双色对(AGENTS.md):浅色面 = 黑底白标记(brands/official/logo.svg),
-// 深色面 = 白底黑标记(brands/official/logo-dark.svg)。只允许这一对,
-// 不得再发明第三种配色。
-const (
-	brandMarkLightTile = "#000000"
-	brandMarkLightMark = "#FFFFFF"
-	brandMarkDarkTile  = "#FFFFFF"
-	brandMarkDarkMark  = "#000000"
-)
-
-// 两个变体由**同一模板**渲染 —— 几何必然一致,差异只有配色与主题 class。
-var (
-	brandMarkLightSVG = fmt.Sprintf(brandMarkSVGTemplate, brandMarkLightTile, brandMarkLightMark, "mark-light")
-	brandMarkDarkSVG  = fmt.Sprintf(brandMarkSVGTemplate, brandMarkDarkTile, brandMarkDarkMark, "mark-dark")
-	// brandMarkSVG 一次注入两版,哪版可见交给 CSS(prefers-color-scheme)。
-	brandMarkSVG = brandMarkLightSVG + brandMarkDarkSVG
+// 2026-09-13(审计 R7-RV-6):此前只有**单色**常量,门户默认是深色底
+// (--bg:#080a0f),黑方块在深色底上几乎不可见 —— 现在同时下发两个变体,由
+// CSS 选边(AGENTS.md 品牌双色对:浅色面 logo.svg / 深色面 logo-dark.svg,
+// 同一标记、只有方块底色不同)。
+//
+// 2026-10-21:旧的内联括号几何(brandMarkSVGTemplate)随品牌真源更换**退役**;
+// 这里改为直接嵌入两份权威文件,`TestRenderBrandMarkDerivesFromOfficialLogo`
+// 解码两个 data URI 与 brands/official/*.svg 逐字节对拍。
+var brandMarkHTML = template.HTML(
+	`<span class="mark mark-light"><img alt="" src="` + brandLogoLightURI + `"></span>` +
+		`<span class="mark mark-dark"><img alt="" src="` + brandLogoDarkURI + `"></span>`,
 )
 
 // Platform 一个客户端平台下载项。
@@ -98,11 +76,11 @@ type View struct {
 	Tagline string
 	// Welcome 欢迎语(多行保留换行)
 	Welcome string
-	// LogoURL 浅色版 logo 地址(渠道配置;可空 —— 为空则回落到内联的官方几何 brandMark)
+	// LogoURL 浅色版 logo 地址(渠道配置;可空 —— 为空则回落到内嵌的权威 SVG brandMark)
 	LogoURL string
 	// LogoDarkURL 暗色版 logo 地址(可空)。门户跟随系统深浅色,深色下必须换成
-	// 暗色版(浅色版是黑底白 mark,贴深色背景几乎不可见);渠道没做暗色版时为空,
-	// 此时深浅色都用浅色版(退化成改造前的行为)。
+	// 暗色版(AGENTS.md 双色对:浅色面 logo.svg / 深色面 logo-dark.svg);渠道
+	// 没做暗色版时为空,此时深浅色都用浅色版(退化成改造前的行为)。
 	LogoDarkURL string
 	// AdminURL 管理后台入口
 	AdminURL string
@@ -116,9 +94,9 @@ type View struct {
 
 // page 门户模板(单文件内联,便于审计)。
 var page = template.Must(template.New("portal").Funcs(template.FuncMap{
-	// brandMark 注入内联品牌标记(浅色/深色两个变体一起,纯常量、无任何外部
-	// 输入,故可直接当 HTML;哪版可见由 CSS 的 prefers-color-scheme 决定)。
-	"brandMark": func() template.HTML { return template.HTML(brandMarkSVG) },
+	// brandMark 注入回落的品牌标记:两份权威 SVG 的 data URI(纯常量,无任何
+	// 外部输入,故可直接当 HTML;哪版可见由 CSS 的 prefers-color-scheme 决定)。
+	"brandMark": func() template.HTML { return brandMarkHTML },
 	"delay":     delay,
 	// featureList/anyDownloadable 是下载区与功能说明用的模板函数(2026-09-14 门户改版)。
 	"featureList":     featureList,
@@ -171,26 +149,26 @@ var page = template.Must(template.New("portal").Funcs(template.FuncMap{
   @keyframes rise{to{opacity:1;transform:none}}
 
   .brand{display:flex;align-items:center;gap:12px;margin-bottom:34px}
-  /* 品牌标记:渠道配了 logo 就出图,没配就出**内联的官方几何**
-     (brands/official/logo.svg 的两个配色变体);两种形态都自带方块底,
-     这里不再画渐变背景 —— 自造图形/文字字形都违反品牌铁律
+  /* 品牌标记:渠道配了 logo 就出图,没配就出**内嵌的权威 SVG**
+     (brands/official/logo.svg / logo-dark.svg 的 data URI 副本);两种形态都
+     自带方块底,这里不再画渐变背景 —— 自造图形/文字字形都违反品牌铁律
      (审计 R7 branding-5)。 */
   .brand .mark{width:38px;height:38px;border-radius:11px;overflow:hidden;flex:0 0 auto;
     display:flex;align-items:center;justify-content:center}
-  .brand .mark img,.brand .mark svg{width:100%;height:100%;object-fit:contain;display:block}
+  .brand .mark img{width:100%;height:100%;object-fit:contain;display:block}
   /* <picture> 默认是 inline,撑不开尺寸:显式铺满,里面 img 的 100% 才有参照 */
   .brand .mark picture{display:block;width:100%;height:100%}
-  /* 两个变体同一份几何、只有配色翻转,按主题显隐(审计 R7-RV-6)。
-     选边必须与 token 集**同一条件**:本页 :root 默认是深色 token
-     (--bg:#080a0f),浅色 token 只在 @media (prefers-color-scheme: light) 里生效
-     —— 所以标记默认给深色变体(logo-dark.svg,白底黑标记),浅色偏好下切到
-     logo.svg(黑底白标记)。写反会让"未声明偏好"的 UA 拿到深色底 + 黑方块
-     (方块几乎不可见),那正是这条 finding 的原症状。 */
-  .brand .mark .mark-light{display:none}
-  .brand .mark .mark-dark{display:block}
+  /* 两个变体各是一个 .mark(内部是权威文件的 data URI <img>),按主题显隐
+     (审计 R7-RV-6)。选边必须与 token 集**同一条件**:本页 :root 默认是深色
+     token(--bg:#080a0f),浅色 token 只在 @media (prefers-color-scheme: light)
+     里生效 —— 所以标记默认给深色变体(logo-dark.svg),浅色偏好下切到
+     logo.svg。写反会让"未声明偏好"的 UA 拿到深色底 + 黑方块(方块几乎不可见),
+     那正是这条 finding 的原症状。 */
+  .brand .mark.mark-light{display:none}
+  .brand .mark.mark-dark{display:flex}
   @media (prefers-color-scheme: light){
-    .brand .mark .mark-light{display:block}
-    .brand .mark .mark-dark{display:none}
+    .brand .mark.mark-light{display:flex}
+    .brand .mark.mark-dark{display:none}
   }
   .brand .name{font-size:16.5px;font-weight:640;letter-spacing:-.01em}
 
@@ -292,8 +270,9 @@ var page = template.Must(template.New("portal").Funcs(template.FuncMap{
 
   <div class="brand rise" style="--d:.02s">
     {{/* 渠道配了 logo:按主题二选一(深色面用渠道的 logo_dark,否则黑方块贴深色底
-         几乎不可见);没配 logo 则回落到内联的官方几何(brandMark,双变体+CSS 选边)。 */}}
-    <span class="mark">{{if .LogoURL}}<picture>{{if .LogoDarkURL}}<source media="(prefers-color-scheme: dark)" srcset="{{.LogoDarkURL}}">{{end}}<img src="{{.LogoURL}}" alt=""></picture>{{else}}{{brandMark}}{{end}}</span>
+         几乎不可见);没配 logo 则回落到**权威 SVG 文件本身**(brandMark:两个
+         data URI 变体 + CSS 选边)。 */}}
+    {{if .LogoURL}}<span class="mark"><picture>{{if .LogoDarkURL}}<source media="(prefers-color-scheme: dark)" srcset="{{.LogoDarkURL}}">{{end}}<img src="{{.LogoURL}}" alt=""></picture></span>{{else}}{{brandMark}}{{end}}
     <span class="name">{{.Name}}</span>
   </div>
 

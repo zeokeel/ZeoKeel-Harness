@@ -28,7 +28,7 @@ afterEach(() => {
 })
 
 describe('installFavicon', () => {
-  it('replaces every icon link with the brace-mark data URI', () => {
+  it('replaces every icon link with the day brand-tile data URI', () => {
     const links: FakeLink[] = [{ href: '/favicon.svg', rel: 'icon' }]
     vi.stubGlobal('document', fixtureDocument(links, null))
     installFavicon()
@@ -36,20 +36,24 @@ describe('installFavicon', () => {
     expect(decodeURIComponent(links[0]!.href)).toContain('<svg')
   })
 
-  it('decodes to the exact product logo geometry (brace mark, 1.25×)', () => {
+  it('decodes to the full day tile (logo.svg: white tile + full-colour mark)', () => {
     const links: FakeLink[] = [{ href: '', rel: 'icon' }]
     vi.stubGlobal('document', fixtureDocument(links, null))
     installFavicon()
     const svg = decodeURIComponent(links[0]!.href.split(',')[1]!)
-    // Authority derivation: the tile, the brace paths, connector and nodes
-    // (see repo-root logo.svg geometry, enlarged 1.25×).
+    // 2026-10-21：favicon 是**完整日间 tile**（不是 mark-only，也不再用已退役的
+    // 花括号几何）。浏览器标签栏背景不受页面主题影响，所以 tile 自带白底。
     expect(svg).toContain('rx="180"')
-    expect(svg).toContain('translate(627 627) scale(1.25) translate(-627 -627)')
-    expect(svg).toContain('M 334 409')
-    expect(svg).toContain('M 920 409')
-    expect(svg).toContain('x1="435" y1="627" x2="817" y2="627"')
-    expect(svg).toContain('cx="435" cy="627" r="65"')
-    expect(svg).toContain('cx="817" cy="627" r="65"')
+    expect(svg).toContain('fill="#FFFFFF"')
+    expect(svg).toContain('scale(0.10709006)')
+    expect(svg).toContain('translate(627.00 627.00)')
+    expect(svg.match(/<linearGradient\b/gu)).toHaveLength(6)
+    expect(svg).toContain('url(#id0)')
+    expect(svg).toContain('#37E7FE')
+    // 退役几何与 token 染色都不得回来。
+    expect(svg).not.toContain('scale(1.25)')
+    expect(svg).not.toContain('currentColor')
+    expect(svg).not.toContain('stroke-width="40"')
   })
 
   it('matches the checked-in authored brand source', () => {

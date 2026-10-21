@@ -1777,7 +1777,8 @@ describe('packaged desktop runtime verification (physical layout, asar: false)',
       expect(() => assertBrandAssetSvg('<svg><title>DeepSeek Harness</title></svg>', 'x'))
         .toThrow(/上游厂商名/)
       expect(() => assertBrandAssetSvg('{"name":"DeepSeek"}', 'x')).toThrow(/is not an SVG document/)
-      // 渠道 logo 允许与官方几何不同(白标标记没有 scale(1.25)),只拦"上游特征"。
+      // 渠道 logo 允许与官方几何完全不同（白标有自己的图形，官方 mark 的渐变/
+      // transform 不是判据），只拦"上游特征"。
       expect(() => assertBrandAssetSvg('<svg><rect fill="#006AFF"/><path d="M 0 0"/></svg>', 'x'))
         .not.toThrow()
     })

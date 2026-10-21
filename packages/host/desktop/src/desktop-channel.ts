@@ -193,7 +193,7 @@ export interface ChannelBrand {
    *
    * 服务端可达时以服务端下发的 URL 为准；服务端不可达、或服务端还是旧版（没有
    * `/api/client/v2/channel`）时，客户端与登录页显示的就是它 —— 没有它就只能回落
-   * 到编译期内置的**官方**花括号 mark（白标客户看到厂商图形）。2026-09-11 实测。
+   * 到编译期内置的**官方**彩色 mark（白标客户看到厂商图形）。2026-09-11 实测。
    */
   readonly logoURL?: string
   /** 深色场景的随包 logo（`assets.logo_dark`），同上。 */

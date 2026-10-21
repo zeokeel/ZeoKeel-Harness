@@ -26,10 +26,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tetratelabs/wazero/sys"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
-	"github.com/tetratelabs/wazero/sys"
 )
 
 // serveOneShot 用 64 MiB 上限跑一条请求（一次性巨块 OOM 的固定夹具）。

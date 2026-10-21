@@ -425,7 +425,7 @@ describe('assertMacBundleConsistency', () => {
     expect(() => assertMacBundleConsistency(bundle.appPath, undefined, {
       expectedIdentifier: 'com.example-vendor.harness',
     })).toThrow(
-      /declares CFBundleIdentifier=ai\.deepseek\.dsh\.desktop but this build declares com\.example-vendor\.harness/u,
+      /declares CFBundleIdentifier=com\.zeokeel\.harness but this build declares com\.example-vendor\.harness/u,
     )
   })
 

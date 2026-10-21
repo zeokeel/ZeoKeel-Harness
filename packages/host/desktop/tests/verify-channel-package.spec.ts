@@ -161,7 +161,7 @@ describe('verifyChannelPackage', () => {
     writeFileSync(stagedPath, JSON.stringify(staged))
     await expect(
       verifyChannelPackage({ env: { DSH_BUILD_CHANNEL: CHANNEL }, repoRoot: repo, buildDir: appDir }),
-    ).rejects.toThrow(/desktop\.app_id=ai\.deepseek\.dsh\.desktop/u)
+    ).rejects.toThrow(/desktop\.app_id=com\.zeokeel\.harness/u)
   })
 
   it('官方构建的 build/ 干净时通过', async () => {

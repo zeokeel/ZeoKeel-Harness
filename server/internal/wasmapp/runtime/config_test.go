@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
-	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile/testdata/wasmtest"
 )
 
 // 本文件覆盖 §4.3.1（编译缓存：唯一构造函数 / 指纹 / 目录 / 分代）。

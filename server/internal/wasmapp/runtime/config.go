@@ -31,9 +31,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tetratelabs/wazero"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/cachetrust"
-	"github.com/tetratelabs/wazero"
 )
 
 // ===== §4.3.1 编译缓存 =====

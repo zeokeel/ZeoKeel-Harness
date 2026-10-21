@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/tetratelabs/wazero/sys"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // 本文件覆盖 §10.2 第 14/15/21/22/23 项（沙箱能力面：随机源 / 时钟 / args / env / 零 preopen）。

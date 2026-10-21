@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tetratelabs/wazero/sys"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
-	"github.com/tetratelabs/wazero/sys"
 )
 
 // 本文件是 **R1-e2e-1** 的护栏：内存超限必须报 `RUNTIME_MEMORY`（并给出正确 hints），

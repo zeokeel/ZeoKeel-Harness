@@ -376,14 +376,14 @@ func TestFileServesOnlyWhitelistedRegularFiles(t *testing.T) {
 	withReleaseDir(t, testInfo(t, "2.7.0", nil), map[string]string{
 		"ZeoKeel-2.7.0.dmg": "dmg",
 		"ZeoKeel-2.7.0.DMG": "DMG",
-		"Setup-2.7.0.exe":    "exe",
+		"Setup-2.7.0.exe":   "exe",
 		"ZeoKeel-2.7.0.msi": "msi",
-		"app.AppImage":       "appimage",
-		"pkg.tar.gz":         "targz",
+		"app.AppImage":      "appimage",
+		"pkg.tar.gz":        "targz",
 		"zeokeel.deb":       "deb",
-		"mac.pkg":            "pkg",
-		"win.zip":            "zip",
-		"notes.txt":          "txt",
+		"mac.pkg":           "pkg",
+		"win.zip":           "zip",
+		"notes.txt":         "txt",
 	})
 	// 资产目录里的子目录(目录探测的目标)。
 	if err := os.Mkdir(filepath.Join(Dir, "downloads"), 0o755); err != nil {

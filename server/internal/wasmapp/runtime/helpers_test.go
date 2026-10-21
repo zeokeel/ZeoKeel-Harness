@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tetratelabs/wazero"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
-	"github.com/tetratelabs/wazero"
 )
 
 // ===== guest 现场编译 =====

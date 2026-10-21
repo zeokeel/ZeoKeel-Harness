@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tetratelabs/wazero/sys"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
-	"github.com/tetratelabs/wazero/sys"
 )
 
 // failureContext 是"把 guest 的退出形态映射成平台错误码"所需的全部事实（§7.4）。

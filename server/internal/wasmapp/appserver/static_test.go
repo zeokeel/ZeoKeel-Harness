@@ -208,19 +208,19 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 	cfg := `{"access":"login",` + secretList + `,` +
 		`"purpose":"财务报销","data_sensitivity":"confidential","owner":"alice"}`
 	e.publishApp(appSpec{appID: appID, config: cfg, assets: map[string]string{
-		"index.html":               "<html>public shell</html>",
-		"static/app.js":            "console.log(1)",
+		"index.html":              "<html>public shell</html>",
+		"static/app.js":           "console.log(1)",
 		"assets/zeokeel.app.json": `{"note":"作者误放在子目录里的同名文件也不直出"}`,
 	}})
 
 	// (1) 历史 access=public（读取侧即 login）：不得拿到配置文件内容，必须交给 wasm。
 	for _, p := range []string{
-		"/zeokeel.app.json",     // 根路径
-		"/./zeokeel.app.json",   // dot 段被 path.Clean 归一
-		"//zeokeel.app.json",    // 双斜杠被 path.Clean 归一
+		"/zeokeel.app.json",      // 根路径
+		"/./zeokeel.app.json",    // dot 段被 path.Clean 归一
+		"//zeokeel.app.json",     // 双斜杠被 path.Clean 归一
 		"/%70icoaide.app.json",   // 一次百分号编码（net/http 已解码）
 		"/%2570icoaide.app.json", // 双层编码（isReservedAsset 自己再解一次）
-		"/ZeoKeel.App.JSON",     // 大小写（macOS/Windows 文件系统不敏感）
+		"/ZeoKeel.App.JSON",      // 大小写（macOS/Windows 文件系统不敏感）
 		"/ZEOKEEL.app.json",
 		"/assets/zeokeel.app.json", // 子目录里的同名文件同样不直出
 	} {
@@ -309,10 +309,10 @@ func TestStatic_ReservedAssetMatcher(t *testing.T) {
 		"a/b/c/zeokeel.app.json":      true,
 		"zeokeel.app.json.bak":        false,
 		"not-zeokeel.app.json":        false,
-		"index.html":                   false,
+		"index.html":                  false,
 		"zeokeel.app.json/index.html": false, // 最后一段不是它
 		"api/zeokeel.app.json":        true,  // 保留前缀由 staticLogicalPath 先拒，这里保持"是"
-		"":                             false,
+		"":                            false,
 	}
 	for in, want := range cases {
 		if got := isReservedAsset(in); got != want {

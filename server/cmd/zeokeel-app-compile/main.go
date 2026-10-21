@@ -42,10 +42,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tetratelabs/wazero"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
-	"github.com/tetratelabs/wazero"
 )
 
 func main() {

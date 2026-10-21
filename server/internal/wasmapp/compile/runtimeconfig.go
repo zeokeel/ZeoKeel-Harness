@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/tetratelabs/wazero"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // CompilerMemoryPagesEnvVar 是"编译子进程的实例内存上限"的传递通道（父侧写、子侧读）。

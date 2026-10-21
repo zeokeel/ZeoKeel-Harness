@@ -205,11 +205,11 @@ func TestRealAssetPassesServerManifestValidation(t *testing.T) {
 // 路径闸的变异验证对象：去掉归一化 ⇒ 前四条必须变红。
 func TestPackEntryNameRejectsTraversalAndAbsolute(t *testing.T) {
 	bad := map[string]string{
-		"../evil.md":             "上跳",
-		"a/../../evil.md":        "中段上跳",
-		"/etc/passwd":            "绝对路径",
-		"\\windows\\evil.txt":    "反斜杠绝对路径",
-		"C:\\temp\\evil.txt":     "盘符绝对路径",
+		"../evil.md":            "上跳",
+		"a/../../evil.md":       "中段上跳",
+		"/etc/passwd":           "绝对路径",
+		"\\windows\\evil.txt":   "反斜杠绝对路径",
+		"C:\\temp\\evil.txt":    "盘符绝对路径",
 		".zeokeel/release.json": "安装器溯源目录",
 	}
 	for rel, reason := range bad {

@@ -58,10 +58,10 @@ func TestDeprecatedEnvIsWarnedWithCleanup(t *testing.T) {
 		"WARNING: deprecated configuration still set",
 		"ZEOKEEL_APPS_BASE_DOMAIN",
 		"ZEOKEEL_TRUSTED_PROXIES_EXPLICIT",
-		"no longer read",                             // 已废除
-		"Replacement:",                               // 替代项
+		"no longer read",                              // 已废除
+		"Replacement:",                                // 替代项
 		"sed -i '/^ZEOKEEL_APPS_BASE_DOMAIN=/d' .env", // 可执行清理命令
-		"docs/deploy/AI-DEPLOY.md",                   // 在哪份文档
+		"docs/deploy/AI-DEPLOY.md",                    // 在哪份文档
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("启动告警缺少 %q, 实得:\n%s", want, out)

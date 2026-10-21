@@ -5,8 +5,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/tetratelabs/wazero"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
 // InstanceLimits 是**一次请求**的上限集合（§4.3 / §4.6）。

@@ -52,7 +52,7 @@ func TestTrustedProxiesDerivedFromCaddyIP(t *testing.T) {
 func TestTrustedProxiesExplicitWins(t *testing.T) {
 	got, source := trustedProxies(envFrom(map[string]string{
 		"ZEOKEEL_TRUSTED_PROXIES": "172.20.0.1, 10.0.0.7 ,, ",
-		"CADDY_IP":               "172.30.0.2",
+		"CADDY_IP":                "172.30.0.2",
 	}))
 	if source != "env:ZEOKEEL_TRUSTED_PROXIES" {
 		t.Fatalf("source = %q, want env:ZEOKEEL_TRUSTED_PROXIES", source)

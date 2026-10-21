@@ -927,7 +927,7 @@ func checkHostnamesArePlaceholders(t *testing.T, rel, text string) {
 		"harness.example.com": true,
 		"notes.example.com":   true,
 		"example.com":         true,
-		"zeokeel.app.json":   false, // 文件名，不是主机名（下面按后缀放过）
+		"zeokeel.app.json":    false, // 文件名，不是主机名（下面按后缀放过）
 	}
 	for _, host := range placeholderHostRe.FindAllString(text, -1) {
 		if strings.HasSuffix(host, ".example.com") || host == "example.com" {

@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tetratelabs/wazero"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/assets"
-	"github.com/tetratelabs/wazero"
 )
 
 // compiledModuleSizeFactor 把"wasm 字节数"换算成"驻留内存估算"。

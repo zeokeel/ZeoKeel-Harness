@@ -49,13 +49,13 @@ func TestFileDownloadHeadersAreExplicit(t *testing.T) {
 	const htmlBytes = "<html><script>alert(1)</script></html>"
 	withReleaseDir(t, testInfo(t, "2.7.0", nil), map[string]string{
 		"ZeoKeel-2.7.0.dmg": htmlBytes,
-		"Setup-2.7.0.exe":    htmlBytes,
-		"app.AppImage":       htmlBytes,
+		"Setup-2.7.0.exe":   htmlBytes,
+		"app.AppImage":      htmlBytes,
 		"zeokeel.deb":       htmlBytes,
-		"win.zip":            htmlBytes,
-		"pkg.tar.gz":         htmlBytes,
-		"installer.msi":      htmlBytes,
-		"mac.pkg":            htmlBytes,
+		"win.zip":           htmlBytes,
+		"pkg.tar.gz":        htmlBytes,
+		"installer.msi":     htmlBytes,
+		"mac.pkg":           htmlBytes,
 		"ZeoKeel-2.7.0.DMG": htmlBytes, // 扩展名大小写不敏感
 	})
 	r := newRouter("2.7.0")

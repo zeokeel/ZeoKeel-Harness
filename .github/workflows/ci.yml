@@ -1500,6 +1500,17 @@ jobs:
           yarn workspace dsh-plugin-desktop dist:win --no-prebuild --no-gates
           mkdir -p client-assets/official
           cp packages/host/desktop/dist/*Setup*.exe client-assets/official/
+      # 行为级安装器门禁（P6，2026-10-22 反证审查结论）：
+      # 此前这条链只有配置字面量 + PE 头 + win-unpacked 树检查，既没有跑过安装器，
+      # 也没证明一键安装器的载荷里真的带 LICENSE/THIRD_PARTY_NOTICES（它没有 EULA 页）。
+      # 这里对**官方渠道**产物做两次真实执行：
+      #   · payload：7z 解出 $PLUGINSDIR/app-64.zip，断言两份声明与主程序在载荷里；
+      #   · runtime：/S 安装（HKCU 有键/HKLM 无键/落盘文件齐全）→ 重装单份 →
+      #     /S 卸载干净；并先种一个 legacy GUID 负例，断言 exit 2 且不落盘。
+      # 每一步都有硬超时：静默挂起会让 job 红，而不是卡住 150 分钟。
+      - name: Verify official installer payload and silent install (P6)
+        shell: pwsh
+        run: node packages/host/desktop/scripts/ci-verify-win-installer.mjs
       # artifact 名中性(公开仓的 artifact 列表匿名可读,名字带渠道 id 即泄露客户名)。
       # 守卫与 linux job / macOS job 同源(2026-09-12 审计 P1-1):品牌渠道产物经
       # R2 中转、**只在 tag 上**被搬走,非 tag 时 client-assets/ 里仍有品牌目录

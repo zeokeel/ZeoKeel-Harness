@@ -194,6 +194,13 @@ Upgrades over a **legacy installation** are intentionally refused, because a per
 
 `scripts/installer-shim.nsh` checks HKLM/HKCU for both GUIDs: an interactive install shows a message and exits with code 2; a silent (`/S`) update does **not** show a box (that would hang an unattended update forever) — it writes `%TEMP%\zeokeel-harness-legacy-install.txt` and exits 2. The in-app updater additionally pre-checks the same keys before handing the installer over, so a user sees a native "needs a manual migration" dialog and keeps the downloaded installer for retry. The old version must be uninstalled from Settings → Apps first; note that a PicoAide installation used `~/.picoaide-harness` as its home, while ZeoKeel uses `~/.zeokeel-harness`, so sessions and settings are not migrated automatically.
 
+The Windows packaging job runs `scripts/ci-verify-win-installer.mjs` (P6, 2026-10-22), which drives two behaviour-level gates:
+
+- `scripts/verify-win-installer-payload.mjs <Setup.exe>` extracts the installer's `$PLUGINSDIR/app-64.zip` payload (7-Zip) and asserts `resources/LICENSE`, `resources/THIRD_PARTY_NOTICES.md` and the application executable are inside it — the one-click installer has no EULA page, so the notices must travel in the payload;
+- `scripts/verify-win-installer-runtime.mjs <Setup.exe>` runs the installer for real on a clean runner: seeds a legacy GUID and asserts `/S` exits 2 without installing, then silently installs (application + notices on disk, HKCU key present, **no** HKLM key), reinstalls (single copy at the same path) and silently uninstalls (directory and key removed). Every process call has a hard timeout so a silent hang fails the job instead of blocking it.
+
+Both scripts also run individually on a developer machine (payload: any OS with 7-Zip; runtime: Windows).
+
 The current version is written to `dsh-plugin-desktop\dist\ZeoKeel-Harness-<version>-x64-Setup.exe`; the unpacked application remains at `dsh-plugin-desktop\dist\win-unpacked\ZeoKeel Harness.exe` for smoke testing.
 
 This local command deliberately strips Windows certificate variables and sets `signExecutable=false`. Its output is installable for testing but has no Authenticode publisher, so Windows can display an Unknown publisher or SmartScreen warning. A signed Windows release, certificate verification, installer upgrade/uninstall testing, and native UI/sandbox smoke remain separate release gates.

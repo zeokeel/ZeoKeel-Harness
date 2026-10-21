@@ -10504,7 +10504,9 @@ var DEFAULT_VIEWPORT = { x: 48, y: 36, scale: 0.88 };
 
 // src/client/canvas-grok/helpers.ts
 function createNodeId() {
-  const rand = Math.random().toString(36).slice(2, 8);
+  const buffer = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(buffer);
+  const rand = buffer[0].toString(36).padStart(7, "0").slice(0, 6);
   return `canvas_${Date.now().toString(36)}_${rand}`;
 }
 function normalizePath(raw) {
@@ -10524,7 +10526,8 @@ function inferTypeFromPath(path) {
   return EXT_TYPE[ext] ?? "file";
 }
 function titleFromPath(path, t) {
-  const cleaned = normalizePath(path).replace(/\\/g, "/").replace(/\/+$/, "");
+  let cleaned = normalizePath(path).replace(/\\/g, "/");
+  while (cleaned.endsWith("/")) cleaned = cleaned.slice(0, -1);
   const base = cleaned.split("/").pop();
   return base && base.length > 0 ? base : cleaned || t("canvas.node.unnamed");
 }
@@ -12572,7 +12575,7 @@ function autoFixMermaid(source) {
       const title = sub[2];
       if (!title.startsWith('"') && !title.startsWith("[") && /[（）()！？!?，。；：、"'【】《》]/.test(title)) {
         changed = true;
-        return `${sub[1]}"${title.replace(/"/g, '\\"')}"`;
+        return `${sub[1]}"${title.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
       }
       return line;
     }

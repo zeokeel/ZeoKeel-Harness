@@ -1013,16 +1013,24 @@ const LOGIN_FORM_HTML = '<!doctype html><html><body><form method="post" action="
  * （见 `/dex/approval` 的 POST 分支）—— 脚本字段一改回旧形态，`good` 腿当场红。
  * @param reqValue - 本次授权流的 `req`（假 IdP 用 state 充当，逐流不同）。
  */
-const approvalFormHtml = reqValue => '<!doctype html><html><body>'
-  + `<form method="post" action="/dex/approval?req=${reqValue}&state=${reqValue}">`
-  + `<input type="hidden" name="req" value="${reqValue}">`
+/** 假 IdP 的 req 来自查询串：同时做 URL 与 HTML 转义，别把它拼成可执行标记。 */
+const escapeHtml = value => String(value).replace(/[&<>"']/gu, ch => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[ch]))
+const approvalFormHtml = reqValue => {
+  const encoded = encodeURIComponent(reqValue)
+  const escaped = escapeHtml(reqValue)
+  return '<!doctype html><html><body>'
+  + `<form method="post" action="/dex/approval?req=${encoded}&state=${encoded}">`
+  + `<input type="hidden" name="req" value="${escaped}">`
   + '<input type="hidden" name="approval" value="approve">'
   + '<button type="submit">Grant Access</button></form>'
-  + `<form method="post" action="/dex/approval?req=${reqValue}&state=${reqValue}">`
-  + `<input type="hidden" name="req" value="${reqValue}">`
+  + `<form method="post" action="/dex/approval?req=${encoded}&state=${encoded}">`
+  + `<input type="hidden" name="req" value="${escaped}">`
   + '<input type="hidden" name="approval" value="rejected">'
   + '<button type="submit">Cancel</button></form>'
   + '</body></html>'
+}
 
 /** 读掉请求体（不读会让 keep-alive 请求挂住）。 */
 function readBody(req) {

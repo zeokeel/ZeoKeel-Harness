@@ -237,7 +237,7 @@ function autoFixMermaid(source: string): string | null {
         /[（）()！？!?，。；：、"'【】《》]/.test(title)
       ) {
         changed = true
-        return `${sub[1]}"${title.replace(/"/g, '\\"')}"`
+        return `${sub[1]}"${title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
       }
       return line
     }

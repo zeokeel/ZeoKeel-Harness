@@ -7365,8 +7365,12 @@ exit 0
 // （否则说明这份裸检出并非真的没有依赖树,绿是假的）。
 {
   const bare = tempDir('ci-bare-checkout-')
-  const archived = spawnSync('bash', ['-c', `git -C ${JSON.stringify(root)} archive HEAD | tar -x -C ${JSON.stringify(bare)}`], { encoding: 'utf8' })
-  check(archived.status === 0, `git archive HEAD 失败(裸检出的造法本身要可靠): ${archived.stderr ?? ''}`)
+  const archive = spawnSync('git', ['-C', root, 'archive', 'HEAD'], { encoding: 'buffer', maxBuffer: 512 * 1024 * 1024 })
+  const extracted = spawnSync('tar', ['-x', '-C', bare], { input: archive.stdout, encoding: 'utf8' })
+  check(
+    archive.status === 0 && extracted.status === 0,
+    `git archive HEAD 失败(裸检出的造法本身要可靠): ${String(archive.stderr ?? '')}${String(extracted.stderr ?? '')}`,
+  )
   check(!existsSync(join(bare, 'node_modules')), '裸检出里不得有 node_modules（否则这一节测不到 release job 的真实条件）')
 
   // 抽 `node -e '<body>' "$REPO_ROOT/<relative .ts>"`（两个脚本用 REPO_ROOT/SCRIPT_ROOT）。

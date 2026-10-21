@@ -114,7 +114,7 @@ export class CoiScheduler {
     return resolveAttachmentsImpl(attachments, {
       outputDir: join(this.config.coiDataDir, 'attachments'),
       // 文件名前缀：时间戳+随机（taskId 此时尚未生成；并发任务不撞名即可）
-      tag: `att-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      tag: `att-${Date.now().toString(36)}${randomUUID().replaceAll('-', '').slice(0, 4)}`,
       attachmentsStore: this.attachmentsStore,
       agentsService: this.agentsService,
       sessionId: ownerSessionId,

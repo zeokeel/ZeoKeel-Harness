@@ -23,7 +23,9 @@ import type {
 
 /** 稳定节点 id。标题会撞车，引用一律走 id。 */
 export function createNodeId(): string {
-  const rand = Math.random().toString(36).slice(2, 8)
+  const buffer = new Uint32Array(1)
+  globalThis.crypto.getRandomValues(buffer)
+  const rand = buffer[0].toString(36).padStart(7, '0').slice(0, 6)
   return `canvas_${Date.now().toString(36)}_${rand}`
 }
 
@@ -51,7 +53,8 @@ export function inferTypeFromPath(path: string): CanvasNodeType {
 }
 
 export function titleFromPath(path: string, t: Translate): string {
-  const cleaned = normalizePath(path).replace(/\\/g, '/').replace(/\/+$/, '')
+  let cleaned = normalizePath(path).replace(/\\/g, '/')
+  while (cleaned.endsWith('/')) cleaned = cleaned.slice(0, -1)
   const base = cleaned.split('/').pop()
   return base && base.length > 0 ? base : cleaned || t('canvas.node.unnamed')
 }

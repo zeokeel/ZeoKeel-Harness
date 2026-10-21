@@ -110,7 +110,7 @@ describe('技能用量上报的会话归属（FIX-40 ③：观察点同步取会
     await expect.poll(() => posts.length, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS }).toBeGreaterThan(0)
 
     expect(posts, '恰一次上报').toHaveLength(1)
-    expect(posts[0]!.url.startsWith(HOST_A), `上报必须落在 ALICE 的服务端，实际 ${posts[0]!.url}`).toBe(true)
+    expect(new URL(posts[0]!.url).origin, `上报必须落在 ALICE 的服务端，实际 ${posts[0]!.url}`).toBe(HOST_A)
     expect(posts[0]!.authorization, '令牌也必须是 ALICE 的').toContain(ALICE.token)
   })
 
@@ -131,7 +131,7 @@ describe('技能用量上报的会话归属（FIX-40 ③：观察点同步取会
     await expect.poll(() => posts.length, { timeout: WAIT_BUDGETS.STATE_PROPAGATION_MS }).toBeGreaterThan(0)
 
     expect(posts, '恰一次上报').toHaveLength(1)
-    expect(posts[0]!.url.startsWith(HOST_A), `上报必须落在 ALICE 的服务端，实际 ${posts[0]!.url}`).toBe(true)
+    expect(new URL(posts[0]!.url).origin, `上报必须落在 ALICE 的服务端，实际 ${posts[0]!.url}`).toBe(HOST_A)
     expect(posts[0]!.authorization).toContain(ALICE.token)
   })
 
@@ -152,7 +152,7 @@ describe('技能用量上报的会话归属（FIX-40 ③：观察点同步取会
     expect(posts, '修前形状也会发出一次上报').toHaveLength(1)
     // 判据在这里必须**判红**：它记到了 BOB 名下 —— 与第一个用例的断言方向相反，
     // 证明"取调用时刻的会话"这条判据不是恒绿。
-    expect(posts[0]!.url.startsWith(HOST_B), '修前形状会把这一笔记到新账号名下（判据必须能看见它）').toBe(true)
+    expect(new URL(posts[0]!.url).origin, '修前形状会把这一笔记到新账号名下（判据必须能看见它）').toBe(HOST_B)
     expect(posts[0]!.authorization).toContain(BOB.token)
   })
 })

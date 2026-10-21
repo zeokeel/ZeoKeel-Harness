@@ -675,7 +675,9 @@ export function projectHash(cwd) {
  */
 export function projectLabel(cwd) {
   if (!cwd) return undefined
-  const parts = String(cwd).replace(/\\/g, '/').replace(/\/+$/, '').split('/').filter(Boolean)
+  let normalized = String(cwd).replace(/\\/g, '/')
+  while (normalized.endsWith('/')) normalized = normalized.slice(0, -1)
+  const parts = normalized.split('/').filter(Boolean)
   if (parts.length === 0) return '/'
   const base = parts[parts.length - 1]
   if (base.length < 3 || /^\d+$/.test(base)) {

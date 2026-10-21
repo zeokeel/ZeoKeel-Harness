@@ -25,6 +25,7 @@
  *   2. installNotifyWebApi —— 宿主端 API（未读数/列表/已读/全部已读/删除/
  *      全文/附件下载），web 渠道关闭时**不挂载**（前端探测 404 即不注入铃铛）。
  */
+import { randomUUID } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { translate, getLocale, MISC2_DICT } from './i18n.js'
@@ -49,7 +50,7 @@ const MAX_ITEMS = 500
 
 /** 生成通知 id：ntf-<时间戳36>-<随机6位>。 */
 export function newNotificationId() {
-  return `ntf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return `ntf-${Date.now().toString(36)}-${randomUUID().replaceAll('-', '').slice(0, 6)}`
 }
 
 /** 读取 JSON 请求体（上限 256 KiB）。

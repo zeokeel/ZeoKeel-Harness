@@ -47,6 +47,29 @@ export const inject = ['slots', 'locale']
 // 一切正常（最难查的一类漂移）。
 export type { FootMenuEntry, FootMenuService } from './contract.ts'
 
+function openSettingsFromLauncher(): boolean {
+  if (typeof document === 'undefined') return false
+  const triggers = [...document.querySelectorAll('button[aria-haspopup="menu"]')]
+    .filter(button => ['账号菜单', 'Account menu'].includes(button.getAttribute('aria-label') ?? ''))
+  for (const trigger of triggers) {
+    const internals = trigger as unknown as Record<string, unknown>
+    const fiberKey = Object.keys(internals).find(key => key.startsWith('__reactFiber$'))
+    if (fiberKey === undefined) continue
+    let fiber = internals[fiberKey] as { memoizedProps?: unknown, return?: unknown } | null
+    let depth = 0
+    while (fiber !== null && depth < 40) {
+      const props = fiber.memoizedProps as { openSettings?: unknown } | null | undefined
+      if (props !== null && props !== undefined && typeof props.openSettings === 'function') {
+        props.openSettings()
+        return true
+      }
+      fiber = (fiber.return ?? null) as { memoizedProps?: unknown, return?: unknown } | null
+      depth += 1
+    }
+  }
+  return false
+}
+
 /**
  * Open the upstream settings modal through the official `settings.launcher`
  * menu. The account trigger itself is hidden (it duplicates our 更多 row), so
@@ -56,6 +79,7 @@ export type { FootMenuEntry, FootMenuService } from './contract.ts'
  */
 function openOfficialSettings(): void {
   if (typeof document === 'undefined') return
+  if (openSettingsFromLauncher()) return
   const trigger = [...document.querySelectorAll('button[aria-haspopup="menu"]')]
     .find(button => ['账号菜单', 'Account menu'].includes(button.getAttribute('aria-label') ?? '')) as HTMLButtonElement | undefined
   if (trigger === undefined) return

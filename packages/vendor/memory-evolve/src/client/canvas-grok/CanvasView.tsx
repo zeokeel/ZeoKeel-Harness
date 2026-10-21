@@ -9,8 +9,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  IconPlusOutline16,
-  IconSearchOutline16,
+  IconPlusOutlineRegular,
+  IconSearchOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CanvasBoard } from './CanvasBoard.tsx'
 import { CanvasDialogs } from './CanvasDialogs.tsx'
@@ -654,7 +654,7 @@ export function CanvasView(props: ConvViewProps & CanvasViewProps): JSX.Element 
         </div>
 
         <label className="cg-search">
-          <IconSearchOutline16 />
+          <IconSearchOutlineRegular />
           <input
             value={query}
             placeholder={t('canvas.search.placeholder')}
@@ -664,13 +664,13 @@ export function CanvasView(props: ConvViewProps & CanvasViewProps): JSX.Element 
 
         <div className="cg-toolbar-group">
           <button type="button" className="cg-btn cg-ghost" onClick={() => setDialog('path')}>
-            <IconPlusOutline16 /> {t('canvas.action.path')}
+            <IconPlusOutlineRegular /> {t('canvas.action.path')}
           </button>
           <button type="button" className="cg-btn cg-ghost" onClick={() => setDialog('note')}>
-            <IconPlusOutline16 /> {t('canvas.action.note')}
+            <IconPlusOutlineRegular /> {t('canvas.action.note')}
           </button>
           <button type="button" className="cg-btn cg-ghost" onClick={() => setDialog('catalog')}>
-            <IconPlusOutline16 /> {t('canvas.action.catalog')}
+            <IconPlusOutlineRegular /> {t('canvas.action.catalog')}
           </button>
         </div>
 

@@ -1895,8 +1895,8 @@ function sourceClass(source) {
 }
 function ResourceIcon({ skill }) {
   const rb = skill.resourceBase;
-  if (rb?.kind === "directory") return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpen16, { className: "sb-card-meta-icon" });
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconDataOutline16, { className: "sb-card-meta-icon" });
+  if (rb?.kind === "directory") return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpenRegular, { className: "sb-card-meta-icon" });
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconDataOutlineRegular, { className: "sb-card-meta-icon" });
 }
 var PAGE_SIZE2 = 20;
 function SkillList(props) {
@@ -1984,11 +1984,11 @@ function SkillList(props) {
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-list", children: [
       loading && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-note", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutline16, { className: "sb-spin" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: t("loading.skills") })
       ] }),
       !loading && error !== null && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-note sb-note--error", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutline16, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: error }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "sb-btn sb-btn--ghost", onClick: onRetry, children: t("refresh") })
       ] }),
@@ -2032,7 +2032,7 @@ function SkillList(props) {
                       onToggleDisabled(skill);
                     }
                   },
-                  children: togglingName === skill.name ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutline16, { className: "sb-spin" }) : skill.disabled ? t("enable") : t("disable")
+                  children: togglingName === skill.name ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }) : skill.disabled ? t("enable") : t("disable")
                 }
               )
             ] })
@@ -2088,14 +2088,14 @@ function FileTree(props) {
     const indent = { paddingLeft: 8 + depth * 14 };
     if (loadingDirs.has(dirAbs)) {
       return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-tree-note", style: indent, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutline16, { className: "sb-spin" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: t("loading.dir") })
       ] });
     }
     const dirError = dirErrors.get(dirAbs);
     if (dirError !== void 0) {
       return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-tree-note sb-note--error", style: indent, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutline16, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-tree-errmsg", title: dirError, children: dirError }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "sb-tree-retry", onClick: () => onRetryDir(dirAbs), children: t("refresh") })
       ] });
@@ -2119,8 +2119,8 @@ function FileTree(props) {
               onClick: () => onToggleDir(abs),
               title: abs,
               children: [
-                isOpen ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronDownOutline14, {}) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronRightOutline14, {}),
-                isOpen ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpen16, {}) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderClose16, {}),
+                isOpen ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronDownOutlineRegular, {}) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronRightOutlineRegular, {}),
+                isOpen ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpenRegular, {}) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderCloseRegular, {}),
                 /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-tree-name", children: entry.name })
               ]
             }
@@ -2164,7 +2164,7 @@ function FileTree(props) {
         )
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "sb-crumbs", children: crumbs.map((crumb, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "sb-crumb-seg", children: [
-        i > 0 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronRightOutline14, { className: "sb-crumb-sep" }),
+        i > 0 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronRightOutlineRegular, { className: "sb-crumb-sep" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "sb-crumb", onClick: () => onJump(crumb.abs), children: crumb.label })
       ] }, crumb.abs)) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "sb-tree", children: renderEntries(root, 0) })
@@ -2204,13 +2204,13 @@ function FileEditor(props) {
   let body;
   if (fileLoading) {
     body = /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-editor-empty", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutline16, { className: "sb-spin" }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: t("loading.dir") })
     ] });
   } else if (fileError !== null) {
     const msg = fileError.kind === "not.text" ? t("not.text") : fileError.kind === "too.large" ? t("too.large") : t("read.failed", { message: fileError.message });
     body = /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-editor-empty sb-note--error", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutline16, {}),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: msg })
     ] });
   } else if (file === null) {
@@ -2248,7 +2248,7 @@ function FileEditor(props) {
       ] }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-editor-path", children: t("no.file") }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-spacer" }),
       file !== null && !editing && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("button", { type: "button", className: "sb-btn", onClick: onEdit, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconEditOutline16, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconEditOutlineRegular, {}),
         t("edit")
       ] }),
       editing && dirty && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-dirty-dot", title: t("dirty.hint") }),
@@ -2261,7 +2261,7 @@ function FileEditor(props) {
             onClick: onSave,
             disabled: saveState === "saving" || !dirty,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCheckOutline16, {}),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCheckOutlineRegular, {}),
               saveState === "saving" ? t("saving") : t("save")
             ]
           }
@@ -2304,19 +2304,19 @@ function DirsModal(props) {
             disabled: mutating || input.trim() === "",
             onClick: onAdd,
             children: [
-              mutating ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutline16, { className: "sb-spin" }) : null,
+              mutating ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }) : null,
               t("dirs.add")
             ]
           }
         )
       ] }),
       error !== null && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-action-error", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutline16, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-action-error-text", children: error })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-dirs-list", children: [
         loading && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-note", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutline16, { className: "sb-spin" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: t("loading.skills") })
         ] }),
         !loading && dirs.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "sb-note", children: t("dirs.empty") }),
@@ -2779,7 +2779,7 @@ function SkillsBrowser({ t, sessionId }) {
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-side", children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-side-toolbar", children: [
           /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-search", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconSearchOutline16, { className: "sb-search-icon" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconSearchOutlineRegular, { className: "sb-search-icon" }),
             /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
               "input",
               {
@@ -2797,7 +2797,7 @@ function SkillsBrowser({ t, sessionId }) {
                 className: "sb-search-clear",
                 onClick: () => setQuery(""),
                 "aria-label": t("cancel"),
-                children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCloseOutline16, {})
+                children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCloseOutlineRegular, {})
               }
             )
           ] }),
@@ -2812,7 +2812,7 @@ function SkillsBrowser({ t, sessionId }) {
                 void loadDirs();
               },
               title: t("manage.dirs"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpen16, {})
+              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpenRegular, {})
             }
           ),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
@@ -2823,7 +2823,7 @@ function SkillsBrowser({ t, sessionId }) {
               onClick: () => void handleRefresh(),
               disabled: refreshing,
               title: t("refresh"),
-              children: refreshing ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutline16, { className: "sb-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconRefreshOutline16, {})
+              children: refreshing ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconRefreshOutlineRegular, {})
             }
           )
         ] }),
@@ -2851,7 +2851,7 @@ function SkillsBrowser({ t, sessionId }) {
           }
         ),
         actionError !== null && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-action-error", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutline16, {}),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-action-error-text", children: actionError }),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
             "button",
@@ -2859,7 +2859,7 @@ function SkillsBrowser({ t, sessionId }) {
               type: "button",
               className: "sb-btn sb-btn--ghost",
               onClick: () => setActionError(null),
-              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCloseOutline16, {})
+              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCloseOutlineRegular, {})
             }
           )
         ] }),
@@ -12064,7 +12064,7 @@ ${t("canvas.content.truncated")}` : text;
         ] })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("label", { className: "cg-search", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconSearchOutline16, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconSearchOutlineRegular, {}),
         /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
           "input",
           {
@@ -12076,17 +12076,17 @@ ${t("canvas.content.truncated")}` : text;
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("div", { className: "cg-toolbar-group", children: [
         /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("button", { type: "button", className: "cg-btn cg-ghost", onClick: () => setDialog("path"), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutline16, {}),
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutlineRegular, {}),
           " ",
           t("canvas.action.path")
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("button", { type: "button", className: "cg-btn cg-ghost", onClick: () => setDialog("note"), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutline16, {}),
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutlineRegular, {}),
           " ",
           t("canvas.action.note")
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("button", { type: "button", className: "cg-btn cg-ghost", onClick: () => setDialog("catalog"), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutline16, {}),
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutlineRegular, {}),
           " ",
           t("canvas.action.catalog")
         ] })

@@ -14,6 +14,39 @@ body[data-dsh-desktop-mode="advanced"] { margin: 0; background: transparent !imp
 .dshDesktopFrame { position: relative; display: grid; grid-template-rows: 100%; width: 100%; height: 100%; overflow: hidden; background: transparent; }
 .dshDesktopSidebarSurface { --dsw-specific-sidebar-fill: transparent; position: relative; grid-column: 1; grid-row: 1; min-width: 0; overflow: hidden; background: transparent; border-right: 1px solid var(--dsw-alias-border-l1); }
 .dshDesktopUpstreamSidebar { box-sizing: border-box; width: 100%; height: 100%; }
+/* 菜单卡片的"不透明背板"（2026-10-18 现场：用着用着页面变透明）。
+   上游菜单（MenuSurface）的材质是"半透明底 + backdrop-filter"卡片：
+   background: var(--dsw-menu-surface-fill)（亮色 alpha .58 / 暗色 .45）+
+   backdrop-filter: var(--dsw-menu-backdrop-filter)（blur(40px) saturate(150%)）。
+   可 backdrop-filter 只采样**页面自身**的绘制结果，而我们的窗口刻意让出原生材质：
+   darwin 是 transparent + vibrancy，win32 是 backgroundColor:#00000000 + mica，
+   左栏 .dshDesktopSidebarSurface 也是 transparent。窗口的透明合成面上没有实底时，
+   Chromium 不再产出模糊 —— 卡片只剩半透明填充，下面的会话列表/桌面直接透上来
+   （用户看到的就是"页面变透明"；真机 AB：同一个透明窗口，无背板时菜单区 alpha
+   ≈0.48 且背后文字清晰，补上实底后背板 alpha=1、文字被模糊）。
+   上游知道这件事：MenuSurface 额外 portal 了一个 [data-menu-backing]（bg-base 实底、
+   z-index:-1，位于页面内容之下、原生材质之上），但它的样式只在
+   html[data-platform='darwin'] 下打开（那是上游 Electron preload 打的标记）。我们的壳
+   用 data-dsh-desktop-mode / data-dsh-desktop-platform 标记自己，没有
+   html[data-platform]（见 dsh-client-ui-primitives 的 darwin-desktop.d.ts），
+   所以这条兜底在所有平台都没生效。
+   这里按 desktop 自己的模式标记打开同一个背板：位置沿用上游的 CSS anchor（与菜单
+   surface 的 anchor-name 对齐；Electron 44 真机量到背板矩形与菜单矩形逐像素相等），
+   不写上游 CSS-module 的哈希类名。背板只补"可模糊的底"，菜单材质仍是半透明 + 模糊；
+   **不要**给 [data-menu-material] 加不透明底色 —— 那会把毛玻璃整层关掉。
+   win32 的 mica 与 darwin 的 vibrancy 是同一条链路，所以三个平台一起开。 */
+body[data-dsh-desktop-mode="advanced"] [data-menu-backing] {
+  display: block;
+  position: fixed;
+  position-anchor: var(--dsh-menu-anchor);
+  top: anchor(top);
+  left: anchor(left);
+  width: anchor-size(width, 0px);
+  height: anchor-size(height, 0px);
+  z-index: -1;
+  background: var(--dsw-alias-bg-base);
+  pointer-events: none;
+}
 /* 模态打开期间左栏交回不透明底（issue #128：左侧毛玻璃像被扫描了）。
    整视口蒙版是 rgba(0,0,0,.24) + backdrop-filter: blur(2px)，而 backdrop-filter 只能
    采样页面自身的绘制结果；左栏平时刻意透明（上行 background: transparent，为的是透出

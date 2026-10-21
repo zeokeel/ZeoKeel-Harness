@@ -397,7 +397,7 @@ const REGISTERED_INSTALL_INTEGRITY_BODIES = [
     // `EXECUTION_POINT_REGISTRY` / `EXECUTION_FACE_REGISTRY` 两侧各自的登记（P0 集成的
     // 能力中心、网关客户端、模块编译契约等 + master 的 schedule 与审计判据）合并后，
     // 本件内容再次变化 ⇒ 摘要按 `sha256sum scripts/check-install-integrity.mjs` 同步。
-    sha256: 'a8ba1dbaad4db40f2b880ef1df8d4f75b70c96323e1c786d66959b63897a74a2',
+    sha256: '1b85c188a661ff1653446dc50889dbf6876db76410d31169548a324f439a741b',
     methods: [
       'judge-body-bytes-equal-head',
       'yarnrc-forbidden-keys',

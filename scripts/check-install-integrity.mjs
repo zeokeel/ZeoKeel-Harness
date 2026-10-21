@@ -291,6 +291,9 @@ export const EXECUTION_FACE_REGISTRY = [
   // 2026-10-14（p2 变体裁剪）：新增的变体清单读写脚本（打包入口与
   // `verify-packaged-runtime` 都经它取"这一轮声明关了哪些模块"）。
   'packages/host/desktop/scripts/channel-variant.ts',
+  // 2026-10-22（P6）：CI 里的安装器行为门禁入口（payload + 静默安装/卸载/迁移负例）。
+  // 它和两个被它调用的判据都属执行面：改写它们 = 改写"发布产物真的能装能卸"这条结论。
+  'packages/host/desktop/scripts/ci-verify-win-installer.mjs',
   'packages/host/desktop/scripts/clean.mjs',
   'packages/host/desktop/scripts/direct-invocation.mjs',
   'packages/host/desktop/scripts/e2e-client.mjs',
@@ -340,6 +343,8 @@ export const EXECUTION_FACE_REGISTRY = [
   'packages/host/desktop/scripts/verify-renderer-error-capture.mjs',
   'packages/host/desktop/scripts/verify-runtime-closure.mjs',
   'packages/host/desktop/scripts/verify-session-restart.mjs',
+  'packages/host/desktop/scripts/verify-win-installer-payload.mjs',
+  'packages/host/desktop/scripts/verify-win-installer-runtime.mjs',
   'packages/host/desktop/scripts/verify-win-installer.ts',
   'packages/host/desktop/scripts/verify-win-portable.ts',
   // 构建期守卫（2026-10-20）：gateway-client 的 `build` 脚本在 tsdown/tsc 之后
@@ -427,6 +432,7 @@ export const EXECUTION_FACE_REGISTRY = [
  * 双向：扫到却没登记 ⇒ 红（新的执行体悄悄进了 CI）；登记了却没被扫到 ⇒ 红（死条目）。
  */
 export const CI_REFERENCED_EXECUTION_REGISTRY = [
+  'packages/host/desktop/scripts/ci-verify-win-installer.mjs',
   'scripts/check-frozen-launchers.mjs',
   // `p1b-conditionalize` 新加的服务端构建变体矩阵步骤（`ci.yml` 的 server job，
   // 该 job 的 `defaults.run.working-directory: server`）。**推导面用的是"命令位里

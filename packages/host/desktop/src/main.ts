@@ -47,7 +47,8 @@ import { provideAppAiRunner } from './app-ai-runner.ts'
 import { assertRequiredClientEntries, assertRequiredRowsActive } from './startup-rows.ts'
 import { fatalBootIdentity, reportFatalBootFailure, type FatalBootChoice } from './fatal-boot.ts'
 import { performFatalRecovery, type FatalRecoveryTargets } from './fatal-recovery.ts'
-import { clearSafeModeMarker, readSafeModeBundles, safeModeMarkerPath } from './desktop-safe-mode.ts'
+import { beginSafeModeBoot, finishSafeModeBoot, safeModeMarkerPath } from './desktop-safe-mode.ts'
+import { resolveFatalExit } from './fatal-exit.ts'
 import { provideWasmAppsWindows } from './wasm-apps-windows.ts'
 import { applyInstallDshHome, isSystemWorkingDirectory } from './desktop-home.ts'
 import { macAppBundlePath, writeMacosUpdateBootFailureMarker } from './macos-update-install.ts'
@@ -671,10 +672,9 @@ async function start(): Promise<void> {
     const activeProfileName = DESKTOP_PROFILE_NAME
     // 安全模式是"一次性"的：本组合读标记、成功后立刻清掉（见 desktop-safe-mode.ts）。
     // 读失败只登记，绝不阻断启动 —— 恢复标记坏了不该变成新的致命原因。
-    const safeMode = readSafeModeBundles(safeModePath)
-    if (safeMode.problem !== undefined) electronLogger.error(`${BIN_NAME}: ${safeMode.problem}`)
-    if (safeMode.bundles.size > 0) {
-      electronLogger.error(`${BIN_NAME}: composing in safe mode without ${safeMode.bundles.size} third-party bundle(s)`)
+    const safeModeBundles = beginSafeModeBoot(safeModePath, message => { electronLogger.error(`${BIN_NAME}: ${message}`) })
+    if (safeModeBundles.size > 0) {
+      electronLogger.error(`${BIN_NAME}: composing in safe mode without ${safeModeBundles.size} third-party bundle(s)`)
     }
     const prepared = await prepareDesktopProfile(
       process.env.DSH_TELEMETRY_DISABLED,
@@ -685,7 +685,7 @@ async function start(): Promise<void> {
       // 必须显式注入：插件在纯 Node 宿主里无从得知 userData，缺席时窗口管理器
       // **整个不构造**（`index.ts` 的 `userDataDir === undefined` 分支）。
       app.getPath('userData'),
-      safeMode.bundles,
+      safeModeBundles,
     )
     const releasePackageResolver = installProfilePackageResolver(prepared.bareModuleBaseUrl)
     // Electron does not patch `child_process.spawn`/`spawnSync` for asar paths
@@ -811,9 +811,7 @@ async function start(): Promise<void> {
     // 安全模式标记在**宿主挂载 + 必需行/客户端条目都通过**之后才清除：只以
     // `prepareDesktopProfile` 成功为界会让"组合过了、挂载才炸"的第三方插件在下次
     // 重启又被加载回来（2026-10-21 反证审查 A：恢复必须真的救到可运行状态）。
-    if (safeMode.bundles.size > 0 && clearSafeModeMarker(safeModePath)) {
-      electronLogger.error(`${BIN_NAME}: left safe mode after a successful boot`)
-    }
+    for (const warning of prepared.warnings) electronLogger.error(`${BIN_NAME}: ${warning}`)
     // 0.1.7: the desktop's own settings live in this plugin's profile entry
     // (`desktop-shell`) and are read through the settings form projection; the
     // live-change signal is `settings/document-updated`.
@@ -827,6 +825,10 @@ async function start(): Promise<void> {
       fileExporter?.setThreshold(readLogLevel())
     })
     await runtime.mountScheduled()
+    // 标记只在这一步之后才清：`mountScheduled()` 是"宿主已排好挂载"的可观察边界，
+    // 早于它的位置（原先在 assertRequiredClientEntries 之后）曾被反证审查标为
+    // "post-mount 描述不准"（R2-8）；清除失败保留标记并记日志，绝不静默永久安全模式。
+    finishSafeModeBoot(safeModePath, safeModeBundles, message => { electronLogger.error(`${BIN_NAME}: ${message}`) })
     notifySkippedOptionalEntries(runtime, electronLogger, prepared.skippedOptionalEntries)
     reportLegacyAgentPresetDiagnostics(prepared.presetDiagnostics, electronLogger)
     // Upstream 0.1.7 reports a bundle whose manifest/patch cannot be loaded by
@@ -854,17 +856,14 @@ async function start(): Promise<void> {
     // **可选视图** `mountedRuntime`（窗口内是 undefined），而 `nativeExit`/`shutdown`
     // 在窗口之前就已构造，两条退出语句因此永远有对象可用。
     const action = await reportFatalStartupFailure(cause, mountedRuntime, electronLogger)
-    let exitCode = 1
-    if (action === 'retry') {
-      nativeExit.requestRelaunch()
-      exitCode = 0
-    } else if (action === 'safe-mode' || action === 'backup-patch') {
-      // 恢复操作本身也可能失败（权限、磁盘满）。失败时**不重启**：重启只会再弹
-      // 同一个对话框，用户会以为按钮没生效；改为留在原地非零退出并写日志。
-      exitCode = await runFatalRecovery(action, electronLogger)
-      if (exitCode === 0) nativeExit.requestRelaunch()
-    }
-    await shutdown.request(exitCode)
+    // 退出码/是否重启的全部语义在 `fatal-exit.ts` 里，可被单测逐条钉住：
+    // 恢复失败**不重启**（重启只会再弹同一个对话框），quit 永远非零退出。
+    const decision = await resolveFatalExit(
+      action,
+      recoveryAction => runFatalRecovery(recoveryAction, electronLogger),
+    )
+    if (decision.relaunch) nativeExit.requestRelaunch()
+    await shutdown.request(decision.exitCode)
   }
 }
 

@@ -155,7 +155,9 @@ describe('provideWasmAppsWindows（桌面壳 → 插件的服务接线）', () =
     // 反向：不得再出现"内联 hostCtx.provide(窗口服务名…)"的形态（内联 = 本条失守）。
     expect(main).not.toMatch(/hostCtx\.provide\(\s*WASM_APPS_WINDOW_ADAPTER_SERVICE/)
     // userDataDir 必须走 `prepareDesktopProfile` 的注入（缺它 ⇒ 窗口管理器整个不构造）。
-    expect(main).toMatch(/prepareDesktopProfile\([\s\S]{0,400}?app\.getPath\('userData'\),\s*\)/)
+    // 允许 userData 之后还有尾随实参（例如安全模式的一次性 bundle 集合）：
+    // 原来的 `\s*\)` 把"参数序"钉死，2026-10-21 加第 6 实参时直接把这条守卫打红。
+    expect(main).toMatch(/prepareDesktopProfile\([\s\S]{0,400}?app\.getPath\('userData'\),/)
 
     // 注入链的另一半在 `profile.ts`：把注入写成"只有传了才出现"的同时，必须真的有
     // 一处把它放进 `zeokeel-wasm-apps-host` 行的 config（拼错键名/放错行都会静默）。

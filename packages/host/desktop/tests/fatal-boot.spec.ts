@@ -158,9 +158,11 @@ describe('main.ts / startup-rows.ts 的接线与注释一致性（B-02）', () =
     expect(block).toContain('requestRelaunch()')
     // 两个恢复出口必须真的接在 catch 里：删掉分支、改成恒重启、或把 shutdown 提到
     // 恢复之前，都会让这里的 token 判据变红（2026-10-21 反证审查 D 的 C1–C9）。
-    expect(block, '致命路径必须调用恢复执行器').toContain('runFatalRecovery(action, electronLogger)')
-    expect(block, '恢复成功后必须重启').toContain('if (exitCode === 0) nativeExit.requestRelaunch()')
-    expect(block, '退出码必须由恢复结果决定').toContain('await shutdown.request(exitCode)')
+    // 退出码/是否重启的**语义**本身在 fatal-exit.spec.ts 里逐条判，这里只钉接线。
+    expect(block, '致命路径必须调用退出决策器').toContain('resolveFatalExit(')
+    expect(block, '恢复必须经 runFatalRecovery 执行').toContain('runFatalRecovery(recoveryAction, electronLogger)')
+    expect(block, '重启必须由决策结果驱动').toContain('if (decision.relaunch) nativeExit.requestRelaunch()')
+    expect(block, '退出码必须来自决策结果').toContain('await shutdown.request(decision.exitCode)')
   })
 
   it('详情里的日志目录与日志系统同源（<userData>/logs）', () => {

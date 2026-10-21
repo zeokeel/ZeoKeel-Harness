@@ -13,7 +13,7 @@
  *  4. 两个用户补丁（profile 与 `$DSH_HOME`）都要备份：home 补丁同样会抛死；
  *  5. 「备份补丁」无事可做时必须报错，绝不"成功重启"骗用户。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -148,7 +148,7 @@ describe('真实 profile 数据面（2026-10-21 P0 回归）', () => {
 })
 
 describe('安全模式（一次性标记）', () => {
-  it('写标记 + 备份两个补丁，且绝不写插件持久状态', async () => {
+  it('只写标记：不动两个用户补丁（安全模式不替用户改设置），也不写插件持久状态', async () => {
     const targets = sandbox()
     writeManifest(targets, [CARRIER, FEATURE, IMMUTABLE, THIRD_PARTY, THIRD_PARTY_B])
     writePatch(profilePatchPath(targets), '- insert: []\n')
@@ -156,8 +156,11 @@ describe('安全模式（一次性标记）', () => {
 
     const report = await enterFatalSafeMode(targets, new Date('2026-10-21T12:00:00.000Z'))
     expect(report.disabledBundles).toEqual([THIRD_PARTY_B, THIRD_PARTY])
-    expect(report.backupPath).toBe(`${profilePatchPath(targets)}.bak-2026-10-21T12-00-00-000Z`)
-    expect(report.homeBackupPath).toBe(`${homePatchPath(targets)}.bak-2026-10-21T12-00-00-000Z`)
+    expect(report.backupPath).toBeUndefined()
+    expect(report.homeBackupPath).toBeUndefined()
+    // 用户的设置补丁（含 home 补丁）必须原地不动（反证审查 A 的 R2-5）。
+    expect(readFileSync(profilePatchPath(targets), 'utf8')).toBe('- insert: []\n')
+    expect(readFileSync(homePatchPath(targets), 'utf8')).toBe('- insert: []\n')
     expect(markerBundles(targets)).toEqual([THIRD_PARTY_B, THIRD_PARTY])
 
     // 插件持久状态（plugin-management/state.json）不该被安全模式碰过。
@@ -168,7 +171,7 @@ describe('安全模式（一次性标记）', () => {
     expect(statSync(join(targets.safeModePath, '..')).mode & 0o777).toBe(0o700)
   })
 
-  it('标记先写、补丁后搬：标记写失败时补丁原样不动（不留半成品）', async () => {
+  it('标记写失败时直接报错：不产生任何半成品（补丁本来就只在另一个出口搬）', async () => {
     const targets = sandbox()
     writeManifest(targets, [CARRIER, THIRD_PARTY])
     writePatch(profilePatchPath(targets), '- insert: []\n')
@@ -195,18 +198,23 @@ describe('安全模式（一次性标记）', () => {
     await expect(performFatalRecovery('safe-mode', targets)).rejects.toThrow(/cannot read the profile manifest/u)
   })
 
-  it('没有三方包时不写标记、不搬补丁，并要求改用「备份补丁」', async () => {
+  it('没有三方包时退化为备份用户补丁（安全模式不能是死胡同，R2-4）', async () => {
     const targets = sandbox()
     writeManifest(targets, [CARRIER, FEATURE, IMMUTABLE])
     writePatch(profilePatchPath(targets), '- insert: []\n')
 
-    const report = await enterFatalSafeMode(targets)
+    const report = await performFatalRecovery('safe-mode', targets)
     expect(report.disabledBundles).toEqual([])
+    expect(report.degradedToPatchBackup).toBe(true)
+    expect(report.backupPath).toBeDefined()
     expect(existsSync(targets.safeModePath)).toBe(false)
-    expect(existsSync(profilePatchPath(targets))).toBe(true)
+    expect(existsSync(profilePatchPath(targets))).toBe(false)
 
-    await expect(performFatalRecovery('safe-mode', targets))
-      .rejects.toThrow(/no third-party bundle to disable/u)
+    // 既无三方包、也没有任何补丁可搬时才算失败（并且绝不假成功）。
+    const empty = sandbox()
+    writeManifest(empty, [CARRIER])
+    mkdirSync(desktopProfileDirectory(empty), { recursive: true })
+    await expect(performFatalRecovery('safe-mode', empty)).rejects.toThrow(/nothing to back up/u)
   })
 
   it('重复进入幂等：补丁已搬走时只重写标记，不报错', async () => {
@@ -216,8 +224,9 @@ describe('安全模式（一次性标记）', () => {
 
     const first = await enterFatalSafeMode(targets)
     const second = await enterFatalSafeMode(targets)
-    expect(first.backupPath).toBeDefined()
-    expect(second.backupPath).toBeUndefined()
+    expect(first.disabledBundles).toEqual([THIRD_PARTY])
+    expect(second.disabledBundles).toEqual([THIRD_PARTY])
+    expect(first.backupPath).toBeUndefined()
     expect(markerBundles(targets)).toEqual([THIRD_PARTY])
   })
 })
@@ -236,5 +245,46 @@ describe('备份补丁动作', () => {
     const empty = sandbox()
     mkdirSync(desktopProfileDirectory(empty), { recursive: true })
     await expect(performFatalRecovery('backup-patch', empty)).rejects.toThrow(/nothing to back up/u)
+  })
+})
+
+
+describe('补丁形态与备份名额', () => {
+  it('补丁是目录或符号链接时拒绝"备份"（避免假装搬走了设置）', async () => {
+    const targets = sandbox()
+    mkdirSync(profilePatchPath(targets), { recursive: true })
+    expect(() => backupProfilePatch(profilePatchPath(targets))).toThrow(/not a regular file/u)
+
+    const second = sandbox()
+    mkdirSync(desktopProfileDirectory(second), { recursive: true })
+    writeFileSync(join(desktopProfileDirectory(second), 'real.yml'), '- insert: []\n')
+    symlinkSync(join(desktopProfileDirectory(second), 'real.yml'), profilePatchPath(second))
+    expect(() => backupProfilePatch(profilePatchPath(second))).toThrow(/not a regular file/u)
+    // 链接目标必须原地不动。
+    expect(existsSync(join(desktopProfileDirectory(second), 'real.yml'))).toBe(true)
+  })
+
+  it('100 个备份名耗尽时明确报错，不无限循环', () => {
+    const targets = sandbox()
+    writePatch(profilePatchPath(targets), '- insert: []\n')
+    const now = new Date('2026-10-21T12:00:00.000Z')
+    const stamp = '2026-10-21T12-00-00-000Z'
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const suffix = attempt === 0 ? '' : `-${String(attempt)}`
+      writeFileSync(`${profilePatchPath(targets)}.bak-${stamp}${suffix}`, 'occupied')
+    }
+    expect(() => backupProfilePatch(profilePatchPath(targets), now)).toThrow(/no free backup name/u)
+    // 原补丁仍在（失败不产生半成品）。
+    expect(existsSync(profilePatchPath(targets))).toBe(true)
+  })
+
+  it('performFatalRecovery 的 safe-mode 成功路径返回报告（含备份与禁用清单）', async () => {
+    const targets = sandbox()
+    writeManifest(targets, [CARRIER, THIRD_PARTY])
+    writePatch(profilePatchPath(targets), '- insert: []\n')
+    const report = await performFatalRecovery('safe-mode', targets, new Date('2026-10-21T12:00:00.000Z'))
+    expect(report.disabledBundles).toEqual([THIRD_PARTY])
+    expect(report.backupPath).toBeUndefined()
+    expect(markerBundles(targets)).toEqual([THIRD_PARTY])
   })
 })

@@ -24,7 +24,7 @@
  * @module dsh-plugin-desktop/fatal-recovery
  */
 
-import { existsSync, readFileSync, renameSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { PROFILE_PATCH_FILENAME, resolveProfileDir } from '@deepseek-ai/dsh-app-boot'
 import { writeSafeModeMarker } from './desktop-safe-mode.ts'
@@ -53,6 +53,11 @@ export interface FatalRecoveryReport {
   readonly disabledBundles: readonly string[]
   /** Why the profile manifest could not be read (safe mode then has nothing to disable). */
   readonly manifestError?: string
+  /**
+   * True when safe mode had no third-party bundle to skip and backed the user
+   * patches up instead (so the exit is never a dead end).
+   */
+  readonly degradedToPatchBackup?: boolean
 }
 
 /** Directory of the user-editable Desktop profile. */
@@ -88,6 +93,13 @@ export function homePatchPath(targets: FatalRecoveryTargets): string {
  */
 export function backupProfilePatch(patchPath: string, now: Date = new Date()): string | undefined {
   if (!existsSync(patchPath)) return undefined
+  const stat = lstatSync(patchPath)
+  // 只搬普通文件：目录会被 renameSync 当成"备份"（内容却是目录），符号链接则只
+  // 搬走链接、目标文件原地不动 —— 两种情况下用户都会以为设置已经备份
+  // （2026-10-21 反证审查 D 的 P2/P3 实测）。
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new Error(`fatal recovery: ${patchPath} is not a regular file`)
+  }
   const stamp = now.toISOString().replace(/[:.]/gu, '-')
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const suffix = attempt === 0 ? '' : `-${String(attempt)}`
@@ -168,15 +180,64 @@ export async function enterFatalSafeMode(
   }
 
   const candidates = safeModeCandidates(bundles)
-  if (candidates.length === 0) return { disabledBundles: [] }
+  if (candidates.length > 0) {
+    // 只写标记：**不搬补丁**。安全模式解决的是"第三方插件"，用户的设置补丁
+    // （SettingsForms 就写在 profile 补丁里，home 补丁还与 CLI 共享）不该被一次
+    // 插件故障顺手移走（2026-10-21 反证审查 A 的 R2-5）。要重置补丁请用另一个出口。
+    await writeSafeModeMarker(targets.safeModePath, candidates, now)
+    return { disabledBundles: candidates }
+  }
 
-  await writeSafeModeMarker(targets.safeModePath, candidates, now)
-  const backupPath = backupProfilePatch(profilePatchPath(targets), now)
-  const homeBackupPath = backupProfilePatch(homePatchPath(targets), now)
+  // 没有第三方插件可跳过时，安全模式不能是死胡同（R2-4）：退化为备份用户补丁。
+  const backups = backupUserPatches(targets, now)
+  return { disabledBundles: [], ...backups, degradedToPatchBackup: true }
+}
+
+/** Result of moving the two user-editable patches aside. */
+export interface UserPatchBackups {
+  readonly backupPath?: string
+  readonly homeBackupPath?: string
+}
+
+/**
+ * Move both user patches aside, validating both before touching either.
+ *
+ * 先校验再改名：补丁是目录/符号链接时直接拒绝，避免"搬走一个假的备份"；
+ * home 补丁改名失败时把 profile 补丁回滚，不留下半执行状态（R2-6）。
+ * @param targets - resolved profile locations.
+ * @param now - injectable clock (tests).
+ * @returns both backup paths (absent when that patch did not exist).
+ */
+export function backupUserPatches(targets: FatalRecoveryTargets, now: Date = new Date()): UserPatchBackups {
+  const profilePatch = profilePatchPath(targets)
+  const homePatch = homePatchPath(targets)
+  // Validate first: `backupProfilePatch` also validates, but doing both up front
+  // keeps the rollback below from starting when the second path is a directory.
+  for (const patch of [profilePatch, homePatch]) {
+    if (!existsSync(patch)) continue
+    const stat = lstatSync(patch)
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error(`fatal recovery: ${patch} is not a regular file`)
+    }
+  }
+  const backupPath = backupProfilePatch(profilePatch, now)
+  let homeBackupPath: string | undefined
+  try {
+    homeBackupPath = backupProfilePatch(homePatch, now)
+  } catch (cause) {
+    if (backupPath !== undefined) {
+      // Roll back the profile-patch move so the next boot still sees the user's
+      // settings rather than a half-migrated state.
+      try { renameSync(backupPath, profilePatch) } catch { /* keep the backup; report below */ }
+    }
+    throw cause
+  }
+  if (backupPath === undefined && homeBackupPath === undefined) {
+    throw new Error('no user patch found; nothing to back up')
+  }
   return {
     ...(backupPath === undefined ? {} : { backupPath }),
     ...(homeBackupPath === undefined ? {} : { homeBackupPath }),
-    disabledBundles: candidates,
   }
 }
 
@@ -198,19 +259,7 @@ export async function performFatalRecovery(
     if (report.manifestError !== undefined) {
       throw new Error(`safe mode cannot read the profile manifest: ${report.manifestError}`)
     }
-    if (report.disabledBundles.length === 0) {
-      throw new Error('safe mode found no third-party bundle to disable; use "Back Up Patch" instead')
-    }
     return report
   }
-  const backupPath = backupProfilePatch(profilePatchPath(targets), now)
-  const homeBackupPath = backupProfilePatch(homePatchPath(targets), now)
-  if (backupPath === undefined && homeBackupPath === undefined) {
-    throw new Error('no user patch found; nothing to back up')
-  }
-  return {
-    ...(backupPath === undefined ? {} : { backupPath }),
-    ...(homeBackupPath === undefined ? {} : { homeBackupPath }),
-    disabledBundles: [],
-  }
+  return { disabledBundles: [], ...backupUserPatches(targets, now) }
 }

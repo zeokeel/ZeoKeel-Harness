@@ -806,6 +806,12 @@ export interface PreparedDesktopProfile {
    * `profileContext` describing this generation instead of re-deriving it.
    */
   overlays: PatchOptions[]
+  /**
+   * Non-fatal degradations observed while preparing this generation (for example
+   * an unreadable plugin-management state or a persisted disable that points at an
+   * installation-owned bundle). The launcher logs them; none of them abort boot.
+   */
+  warnings: readonly string[]
   /** Installation manifest path used as the first module-resolution anchor. */
   installAnchor: string
   /**
@@ -1064,9 +1070,28 @@ export async function prepareDesktopProfile(
   // the loader already does.
   const profile = loadProfile(BIN_NAME, profileName, INSTALL_ANCHOR, home)
   const resolution = await createRuntimeResolution({ installAnchor: INSTALL_ANCHOR, profile, home })
-  const persistentDisabled = pluginStatePath === undefined
-    ? new Set<string>()
-    : readDesktopDisabledBundles(pluginStatePath, profileName)
+  const warnings: string[] = []
+  let storedDisabled: ReadonlySet<string> = new Set<string>()
+  if (pluginStatePath !== undefined) {
+    try {
+      storedDisabled = readDesktopDisabledBundles(pluginStatePath, profileName)
+    } catch (cause) {
+      // 坏/旧版本的 plugin 状态不能变成新的致命原因（2026-10-21 反证审查 C 的 N9）：
+      // 安全模式的 marker 和两个补丁出口都治不了它，只能降级为"没有禁用项"。
+      warnings.push(`plugin-management state ignored: ${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+  // 旧版本（或插件管理器当前的可变判据）可能把**安装面层**写进禁用集合；那会让
+  // `@zeokeel/dsh-enterprise` 这类 carrier 层消失、组合必抛。读侧一律降级
+  // （2026-10-21 反证审查 C 的 N2：单靠 marker 一侧过滤挡不住持久状态）。
+  const persistentDisabled = new Set<string>()
+  for (const name of storedDisabled) {
+    if (desktopPluginBundleMutable(name) && !desktopInstallationBundle(name)) {
+      persistentDisabled.add(name)
+    } else {
+      warnings.push(`ignoring persisted disable outside the third-party set: ${name}`)
+    }
+  }
   // Safe mode is one-boot only (`desktop-safe-mode.ts` proves why a persistent
   // disable would be a trap), and the union re-filters at the point where the
   // composition actually consumes the set (see `effectiveDisabledBundles`).
@@ -1376,6 +1401,7 @@ export async function prepareDesktopProfile(
   return {
     homeDir: home,
     profile,
+    warnings,
     rootConfig,
     bareModuleBaseUrl,
     patches: structuredClone(patches),

@@ -31,6 +31,10 @@ function fixture(version = '2.0.0'): {
   const application = join(unpacked, 'ZeoKeel Harness.exe')
   writeFileSync(installer, portableExecutable())
   writeFileSync(application, portableExecutable())
+  // 许可证声明经 extraResources 落在 resources/（一键安装器不再有 license 页）。
+  mkdirSync(join(unpacked, 'resources'), { recursive: true })
+  writeFileSync(join(unpacked, 'resources', 'LICENSE'), 'MIT License\n')
+  writeFileSync(join(unpacked, 'resources', 'THIRD_PARTY_NOTICES.md'), 'notices\n')
   return { root, installer, application }
 }
 
@@ -88,5 +92,23 @@ describe('Windows installer artifact verification', () => {
 
     expect(() => verifyWindowsInstaller(OFFICIAL_OPTIONS(value.root)))
       .toThrow('does not have a Windows PE signature')
+  })
+})
+
+
+describe('许可证声明随包（一键安装器无 license 页）', () => {
+  it('resources 里缺 THIRD_PARTY_NOTICES.md 时验证失败（不再是 build.files 字面量）', () => {
+    const fixtureRoot = fixture()
+    const { root, installer, application } = fixtureRoot
+    const options: WindowsInstallerVerificationOptions = {
+      desktopRoot: root,
+      version: '2.0.0',
+      installerName: `ZeoKeel-Harness-2.0.0-x64-Setup.exe`,
+      applicationName: 'ZeoKeel Harness.exe',
+    }
+    // 基线通过
+    expect(verifyWindowsInstaller(options)).toEqual({ installerPath: installer, applicationPath: application })
+    rmSync(join(root, 'dist', 'win-unpacked', 'resources', 'THIRD_PARTY_NOTICES.md'))
+    expect(() => verifyWindowsInstaller(options)).toThrow(/missing THIRD_PARTY_NOTICES\.md/u)
   })
 })

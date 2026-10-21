@@ -23,6 +23,7 @@ const manifest = JSON.parse(readFileSync(new URL('package.json', packageRoot), '
     afterPack?: unknown
     electronFuses?: unknown
     files?: unknown
+    extraResources?: unknown
     mac?: {
       hardenedRuntime?: unknown
       icon?: unknown
@@ -317,8 +318,14 @@ describe('published package surface', () => {
     expect(manifest.build?.files).toContain('!**/node_modules/@deepseek-ai/libreoffice-kit/**')
     expect(manifest.build?.files).toContain('!**/node_modules/@deepseek-ai/libreoffice-kit-*/**')
     // 一键安装器不再展示 EULA 页（见 nsis 段），所以 MIT 与第三方声明必须随包分发。
-    expect(manifest.build?.files).toContain('LICENSE')
-    expect(manifest.build?.files).toContain('THIRD_PARTY_NOTICES.md')
+    // 注意：**不能**只塞进 build.files —— 打包输入是 pack-app-root 的白名单目录，
+    // build.files 里加这两条不会让它们进 asar（2026-10-21 打包反证实证），必须走
+    // extraResources 落到 resources/。
+    expect(manifest.build?.extraResources).toEqual(expect.arrayContaining([
+      { from: 'LICENSE', to: 'LICENSE' },
+      { from: 'THIRD_PARTY_NOTICES.md', to: 'THIRD_PARTY_NOTICES.md' },
+    ]))
+    expect(manifest.build?.files).not.toContain('LICENSE')
     expect(manifest.build?.mac?.icon).toBe('build/app-icon-mac.png')
     expect(manifest.build?.win?.icon).toBe('build/app-icon.png')
     expect(manifest.build?.win?.target).toEqual([{
@@ -329,8 +336,10 @@ describe('published package surface', () => {
     expect(manifest.build?.nsis).toEqual({
       oneClick: true,
       perMachine: false,
-      allowElevation: false,
       allowToChangeInstallationDirectory: false,
+      // 迁移垫片：检测旧的 per-machine 安装并显式停下（见 scripts/installer-shim.nsh；
+      // 放 scripts/ 而不是 build/ —— build/ 有"每个文件都必须登记为随包"的枚举守卫）。
+      include: 'scripts/installer-shim.nsh',
       createDesktopShortcut: true,
       createStartMenuShortcut: true,
       runAfterFinish: true,

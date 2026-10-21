@@ -393,6 +393,14 @@
     "afterPack": "./scripts/verify-packaged-runtime.ts",
     "extraResources": [
       {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      },
+      {
         "from": "build/speech-model",
         "to": "speech-model"
       },
@@ -419,8 +427,6 @@
       "build/web-brand/official.svg",
       "cordis.patch.yml",
       "lib/**",
-      "LICENSE",
-      "THIRD_PARTY_NOTICES.md",
       "package.json",
       "!**/*.map",
       "!*.map",
@@ -537,8 +543,8 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "allowElevation": false,
       "allowToChangeInstallationDirectory": false,
+      "include": "scripts/installer-shim.nsh",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true,

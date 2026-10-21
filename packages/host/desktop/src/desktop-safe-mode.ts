@@ -20,7 +20,7 @@
  * @module dsh-plugin-desktop/desktop-safe-mode
  */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 
@@ -34,6 +34,8 @@ const SAFE_MODE_FILE_MODE = 0o600
 const SAFE_MODE_DIRECTORY_MODE = 0o700
 /** Upper bound on the bundle list (same cap as the plugin state). */
 const MAX_SAFE_MODE_BUNDLES = 512
+/** Marker is a small JSON document; anything bigger is not ours. */
+const MAX_SAFE_MODE_BYTES = 64 * 1024
 
 /** Persisted content of the marker. */
 export interface DesktopSafeModeState {
@@ -75,7 +77,15 @@ export async function writeSafeModeMarker(
     bundles: names,
     createdAt: now.toISOString(),
   }
-  mkdirSync(dirname(markerPath), { recursive: true, mode: SAFE_MODE_DIRECTORY_MODE })
+  assertPrivateDirectory(dirname(markerPath))
+  // 标记本身必须是不存在的路径或普通文件：符号链接会让写入穿透到链接目标
+  // （2026-10-21 反证审查 D 的 P5 实测），目录则会让 writeFileAtomic 直接失败。
+  if (existsSync(markerPath)) {
+    const stat = lstatSync(markerPath)
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('safe-mode marker must be a regular file')
+    }
+  }
   await writeFileAtomic(markerPath, `${JSON.stringify(state, undefined, 2)}\n`, {
     mode: SAFE_MODE_FILE_MODE,
     dirMode: SAFE_MODE_DIRECTORY_MODE,
@@ -92,6 +102,15 @@ export async function writeSafeModeMarker(
  */
 export function readSafeModeBundles(markerPath: string): ReadSafeModeResult {
   if (!existsSync(markerPath)) return { bundles: new Set() }
+  // 读侧也要先看形态：FIFO/设备文件会让 readFileSync **永久阻塞**启动
+  // （2026-10-21 反证审查 A 的 R2-1 实测 timeout=124），"绝不抛错"不等于"绝不阻塞"。
+  const stat = lstatSync(markerPath)
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    return { bundles: new Set(), problem: 'safe-mode marker is not a regular file' }
+  }
+  if (stat.size > MAX_SAFE_MODE_BYTES) {
+    return { bundles: new Set(), problem: 'safe-mode marker is too large' }
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(readFileSync(markerPath, 'utf8')) as unknown
@@ -128,6 +147,70 @@ export function clearSafeModeMarker(markerPath: string): boolean {
     if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return false
     return false
   }
+}
+
+/**
+ * Reject a plugin-management directory that is a link (or a non-directory).
+ *
+ * The marker lives in the same private directory as the plugin state; writing
+ * through a symlink would put recovery data outside the userData tree, which is
+ * both a privacy and a security problem.
+ * @param directory - directory containing the marker.
+ */
+function assertPrivateDirectory(directory: string): void {
+  if (!existsSync(directory)) {
+    mkdirSync(directory, { recursive: true, mode: SAFE_MODE_DIRECTORY_MODE })
+  }
+  const stat = lstatSync(directory)
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new Error('safe-mode directory must be a real directory')
+  }
+  // 已存在的目录可能是 0755（旧版本/手工创建）：与 plugin state 一样收紧到 0700，
+  // 否则恢复标记里的第三方包名会对同机其它账户可读（2026-10-21 反证审查 C 的 N3）。
+  if ((stat.mode & 0o777) !== SAFE_MODE_DIRECTORY_MODE) chmodSync(directory, SAFE_MODE_DIRECTORY_MODE)
+}
+
+/**
+ * Read the marker at boot time and log an unusable one.
+ *
+ * A corrupt marker must never fail the boot it was supposed to rescue; the
+ * caller only needs the bundle set.
+ * @param markerPath - absolute marker path.
+ * @param log - diagnostics sink (file logger in production).
+ * @returns bundle names to filter for this boot.
+ */
+export function beginSafeModeBoot(markerPath: string, log: (message: string) => void): ReadonlySet<string> {
+  const result = readSafeModeBundles(markerPath)
+  if (result.problem !== undefined) {
+    log(`safe-mode marker ignored: ${result.problem}`)
+    // 坏标记不能永远躺在那里（R2-10）：删不掉也只是每次启动多一条日志。
+    if (!clearSafeModeMarker(markerPath)) log('safe-mode marker could not be removed')
+  }
+  return result.bundles
+}
+
+/**
+ * Clear the marker once the boot actually reached a mounted Host.
+ *
+ * Only a boot that consumed the marker clears it; an absent or malformed marker
+ * is a no-op, so a second recovery attempt keeps working.
+ * @param markerPath - absolute marker path.
+ * @param bundles - bundle set returned by {@link beginSafeModeBoot}.
+ * @param log - diagnostics sink.
+ * @returns true when a marker was removed.
+ */
+export function finishSafeModeBoot(
+  markerPath: string,
+  bundles: ReadonlySet<string>,
+  log: (message: string) => void,
+): boolean {
+  if (bundles.size === 0) return false
+  if (!clearSafeModeMarker(markerPath)) {
+    log('safe-mode marker could not be removed; the next boot will stay in safe mode')
+    return false
+  }
+  log(`left safe mode after a successful boot (${String(bundles.size)} third-party bundle(s) re-enabled)`)
+  return true
 }
 
 function stableCompare(left: string, right: string): number {

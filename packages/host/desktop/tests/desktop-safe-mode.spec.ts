@@ -6,12 +6,14 @@
  *  - 读取**绝不抛错**（坏标记不能变成新的致命原因）；
  *  - 清除失败不阻断已成功的启动。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  beginSafeModeBoot,
   clearSafeModeMarker,
+  finishSafeModeBoot,
   readSafeModeBundles,
   safeModeMarkerPath,
   writeSafeModeMarker,
@@ -80,5 +82,82 @@ describe('安全模式标记', () => {
     expect(clearSafeModeMarker(markerPath)).toBe(true)
     expect(existsSync(markerPath)).toBe(false)
     expect(clearSafeModeMarker(markerPath)).toBe(false)
+  })
+})
+
+
+describe('启动期的一次性生命周期', () => {
+  it('begin 读标记；坏标记只记一条日志、返回空集（不阻断启动）', async () => {
+    const { markerPath } = sandbox()
+    mkdirSync(join(markerPath, '..'), { recursive: true })
+    writeFileSync(markerPath, '{ bad')
+    const log = vi.fn()
+    expect([...beginSafeModeBoot(markerPath, log)]).toEqual([])
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('ignored'))
+  })
+
+  it('finish 只在本次真的消费了标记时清除；没有标记时是 no-op', async () => {
+    const { markerPath } = sandbox()
+    await writeSafeModeMarker(markerPath, ['@acme/plugin'])
+    const log = vi.fn()
+    expect(finishSafeModeBoot(markerPath, new Set(), log)).toBe(false)
+    expect(existsSync(markerPath)).toBe(true)
+    expect(finishSafeModeBoot(markerPath, new Set(['@acme/plugin']), log)).toBe(true)
+    expect(existsSync(markerPath)).toBe(false)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('left safe mode'))
+  })
+})
+
+describe('私有目录与标记的形态守卫', () => {
+  it('plugin-management 是符号链接时拒绝写入（与 plugin state 同口径）', async () => {
+    const { root } = sandbox()
+    const outside = join(root, 'outside')
+    const parent = join(root, 'userData')
+    mkdirSync(outside, { recursive: true })
+    mkdirSync(parent, { recursive: true })
+    symlinkSync(outside, join(parent, 'plugin-management'))
+    await expect(writeSafeModeMarker(join(parent, 'plugin-management', 'safe-mode.json'), ['@acme/plugin']))
+      .rejects.toThrow(/real directory/u)
+    expect(existsSync(join(outside, 'safe-mode.json'))).toBe(false)
+  })
+
+  it('标记本身是符号链接时拒绝写入（不穿透覆盖链接目标）', async () => {
+    const { root, markerPath } = sandbox()
+    mkdirSync(join(markerPath, '..'), { recursive: true })
+    const target = join(root, 'target.json')
+    writeFileSync(target, 'do not touch')
+    symlinkSync(target, markerPath)
+    await expect(writeSafeModeMarker(markerPath, ['@acme/plugin'])).rejects.toThrow(/regular file/u)
+  })
+
+  it('已存在的 0755 目录被收紧到 0700', async () => {
+    const { markerPath } = sandbox()
+    const directory = join(markerPath, '..')
+    mkdirSync(directory, { recursive: true, mode: 0o755 })
+    chmodSync(directory, 0o755)
+    await writeSafeModeMarker(markerPath, ['@acme/plugin'])
+    expect(statSync(directory).mode & 0o777).toBe(0o700)
+  })
+})
+
+
+describe('读取侧的形态守卫与自愈', () => {
+  it('标记是目录/超长文件时只报告问题，不被当成标记（也不阻塞读取）', async () => {
+    const { markerPath } = sandbox()
+    mkdirSync(markerPath, { recursive: true })
+    expect(readSafeModeBundles(markerPath).problem).toContain('not a regular file')
+
+    rmSync(markerPath, { recursive: true, force: true })
+    writeFileSync(markerPath, `{"version":1,"bundles":[],"pad":"${'x'.repeat(64 * 1024)}"}`)
+    expect(readSafeModeBundles(markerPath).problem).toContain('too large')
+  })
+
+  it('begin 遇到坏标记会删掉它（不能永久留在磁盘上，R2-10）', () => {
+    const { markerPath } = sandbox()
+    mkdirSync(join(markerPath, '..'), { recursive: true })
+    writeFileSync(markerPath, '{ bad')
+    const log = vi.fn()
+    expect([...beginSafeModeBoot(markerPath, log)]).toEqual([])
+    expect(existsSync(markerPath)).toBe(false)
   })
 })

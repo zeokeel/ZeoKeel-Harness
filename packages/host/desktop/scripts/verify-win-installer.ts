@@ -107,6 +107,21 @@ export function verifyWindowsInstaller(
 
   assertPortableExecutable(installerPath, 'Windows NSIS installer')
   assertPortableExecutable(applicationPath, 'unpacked Windows application')
+  // 一键安装器不再展示 EULA 页，许可证声明改由 extraResources 落到 resources/。
+  // 只断言 build.files 里有字符串是假覆盖（2026-10-21 打包反证：白名单暂存目录
+  // 根本不包含它们），所以这里检查**产物**里真有这两份文本。
+  for (const notice of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
+    const noticePath = join(distDir, 'win-unpacked', 'resources', notice)
+    let stat
+    try {
+      stat = statSync(noticePath)
+    } catch {
+      throw new Error(`packaged application is missing ${notice} (extraResources): ${noticePath}`)
+    }
+    if (!stat.isFile() || stat.size === 0) {
+      throw new Error(`packaged application has an empty ${notice}: ${noticePath}`)
+    }
+  }
   return { installerPath, applicationPath }
 }
 

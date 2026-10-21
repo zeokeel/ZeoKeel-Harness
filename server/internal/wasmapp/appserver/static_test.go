@@ -215,12 +215,12 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 
 	// (1) 历史 access=public（读取侧即 login）：不得拿到配置文件内容，必须交给 wasm。
 	for _, p := range []string{
-		"/zeokeel.app.json",      // 根路径
-		"/./zeokeel.app.json",    // dot 段被 path.Clean 归一
-		"//zeokeel.app.json",     // 双斜杠被 path.Clean 归一
-		"/%70icoaide.app.json",   // 一次百分号编码（net/http 已解码）
-		"/%2570icoaide.app.json", // 双层编码（isReservedAsset 自己再解一次）
-		"/ZeoKeel.App.JSON",      // 大小写（macOS/Windows 文件系统不敏感）
+		"/zeokeel.app.json",     // 根路径
+		"/./zeokeel.app.json",   // dot 段被 path.Clean 归一
+		"//zeokeel.app.json",    // 双斜杠被 path.Clean 归一
+		"/%7aeokeel.app.json",   // 一次百分号编码（net/http 已解码）
+		"/%257aeokeel.app.json", // 双层编码（isReservedAsset 自己再解一次）
+		"/ZeoKeel.App.JSON",     // 大小写（macOS/Windows 文件系统不敏感）
 		"/ZEOKEEL.app.json",
 		"/assets/zeokeel.app.json", // 子目录里的同名文件同样不直出
 	} {
@@ -234,7 +234,7 @@ func TestStatic_ReservedAppConfigNeverServed(t *testing.T) {
 		}
 	}
 	// 语义断言（不只是"没泄露"）：保留资源确实落到了 wasm 手里，路径原样传进帧。
-	for _, p := range []string{"/zeokeel.app.json", "/%70icoaide.app.json"} {
+	for _, p := range []string{"/zeokeel.app.json", "/%7aeokeel.app.json"} {
 		rec := e.get(appID, p)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("路径 %s 应交由 wasm 处理（200 + 应用自答），得到 %d", p, rec.Code)
@@ -320,7 +320,7 @@ func TestStatic_ReservedAssetMatcher(t *testing.T) {
 		}
 	}
 	// 编码形态：一次/两次百分号编码都要认出来。
-	for _, in := range []string{"%70icoaide.app.json", "%2570icoaide.app.json", "assets/%70icoaide.app.json"} {
+	for _, in := range []string{"%7aeokeel.app.json", "%257aeokeel.app.json", "assets/%7aeokeel.app.json"} {
 		if !isReservedAsset(in) {
 			t.Errorf("isReservedAsset(%q) 必须为真（解码形态属于覆盖范围）", in)
 		}

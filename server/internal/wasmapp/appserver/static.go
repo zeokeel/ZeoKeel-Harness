@@ -183,9 +183,9 @@ func writeStaticHeaders(h http.Header, selfOrigin string, a assetEntry) {
 //   - **大小写不敏感**：macOS/Windows 的文件系统就是大小写不敏感的，
 //     `ZeoKeel.App.JSON` 在那些部署上能读到同一个文件。
 //   - **编码形态**：`r.URL.Path` 在到达 handler 之前已被 net/http 解码过一次
-//     （`/%70icoaide.app.json` ⇒ `/zeokeel.app.json`），规则 4/5 的 `path.Clean`
+//     （`/%7aeokeel.app.json` ⇒ `/zeokeel.app.json`），规则 4/5 的 `path.Clean`
 //     也把 `//`、`/./` 归一掉了。这里对**多层编码**做有限次（≤3）解码兜底，
-//     防止上游反代/网关的解码层数与 net/http 不同（`/%2570icoaide…` 在只解一次
+//     防止上游反代/网关的解码层数与 net/http 不同（`/%257aeokeel…` 在只解一次
 //     的链路上会以 `%70…` 形态出现）。解码后若出现新的 `/`、`\`、`..` 段则停止 ——
 //     那些形态由 staticLogicalPath/assets 负责拒，不属于"保留资源"的判定范围。
 func isReservedAsset(logical string) bool {

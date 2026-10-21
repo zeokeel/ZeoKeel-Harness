@@ -59,7 +59,7 @@ func TestBuildAndReadRoundTrip(t *testing.T) {
 	if set.Has("nope.css") {
 		t.Fatalf("Has(nope.css) 必须为假：%v", set.List())
 	}
-	want := []string{"index.html", "zeokeel.app.json", "static/app.css", "static/app.js", "static/logo.png"}
+	want := []string{"index.html", "static/app.css", "static/app.js", "static/logo.png", "zeokeel.app.json"}
 	if got := set.List(); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("List = %v，期望 %v（必须按字典序）", got, want)
 	}
@@ -176,7 +176,7 @@ func TestBuildSkipsToolchainSectionsAndConfig(t *testing.T) {
 	if len(kept) != 1 {
 		t.Fatalf("kept = %v，只应有 index.html", kept)
 	}
-	wantSkipped := []string{"go:buildid", "linking", "name", limits.AppConfigFileName, "producers", "sourceMappingURL"}
+	wantSkipped := []string{"go:buildid", "linking", "name", "producers", "sourceMappingURL", limits.AppConfigFileName}
 	if strings.Join(skipped, ",") != strings.Join(wantSkipped, ",") {
 		t.Fatalf("skipped = %v，期望（字典序）%v", skipped, wantSkipped)
 	}

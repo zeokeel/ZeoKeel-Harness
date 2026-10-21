@@ -50,6 +50,11 @@ import (
 // 本表按技能分组进文件末尾的 `seededSkillDigests`：分组键 = `server/skills/` 下的技能
 // 目录名，也是 R13-F-05「技能集合三方对账」的第 3 个集合（判据在 builtin_skills_test.go）。
 var appBuilderSkillDigests = map[string]string{
+	// 2.13.2 = 品牌改名的**内容交付**（PicoAide -> ZeoKeel）：SKILL 正文、示例与
+	//   参考文档里的厂商名/`x-abi-version`（zeokeel-app/1）/`zeokeel.app.json` 同名
+	//   文件名全部随之替换（18 个文件中的字符串改动，结构未变）。内容变必然提版本。
+	"233fe6b18d934b4280a3e8924ec00df1a77ff76ee95362bc087e6826a3451eb9": "2.13.2",
+
 	// 2.0.0 = 九阶段「陪小白把设计做完」手册（三轮设计访谈 + 五角色评审与追问话术）
 	//   + 前后端分离示例（静态前端 web/* 经 pack-assets 打进 wasm 自定义段 + wasm 只做
 	//   JSON API）+ 应用内 AI 改「客户端 AI loop」口径修正（六错误码、撤销入口在应用

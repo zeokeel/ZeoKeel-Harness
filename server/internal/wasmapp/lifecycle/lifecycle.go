@@ -104,6 +104,9 @@ func SnapshotsDir(dataRoot, appID string) (string, error) {
 //   - 任何一步失败都**清理半成品目录**并把错误返回给调用方 —— 冻结路径据此只写
 //     snapshot_error（不阻断冻结），删除路径据此**拒绝删除**（fail-closed）。
 func Snapshot(ctx context.Context, db *sql.DB, dataRoot, appID string, now time.Time) (*SnapshotResult, error) {
+	// 与真删/导出串行：快照写入期间不能被 RemoveAppData 整目录删掉。
+	unlock := LockAppData(dataRoot, appID)
+	defer unlock()
 	base, err := SnapshotsDir(dataRoot, appID)
 	if err != nil {
 		return nil, err
@@ -186,6 +189,8 @@ func VacuumInto(ctx context.Context, srcPath, dstPath string) error {
 // 失败不阻断调用方：解冻是"恢复服务"的动作，磁盘故障不该把它拦住；但调用方应把错误
 // 写进响应/日志（残留快照=残留数据，运维需要知道）。
 func DeleteSnapshots(dataRoot, appID string) error {
+	unlock := LockAppData(dataRoot, appID)
+	defer unlock()
 	dir, err := SnapshotsDir(dataRoot, appID)
 	if err != nil {
 		return err
@@ -204,6 +209,8 @@ func DeleteSnapshots(dataRoot, appID string) error {
 // ⚠️ 这是本平台唯一的 `os.RemoveAll`：路径只由 AppDir 拼出，而 AppDir 对 app_id
 // 做过形状判据 —— 不接受空串、`..`、绝对路径、大写。
 func RemoveAppData(dataRoot, appID string) (string, error) {
+	unlock := LockAppData(dataRoot, appID)
+	defer unlock()
 	dir, err := AppDir(dataRoot, appID)
 	if err != nil {
 		return "", err
@@ -373,6 +380,9 @@ func WriteExportJSON(w io.Writer, doc map[string]any) (int64, error) {
 // 属于生命周期语义（快照目录的判据是 `<apps>/<app_id>/snapshots/<RFC3339>`，不能让
 // 导出在半途造出看起来像快照的东西）。
 func ExportZip(ctx context.Context, db *sql.DB, dataRoot, appID string, opts ExportOptions, now time.Time) (string, func(), error) {
+	// 与真删/快照串行：zip 读 app.db/资源期间不能被整目录删除。
+	unlock := LockAppData(dataRoot, appID)
+	defer unlock()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}

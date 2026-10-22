@@ -252,3 +252,13 @@ wasm E2E 为 0 等）。**工作区 253 个文件尚未提交 git**，交付闭�
   `102e1679c0` + `9188381b28`（文档）。
 - **仍未覆盖**：Windows/macOS 打包、WASM 应用面 E2E（`e2e-client` 里 wasm 断言仍为 0）、
   多实例/磁盘满/真实 Electron 应用窗口演练、手动 purge 入口。
+
+## 14. WASM 应用链路 E2E 已接入（2026-10-23）
+
+- `e2e-client` 新增一条**用户可见链路**断言：应用中心 → 应用详情 →「打开」→
+  Chromium 目标列表出现 `zeokeel-app://shared-notes/`（自定义协议窗口），而不是只断言
+  "客户端发了请求"。mock gateway 增加平台 `open` 端点响应（stable version/changed/opens）。
+- 结果：打包版 `e2e-client` **47/47 通过**（含这条）。覆盖到"目录 → 本机打开路由 →
+  宿主建窗 → 协议导航"；**未覆盖** wasm 执行/静态资源真实内容、骨架首帧与 Sentry 摄取
+  （仍需真实服务端/真机）。
+- 剩余：Windows/macOS 打包、真实 Electron 下骨架/Sentry/存储清理、多实例/磁盘满演练。

@@ -238,3 +238,17 @@ wasm E2E 为 0 等）。**工作区 253 个文件尚未提交 git**，交付闭�
   下应用窗口骨架/Sentry/存储清理、多实例与磁盘满演练仍未做。
 - **提交**：本轮改动已提交 `102e1679c0 feat(wasm): production-grade hardening for the app platform`
   （257 文件；门禁在提交前全绿）。
+
+## 13. 第三轮（2026-10-23 凌晨）：保留期可配 + 并发门禁 + 打包验证
+
+- **保留期可配（管理员 P2 关闭）**：`applimits.retirement_snapshot_retention_days`（1–3650，
+  默认 90）进入限制项控制台；冻结/删除时间线、审计、管理列表与站点文档全部读当前生效值；
+  webadmin 表单/区间/夹具同步，旧设置缺字段按默认补齐。
+- **高敏读取权限分离（管理员 P2）**：`?database=1`/`?assets=1` 导出与 `?unmask=1` 需
+  `capability:write`；控制面 JSON 导出仍只读。判据：auditor 403 / super_admin 放行 / 默认导出不受影响。
+- **并发门禁进 `make check`**：新增 `make test-wasm-race`（queue / applimits / readyz 全包 +
+  serverstore 两阶段真删/restore 定向，`-race`），CI 与本地发布门禁同义。
+- **交付闭环**：Linux AppImage/deb 打包成功；打包版 `e2e:client` 全绿；提交
+  `102e1679c0` + `9188381b28`（文档）。
+- **仍未覆盖**：Windows/macOS 打包、WASM 应用面 E2E（`e2e-client` 里 wasm 断言仍为 0）、
+  多实例/磁盘满/真实 Electron 应用窗口演练、手动 purge 入口。

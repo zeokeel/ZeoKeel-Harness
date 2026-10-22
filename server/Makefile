@@ -146,6 +146,14 @@ test-server:
 test-server-fast:
 	go test $(GO_TAG_FLAG) $(GO_PACKAGES) -p $(TEST_PARALLEL)
 
+# WASM 平台并发关键包的 `-race`（2026-10-23 生产化门禁）。
+#   - queue/applimits/readyz：准入计数、按应用覆盖、预算账本都在锁内/并发读；
+#   - serverstore 只跑两阶段真删与 restore 的并发用例（全包 -race 太慢）。
+# 为什么进 `make check`：上一轮真实缺陷（429 计数在解锁后自增、map 无锁写）正是
+# 只有 -race 才能稳定抓到的形态。CI 与本地发布门禁同义。
+test-wasm-race:
+	bash scripts/wasm-race.sh "$(GO_TAG_FLAG)"
+
 
 # webadmin 是编译进 Go 二进制的临时产物:build-server 自动先构建,不单独编译
 build-server: webadmin
@@ -226,6 +234,7 @@ check:
 	@if [ -n "$$(gofmt -l $(GO_DIRS))" ]; then echo "gofmt未通过:"; gofmt -l $(GO_DIRS); exit 1; fi
 	go vet $(GO_TAG_FLAG) $(GO_PACKAGES)
 	$(MAKE) test-server
+	$(MAKE) test-wasm-race
 	# webadmin 四件：单测（按当前变体给期望）→ **非缺省变体测试矩阵** → **变体产物判据**
 	# （真跑 5 次构建）→ 正式构建。判据夹在中间：`npm run build` 产出的是 `make build-server`
 	# 要嵌入的那份 dist（用同一个 FEATURES），而这两个判据都用各自的独立 outDir，不污染它。

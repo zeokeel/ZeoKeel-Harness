@@ -11,8 +11,11 @@ import { WINDOWS_TITLEBAR_HEIGHT } from './window-chrome.ts'
  * 由本模块自身位置解析(`lib/window-options.js` → `lib/preload/renderer-error.cjs`),
  * 所以 asar 内外一致;`tsdown.config.ts` 的 `PACKAGE_NAME/preload` 配置必须与该
  * 文件名保持同步(打包断言里有对应条目)。
+ *
+ * U-03(2026-10-22 评审):**导出**给 `main.ts`,让 WASM 应用窗口装**同一份** preload
+ * ——应用窗口此前没有 preload,页面里的未捕获错误一条都到不了主进程/Sentry。
  */
-const RENDERER_ERROR_PRELOAD = fileURLToPath(new URL('./preload/renderer-error.cjs', import.meta.url))
+export const RENDERER_ERROR_PRELOAD = fileURLToPath(new URL('./preload/renderer-error.cjs', import.meta.url))
 
 /**
  * Build the native material window used by the desktop-owned advanced shell.

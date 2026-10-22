@@ -381,6 +381,73 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 
 > 已删除(2026-09-19,照旧文档对接会拿到 404 JSON 信封):应用子域的 `/login`、`/logout`、`/app-ticket`、`/domain` 与应用子域路由树;目录/发布/上下架响应里的 `entry_url`;`access` 取值 `public`(写侧拒绝,存量由迁移 0074 改写为 `login`)。
 
+## 11c. WASM 应用生命周期与限流(0086/0087)
+
+这一节是**契约面**,不是设计稿:每条都在代码里可查——路由 `internal/router/optional_apps_on.go`,
+handler `internal/wasmapp/api/{deployments,admin_retirement,lifecycle_actions,admin_limits_app,admin}.go`,
+事务与不变量 `internal/serverstore/wasm_deployments.go`。全部成功响应 `c.JSON`,失败走 §1 的信封。
+
+三条状态不变量(读这一节前先记住):
+
+1. **生效版本只认部署指针** `apps.current_release_id`/`apps.current_deployment_id`,不是"最新一行 approved"。
+   部署只有一条写路径:`serverstore.DeployWasmRelease`(事务内 `SELECT … FOR UPDATE` + 终态三重判据
+   purged→deleted→frozen + `approved`/字节校验),目标即当前 ⇒ `changed:false`(不写历史、不写审计)。
+2. **回滚 = 用旧版本再部署一次**(`kind=rollback`):不重传、不重审、不改写历史。
+   **它只切制品版本,不恢复应用库**——应用库按 `app_id` 定位(`appdb.SafePath(dataRoot, appID)`),
+   一个应用一份库、跨版本共享。
+3. **审批只部署"本次被批准的那个版本"**(`approveDeployRelease`):仅当它比当前部署版本**新**
+   (SemVer)才上线,否则只标 `approved` 并按当前指针修投影 ⇒ 审批不会撤销回滚、也不会越级跳到别的版本。
+
+### 11c.1 员工面(Bearer;发布者本人或超管,非本人 404 与"应用不存在"同形)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/client/v2/apps/wasm/:app_id/releases` | 我的版本历史 + 审核结论:`{app_id,current_version,review_required,releases:[{version,status,reason,created_at,current,checksum,size,bytes_released}]}`。`status` ∈ `pending`/`approved`/`rejected`/`withdrawn`;`reason` 只可能在 `rejected` 行非空;`bytes_released=true` ⇒ 制品字节已释放(部署会 409 `RELEASE_BYTES_RELEASED`)。返回体不含制品字节;`allowDeleted=true`(已删应用历史仍可读) |
+| GET | `/api/client/v2/apps/wasm/:app_id/deployments?limit=` | 部署历史:`{app_id,current_version,current_deployment_id,current_release_id,deployments:[{id,app_id,version,release_id,kind,actor,actor_role,message,created_at,current}]}`(`limit` 缺省 50)。`current` 由**部署指针**判定,不是"最新一行";`kind` ∈ `publish`(审核关闭时发布成功)/`review`(审批部署)/`rollback`(显式部署非最新 approved 版本)/`seed`(内置演示应用播种)/`legacy`(迁移回填)。**只读、不写审计**(每次打开面板都调) |
+| POST | `/api/client/v2/apps/wasm/:app_id/deployments` | 部署/回滚到某个 `approved` 版本。请求体 `{"version":"x.y.z","message":"…"}`(≤8 KiB;`version` 必填,缺省报 `MISSING_FIELD` + `details.field`)。响应 `{app:{app_id,current_version,current_release_id,current_deployment_id},deployment:{…},changed}`;幂等分支 `changed:false` + `note`。**写审计** `wasm_app_deploy`(detail 含 `deployment_id`/`version`/`kind`/`actor_role`);`kind=rollback` 时额外 evict 该应用实例 |
+| POST | `/api/client/v2/apps/wasm/:app_id/releases/:version/withdraw` | 撤回**待审**版本:置 `withdrawn`、释放制品字节、**版本号永久占用**。响应 `{app_id,version,status:"withdrawn",changed:true,note}`。只对 `pending`(否则 `409 RELEASE_NOT_PENDING`);归属判定 = 版本发布者本人或超管(非本人 404 同形)。**写审计** `wasm_app_release_withdraw` |
+| POST | `/api/client/v2/apps/wasm/:app_id/restore` | 恢复软删(保留期内)。响应 `{app:{app_id,deleted:false,enabled:false},changed,retention_cleared,snapshot_cleanup_error,note}`。**恢复不自动上架**(`enabled` 恒 `false`)、**部署指针已复位**(软删时字节已释放) ⇒ 先发布/部署再上架;快照目录尽力清理,失败只报 `snapshot_cleanup_error` 不阻断。未删除过 ⇒ `changed:false`(幂等,不写审计)。**写审计** `wasm_app_restore` |
+| GET | `/api/client/v2/apps/wasm/:app_id/availability` | 标识唯一性预查(只读,不编译/不占号/不进审计):`{app_id,valid,exists,available,owned_by_you,can_publish,reason,code,message,hints}`。`reason` ∈ `available`/`taken`/`invalid`/`frozen`/`retired`（终态闸门与 publish 同一处 `publishBlockOf`,code/message/hints 逐字相同）。**未登录不可用**(否则就是免费的标识探测器) |
+
+### 11c.2 管理面(管理会话 + CSRF + RBAC;读 `capability:read` / 处置 `capability:write`)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/server/admin/wasm-apps/releases/pending` | 跨应用待审队列(静态段,先于 `/:app_id` 注册):`{pending:[{app_id,title,version,publisher,created_at,age_seconds,current_version}],total,review_required,note}`。**`total` 是全量计数**(与页头徽标同源,不是本页行数;队列上限 200 行);字段集刻意只有七项——它的用途是"决定通过还是拒绝",不是版本详情 |
+| POST | `/api/server/admin/wasm-apps/releases/purge-stale` | 审核开关**关闭后**把积压 `pending` 批量置 `withdrawn`(释放字节、版本号永久占用、行保留):`{purged,changed,status,reason,review_required,setting_key,version_occupied,note}`。审核仍开启 ⇒ `409 VALIDATION`(**严格**读开关,读失败也 fail-closed 拒);`purged=0` 不写审计,重复调用幂等。**写审计** `wasm_release_purge_stale`(组织级,无 app 维度) |
+| GET | `/api/server/admin/wasm-apps/:app_id/releases?status=` | 管理面版本列表:`status` ∈ `pending`(缺省)/`approved`/`rejected`/`all`,其它值 `400 VALIDATION`。带 `current_version` 与 `pending_total`;已删/已清除应用的**历史仍可读** |
+| POST | `/api/server/admin/wasm-apps/:app_id/releases/:version/approve` | 通过审核。响应 `{app_id,version,status:"approved",changed,current_version,deployment?}`。语义见 11c 不变量 3:只部署本次批准的那一版,否则只标 `approved`。终态重试 ⇒ `changed:false` 但仍重跑一次投影同步(可自愈,幂等最小写入);冻结/已删/字节已释放时状态已落库而部署失败 ⇒ 回 `409`/`410` + hint「结论已落库,处理后重试」(可重试幂等) |
+| POST | `/api/server/admin/wasm-apps/:app_id/releases/:version/reject` | 拒绝(见 §11b 该行)。`reason` 必填;`approved` 版本不可拒绝 ⇒ `409 APPROVED_NOT_REJECTABLE`(三面同码,语义见 §1) |
+| GET | `/api/server/admin/wasm-apps/:app_id/deployments?limit=` | 管理面部署历史(**与员工面同 payload、同实现**,差别只有鉴权)。已清除(purged)的应用**也可以读**——真删保留元数据与历史正是为了回答"谁在什么时候把哪一版上线/下线" |
+| POST | `/api/server/admin/wasm-apps/:app_id/deployments` | 管理员部署/回滚任意 `approved` 版本(体同员工面;审计 `actor_role=admin_session`) |
+| POST | `/api/server/admin/wasm-apps/:app_id/restore` | 管理员恢复软删(`actor_role=admin_session`;响应同员工面) |
+| DELETE | `/api/server/admin/wasm-apps/:app_id` | **删除 = 软删 + 快照**(不是"立即抹除数据"):先 `VACUUM INTO` 快照与元数据快照,失败即 fail-closed(500 + 未做任何删除);保留期(`retirement_snapshot_retention_days`,编译期缺省 90 天)到期后由 `wasm_retirement` 作业真删。已删除应用再删 ⇒ 404(与员工面一致) |
+| GET | `/api/server/admin/wasm-apps/:app_id/export` | 管理面导出(与员工面同参数;`?database=1&assets=1` 才含库/资源,`actor_role=admin_session`) |
+| GET | `/api/server/admin/wasm-apps/runtime` | 平台级只读运行时水位(静态段):`{runtime:{captured_at,unavailable[],module_cache?,appdb_handles?,compile?,queue?,schedulers?,app_limits?{override_count},events?{written,dropped,failed},exec?{running,waiting},disk?{free_bytes},ready?,ready_reasons[]}}`。**未注入的段不出现在响应里、并进 `unavailable[]`**(不伪造 0):`module_cache`(记账占用,非 RSS)/`appdb_handles`(句柄/上限/读连接)/`compile`(队列水位+缓存+编译计数)/`queue`(`global_running`/`waiting`/`apps`/`tracked_apps`/`rejected_queue_full`/`rejected_wall_clock`/`top_apps[]` 按应用前 N)/`schedulers[]`(`name`/`tick_seconds`/`started`/`started_at`/`metrics_available`/`source`/`runs`/`errors`/`last_run_at`/`last_error`,含 `wasm_retirement` 与 `wasm_opens`)/`events`(sink 写入/丢弃/失败计数) |
+| GET | `/api/server/admin/wasm-apps/:app_id/limits` | 应用级限流覆盖视图:`{app_id,global:{app_running,app_queue,user_per_app_running,user_per_app_queued},override:{同四键,继承为 null},effective:{同四键},exceeds_global}`。`effective` 用 `applimits.ApplyOverride` 算(与调度器 `effectiveOptionsLocked` 同一套用规则);`exceeds_global` 只是**提示**(允许高于全局,前端据此二次确认)。应用不存在/已删除 ⇒ 404(不泄露存在性) |
+| PUT | `/api/server/admin/wasm-apps/:app_id/limits` | 保存覆盖:体是**四键严格 JSON 对象**(`null` / `{}` / 四键全 `null` = 清空)。未知键 fail-loud;越界/非正数 ⇒ `400 VALIDATION`(`field` 指名);**高于全局允许但 `exceeds_global=true`**。保存顺序硬性:校验 → 落库 → 下发调度器 → 写审计;`changed:false`(与服务端现值相同)时**不落库、不写审计,但仍下发一次**(修"库与运行态漂移"的唯一无副作用动作)。响应 = 视图 + `changed`。**写审计** `wasm_app_limits_change`(`null` 明写"恢复继承全局")。装配缺 `AppLimitsApply` ⇒ `INTERNAL`(拒绝半套:不落库) |
+| DELETE | `/api/server/admin/wasm-apps/:app_id/limits` | 清空覆盖(等价 `PUT null`)。**不接受请求体**(带了 ⇒ 400);响应同 PUT |
+| GET | `/api/server/admin/wasm-apps/limit-overrides` | 全部应用级覆盖总览(静态段,只读、不分页):`{global:{四键},items:[{app_id,global,override,effective,exceeds_global,updated_at,updated_by}],total}`。覆盖行随应用删除保留(无外键)⇒ 列表会如实展示"已删应用的残留覆盖" |
+
+**生命周期错误码**(状态码与码成对:`409` = 现在不能;`410` = 永远不能):
+
+| code | HTTP | 含义 / 下一步 |
+|------|------|---------------|
+| `RELEASE_NOT_DEPLOYABLE` | 409 | 目标版本不是 `approved`(pending 先过审;rejected/withdrawn 是终态,换更高版本号) |
+| `RELEASE_NOT_PENDING` | 409 | 撤回只对 `pending` 版本有效 |
+| `RELEASE_BYTES_RELEASED` | 409 | 该版本制品字节已释放(被拒/撤回/退役/版本 GC);换一个仍有字节的 approved 版本,或发新版本 |
+| `APP_FROZEN` | 409 | 先解冻(`POST …/freeze {"frozen":false}`),再上架/部署 |
+| `APP_DELETED` | 409 | 先 `restore`,恢复后 `enabled` 仍为 0,需显式上架 |
+| `APP_PURGED` | 410 | 保留期到期后已真删(数据与快照都不在),不可恢复;只能换新 `app_id` |
+| `APPROVED_NOT_REJECTABLE` | 409 | 已通过审核的版本不可拒绝(拒绝会永久释放字节);要停服务用下架/冻结 |
+| `NOT_FOUND` | 404 | 应用或版本不存在(**也是**"不是你的应用"的同形回答:不泄露存在性) |
+
+**权限与审计**:本节的读端点全部 `capability:read`(含 `?database=1` 导出、`unmask=1`、覆盖总览),
+写端点全部 `capability:write`(部署/撤回/恢复/删除/purge-stale/覆盖保存)。
+写动作的审计动作名:`wasm_app_deploy` / `wasm_app_release_withdraw` / `wasm_app_restore` /
+`wasm_app_limits_change` / `wasm_release_purge_stale`(组织级) / `wasm_app_delete` / `wasm_app_freeze`;
+`actor_role` ∈ `owner`(作者自己) / `super_admin`(超管兜底) / `admin_session`(管理面会话)。
+
 ## 12. 连接器(admin)
 
 | 方法 | 路径 | 说明 |

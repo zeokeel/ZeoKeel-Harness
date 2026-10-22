@@ -398,8 +398,50 @@ const (
 	RequestWallClock = 60 * time.Second
 	// AppQueueDepth 是每应用队列长度（§4.6）：32，超出 429 + Retry-After。
 	AppQueueDepth = 32
-	// UserPerAppRunning 是单用户在**同一应用**内同时运行数（§4.6）：1。
-	UserPerAppRunning = 1
+	// WasmQueueBodyBytesMax 是**排队请求体**的全局字节预算（§4.6）：256 MiB。
+	//
+	// 为什么需要它（生产评审管理员视角 P1-3，2026-10-22）：
+	// `appserver.serveWasm` 在**准入之前**就把请求体读进内存（慢客户端不该占着执行槽，
+	// 这是刻意的顺序），而排队容量是按**每应用队列长度**算的 —— 控制台允许把 `app_queue`
+	// 配到 `applimits.MaxAppQueue`（4096），于是"一个应用 4096 × 1 MiB ≈ 4 GiB 已读字节
+	// 挂在队列里"是**合法配置**，而 `/readyz` 的内存账里没有这一笔（四笔账 + 页缓存
+	// 都不含它）⇒ 账绿、人绿、进程 OOM。队列深度管的是**条数**，管不住**字节**。
+	//
+	// 取值理由（256 MiB）：
+	//   - 它是**全局硬上界**，与"每应用队列 × 请求体上限"无关：所有应用、所有等待者
+	//     加起来的已读请求体不超过它，因此合法配置再也拼不出 4 GiB；
+	//   - 至少容得下**一个默认队列满配的应用**：`AppQueueDepth(32) ×
+	//     AppRequestBodyMaxBytes(1 MiB) = 32 MiB`，256 MiB = 8 个这样的应用同时排满，
+	//     常见热点不会因为"别的应用在排队"而被误拒（下面的不变式由 queue 包用例钉住）；
+	//   - 相对默认档内存账（实例池 2 GiB + 编译峰值 256 MiB + 上传峰值 118 MiB +
+	//     缓存驻留 128 MiB + 页缓存 160 MiB ≈ 2.6 GiB）只占约 9%，不会把默认档的
+	//     机器门槛抬得离谱；同时它**如实进账**（readyz.MemoryBudget.QueueBody），
+	//     所以"账上放得下"与"运行期真的放得下"是同一个数；
+	//   - 对 2 GiB 级机器（small 档）它占 12.5%，仍然远低于
+	//     MemoryPeakGuardPercent（70%）允许的峰值 —— 但把 small 档的最低可用内存
+	//     从 ~0.94 GiB 抬到 ~1.29 GiB，这是**如实记账**的代价，不是新闸门带来的风险。
+	//
+	// ⚠️ 它**不**由控制台配置：队列内存上界是"进程能不能活"的判据，不是运营旋钮；
+	// 与 `MaxAppQueue`（条数）的关系是"条数可以很大，字节仍被这里封顶"。
+	// 消费者：`queue.Options.QueueBodyBytes`（准入时按请求体大小占账，超限 fail-closed
+	// 429 `APP_QUEUE_FULL`/`details.reason=queue_bytes_exceeded`）与
+	// `readyz.MemoryPlan.QueueBodyBytes`（内存账的第六笔）。
+	WasmQueueBodyBytesMax = 256 << 20
+	// UserPerAppRunning 是单用户在**同一应用**内同时运行数（§4.6）：**2**。
+	//
+	// 2026-10-22 由 1 提到 2（决策 docs/decisions/2026-10-22-wasm-per-app-limits.md §1）：
+	// 1 把代价压在最正常的用法上 —— 前端 `Promise.all([...])` 两个请求、页面初始化同时取
+	// "列表 + 当前用户配置"、应用内 AI 的一次读 + 一次写，都合法却因为"单用户单应用只允许
+	// 1 个在跑"而**串行**，而排队时间还计入 60 s 端到端墙钟。
+	//
+	// 为什么是 2 而不是 4：实例池乘数是 `max_instances`（默认 32），`app_running` 仍为 4
+	// ⇒ 2 ≤ 4 表示"单用户占不满一个应用的全部并发槽"（两个用户即可填满 4 个读槽）；
+	// 取 4 会让单个用户吃满 4/4，"每用户上限"就退化成"和没有一样"。运营要放大是显式动作
+	//（控制台 `user_per_app_running`，或 per-app 覆盖），不该是默认。
+	//
+	// 它仍然是**默认值不是固定值**：控制台 `wasm.limits` 可改（范围 1–`app_running`），
+	// 单个应用还可用 `wasm_app_limits` 覆盖（迁移 0087）。
+	UserPerAppRunning = 2
 	// UserPerAppQueued 是单用户在同一应用队列中的占位上限（§4.6）：4。
 	UserPerAppQueued = 4
 	// UserGlobalRunning 是单用户跨应用全局在跑上限（§4.6）：4。

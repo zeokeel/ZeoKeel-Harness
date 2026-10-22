@@ -66,6 +66,23 @@ const (
 	schedulerBalance       = "balance"
 	schedulerModelSync     = "model_sync"
 	schedulerDirectorySync = "directory_sync"
+	// schedulerWasmRetirement 是 WASM 应用「退役真删」作业的登记名（设计 2026-10-22 §5.5）。
+	//
+	// 为什么它必须在这张表里（审计 2026-10-22 C-01/C-14 的同一条教训）：冻结/退役
+	// 承诺「保留期结束后真删」，而这条作业此前**不存在**；即使存在，一条不登记的
+	// 后台作业停摆时与"本来就没活干"在运维面上同形。登记之后 `scheduler status
+	// (startup|shutdown): name=wasm_retirement started=… runs=… errors=…` 能直接回答
+	// "真删到底跑没跑、上次跑成什么样"。
+	schedulerWasmRetirement = "wasm_retirement"
+	// schedulerWasmOpens 是 WASM 应用「打开计数」维护作业的登记名（审计 2026-10-22 C-14）。
+	//
+	// 为什么它必须在这张表里：这条作业（日汇总 upsert + 明细 90 天清理）此前是
+	// **裸启动** —— 既没有登记，也没有 Runs/Errors。停摆时的唯一现象是"看板数字不涨"，
+	// 而"数字不涨"与"真的没人用"在运维面上完全同形（C-14 的原缺陷形态）。
+	// 登记之后 `scheduler status (startup|shutdown): name=wasm_opens started=… runs=…`
+	// 能直接回答"汇总到底跑没跑"；配合 `GET …/opens/summary` 的 `stale` 与
+	// `aggregated_until`，管理员在页面上也能看到同一个结论。
+	schedulerWasmOpens = "wasm_opens"
 )
 
 // observableScheduler 是装配接缝要求的完整面：能被 Start(ctx)，且能报出运行状态。

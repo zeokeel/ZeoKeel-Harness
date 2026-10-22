@@ -40,8 +40,14 @@ export function releasesPath(appId: string): string {
   return lifecyclePath(appId, RELEASES_SUFFIX)
 }
 
-/** 服务端的三种版本状态（`app_releases.status` 的 CHECK 约束）。 */
-export const RELEASE_STATUSES = ['pending', 'approved', 'rejected'] as const
+/**
+ * 服务端的版本状态（`app_releases.status` 的 CHECK 约束）。
+ *
+ * `withdrawn`（2026-10-22 生命周期重设计 §3.2）：作者撤回 pending 版本后的**新终态**
+ * —— 制品字节释放、`size=0`，但**版本号永久占位**。界面必须认识它，否则撤回后那一行
+ * 会显示成未知状态字符串（看起来像契约漂移）。
+ */
+export const RELEASE_STATUSES = ['pending', 'approved', 'rejected', 'withdrawn'] as const
 
 /** 版本状态取值。 */
 export type ReleaseStatus = typeof RELEASE_STATUSES[number]

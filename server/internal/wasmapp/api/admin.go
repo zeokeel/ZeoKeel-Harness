@@ -17,10 +17,12 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
+	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appcfg"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/applimits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
 
@@ -59,12 +61,16 @@ const (
 )
 
 // 列表状态筛选的取值（`""`/`all` = 不筛）。
+//
+// 词表**只有一份真源**（serverstore.WasmAppListStatus*）：C-13 之后 status 的语义
+// 在 SQL 里落地（`pending` 需要 EXISTS 子查询），api 这一层只做"取值是否合法"的
+// 校验与回显 —— 两处各写一份字面量就会出现"能校验、筛不出"的组合。
 const (
-	appFilterPending     = "pending"
-	appFilterPublished   = "published"
-	appFilterUnpublished = "unpublished"
-	appFilterFrozen      = "frozen"
-	appFilterDeleted     = "deleted"
+	appFilterPending     = serverstore.WasmAppListStatusPending
+	appFilterPublished   = serverstore.WasmAppListStatusPublished
+	appFilterUnpublished = serverstore.WasmAppListStatusUnpublished
+	appFilterFrozen      = serverstore.WasmAppListStatusFrozen
+	appFilterDeleted     = serverstore.WasmAppListStatusDeleted
 )
 
 // AdminList 列出 wasm 应用 + 当前的审核开关状态。
@@ -129,71 +135,96 @@ func (h *Handlers) adminList(c *gin.Context) {
 	}
 	q := strings.ToLower(strings.TrimSpace(c.Query("q")))
 
-	apps, err := serverstore.ListWasmApps(c.Request.Context(), h.opt.DB, filter)
+	ctx := c.Request.Context()
+
+	// ---- C-13（审计 2026-10-22，P2）：筛选与分页**下推到 SQL** ----
+	//
+	// 现场：此前每次都把**全部** wasm 应用读进内存，再在 Go 里过滤/分页 —— 几百/几千
+	// 应用时是"每页 200 行却扫全表"（本文件顶部 P1-7 的注释曾把这条记为"待接线"）。
+	// 现在 `q`（大小写不敏感子串）与 `status` 都进 WHERE，`limit/offset` 进
+	// LIMIT/OFFSET，`total` 由**同一份谓词**的 COUNT(*) 给出（ListWasmAppsPage）。
+	//
+	// ⚠️ `access` 是唯一留在内存里的筛选，这是刻意的：它住在 `config_json` 里，读侧
+	// 口径（缺省 login / 历史 public ≡ login / 解析失败回落 login）的唯一实现是
+	// `appcfg.AccessOfConfigJSON`；在 SQL 里再解一遍 JSON 就是把访问模型写成第二个
+	// 真源（R24/I6 一改就静默分叉）。因此只有在 access 筛选存在时才回落到"取回筛选
+	// 结果再切片"，并由响应里的 `sql_paged=false` **如实标注**（其余情况恒为 true，
+	// 前端/运维据此判断本次分页是不是 SQL 下推的）。
+	filter.Query = q
+	filter.Status = status
+	sqlPaged := accessFilter == ""
+	if sqlPaged {
+		filter.Limit, filter.Offset = limit, offset
+	}
+	result, err := serverstore.ListWasmAppsPage(ctx, h.opt.DB, filter)
 	if err != nil {
 		writeErr(c, internalErr("查询失败", err))
 		return
 	}
+	rows := result.Apps
+	total := result.Total
+	if !sqlPaged {
+		// access 是内存筛选 ⇒ 不能先按 SQL 切页再过滤（那样会把命中项切掉）。
+		// 这里取回的是 q/status 已筛过的集合，再按 access 过滤后切片；total 也因此
+		// 由内存结果给出（DB 的 COUNT 不知道 access 口径）。
+		matched := make([]serverstore.WasmApp, 0, len(rows))
+		for i := range rows {
+			if !matchAppAccess(&rows[i], accessFilter) {
+				continue
+			}
+			matched = append(matched, rows[i])
+		}
+		total = len(matched)
+		if offset >= len(matched) {
+			rows = nil
+		} else {
+			rows = matched[offset:]
+		}
+		if len(rows) > limit {
+			rows = rows[:limit]
+		}
+	}
+	truncated := offset+len(rows) < total
+
 	// 待审积压（P0-1）：审核开关一旦打开，新版本就停在 pending 而**没有任何提示**
 	// 是这次审计的 P0（"全组织无法上线且没有审批出口"）。这里把积压量随列表一起
 	// 下发：管理员打开页面就能看到"有几个版本在等我审批"，不需要先点进某个应用。
 	// 一次查询取全量待审行（待审是小集合），不按应用发 N 次查询。
-	pending, perr := serverstore.PendingWasmReleases(c.Request.Context(), h.opt.DB)
+	pending, perr := serverstore.PendingWasmReleases(ctx, h.opt.DB)
 	if perr != nil {
 		writeErr(c, internalErr("查询待审版本失败", perr))
 		return
 	}
 	// 全组织待审总数：**与分页无关**（不是"当前这一页有几条待审"）。审核开关是
 	// 组织级开关，它的后果（"全组织的新版本都卡住了"）必须在开关旁边就看得见。
-	pendingTotal := 0
-	for _, versions := range pending {
-		pendingTotal += len(versions)
+	//
+	// 2026-10-22 反证 F-1：这个数必须与 `GET /releases/pending` 的 `total` **同源**
+	// （CountPendingReleases）。此前是"把 PendingWasmReleases 的 map 逐应用累加"，
+	// 与队列端点各自算一遍 —— 而队列端点还有过 200 行硬上限，于是页头徽标与点开的
+	// 队列会给出两个数字。现在两条出口共用同一个 COUNT。
+	pendingTotal, cerr := serverstore.CountPendingReleases(ctx, h.opt.DB)
+	if cerr != nil {
+		writeErr(c, internalErr("查询待审总数失败", cerr))
+		return
 	}
-
-	// 过滤 → total → 分页。顺序不能反：先分页再过滤会让"命中项恰好不在本页"
-	// 变成"搜不到"（正是 P1-7 的现场）。
-	matched := make([]*serverstore.WasmApp, 0, len(apps))
-	for i := range apps {
-		a := &apps[i]
-		if !matchAppQuery(a, q) {
-			continue
-		}
-		if !matchAppStatus(a, status, len(pending[a.AppID])) {
-			continue
-		}
-		if accessFilter != "" && !matchAppAccess(a, accessFilter) {
-			continue
-		}
-		matched = append(matched, a)
-	}
-	total := len(matched)
-	page := matched
-	if offset >= len(page) {
-		page = nil
-	} else {
-		page = page[offset:]
-	}
-	if len(page) > limit {
-		page = page[:limit]
-	}
-	truncated := offset+len(page) < total
 
 	// 当前版本号：apps 行上只有 current_release_id，批量取一次（管理面列表要显示
 	// 「当前版本」，没有它这一页只能显示一个内部 id）。取不到不算错 —— 版本行可能
 	// 已被保留策略回收，列表里显示空串即可。
-	ids := make([]int64, 0, len(page))
-	for _, a := range page {
-		if a.CurrentReleaseID > 0 {
-			ids = append(ids, a.CurrentReleaseID)
+	ids := make([]int64, 0, len(rows))
+	for i := range rows {
+		if rows[i].CurrentReleaseID > 0 {
+			ids = append(ids, rows[i].CurrentReleaseID)
 		}
 	}
-	versions, verr := serverstore.WasmAppCurrentVersions(c.Request.Context(), h.opt.DB, ids)
+	versions, verr := serverstore.WasmAppCurrentVersions(ctx, h.opt.DB, ids)
 	if verr != nil {
 		writeErr(c, internalErr("查询版本失败", verr))
 		return
 	}
-	out := make([]gin.H, 0, len(page))
-	for _, a := range page {
+	out := make([]gin.H, 0, len(rows))
+	for i := range rows {
+		a := &rows[i]
 		// 空切片而不是 nil：前端可以直接 `.length`/`map`，不必再判 null
 		//（JSON 里 nil slice 会变成 null，这是两端最容易踩的一处）。
 		appPending := pending[a.AppID]
@@ -218,8 +249,26 @@ func (h *Handlers) adminList(c *gin.Context) {
 			"pending_count":    len(appPending),
 			"frozen_at":        a.FrozenAt,
 			"deleted_at":       a.DeletedAt,
-			"created_at":       a.CreatedAt,
-			"updated_at":       a.UpdatedAt,
+			// 生命周期重设计（迁移 0086，设计 2026-10-22 §7）：管理台详情抽屉的
+			// 「生命周期」块与冻结确认框需要这些字段**在动作之前**就可见 ——
+			// 下发实际值而不是让前端显示"服务端未下发"。
+			//
+			// 语义（与 api 的 freeze/delete 响应逐字一致，避免两端各算一份）：
+			//   purge_after    = 冻结时刻 + limits.RetirementSnapshotRetentionDays；
+			//   snapshot_at    = 快照**成功**落盘时刻（真删的硬前置条件）；
+			//   snapshot_error = 最近一次快照失败原因（不阻断冻结，但阻断真删）；
+			//   purged_at      = 真删完成时刻（数据已清除，不可恢复）。
+			"current_deployment_id": a.CurrentDeploymentID,
+			"purge_after":           a.PurgeAfter,
+			"snapshot_at":           a.SnapshotAt,
+			"snapshot_path":         a.SnapshotPath,
+			"snapshot_error":        a.SnapshotError,
+			"purged_at":             a.PurgedAt,
+			// 两阶段真删：purged_at 是终态，data_cleaned_at 才是"盘上真的删干净"。
+			// 管理台不得再只看 purged_at 就宣称"数据已删除"。
+			"data_cleaned_at": a.DataCleanedAt,
+			"created_at":      a.CreatedAt,
+			"updated_at":      a.UpdatedAt,
 		})
 	}
 	// 审核开关随列表一起下发：webadmin 的应用页要能直接渲染它（R17），
@@ -237,10 +286,20 @@ func (h *Handlers) adminList(c *gin.Context) {
 		"offset":    offset,
 		"q":         q,
 		"status":    status,
+		// sql_paged=false 表示本次不是 SQL 下推分页（唯一原因是带了 `access=` 筛选，
+		// 见 handler 里 sqlPaged 的注释）。运维/前端据此判断"total 是 DB 的 COUNT 还是
+		// 内存过滤后的长度" —— 两种口径给出同一个键，不标注就无法分辨。
+		"sql_paged": sqlPaged,
 		// `access` 回显（W5 C1 的契约）：前端据它判断"服务端是否支持该筛选"。
 		// **不回显**会让前端退化成本页过滤（并明说"共 N 条是未筛选全集"）——
 		// 那是个安全但难用的降级分支，别让它误判。
 		"access": accessFilter,
+		// 退役保留期（天）：冻结确认框要在**动作之前**显示 purge_after 的具体日期，
+		// 而 purge_after 只有在冻结之后才存在 ⇒ 前端需要这条常量自己算"冻结后会保留多久"。
+		// 名字取与 limits/limitsspec 同一口径（retention_snapshot_retention_days 的
+		// 短名），并保留 `retention_days` 这个更短的别名给已对齐的前端。
+		"retention_days":                     h.retentionDays(),
+		"retirement_snapshot_retention_days": h.retentionDays(),
 	})
 }
 
@@ -249,6 +308,12 @@ func (h *Handlers) adminList(c *gin.Context) {
 // 归一化口径与 appcfg 的读侧一致：历史 `public` 行按 `login` 参与匹配（I6），
 // 因此 `access=login` 会同时返回字面 login 与历史 public 的行 —— 这正是管理员
 // 要清理/复核的那批。
+//
+// 这是**唯一**留在内存里的列表筛选（C-13 的 SQL 下推不覆盖它）：access 住在
+// config_json 里，读侧口径的唯一实现是 appcfg；在 SQL 里再解一遍 JSON 会把访问
+// 模型写成第二个真源。`q`/`status` 已在 serverstore 的 WHERE 里（wasmAppWhere）——
+// 语义与前端徽章同一口径（冻结优先于上下架、已删除优先于一切、pending 用 EXISTS 且
+// 排除已删除应用），对应行为判据见 admin_list_test.go 的分页/搜索/状态矩阵。
 func matchAppAccess(a *serverstore.WasmApp, want string) bool {
 	// 历史取值的判定**只用 appcfg 的判定函数**（`IsLegacyPublicAccess`）：服务端
 	// 只有归属模块知道"历史公开档位长什么样"，调用点读起来是意图（这是不是历史档位）
@@ -257,40 +322,6 @@ func matchAppAccess(a *serverstore.WasmApp, want string) bool {
 		return want == string(appcfg.AccessLogin)
 	}
 	return string(appcfg.AccessOfConfigJSON(a.ConfigJSON)) == want
-}
-
-// matchAppQuery 判定一行是否命中搜索词（app_id / 标题 / 负责人）。
-//
-// 大小写不敏感的子串匹配：管理端搜索是"我记得名字里有个 share"的用法，
-// 不是精确匹配；q 由调用方先 ToLower。
-func matchAppQuery(a *serverstore.WasmApp, q string) bool {
-	if q == "" {
-		return true
-	}
-	return strings.Contains(strings.ToLower(a.AppID), q) ||
-		strings.Contains(strings.ToLower(a.Title), q) ||
-		strings.Contains(strings.ToLower(a.Owner), q)
-}
-
-// matchAppStatus 判定一行是否属于某个状态筛选。
-//
-// 语义与前端徽章**同一口径**（冻结优先于上下架、已删除优先于一切）：
-// 两处各自解释一次会让"筛 pending 出来的行不带待审徽章"这类矛盾出现。
-func matchAppStatus(a *serverstore.WasmApp, status string, pendingCount int) bool {
-	switch status {
-	case appFilterPending:
-		return pendingCount > 0
-	case appFilterPublished:
-		return a.DeletedAt == nil && a.FrozenAt == nil && a.Enabled
-	case appFilterUnpublished:
-		return a.DeletedAt == nil && a.FrozenAt == nil && !a.Enabled
-	case appFilterFrozen:
-		return a.FrozenAt != nil
-	case appFilterDeleted:
-		return a.DeletedAt != nil
-	default: // "" / "all"
-		return true
-	}
 }
 
 // ===========================================================================
@@ -341,7 +372,10 @@ func (h *Handlers) adminReleases(c *gin.Context) {
 		return
 	}
 	appID := registry.NormalizeAppID(c.Param("app_id"))
-	app, aerr := h.adminApp(c, appID)
+	// 只读面放行已退役（2026-10-22 反证 F-3）：详情抽屉在「已删除」行里仍要能看
+	// 版本历史；此前这里走 adminApp(allowDeleted=false) ⇒ 已删行必然两条红字 404，
+	// 而保留期内"这个应用发过什么版本"正是复核/恢复前要看的东西。写动作仍 false。
+	app, aerr := h.loadAdminApp(c, appID, true)
 	if aerr != nil {
 		writeErr(c, aerr)
 		return
@@ -396,9 +430,11 @@ func (h *Handlers) adminReleases(c *gin.Context) {
 			"publisher": r.Publisher,
 			"size":      r.Size,
 			"checksum":  r.Checksum,
-			"changelog": r.Changelog,
+			// 与员工面同字段（见 read.go 的解释）：显式事实，避免"size 缺省 vs 0 字节"。
+			"bytes_released": r.Size <= 0,
+			"changelog":      r.Changelog,
 			// 描述与标题同源（都来自 apps 的显示面投影 = 生效版本的 app_releases 行）：
-			// 审核通过会把这两列一起公开给全组织（admin.go 的 syncAppProjection），
+			// 审核通过会把这两列一起公开给全组织（admin.go 的审批投影落地），
 			// 所以审批人必须在批准**之前**看到它们（审计第三轮 B 区：此前只下发 title，
 			// 而卡片连 title 都没渲染 ⇒ 对"改名/换描述"是盲批）。
 			"description": r.Description,
@@ -528,7 +564,7 @@ func (h *Handlers) reviewRelease(c *gin.Context, approve bool) {
 	// 写入是顺序、非事务的 ——
 	//
 	//	① SetReleaseStatusForReview（状态落库，不可回滚）
-	//	② 投影重算（SetWasmAppCurrentRelease / SetWasmAppConfig / SetWasmAppDisplay）
+	//	② 投影重算（部署事务 DeployWasmRelease + SetWasmAppConfig / SetWasmAppDisplay）
 	//
 	// ②任一步失败时端点回 500「审核结果已落库，但…失败（请重试一次）」。而重试时版本
 	// 行已经是终态 —— 老实现命中下面的早退分支直接 200 `changed=false`，**一次都不再
@@ -536,12 +572,25 @@ func (h *Handlers) reviewRelease(c *gin.Context, approve bool) {
 	// 占位）。旧的早退注释还写着"重复调用本端点幂等（会再走一次投影同步）"，与实现相反。
 	//
 	// 现在的口径：终态 ⇒ 不重复写状态、不重复写审计（幂等无副作用），但**无条件重跑
-	// 一次投影同步**（syncAppProjection 是幂等且最小写入的：值没变就不写）。因此
-	// "重试一次"这句错误提示是真的可重试，而"重复 approve"也不会变成重复副作用。
+	// 一次投影同步**（两条路径都是幂等且最小写入的：值没变就不写）。因此"重试一次"
+	// 这句错误提示是真的可重试，而"重复 approve"也不会变成重复副作用。
+	//
+	// ⚠️ 两条路径**必须分开**（2026-10-22 反证 8a）：approve ⇒ 部署 max approved
+	// （kind=review）；reject/终态重试 ⇒ 只按当前指针修投影，**禁止部署**。共用一个
+	// "max approved + 部署"函数会让"回滚后拒绝一个无关 pending 版本"把指针推回 v2。
 	if (approve && meta.Status == serverstore.ReleaseStatusApproved) ||
 		(!approve && meta.Status == serverstore.ReleaseStatusRejected) {
 		current := h.currentVersionOf(ctx, appID, app)
-		latestVersion, perr := h.syncAppProjection(ctx, appID, app)
+		var (
+			latestVersion string
+			dep           *serverstore.WasmDeployment
+			perr          *apperr.Error
+		)
+		if approve {
+			latestVersion, dep, perr = h.approveDeployRelease(ctx, appID, app, meta, admin.Username, serverstore.ActorRoleAdminSession)
+		} else {
+			latestVersion, perr = h.repairProjectionFromCurrent(ctx, appID, app)
+		}
 		if perr != nil {
 			writeErr(c, perr)
 			return
@@ -549,11 +598,20 @@ func (h *Handlers) reviewRelease(c *gin.Context, approve bool) {
 		if latestVersion != "" {
 			current = latestVersion
 		}
-		c.JSON(http.StatusOK, gin.H{
+		resp := gin.H{
 			"app_id": appID, "version": version,
 			"status": meta.Status, "changed": false,
 			"current_version": current,
-		})
+		}
+		if dep != nil {
+			// 自愈形态：状态早已落定，但部署历史/投影这次才补齐 —— 如实下发这条部署。
+			h.auditApp(appID, admin.Username, "wasm_app_deploy",
+				auditDetail(appID, auditTitleOf(app), "补部署 deployment_id="+strconv.FormatInt(dep.ID, 10)+
+					" version="+dep.Version+" kind="+dep.Kind+" actor_role="+dep.ActorRole+
+					"（审核终态重试自愈）"))
+			resp["deployment"] = deploymentJSON(*dep, dep.ID)
+		}
+		c.JSON(http.StatusOK, resp)
 		return
 	}
 	if !approve && meta.Status == serverstore.ReleaseStatusApproved {
@@ -611,18 +669,51 @@ func (h *Handlers) reviewRelease(c *gin.Context, approve bool) {
 		return
 	}
 
-	// 审核落定之后把 apps 行的**投影**重算为"最新 approved 版本"（R1-pm-9 + R2-1）。
-	// 实现与理由见 syncAppProjection（approve/reject 两条路径共用同一段，因为它们
-	// 要的是同一个答案；上面的终态分支也调它 —— 那是"请重试一次"能真正修好的关键）。
+	// 审核落定之后把 apps 行的**投影**对齐（R1-pm-9 + R2-1）。两条路径分开：
+	//   * approve ⇒ 部署本次批准的版本（仅当比当前新；kind=review）+ 按该版本修投影（设计 §5.2）；
+	//   * reject  ⇒ 只按**当前部署指针**修投影：拒绝从不改变"线上是哪一版"
+	//     （2026-10-22 反证 8a —— 此前它会把回滚静默推回 max approved）。
 	current := h.currentVersionOf(ctx, appID, app)
-	if latestVersion, perr := h.syncAppProjection(ctx, appID, app); perr != nil {
+	var (
+		latestVersion string
+		dep           *serverstore.WasmDeployment
+		perr          *apperr.Error
+	)
+	if approve {
+		latestVersion, dep, perr = h.approveDeployRelease(ctx, appID, app, meta, admin.Username, serverstore.ActorRoleAdminSession)
+	} else {
+		latestVersion, perr = h.repairProjectionFromCurrent(ctx, appID, app)
+	}
+	if perr != nil {
+		// 状态已经落库（不可回滚），但投影/部署失败 ⇒ **审批结论必须照样留痕**
+		// （2026-10-22 生产评审 P2）：旧实现在这里直接返回，审批审计只在成功路径写，
+		// 于是"管理员点了通过、库里已 approved、审计链里没有这件事"。失败原因写进
+		// 同一行 detail；若部署事务已产生历史行，也一并记录。
+		if approve {
+			h.auditApp(appID, admin.Username, "wasm_app_release_approve",
+				auditDetail(appID, auditTitleOf(app), fmt.Sprintf("v%s 审核通过（状态已落库；部署/投影失败：%v）", version, perr)))
+			if dep != nil {
+				h.auditApp(appID, admin.Username, "wasm_app_deploy",
+					auditDetail(appID, auditTitleOf(app), "审批部署（部分完成） deployment_id="+strconv.FormatInt(dep.ID, 10)+
+						" version="+dep.Version+" kind="+dep.Kind+" actor_role="+dep.ActorRole))
+			}
+		} else {
+			h.auditApp(appID, admin.Username, "wasm_app_release_reject",
+				auditDetail(appID, auditTitleOf(app), fmt.Sprintf("v%s 审核拒绝（状态已落库；投影修复失败：%v）", version, perr)))
+		}
 		writeErr(c, perr)
 		return
 	} else if latestVersion != "" {
 		current = latestVersion
 	}
+	if dep != nil {
+		// 审计：detail 含 deployment_id/version/kind/actor_role（设计 §3.3 不变量）。
+		h.auditApp(appID, admin.Username, "wasm_app_deploy",
+			auditDetail(appID, auditTitleOf(app), "审批部署 deployment_id="+strconv.FormatInt(dep.ID, 10)+
+				" version="+dep.Version+" kind="+dep.Kind+" actor_role="+dep.ActorRole))
+	}
 
-	// 审计明细里的标题取**投影落定之后**的行状态：syncAppProjection 刚刚可能把 app_id
+	// 审计明细里的标题取**投影落定之后**的行状态：投影落地刚刚可能把 app_id
 	// 占位（首版待审）或脏投影换成了生效版本的真值 —— 用审批前读到的旧快照会把一次
 	// 成功的首审记成「首版待审，暂无生效标题」，那同样是留错证据（auditTitleOf 的判据
 	// 就是 current_release_id）。复读失败不阻断审核：审计是尽力而为的旁路。
@@ -641,84 +732,161 @@ func (h *Handlers) reviewRelease(c *gin.Context, approve bool) {
 		if reason != "" {
 			detail += "：" + reason
 		}
+		// A8（2026-10-22 功能合理性审计）：驳回的**影响面**必须同时写进审计与回执。
+		// 版本号由 `(app_id, version)` 唯一行承载，驳回只清归档字节、**不删行**
+		// （SetReleaseStatusForReview 的 rejected 分支）⇒ 版本号永久占位、不可复用；
+		// 而驳回动作此前对此一字不提，作者按"改完再发同一版"必然撞 MustBeNewer。
+		detail += "；版本号永久占用（行保留、字节已释放），重发需升版本号"
 		h.auditApp(appID, admin.Username, "wasm_app_release_reject",
 			auditDetail(appID, auditTitleOf(app), detail))
 	}
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"app_id":          appID,
 		"version":         version,
 		"status":          target,
 		"changed":         true,
 		"current_version": current,
 		"reason":          reason,
-	})
+	}
+	// A8 的**回执面**：驳回后版本行仍占位（永久占用），作者重发必须升版本号。
+	// 用字段 + note 双份而不是只写散文：管理台按 `version_occupied` 渲染警示，
+	// 人读 note；两者都与设计 §2「版本不可变、版本号不复用」逐字一致。
+	if !approve {
+		resp["version_occupied"] = true
+		resp["note"] = "版本号将被永久占用（驳回不删行、只释放制品字节）：作者重发必须升版本号，" +
+			"同一版本号再提交会被 MustBeNewer 拒绝"
+	}
+	if dep != nil {
+		resp["deployment"] = deploymentJSON(*dep, dep.ID)
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
-// syncAppProjection 把 apps 行的**投影列**重算为"最新 approved 版本"，返回生效版本号。
+// applyProjectionForRelease 把 apps 行的**投影列**重算为给定版本（rel）的值。
 //
-// 投影列 = current_release_id 与 config_json/purpose/data_sensitivity 以及
-// title/description（R1-pm-9 + R2-1）：它们是同一份版本的投影，必须一起回到同一版。
-//
-// 两条调用路径要的是同一个答案：
-//   - **approve**：新版本成为生效版本 ⇒ 投影切到它（目录徽标/标题/描述/生效版本随
-//     审批生效 —— 待审期间 E1 刻意不写 title/description，所以这里是它们唯一的
-//     生效入口，漏掉就等于"批准了却永远看不到新标题"）；
-//   - **reject** ：被拒版本从未生效 ⇒ 投影**恢复**成仍在生效的那一版 ——
-//     否则待审版本带来的 access/负责人/用途会永久留在目录上（审核期间展示一个
-//     没被任何人批准的访问级别，正是这条缺陷的下游后果），标题/描述同理
-//     （这条路同时把老实现留下的"脏标题"投影治好）。
-//
-// 取最新 approved 而不是本次版本：审批一个**更旧**的待审版本时（例如 v2 待审、
-// v3 已通过），生效版本仍然是更新的那个 approved 版本 —— 与线上交付
-// （max(id) approved）同口径。
-//
-// 没有任何 approved 版本（首版待审被拒）时不动投影：没有可投影的基线，
-// 而"把一行从未生效的配置留着"与"把它清空"对目录都没有影响（目录只列有生效
-// 版本的应用，见 read.go 的目录条件）。
+// 投影列 = config_json/purpose/data_sensitivity 与 display 面 title/description
+// （R1-pm-9 + R2-1）：它们是同一份版本的投影，必须一起回到同一版。
+// 显示面两列取**版本行自己的值**（publish 时与 config 一起写进 app_releases）：
+// 目录门面必须与生效版本逐字一致；首版待审用的 app_id 占位必须在这一刻被真值替掉。
 //
 // **幂等且最小写入**（审计第三轮 B 区 CONFIRMED 的修复点）：每一步都先比较现值，
 // 值没变就不写。这有两个后果，缺一不可：
-//   - "已终态但投影不一致"的重复调用能**自愈**（重试一次真的会把投影补齐）；
+//   - "状态已落库、投影没跟上"的重复调用能**自愈**（重试一次真的会把投影补齐）；
 //   - "再调一次"不产生任何写入（updated_at 不跳），即幂等无副作用。
 //
-// 失败语义：状态已经落库（approved/rejected）、但投影没更新 —— 这不是"审核失败"，
-// 而是平台侧写入故障。端点如实回 500「请重试一次」；重试会再次走到这里。
-func (h *Handlers) syncAppProjection(ctx context.Context, appID string, app *serverstore.WasmApp) (string, *apperr.Error) {
-	latest, lerr := serverstore.LatestApprovedWasmReleaseMeta(ctx, h.opt.DB, appID)
-	switch {
-	case errors.Is(lerr, serverstore.ErrNotFound):
-		// 没有已通过版本：保持现状（"当前生效版本"= 空或回收后的残留）。
-		return "", nil
-	case lerr != nil:
-		return "", internalErr("审核结果已落库，但应用投影更新失败（请重试一次）", lerr)
-	}
-	if latest.ID != app.CurrentReleaseID {
-		if serr := serverstore.SetWasmAppCurrentRelease(ctx, h.opt.DB, appID, latest.ID); serr != nil {
-			return "", internalErr("审核结果已落库，但应用投影更新失败（请重试一次）", serr)
-		}
+// 指针（current_release_id）**不在这里写**：它只由 DeployWasmRelease 的事务改
+// （设计 §3.3 的不变量）。本函数只修"投影列"这一半，调用方决定拿哪一版当目标。
+func (h *Handlers) applyProjectionForRelease(ctx context.Context, appID string, app *serverstore.WasmApp, rel *serverstore.WasmRelease) *apperr.Error {
+	if app == nil || rel == nil {
+		return nil
 	}
 	// 配置列与 config_json 同源同版：purpose/data_sensitivity 从该版本的
 	// config_json 现解（解析失败回落空串，与 AccessOfConfigJSON 同向）。
 	// 空 config_json 的历史行不写 —— 不能拿"没有配置"去清掉现有投影。
-	if strings.TrimSpace(latest.ConfigJSON) != "" {
-		purpose, sensitivity := appcfg.DeclarationsOfConfigJSON(latest.ConfigJSON)
-		if app.ConfigJSON != latest.ConfigJSON || app.Purpose != purpose || app.DataSensitivity != sensitivity {
+	if strings.TrimSpace(rel.ConfigJSON) != "" {
+		purpose, sensitivity := appcfg.DeclarationsOfConfigJSON(rel.ConfigJSON)
+		if app.ConfigJSON != rel.ConfigJSON || app.Purpose != purpose || app.DataSensitivity != sensitivity {
 			if serr := serverstore.SetWasmAppConfig(ctx, h.opt.DB, appID,
-				latest.ConfigJSON, purpose, sensitivity); serr != nil {
-				return "", internalErr("审核结果已落库，但配置投影更新失败（请重试一次）", serr)
+				rel.ConfigJSON, purpose, sensitivity); serr != nil {
+				return internalErr("审核结果已落库，但配置投影更新失败（请重试一次）", serr)
 			}
 		}
 	}
-	// 显示面两列（title/description）也取**该版本行自己的值**（R2-1）：
-	// 这两个字段是版本的属性（publish 时与 config 一起写进 app_releases），
-	// 与 purpose 不同源时也要以版本行为准 —— 目录门面必须与生效版本逐字一致。
-	// 首版待审用的 app_id 占位必须在这一刻被真值替掉（值相同则不必写）。
-	if app.Title != latest.Title || app.Description != latest.Description {
-		if serr := serverstore.SetWasmAppDisplay(ctx, h.opt.DB, appID, latest.Title, latest.Description); serr != nil {
-			return "", internalErr("审核结果已落库，但显示面投影更新失败（请重试一次）", serr)
+	if app.Title != rel.Title || app.Description != rel.Description {
+		if serr := serverstore.SetWasmAppDisplay(ctx, h.opt.DB, appID, rel.Title, rel.Description); serr != nil {
+			return internalErr("审核结果已落库，但显示面投影更新失败（请重试一次）", serr)
 		}
 	}
-	return latest.Version, nil
+	return nil
+}
+
+// approveDeployRelease 是 **approve 路径**的落地：把**本次被批准的版本**（rel）
+// 在"比当前部署版本更新"时部署上线（kind=review），并按该版本修投影。
+//
+// 为什么不是"部署 max(id) approved"（2026-10-22 终轮反证，P1）：
+// 旧实现取 max approved 当目标 ⇒ 回滚到 v1 之后，管理员审批任意一个更旧/无关的
+// pending 版本，都会把线上**静默推回最新的 v2/v3**（回滚被撤销、还写一条"审批部署"
+// 审计）。这与设计 §5.2 "审批更旧版本不降级"只对了一半：不该降级，也不该**越级跳到
+// 另一个版本** —— 审批动作的目标只能是"这一个版本"。
+//
+// 新语义：
+//   - 本次批准的版本比当前部署版本新（或当前没有部署）⇒ 部署**它**（kind=review）；
+//   - 比当前部署版本旧 ⇒ **不部署**（不降级、也不跳到 max approved），只按当前指针
+//     修投影（与 reject 同一路径）；
+//   - 部署失败（冻结/删除/字节已释放）⇒ 状态已落库但如实回错误 + 可重试 hint。
+//
+// 与 reject 的分工：reject / 终态重试**只**走 repairProjectionFromCurrent，绝不部署。
+func (h *Handlers) approveDeployRelease(ctx context.Context, appID string, app *serverstore.WasmApp,
+	rel *serverstore.WasmRelease, actor, role string) (string, *serverstore.WasmDeployment, *apperr.Error) {
+	if rel == nil {
+		return "", nil, internalErr("审批版本元数据缺失（平台缺陷）", nil)
+	}
+	// 目标只能是"本次审批的版本"：不比**当前部署版本**新就不部署。
+	//
+	// "新"必须按**版本号语义**比（`util.CompareSemVer`），不能按 release 行 id：
+	// 行 id 只反映"落库顺序"，而版本号才是外部契约。反例：回滚到 v3 之后，作者补交
+	// 一个 0.9.0 的 pending（行 id 更大）—— 按 id 比会把它当成"更新"而把线上降级。
+	if app.CurrentReleaseID != 0 {
+		cur, cerr := serverstore.CurrentWasmReleaseMeta(ctx, h.opt.DB, appID)
+		if cerr != nil && !errors.Is(cerr, serverstore.ErrNotFound) {
+			return "", nil, internalErr("审核结果已落库，但读当前部署版本失败（请重试一次）", cerr)
+		}
+		if cur != nil && util.CompareSemVer(rel.Version, cur.Version) <= 0 {
+			v, perr := h.repairProjectionFromCurrent(ctx, appID, app)
+			return v, nil, perr
+		}
+	}
+	// 指针切换**必须**走部署事务（设计 §5.1）：直接写 apps.current_release_id 会留下
+	// "生效版本变了、部署历史里没有这一条"的绕过点，而部署历史是唯一事实来源。
+	dep, changed, derr := serverstore.DeployWasmRelease(ctx, h.opt.DB, serverstore.DeployWasmReleaseInput{
+		AppID: appID, ReleaseID: rel.ID, Kind: serverstore.DeployKindReview,
+		Actor: actor, ActorRole: role, Message: "审核通过后部署该版本",
+		Now: h.now().UTC(),
+	})
+	if derr != nil {
+		// 状态已经落库（approved），但部署/投影没完成：如实回错误并保留"可重试"语义
+		// （解冻/恢复之后重试会再次走到这里，且幂等）。**不**用 500 掩盖生命周期终态。
+		e := deployError(appID, rel.Version, derr)
+		e.WithHint("审核结论已落库；处理掉上面的状态（解冻/恢复）后重试本端点即可完成部署，重复调用是幂等的")
+		return "", nil, e
+	}
+	// 部署事务已经写过投影（真变更时）；这里用**复读行**再补齐一次，覆盖两类残留：
+	//   * 幂等分支（指针已经是该版本）不做任何写入 ⇒ 上次失败留下的脏投影在这里自愈；
+	//   * 复读保证"最小写入"判据拿的是当前值（拿部署前的快照会多写一次 updated_at）。
+	fresh := app
+	if g, gerr := serverstore.GetWasmApp(ctx, h.opt.DB, appID); gerr == nil {
+		fresh = g
+	}
+	if perr := h.applyProjectionForRelease(ctx, appID, fresh, rel); perr != nil {
+		return "", dep, perr
+	}
+	_ = changed
+	return rel.Version, dep, nil
+}
+
+// repairProjectionFromCurrent 是 **reject / 审核终态重试** 的投影修复：只把投影列
+// 按**当前部署指针**指向的版本对齐。
+//
+// 为什么必须是指针而不是 max approved（2026-10-22 反证 8a，P1）：reject 从不改变
+// "线上是哪一版" —— 它的作用只是把一个待审版本挡在门外。若这里取 max approved 并在
+// 指针不同时部署，就会发生："回滚到 v1 → 管理员拒绝一个无关的 pending vN → 指针被
+// 推回 v2 + 多一条 kind=review 部署 + 一条『审批部署』审计" ⇒ **回滚被一次拒绝静默撤销**，
+// 审计还把拒绝记成上线。现在这条路**不部署、不写 wasm_app_deploy**。
+//
+// 指针读不到（应用从未部署/已删）⇒ 不动投影（没有可投影的基线）。
+// 被拒版本带来的 access/负责人/用途会永久留在目录上，正是这里要修的另一半。
+func (h *Handlers) repairProjectionFromCurrent(ctx context.Context, appID string, app *serverstore.WasmApp) (string, *apperr.Error) {
+	cur, cerr := serverstore.CurrentWasmReleaseMeta(ctx, h.opt.DB, appID)
+	switch {
+	case errors.Is(cerr, serverstore.ErrNotFound):
+		return "", nil
+	case cerr != nil:
+		return "", internalErr("审核结果已落库，但应用投影修复失败（请重试一次）", cerr)
+	}
+	if perr := h.applyProjectionForRelease(ctx, appID, app, cur); perr != nil {
+		return "", perr
+	}
+	return cur.Version, nil
 }
 
 // currentVersionOf 返回该应用**当前生效版本**的版本号（投影读不到时回落空串）。
@@ -1132,71 +1300,10 @@ func (h *Handlers) adminTransferOwner(c *gin.Context) {
 
 // AdminFreeze 管理员冻结/解冻（R37）。
 func (h *Handlers) adminFreeze(c *gin.Context) {
-	if err := h.requirePlatform(); err != nil {
-		writeErr(c, err)
-		return
-	}
-	admin := serverauth.AdminUser(c)
-	if admin == nil {
-		writeErr(c, apperr.New(apperr.CodeAuthRequired, "未登录"))
-		return
-	}
-	appID := registry.NormalizeAppID(c.Param("app_id"))
-	app, aerr := h.adminApp(c, appID)
-	if aerr != nil {
-		writeErr(c, aerr)
-		return
-	}
-	// body 可选（缺省 = 冻结）：只认显式的 {"frozen":false} 表示解冻。
-	req := struct {
-		Frozen *bool `json:"frozen"`
-	}{}
-	if c.Request.ContentLength > 0 {
-		if berr := bindAdminJSON(c, &req); berr != nil {
-			writeErr(c, berr)
-			return
-		}
-	}
-	frozen := true
-	if req.Frozen != nil {
-		frozen = *req.Frozen
-	}
-	ctx := c.Request.Context()
-	if frozen {
-		if app.FrozenAt != nil {
-			c.JSON(http.StatusOK, gin.H{"app": gin.H{"app_id": appID, "frozen": true, "changed": false, "frozen_at": app.FrozenAt}})
-			return
-		}
-		now := h.now().UTC()
-		if err := serverstore.FreezeWasmApp(ctx, h.opt.DB, appID, now); err != nil {
-			writeErr(c, internalErr("冻结失败", err))
-			return
-		}
-		if app.Enabled {
-			if err := serverstore.SetWasmAppEnabled(ctx, h.opt.DB, appID, false); err != nil {
-				writeErr(c, internalErr("冻结时下架失败", err))
-				return
-			}
-		}
-		h.auditApp(appID, admin.Username, "wasm_app_freeze",
-			auditDetail(appID, auditTitleOf(app), "冻结（管理员处置；停止服务 + 进入只读快照保留期）"))
-		// 冻结 = 停止服务（appserver 对冻结应用直接 404）⇒ 进程内驻留没有留着的理由。
-		// 与发布者下架路径共用同一钩子（P1-8：管理端此前不逐出）。
-		h.evictApp(appID)
-		c.JSON(http.StatusOK, gin.H{"app": gin.H{"app_id": appID, "frozen": true, "changed": true, "frozen_at": now, "enabled": false}})
-		return
-	}
-	if app.FrozenAt == nil {
-		c.JSON(http.StatusOK, gin.H{"app": gin.H{"app_id": appID, "frozen": false, "changed": false, "enabled": app.Enabled}})
-		return
-	}
-	if err := serverstore.FreezeWasmApp(ctx, h.opt.DB, appID, time.Time{}); err != nil {
-		writeErr(c, internalErr("解冻失败", err))
-		return
-	}
-	h.auditApp(appID, admin.Username, "wasm_app_freeze",
-		auditDetail(appID, auditTitleOf(app), "解冻（enabled 保持不变）"))
-	c.JSON(http.StatusOK, gin.H{"app": gin.H{"app_id": appID, "frozen": false, "changed": true, "enabled": app.Enabled}})
+	// 实现收敛到 admin_retirement.go 的 adminFreezeLifecycle（→ lifecycle_actions.go 的
+	// freezeForApp/unfreezeForApp）：冻结要同时写 purge_after 并立即尝试快照，解冻要清
+	// 时间线并尽力删快照目录（设计 2026-10-22 §5.4）。员工面与管理面共用同一段。
+	h.adminFreezeLifecycle(c)
 }
 
 // AdminReview 读写审核开关（R17）。
@@ -1227,8 +1334,10 @@ func (h *Handlers) adminReview(c *gin.Context) {
 		return
 	}
 	old := h.reviewRequired()
+	pendingTotal := h.pendingReleaseTotal(c.Request.Context())
 	if old == *req.Required {
-		c.JSON(http.StatusOK, gin.H{"review_required": old, "changed": false, "setting_key": SettingReviewRequired})
+		c.JSON(http.StatusOK, gin.H{"review_required": old, "changed": false,
+			"setting_key": SettingReviewRequired, "pending_releases": pendingTotal})
 		return
 	}
 	if err := serverstore.SetSetting(h.opt.DB, SettingReviewRequired, strconv.FormatBool(*req.Required)); err != nil {
@@ -1237,8 +1346,31 @@ func (h *Handlers) adminReview(c *gin.Context) {
 	}
 	// 组织级动作（没有 app 维度）⇒ 走 Audit 钩子 / AuditLog。
 	h.auditOrg(admin.Username, "wasm_review_switch",
-		fmt.Sprintf("发布审核开关 wasm.review_required %t → %t", old, *req.Required))
-	c.JSON(http.StatusOK, gin.H{"review_required": *req.Required, "changed": true, "setting_key": SettingReviewRequired})
+		fmt.Sprintf("发布审核开关 wasm.review_required %t → %t（现存待审 %d 个版本）", old, *req.Required, pendingTotal))
+	resp := gin.H{"review_required": *req.Required, "changed": true,
+		"setting_key": SettingReviewRequired, "pending_releases": pendingTotal}
+	// 设计 §5.7：关闭审核开关时，必须提示「现有 N 个 pending 将失去意义」并指明清理
+	// 动作（作者撤回 / 管理面逐个处置）。只回状态数字会让那批版本永久积压。
+	if !*req.Required && pendingTotal > 0 {
+		resp["note"] = fmt.Sprintf("审核开关已关闭；现有 %d 个待审版本将失去意义（作者可撤回，管理面可逐个通过/拒绝）", pendingTotal)
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// pendingReleaseTotal 返回全组织待审版本数（审核开关响应与管理列表共用一处口径）。
+//
+// 查询失败时回 0 而不报错：这是**提示性**数字，让它把开关保存动作打成 500 是本末倒置；
+// 列表端点仍然会在同一查询失败时报错（那里是列表的主数据）。
+func (h *Handlers) pendingReleaseTotal(ctx context.Context) int {
+	pending, err := serverstore.PendingWasmReleases(ctx, h.opt.DB)
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, versions := range pending {
+		total += len(versions)
+	}
+	return total
 }
 
 // adminApp 载入应用（管理面无归属限制：管理员可处置任何应用），已删除的不可处置。
@@ -1266,9 +1398,16 @@ func (h *Handlers) loadAdminApp(c *gin.Context, appID string, allowDeleted bool)
 		return nil, internalErr("查询失败", err)
 	}
 	if app.DeletedAt != nil && !allowDeleted {
+		// 2026-10-22 反证 F-4：禁止把"未实现的后台任务"写进用户可见 hint —— 退役
+		// 作业已实现（retirement 调度器），这里要给的是**当前可做的动作**。
+		if app.PurgedAt != nil {
+			return nil, apperr.New(apperr.CodeNotFound, "应用已删除且数据已清除").
+				WithDetail("app_id", appID).
+				WithHint("保留期已结束、数据已真删，不可恢复；元数据与部署历史仅作审计留档")
+		}
 		return nil, apperr.New(apperr.CodeNotFound, "应用已退役（已删除）").
 			WithDetail("app_id", appID).
-			WithHint("已删除的应用不能再处置；R37 的\"真删\"由后台任务执行")
+			WithHint("已删除的应用不能再修改；未过保留期前可在本页「已删除」筛选里恢复（按服务端返回的 purge_after 判断）")
 	}
 	return app, nil
 }
@@ -1318,29 +1457,38 @@ func (h *Handlers) adminDiagnostics(c *gin.Context) {
 // 调用的导出方法。这里给管理面一个**只读**入口，让管理员不查库、不看日志也能
 // 回答"现在的内存/队列/缓存水位如何"。
 //
-// 只暴露**已经注入到本包**的访问器（Compiler / Events / Ready）：其余几项是
-// appserver 的私有方法（moduleCache / appDBPool）。**如实列出"缺哪个、接哪里"**
-// （unavailable 段），而不是静默省略 —— 管理员必须能区分"这个数是 0"和
-// "这个数没有出口"。（原文另列的两项 —— `anonlimit.Limiter.Stats` 与
-// `aichat.Client.RevokeFailures` —— 已随 W4 删除，条目同步移除。）
+// 只暴露**已经注入到本包**的访问器（Compiler / Events / Ready / ModuleCacheStats /
+// AppDBPoolStats）。**如实列出"缺哪个、接哪里"**（unavailable 段），而不是静默省略
+// —— 管理员必须能区分"这个数是 0"和"这个数没有出口"。
+//
+// 2026-10-22（审计 C-10）：module_cache / appdb_handles 两项**已经接上**
+// （appserver.Server.ModuleCacheStats()/AppDBPoolStats() → api.Options →
+// 本文件下面的真实值段）。它们只在**未装配**时进 unavailable 段；接线后仍留在
+// 缺口清单里就是"把已经接好的显示成还没接"，正是这段注释原来警告的形态。
+// （原文另列的两项 —— `anonlimit.Limiter.Stats` 与 `aichat.Client.RevokeFailures`
+// —— 已随 W4 删除，条目同步移除。）
 
 // runtimeUnavailable 返回当前**没有出口**的水位清单（名称/原因/接线位置）。
 //
-// 这是数据面诚实性的一部分：新增可注入访问器后必须同步删掉对应条目，
-// 否则页面会把"已经接好了"一直显示成"还没接"。
-func runtimeUnavailable() []gin.H {
-	return []gin.H{
-		{
+// 判据由调用方给（照旧是"接线后必须同步删掉条目"）：只有真的没有注入访问器时
+// 才列进缺口清单。
+func runtimeUnavailable(hasModuleCache, hasAppDBPool bool) []gin.H {
+	out := make([]gin.H, 0, 2)
+	if !hasModuleCache {
+		out = append(out, gin.H{
 			"name":   "module_cache",
-			"reason": "进程内编译模块缓存（条目/字节）住在 appserver 的私有 moduleCache 上，没有导出访问器",
-			"wiring": "appserver.Server 增加 ModuleCacheStats() (entries int, bytes int64)，再经 api.Options 注入",
-		},
-		{
-			"name":   "appdb_handles",
-			"reason": "应用库句柄数住在 appserver 的私有 appDBPool 上（pool.size()），没有导出访问器",
-			"wiring": "appserver.Server 增加 AppDBPoolStats() (handles int, max int)，再经 api.Options 注入",
-		},
+			"reason": "进程内编译模块缓存（条目/字节）没有注入访问器（api.Options.ModuleCacheStats 为 nil）",
+			"wiring": "装配点注入 appserver.Server.ModuleCacheStats() → api.Options.ModuleCacheStats",
+		})
 	}
+	if !hasAppDBPool {
+		out = append(out, gin.H{
+			"name":   "appdb_handles",
+			"reason": "应用库句柄池（句柄数/上限）没有注入访问器（api.Options.AppDBPoolStats 为 nil）",
+			"wiring": "装配点注入 appserver.Server.AppDBPoolStats() → api.Options.AppDBPoolStats",
+		})
+	}
+	return out
 }
 
 // AdminRuntime 是平台级运行时水位（只读）：编译/执行/事件/磁盘 + 缺口清单。
@@ -1349,9 +1497,34 @@ func (h *Handlers) adminRuntime(c *gin.Context) {
 		writeErr(c, err)
 		return
 	}
+	hasModuleCache := h.opt.ModuleCacheStats != nil
+	hasAppDBPool := h.opt.AppDBPoolStats != nil
 	view := gin.H{
 		"captured_at": h.now().UTC(),
-		"unavailable": runtimeUnavailable(),
+		"unavailable": runtimeUnavailable(hasModuleCache, hasAppDBPool),
+	}
+	// 模块缓存（C-10）：**记账占用**而不是 RSS（口径见 appserver.ModuleCacheStats 的注释）。
+	// 未注入 ⇒ 不进这一段（进 unavailable），绝不下发一个看起来像"缓存是空的"的 0。
+	if hasModuleCache {
+		st := h.opt.ModuleCacheStats()
+		view["module_cache"] = gin.H{
+			"entries":          st.Entries,
+			"compiled_entries": st.CompiledEntries,
+			"bytes":            st.Bytes,
+			"max_bytes":        st.MaxBytes,
+			"max_entries":      st.MaxEntries,
+			"idle_ttl_seconds": int(st.IdleTTL / time.Second),
+		}
+	}
+	// 应用库句柄池（C-10）：句柄数 / 上限 / 下一个新建句柄的只读连接数。
+	if hasAppDBPool {
+		st := h.opt.AppDBPoolStats()
+		view["appdb_handles"] = gin.H{
+			"handles":              st.Handles,
+			"max":                  st.Max,
+			"readers":              st.Readers,
+			"idle_timeout_seconds": int(st.IdleTimeout / time.Second),
+		}
 	}
 	// 编译面（Compiler 是构造 Handlers 时注入的强依赖之一）。
 	if h.opt.Compiler != nil {
@@ -1370,6 +1543,61 @@ func (h *Handlers) adminRuntime(c *gin.Context) {
 			"timeouts":          st.Timeouts,
 			"last_compile_ms":   st.LastCompileMS,
 		}
+	}
+	// 执行队列（生产评审管理员视角 P1）：全局水位 + 429 计数 + 按应用前 N 水位。
+	// 429 此前不计数、不打日志，导致"哪个应用在拖垮平台/为什么用户一直失败"无读数。
+	// P1-3 追加：排队**请求体字节**账（上限/此刻/峰值/因它被拒的次数）——
+	// "app_queue 配到 4096 会不会把进程撑爆"这个问题，只有这一段能回答。
+	if h.opt.QueueStats != nil {
+		qs := h.opt.QueueStats()
+		q := gin.H{
+			"global_running":      qs.GlobalRunning,
+			"waiting":             qs.Waiting,
+			"apps":                qs.Apps,
+			"tracked_apps":        qs.TrackedApps,
+			"rejected_queue_full": qs.RejectedQueueFull,
+			"rejected_wall_clock": qs.RejectedWallClock,
+			// P1-3：排队请求体字节账（上限 / 此刻 / 峰值 / 因它被拒的次数）。
+			// "峰值"是这里唯一能回答"刚才有没有撞到水位"的读数（轮询几乎总读到 0）。
+			"rejected_queue_bytes":   qs.RejectedQueueBytes,
+			"queued_body_bytes":      qs.QueuedBodyBytes,
+			"max_queued_body_bytes":  qs.MaxQueuedBodyBytes,
+			"queue_body_bytes_limit": qs.QueueBodyBytesLimit,
+		}
+		if h.opt.QueueApps != nil {
+			apps := h.opt.QueueApps(20)
+			if apps == nil {
+				apps = []queue.AppWatermark{}
+			}
+			q["top_apps"] = apps
+		}
+		view["queue"] = q
+	}
+	// 后台调度器（含 wasm_retirement 真删作业）：跑没跑、上次错误必须可读，
+	// 否则停摆与"本来没活干"在运维面上同形（审计 C-14 同形态）。
+	if h.opt.SchedulerStatus != nil {
+		st := h.opt.SchedulerStatus()
+		if st == nil {
+			st = []SchedulerStatusView{}
+		}
+		view["schedulers"] = st
+	}
+	// 退役真删积压（反证 R2-P2-2）：到期但删不掉 / 等清理的应用必须可数，
+	// 否则"90 天承诺"只在作业失败日志里才可见。
+	if h.opt.PurgeBacklog != nil {
+		blocked, cleanupPending := h.opt.PurgeBacklog()
+		if blocked == nil {
+			blocked = []string{}
+		}
+		view["purge"] = gin.H{
+			"blocked_no_snapshot": blocked,
+			"cleanup_pending":     cleanupPending,
+		}
+	}
+	// 应用级限流覆盖（per-app limits）：管理员总览需要"现在有几个例外配置"，
+	// 不能只能逐应用翻。未注入 ⇒ 不出这一段（不伪造 0）。
+	if h.opt.AppLimitsCount != nil {
+		view["app_limits"] = gin.H{"override_count": h.opt.AppLimitsCount()}
 	}
 	// 调用事件 sink 的丢/失败计数：诊断面自己"有没有在丢数据"是排障的前提。
 	if h.opt.Events != nil {

@@ -1301,25 +1301,57 @@ describe('工具描述与服务端实现一致（下架语义 / 旧配置字段�
     // 冻结行对归属人可见是第六轮 R6-B P2-1 的语义决策（否则"发布者本人在应用中心里
     // 就能解冻"没有任何依附面：目录是面板唯一数据源，行一消失就没有可点的东西）。
     // 两段分开钉：把归属例外删掉、或把冻结行改回对所有人排除，这里都要红。
-    expect(READ_GO).toMatch(/if\s*a\.CurrentReleaseID\s*<=\s*0\s*\{\s*\n\s*continue/)
+    expect(READ_GO).toMatch(/if\s*a\.CurrentReleaseID\s*<=\s*0\s*\{\s*\n\s*if\s*!ownedByViewer\s*\{\s*\n\s*continue/)
     expect(READ_GO).toMatch(/if\s*a\.FrozenAt\s*!=\s*nil\s*&&\s*!ownedByViewer\s*\{\s*\n\s*continue/)
     expect(READ_GO, '冻结行的归属例外判据必须来自调用者身份（严格归属，不含超管兜底）')
       .toMatch(/ownedByViewer\s*:=\s*a\.Owner\s*!=\s*""\s*&&\s*a\.Owner\s*==\s*viewer\.Username/)
     // 目录行必须下发权威 `enabled` 值（客户端据此标「已下架」）。**不要**钉具体空格数：
     // gofmt 会随相邻键的对齐随时改它（第六轮加 `frozen` 键时就变了），判据要的是语义。
     expect(READ_GO, '目录行不再下发权威 enabled 值')
-      .toMatch(/"enabled":\s+a\.Enabled,/)
+      .toMatch(/enabled\s*:=\s*a\.Enabled/)
+    expect(READ_GO, '目录行不再下发权威 enabled 值')
+      .toMatch(/"enabled":\s*enabled,/)
   })
 
-  it('wasm_app_list 描述说"下架即不能访问（410）"，且不再说"域名仍然可访问/不在应用中心推荐"', () => {
+  /**
+   * D-07（2026-10-23 应用开发者评审）：工具描述是**模型直接读到**的契约，必须与平台
+   * 现状一致 —— 平台**没有**对外 URL（服务端目录行不下发任何链接字段），应用只能在
+   * 桌面客户端里打开。修前描述写「入口链接」与「应用子域对下架应用返回 410 Gone…
+   * 恢复上架后链接不变」，模型据此会给用户编一个假链接，或把一次下架解释成域名问题。
+   *
+   * ---- 变异验证（逐条实跑，见报告） ----
+   *  - 把「入口链接」写回描述 ⇒ 第一条红（禁词表）；
+   *  - 删掉 first_release 那一段 ⇒ 第二条红（首版待审/被拒打不开没有任何说明）；
+   *  - 把「没有对外 URL」改成「访问地址是 https://…」⇒ 第一条红。
+   */
+  it('wasm_app_list 描述如实说"没有对外 URL + 只能客户端打开"，且不再提入口链接/域名/子域（D-07）', () => {
     const description = byName('wasm_app_list').description
-    // ① 下架语义与实现一致（旧描述说"可访问"，正是被勘误的那句）。
-    expect(description).toContain('410')
-    expect(description).toContain('不能访问')
-    expect(description).not.toContain('仍然可访问')
-    // ② 目录语义：下架条目**也列出**（旧描述说"不在应用中心推荐"是反的）。
+    // ① 平台已无入口 URL / 域名：这些词一个都不该出现（旧描述正是靠它们误导模型）。
+    for (const banned of ['入口链接', '域名', '子域', 'entry_url', '410']) {
+      expect(description, `wasm_app_list 描述里仍有已删除概念的痕迹：${banned}`).not.toContain(banned)
+    }
+    // ② 与事实一致的三件事必须说到：没有对外 URL、只在客户端打开、深链 scheme 不得编造。
+    expect(description).toContain('没有对外 URL')
+    expect(description).toContain('桌面客户端')
+    expect(description).toContain('不得编造')
+    // ③ 目录语义：下架条目**也列出**（旧描述说"不在应用中心推荐"是反的），但打不开。
     expect(description).toContain('也会列出')
+    expect(description).toContain('打不开')
     expect(description).not.toContain('不在应用中心推荐')
+    // ④ 首版待审 / 被拒 / 已撤回（U-02）必须能从描述里读出来：这些行 enabled=false 却
+    //    **不是**"已下架"，打不开是因为还没有审核通过的版本。
+    expect(description).toContain('first_release')
+    expect(description).toContain('first_release_status')
+    expect(description).toContain('pending')
+    expect(description).toContain('rejected')
+    expect(description).toContain('还没有审核通过的版本')
+    // ⑤ `appId` 参数描述（publish / validate 共用的同一句）同样不得再把 app_id 说成
+    //    域名标签 —— 它是同一份"模型可见契约"，只改 list 的描述不够。
+    for (const tool of ['wasm_app_publish', 'wasm_app_validate']) {
+      const appIdDescription = String(byName(tool).parameters.properties!.appId!.description)
+      expect(appIdDescription, `${tool} 的 app_id 描述仍把标识说成域名标签`).not.toContain('域名')
+      expect(appIdDescription).toContain('没有可贴进浏览器的地址')
+    }
   })
 
   it('config 描述说清"未知字段才拒"与旧字段的真实后果（与 appcfg 的 decode + mergeMissing 一致）', () => {

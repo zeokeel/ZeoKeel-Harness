@@ -81,6 +81,16 @@ type MemoryPlan struct {
 	// 实例池那笔账**同一个**（plan.Instances）；控制台把 appdb_cache_kib / app_db_readers
 	// 调大时，单价随之上抬，账本才不会"配到 272 GiB 还 ok:true"（R1-rt-8）。
 	AppDBPageCachePerHandleBytes int64
+	// QueueBodyBytes 是"排队请求体"这笔账（生产评审管理员视角 P1-3，2026-10-22）。
+	//
+	// 它**不是**"每应用队列长度 × 单请求体上限"算出来的乘积（那正是缺陷本身：
+	// 合法配置 app_queue=4096 × 1 MiB ≈ 4 GiB），而是**运行期真正的全局硬上界**
+	// `queue.Options.QueueBodyBytes`（缺省 limits.WasmQueueBodyBytesMax = 256 MiB）。
+	// 也就是说：账上的数与调度器 fail-closed 判据读的是同一个常量 ——
+	// 改了常量而不改这里，或反过来，都会被 applimits/queue 的跨包等值断言抓住。
+	//
+	// 0 ⇒ 用 limits.WasmQueueBodyBytesMax（与其它笔同一条"零值回落默认"纪律）。
+	QueueBodyBytes int64
 }
 
 // DefaultAppDBPageCachePerHandleBytes 是"每应用库句柄页缓存"的默认估算：
@@ -103,6 +113,7 @@ func DefaultMemoryPlan() MemoryPlan {
 		CompilePeakBytes:             CompilePeakBytes,
 		UploadPeakBytes:              limits.UploadPeakPerUploadBytes,
 		AppDBPageCachePerHandleBytes: DefaultAppDBPageCachePerHandleBytes,
+		QueueBodyBytes:               limits.WasmQueueBodyBytesMax,
 	}
 }
 
@@ -129,6 +140,9 @@ func (p MemoryPlan) withDefaults() MemoryPlan {
 	}
 	if p.AppDBPageCachePerHandleBytes <= 0 {
 		p.AppDBPageCachePerHandleBytes = d.AppDBPageCachePerHandleBytes
+	}
+	if p.QueueBodyBytes <= 0 {
+		p.QueueBodyBytes = d.QueueBodyBytes
 	}
 	return p
 }
@@ -1103,8 +1117,28 @@ func (l *InstanceLock) Path() string {
 //
 // 因此它属于"有界可回收缓存"这一类（与磁盘编译缓存同性质），而不是第五笔账。
 // 若将来把上限调大、或改成按并发/按实例多份，必须回到这里把它并入 Total。
+//
+// 2026-10-22 追加（生产评审管理员视角 P1-3）：**"排队请求体"现在正式进账**。
+//
+// 它此前是一笔真实存在、却被记账边界漏掉的内存：
+//   - `appserver.serveWasm` 在**准入之前**就把请求体读进内存（慢客户端不得占着执行槽，
+//     那个顺序是对的、也是本笔账存在的前提）；
+//   - 而排队容量只按**条数**判（`app_queue`），控制台允许配到
+//     `applimits.MaxAppQueue` = 4096 ⇒ "4096 × 1 MiB ≈ 4 GiB 已读请求体挂在队列里"
+//     是**完全合法**的配置；
+//   - 四笔账（实例池 + 编译峰值 + 上传峰值 + 缓存驻留）与页缓存那一笔都不含它 ⇒
+//     `/readyz` 的 `mem_budget_ok`、控制台预览、启动自检全都给绿，OOM 前没有任何水位。
+//
+// 现在它既是**运行期的硬上界**（`queue.Options.QueueBodyBytes`，超限 fail-closed 429
+// `APP_QUEUE_FULL`/`details.reason=queue_bytes_exceeded`），也是账上的一笔
+// （`MemoryBudget.QueueBody` = `limits.WasmQueueBodyBytesMax` = 256 MiB）。
+// 两者**同源同值**：账上的数就是调度器判据读的那个常量，不存在"账算 256 MiB、实跑 4 GiB"。
+//
+// ⚠️ 为什么"按并发 × 单请求体上限"（32 × 1 MiB = 32 MiB）不够：那只覆盖**在跑**的请求；
+// 队列里的等待者不在并发计数里，却是真实常驻字节。也就是说这笔账只能由
+// "全局排队体预算"来封顶，不能由并发数推导。
 
-// MemoryBudget 是四笔账（+ 应用库页缓存这笔）的分解（便于日志与探针展示）。
+// MemoryBudget 是四笔账（+ 应用库页缓存 + 排队请求体）的分解（便于日志与探针展示）。
 type MemoryBudget struct {
 	// Profile 是本次判定用的内存档位名（default / small / large）。
 	Profile       string `json:"profile"`
@@ -1119,8 +1153,16 @@ type MemoryBudget struct {
 	// 组合配到 272 GiB 而保存判据一字不变。现在它是独立一笔（不并入模块缓存：两者的
 	// 生命周期与失效路径完全不同，合并会让"调小哪一项"变得不可读）。
 	AppDBCache int64 `json:"appdb_cache_bytes"`
-	Total      int64 `json:"total_bytes"`
-	Available  int64 `json:"available_bytes"`
+	// QueueBody 是"排队请求体"这笔账（P1-3，2026-10-22）：
+	// = 运行期全局排队体预算 limits.WasmQueueBodyBytesMax（256 MiB），**不是**
+	// 每应用队列长度 × 单请求体上限的乘积（那正是被漏掉的那 4 GiB）。
+	//
+	// 它独立成笔而不并入模块缓存/页缓存：那两笔都**可逐出**，而排队体是
+	// "用户请求等着被处理"的活数据 —— 逐出等于丢请求，唯一的收敛手段是让**新的**
+	// 准入 fail-closed（429）。调节旋钮也只有"（未来）改常量"这一条，与控制台无关。
+	QueueBody int64 `json:"queue_body_bytes"`
+	Total     int64 `json:"total_bytes"`
+	Available int64 `json:"available_bytes"`
 	// Known 报告 Available 是不是**真的读到的**（false = 读不到 ⇒ 未判定）。
 	//
 	// 旧实现把"读不到"与"内存充足"表达成同一个 ok=true，控制台与 /readyz 都区分不出来
@@ -1142,7 +1184,8 @@ func ComputeMemoryBudget(availableBytes int64) MemoryBudget {
 	return ComputeMemoryBudgetFor(availableBytes, DefaultMemoryPlan())
 }
 
-// ComputeMemoryBudgetFor 按给定档位计算理论峰值并判定（§4.3 内存四笔账 + 页缓存一笔）。
+// ComputeMemoryBudgetFor 按给定档位计算理论峰值并判定
+// （§4.3 内存四笔账 + 页缓存一笔 + 排队请求体一笔，见文件上方"内存四笔账"的记账边界）。
 func ComputeMemoryBudgetFor(availableBytes int64, plan MemoryPlan) MemoryBudget {
 	p := plan.withDefaults()
 	b := MemoryBudget{
@@ -1153,9 +1196,11 @@ func ComputeMemoryBudgetFor(availableBytes int64, plan MemoryPlan) MemoryBudget 
 		CacheResident: p.ModuleCacheBytes,
 		// 页缓存的乘数与实例池同一份（句柄数 ≤ max_instances = plan.Instances）。
 		AppDBCache: int64(p.Instances) * p.AppDBPageCachePerHandleBytes,
-		Available:  availableBytes,
+		// 排队请求体：与运行期调度器判据同一个数（P1-3）。
+		QueueBody: p.QueueBodyBytes,
+		Available: availableBytes,
 	}
-	b.Total = b.Instances + b.CompilePeak + b.UploadPeak + b.CacheResident + b.AppDBCache
+	b.Total = b.Instances + b.CompilePeak + b.UploadPeak + b.CacheResident + b.AppDBCache + b.QueueBody
 	if availableBytes < 0 {
 		b.Known = false
 		b.OK = true
@@ -1184,7 +1229,16 @@ func CheckStartupMemoryFor(availableBytes int64, plan MemoryPlan) (MemoryBudget,
 		WithDetail("available_bytes", b.Available).
 		WithDetail("profile", b.Profile).
 		WithDetail("guard_percent", limits.MemoryPeakGuardPercent).
-		WithHint("§4.3 要求内存四笔账联立：实例池 + 编译峰值 + 上传峰值 + 缓存驻留").
+		// 分解值也下发：不然管理员只知道"超了"，不知道超在哪一笔（P1-3 就是为了
+		// 让"排队请求体"这笔从"看不见"变成"能指着它调"）。
+		WithDetail("instances_bytes", b.Instances).
+		WithDetail("compile_peak_bytes", b.CompilePeak).
+		WithDetail("upload_peak_bytes", b.UploadPeak).
+		WithDetail("cache_resident_bytes", b.CacheResident).
+		WithDetail("appdb_cache_bytes", b.AppDBCache).
+		WithDetail("queue_body_bytes", b.QueueBody).
+		WithHint("§4.3 要求内存账联立：实例池 + 编译峰值 + 上传峰值 + 缓存驻留 + " +
+			"应用库页缓存 + 排队请求体").
 		WithHint("两条出路：①扩容机器内存；②用 ZEOKEEL_WASM_MEMORY_PROFILE 声明更小的档位" +
 			"（small = 3 并发 / 64 MiB 实例 / 64 MiB 模块缓存，适合 2 GB 级机器）")
 }

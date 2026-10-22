@@ -44,6 +44,9 @@ func TestHintsCoverRequiredReasons(t *testing.T) {
 		apperr.CodeDBLimit,
 		apperr.CodeDBDenied,
 		apperr.CodeAppQueueFull,
+		// 2026-10-22 审计 A4：平台排队必须有自己的可操作提示，
+		// 不能再让作者从 MODULE_KILLED 的"被取消"里猜。
+		apperr.CodeModuleLoadQueued,
 	}
 	for _, code := range required {
 		hints := HintsFor(string(code))

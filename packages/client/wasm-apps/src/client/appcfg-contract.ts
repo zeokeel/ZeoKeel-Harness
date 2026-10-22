@@ -243,13 +243,17 @@ export const CATALOG_ROW_FIELDS = [
 /**
  * 只下发给**发布者本人**的目录行字段。
  *
- * 为什么必须限定调用者：`whitelist` 是账号名单，`purpose` 是内部用途声明 ——
- * 目录对所有员工可见（R38），把它们下发给所有人等于把每个应用的准入名单摊开。
- * 而发布新版只能由发布者本人做（服务端 `ownedApp` 对非发布者一律 404），
- * 所以"作者的发布表单要能预填"与"名单不外泄"这两件事同时成立的唯一形态就是
- * 按调用者下发。
+ * 为什么必须限定调用者：`whitelist` 是账号名单，`purpose` 是内部用途声明，
+ * `data_sensitivity` 是内部合规声明 —— 目录对所有员工可见（R38），把它们下发给
+ * 所有人等于把每个应用的准入名单/内部声明摊开。而发布新版只能由发布者本人做
+ * （服务端 `ownedApp` 对非发布者一律 404），所以"作者的发布表单要能预填"与
+ * "这些字段不外泄"同时成立的唯一形态就是按调用者下发。
+ *
+ * `data_sensitivity`（2026-10-22 生命周期改造 / 审计 F-02）：作者发新版时要
+ * **显示并沿用**上一次的数据敏感度声明；服务端 `read.go` 已按 isOwner 下发
+ * （此前只有 purpose/whitelist，表单每版都要凭空重填）。
  */
-export const CATALOG_ROW_AUTHOR_FIELDS = ['purpose', 'whitelist'] as const
+export const CATALOG_ROW_AUTHOR_FIELDS = ['purpose', 'whitelist', 'data_sensitivity'] as const
 
 /**
  * 目录行里**有条件出现**的字段（作者没声明就整个键缺席，客户端按缺省处理）。
@@ -259,10 +263,23 @@ export const CATALOG_ROW_AUTHOR_FIELDS = ['purpose', 'whitelist'] as const
  * 见 `read.go` 的 catalog 与 `appcfg.ResolvedWindow`）。缺席 ⇒ 客户端按缺省
  * 1280×720 处理，且**不声称锁了比例**。
  *
+ * `first_release` / `first_release_status` / `first_release_version` /
+ * `first_release_reason`（U-02，评审 2026-10-23 P1）：**归属人**的"还没有任何生效版本"
+ * 的行（首版待审 / 被拒 / 已撤回）才有。它们是那个应用在应用中心里唯一的依附面 ——
+ * 没有它，作者既看不到审核状态与被拒理由，也点不到撤回（撤回入口挂在目录行的版本
+ * 历史里）。四者同属一档：客户端要按 `first_release === true` 判定"这是首版行"，
+ * 状态/版本号/理由再逐字段读。
+ *
  * 为什么单独一档（而不是并进 `CATALOG_ROW_FIELDS`）：并入会让"服务端每行都给"
  * 这条断言变成假的 —— 而它正是目录行对拍的意义（改名/漏发必须能被打红）。
  */
-export const CATALOG_ROW_CONDITIONAL_FIELDS = ['window'] as const
+export const CATALOG_ROW_CONDITIONAL_FIELDS = [
+  'window',
+  'first_release',
+  'first_release_status',
+  'first_release_version',
+  'first_release_reason',
+] as const
 
 /**
  * `window` 的子字段名（与 `appcfg.json` 的 `window_fields` 对拍）。

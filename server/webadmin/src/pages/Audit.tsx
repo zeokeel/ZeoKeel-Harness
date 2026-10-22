@@ -25,6 +25,9 @@ interface LogRow {
   action: string
   detail: string
   created_at: string
+  // WASM 应用维度审计（0069 的 app_id）：应用级操作可按应用过滤/展示。
+  // 非应用类审计没有该字段（服务端 JSON 省略）。
+  app_id?: string
 }
 
 // M3: 与服务端实际写入的 audit action 全集对齐(用户/部门/技能/令牌等敏感操作)
@@ -164,6 +167,28 @@ export const ACTION_LABEL: Record<string, string> = {
   // 行内只剩裸 id `wasm_app_release_reject` —— "v1.2.0 为什么被拒"这个问题在
   // 管理端根本查不了(审计评审 R1-uxw-3 的现场)。动作名与服务端逐字一致,
   // 由 `Audit.test.tsx` 的双向对拍用例守(DTO/写点改名会立刻红)。
+  // 生命周期重设计（2026-10-22，设计 §5.1/§5.3/§5.5）的三个新写点：
+  //   - wasm_app_deploy：部署/回滚（审批上线与回滚同一条动作名，kind 在 detail 里）；
+  //   - wasm_app_release_withdraw：作者撤回待审版本；
+  //   - wasm_app_restore：恢复软删。
+  // 动作名与服务端 auditApp 的实参逐字一致；未登记会让审计页回落成裸 action id
+  // （R1-uxw-3 的现场形态），且 `Audit.test.tsx` 的双向对拍会直接红。
+  wasm_app_deploy: '部署/回滚应用版本',
+  wasm_app_release_withdraw: '撤回应用版本',
+  wasm_app_restore: '恢复应用',
+  // 反证 F-7：真删（`retirement/scheduler.go` 的 `const auditAction = "wasm_app_purge"`，
+  // actor=system）。动作名是**包级常量** ⇒ 只认字面量的对拍对它失明，标签就这么漏了一整轮；
+  // 现在 audit-sinks 会解析同包 const，未登记即红。
+  wasm_app_purge: '真删应用数据（退役作业）',
+  // C-08：关闭审核后批量清理积压待审版本（pending → withdrawn，字节释放、版本号永久占用）。
+  // 服务端 2026-10-22 与生命周期重设计一起落地（`admin_retirement.go` 的 purge-stale），
+  // 动作名逐字一致。
+  wasm_release_purge_stale: '清理积压待审版本',
+  // C-05 的数据面（`rows.go` 的 action 变量）：管理员一打开「数据」块就会产生这两条审计，
+  // 不登记就只能看到裸 id（R1-uxw-3 的现场形态）。动作名经**局部变量**传入，属
+  // `DERIVED_ACTIONS`（`Audit.test.tsx` 里按"参数传入"登记），不在字面量闭包里。
+  wasm_app_rows_view: '查看应用数据行',
+  wasm_app_rows_view_unmasked: '查看应用数据行（原值）',
   wasm_app_release: '发布应用版本',
   wasm_app_release_pending: '应用版本进入待审',
   wasm_app_release_approve: '通过应用版本',
@@ -183,6 +208,12 @@ export const ACTION_LABEL: Record<string, string> = {
   // 只显示原始动作码（审计可读性倒退）。属契约型保留，不是残留。
   wasm_apps_base_domain_change: '应用域名变更',
   wasm_limits_change: '应用限制项变更',
+  // per-app 限流覆盖（契约 `docs/decisions/2026-10-22-wasm-per-app-limits.md` §2.3/§2.6）：
+  // 每次保存/清空一条，detail 含 app_id 与四个覆盖值（`null` = 恢复继承全局）。
+  // 新动作按契约先定名登记（`wasm_app_limits_change` 已于 2026-10-22 由服务端真实写入）：否则落地当天审计页会把这批行
+  // 渲染成裸 id（R1-uxw-3 的现场形态）。落地后由 `Audit.test.tsx` 的
+  // `PENDING_SERVER_ACTIONS` 自证判据强制把这一条从"待落地"桶里挪走。
+  wasm_app_limits_change: '应用限流覆盖变更',
   wasm_review_switch: '应用更新审批开关',
 }
 // 注:quota_change / dept_budget_change / quota_default_change 随配额与部门预算
@@ -235,8 +266,11 @@ export default function Audit() {
   // M8: 筛选条件(输入态 vs 已应用态)
   const [filterAction, setFilterAction] = useState('')
   const [filterUser, setFilterUser] = useState('')
+  // WASM 应用维度过滤（生产评审管理员视角 P2：审计按 app 不可查）。
+  const [filterApp, setFilterApp] = useState('')
   const [appliedAction, setAppliedAction] = useState('')
   const [appliedUser, setAppliedUser] = useState('')
+  const [appliedApp, setAppliedApp] = useState('')
   // P1-8: 请求序号防乱序——快速翻页/切筛选时只有最新请求的响应能更新 state
   const loadSeq = useRef(0)
   // G13: 审计保留策略(仅 super_admin 可写; auditor 只读展示)
@@ -259,12 +293,13 @@ export default function Audit() {
   // 直接矛盾;这里改成只读展示 + 说明,导出 CSV / 筛选(audit:read)保持可用。
   const canWriteRetention = hasPermission(PERM_AUDIT_RETENTION_WRITE)
 
-  const load = useCallback(async (p: number, action: string, username: string) => {
+  const load = useCallback(async (p: number, action: string, username: string, appID: string) => {
     const current = ++loadSeq.current
     try {
       const params = new URLSearchParams({ page: String(p), size: '50' })
       if (action) params.set('action', action)
       if (username) params.set('username', username)
+      if (appID) params.set('app_id', appID)
       const data = await request(`${ADMIN_API}/audit?${params.toString()}`)
       if (current !== loadSeq.current) return // P1-8: 过期响应丢弃
       setLogs(data.logs)
@@ -293,13 +328,14 @@ export default function Audit() {
     }
   }, [])
 
-  useEffect(() => { load(1, appliedAction, appliedUser) }, [load, appliedAction, appliedUser])
+  useEffect(() => { load(1, appliedAction, appliedUser, appliedApp) }, [load, appliedAction, appliedUser, appliedApp])
 
   const applyFilter = () => {
     setAppliedAction(filterAction)
     setAppliedUser(filterUser.trim())
+    setAppliedApp(filterApp.trim())
     setPage(1)
-    load(1, filterAction, filterUser.trim())
+    load(1, filterAction, filterUser.trim(), filterApp.trim())
   }
 
   // 审批预览:上传类审计条目可当场查看归档内容(2026-09-01)
@@ -329,11 +365,11 @@ export default function Audit() {
   const exportCSV = () => {
     // R15C-W-06:只在"这一页确实读到了"时才允许导出(内存行的来源就是这次读取)。
     if (!logsLoaded || logs.length === 0) return
-    const header = ['id', 'username', 'action', 'detail', 'created_at']
+    const header = ['id', 'app_id', 'username', 'action', 'detail', 'created_at']
     downloadCsv(
       `audit-${new Date().toISOString().slice(0, 10)}.csv`,
       header,
-      logs.map((l) => [l.id, l.username, l.action, l.detail, l.created_at]),
+      logs.map((l) => [l.id, l.app_id ?? '', l.username, l.action, l.detail, l.created_at]),
     )
   }
 
@@ -371,7 +407,7 @@ export default function Audit() {
             <Button size="sm" variant="outline" onClick={exportCSV} disabled={!logsLoaded || logs.length === 0}>
               <Download className="h-3.5 w-3.5" /> 导出 CSV
             </Button>
-            <Button size="sm" variant="outline" onClick={() => load(page, appliedAction, appliedUser)}>
+            <Button size="sm" variant="outline" onClick={() => load(page, appliedAction, appliedUser, appliedApp)}>
               <RefreshCw className="h-3.5 w-3.5" /> 刷新
             </Button>
           </>
@@ -434,9 +470,17 @@ export default function Audit() {
           onChange={(e) => setFilterUser(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') applyFilter() }}
         />
+        <Input
+          className="w-48"
+          placeholder="应用 ID（WASM）"
+          aria-label="按应用 ID 过滤"
+          value={filterApp}
+          onChange={(e) => setFilterApp(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') applyFilter() }}
+        />
         <Button size="sm" variant="outline" onClick={applyFilter}>筛选</Button>
-        {(appliedAction || appliedUser) && (
-          <Button size="sm" variant="ghost" onClick={() => { setFilterAction(''); setFilterUser(''); setAppliedAction(''); setAppliedUser('') }}>清除筛选</Button>
+        {(appliedAction || appliedUser || appliedApp) && (
+          <Button size="sm" variant="ghost" onClick={() => { setFilterAction(''); setFilterUser(''); setFilterApp(''); setAppliedAction(''); setAppliedUser(''); setAppliedApp('') }}>清除筛选</Button>
         )}
       </div>
       <Card>
@@ -445,6 +489,7 @@ export default function Audit() {
           <TableRow>
             <TableHead>ID</TableHead>
             <TableHead>操作</TableHead>
+            <TableHead>应用</TableHead>
             <TableHead>操作者</TableHead>
             <TableHead>详情</TableHead>
             <TableHead>时间</TableHead>
@@ -455,6 +500,7 @@ export default function Audit() {
             <TableRow key={l.id}>
               <TableCell className="font-mono text-xs text-slate-400">{l.id}</TableCell>
               <TableCell><Badge variant={actionBadgeVariant(l.action)}>{ACTION_LABEL[l.action] ?? l.action}</Badge></TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">{l.app_id ?? '—'}</TableCell>
               <TableCell>
                 <span className="inline-flex items-center gap-1.5 font-medium">
                   <span className="flex h-5 w-5 items-center justify-center rounded bg-slate-100 text-[9px] font-bold text-slate-500">
@@ -488,7 +534,7 @@ export default function Audit() {
           ))}
           {!logsLoaded && error && (
             <TableRow>
-              <TableCell colSpan={5} className="border-0 p-0">
+              <TableCell colSpan={6} className="border-0 p-0">
                 <EmptyState
                   icon={<ScrollText className="h-5 w-5 text-muted-foreground" />}
                   title="审计记录未读取成功"
@@ -499,7 +545,7 @@ export default function Audit() {
           )}
           {logsLoaded && logs.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="border-0 p-0">
+              <TableCell colSpan={6} className="border-0 p-0">
                 <EmptyState
                   icon={<ScrollText className="h-5 w-5 text-muted-foreground" />}
                   title="暂无审计记录"
@@ -510,7 +556,7 @@ export default function Audit() {
           )}
           {!logsLoaded && logs.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="border-0 p-0">
+              <TableCell colSpan={6} className="border-0 p-0">
                 <div className="p-4 text-sm text-muted-foreground">审计记录加载中…</div>
               </TableCell>
             </TableRow>
@@ -528,9 +574,9 @@ export default function Audit() {
       />
       </Card>
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => load(page - 1, appliedAction, appliedUser)}>上一页</Button>
+        <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => load(page - 1, appliedAction, appliedUser, appliedApp)}>上一页</Button>
         <span className="text-sm text-muted-foreground">第 {page}/{pages} 页 · 共 {total} 条</span>
-        <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => load(page + 1, appliedAction, appliedUser)}>下一页</Button>
+        <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => load(page + 1, appliedAction, appliedUser, appliedApp)}>下一页</Button>
       </div>
     </div>
   )

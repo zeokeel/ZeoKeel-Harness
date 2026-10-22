@@ -307,6 +307,42 @@ export interface OpensSummary {
   trend?: OpensTrendPoint[]
   apps?: OpensAppRow[]
   top_apps?: OpensTopRow[]
+  /**
+   * ---- C-14 的四个健康键（服务端 2026-10-22 落地，恒在；不可得时 null/空数组）----
+   *
+   * 为什么它们必须进这个 interface 而不是另开一份：`opens-contract-parity.spec.ts` 对
+   * 顶层键做**集合相等**对拍 —— 服务端下发了而这里没声明 = 契约漂移（前端读不到），
+   * 所以"服务端有了"与"这里声明了"必须同时成立。
+   *
+   * `aggregated_until` = 最后一次汇总的时刻（RFC3339；没有记录时 null：
+   * 取库侧 `wasm_app_opens_daily.updated_at` 与作业 `last_run_at` 的**较晚者**）。
+   */
+  aggregated_until?: string | null
+  /** 数据是否可能已过期（`stale_reasons` 非空即 true）。 */
+  stale?: boolean | null
+  /** 判陈旧的**证据**（给运维/AI 的可操作理由；空数组 = 不陈旧）。 */
+  stale_reasons?: string[]
+  /** 陈旧判定阈值（秒，= 3 个 tick）；前端据此解释"多久没更新才算停摆"。 */
+  stale_after_seconds?: number | null
+  /** 作业读数（未注入时为 null：**不是**"跑了 0 轮"）。 */
+  opens_job?: OpensJobReadout | null
+}
+
+/**
+ * 打开计数维护作业的读数（`opens_job`；服务端 `wasmapp/api/handlers.go` 的 OpensJobHealth）。
+ *
+ * 每一个字段都可能为 null：`started_at`/`last_run_at` 为 null = "没启动/没跑过"（服务端用
+ * `zeroAsNil` 把零值时刻渲成 null），`tick_seconds` 为 null = 未知。**不要**把 null 当 0 ——
+ * "0 轮"与"读不到读数"在运维面上是两件事（C-14 的原缺陷形态就是它们不可辨）。
+ */
+export interface OpensJobReadout {
+  started?: boolean | null
+  started_at?: string | null
+  runs?: number | null
+  errors?: number | null
+  last_run_at?: string | null
+  last_error?: string | null
+  tick_seconds?: number | null
 }
 
 export interface OpensDetail {
@@ -329,6 +365,131 @@ export interface OpensDetail {
   pv?: number
   uv?: number
   detail_retention_days?: number
+}
+
+// ---------------------------------------------------------------------------
+// 汇总健康（审计 C-14 / 反证 F-6）：日汇总作业的读数
+// ---------------------------------------------------------------------------
+
+/**
+ * 「打开数」看板的**健康读数**（C-14 的闭环点）。
+ *
+ * ## 为什么需要它（审计原话）
+ *
+ * 打开计数是"明细 → 日汇总（每 5 分钟 tick）"两层结构。作业停摆时曲线只是**不再增长**，
+ * 而"没人用"看起来一模一样 —— 管理员据此会得出"这批应用没人用"的相反结论。
+ *
+ * ## 契约（服务端 2026-10-22 已落地，`wasmapp/api/admin_opens.go`）
+ *
+ * `aggregated_until`（RFC3339 | null）、`stale`（bool）、`stale_reasons`（string[]）、
+ * `stale_after_seconds`（number）、`opens_job`（读数对象 | null），五个键**恒在**。
+ *
+ * 兼容口径：**键缺失**（尚未升级的服务端）⇒ `contractPresent=false`，界面如实显示
+ * 「服务端未下发」，既不编一个"数据是最新的"，也不把缺失读成"没有作业"。
+ */
+export interface OpensSummaryHealth {
+  /** 最后一次汇总的时刻（RFC3339 原样）；null = 服务端明确回报"没有汇总记录"。 */
+  aggregatedUntil: string | null
+  /** 是否陈旧；null = 服务端没下发该键（**不等于**"不陈旧"）。 */
+  stale: boolean | null
+  /** 判陈旧的证据（服务端 `stale_reasons`；空数组 = 不陈旧）。 */
+  staleReasons: string[]
+  /** 陈旧阈值（秒）；null = 未下发。 */
+  staleAfterSeconds: number | null
+  /** 作业读数；null = 未注入（`opens_job: null`）或服务端没下发该键。 */
+  job: OpensJobReadout | null
+  /** `aggregated_until` / `stale` 两个核心键都在 ⇒ true；任一缺失 ⇒ false。 */
+  contractPresent: boolean
+}
+
+/** 契约缺失时看板必须说的那句话（**不编造新鲜度**）。 */
+export const OPENS_HEALTH_CONTRACT_MISSING =
+  '汇总健康：服务端未下发 `aggregated_until` / `stale`（C-14 的读数键）。' +
+  '因此无法区分「没人用」与「日汇总作业停摆」—— 下面的数字可能滞后，请以明细/趋势为准并让运维核对作业。'
+
+/** 阈值的一句话（秒 → 可读）。 */
+export function staleThresholdText(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds) || seconds <= 0) return ''
+  if (seconds < 3600) return `${Math.round(seconds / 60)} 分钟`
+  return `${(seconds / 3600).toFixed(1)} 小时`
+}
+
+/** `stale=true` 时的看板文案（数据可能未更新 + 最后汇总时间 + 判据阈值）。 */
+export function opensHealthStaleNotice(health: OpensSummaryHealth): string {
+  const until = health.aggregatedUntil !== null ? `最后成功汇总于 ${health.aggregatedUntil}` : '服务端未回报最后汇总时间'
+  const threshold = staleThresholdText(health.staleAfterSeconds)
+  const tail = threshold === ''
+    ? ''
+    : `（判定阈值 ${threshold}：超过即视为作业停摆）`
+  return `数据可能未更新：服务端回报 stale=true（${until}${tail}）。` +
+    '日汇总作业停摆或落后时，本页的近 N 天数字会偏小 —— 这不是"没人用"，请让运维核对 wasm_app_opens 的汇总作业。'
+}
+
+/** 正常态文案（说清"汇总到哪一天"，而不只是"正常"）。 */
+export function opensHealthOkNotice(health: OpensSummaryHealth): string {
+  if (health.aggregatedUntil !== null) return `汇总健康：最后一次汇总于 ${health.aggregatedUntil}（服务端 stale=false）。`
+  return '汇总健康：服务端回报 stale=false（未回传最后汇总时间）。'
+}
+
+/** 看板健康行的一句话 + 语义种类（渲染与用例都按 kind 判，不按字符串猜）。 */
+export function opensHealthNotice(health: OpensSummaryHealth): { kind: 'missing' | 'stale' | 'ok'; text: string } {
+  if (!health.contractPresent) return { kind: 'missing', text: OPENS_HEALTH_CONTRACT_MISSING }
+  if (health.stale === true) return { kind: 'stale', text: opensHealthStaleNotice(health) }
+  return { kind: 'ok', text: opensHealthOkNotice(health) }
+}
+
+/** 作业读数的一句话（缺读数时说"不可得"，**不说**"跑了 0 轮"）。 */
+export function opensJobText(job: OpensJobReadout | null): string {
+  if (job === null) return '汇总作业读数：服务端未下发（`opens_job` 缺失或为 null）—— 无法区分「停摆」与「跑了但没数据」。'
+  const started = job.started === true ? '已启动' : job.started === false ? '未启动' : '启动状态未知'
+  const runs = numOrNull(job.runs)
+  const errors = numOrNull(job.errors)
+  const tick = numOrNull(job.tick_seconds)
+  const parts = [
+    started,
+    runs === null ? '运行轮数未下发' : `已运行 ${runs} 轮`,
+    errors === null ? '错误数未下发' : `其中 ${errors} 轮出错`,
+    job.last_run_at ? `最近一轮结束于 ${job.last_run_at}` : '还没有跑完过任何一轮',
+    tick === null ? '间隔未知' : `间隔 ${tick} 秒`,
+  ]
+  const last = job.last_error !== null && job.last_error !== undefined && job.last_error !== ''
+    ? `；最近错误：${job.last_error}`
+    : ''
+  return `汇总作业读数：${parts.join(' · ')}${last}`
+}
+
+/** 从 summary 原始响应里读健康键（缺失 == "服务端未下发"，**绝不**用默认值伪造）。 */
+export function parseOpensSummaryHealth(raw: unknown): OpensSummaryHealth {
+  const body: Record<string, unknown> = isRecord(raw) ? raw : {}
+  const untilRaw = body.aggregated_until
+  const staleRaw = body.stale
+  const aggregatedUntil = typeof untilRaw === 'string' && untilRaw.trim() !== '' ? untilRaw.trim() : null
+  const stale = typeof staleRaw === 'boolean' ? staleRaw : null
+  const reasons = Array.isArray(body.stale_reasons)
+    ? body.stale_reasons.filter((r): r is string => typeof r === 'string' && r.trim() !== '')
+    : []
+  const afterRaw = body.stale_after_seconds
+  const staleAfterSeconds = typeof afterRaw === 'number' && Number.isFinite(afterRaw) ? afterRaw : null
+  const jobRaw = body.opens_job
+  const job = isRecord(jobRaw)
+    ? {
+        started: typeof jobRaw.started === 'boolean' ? jobRaw.started : null,
+        started_at: typeof jobRaw.started_at === 'string' ? jobRaw.started_at : null,
+        runs: numOrNull(jobRaw.runs),
+        errors: numOrNull(jobRaw.errors),
+        last_run_at: typeof jobRaw.last_run_at === 'string' ? jobRaw.last_run_at : null,
+        last_error: typeof jobRaw.last_error === 'string' ? jobRaw.last_error : null,
+        tick_seconds: numOrNull(jobRaw.tick_seconds),
+      }
+    : null
+  return {
+    aggregatedUntil,
+    stale,
+    staleReasons: reasons,
+    staleAfterSeconds,
+    job,
+    contractPresent: untilRaw !== undefined && staleRaw !== undefined,
+  }
 }
 
 /**

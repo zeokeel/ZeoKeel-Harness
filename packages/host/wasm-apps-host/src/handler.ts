@@ -40,7 +40,7 @@ import {
 import type { CacheConditionalResult, CacheEntryInput, CacheScope, CachedResponse } from './cache.ts'
 import { securityHeaders } from './cache.ts'
 import { hostCopy, type HostLocale } from './locale.ts'
-import { AI_CHAT_PATH, AI_CHAT_SSE_HEADERS, type AiChatOutcome } from './ai-chat.ts'
+import { AI_CHAT_BODY_MAX_BYTES, AI_CHAT_PATH, AI_CHAT_SSE_HEADERS, type AiChatOutcome } from './ai-chat.ts'
 import { APP_PROOF_HEADER } from './app-proof.ts'
 import { APP_VERSION_HEADER } from './open-gate.ts'
 import { isReservedHostPath } from './host-request.ts'
@@ -51,6 +51,7 @@ import {
   appErrorPage,
   invalidRequestPage,
   readPlatformError,
+  retryLoginActions,
   sessionExpiredPage,
   signInRequiredPage,
 } from './pages.ts'
@@ -71,6 +72,18 @@ export interface AppSchemeHandlerDeps {
   fetch: (url: string, init: RequestInit) => Promise<Response>
   /** 平台返回 401 时清掉本地会话（与 enterprise 出站约定一致）。 */
   clearSession: () => void
+  /**
+   * 会话在**应用窗口里**过期时的通知（U-08，2026-10-22 评审）。
+   *
+   * 为什么需要它：`clearSession()` 会触发作用域清理，而清理链**同步**关掉全部应用
+   * 窗口（§7.2）—— 于是刚渲染出来的「登录已过期」页连一帧都看不见，窗口直接消失；
+   * 重登后也回不到那个应用。宿主拿到 `{appId, path}` 就能在清理时保留这一扇窗口，
+   * 并在重登后把同一应用/路径再打开。
+   *
+   * 在 {@link clearSession} **之前**调用（宿主需要在会话事件到达时就知道"这是过期"）。
+   * 缺席 ⇒ 行为与修前一致（只有页面，没有保留窗口）。
+   */
+  onSessionExpired?: ((expired: { appId: string, path: string }) => void) | undefined
   /** 宿主语言解析（**按调用**，禁止模块级冻结）。 */
   hostLocale: (acceptLanguage: string | null) => HostLocale
   /**
@@ -95,6 +108,14 @@ export interface AppSchemeHandlerDeps {
    * （拿一个猜出来的版本号当键 = 改版后继续发旧内容）。
    */
   cacheVersion?: ((appId: string) => string | undefined) | undefined
+  /**
+   * 客户端登录页 URL（F-04）：会话过期/未登录页上「重新登录」按钮的目标。
+   *
+   * 为什么不在这里拼：本机 webServer 的 origin 只有宿主（`index.ts`）知道（端口是
+   * 动态绑定的），而 `pages.ts` 是纯模板。拿不到 ⇒ 不渲染那个按钮（渲染一个点了没
+   * 反应的按钮比不渲染更糟 —— 那正是修前的形态）。
+   */
+  signInHref?: (() => string | undefined) | undefined
   /** 单次出站预算（毫秒）；缺省 {@link APP_REQUEST_TIMEOUT_MS}。 */
   timeoutMs?: number
   /** 诊断出口（缺省丢弃）。 */
@@ -154,9 +175,38 @@ export function createAppSchemeHandler(
 ): (request: Request) => Promise<Response> {
   const warn = deps.warn ?? ((): void => {})
   const timeoutMs = deps.timeoutMs ?? APP_REQUEST_TIMEOUT_MS
+  /**
+   * 本地错误/会话页的动作（F-04）：重试 = 重新发起**这一次**请求，重新登录 = 客户端
+   * 登录页。重试目标用请求自身的 URL（协议 handler 会重新过闸门，会话恢复后同一条
+   * 请求就能成功）。
+   * @param request - 这次请求。
+   * @returns 页面动作（拿不到登录页地址时只有重试）。
+   */
+  const pageActionsFor = (request: Request): { retryHref: string, signInHref?: string } => {
+    const signIn = deps.signInHref?.()
+    return {
+      retryHref: request.url,
+      ...(signIn === undefined || signIn === '' ? {} : { signInHref: signIn }),
+    }
+  }
 
-  /** 本地错误：文档导航给可读 HTML，应用自己的 fetch 给 JSON 信封。 */
+  /**
+   * 本地错误：文档导航给可读 HTML，应用自己的 fetch 给 JSON 信封。
+   *
+   * **导航页一定带动作**（F-04 / 反证审计 R-04）：修前只有 401 两页有「重试/重新登录」，
+   * 而最常见的失败形态（编译失败、本地 DB 故障、405、平台信封 404/410/500）都是
+   * `localError` 出来的页面 —— 用户看到的是一句"打不开"，却没有任何可点的东西，
+   * 只能自己关窗回主窗口。重试目标就是**这一次请求的 URL**（协议 handler 会重新过
+   * 闸门，瞬时故障/会话恢复后同一条请求就能成功；`<a>` 形态发出的是 GET，对错误页
+   * 已经足够 —— 失败的那次请求本来就没有可重放的字节）。
+   * @param request - 这次请求（重试目标来自它的 URL）。
+   * @param locale - 宿主语言。
+   * @param navigation - 是否文档导航（否则给 JSON 信封）。
+   * @param options - 状态/码/文案。
+   * @returns HTML 或 JSON 响应。
+   */
   const localError = (
+    request: Request,
     locale: HostLocale,
     navigation: boolean,
     options: {
@@ -176,6 +226,8 @@ export function createAppSchemeHandler(
       message: options.message,
       ...(options.hints === undefined ? {} : { hints: options.hints }),
       ...(options.detail === undefined ? {} : { detail: options.detail }),
+      // F-04/R-04：错误页必须能自救 —— 重试（+ 会话拿得到时"重新登录"）。
+      actions: retryLoginActions(locale, pageActionsFor(request)),
     }))
   }
 
@@ -199,7 +251,7 @@ export function createAppSchemeHandler(
     const method = request.method.toUpperCase()
     if (!(APP_METHODS as readonly string[]).includes(method)) {
       warn(`zeokeel-wasm-apps-host: refused method ${method} for app ${url.appId}`)
-      return localError(locale, navigation, {
+      return localError(request, locale, navigation, {
         status: 405,
         code: 'METHOD_NOT_ALLOWED',
         message: hostCopy(locale, '不支持这个请求方法。', 'This request method is not supported.'),
@@ -215,7 +267,7 @@ export function createAppSchemeHandler(
     if (session === null) {
       // 契约 §2：一律要求登录，没有匿名面。这里给**可读页面**（不是空白页）。
       warn(`zeokeel-wasm-apps-host: refused ${url.appId} without a session`)
-      return htmlResponse(401, signInRequiredPage(locale))
+      return htmlResponse(401, signInRequiredPage(locale, pageActionsFor(request)))
     }
 
     // ---- `__zeokeel` 命名空间是**宿主保留面**：只有 AI 桥这一条路径存在 ----
@@ -257,7 +309,10 @@ export function createAppSchemeHandler(
           headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
         })
       }
-      if (aiBody.byteLength > APP_REQUEST_BODY_MAX_BYTES) {
+      // AI 桥的体量判据用**AI 自己的**上限（`AI_CHAT_BODY_MAX_BYTES` = 64 条 × 16 KiB
+      // + 64 KiB 信封余量），不是通用应用请求的 1 MiB：后者恰好等于 contract 上限的
+      // content 字节数，满额合法请求会被这里 413（反证审计 R-09）。
+      if (aiBody.byteLength > AI_CHAT_BODY_MAX_BYTES) {
         return new Response(JSON.stringify({ error: { code: 'app_ai_invalid', message: 'the AI request body is too large' } }), {
           status: 413,
           headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
@@ -394,7 +449,7 @@ export function createAppSchemeHandler(
       const detail = cause instanceof Error ? cause.message : String(cause)
       warn(`zeokeel-wasm-apps-host: gateway request for ${url.appId} failed (${detail})`)
       const timeout = controller.signal.aborted
-      return localError(locale, navigation, {
+      return localError(request, locale, navigation, {
         status: 502,
         code: timeout ? 'GATEWAY_TIMEOUT' : 'GATEWAY_UNAVAILABLE',
         message: hostCopy(
@@ -428,7 +483,7 @@ export function createAppSchemeHandler(
       const code = readPlatformError(body)?.code ?? ''
       if (code.startsWith('proof_')) {
         warn(`zeokeel-wasm-apps-host: the platform rejected the app proof for ${url.appId} (${code})`)
-        return localError(locale, navigation, {
+        return localError(request, locale, navigation, {
           status: 401,
           code,
           message: hostCopy(locale, '客户端证明无效，请重新登录后再试。', 'This client could not prove it is genuine; please sign in again and retry.'),
@@ -440,10 +495,19 @@ export function createAppSchemeHandler(
           detail: `status=401 code=${code}`,
         })
       }
+      // U-08：先把"哪一扇应用窗口、哪个路径"告诉宿主，再清会话 —— 清理链会同步关掉
+      // 全部应用窗口，晚一步宿主就只剩一个已经消失的窗口 id（sessionExpiredPage 那
+      // 张"能自救"的页在真实链路上永远不可达）。通知失败不阻断清会话（异常处理面
+      // 绝不能反过来把会话留着）。
+      try {
+        deps.onSessionExpired?.({ appId: url.appId, path: url.path })
+      } catch (cause) {
+        warn(`zeokeel-wasm-apps-host: recording the expired application window failed (${cause instanceof Error ? cause.message : String(cause)})`)
+      }
       // 与 enterprise 出站约定一致：401 清会话（渲染层的 tripwire 会回登录页）。
       deps.clearSession()
       warn(`zeokeel-wasm-apps-host: the platform rejected the session while serving ${url.appId}`)
-      return htmlResponse(401, sessionExpiredPage(locale))
+      return htmlResponse(401, sessionExpiredPage(locale, pageActionsFor(request)))
     }
     let parsed: unknown
     try {
@@ -466,7 +530,7 @@ export function createAppSchemeHandler(
             ? missingAppTitle(locale)
             : undefined
       const extraHints = reason === 'app_frozen' ? [frozenAppHint(locale)] : undefined
-      return localError(locale, navigation, {
+      return localError(request, locale, navigation, {
         status: upstream.status,
         code: platformError.code,
         ...(title === undefined ? {} : { title }),
@@ -482,7 +546,7 @@ export function createAppSchemeHandler(
     const envelope = parseResponseEnvelope(parsed)
     if (!envelope.ok) {
       warn(`zeokeel-wasm-apps-host: invalid platform response for ${url.appId} (${envelope.reason})`)
-      return localError(locale, navigation, {
+      return localError(request, locale, navigation, {
         status: 502,
         code: 'INVALID_PLATFORM_RESPONSE',
         message: hostCopy(locale, '服务端返回了无法识别的响应。', 'The server returned a response this client cannot read.'),
@@ -496,7 +560,7 @@ export function createAppSchemeHandler(
     }
     if (!upstream.ok) {
       // 外层非 2xx 但体是合法信封：按平台错误呈现（不回给渲染器一个"成功页面"）。
-      return localError(locale, navigation, {
+      return localError(request, locale, navigation, {
         status: upstream.status,
         code: 'PLATFORM_ERROR',
         message: hostCopy(locale, '服务端拒绝了这次请求。', 'The server rejected this request.'),
@@ -506,7 +570,7 @@ export function createAppSchemeHandler(
     const bytes = decodeBase64Body(envelope.envelope.body)
     if (bytes === null) {
       warn(`zeokeel-wasm-apps-host: undecodable base64 body for ${url.appId}`)
-      return localError(locale, navigation, {
+      return localError(request, locale, navigation, {
         status: 502,
         code: 'INVALID_PLATFORM_RESPONSE',
         message: hostCopy(locale, '服务端返回了无法识别的响应。', 'The server returned a response this client cannot read.'),
@@ -518,7 +582,7 @@ export function createAppSchemeHandler(
       // 应用要的页面（半截 HTML 会渲染成乱码、半截 JSON 会解析失败），按 502/
       // `INVALID_PLATFORM_RESPONSE` 处理并给出可读错误页。
       warn(`zeokeel-wasm-apps-host: the platform truncated the response body for ${url.appId}`)
-      return localError(locale, navigation, {
+      return localError(request, locale, navigation, {
         status: 502,
         code: 'INVALID_PLATFORM_RESPONSE',
         message: hostCopy(locale, '响应体不完整，已中止本次加载。', 'The response was incomplete, so this load was aborted.'),
@@ -549,6 +613,9 @@ export function createAppSchemeHandler(
         message: inner?.message ?? hostCopy(locale, '应用无法处理这次请求。', 'The app could not handle this request.'),
         ...(inner?.hints === undefined ? {} : { hints: inner.hints }),
         detail: `status=${String(status)}${inner === null ? '' : ` code=${inner.code}`}`,
+        // F-04/R-04：平台信封错误页（404「应用不存在」/410「已下架」/500）同样给动作 ——
+        // 这一档是用户最常撞到的页面，修前它与 401 两页的唯一区别就是"没有按钮"。
+        actions: retryLoginActions(locale, pageActionsFor(request)),
       }))
     }
     const bodyAllowed = method !== 'HEAD' && status !== 204 && status !== 304

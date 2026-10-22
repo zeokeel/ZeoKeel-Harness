@@ -106,15 +106,19 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request, appLabel strin
 	}
 
 	// ===== ② 生效版本（§6.1 ⑤ / §8）=====
-	// 生效版本 = 最新 approved 且未软删的版本。审核开关开启时，新版停在 pending
-	//（线上仍旧版本），因此"最新 approved"就是线上版本，无需另判开关。
+	// 生效版本 = **当前部署指针**（apps.current_release_id）指向的那一版，且必须
+	// approved 且未软删。审核开关开启时，新版停在 pending（线上仍旧版本）——指针不动，
+	// 所以这里不必另判开关；回滚后指针指回旧版本，这里就交付旧版本。
 	//
 	// ⚠️ 这里取的是**不含制品字节**的元数据（P0-3，2026-09-19）：模块缓存命中
 	//（暖机常态）时 rel.Wasm 没有任何读者，用全列查询等于每请求从 PG 拉一份
 	// ≤32 MiB 的 TOAST 大字段再丢掉（默认档 32 并发下瞬时堆约 1 GiB，而 §4.3 的
 	// 四笔账里没有这一笔）。字节在**冷编译**那一刻按需加载 —— 见 serveWasm 的
 	// acquire 回调与 loadReleaseWasm。
-	rel, rerr := serverstore.LatestApprovedWasmReleaseMeta(r.Context(), s.opt.DB, appID)
+	// ⚠️ 取的是**当前部署指针**（apps.current_release_id）指向的版本，不是 max(id) approved：
+	// 回滚 = 用旧版本再部署一次，只改指针不改 id 顺序（2026-10-22 反证审计 P0）。
+	// 用 LatestApprovedWasmReleaseMeta 会让"回滚"在管理台成功、在用户侧无效。
+	rel, rerr := serverstore.CurrentWasmReleaseMeta(r.Context(), s.opt.DB, appID)
 	switch {
 	case errors.Is(rerr, serverstore.ErrNotFound):
 		s.writeHTMLFailure(w, r, http.StatusNotFound, apperr.CodeNotFound,
@@ -347,6 +351,13 @@ func (s *Server) serveWasm(w http.ResponseWriter, r *http.Request, appID string,
 
 	// 读体放在**排队之前**：慢客户端不该占着执行槽（执行槽是稀缺资源，
 	// 每应用并发上限见 limits.AppRuntimeConcurrency，§4.6）。
+	//
+	// ⚠️ 这个顺序有一个必须**同时**成立的配套（生产评审管理员视角 P1-3，2026-10-22）：
+	// 体在准入之前就读进内存 ⇒ 排队中的请求**各自带着一份已读字节**，而排队容量只按
+	// 条数判（app_queue，合法上界 4096）⇒ 4096 × 1 MiB ≈ 4 GiB 可以合法地挂在队列里。
+	// 所以这里必须把**真实长度**交给调度器（AcquireWithSize），由它按全局预算
+	// limits.WasmQueueBodyBytesMax 封顶并在超限时 fail-closed 429；传 0（旧的
+	// Acquire）等于告诉调度器"我没有占内存"，那笔账会静默失效。
 	body, aerr := readRequestBody(r)
 	if aerr != nil {
 		s.writeFailure(w, r, aerr, true)
@@ -361,7 +372,10 @@ func (s *Server) serveWasm(w http.ResponseWriter, r *http.Request, appID string,
 	ctx, cancel := context.WithTimeout(r.Context(), s.CurrentLimits().WallClock())
 	defer cancel()
 
-	ticket, aerr := s.scheduler.Acquire(ctx, appID, userIDOf(user))
+	// 准入：把**已读入内存的请求体字节数**交出去（P1-3）——调度器据此占全局排队体预算，
+	// 超限时 fail-closed 429（details.reason=queue_bytes_exceeded），而不是把
+	// "一个应用 4 GiB 已读字节"挂在队列里。
+	ticket, aerr := s.scheduler.AcquireWithSize(ctx, appID, userIDOf(user), int64(len(body)))
 	if aerr != nil {
 		// 队列满 / 用户占槽超限 / 排队期间墙钟到点：429 + Retry-After（§7.4）。
 		s.writeFailure(w, r, aerr, false)
@@ -482,6 +496,8 @@ func (s *Server) serveWasm(w http.ResponseWriter, r *http.Request, appID string,
 
 	// 计量（§4.9）：runtime 负责 guest/宿主侧字段，本包补齐排队等待与应用库计量。
 	metrics := res.Metrics
+	// 诊断的版本维度：本次请求实际执行的版本（不是"最新版本"）。
+	metrics.Version = rel.Version
 	metrics.QueueWaitMS = ticket.EnqueuedMS
 	st := db.Stats()
 	metrics.DBRows = st.Rows

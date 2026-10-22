@@ -402,6 +402,13 @@ func (e *testEnv) mount(r *gin.Engine) {
 	cli.GET("/:app_id/availability", e.h.Availability)
 	// 发布者本人的版本历史 + 审核结论（R1-pm-3）：与 internal/router 的申报逐条一致。
 	cli.GET("/:app_id/releases", e.h.MyReleases)
+	// 生命周期重设计（迁移 0086，设计 2026-10-22 §6.1）：部署历史/部署（回滚）/
+	// 撤回 pending/恢复软删。与 internal/router 的申报逐条一致 —— 测试树与生产树
+	// 前缀/形状不一致就测不出路由漂移（本仓既有教训）。
+	cli.GET("/:app_id/deployments", e.h.Deployments)
+	cli.POST("/:app_id/deployments", e.h.DeployRelease)
+	cli.POST("/:app_id/releases/:version/withdraw", e.h.WithdrawRelease)
+	cli.POST("/:app_id/restore", e.h.RestoreApp)
 	// 客户端专属访问模型的三个端点（契约 §5.1/§5.1b/§20.1）：
 	// 与 internal/router 的申报逐条一致 —— 测试树与生产树前缀/形状不一致就测不出漂移。
 	cli.POST("/:app_id/request", e.h.ClientRequest)
@@ -441,6 +448,20 @@ func (e *testEnv) mount(r *gin.Engine) {
 	// 不参与 /:app_id 通配）。P2-1 的信封判据必须走**生产路径**，否则测不出路由漂移。
 	adm.GET("/limits", e.h.AdminLimitsGet)
 	adm.PUT("/limits", e.h.AdminLimitsPut)
+	// 应用级限流覆盖（迁移 0087，决策 2026-10-22 §2.3）：与 internal/router 的申报逐条一致。
+	adm.GET("/limit-overrides", e.h.AdminAppLimitsList)
+	adm.GET("/:app_id/limits", e.h.AdminAppLimitsGet)
+	adm.PUT("/:app_id/limits", e.h.AdminAppLimitsPut)
+	adm.DELETE("/:app_id/limits", e.h.AdminAppLimitsDelete)
+	// 管理面生命周期动作（迁移 0086，设计 2026-10-22 §6.2）：与 internal/router 逐条一致。
+	// 静态段 releases/pending 与 router 一样先于 /:app_id 声明。
+	adm.GET("/releases/pending", e.h.AdminPendingReleases)
+	adm.POST("/releases/purge-stale", e.h.AdminPurgeStaleReleases)
+	adm.GET("/:app_id/deployments", e.h.AdminDeployments)
+	adm.POST("/:app_id/deployments", e.h.AdminDeployRelease)
+	adm.POST("/:app_id/restore", e.h.AdminRestoreApp)
+	adm.DELETE("/:app_id", e.h.AdminDeleteApp)
+	adm.GET("/:app_id/export", e.h.AdminExport)
 
 	// appstore 的归属转移端点（§11 第 17 项授权放开 kind 白名单）：挂同一个路径，
 	// 用同一条用例证明 wasm_app 不再返回 400。

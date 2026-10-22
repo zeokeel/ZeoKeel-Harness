@@ -10,6 +10,7 @@ import (
 
 	"github.com/tetratelabs/wazero/sys"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/capapi"
 )
@@ -361,6 +362,26 @@ func killErrorPages(code apperr.Code, msg string, pages uint32) *apperr.Error {
 		e.WithHint(hints...)
 	}
 	return e
+}
+
+// outputOverrunError 构造"响应体/协议帧超限"的失败（2026-10-22 审计 A7）。
+//
+// 背景：响应体有**三层**数字，作者真正能操作的只有最小那层：
+//
+//	8 MiB   = 平台侧"guest 写出多少字节"的总输出闸门（internal 口径）；
+//	1 MiB   = 单帧原始字节上限（响应必须装进一帧）；
+//	168 KiB = **保证可交付**（按 JSON 最坏转义折算，abi.MaxResponseBodyBytes）。
+//
+// 旧文案只报前两档，作者按 8 MiB 设计却撞在 1 MiB/168 KiB 上，且拿到的数字与
+// 下一步动作对不上。这里把三个数字一起写进 message 与 details，hint 直接给动作。
+func outputOverrunError(msg, layer string) *apperr.Error {
+	return apperr.New(apperr.CodeRuntimeOutputOverrun, msg).
+		WithDetail("layer", layer).
+		WithDetail("total_output_limit_bytes", limits.AppResponseBodyMaxBytes).
+		WithDetail("frame_limit_bytes", abi.MaxFrameBytes).
+		WithDetail("deliverable_payload_bytes", abi.MaxResponseBodyBytes).
+		WithHint("响应体按**保证可交付**的 168 KiB 设计：大列表用 db.query 分页/聚合，不要一次性返回",
+			"单帧原始字节上限 1 MiB（低转义内容可接近它，但不是承诺）；8 MiB 是平台内部总输出闸门，不是可交付上限")
 }
 
 // runtimeHints 返回执行侧失败码的可操作提示（与 apperr.CommonHints 同精神，按需扩展）。

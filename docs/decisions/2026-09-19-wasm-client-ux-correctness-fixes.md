@@ -33,6 +33,12 @@
 （不是"填了空串"，是"类型上不存在"），表单初值恒为 `''` 并在字段下方标注"没有平台默认值：
 需要你声明"。想给它塞默认值必须先改类型 —— 那时对拍用例会红。
 
+> **2026-10-22 订正（本条已被审计 F-02 取代）**：服务端现在按发布者身份在目录行下发
+> `data_sensitivity`（`read.go` 的 `isOwner` 分支），客户端把它解析进目录项并作为发新版表单的
+> 初值 —— "显示并沿用上一次声明"是产品要求，预填不等于给它默认值：首版仍必须声明；
+> 发新版时作者不清空 = 提交省略该键 = 服务端沿用（`appcfg/inherit.go` 的缺席继承）。
+> 对拍改由 `CATALOG_ROW_AUTHOR_FIELDS`（含 `data_sensitivity`）+ `appcfg-contract.spec.ts` 守。
+
 **决策三：改动访问范围必须显式确认。** 选中值与当前值不同时出现确认框，文案是
 "访问范围将被修改：公开 → 登录后使用" + 勾选框；未勾选时提交被**本地**拦下
 （`access_change_unconfirmed`，不发请求）。换一个取值会**撤销**上一次的勾选 ——
@@ -81,7 +87,8 @@ hints + 可选原文）。401 仍保持可读的本地文案，但 code/hints �
 **决策：三处同源。**
 - 客户端选文件时先判 `size > WASM_MAX_BYTES` ⇒ 本地错误项、**不读字节**、不发请求；
 - `WASM_MAX_BYTES` 进入 `appcfg-contract.ts`（客户端契约），由
-  `appcfg-contract.spec.ts` 与 `server/internal/wasmapp/limits/limits.go` 的
+  `appcfg-contract.spec.ts` 与 `server/internal/limits/limits.go` 的
+  （2026-10-22 订正：原写作 `internal/wasmapp/limits`，feature-split 后真源在 `internal/limits`）
   `WasmMaxBytes`（`32 << 20`，读取时按左移解析）对拍；
 - 宿主 `resolveWasmSource` 的 base64 分支补同一条闸门（同一个常量、同一个 `code`），
   避免"同一个超限产物走 HTTP 路径与服务端裁决不一致"。

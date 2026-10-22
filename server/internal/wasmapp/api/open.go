@@ -122,7 +122,10 @@ func (h *Handlers) openApp(c *gin.Context) {
 		return
 	}
 
-	rel, rerr := serverstore.LatestApprovedWasmReleaseMeta(c.Request.Context(), h.opt.DB, appID)
+	// open 返回的版本必须与**真实服务的版本**一致（2026-10-22 反证 P0）：回滚后
+	// 指针指向旧版本，若这里仍报 max(id) approved，客户端会拿到"打开的是 v2"而实际
+	// 执行 v1（缓存键/内容校验全错）。与 appserver 的交付面同一个 accessor。
+	rel, rerr := serverstore.CurrentWasmReleaseMeta(c.Request.Context(), h.opt.DB, appID)
 	switch {
 	case errors.Is(rerr, serverstore.ErrNotFound):
 		h.admissionFailed(c, appID, user, http.StatusNotFound, apperr.CodeNotFound, "open: 无可用版本")

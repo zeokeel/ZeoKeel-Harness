@@ -56,7 +56,7 @@ func decodeErrCode(t *testing.T, rec *httptest.ResponseRecorder, wantStatus int,
 func seedOpenApp(t *testing.T, e *testEnv, appID, version, title string, enabled bool) {
 	t.Helper()
 	seedApp(t, e, appID, title, "alice", enabled)
-	if _, err := serverstore.CreateWasmRelease(context.Background(), e.db, serverstore.WasmRelease{
+	relID, err := serverstore.CreateWasmRelease(context.Background(), e.db, serverstore.WasmRelease{
 		AppID:      appID,
 		Version:    version,
 		Title:      title,
@@ -64,8 +64,21 @@ func seedOpenApp(t *testing.T, e *testEnv, appID, version, title string, enabled
 		Status:     serverstore.ReleaseStatusApproved,
 		ConfigJSON: `{"access":"login"}`,
 		Checksum:   "deadbeef",
-	}); err != nil {
+		// 部署事务要求版本仍有制品字节（RELEASE_BYTES_RELEASED 的另一侧）；open 端点
+		// 只读元数据，所以这里只要"有字节"即可，不需要真能编译的模块。
+		Wasm: []byte("open-fixture-wasm"),
+		Size: int64(len("open-fixture-wasm")),
+	})
+	if err != nil {
 		t.Fatalf("落库版本 %s@%s 失败: %v", appID, version, err)
+	}
+	// open 端点按**部署指针**（apps.current_release_id）报版本（2026-10-22 反证 P0）。
+	// 夹具必须像生产一样"发布后部署"，否则 current=0 ⇒ open 回"还没有可用版本"。
+	if _, _, derr := serverstore.DeployWasmRelease(context.Background(), e.db, serverstore.DeployWasmReleaseInput{
+		AppID: appID, ReleaseID: relID, Kind: serverstore.DeployKindPublish,
+		Actor: "alice", ActorRole: serverstore.ActorRoleOwner,
+	}); derr != nil {
+		t.Fatalf("部署夹具版本 %s@%s 失败: %v", appID, version, derr)
 	}
 }
 
@@ -148,12 +161,24 @@ func TestOpenAppHappyPathCountsAndSetsVersion(t *testing.T) {
 		t.Fatalf("两次打开后计数 = %d, want 2（PV 不去重）", n)
 	}
 	// 版本变化 ⇒ changed=true。
+	//
+	// ⚠️ 生命周期重设计（迁移 0086）：**只有部署（deployment）会改变生效版本**。
+	// 落一行 approved 版本不再等于"上线"（那是设计 §3.3 的 core 语义，也是"回滚"
+	// 能成立的前提）⇒ 夹具必须像生产一样再部署一次。
 	seedOpenApp(t, e, "notes2", "1.0.0", "备忘工具", true)
-	if _, err := serverstore.CreateWasmRelease(context.Background(), e.db, serverstore.WasmRelease{
+	rel2, err := serverstore.CreateWasmRelease(context.Background(), e.db, serverstore.WasmRelease{
 		AppID: "notes", Version: "2.0.0", Title: "备忘工具", Publisher: "alice",
 		Status: serverstore.ReleaseStatusApproved, ConfigJSON: `{"access":"login"}`,
-	}); err != nil {
+		Wasm: []byte("open-fixture-wasm-v2"), Size: int64(len("open-fixture-wasm-v2")),
+	})
+	if err != nil {
 		t.Fatalf("落库新版本: %v", err)
+	}
+	if _, _, derr := serverstore.DeployWasmRelease(context.Background(), e.db, serverstore.DeployWasmReleaseInput{
+		AppID: "notes", ReleaseID: rel2, Kind: serverstore.DeployKindPublish,
+		Actor: "alice", ActorRole: serverstore.ActorRoleOwner,
+	}); derr != nil {
+		t.Fatalf("部署新版本: %v", derr)
 	}
 	rec = e.postOpen("notes", e.tokens["alice"], "1.2.3", true)
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {

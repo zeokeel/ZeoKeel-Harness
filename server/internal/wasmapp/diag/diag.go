@@ -23,11 +23,13 @@ import (
 
 // Failure 是一条失败/被杀记录(§4.9:诊断必须带 guest exit code 与 stderr 尾巴)。
 type Failure struct {
-	CreatedAt     time.Time `json:"created_at"`
-	Outcome       string    `json:"outcome"`
-	ReasonCode    string    `json:"reason_code"`
-	GuestExitCode int32     `json:"guest_exit_code"`
-	StderrTail    string    `json:"stderr_tail"`
+	CreatedAt time.Time `json:"created_at"`
+	// Version 是这次失败实际执行的版本（空串 = 0089 之前的老数据，不伪装）。
+	Version       string `json:"version"`
+	Outcome       string `json:"outcome"`
+	ReasonCode    string `json:"reason_code"`
+	GuestExitCode int32  `json:"guest_exit_code"`
+	StderrTail    string `json:"stderr_tail"`
 	// Evidence 是**分类依据**（第三轮审计 P3-1）：RUNTIME_MEMORY 这类码光看 reason_code +
 	// peak_memory_bytes 无法分辨"真 OOM / panic 误报 / 应用自己打印的同名文本"，而
 	// stderr_tail 往往全是 goroutine 回溯。内容形如
@@ -75,6 +77,18 @@ type AppSummary struct {
 	MaxPeakMemoryBytes int64      `json:"max_peak_memory_bytes"`
 	MaxQueueWaitMS     int64      `json:"max_queue_wait_ms"`
 	LastFailureAt      *time.Time `json:"last_failure_at"`
+	// Versions 是按**执行版本**聚合的调用结果（次数降序）。作者/管理员据此回答
+	// "回滚后有没有止血、新版本是不是更差"（2026-10-22 生产评审 D-02）。
+	// 空串项 = 0089 之前的老数据。
+	Versions []VersionSummary `json:"versions"`
+}
+
+// VersionSummary 是单版本的调用聚合。
+type VersionSummary struct {
+	Version       string     `json:"version"`
+	Total         int64      `json:"total"`
+	Failed        int64      `json:"failed"`
+	LastFailureAt *time.Time `json:"last_failure_at"`
 }
 
 // clampLimit 把调用方给的条数收敛到 limits 声明的默认值/上限:
@@ -104,7 +118,7 @@ func RecentFailures(ctx context.Context, db *sql.DB, appID string, limit int) ([
 	if err := requireAppID(appID); err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT created_at, outcome, reason_code, guest_exit_code,
+	rows, err := db.QueryContext(ctx, `SELECT created_at, version, outcome, reason_code, guest_exit_code,
 		stderr_tail, evidence, cpu_ms, peak_memory_bytes, db_rows, db_bytes
 		FROM wasm_call_events
 		WHERE app_id = $1 AND outcome <> $2
@@ -118,7 +132,7 @@ func RecentFailures(ctx context.Context, db *sql.DB, appID string, limit int) ([
 	for rows.Next() {
 		var f Failure
 		var created time.Time
-		if err := rows.Scan(&created, &f.Outcome, &f.ReasonCode, &f.GuestExitCode,
+		if err := rows.Scan(&created, &f.Version, &f.Outcome, &f.ReasonCode, &f.GuestExitCode,
 			&f.StderrTail, &f.Evidence, &f.CPUMs, &f.PeakMemory, &f.DBRows, &f.DBBytes); err != nil {
 			return nil, err
 		}
@@ -150,6 +164,22 @@ func SummaryWithMemoryPages(ctx context.Context, db *sql.DB, appID string, since
 // SummaryWithLimits 与 SummaryWithMemoryPages 同义，但时间预算也按**生效**的限制项渲染。
 func SummaryWithLimits(ctx context.Context, db *sql.DB, appID string, since time.Time,
 	memoryPages uint32, lim applimits.Limits) (AppSummary, error) {
+	return summaryWithLimits(ctx, db, appID, since, memoryPages, lim, nil)
+}
+
+// SummaryWithAppLimits 与 SummaryWithLimits 相同，但把**该应用**的生效并发四轴
+// （全局 + per-app 覆盖，来自 queue.Scheduler.EffectiveOptions）一并交给提示渲染。
+//
+// 为什么需要它（2026-10-22 生产化评审）：429 提示里写的是"默认 N 个在跑"，而管理员
+// 可以把某个应用单独调成 1 或 4；作者看到默认值会按错误的并发模型调优。诊断的第一
+// 消费者是 AI（§4.9），数字必须与**这个应用**实际被判定的值一致。
+func SummaryWithAppLimits(ctx context.Context, db *sql.DB, appID string, since time.Time,
+	memoryPages uint32, lim applimits.Limits, axes limits.Axes) (AppSummary, error) {
+	return summaryWithLimits(ctx, db, appID, since, memoryPages, lim, &axes)
+}
+
+func summaryWithLimits(ctx context.Context, db *sql.DB, appID string, since time.Time,
+	memoryPages uint32, lim applimits.Limits, axes *limits.Axes) (AppSummary, error) {
 	out := AppSummary{AppID: appID, Since: since, Reasons: []ReasonCount{}, Hints: []string{}}
 	if err := requireAppID(appID); err != nil {
 		return out, err
@@ -210,9 +240,13 @@ func SummaryWithLimits(ctx context.Context, db *sql.DB, appID string, since time
 	if err := rows.Err(); err != nil {
 		return out, err
 	}
+	// 按版本聚合（同一窗口、同一 app）：诊断必须能回答"哪个版本在失败"。
+	if err := summarizeVersions(ctx, db, appID, since, &out); err != nil {
+		return out, err
+	}
 	for code, b := range perReason {
 		out.Reasons = append(out.Reasons, ReasonCount{
-			ReasonCode: code, Count: b.count, Hints: HintsForLimits(code, memoryPages, lim)})
+			ReasonCode: code, Count: b.count, Hints: hintsForLimits(code, memoryPages, lim, axes)})
 	}
 	// 次数降序、同次数按错误码升序:输出稳定,便于 AI 与页面直接对比两次诊断。
 	sortReasons(out.Reasons)
@@ -234,6 +268,46 @@ func SummaryWithLimits(ctx context.Context, db *sql.DB, appID string, since time
 			"有失败码没有对应的内置提示:把 stderr_tail 与 reason_code 一起交给 AI,并对照设计基线 §7.4 失败语义表")
 	}
 	return out, nil
+}
+
+// summarizeVersions 按 version 聚合窗口内调用（空串 = 0089 前老数据）。
+func summarizeVersions(ctx context.Context, db *sql.DB, appID string, since time.Time, out *AppSummary) error {
+	rows, err := db.QueryContext(ctx, `SELECT version, count(*),
+		count(*) FILTER (WHERE outcome <> $3),
+		max(created_at) FILTER (WHERE outcome <> $3)
+		FROM wasm_call_events
+		WHERE app_id = $1 AND created_at >= $2
+		GROUP BY version
+		ORDER BY count(*) DESC, version`, appID, since.UTC(), outcomeOK)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	out.Versions = []VersionSummary{}
+	for rows.Next() {
+		var v VersionSummary
+		var last any
+		if err := rows.Scan(&v.Version, &v.Total, &v.Failed, &last); err != nil {
+			return err
+		}
+		v.LastFailureAt = nullableTime(last)
+		out.Versions = append(out.Versions, v)
+	}
+	return rows.Err()
+}
+
+// nullableTime 把 SQL NULL 转成 *time.Time（pgx 的 time.Time / []byte / nil 三种形态）。
+func nullableTime(v any) *time.Time {
+	switch t := v.(type) {
+	case time.Time:
+		tt := t
+		return &tt
+	case []byte:
+		if parsed, err := time.Parse(time.RFC3339Nano, string(t)); err == nil {
+			return &parsed
+		}
+	}
+	return nil
 }
 
 func sortReasons(rs []ReasonCount) {
@@ -301,6 +375,16 @@ func HintsForMemoryPages(reasonCode string, memoryPages uint32) []string {
 // 各自的编译期默认）。装配侧拿得到当前限制项时必须走它：控制台改过预算之后，
 // 提示里还写旧数字就是让作者按过期值调优（R1-rt-25 的同一形态，2026-10-01 扩到时间预算）。
 func HintsForLimits(reasonCode string, memoryPages uint32, lim applimits.Limits) []string {
+	return hintsForLimits(reasonCode, memoryPages, lim, nil)
+}
+
+// HintsForApp 与 HintsForLimits 相同，但 429 类提示按**该应用**的生效四轴渲染
+// （`axes` 为全局 + per-app 覆盖的生效值；零值 = 不渲染应用级文案）。
+func HintsForApp(reasonCode string, memoryPages uint32, lim applimits.Limits, axes limits.Axes) []string {
+	return hintsForLimits(reasonCode, memoryPages, lim, &axes)
+}
+
+func hintsForLimits(reasonCode string, memoryPages uint32, lim applimits.Limits, axes *limits.Axes) []string {
 	hints, ok := hintTable[apperr.Code(reasonCode)]
 	if !ok {
 		return nil
@@ -312,6 +396,12 @@ func HintsForLimits(reasonCode string, memoryPages uint32, lim applimits.Limits)
 	}
 	if lim.GuestBudgetSeconds <= 0 && lim.HostCallBudgetSeconds <= 0 && lim.SQLStatementBudgetSeconds <= 0 {
 		lim = applimits.Defaults()
+	}
+	if axes != nil && apperr.Code(reasonCode) == apperr.CodeAppQueueFull && axes.AppRunning > 0 {
+		// 应用级生效值优先：作者排障时要知道"这个应用"到底被判成多少。
+		out[0] = fmt.Sprintf("本应用生效上限：每应用队列 %d、每用户同应用在跑 %d 个（+ 排队 %d 个）、每用户跨应用在跑 %d 个（管理员可在应用详情 → 限流里覆盖；全局默认是队列 %d / 在跑 %d / 占槽 %d）",
+			axes.AppQueue, axes.UserPerAppRunning, axes.UserPerAppQueued, limits.UserGlobalRunning,
+			limits.AppQueueDepth, limits.UserPerAppRunning, limits.UserPerAppQueued)
 	}
 	return renderBudgetHints(out, lim)
 }
@@ -359,8 +449,11 @@ var hintTable = map[apperr.Code][]string{
 		"PRAGMA / ATTACH / 多语句 / 参数化缺失都会被拒:按 db.query(sql, args) 的参数化写法改",
 	},
 	apperr.CodeAppQueueFull: {
-		fmt.Sprintf("每应用队列 %d、每用户同应用同时 1 个在跑 + 队列 %d 个、每用户跨应用在跑 %d 个:应用侧并发压到 1",
-			limits.AppQueueDepth, limits.UserPerAppQueued, limits.UserGlobalRunning),
+		// 数值必须来自 limits（默认值），且注明"管理员可改" —— 写死 1 会在
+		// user_per_app_running 默认 2 / per-app 覆盖成 3 时给作者错误的调优方向
+		// （2026-10-22 反证 F-1）。
+		fmt.Sprintf("每应用队列 %d、每用户同应用在跑 %d 个（默认值；管理员可在控制台改，也可按应用覆盖）+ 队列 %d 个、每用户跨应用在跑 %d 个",
+			limits.AppQueueDepth, limits.UserPerAppRunning, limits.UserPerAppQueued, limits.UserGlobalRunning),
 		fmt.Sprintf("收到 429 不要立刻重试(只会继续撞队列):按 Retry-After 退避,默认 %d 秒", limits.RetryAfterSeconds),
 		"把多次小请求合并成一次请求,或在页面上提示稍后重试",
 	},
@@ -404,5 +497,9 @@ var hintTable = map[apperr.Code][]string{
 	apperr.CodeModuleKilled: {
 		"请求被宿主强制终止(超时或平台取消):按 RUNTIME_TIMEOUT 的路径排查,不要把它当成页面错误",
 		"被杀的请求没有响应帧,客户端应显示可重试的提示",
+	},
+	apperr.CodeModuleLoadQueued: {
+		"这是平台侧排队(冷编译/冷加载串行),不是应用出错:稍后重试即可",
+		"若持续出现:降低首次打开并发,或减小应用体积/首次编译耗时;运维可调 compile_concurrency",
 	},
 }

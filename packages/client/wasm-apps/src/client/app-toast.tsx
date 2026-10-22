@@ -26,6 +26,11 @@ declare module '@deepseek-ai/cordis' {
   interface Events {
     /** 收到一条属于**另一家企业客户端**的深链（§5.3；宿主发出）。 */
     'zeokeel/wasm-app-deep-link-foreign'(payload?: { url?: string }): void
+    /**
+     * 未登录的深链被记住（`queued`）／登录后按队列续开（`opening`）（U-07；宿主发出）。
+     * 载荷只用于决定文案，不用于拼接任何 URL。
+     */
+    'zeokeel/wasm-app-queued'(payload?: { app_id?: string, state?: 'queued' | 'opening' }): void
   }
 }
 
@@ -37,8 +42,21 @@ declare module '@deepseek-ai/cordis' {
  */
 export const APP_FOREIGN_DEEP_LINK_EVENT = 'zeokeel/wasm-app-deep-link-foreign'
 
-/** toast 的类型（目前只有一种；保留联合类型是为了以后加别的提示时不改签名）。 */
-export type AppToast = { kind: 'foreign-deep-link' }
+/**
+ * 深链入队 / 续开的宿主广播事件（**跨端接缝**，U-07；与宿主的
+ * `WASM_APP_QUEUED_EVENT` 逐字相同）。
+ *
+ * 为什么需要它：未登录时点同事发来的 `<scheme>://app/<id>`，宿主把打开请求放进
+ * 待打开队列后**什么都不发生**（宿主修前不广播、客户端也就无从提示）。用户会以为
+ * 链接坏了或客户端没装 —— 而面板路径对同一件事会显示「已记住这次打开」。
+ */
+export const APP_QUEUED_EVENT = 'zeokeel/wasm-app-queued'
+
+/** toast 的类型（三种提示各自可辨：异渠道 / 已记住 / 登录后续开）。 */
+export type AppToast =
+  | { kind: 'foreign-deep-link' }
+  | { kind: 'deep-link-queued' }
+  | { kind: 'deep-link-resumed' }
 
 /** toast 自动消失的时间（一次性提示，不该常驻）。 */
 export const APP_TOAST_TTL_MS = 8000
@@ -95,9 +113,17 @@ export function subscribeAppToast(listener: () => void): () => void {
   return () => { listeners.delete(listener) }
 }
 
-/** toast 文案的字典键（逐条：文案是产品契约，不能散在 JSX 里）。 */
+/**
+ * toast 文案的字典键（逐条：文案是产品契约，不能散在 JSX 里）。
+ *
+ * `deep-link-queued` 刻意复用**面板路径**那一句（`appCenter.openPendingLogin`）：
+ * 深链与面板点开是同一件事（"这次打开被记住了"），两处文案分叉会让用户以为是
+ * 两种不同的能力（U-07 的验收口径 = 同口径）。
+ */
 const TOAST_TEXT_KEYS = {
   'foreign-deep-link': 'appCenter.toast.foreignDeepLink',
+  'deep-link-queued': 'appCenter.openPendingLogin',
+  'deep-link-resumed': 'appCenter.toast.deepLinkResumed',
 } as const
 
 /**
@@ -106,6 +132,22 @@ const TOAST_TEXT_KEYS = {
  */
 export function foreignDeepLinkToastText(): string {
   return t(TOAST_TEXT_KEYS['foreign-deep-link'])
+}
+
+/**
+ * "已记住这次打开"的提示文案（U-07；**与面板路径同一句** —— 同一个字典键）。
+ * @returns 当前语言下的文案。
+ */
+export function queuedDeepLinkToastText(): string {
+  return t(TOAST_TEXT_KEYS['deep-link-queued'])
+}
+
+/**
+ * 登录后自动续开深链的提示文案（U-07：自动续跑也要可感知）。
+ * @returns 当前语言下的文案。
+ */
+export function resumedDeepLinkToastText(): string {
+  return t(TOAST_TEXT_KEYS['deep-link-resumed'])
 }
 
 /**

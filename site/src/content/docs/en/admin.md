@@ -310,17 +310,25 @@ Four tabs:
 Three sub-pages:
 
 1. **Apps**: the list of employee-built apps and the actions on them — publish / unpublish, freeze / unfreeze,
-   transfer ownership (the responsible person), delete, access level; the drawer shows versions, the pending list,
-   the database schema and data rows (read-only, for troubleshooting and compliance), runtime diagnostics and
-   announcement templates. The **update-approval switch** is organisation-wide: once on, a newly published version
-   waits in "pending" while the currently effective version keeps serving traffic.
+   transfer ownership (the responsible person), **delete (soft delete plus snapshot) / restore**,
+   **export (including the app database and assets)**, access level; the drawer shows versions, the pending list,
+   **deployment history and rollback (make a release live)**, the database schema and data rows (read-only, for
+   troubleshooting and compliance), runtime diagnostics, **per-app limit overrides (four concurrency axes, inheriting
+   the global values by default)** and announcement templates. The **update-approval switch** is organisation-wide:
+   once on, a newly published version waits in "pending" while the currently effective version keeps serving traffic;
+   **approving deploys only the release just approved** and never undoes a rollback an admin made earlier. The header
+   also carries a **cross-app pending queue** (act on each app in turn; once review is switched off the stale pending
+   releases can be purged in one action).
 2. **Operations board**: open counts (PV / UV), daily trend and aggregation by department, where the rule is
    "distinct users within the window" and the department is the one held at open time. Per-app AI usage appears
-   alongside the open counts.
+   alongside the open counts (attribution is a **reference figure**: the label comes from the client and can be
+   polluted by any caller holding a bearer, so it is not used for reconciliation or billing).
 3. **Limits**: platform-level resource and time budgets (global concurrency, per-app concurrency and queue,
    per-user concurrency, per-instance memory cap, module cache and idle reclamation, application database read
    connections and page cache, plus the guest / dry-run / host-call / end-to-end wall clock / single SQL statement /
-   compile budgets). The legal ranges are derived by the server from the ordering relationships between the items, so
+   compile budgets). The same page shows the **overview of every per-app override** and the platform runtime
+   watermarks (compile/execution queues, 429 counters, top-N apps by pressure, background schedulers, dropped-event
+   counters, free disk). The legal ranges are derived by the server from the ordering relationships between the items, so
    the range shown in the console is exactly the range the server will accept.
 
 **Connectors `/connectors`** (read `connector:read`, write `connector:write`)

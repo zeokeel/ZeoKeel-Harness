@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { ACTION_LABEL } from '../pages/Audit'
 import {
   analyzeAuditGraph,
+  blankComments,
   deriveStoreAppenders,
+  scanCalls,
   findAuditActionFields,
   findAuditRowWriters,
   type AuditSinkSeed,
@@ -118,6 +120,99 @@ describe('审计 sink 调用图闭包（合成夹具自证）', () => {
     expect(entries).toContain('probeAuditReordered:1')
     expect(entries).toContain('probeAuditTx:1')
     expect(entries.some((e) => e.startsWith('probeNotAudit'))).toBe(false)
+  })
+})
+
+// 反证 F-7：动作名不是字面量，而是**包级 const**（`retirement/scheduler.go` 的
+// `const auditAction = "wasm_app_purge"`）。旧判据只认承载位上的 `"…"` 字面量 ⇒ 整条写点
+// 在真源上不可见，于是"新增写点必须补中文标签"这条判据永远绿。
+const CONST_ACTION: GoSourceFile = {
+  path: 'internal/wasmapp/retirement/scheduler.go',
+  text: `package retirement
+
+const auditAction = "wasm_app_purge"
+
+// auditActor 是**执行者**（不是动作名）：它落在 4 参签名的下标 1 上，
+// 必须**不能**被当成"待补标签的动作"（按实参个数消歧）。
+const auditActor = "system"
+
+const auditNotAnAction = "just_a_value_with_underscores"
+
+const threeArgAction = "wasm_app_three_arg"
+
+const (
+	tickAction  string = "wasm_app_purge_tick"
+	otherAction        = "wasm_app_purge_other"
+)
+
+type Options struct {
+	Audit func(appID, username, action, detail string) error
+}
+
+// 同一出口名的**另一种签名**（3 参：动作在下标 1）—— 消歧必须按实参个数做，
+// 不能把两种签名混成一个载体位集合。
+type LegacyOptions struct {
+	Audit func(username, action, detail string) error
+}
+
+func (s *Scheduler) run(opt Options, legacy LegacyOptions, appID string) {
+	_ = opt.Audit(appID, auditActor, auditAction, "detail")
+	_ = opt.Audit(appID, "boss", tickAction, "detail")
+	_ = opt.Audit(appID, auditNotAnAction, otherAction, "detail")
+	_ = opt.Audit(appID, "boss", undefinedConst, "detail")
+	_ = opt.Audit(appID, "boss", "wasm_app_literal_action", "detail")
+	_ = legacy.Audit("boss", threeArgAction, "detail")
+}
+`,
+}
+
+/**
+ * 这份夹具的 `Audit` 字段签名是 `func(appID, username, action, detail)`（动作在 2）——
+ * 正是 `retirement.Scheduler` 的形态。SEEDS 里默认只登记了 3 参形态（动作在 1），
+ * 这里补上 4 参形态（与 `Audit.test.tsx` 的 `AUDIT_FORWARDING_SINKS` 同一份登记表）。
+ */
+const CONST_SEEDS: AuditSinkSeed[] = [...SEEDS, { name: 'Audit', actionArg: 2 }]
+const CONST_GRAPH = analyzeAuditGraph([CONST_ACTION], CONST_SEEDS)
+
+describe('动作名是包级常量时也必须被抽出来（反证 F-7）', () => {
+  it('同包 const 实参 ⇒ 值被当作动作名（单条声明 / const 分组 / 带类型标注都在内）', () => {
+    const found = [...CONST_GRAPH.actions.keys()].sort()
+    expect(found).toContain('wasm_app_purge')
+    expect(found).toContain('wasm_app_purge_tick')
+    expect(found).toContain('wasm_app_purge_other')
+    // 位置指向**常量声明处**（排障时直接跳过去改动作名）。
+    expect(CONST_GRAPH.actions.get('wasm_app_purge')).toBe('internal/wasmapp/retirement/scheduler.go:3')
+  })
+
+  it('按实参个数消歧：执行者常量不会变成动作名，3 参签名自己那条照样认得出', () => {
+    const found = [...CONST_GRAPH.actions.keys()]
+    // 4 参调用 ⇒ 只认下标 2；下标 1 的 `auditActor="system"` / `auditNotAnAction="just_…"`
+    // 都落在"用户名字段"上，不是动作名。
+    expect(found).not.toContain('system')
+    expect(found).not.toContain('just_a_value_with_underscores')
+    // 3 参签名（动作在下标 1）自己那条照样认得出。
+    expect(found).toContain('wasm_app_three_arg')
+    // 未定义的标识符解析不出来 ⇒ 不会凭空造一个动作名。
+    expect(found).not.toContain('undefinedConst')
+    // 字面量路径不受影响（两种形态并存）。
+    expect(found).toContain('wasm_app_literal_action')
+  })
+
+  it('反证：只认字面量的旧口径在这份夹具里只能看到 1 条，新口径能看到 5 条', () => {
+    const literalOnly = new Set<string>()
+    for (const call of scanCalls(blankComments(CONST_ACTION.text))) {
+      const arg = call.args[2]?.trim()
+      const m = arg === undefined ? null : /^"([^"]*)"$/u.exec(arg)
+      if (m !== null) literalOnly.add(m[1]!)
+    }
+    expect([...literalOnly]).toEqual(['wasm_app_literal_action', 'detail'])
+    expect([...CONST_GRAPH.actions.keys()].sort()).toEqual([
+      'wasm_app_literal_action',
+      'wasm_app_purge',
+      'wasm_app_purge_other',
+      'wasm_app_purge_tick',
+      'wasm_app_three_arg',
+    ])
   })
 })
 

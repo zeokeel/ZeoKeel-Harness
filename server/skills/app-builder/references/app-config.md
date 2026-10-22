@@ -64,8 +64,8 @@
 | 字段 | 类型 | 必填 | 缺省 | 取值 / 上限 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `window.ratio` | string | 否 | — | — | 强制锁定的宽高比：写 "W:H"（如 "16:9"）或浮点数（如 1.7778）；合法区间 0.25–4.0（越界/0/负/非数字 ⇒ `APP_CONFIG_INVALID`） |
-| `window.width` | string | 否 | — | — | 首次打开的窗口宽度（像素，正整数）：缺省 1280；与 ratio 冲突时以 ratio 为准 |
-| `window.height` | string | 否 | — | — | 首次打开的窗口高度（像素，正整数）：缺省 720；与 ratio 冲突时以 ratio 为准 |
+| `window.width` | integer | 否 | — | ≤ 7680 | 首次打开的窗口宽度（像素，正整数 320–7680）：缺省 1280；与 ratio 冲突时以 ratio 为准 |
+| `window.height` | integer | 否 | — | ≤ 7680 | 首次打开的窗口高度（像素，正整数 320–7680）：缺省 720；与 ratio 冲突时以 ratio 为准 |
 
 字段提示：
 
@@ -73,10 +73,10 @@
   - 窗口 resize 时按它约束比例：这是**强制**项，不是建议
   - 只给 ratio 时按默认宽度 1280 推高度（16:9 ⇒ 1280×720）
 - `window.width`
-  - 合法区间见 `window_fields` 的 max（越界 ⇒ `APP_CONFIG_INVALID`）
-  - 写字符串（"1280px"）或小数一律拒
+  - 必须是**正整数**：字符串（"1280px"）、小数、0、负数、超出 320–7680 一律拒（`APP_CONFIG_INVALID`）
 - `window.height`
   - 只写 height 时宽度按 ratio 推导
+  - 与 width 同一条判据：字符串/小数/0/负数一律拒
 
 ## 2. 发布载荷（`validate` / `publish` 的请求体）
 

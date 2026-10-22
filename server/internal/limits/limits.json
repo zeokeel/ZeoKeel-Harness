@@ -680,11 +680,19 @@
       "Unit": "count",
       "Section": "§4.6",
       "Title": "每应用队列长度",
-      "Note": "超出 429 + Retry-After"
+      "Note": "超出 429 + Retry-After；它只管**条数**，排队字节由下一条封顶"
+    },
+    {
+      "Key": "wasm_queue_body_bytes_max",
+      "Value": "268435456",
+      "Unit": "bytes",
+      "Section": "§4.6",
+      "Title": "排队请求体全局上限",
+      "Note": "全局硬上界（≠ 每应用队列长度 × 请求体上限）：准入前已读入、等待中的请求体合计超过即 429 APP_QUEUE_FULL（details.reason=queue_bytes_exceeded）；同一笔计入 /readyz 内存账"
     },
     {
       "Key": "user_per_app_running",
-      "Value": "1",
+      "Value": "2",
       "Unit": "count",
       "Section": "§4.6",
       "Title": "单用户同应用在跑",

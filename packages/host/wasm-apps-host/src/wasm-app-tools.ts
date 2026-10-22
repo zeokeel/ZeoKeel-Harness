@@ -226,7 +226,8 @@ const APP_CONFIG_DESCRIPTION_OPTIONAL = [
 
 /** `appId` 的形态规则（与 `limits.AppIDPattern`、服务端 `registry.ValidateAppID` 同口径）。 */
 const APP_ID_DESCRIPTION = [
-  '应用标识（app_id），同时也是它的域名标签：应用地址是 https://<app_id>.<企业域名>。',
+  '应用标识（app_id）：在应用中心里唯一标识一个应用，也是客户端内打开地址的 host 部分。',
+  '应用**没有可贴进浏览器的地址**：它只能在桌面客户端的应用中心里打开（或客户端下发的深链），所以不要给用户编造任何访问链接。',
   '形态：小写字母/数字，用单个连字符分段（正则 ^[a-z0-9]+(?:-[a-z0-9]+)*$），不超过 63 个字符，',
   '不能是纯数字，不能以 xn-- 开头，不能用平台保留字（www / api / admin / portal / updates / sso / login 等）。',
   '**一经发布不能改名**；首个发布者永久占用该标识（删除、下架也还是他的）。',
@@ -520,15 +521,21 @@ export function registerWasmAppTools(ctx: Context, options: WasmAppToolOptions):
   disposers.push(tools.register(defineTool({
     name: 'wasm_app_list',
     description: [
-      '列出应用中心里的 WASM 应用（应用标识、标题、负责人、访问模式 access、是否上架 enabled、当前版本、入口链接）。',
+      '列出应用中心里的 WASM 应用（应用标识、标题、负责人、访问模式 access、是否上架 enabled、是否被冻结 frozen、当前版本号、首版审核状态 first_release / first_release_status）。',
       '发布前用它确认两件事：app_id 有没有被占用、以及已有应用的**当前版本号**（新版本号必须严格大于它）。',
-      // ⚠️ 这句曾经写成"下架的域名仍然可访问，只是不在应用中心推荐"，**两个分句都与实现相反**
-      // （独立评审 R1-pm-5 / R1-uxc-1）：
-      //   - 访问：`enabled=false` ⇒ 应用子域 **410 Gone**（server/internal/wasmapp/appserver/serve.go:80-85
-      //     的 writeGone，文案见 respond.go:149-155："应用已下架…数据仍然保留"）；
-      //   - 目录：下架条目**照样列在应用中心**（api/read.go:432-441 的目录条件，
-      //     服务端同一处注释已就地勘误）。
-      '**已下架**（enabled=false）的应用也会列出，但它的域名**不能访问**：应用子域对下架应用一律返回 410 Gone（数据保留、恢复上架后链接不变），不要据此认为标识空闲。',
+      // 2026-10-23 D-07：这一段替换了过时的"入口链接 + 应用子域 410"表述。平台**没有**
+      // 对外 URL：服务端目录不下发任何链接字段（server/internal/wasmapp/api/read.go 的目录行），
+      // 应用只能由桌面客户端打开。旧描述让模型给用户编一个"应用链接"、或解释"下架后域名
+      // 410"，两件事在客户端专属模型下都不存在 —— 用户拿着假链接去分享，失败信息把人
+      // 指向完全错误的排查方向。判据见 packages/host/enterprise/tests/wasm-app-tools.spec.ts。
+      '应用**没有对外 URL**：只能在桌面客户端的应用中心里打开（或客户端下发的深链 `<客户端 scheme>://app/<app_id>`，scheme 由客户端下发，**不得编造**）。不要给用户编任何访问链接或"网页地址"。',
+      // 目录语义（服务端 read.go）：下架条目**照样列出**（可逆、数据还在），冻结行只对
+      // 归属人本人列出；两者都**打不开**，也都不代表标识空闲。
+      '**已下架**（enabled=false）的应用也会列出，但**打不开**：数据仍然保留，恢复上架后仍是同一个应用；不要据此认为标识空闲（app_id 一经发布不能改名）。',
+      '**冻结**（frozen=true）的行只对归属人本人列出，同样打不开（解冻是发布者/管理员动作）。',
+      // U-02：归属人自己的首版待审/被拒/已撤回应用也会出现在这里，`enabled` 为 false
+      // —— 这是"还没有审核通过的版本"，**不是**"已下架"。
+      '归属人自己**首版待审 / 被拒 / 已撤回**的应用也会列出：`first_release=true`，`first_release_status` ∈ pending / rejected / withdrawn，`first_release_version` 是那一版的版本号（撤回请求的路径参数），被拒时还有 `first_release_reason`。这些行 `enabled=false`、**打不开**（还没有审核通过的版本），别当成"已上架"。',
       '只读，不改变任何状态。',
     ].join(''),
     parameters: {},
@@ -597,12 +604,13 @@ export function registerWasmAppTools(ctx: Context, options: WasmAppToolOptions):
       '给已有应用发新版本必须写 changelog（首版可以省略）。',
       '失败不占版本号：按返回的 error.code / details / hints 改完，用同一个版本号重发即可。',
       // 待审语义分两种（原句只写了第一种，"首版"那半句与实现不符）：
-      // 已有应用：目录与子域都继续用生效版本（serve.go 取 LatestApproved）；
-      // **首版**：没有任何 approved 版本 ⇒ 目录直接不列（api/read.go:440 的
-      // `CurrentReleaseID <= 0 → continue`）、子域 404"应用还没有可用版本"
-      // （appserver/serve.go:96-103）。写"线上仍是旧版本"会让模型以为首版也在服务。
+      // 已有应用：目录与客户端里的打开都继续用生效版本（serve.go 取 LatestApproved）；
+      // **首版**：没有任何 approved 版本 ⇒ 目录里只有归属人自己能看到那一行
+      // （api/read.go 的 `CurrentReleaseID <= 0` + `first_release`），打开返回
+      // "应用还没有可用版本"（appserver/serve.go）。写"线上仍是旧版本"会让模型以为
+      // 首版也在服务。旧的"子域"措辞随 D-07 一并删除：平台没有对外 URL。
       '若企业开启了更新审批，新版本会进待审队列（结果里 status=pending）：已有应用线上仍是旧版本、不影响正在使用的用户；',
-      '**首版**发布时则是"审核通过前应用还没有可用版本"（应用中心里也还看不到它）。',
+      '**首版**发布时则是"审核通过前应用还没有可用版本"（应用中心里对**归属人自己**显示首版待审/被拒且打不开，其他成员看不到这一行）。',
       SKILL_POINTER,
     ].join(''),
     parameters: {

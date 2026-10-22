@@ -114,21 +114,23 @@
         },
         {
           "key": "window.width",
-          "type": "string",
+          "type": "integer",
           "required": false,
-          "desc": "首次打开的窗口宽度（像素，正整数）：缺省 1280；与 ratio 冲突时以 ratio 为准",
+          "max": 7680,
+          "desc": "首次打开的窗口宽度（像素，正整数 320–7680）：缺省 1280；与 ratio 冲突时以 ratio 为准",
           "hints": [
-            "合法区间见 `window_fields` 的 max（越界 ⇒ `APP_CONFIG_INVALID`）",
-            "写字符串（\"1280px\"）或小数一律拒"
+            "必须是**正整数**：字符串（\"1280px\"）、小数、0、负数、超出 320–7680 一律拒（`APP_CONFIG_INVALID`）"
           ]
         },
         {
           "key": "window.height",
-          "type": "string",
+          "type": "integer",
           "required": false,
-          "desc": "首次打开的窗口高度（像素，正整数）：缺省 720；与 ratio 冲突时以 ratio 为准",
+          "max": 7680,
+          "desc": "首次打开的窗口高度（像素，正整数 320–7680）：缺省 720；与 ratio 冲突时以 ratio 为准",
           "hints": [
-            "只写 height 时宽度按 ratio 推导"
+            "只写 height 时宽度按 ratio 推导",
+            "与 width 同一条判据：字符串/小数/0/负数一律拒"
           ]
         }
       ]
@@ -213,21 +215,23 @@
     },
     {
       "key": "window.width",
-      "type": "string",
+      "type": "integer",
       "required": false,
-      "desc": "首次打开的窗口宽度（像素，正整数）：缺省 1280；与 ratio 冲突时以 ratio 为准",
+      "max": 7680,
+      "desc": "首次打开的窗口宽度（像素，正整数 320–7680）：缺省 1280；与 ratio 冲突时以 ratio 为准",
       "hints": [
-        "合法区间见 `window_fields` 的 max（越界 ⇒ `APP_CONFIG_INVALID`）",
-        "写字符串（\"1280px\"）或小数一律拒"
+        "必须是**正整数**：字符串（\"1280px\"）、小数、0、负数、超出 320–7680 一律拒（`APP_CONFIG_INVALID`）"
       ]
     },
     {
       "key": "window.height",
-      "type": "string",
+      "type": "integer",
       "required": false,
-      "desc": "首次打开的窗口高度（像素，正整数）：缺省 720；与 ratio 冲突时以 ratio 为准",
+      "max": 7680,
+      "desc": "首次打开的窗口高度（像素，正整数 320–7680）：缺省 720；与 ratio 冲突时以 ratio 为准",
       "hints": [
-        "只写 height 时宽度按 ratio 推导"
+        "只写 height 时宽度按 ratio 推导",
+        "与 width 同一条判据：字符串/小数/0/负数一律拒"
       ]
     }
   ]

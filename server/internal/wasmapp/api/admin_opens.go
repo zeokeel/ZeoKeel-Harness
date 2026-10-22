@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -24,6 +25,12 @@ import (
 func (h *Handlers) adminAppOpens(c *gin.Context) {
 	appID := strings.ToLower(strings.TrimSpace(c.Param("app_id")))
 	if aerr := h.validateAppIDServing(appID); aerr != nil {
+		writeErr(c, aerr)
+		return
+	}
+	// 只读面统一口径（2026-10-22 C-06）：不存在的应用必须 404，不能回 200 全零
+	// （那会被读成"这个应用没人用"）；已删除/已清除仍可读（保留期内复核）。
+	if _, aerr := h.loadAdminApp(c, appID, true); aerr != nil {
 		writeErr(c, aerr)
 		return
 	}
@@ -192,6 +199,76 @@ func (h *Handlers) adminOpensSummary(c *gin.Context) {
 			AppID: a.AppID, Title: a.Title, PV: a.WindowPV, UV: a.WindowUV,
 		})
 	}
+
+	// ---- C-14（审计 2026-10-22，P3）：看板必须能说"这个数字新不新" ----
+	//
+	// 现场：日汇总由 opens.Scheduler 每 5 分钟 tick 一次，而这条作业此前既没有
+	// 自记账也没有登记 —— 它停摆时唯一的可见现象是"看板数字不涨"，与"真的没人用"
+	// 在数据上完全同形。这里补三样：
+	//
+	//	① `aggregated_until`：**最后一次汇总**的时刻。两个来源取**较晚者**：
+	//	   - 库侧 `wasm_app_opens_daily.updated_at`（迁移 0075 就是为这条诊断留的列）：
+	//	     证明"表真的被写过"（有数据的部署上这是最硬的证据）；
+	//	   - 作业的 `LastRunAt`：证明"这一轮真的跑完了"（没有打开数据的部署上
+	//	     表永远不会被写，只看库会把一个健康部署误判成停摆）。
+	//	   两者都没有 ⇒ null（**不**用 now() 冒充）。
+	//	② `stale`：距 `aggregated_until` 超过**3 个 tick**（缺省 15 分钟）即为陈旧；
+	//	   作业未启动时恒为 stale（进程里没有任何人在汇总）。
+	//	③ `opens_job`：作业读数原样下发（started/runs/errors/last_run_at/last_error/tick_seconds），
+	//	   未注入时各字段为 null 而不是 0 —— "读不到"与"跑了 0 轮"必须可辨。
+	//
+	// stale 只描述**数据新鲜度**，不改任何数字：陈旧时看板照常显示最后汇总结果，
+	// 前端据此显示"数据可能未更新"（设计口径与 /readyz 的降级说明一致）。
+	jobKnown := h.opt.OpensHealth != nil
+	var job OpensJobHealth
+	if jobKnown {
+		job = h.opt.OpensHealth()
+	}
+	aggAt, aggKnown, aggErr := serverstore.LastWasmAppOpensAggregateAt(c.Request.Context(), h.opt.DB)
+	if aggErr != nil {
+		// 汇总时间读不到不影响看板主体（数字来自 Summarize*），但必须如实说"不知道新不新"。
+		aggKnown = false
+	}
+	if jobKnown && !job.LastRunAt.IsZero() && (!aggKnown || job.LastRunAt.After(aggAt)) {
+		aggAt, aggKnown = job.LastRunAt, true
+	}
+	staleAfter := 3 * job.Tick
+	if staleAfter <= 0 {
+		// 作业读数不可得时用 opens 的缺省间隔（15 分钟 = 3 × 5 分钟），而不是 0
+		//（0 会让任何时刻都判成 stale）。
+		staleAfter = 3 * opensJobDefaultTick
+	}
+	staleReasons := []string{}
+	switch {
+	case jobKnown && !job.Started:
+		staleReasons = append(staleReasons, "打开计数维护作业未启动（本进程没有任何人在汇总）")
+	case !aggKnown:
+		staleReasons = append(staleReasons, "没有任何汇总记录（从未有打开数据，或作业一次都没跑过）")
+	}
+	if aggKnown && now.Sub(aggAt) > staleAfter {
+		staleReasons = append(staleReasons, fmt.Sprintf("最后汇总在 %s（超过 %s 未更新）",
+			aggAt.Format(time.RFC3339), staleAfter))
+	}
+	if aggErr != nil {
+		staleReasons = append(staleReasons, "读取最后汇总时间失败: "+aggErr.Error())
+	}
+	var aggregatedUntil any
+	if aggKnown {
+		aggregatedUntil = aggAt.Format(time.RFC3339)
+	}
+	var jobOut gin.H
+	if jobKnown {
+		jobOut = gin.H{
+			"started":      job.Started,
+			"started_at":   zeroAsNil(job.StartedAt),
+			"runs":         job.Runs,
+			"errors":       job.Errors,
+			"last_run_at":  zeroAsNil(job.LastRunAt),
+			"last_error":   job.LastError,
+			"tick_seconds": int(job.Tick / time.Second),
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"from": serverstore.LocalDayString(from),
 		"to":   serverstore.LocalDayString(now),
@@ -215,7 +292,37 @@ func (h *Handlers) adminOpensSummary(c *gin.Context) {
 		"trend":                 sum.Trend,
 		"apps":                  sum.Apps,
 		"top_apps":              topApps,
+		// ---- C-14 的四个新增键（恒在；不可得时为 null/空数组，不省略）----
+		//
+		// `aggregated_until` = 最后一次汇总的时刻（RFC3339；没有记录时为 null）；
+		// `stale` = 数据是否可能已过期（见上面 staleReasons 的判定）；
+		// `stale_reasons` = 为什么判陈旧（空数组 = 不陈旧；给运维/AI 的可操作证据）；
+		// `stale_after_seconds` = 判定阈值（3 个 tick，前端可据此解释）。
+		// `opens_job` = 作业读数（未注入时缺省为零值 gin.H{} ⇒ 前端按"不可得"渲染）。
+		"aggregated_until":    aggregatedUntil,
+		"stale":               len(staleReasons) > 0,
+		"stale_reasons":       staleReasons,
+		"stale_after_seconds": int(staleAfter / time.Second),
+		"opens_job":           jobOut,
 	})
+}
+
+// opensJobDefaultTick 是**读不到作业读数**时用来推导 stale 阈值的缺省 tick。
+//
+// 必须与 opens.DefaultTick 同值（5 分钟）：这里不能用 0（那样任何时刻都 stale），
+// 也不能用"很大的值"（那会把停摆藏起来）。跨包同值的判据在 cmd/server 的装配用例里
+// （它直接比对 opens.DefaultTick）。
+const opensJobDefaultTick = 5 * time.Minute
+
+// zeroAsNil 把零值时刻渲染成 JSON null（"未发生"而不是 1970 年）。
+//
+// 前端对 null 与"很久以前"的处理必须不同：运行读数里 started_at/last_run_at 为
+// 零值表示"没启动/没跑过"，写成 0001-01-01 会被读成"跑过但时间戳异常"。
+func zeroAsNil(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // 看板缺省值（与 L6 前端一致；改这里要同步前端）。
@@ -235,6 +342,11 @@ const (
 func (h *Handlers) adminAppAIUsage(c *gin.Context) {
 	appID := strings.ToLower(strings.TrimSpace(c.Param("app_id")))
 	if aerr := h.validateAppIDServing(appID); aerr != nil {
+		writeErr(c, aerr)
+		return
+	}
+	// 同 adminAppOpens：不存在的应用 404，避免"恒零用量"被读成事实。
+	if _, aerr := h.loadAdminApp(c, appID, true); aerr != nil {
 		writeErr(c, aerr)
 		return
 	}

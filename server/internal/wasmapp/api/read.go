@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -81,7 +81,10 @@ func (h *Handlers) diagnosticsPayload(c *gin.Context, appID string, app *servers
 	// R2-DG-2 的加固：`h.instanceMemoryPages()` 取的是**已保存值**（控制台设置），
 	// 而单实例上限要重启才生效 ⇒ 在"保存了但没重启"的窗口里它仍然不是生效值。
 	// 这里统一走 effectiveMemoryPages()（运行时优先，见它的注释）。
-	summary, err := diag.SummaryWithLimits(ctx, h.opt.DB, appID, since, h.effectiveMemoryPages(), h.budgets())
+	// 该应用**运行期生效**的并发四轴（全局 + per-app 覆盖）：
+	// 429 类 hints 与响应里的 limits 段都必须用它，而不是全局默认值。
+	axes, hasOverride := h.effectiveQueueAxes(appID)
+	summary, err := diag.SummaryWithAppLimits(ctx, h.opt.DB, appID, since, h.effectiveMemoryPages(), h.budgets(), axes)
 	if err != nil {
 		return nil, internalErr("查询失败", err)
 	}
@@ -91,20 +94,92 @@ func (h *Handlers) diagnosticsPayload(c *gin.Context, appID string, app *servers
 	// 合并后保序去重（同一个 hint 不重复刷屏）。
 	hints := append([]string{}, summary.Hints...)
 	for _, f := range failures {
-		hints = append(hints, diag.HintsForLimits(f.ReasonCode, h.effectiveMemoryPages(), h.budgets())...)
+		hints = append(hints, diag.HintsForApp(f.ReasonCode, h.effectiveMemoryPages(), h.budgets(), axes)...)
+	}
+
+	// ---- A3（2026-10-22 功能合理性审计，P2）：把事件丢弃量交给作者 ----
+	//
+	// 现场：调用事件走**有界环形缓冲**，满了丢最旧并计数（events.Sink.Dropped），
+	// 落库失败丢整批并计数（Failed）。管理面的 `/admin/wasm-apps/runtime` 一直能看到
+	// 这两个数，**作者面诊断却一个字段都不给** —— 作者（第一消费者是 AI）看到
+	// `summary.failed = 0` 会直接得出"没有问题"，而这段时间可能已经丢了几千条事件。
+	// 丢弃本身是设计的一部分（§4.9「丢最旧并计数」），不是错误；但"统计可能不完整"
+	// 必须写在响应里，且 **0 也要下发**（缺字段与 0 在 JSON 消费侧无法区分）。
+	//
+	// `events_available=false` 时那两个 0 **不是**"没丢过"而是"没在记"：未装配 sink
+	// 时 failures 为空是另一回事，必须让作者能分辨这两种"看起来健康"。
+	eventsAvailable := h.opt.Events != nil
+	dropped, flushFailed := int64(0), int64(0)
+	if eventsAvailable {
+		dropped = h.opt.Events.Dropped()
+		flushFailed = h.opt.Events.Failed()
+	}
+	if dropped+flushFailed > 0 {
+		hints = append(hints, fmt.Sprintf("事件统计可能不完整：调用事件被丢弃 %d 条（环形缓冲满）/"+
+			"落库失败 %d 条，本页的失败次数与占比可能低于真实值", dropped, flushFailed))
+	}
+	if !eventsAvailable {
+		hints = append(hints, "调用事件通道未接线（events sink 未注入）：failures 为空不代表没有失败，"+
+			"请以平台运行时水位（/admin/wasm-apps/runtime 的 events 段）与平台日志为准")
+	}
+
+	// ---- A6（2026-10-22 功能合理性审计，P2）：whitelist 是「假准入」必须说清 ----
+	//
+	// R24：`access=whitelist` 的名单**由应用自己判定**，平台不比对。发布/诊断此前
+	// 零提示 ⇒ 作者以为平台在替它拦截，实际任何登录用户都能打开这个应用。
+	// 这里**不改任何准入语义**（平台鉴权仍是"登录 + 归属"），只把事实与可操作做法下发：
+	// `whitelist_enforced` 是恒为 false 的平台事实（写成字段而不是只在 hint 里提一次：
+	// AI 消费方按字段判断比读自然语言可靠），hint 给出"应用自己怎么判"的落点。
+	access := string(appcfg.AccessOfConfigJSON(app.ConfigJSON))
+	if access == string(appcfg.AccessWhitelist) {
+		hints = append(hints, "access=whitelist 只描述作者自判的名单：平台不比对白名单（R24），"+
+			"任何登录用户都能打开本应用；需要真正限制时请应用前端读取随包 zeokeel.app.json 的 whitelist "+
+			"自行判定，并对名单外用户给出明确的拒绝页（平台不会替应用做这一步）")
 	}
 	return gin.H{
-		"app_id":         appID,
-		"app_enabled":    app.Enabled,
-		"app_frozen":     app.FrozenAt != nil,
-		"app_deleted":    app.DeletedAt != nil,
-		"since":          summary.Since,
-		"window_minutes": int(window.Minutes()),
-		"retention_days": limits.CallEventRetentionDays,
-		"summary":        summary,
-		"failures":       failures,
-		"hints":          dedupeStrings(hints),
+		"app_id":              appID,
+		"app_enabled":         app.Enabled,
+		"app_frozen":          app.FrozenAt != nil,
+		"app_deleted":         app.DeletedAt != nil,
+		"access":              access,
+		"whitelist_enforced":  false,
+		"since":               summary.Since,
+		"window_minutes":      int(window.Minutes()),
+		"retention_days":      limits.CallEventRetentionDays,
+		"events_dropped":      dropped,
+		"events_flush_failed": flushFailed,
+		"events_available":    eventsAvailable,
+		"summary":             summary,
+		"failures":            failures,
+		"hints":               dedupeStrings(hints),
+		// 本应用**生效**的并发四轴 + 来源（override/global）。作者/AI 不需要再猜
+		// "我是被全局限的还是被单独降额了"（生产化评审：可解释性）。
+		"limits": gin.H{
+			"app_running":          axes.AppRunning,
+			"app_queue":            axes.AppQueue,
+			"user_per_app_running": axes.UserPerAppRunning,
+			"user_per_app_queued":  axes.UserPerAppQueued,
+			"source":               map[bool]string{true: "override", false: "global"}[hasOverride],
+		},
 	}, nil
+}
+
+// effectiveQueueAxes 返回某应用运行期生效的并发四轴与"是否有显式覆盖"。
+//
+// 优先级：Options.AppLimitsEffective（生产装配注入 queue.Scheduler.EffectiveOptions）
+// ⇒ 回落全局 Limits（最小装配/单测；来源恒为 global，绝不冒充 override）。
+func (h *Handlers) effectiveQueueAxes(appID string) (limits.Axes, bool) {
+	if h.opt.AppLimitsEffective != nil {
+		axes, hasOverride := h.opt.AppLimitsEffective(appID)
+		return axes, hasOverride
+	}
+	lim := h.budgets()
+	return limits.Axes{
+		AppRunning:        lim.AppRunning,
+		AppQueue:          lim.AppQueue,
+		UserPerAppRunning: lim.UserPerAppRunning,
+		UserPerAppQueued:  lim.UserPerAppQueued,
+	}, false
 }
 
 // effectiveMemoryPages 返回诊断面要用的单实例内存页数（R2-DG-2）。
@@ -651,36 +726,93 @@ func (h *Handlers) catalog(c *gin.Context) {
 		//     归属判据用**严格归属**（a.Owner == 调用者），不含超管兜底：管理员面在
 		//     webadmin（`?filter=frozen` + 管理端点），员工面不为他们扩面。
 		ownedByViewer := a.Owner != "" && a.Owner == viewer.Username
+		// 首版待审 / 被拒 / 已撤回（U-02，评审 2026-10-23 P1）。
+		//
+		// 现场：审核开关打开后作者发布的**第一个**版本落在 pending（publish.go 的
+		// `review ⇒ status=pending`），而"生效"只发生在 approved 分支
+		// （commitRelease 里 `in.status == ReleaseStatusApproved` 才部署）⇒ 首版待审
+		// 期间 `apps.current_release_id` 恒为 0。本函数的目录条件（"有生效版本"）
+		// 于是把这个应用**整行**跳过 —— 连归属人自己也看不到：作者无法确认审核状态、
+		// 看不到被拒理由、点不到「撤回」（撤回入口挂在目录行的版本历史里），而同一时刻
+		// 发布成功块还在承诺"线上仍是旧版本"并给出分享深链（同事点开得到"应用不存在"）。
+		//
+		// 定案（与"冻结行对归属人列出"同一条纪律，R6-B-3）：
+		//   · **归属人**看得到自己"占着标识但还没有任何生效版本"的行，行里带
+		//     `first_release:true` + `first_release_status`（pending/rejected/withdrawn）
+		//     + `first_release_version`（撤回要按它发请求）+ rejected 行的
+		//     `first_release_reason`（`app_releases.reason` 的读路径之一，R1-pm-3 的
+		//     "被拒必须能看到理由"在这里也不能断）；
+		//   · **其他人看不到这一行** —— 与"不存在"同形，不泄露存在性（R38/§8）；
+		//   · 行的 `enabled` 下发 **false**：这个应用**打不开**（没有可交付版本），
+		//     而 `enabled` 是"能不能用"的对外口径（客户端据此禁用打开、宿主工具面据此
+		//     判断可用性）。真实上架状态由 `first_release` 回答，客户端据此渲染
+		//     「待审/被拒（尚未上线）」而**不是**「已下架」；
+		//   · 标题/说明/访问级别/负责人取**那一版自己的**内容（`app_releases` 的
+		//     title/description/config_json）：发布路径对"待审"刻意不写投影列
+		//     （publish.go 的 E1 注释），而作者在被拒后重填一整个表单是不必要的惩罚。
+		//     未审核内容只随这一行下发给归属人本人，不会外泄给其他员工。
+		var firstRelease *serverstore.WasmRelease
 		if a.CurrentReleaseID <= 0 {
-			continue
+			if !ownedByViewer {
+				continue
+			}
+			firstRelease, err = h.firstReleaseOf(c.Request.Context(), a.AppID)
+			if err != nil {
+				writeErr(c, internalErr("查询版本失败", err))
+				return
+			}
+			if firstRelease == nil {
+				// 占名但从未发布成功（没有版本行）/ 审核已通过但部署事务失败（瞬时异常，
+				// 重试可自愈）：都不列 —— 见 firstReleaseOf 的注释。
+				continue
+			}
 		}
 		if a.FrozenAt != nil && !ownedByViewer {
 			continue
 		}
 		// 负责人 = zeokeel.app.json 的 owner（§4.2 的"负责人"声明）；平台归属
 		// （apps.owner）只是兜底 —— 两者同名不同物，不做互相推导（appcfg 包注释）。
+		//
+		// 首版行读**那一版**的配置（见上面的定案）：待审版本自己的 access/purpose/
+		// whitelist/window 才是作者下一次发布要沿用的基线。
+		cfgJSON := a.ConfigJSON
+		if firstRelease != nil {
+			cfgJSON = firstRelease.ConfigJSON
+		}
 		var cfg appcfg.Config
-		if a.ConfigJSON != "" {
-			_ = json.Unmarshal([]byte(a.ConfigJSON), &cfg)
+		if cfgJSON != "" {
+			_ = json.Unmarshal([]byte(cfgJSON), &cfg)
 		}
 		responsible := strings.TrimSpace(cfg.Owner)
 		if responsible == "" {
 			responsible = a.Owner
 		}
 		isOwner := a.Owner == viewer.Username || isSuperAdmin(viewer)
+		// 首版行列的显示面取那一版自己的值（理由见上面 firstRelease 的定案）。
+		rowTitle, rowDescription := a.Title, a.Description
+		enabled := a.Enabled
+		if firstRelease != nil {
+			if t := strings.TrimSpace(firstRelease.Title); t != "" {
+				rowTitle = t
+			}
+			rowDescription = firstRelease.Description
+			// 没有任何可交付版本 ⇒ 打不开。`enabled` 是"能不能用"的唯一对外口径
+			// （客户端用它禁用打开、宿主工具面用它判断可用性）。
+			enabled = false
+		}
 		row := gin.H{
 			"app_id":      a.AppID,
-			"title":       a.Title,
-			"description": a.Description,
+			"title":       rowTitle,
+			"description": rowDescription,
 			"responsible": responsible,
 			"owner":       a.Owner,
 			// access 让应用中心能标出访问级别（public/login/whitelist）；
 			// 它从 config_json 现解（旧 schema 由 appcfg 的兼容 shim 映射，
 			// 解析失败回落 login —— 见 appcfg.AccessOfConfigJSON）。
-			"access": string(appcfg.AccessOfConfigJSON(a.ConfigJSON)),
+			"access": string(appcfg.AccessOfConfigJSON(cfgJSON)),
 			// enabled=false = 已下架：**不能**从 URL 直达（appserver 返回 410 Gone，
 			// 见 writeGone），但它仍列在目录里（理由见上面的目录条件）。
-			"enabled": a.Enabled,
+			"enabled": enabled,
 			// frozen=true = 已冻结（R6-B-3）：冻结**顺带下架**（release.go 的 freeze
 			// 先置 frozen_at 再 enabled=0），所以只看 enabled 会把冻结显示成"已下架"
 			// —— 两者的处置完全不同（下架可自己重新上架；冻结要先解冻，而解冻入口
@@ -692,6 +824,23 @@ func (h *Handlers) catalog(c *gin.Context) {
 			"current_version": versions[a.CurrentReleaseID],
 			// 调用者是不是发布者：客户端据此给出"发新版"入口（非发布者发布必然 404）。
 			"is_owner": isOwner,
+		}
+		// 首版行（只可能是归属人自己的行，见上面 firstRelease 的定案）：把"为什么
+		// 打不开"与"下一步能做什么"一并给出 —— 状态（pending/rejected/withdrawn）、
+		// 版本号（撤回请求的路径参数）与被拒理由。
+		//
+		// 为什么用扁平的 `first_release_*` 而不是嵌套对象：目录行本来就是扁平契约
+		// （客户端 `parseCatalogReport` 逐字段读、未知字段忽略），嵌套会让"哪一行是
+		// 首版行"多一层形状判断。
+		if firstRelease != nil {
+			row["first_release"] = true
+			row["first_release_status"] = firstRelease.Status
+			row["first_release_version"] = firstRelease.Version
+			if firstRelease.Status == serverstore.ReleaseStatusRejected {
+				// 被拒理由：数据库保证 approved/pending 行的 reason 恒为空串，
+				// 所以只在 rejected 行上下发（客户端据此渲染"理由 + 重发出路"）。
+				row["first_release_reason"] = firstRelease.Reason
+			}
 		}
 		// 窗口的默认尺寸与**强制宽高比**（§6 的 `window.*` 三个字段，R1-L3-9）：
 		// F3 的"强制锁比例"要用它建窗，而目录是客户端在打开前唯一能读到应用配置的地方
@@ -730,11 +879,55 @@ func (h *Handlers) catalog(c *gin.Context) {
 				whitelist = []string{}
 			}
 			row["whitelist"] = whitelist
+			// data_sensitivity：作者「发新版」时要**显示并沿用**上一次的声明
+			// （C 泳道 F-02/F-03 的前端依赖；此前目录行只下发 purpose/whitelist，
+			// 表单的数据敏感度只能凭空重填）。
+			//
+			// 真源是**生效版本的 config_json**（cfg 从 apps.config_json 现解，而那一列
+			// 是生效版本的投影）；投影为空时回落到发布时随包声明的同名声明。
+			// 与 purpose/whitelist 同一条纪律：**只对发布者本人下发** —— 数据敏感度
+			// 是内部合规声明，目录对全体员工可见（R38），无条件下发等于把它摊开。
+			sensitivity := strings.TrimSpace(cfg.DataSensitivity)
+			if sensitivity == "" {
+				sensitivity = strings.TrimSpace(a.DataSensitivity)
+			}
+			row["data_sensitivity"] = sensitivity
+			// responsible 已在上方按"负责人声明优先、平台归属兜底"算好并**对所有行**
+			// 下发（它是门面信息）；这里不再重复。
 		}
 		// R36：目录**不**显示额度/用量 —— 这里刻意不返回任何用量字段。
 		out = append(out, row)
 	}
 	c.JSON(http.StatusOK, gin.H{"apps": out})
+}
+
+// firstReleaseOf 返回"还没有生效版本"的归属人行所需的**最近一次**版本。
+//
+// 只取最近一版（`ListWasmReleases` 按 `(created_at, id)` 升序，取末元素）：全部
+// 版本的读面仍然是 `GET …/:app_id/releases`（R1-pm-3）；目录行只需要回答"这一行
+// 现在处于哪个状态、撤回该用哪个版本号"。
+//
+// 返回 nil 的两种情形（目录都不列这一行，与既有口径一致）：
+//   - **一个版本行都没有**：占名但从未发布成功（发布失败不落行）；
+//   - **最近一版是 approved 却没有生效指针**：这是"审核通过但部署事务失败"的
+//     瞬时异常（admin.go 的 approve 路径重试会自愈，见 admin_review_repair_test）。
+//     把一版"已通过却打不开"的行摆给作者，只会让作者以为审核结果丢了。
+//
+// 其余状态（pending / rejected / withdrawn）都要列：那正是作者**唯一**能看到"我的
+// 首版卡在哪、被什么理由拒了、要不要撤回重发"的地方（U-02）。
+func (h *Handlers) firstReleaseOf(ctx context.Context, appID string) (*serverstore.WasmRelease, error) {
+	releases, err := serverstore.ListWasmReleases(ctx, h.opt.DB, appID, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(releases) == 0 {
+		return nil, nil
+	}
+	latest := releases[len(releases)-1]
+	if latest.Status == serverstore.ReleaseStatusApproved {
+		return nil, nil
+	}
+	return &latest, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -801,6 +994,11 @@ func (h *Handlers) myReleases(c *gin.Context) {
 			"current":    r.Version == current && current != "",
 			"checksum":   r.Checksum,
 			"size":       r.Size,
+			// bytes_released（2026-10-22 终轮反证）：制品字节已释放（审核拒绝/作者撤回/
+			// 退役/GC）时 `archive=NULL, size=0`。前端此前只能靠 `size<=0` 推断，而
+			// `size` 缺失与"真的 0 字节"不可区分；给出显式事实字段，部署选择器据此
+			// 排除不可部署的 approved 版本（服务端仍会 409 RELEASE_BYTES_RELEASED）。
+			"bytes_released": r.Size <= 0,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -845,94 +1043,13 @@ func (h *Handlers) export(c *gin.Context) {
 		writeErr(c, oerr)
 		return
 	}
-	ctx := c.Request.Context()
-	releases, err := serverstore.ListWasmReleases(ctx, h.opt.DB, appID, true)
-	if err != nil {
-		writeErr(c, internalErr("查询失败", err))
-		return
+	// 实现收敛到 lifecycle_actions.go 的 exportForApp（设计 2026-10-22 §5.6）：
+	// 默认 JSON（format /1，向后兼容）；`?database=1` / `?assets=1` ⇒ application/zip。
+	// 快照目录（R37 的定期快照）与导出现在共用 internal/wasmapp/lifecycle 的同一份
+	// BuildExport —— 两份实现必然漂移，而漂移的表现是"快照里有一份、导出里少一份"。
+	role := serverstore.ActorRoleOwner
+	if app.Owner != u.Username && isSuperAdmin(u) {
+		role = serverstore.ActorRoleSuperAdmin
 	}
-	h.auditApp(appID, u.Username, "wasm_app_export",
-		auditDetail(appID, auditTitleOf(app), "导出控制面快照"))
-
-	rows := make([]gin.H, 0, len(releases))
-	var currentVersion string
-	for _, r := range releases {
-		row := gin.H{
-			"version":     r.Version,
-			"title":       r.Title,
-			"description": r.Description,
-			"changelog":   r.Changelog,
-			"publisher":   r.Publisher,
-			"status":      r.Status,
-			// 审核结论（被拒理由；通过/待审恒为空串）：导出的快照要能回答"这一版
-			// 为什么没上线"，否则退役后的回看只剩一个 status（R1-pm-3）。
-			"reason":     r.Reason,
-			"checksum":   r.Checksum,
-			"size":       r.Size,
-			"created_at": r.CreatedAt,
-			"deleted":    r.DeletedAt != nil,
-		}
-		if r.ConfigJSON != "" {
-			row["config"] = json.RawMessage(r.ConfigJSON)
-		}
-		if r.ID == app.CurrentReleaseID {
-			currentVersion = r.Version
-			row["current"] = true
-		}
-		rows = append(rows, row)
-	}
-	var appConfig json.RawMessage
-	if app.ConfigJSON != "" {
-		appConfig = json.RawMessage(app.ConfigJSON)
-	}
-	body := gin.H{"export": gin.H{
-		"format":      "zeokeel.wasm-app-export/1",
-		"exported_at": h.now().UTC(),
-		"app": gin.H{
-			"app_id": app.AppID,
-			"title":  app.Title,
-			// 标题的**来源**（审计第三轮 B 区，2026-09-19）：首版待审期间 apps.title 是
-			// app_id 占位而不是任何一版的真实标题 —— 导出是给 AI/运维读的控制面快照，
-			// 光看 `title: "brand-new-tool"` 会把占位当事实（"这个应用叫这个名字"）。
-			// 取值：
-			//   release            = apps.title 是**生效版本**标题的投影（唯一可信的标题来源）；
-			//   app_id_placeholder = 还没有生效版本，title 是 app_id 占位（不是真实标题）；
-			//   empty              = 没有生效版本且行里也没有标题（历史残渣）。
-			// 加字段不改值 ⇒ format 仍是 zeokeel.wasm-app-export/1。
-			"title_source":       exportTitleSource(app),
-			"description":        app.Description,
-			"owner":              app.Owner,
-			"channel":            app.Channel,
-			"enabled":            app.Enabled,
-			"access":             string(appcfg.AccessOfConfigJSON(app.ConfigJSON)),
-			"purpose":            app.Purpose,
-			"data_sensitivity":   app.DataSensitivity,
-			"config":             appConfig,
-			"current_version":    currentVersion,
-			"current_release_id": app.CurrentReleaseID,
-			"frozen_at":          app.FrozenAt,
-			"deleted_at":         app.DeletedAt,
-			"created_at":         app.CreatedAt,
-			"updated_at":         app.UpdatedAt,
-		},
-		"releases": rows,
-		"assets": gin.H{
-			"layout": "<data_root>/apps/<app_id>/assets/<release_id>/",
-			"note":   "静态资源在发布期已从 wasm 自定义段抽出到这个目录；本导出**不**返回资源内容（可从各版本 wasm 重新抽出）",
-		},
-		"database": gin.H{
-			"path_template": "<data_root>/apps/<app_id>/app.db",
-			"included":      false,
-			"why": "应用库里是**使用者**写入的业务数据（可能含个人信息）；导出它属于独立的管理员运维动作，" +
-				"不在本端点范围内（§8 管理平面边界：本导出只含控制面元数据）",
-			"snapshot_hint": "SQLite 单文件只读快照：`VACUUM INTO '<目标路径>'`（SQLite 3.27+；不锁写、不留 WAL 尾巴）；" +
-				"平台侧 R37 的定期快照由后台任务执行（当前未实现）",
-		},
-		"retention": gin.H{
-			"snapshot_days": limits.RetirementSnapshotRetentionDays,
-			"note":          "R37：冻结 → 只读快照保留期内可导出 → 保留期结束后真删（真删任务当前未实现）",
-		},
-	}}
-	c.Header("Content-Disposition", `attachment; filename="`+url.PathEscape(appID)+`-export.json"`)
-	c.JSON(http.StatusOK, body)
+	h.exportForApp(c, app, u.Username, role)
 }

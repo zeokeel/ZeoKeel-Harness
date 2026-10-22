@@ -172,9 +172,15 @@ node scripts/pack-assets.mjs --in shared-notes.wasm --out dist/shared-notes-pack
 | 步骤 | 端点（管理面只在平台主站；应用在客户端内以 `<渠道 app 源 scheme>://<app_id>` 打开，渠道参数化，拿不到管理面） | 说明 |
 | --- | --- | --- |
 | 预检 | `POST /api/client/v2/apps/wasm/validate` | 静态检查 + 真编译 + 合成帧干跑；**不占版本号、不进审计** |
+| 标识预查 | `GET /api/client/v2/apps/wasm/:app_id/availability` | 只读：标识唯一性 / 保留字（不编译、不占号、不进审计） |
 | 提交新版本 | `POST /api/client/v2/apps/wasm/:app_id/releases` | **同步**：成功才落版本行；请求体含 wasm + `version`/`title`/`changelog` + 应用配置文件 |
+| 版本历史 + 审核结论 | `GET …/wasm/:app_id/releases` | 自己应用的版本清单、状态（`pending`/`rejected`/`approved`/`withdrawn`）与被拒理由；**审核结论唯一的作者侧出口** |
+| 部署历史 | `GET …/wasm/:app_id/deployments?limit=` | `current_version` / `current_deployment_id` / `current_release_id` + 历史行；`current` 由**部署指针**判定 |
+| 部署 / 回滚 | `POST …/wasm/:app_id/deployments` | 体 `{"version":"x.y.z","message":"…"}`；**回滚 = 用旧版本再部署一次**（不重传、不重审） |
+| 撤回待审版本 | `POST …/wasm/:app_id/releases/:version/withdraw` | **只对 `pending`**：置 `withdrawn`、释放制品字节、版本号永久占用 |
+| 恢复软删 | `POST …/wasm/:app_id/restore` | 保留期内可恢复；恢复后 `enabled` 仍为 0（**不自动上架**），部署指针已复位 |
 | 上架 / 下架 | `POST /api/client/v2/apps/wasm/:app_id/publish` · `…/unpublish` | 发布者自主操作，与审核开关无关 |
-| 冻结 / 导出 / 删除 | `POST …/wasm/:app_id/freeze` · `GET …/export` · `DELETE …/wasm/:app_id` | 冻结 = 停止服务 + 下架 + 进入只读保留期（`retirement_snapshot_retention_days` = 90 天）；导出 = 控制面元数据 JSON（**不含**应用库里的业务数据）；删除 = **软删**（标识与版本号永久占位）——⚠️ **保留期到期后的定期快照与「真删」后台任务尚未实现**：制品与应用库会一直留在服务端 |
+| 冻结 / 导出 / 删除 | `POST …/wasm/:app_id/freeze` · `GET …/export` · `DELETE …/wasm/:app_id` | 冻结 = 停止服务 + 下架 + 进入只读保留期（`retirement_snapshot_retention_days` = 90 天）；导出 = 控制面元数据 JSON（**不含**应用库里的业务数据），`?database=1&assets=1` 可导出库快照/资源；删除 = **软删**（标识与版本号永久占位）。**保留期到期后平台会真删**制品、应用库与快照（快照在冻结/删除时生成；已清除后不可恢复，元数据与部署历史留作审计） |
 | 诊断 | `GET …/wasm/:app_id/diagnostics` | 最近失败与被杀记录（见 `references/diagnostics.md`） |
 | 自省 | `GET …/wasm/:app_id/schema` | 表结构与占用（仅发布者可见，并写审计） |
 | 数据 | `GET …/wasm/:app_id/rows?table=&limit=&offset=&unmask=` | 某张表的一页行（仅发布者；**默认脱敏**敏感列，原值需显式 `unmask=1` 且单独记审计） |
@@ -196,7 +202,58 @@ node scripts/pack-assets.mjs --in shared-notes.wasm --out dist/shared-notes-pack
 更新审批（组织级开关，默认关）：
 
 - 关闭 ⇒ 新版本发布后直接生效；
-- 开启 ⇒ 新版本进待审队列，**线上仍是旧版本**（不影响使用），管理员通过后生效。
+- 开启 ⇒ 新版本进待审队列，**线上仍是旧版本**（不影响使用），管理员通过后生效；
+- **`approved` ≠ 线上**：审批通过只部署**本次被批准的那一版**，且按 SemVer 只有比当前生效
+  版本新才真的切指针 —— 它**不会**把线上跳到别的更新版本，也**不会撤销**你之后做的回滚；
+- **`rejected` 是终态**：被拒版本**不可改判通过**（`409 APPROVED_NOT_REJECTABLE` 是反方向的
+  同族），字节在拒绝时释放、版本号永久占位 ⇒ 改完发**更高**的版本号。
+
+## 4.1 版本与部署：回滚、撤回、恢复、审核结论
+
+三条只读 + 三条动作，构成"线上跑的是哪一版 / 怎么退回去"。四条的鉴权都是**发布者本人或超管**，
+非本人一律 **404**、与"应用不存在"逐字节同形。
+
+| 想做的事 | 端点 | 语义要点 |
+| --- | --- | --- |
+| 看我的版本与审核结论 | `GET …/:app_id/releases` | 状态 `pending` / `rejected`（带理由）/ `approved` / `withdrawn`；返回体不含制品字节 |
+| 看部署历史 | `GET …/:app_id/deployments?limit=` | `current_version` / `current_deployment_id` / `current_release_id` + 历史行；`current` 由**部署指针**判定（不是"最新一行"） |
+| **回滚** | `POST …/:app_id/deployments`（`{"version":"x.y.z","message":"…"}`） | **回滚 = 用旧版本重新部署一次**：不重传、不重审、不改写历史；目标已是当前版本 ⇒ `changed:false`（幂等，不追加历史、不写审计） |
+| 撤回待审版本 | `POST …/:app_id/releases/:version/withdraw` | **只对 `pending`**：置 `withdrawn`、释放制品字节、**版本号仍永久占用** |
+| 恢复软删 | `POST …/:app_id/restore` | 保留期内可恢复；恢复后 `enabled` 仍为 0（**不自动上架**），部署指针已复位 ⇒ 先发布/部署一个仍有字节的版本，再上架 |
+| 标识预查 | `GET …/:app_id/availability` | 只读（不编译、不占号、不进审计） |
+
+动作的错误码都带可操作 hints：`RELEASE_NOT_DEPLOYABLE`(409，不是 approved) /
+`RELEASE_NOT_PENDING`(409，撤回只对 pending) / `RELEASE_BYTES_RELEASED`(409，制品字节已释放) /
+`APP_FROZEN`(409，先解冻) / `APP_DELETED`(409，先 restore) / `APP_PURGED`(410，保留期到期已真删)。
+
+五条硬语义：
+
+1. **版本状态与"线上"是两件事**：生效版本只认**部署指针**；`approved` 只说明"这一版可以上线"。
+2. **回滚只切制品版本**：`title` / 配置 / 访问级别跟着**版本**走（回滚到 v1，线上就是 v1 的配置）；
+   版本号、发布者、归属都不变。
+3. **撤回只对 `pending`**；`approved` / `rejected` / `withdrawn` 是终态。要把已上线版本下线，
+   请**部署另一个版本**（回滚）或下架/冻结 —— 没有"撤销上线"这个动作。
+4. **恢复不等于上架**：`restore` 之后必须显式 `publish`。
+5. **版本号永久占用**：被拒、被撤回、被软删的版本号都不释放，唯一出路是发更高的版本号。
+
+### 回滚**只切换制品版本，不恢复应用库**（应用库按 `app_id` 定位，跨版本共享）
+
+- 应用库**按 `app_id`** 定位（`server/internal/wasmapp/appdb/appdb.go` 的
+  `SafePath(dataRoot, appID)`）：一个应用**只有一份库文件**，所有版本共用同一份数据。
+- 所以回滚**不会**把库恢复到旧版本当时的样子（没有库快照回放，也没有按版本分库）。典型后果：
+  v2 改了表名/删了列 → 回滚到 v1 → v1 的代码读到空表或"列不存在"，
+  **看起来像"回滚把数据弄丢了"，其实数据还在、只是结构对不上**。
+- 正确做法：① 改结构用**新表名 + 双写/迁移列**，让新旧两版都能读；② 回滚前后用
+  `wasm_app_rows` 抽查关键表；③ 数据要"修回去"只能**发新版本**（带迁移逻辑的 v3）；
+  ④ 留档走保留期内的导出（`?database=1&assets=1`），那是运维动作、不是回滚。
+- `restore` 之后"恢复成功但打不开"是设计内行为：部署指针已复位，先发布/部署再上架。
+
+### **AI 工具面没有回滚 / 撤回**
+
+宿主提供给模型的工具只有六个：`wasm_app_list` / `wasm_app_validate` / `wasm_app_publish` /
+`wasm_app_schema` / `wasm_app_diagnostics` / `wasm_app_rows` —— **没有**部署（回滚）、撤回、
+恢复，也没有"读审核结论"的工具。⇒ **AI 可以发布；回滚 / 撤回 / 恢复必须在客户端「应用中心」
+里由人操作。** 不要声称已回滚，也不要编造"已撤回"的结论；需要这三个动作时直接告诉用户去哪儿点。
 
 ## 5. 访问模式与"应用能不能用"
 

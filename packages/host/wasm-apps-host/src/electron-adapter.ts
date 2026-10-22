@@ -19,14 +19,21 @@
  * @module @zeokeel/dsh-wasm-apps-host/electron-adapter
  */
 
-import { BrowserWindow, net, protocol, safeStorage, screen, session } from 'electron'
+import { BrowserWindow, Menu, net, protocol, safeStorage, screen, session } from 'electron'
 import type { ClientRequest, Session as ElectronSession } from 'electron'
 // 权限守卫与请求闸门**只有一份实现**（在 browser 包里，§16.1 要求浏览器与应用窗口
 // 共用）；本包通过 workspace 依赖使用它，不再自己写第二份。
 import { ensureSessionGuard, installAppSchemeRequestGate, type NativeSession as NativeGuardSession, type NativeWebRequestSession } from '@zeokeel/dsh-browser/guard'
-import { DEFAULT_APP_SCHEME, isValidAppScheme } from './app-protocol.ts'
-import { appWindowFailureCopy } from './app-window-copy.ts'
+import { APP_REQUEST_TIMEOUT_MS, DEFAULT_APP_SCHEME, isValidAppScheme } from './app-protocol.ts'
+import {
+  appWindowFailureCopy,
+  backAction,
+  dismissNoticeAction,
+  externalLinkNotice,
+  reloadAction,
+} from './app-window-copy.ts'
 import { createAppWindowRecovery, type AppWindowRecovery } from './app-window-recovery.ts'
+import { renderAppWindowSkeletonPage } from './app-window-skeleton.ts'
 import { DEFAULT_HOST_LOCALE, type HostLocale } from './locale.ts'
 // 窗口几何/生命周期/状态文件的**纯逻辑**在 `windows.ts`（无 Electron 依赖，单测覆盖）；
 // 本模块只实现它的原生动作面。类型从那里**再导出**（不复制第二份声明：两份声明
@@ -72,6 +79,18 @@ export interface AppSchemeRegistrar {
    * 与协议 handler 同一批注册点，每个 session 只装一次）。
    */
   installAppSchemeRequestGate?(scheme: string, isAppSurfaceWebContents: AppSchemeRequestGate, partition?: string): void
+  /**
+   * 清理**某个应用 origin** 在该分区里的浏览器存储（F-07，2026-10-22 审计）。
+   *
+   * 语义边界（每一条都是判据）：
+   *  1. **精确到 origin**：`clearStorageData({ origin })`，**不是**整分区清 ——
+   *     分区是按用户的，整分区清会把同一用户其它应用的 localStorage / IndexedDB
+   *     一起打掉（那是数据丢失，不是"删干净"）；
+   *  2. 分区由调用方传入（`currentPartition()`）：应用页面永远落在 `persist:` 分区里，
+   *     拿默认 session 清等于什么都没清；
+   *  3. 缺席 ⇒ 宿主记一条 warn 并**不假装清过**（纯 Node 宿主/测试替身没有 session）。
+   */
+  clearAppStorage?(partition: string, origin: string): Promise<void>
   /** 出站请求（缺省时插件用全局 fetch）。 */
   fetch?: (url: string, init: RequestInit) => Promise<Response>
   /**
@@ -395,6 +414,17 @@ export function createRealElectronAdapter(): WasmAppsHostAdapter {
         isAppSurfaceWebContents,
       })
     },
+    // F-07：下架/删除/真的恢复之后清**这个应用 origin** 的浏览器存储
+    //（**冻结/解冻不在此列**：只读快照、数据保留，见 `wasm-apps.ts` 的
+    // `lifecycleActionApplied`）。
+    // 必须带 `origin`（精确到应用）：分区是按用户的，整分区清会打掉同一账号下其它
+    // 应用的数据 —— 那样"删除一个应用"就变成了"清空这个人的全部应用存储"。
+    async clearAppStorage(partition, origin) {
+      const target = typeof partition === 'string' && partition !== ''
+        ? session.fromPartition(partition)
+        : session.defaultSession
+      await target.clearStorageData({ origin })
+    },
     // 出站**不走** `session.fetch`：见 createPlatformFetch 的注释（Origin ⇒ CORS 预检
     // ⇒ 平台没有 OPTIONS 路由 ⇒ 应用页永远"连不上服务端"）。
     fetch: createPlatformFetch(),
@@ -429,6 +459,66 @@ export interface RealAppWindowAdapterOptions {
    * 缺席 ⇒ 产品缺省语言（`DEFAULT_HOST_LOCALE`）。
    */
   locale?: (() => HostLocale) | undefined
+  /**
+   * 应用窗口的**渲染进程错误 preload** 绝对路径（U-03，2026-10-22 评审）。
+   *
+   * 与 shell 窗口同一份 `preload/renderer-error.cjs`（桌面壳给路径；本包不认识
+   * desktop 的目录布局）。它只把页面主世界的未捕获 `error`/`unhandledrejection`
+   * 经 IPC 转给主进程 —— 不向页面暴露 API、不持有 DSN、不联网。
+   *
+   * **为什么是每窗口的 `webPreferences.preload`，而不是 `session.setPreloads`**：
+   * 应用窗口落在**与内置浏览器共用**的按用户分区上；把 preload 装到 session 上会
+   * 让浏览器标签里的任意网页也被注入（本功能只需要应用窗口的覆盖面，越窄越安全）。
+   *
+   * 缺席 ⇒ 不装（纯 Node 宿主/旧装配；应用窗口仍能开，只是渲染错误不进链路）。
+   */
+  rendererErrorPreload?: string | undefined
+  /**
+   * 主进程侧应用窗口故障的**上报出口**（U-03）。
+   *
+   * 为什么由桌面壳注入：`reportRendererError` 与 Sentry sink 都在 desktop 包里，而
+   * 本包是它的依赖（不能反向 import）。本包只负责**把事件与 `app_id` 一起交出去**，
+   * 落点（Sentry tag、限流、无 sink 时静默丢弃）由宿主决定。
+   *
+   * 调用永远是 fail-soft：上报出口抛错只记一条 warn，绝不阻断窗口/恢复路径。
+   */
+  reportRendererError?: ((report: AppWindowRendererErrorReport) => void) | undefined
+  /**
+   * 客户端版本（失败页诊断块里的 `client:` 一行；由桌面壳给 `app.getVersion()`）。
+   */
+  appVersion?: string | undefined
+  /**
+   * "骨架 → 应用文档"的**加载看门狗**上限（毫秒；U-01）。
+   *
+   * 缺省 {@link APP_REQUEST_TIMEOUT_MS}（75 s，与协议 handler 的单次出站预算同值）：
+   * 协议 handler 自己超时后会把可读错误页作为文档返回，正常路径下看门狗不会先响；
+   * 它防的是"加载既不 resolve 也不 reject"（handler 卡死/导航被吞）时骨架永久停留。
+   * 单测用小值钉住行为。
+   */
+  loadTimeoutMs?: number | undefined
+  /** 当前是否暗色主题（窗口 `backgroundColor` 跟它，避免暗色下白屏闪一帧）。 */
+  isDarkTheme?: (() => boolean) | undefined
+}
+
+/**
+ * 应用窗口的主进程侧故障报告（U-03）。
+ *
+ * 三种事件源：渲染进程消失、顶层文档加载失败、窗口 unresponsive。**都带 `app_id`**
+ * （以及 `windowKind: 'app'`）—— 否则后台收到一条崩溃事件却不知道是哪个应用。
+ */
+export interface AppWindowRendererErrorReport {
+  /** 事件种类（与 shell 的 `render-process-gone` 同形，另有两条应用窗口专有）。 */
+  type: 'render-process-gone' | 'did-fail-load' | 'unresponsive'
+  /** 出事的应用 id（Sentry tag `zeokeel.app_id`）。 */
+  appId: string
+  /** 窗口种类（当前只有应用窗口走这条出口；保留字段供 shell 侧统一）。 */
+  windowKind: 'app'
+  /** 崩溃原因 / 错误描述 / `'timeout'`。 */
+  reason: string
+  /** `render-process-gone` 的退出码。 */
+  exitCode?: number
+  /** 出错时的文档 URL（应用窗口恒为 `<scheme>://<app_id>/…`）。 */
+  url?: string
 }
 
 /**
@@ -463,6 +553,117 @@ export interface RealAppWindowAdapterOptions {
  * @returns 交给桌面壳 `provide('wasmAppsWindowAdapter', …)` 的适配器实例。
  * @throws 当 `appScheme` 不是合法应用源 scheme 时。
  */
+/**
+ * 应用窗口内**提示条**的注入脚本（F-05，2026-10-22 审计）。
+ *
+ * 缺陷形态：应用里 `window.open` 一律 `deny`，而 `externalLinkNotice` /
+ * `downloadStartedNotice` 两条文案**零消费方** —— 用户点了外链，界面上什么都没发生
+ *（看起来像"链接坏了"）。应用窗口没有自绘 chrome，所以最小可用的反馈是把一个小提示
+ * 条**注入应用页面**（8 s 后自动消失，重复点击只有一条）。
+ *
+ * 安全：文案用 `JSON.stringify` 序列化进脚本 —— 一个带引号/换行的 host 也拼不出可执行
+ * 代码（提示条不得成为注入面）。注入失败不阻断 `deny`（提示是"有反馈"，不是许可）。
+ * @param text - 提示条正文（已本地化）。
+ * @returns 可直接交给 `webContents.executeJavaScript` 的脚本。
+ */
+export function appWindowNoticeScript(text: string): string {
+  const payload = JSON.stringify(String(text))
+  return `(() => {
+  try {
+    const existing = document.getElementById('zeokeel-app-notice')
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing)
+    const host = document.createElement('div')
+    host.id = 'zeokeel-app-notice'
+    host.setAttribute('role', 'status')
+    host.textContent = ${payload}
+    host.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);' +
+      'z-index:2147483647;max-width:min(560px,90vw);padding:10px 16px;border-radius:10px;' +
+      'font:13px/1.5 system-ui,-apple-system,"Segoe UI","PingFang SC",sans-serif;' +
+      'color:#fff;background:rgba(17,24,39,.92);box-shadow:0 6px 24px rgba(0,0,0,.28);' +
+      'pointer-events:none;word-break:break-word'
+    ;(document.body || document.documentElement).appendChild(host)
+    setTimeout(() => { if (host.parentNode) host.parentNode.removeChild(host) }, 8000)
+  } catch (error) { /* 提示失败不阻断 deny */ }
+})()`
+}
+
+/**
+ * 应用窗口的**版本更新提示条**脚本（U-06，2026-10-22 评审）。
+ *
+ * 缺陷形态：平台发了新版本、窗口还开着 ⇒ 窗口继续跑旧前端，而请求已被导到新版本的
+ * 资源（`index.ts` 的 `changed` 只清缓存、不重载；`windows.ts` 同 URL 不重载）；
+ * 全程没有"有新版本，刷新"的提示，`Ctrl/Cmd+R` 又只藏在右键菜单里。
+ *
+ * 形态：页面顶部一条**可关闭**的提示（`关闭` 按钮），`刷新` 按钮执行
+ * `location.reload()` —— 不静默强制刷新：应用里可能有未保存的草稿，重载必须由用户按。
+ * 注入是幂等的（重复收到同一版本通知不叠多条）。
+ *
+ * 安全：三个文案都用 `JSON.stringify` 序列化；节点只用 `textContent`，不拼 HTML。
+ * @param options - 本地化文案（正文/刷新/关闭）。
+ * @returns 可直接交给 `webContents.executeJavaScript` 的脚本。
+ */
+export function appWindowUpdateNoticeScript(options: { message: string, refresh: string, dismiss: string }): string {
+  const message = JSON.stringify(String(options.message))
+  const refresh = JSON.stringify(String(options.refresh))
+  const dismiss = JSON.stringify(String(options.dismiss))
+  return `(() => {
+  try {
+    const existing = document.getElementById('zeokeel-app-update')
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing)
+    const host = document.createElement('div')
+    host.id = 'zeokeel-app-update'
+    host.setAttribute('role', 'status')
+    host.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);' +
+      'z-index:2147483647;display:flex;align-items:center;gap:10px;max-width:min(620px,92vw);' +
+      'padding:10px 14px;border-radius:10px;font:13px/1.5 system-ui,-apple-system,"Segoe UI","PingFang SC",sans-serif;' +
+      'color:#fff;background:rgba(17,24,39,.94);box-shadow:0 6px 24px rgba(0,0,0,.28);' +
+      'pointer-events:auto;word-break:break-word'
+    const text = document.createElement('span')
+    text.textContent = ${message}
+    const reload = document.createElement('button')
+    reload.type = 'button'
+    reload.textContent = ${refresh}
+    reload.style.cssText = 'padding:4px 10px;border:1px solid #2563eb;border-radius:7px;background:#2563eb;color:#fff;font:inherit;cursor:pointer'
+    reload.addEventListener('click', () => { try { location.reload() } catch (error) {} })
+    const close = document.createElement('button')
+    close.type = 'button'
+    close.textContent = ${dismiss}
+    close.setAttribute('aria-label', ${dismiss})
+    close.style.cssText = 'padding:4px 8px;border:0;border-radius:7px;background:transparent;color:#d1d5db;font:inherit;cursor:pointer'
+    close.addEventListener('click', () => { if (host.parentNode) host.parentNode.removeChild(host) })
+    host.appendChild(text)
+    host.appendChild(reload)
+    host.appendChild(close)
+    ;(document.body || document.documentElement).appendChild(host)
+  } catch (error) { /* 提示失败不阻断应用 */ }
+})()`
+}
+
+/**
+ * 应用窗口的**右键菜单**（F-06）：刷新 / 返回。
+ *
+ * 为什么是右键菜单而不是自绘 chrome：应用窗口的几何已按作者声明锁定（`setAspectRatio`
+ * 的 `extraSize` 是给 chrome 预留的，但自绘标题栏要先改窗口 creation 与渲染页），而
+ * 右键菜单不需要动窗口版面，就能给"卡住了/想退一步"两个最常用的出口。键盘等价物
+ * 同时挂上（Ctrl/Cmd+R、Alt+← / Cmd+[），见 {@link createRealElectronWindowAdapter}
+ * 里 `installAppWindowGuards` 的 `before-input-event`。
+ * @param win - 原生窗口（菜单锚点）。
+ * @param locale - 宿主语言（每次弹菜单时求值）。
+ * @param actions - 两个动作的实现（便于单测替身）。
+ */
+export function buildAppWindowMenu(
+  win: BrowserWindow,
+  locale: HostLocale,
+  actions: { reload: () => void, back: () => void },
+): { menu: Menu } {
+  const menu = Menu.buildFromTemplate([
+    { label: reloadAction(locale), click: () => { actions.reload() } },
+    { label: backAction(locale), click: () => { actions.back() } },
+  ])
+  menu.popup({ window: win })
+  return { menu }
+}
+
 export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOptions): WasmAppsWindowAdapter {
   const { appScheme } = options
   if (!isValidAppScheme(appScheme)) {
@@ -470,6 +671,11 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
   }
   const warn = options.warn ?? ((): void => {})
   const locale = options.locale ?? ((): HostLocale => DEFAULT_HOST_LOCALE)
+  /**
+   * 看门狗上限（U-01）。构造期由 `loadTimeoutMs` 给（单测用小值），运行期可经
+   * {@link setLoadTimeout} 对齐插件的 `requestTimeoutMs`（见 windows.ts 的说明）。
+   */
+  let loadTimeoutMs = options.loadTimeoutMs
   /** 句柄 → 原生窗口。用注册表而不是 `instanceof`：单测的替身也是合法句柄。 */
   const handles = new WeakMap<object, BrowserWindow>()
 
@@ -503,7 +709,26 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
      * 最新一次请求**时才作数；崩溃事件前移序号，作废所有在飞结果。
      */
     loadSeq: number
+    /**
+     * "骨架 → 应用文档"的看门狗（U-01）。应用文档 `did-finish-load`/失败/崩溃/关窗
+     * 都会清掉它；只有"既不 resolve 也不 reject"的加载会让它响。
+     */
+    watchdog?: ReturnType<typeof setTimeout> | undefined
+    /**
+     * 应用文档是否**真的**完成过一次加载（U-01 看门狗的判据）。
+     *
+     * 为什么不用 `webContents.getURL()` 判：加载在飞时 `getURL()` 的语义随平台/时序
+     * 漂移（Replace/committed 的差别），而看门狗的结论必须是确定的 —— 一个显式的
+     * 布尔只会在"应用文档确实到了"时翻转。
+     */
+    appDocumentLoaded: boolean
   }
+
+  /**
+   * 允许在应用窗口里导航到的**精确 URL**（F-04：宿主渲染的会话过期页上的「重新登录」
+   * 按钮）。只放行精确匹配；`setNavigationAllowlist` 由插件在装配期登记。
+   */
+  const allowedNavigations = new Set<string>()
 
   const books = new WeakMap<BrowserWindow, AppWindowBookkeeping>()
 
@@ -598,7 +823,10 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
     try {
       await win.loadURL(url)
       // 只有"仍是最新一次请求"的加载成功才算窗口好了（见 `loadSeq` 的注释）。
-      if (book.loadSeq === seq) book.recovery.loaded()
+      if (book.loadSeq === seq) {
+        book.appDocumentLoaded = true
+        book.recovery.loaded()
+      }
     } catch (cause) {
       if (supersededLoad(cause)) return
       reportLoadFailure(url, cause)
@@ -606,6 +834,94 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
       // 覆盖"平台不可达"这类失败（两者都到达时由状态机的单飞合并）。
       if (book.loadSeq === seq) void book.recovery.fail({ kind: 'did-fail-load', reason: cause instanceof Error ? cause.message : String(cause) })
     }
+  }
+
+  /**
+   * 把主进程侧的应用窗口故障交给桌面壳的上报出口（U-03）。
+   *
+   * 三重 fail-soft：出口缺席（纯 Node/旧装配）⇒ 什么都不做；出口抛错 ⇒ 只记 warn；
+   * 无论哪种情况都**不阻断**窗口/恢复路径（上报坏掉绝不能影响用户）。
+   * @param report - 事件种类、`app_id` 与原因。
+   */
+  const reportAppWindowError = (report: AppWindowRendererErrorReport): void => {
+    if (options.reportRendererError === undefined) return
+    try {
+      options.reportRendererError(report)
+    } catch (cause) {
+      warn(`zeokeel-wasm-apps-host: reporting an application window error failed (${cause instanceof Error ? cause.message : String(cause)})`)
+    }
+  }
+
+  /** 清掉"骨架 → 应用文档"看门狗（幂等；窗口关闭/加载落地/崩溃都走它）。 */
+  const clearLoadWatchdog = (book: AppWindowBookkeeping): void => {
+    if (book.watchdog === undefined) return
+    clearTimeout(book.watchdog)
+    book.watchdog = undefined
+  }
+
+  /**
+   * 武装加载看门狗（U-01）。
+   *
+   * 判据是"**应用文档**还没成为当前文档"：骨架是 `data:` 文档，失败页也是 —— 但失败页
+   * 出现意味着恢复路径已经接管（那里会先清看门狗），所以这里只可能在"什么都没发生"时
+   * 响。到点走 `{ retry: false }`：应用加载还在飞，自动重载只会叠一次同目标导航。
+   * @param win - 原生窗口。
+   * @param appId - 应用 id（上报用）。
+   * @param url - 正在加载的应用 URL。
+   */
+  const armLoadWatchdog = (win: BrowserWindow, appId: string, url: string): void => {
+    const book = books.get(win)
+    if (book === undefined) return
+    clearLoadWatchdog(book)
+    const timeoutMs = loadTimeoutMs !== undefined && loadTimeoutMs > 0
+      ? loadTimeoutMs
+      : APP_REQUEST_TIMEOUT_MS
+    const timer = setTimeout(() => {
+      book.watchdog = undefined
+      if (win.isDestroyed()) return
+      if (book.appDocumentLoaded) return
+      warn(`zeokeel-wasm-apps-host: the application document of ${appId} did not finish loading within ${String(timeoutMs)}ms; showing the failure page`)
+      reportAppWindowError({ type: 'did-fail-load', appId, windowKind: 'app', reason: 'timeout', url })
+      // 这次超时作废在飞的加载结果（它若迟到成功，不得把失败页当成"窗口好了"）。
+      book.loadSeq += 1
+      void book.recovery.fail({ kind: 'did-fail-load', reason: 'timeout' }, { retry: false })
+    }, timeoutMs)
+    // 不拖住进程退出（Electron 主进程的 Node timer 支持 unref）。
+    const unref = (timer as unknown as { unref?: () => void }).unref
+    if (typeof unref === 'function') unref.call(timer)
+    book.watchdog = timer
+  }
+
+  /**
+   * 建窗后**第一件**事：把骨架页加载进窗口（U-01）。
+   *
+   * 为什么先 `await` 这一次加载再加载应用：两次 `loadURL` 背靠背时后一次会顶掉前一次
+   * （`ERR_ABORTED`），骨架一帧都画不出来 —— 那正好是这次要修的白屏。
+   *
+   * 返回 `false` 表示"不应该再继续加载应用"：窗口已销毁，或崩溃/恢复路径已经接管了
+   * 这个窗口（`loadSeq` 被前移）。
+   * @param win - 刚建好的原生窗口。
+   * @param appId - 应用 id。
+   * @param appLabel - 应用名（骨架标题）。
+   * @param url - 随后要加载的应用 URL（先记成 `desiredUrl`，崩溃时恢复路径要用）。
+   * @returns 是否继续加载应用文档。
+   */
+  const showLoadingSkeleton = async (win: BrowserWindow, appId: string, appLabel: string, url: string): Promise<boolean> => {
+    const book = books.get(win)
+    if (book === undefined) return false
+    // 恢复路径的重试目标必须从建窗那一刻起就有效（崩溃可以发生在首帧）。
+    book.desiredUrl = url
+    book.loadSeq += 1
+    const seq = book.loadSeq
+    try {
+      await win.loadURL(renderAppWindowSkeletonPage({ locale: locale(), appLabel }))
+    } catch (cause) {
+      // 骨架加载失败不阻断应用加载：它是"有反馈"的优化，不是建窗的前置条件。
+      reportLoadFailure(`application window skeleton for ${appId}`, cause)
+    }
+    if (win.isDestroyed()) return false
+    // 崩溃/恢复/其它导航已经接管：不要再把应用文档盖回去。
+    return book.loadSeq === seq
   }
 
   /**
@@ -621,6 +937,7 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
   const watchAppWindow = (win: BrowserWindow, appId: string): AppWindowBookkeeping => {
     const book: AppWindowBookkeeping = {
       desiredUrl: '',
+      appDocumentLoaded: false,
       health: new Set(),
       closed: new Set(),
       loadSeq: 0,
@@ -641,6 +958,14 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
         load: async (url) => { await win.loadURL(url) },
       },
       copy: () => appWindowFailureCopy(locale()),
+      // U-03：失败页上的诊断块（app_id / 出错 URL / 客户端版本）；U-09：`<html lang>`
+      // 跟随宿主语言（写死 `zh-CN` 会让英文界面的读屏按中文发音）。
+      diagnostics: () => ({
+        appId,
+        url: book.desiredUrl,
+        ...(options.appVersion === undefined ? {} : { clientVersion: options.appVersion }),
+      }),
+      pageLang: () => locale(),
       warn,
       onCrashStateChange: (crashed) => {
         for (const listener of book.health) listener({ crashed })
@@ -651,7 +976,19 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
     // 不是故障 —— 把它们也当崩溃会让"关闭窗口时进程正常退出"弹出一张失败页。
     win.webContents.on('render-process-gone', (_event, details) => {
       const reason = typeof details?.reason === 'string' ? details.reason : 'unknown'
+      const exitCode = typeof details?.exitCode === 'number' ? details.exitCode : undefined
       warn(`zeokeel-wasm-apps-host: the renderer process of an application window is gone (app=${appId}, reason=${reason}, exitCode=${String(details?.exitCode ?? '')})`)
+      // U-03：应用窗口崩溃此前**只 warn** —— 线上"某个应用全公司打不开"平台侧零信号。
+      // 上报与恢复解耦：正常收尾也上报（reason 进 tag），但只有真崩溃才恢复。
+      clearLoadWatchdog(book)
+      reportAppWindowError({
+        type: 'render-process-gone',
+        appId,
+        windowKind: 'app',
+        reason,
+        ...(exitCode === undefined ? {} : { exitCode }),
+        ...(book.desiredUrl === '' ? {} : { url: book.desiredUrl }),
+      })
       if (reason === 'clean-exit' || reason === 'killed') return
       // 崩溃前发出的那次加载即使"成功"也不能算窗口好了（见 `loadSeq`）。
       book.loadSeq += 1
@@ -675,10 +1012,34 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
       }
       if (errorCode === -3) return
       warn(`zeokeel-wasm-apps-host: the main frame of an application window failed to load (${String(errorCode)}: ${String(errorDescription)}) ${target}`)
+      // U-03：加载失败同样进上报链路（带 app_id）；恢复路径不受上报影响。
+      clearLoadWatchdog(book)
+      reportAppWindowError({
+        type: 'did-fail-load',
+        appId,
+        windowKind: 'app',
+        reason: `${String(errorCode)}: ${String(errorDescription)}`,
+        ...(target === '' ? {} : { url: target }),
+      })
       // 同上：这次失败作废所有在飞的加载结果（否则"导航失败但上一次加载成功"
       // 的结算顺序会把状态抹回健康）。
       book.loadSeq += 1
       void book.recovery.fail({ kind: 'did-fail-load', reason: `${String(errorCode)}: ${String(errorDescription)}` })
+    })
+
+    // 故障源 3：窗口卡死（无响应）。Electron 的 `unresponsive` 不是崩溃（进程还在、
+    // 只是主线程被占住），所以**不**走恢复/重载 —— 静默重载会把用户没保存的草稿掀掉。
+    // 它必须进上报链路：这是"某个应用偶尔卡住"唯一能到达平台侧的信号。
+    win.webContents.on('unresponsive', () => {
+      const current = win.isDestroyed() ? '' : win.webContents.getURL()
+      warn(`zeokeel-wasm-apps-host: an application window became unresponsive (app=${appId})`)
+      reportAppWindowError({
+        type: 'unresponsive',
+        appId,
+        windowKind: 'app',
+        reason: 'unresponsive',
+        ...(current === '' ? {} : { url: current }),
+      })
     })
 
     // 恢复的唯一判据："**应用文档**加载完成"。失败页自己也是 `did-finish-load`，
@@ -686,12 +1047,17 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
     // 模型会以为窗口恢复了）。用户点失败页上的「重试」成功时走的就是这一条。
     win.webContents.on('did-finish-load', () => {
       if (win.isDestroyed()) return
-      if (isAppDocumentUrl(win.webContents.getURL())) book.recovery.loaded()
+      if (!isAppDocumentUrl(win.webContents.getURL())) return
+      // U-01：应用文档真的到了 ⇒ 骨架阶段的看门狗功成身退。
+      clearLoadWatchdog(book)
+      book.appDocumentLoaded = true
+      book.recovery.loaded()
     })
 
     // R16B-20：用户点窗口自己的关闭按钮 ⇒ Electron 销毁窗口并派发 `closed`；
     // 宿主此前收不到任何回调（只能靠 `isAlive()` 被动发现）。
     win.on('closed', () => {
+      clearLoadWatchdog(book)
       for (const listener of book.closed) listener()
     })
     return book
@@ -712,7 +1078,10 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
         title: geometry.title,
         // 先开窗（骨架屏），内容随后加载：§19 Q12 的"先开窗再加载"以窗口可见为准。
         show: true,
-        backgroundColor: '#ffffff',
+        // U-01：窗口底色跟随主题。此前写死 `#ffffff`，暗色主题下从建窗到骨架文档
+        // 首次绘制的这一帧会闪一整屏白光（独立文档的 `prefers-color-scheme` 只能
+        // 管文档内部，管不到文档出现之前的窗口底色）。
+        backgroundColor: options.isDarkTheme?.() === true ? '#151517' : '#f5f6f8',
         autoHideMenuBar: true,
         webPreferences: {
           contextIsolation: true,
@@ -728,6 +1097,13 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
           // 兜底：session 与 webPreferences 必须指向同一个分区（`session.fromPartition`
           // 是幂等的，这里只是把"两者同源"写成断言，防将来有人只改一处）。
           session: target,
+          // U-03：与 shell 窗口**同一份**渲染错误 preload。应用窗口此前完全没有
+          // preload ⇒ 页面里的未捕获错误一条都到不了主进程/Sentry。用每窗口 preload
+          // 而不是 `session.setPreloads`：分区与内置浏览器共用，装到 session 上会
+          // 连任意网页一起注入（覆盖面只需应用窗口）。
+          ...(options.rendererErrorPreload === undefined || options.rendererErrorPreload === ''
+            ? {}
+            : { preload: options.rendererErrorPreload }),
         },
       })
       win.setMenuBarVisibility(false)
@@ -737,7 +1113,14 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
       // 订阅必须在**第一次加载之前**挂好：崩溃可以发生在首帧（正是"首次加载失败"）。
       watchAppWindow(win, geometry.appId)
       const handle = remember(win)
-      void loadAppUrl(win, geometry.url)
+      // U-01：第一次 `loadURL` 的目标是**骨架页**（在应用文档就绪前给出可读反馈），
+      // 骨架真正画出来之后才加载应用文档。变异：把这里改回 `loadAppUrl(...)` ⇒
+      // `electron-adapter.spec.ts` 的"首次加载目标是骨架"用例必红。
+      void showLoadingSkeleton(win, geometry.appId, geometry.appLabel, geometry.url).then((ready) => {
+        if (!ready) return
+        void loadAppUrl(win, geometry.url)
+        armLoadWatchdog(win, geometry.appId, geometry.url)
+      })
       win.focus()
       return handle
     },
@@ -778,6 +1161,33 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
       if (win === undefined || win.isDestroyed()) return
       win.close()
     },
+    setLoadTimeout(timeoutMs) {
+      // 非正/非有限值一律忽略（保留原值），避免一处误配置把看门狗变成"立刻失败页"。
+      if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return
+      loadTimeoutMs = timeoutMs
+    },
+    showWindowNotice(handle, message) {
+      const win = windowOf(handle)
+      if (win === undefined || win.isDestroyed()) return
+      // U-06 / §5.1b：不静默强制刷新（应用可能有未保存的草稿）；提示条给「刷新」与
+      // 「关闭」。注入失败不阻断任何宿主动作（提示是"告知"，不是许可）。
+      try {
+        const executor = (win.webContents as unknown as { executeJavaScript?: (code: string) => Promise<unknown> }).executeJavaScript
+        if (typeof executor !== 'function') return
+        const current = locale()
+        void executor.call(win.webContents, appWindowUpdateNoticeScript({
+          message,
+          refresh: reloadAction(current),
+          dismiss: dismissNoticeAction(current),
+        })).catch(() => undefined)
+      } catch { /* 提示失败不阻断应用 */ }
+    },
+    setNavigationAllowlist(urls) {
+      allowedNavigations.clear()
+      for (const url of urls) {
+        if (typeof url === 'string' && url !== '') allowedNavigations.add(url)
+      }
+    },
     setAspectRatio(handle, ratio, extraSize) {
       const win = windowOf(handle)
       if (win === undefined || win.isDestroyed()) return
@@ -797,6 +1207,10 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
       const refuse = (event: { preventDefault: () => void }, url: unknown, isMainFrame: boolean): void => {
         const verdict = classifyAppWindowNavigation(url, appId, appScheme, isMainFrame)
         if (verdict.verdict === 'allow') return
+        // F-04：宿主自己渲染的会话过期页上有「重新登录」按钮 —— 那是**唯一**允许
+        // 应用窗口导航到的跨 origin 目标（精确 URL，登录页）。不做成"放行 origin"：
+        // 那会给应用页一条把窗口导航到客户端任意页面的路。
+        if (isMainFrame && typeof url === 'string' && allowedNavigations.has(url)) return
         event.preventDefault()
         warn(`zeokeel-wasm-apps-host: refused a ${verdict.reason} navigation in an application window (app=${appId})`)
       }
@@ -811,8 +1225,62 @@ export function createRealElectronWindowAdapter(options: RealAppWindowAdapterOpt
       // `preventDefault()` 取消的是整个导航（窗口留在原页面）。子框架的重定向同样
       // 走这里（`details.isMainFrame` 为假时按子框架规则判）。
       contents.on('will-redirect', (details) => { refuse(details, details.url, details.isMainFrame !== false) })
-      contents.setWindowOpenHandler(() => {
-        // §20.2：应用窗口不得弹窗（外链改走内置浏览器新标签 + 提示条，§19 Q9）。
+      /**
+       * 刷新 / 返回（F-06）：应用窗口此前**两个动作都没有**（全包 grep
+       * `reload()`/`goBack()` = 0），卡住或走进坏页面只能关窗重开。
+       *
+       * 返回走 `navigationHistory.goBack()`（Electron 32+ 的新面），旧面
+       * `webContents.goBack()` 作为兜底 —— 两个都不在就静默（刷新仍然可用）。
+       */
+      const goBack = (): void => {
+        if (win.isDestroyed()) return
+        const nav = (contents as unknown as { navigationHistory?: { goBack?: () => void } }).navigationHistory
+        if (typeof nav?.goBack === 'function') { nav.goBack(); return }
+        const legacy = (contents as unknown as { goBack?: () => void }).goBack
+        if (typeof legacy === 'function') legacy.call(contents)
+      }
+      const reload = (): void => {
+        if (win.isDestroyed()) return
+        contents.reload()
+      }
+      contents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown') return
+        const key = typeof input.key === 'string' ? input.key : ''
+        const modified = input.control === true || input.meta === true
+        if (modified && (key === 'r' || key === 'R')) { event.preventDefault(); reload(); return }
+        if (modified && (key === '[' || key === 'ArrowLeft')) { event.preventDefault(); goBack(); return }
+        // Alt+← 是浏览器习惯的第二条返回路径（Windows/Linux 上最常用）。
+        if (input.alt === true && key === 'ArrowLeft') { event.preventDefault(); goBack() }
+      })
+      // 右键菜单：同两个动作的可发现面（没有自绘 chrome 时的最小替代）。
+      contents.on('context-menu', () => {
+        buildAppWindowMenu(win, locale(), { reload, back: goBack })
+      })
+      contents.setWindowOpenHandler((details) => {
+        // §20.2：应用窗口不得弹窗。§19 Q9 的 UX 半边（F-05）：deny 必须**有反馈** ——
+        // http(s) 外链给一条提示条（文案真源 `app-window-copy.ts` 的
+        // `externalLinkNotice`，此前零消费方），否则用户点了链接什么都看不到。
+        //
+        // 为什么仍是 deny 而不是"转内置浏览器新标签"：本安装没有"打开一个浏览器标签"
+        // 的宿主服务（`browserSurface` 只 provide 应用窗口 surface 的注册表），转标签
+        // 需要产品先定那个服务面；在那之前"有反馈的 deny"既比静默 deny 好，也不会
+        // 多开一个可被钓鱼的窗口。
+        const target = typeof (details as { url?: unknown }).url === 'string' ? (details as { url: string }).url : ''
+        const external = ((): URL | null => {
+          try {
+            return target === '' ? null : new URL(target)
+          } catch {
+            return null
+          }
+        })()
+        if (external !== null && (external.protocol === 'http:' || external.protocol === 'https:')) {
+          try {
+            const executor = (contents as unknown as { executeJavaScript?: (code: string) => Promise<unknown> }).executeJavaScript
+            if (typeof executor === 'function') {
+              void executor.call(contents, appWindowNoticeScript(externalLinkNotice(locale(), external.host))).catch(() => undefined)
+            }
+          } catch { /* 提示失败不阻断 deny（与上面同一条取向） */ }
+        }
         warn(`zeokeel-wasm-apps-host: refused a window.open from an application window (app=${appId})`)
         return { action: 'deny' }
       })

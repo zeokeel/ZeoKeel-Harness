@@ -111,21 +111,41 @@ export interface PublishTarget {
   owner: string
   /** 用途声明（仅发布者本人可见）。 */
   purpose?: string
+  /**
+   * 上一次声明过的数据敏感度（F-02：发新版**默认沿用**）。
+   *
+   * 2026-10-22：服务端 `read.go` **已对发布者下发**这个字段（目录行的
+   * `data_sensitivity`，见 `appcfg-contract.ts` 的 `CATALOG_ROW_AUTHOR_FIELDS`），
+   * 所以已有应用的行通常带着它。缺席的语义是"客户端不知道上一次的值"，而不是
+   * "上一次声明是空的" —— 表单据此留空，并在发新版时**省略**该字段（服务端按
+   * 缺席=沿用继承，见 `appcfg/inherit.go`），绝不发空串（那是显式清空）。
+   */
+  dataSensitivity?: string
   /** 准入名单（仅发布者本人可见）。 */
   whitelist?: string[]
   /** 作者声明的窗口规格（目录行下发时预填；缺席 = 不预填）。 */
   window?: AppWindowSpec
+  /**
+   * 已知的版本号（F-03）：版本历史里的待审/被拒/已撤回行（可含当前版本）。
+   *
+   * 为什么需要它：服务端判"版本号是否更新"用的是**全部版本行**的 max（
+   * `api/publish.go` 的 `newestVersion(hist)`），而版本号一经提交永久占位。只按
+   * `currentVersion` 建议"下一版"会给出一个**已被占用**的号（例如待审 3.1.1 时
+   * 建议 3.1.1，作者照抄 → 传完 ≤32 MiB 才吃 `VERSION_NOT_NEWER`）。
+   * 拿不到版本历史时缺席（退化行为 = 只看 `currentVersion`）。
+   */
+  knownVersions?: string[]
 }
 
 /**
  * 发布表单的**初始值**（从 {@link PublishTarget} 推出；纯函数，便于单测）。
  *
- * 纪律（P1-3）：
+ * 纪律（P1-3，2026-10-22 更新）：
  *  - 有基线 ⇒ `access` / `whitelist` / `purpose` / `owner` / `title` **全部预填**；
- *  - `data_sensitivity` **不在这个类型里** —— 平台没有它的默认值
- *    （`appcfg.json` 的 `data_sensitivity.hints` 原话："不要指望界面或平台替你填"），
- *    表单初值恒为空串，必须由作者声明。类型里没有这个键是**结构性**保证：
- *    想给它塞默认值就得先改这个类型（那时对拍用例会红）。
+ *  - `data_sensitivity` **有基线就预填**（服务端 `read.go` 对发布者下发），
+ *    但仍**没有平台默认值**（`appcfg.json` 的 `data_sensitivity.hints`：
+ *    "不要指望界面或平台替你填"）—— 首版必须由作者声明；发新版时不改 = 提交时
+ *    省略该键 ⇒ 服务端沿用上一次声明（不会清空）。
  */
 export interface PublishFormInitial {
   appId: string
@@ -138,8 +158,33 @@ export interface PublishFormInitial {
   currentAccess: AccessMode | undefined
   /** 当前线上版本（展示用；**不预填版本号输入框** —— 预填必然撞"严格递增"）。 */
   currentVersion: string
+  /**
+   * 这一次是不是**首版**（F-02：由 `current_version` 推导，不再恒为 `true`）。
+   *
+   * 服务端的首版判定是"这个应用**没有任何版本行**"（`api/publish.go` 的
+   * `isFirstRelease`），客户端看不到版本行总数，只能按 `current_version` 推：
+   * 有生效版本 ⇒ 一定有版本行 ⇒ **非首版**。反向（没有生效版本但有被拒/待审版本）
+   * 会被判成首版 ⇒ 本地多要求四项声明一次 —— 那是保守方向（只多问、不会把服务端
+   * 会拒的请求放过去），服务端仍是权威。
+   */
+  firstRelease: boolean
+  /**
+   * 已知的另一些版本号（版本历史的待审/被拒/已撤回行，可含当前版本）。
+   *
+   * 用途只有两个，都要求"看全部已知版本"：①「建议下一版」取 max 再 +1；
+   * ② 本地递增校验的基线（版本号永久占位，只看 `currentVersion` 会漏掉更高的历史行）。
+   */
+  knownVersions: string[]
   whitelistText: string
   purpose: string
+  /**
+   * 上一次声明过的数据敏感度（目录行不下发/解析不出时为空串）。
+   *
+   * 空串的语义是"**不知道**上一次的值"，不是"上一次没声明"：发新版时它会从请求体里
+   * 省略（服务端按缺席=沿用继承），而不是发一个空串 —— 显式空串在服务端是
+   * "显式清空声明"（`appcfg/inherit.go`），会把上一版的合规声明抹掉。
+   */
+  dataSensitivity: string
   owner: string
   /** 窗口比例输入框原文（`""` = 作者没声明；`"16:9"` 与 `"1.7778"` 都可）。 */
   windowRatioText: string
@@ -166,8 +211,11 @@ export function initialFormState(target?: PublishTarget): PublishFormInitial {
       access: DEFAULT_ACCESS,
       currentAccess: undefined,
       currentVersion: '',
+      firstRelease: true,
+      knownVersions: [],
       whitelistText: '',
       purpose: '',
+      dataSensitivity: '',
       owner: '',
       windowRatioText: '',
       windowWidthText: '',
@@ -180,8 +228,15 @@ export function initialFormState(target?: PublishTarget): PublishFormInitial {
     access: target.access,
     currentAccess: target.access,
     currentVersion: target.currentVersion,
+    // F-02：`current_version` 非空 ⇒ 已有生效版本 ⇒ 不是首版。
+    firstRelease: target.currentVersion.trim() === '',
+    // F-03：去重 + 只留形态合法的（不可解析的条目没有比较价值，留着只会让 max 失真）。
+    knownVersions: [...new Set([target.currentVersion, ...(target.knownVersions ?? [])]
+      .map(version => version.trim())
+      .filter(version => version !== '' && parseVersion(version) !== null))],
     whitelistText: (target.whitelist ?? []).join(', '),
     purpose: target.purpose ?? '',
+    dataSensitivity: target.dataSensitivity ?? '',
     owner: target.owner,
     windowRatioText: formatWindowRatio(target.window?.ratio),
     windowWidthText: target.window?.width === undefined ? '' : String(target.window.width),
@@ -243,6 +298,196 @@ export function changesAccess(initial: PublishFormInitial, submitted: AccessMode
   return initial.currentAccess !== undefined && initial.currentAccess !== submitted
 }
 
+// ---------------------------------------------------------------------------
+// 版本号：本地递增校验 + "建议下一版"（F-03）
+// ---------------------------------------------------------------------------
+//
+// 缺陷形态（2026-10-22 审计 F-03）：客户端**已经知道**当前线上版本
+// （`initial.currentVersion`），却把这个判据留给服务端在一次 ≤32 MiB 的上传
+// **之后**才回 4xx；而版本号一经提交**永久占位**（被拒也不释放）⇒ 作者只能盲升
+// 再试。修法不是"另立一套更严的规则"（服务端仍是权威），而是：
+//   ① 提交前按**与服务端同一套语义**比较（`util.CompareSemVer`：无预发布 > 有预发布，
+//      预发布段按 §11.4 逐标识符比较），不递增就地拦下 —— 语义不一致会**误拦**服务端
+//      会接受的版本（修前 `1.0.0` 在 `1.0.0-beta` 之后被判 false，R-03）；
+//   ② 给一个"建议下一版"的一键值（已知全部版本取 max 再 +1），作者不必自己算。
+
+/**
+ * 解析后的版本号：三段数字 + 预发布标识符（`-` 之后按 `.` 切）。
+ *
+ * 形态由 {@link VERSION_PATTERN} 保证（`\d+.\d+.\d+` 加可选 `-` 段）——它与服务端
+ * `limits.VersionPattern` 同源，所以这里解析成功的串在服务端也一定是"合法版本"。
+ */
+interface ParsedVersion {
+  core: [number, number, number]
+  /** 预发布标识符（无预发布 ⇒ 空数组）。 */
+  prerelease: string[]
+}
+
+/**
+ * 解析版本号（形态不符 ⇒ `null`）。
+ * @param version - 版本号原文（已 trim）。
+ * @returns 三段数字与预发布标识符。
+ */
+function parseVersion(version: string): ParsedVersion | null {
+  if (!VERSION_PATTERN.test(version)) return null
+  const dash = version.indexOf('-')
+  const coreText = dash < 0 ? version : version.slice(0, dash)
+  const preText = dash < 0 ? '' : version.slice(dash + 1)
+  const parts = coreText.split('.')
+  if (parts.length !== 3) return null
+  const numbers = parts.map(part => Number(part))
+  if (numbers.some(value => !Number.isSafeInteger(value) || value < 0)) return null
+  return {
+    core: [numbers[0]!, numbers[1]!, numbers[2]!],
+    prerelease: preText === '' ? [] : preText.split('.'),
+  }
+}
+
+/**
+ * 纯数字标识符的规范化（去前导零）。
+ *
+ * 为什么不用 `Number()`：预发布段（以及核心段的数字）长度不受限，`Number` 在
+ * 20 位以上会丢精度 —— 服务端为此专门用"位数优先、再字典序"的任意精度比较
+ * （`util.semver.go` 的 `compareDigitRuns`），这里必须同一条规则。
+ * @param text - 标识符原文。
+ * @returns 规范化数字串；不是纯数字 ⇒ `null`。
+ */
+function numericIdentifier(text: string): string | null {
+  if (!/^\d+$/u.test(text)) return null
+  const stripped = text.replace(/^0+/u, '')
+  return stripped === '' ? '0' : stripped
+}
+
+/**
+ * 两个规范化数字串的数值比较（位数优先、再字典序 —— 无溢出）。
+ * @param left - 规范化数字串。
+ * @param right - 规范化数字串。
+ * @returns 负数/0/正数（与 `Array.prototype.sort` 的契约一致）。
+ */
+function compareDigitRuns(left: string, right: string): number {
+  if (left.length !== right.length) return left.length < right.length ? -1 : 1
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
+
+/**
+ * 预发布段比较（服务端 `comparePrereleaseRuns` 的同一条 §11.4 规则）。
+ * @param left - 左侧标识符数组。
+ * @param right - 右侧标识符数组。
+ * @returns 负数/0/正数。
+ */
+function comparePrerelease(left: readonly string[], right: readonly string[]): number {
+  const shared = Math.min(left.length, right.length)
+  for (let index = 0; index < shared; index += 1) {
+    const a = left[index]!
+    const b = right[index]!
+    const an = numericIdentifier(a)
+    const bn = numericIdentifier(b)
+    if (an !== null && bn !== null) {
+      const byNumber = compareDigitRuns(an, bn)
+      if (byNumber !== 0) return byNumber
+      continue
+    }
+    // §11.4.3：纯数字标识符优先级**低于**字母数字标识符。
+    if (an !== null) return -1
+    if (bn !== null) return 1
+    if (a !== b) return a < b ? -1 : 1
+  }
+  // §11.4.4：前缀相同 ⇒ 标识符多者更大。
+  if (left.length === right.length) return 0
+  return left.length < right.length ? -1 : 1
+}
+
+/**
+ * 两个版本号的比较（**与服务端 `util.CompareSemVer` 同语义**，`registry.MustBeNewer`
+ * 判的就是它的符号）。
+ *
+ * 三条必须对齐的规则：
+ *  1. 核心三段按数值比较（`1.0.0` < `1.0.1`）；
+ *  2. **无预发布 > 有预发布**（`1.0.0` > `1.0.0-beta`）—— 这是修前最贵的漏洞：
+ *     剥掉预发布后两侧核心相等 ⇒ 返回 `false`（"不递增"）⇒ 作者被本地拦死，
+ *     而服务端接受（转正是合法发布）；
+ *  3. 预发布段按 §11.4：纯数字按数值、数字低于字母数字、前缀相同多者更大
+ *     （`1.0.0-rc.2` > `1.0.0-rc.1`）。
+ * @param left - 左侧版本号。
+ * @param right - 右侧版本号。
+ * @returns 负数/0/正数；**任一侧不可解析 ⇒ `null`**（不可比，调用方放行）。
+ */
+export function compareVersions(left: string, right: string): number | null {
+  const a = parseVersion(left.trim())
+  const b = parseVersion(right.trim())
+  if (a === null || b === null) return null
+  for (let index = 0; index < 3; index += 1) {
+    if (a.core[index]! > b.core[index]!) return 1
+    if (a.core[index]! < b.core[index]!) return -1
+  }
+  if (a.prerelease.length === 0 && b.prerelease.length === 0) return 0
+  if (a.prerelease.length === 0) return 1
+  if (b.prerelease.length === 0) return -1
+  return comparePrerelease(a.prerelease, b.prerelease)
+}
+
+/**
+ * `candidate` 是否**严格大于** `current`（与服务端 `MustBeNewer` 同一套语义）。
+ *
+ * @param candidate - 本次要提交的版本号。
+ * @param current - 当前的比较基线（空串/不可解析 ⇒ 没有可比基线）。
+ * @returns `true` = 严格大于；`false` = 不大于（相同或更小）；`null` = **不可比**
+ *   （任一侧形态不符/没有基线）—— 调用方据此**不**在本地拦（服务端权威）。
+ */
+export function isVersionAfter(candidate: string, current: string): boolean | null {
+  const order = compareVersions(candidate, current)
+  return order === null ? null : order > 0
+}
+
+/**
+ * 已知版本的**最大值**（用于"建议下一版"的基线）。
+ *
+ * 为什么不是"当前版本"：服务端判重用的是 `newestVersion(hist)`，而 `hist` 是
+ * **全部**版本行（含待审/被拒/已撤回/软删）—— 版本号一经提交**永久占位**。只看
+ * `current_version` 时，存在更高的 pending 3.1.1 会让建议值也落在 3.1.1 上，
+ * 作者照抄 → 传完 ≤32 MiB 才吃 `VERSION_NOT_NEWER`（R-03）。
+ * @param versions - 已知版本号（含当前版本；不可解析的条目被忽略）。
+ * @returns 最大版本号原文；一条都不可解析 ⇒ `null`。
+ */
+export function newestVersion(versions: readonly string[]): string | null {
+  let best: string | null = null
+  for (const raw of versions) {
+    const version = raw.trim()
+    if (parseVersion(version) === null) continue
+    if (best === null) { best = version; continue }
+    const order = compareVersions(version, best)
+    if (order !== null && order > 0) best = version
+  }
+  return best
+}
+
+/**
+ * "建议下一版"：把**已知最大版本**的最后一段数字 +1（`1.2.3` ⇒ `1.2.4`）。
+ *
+ * 为什么是把最后一段 +1，而不是"major+1"：修一个 bug 的发版是最常见的路径，
+ * 跳 major 会误导作者以为这是个大版本；作者想改中间/大段时直接改输入框即可。
+ * 预发布后缀会被丢掉（`1.2.3-beta.1` ⇒ `1.2.4`）：沿用 `beta` 会让"下一版"看起来
+ * 仍是预发布，而它已经是一个新版本号。
+ * @param current - 当前线上版本（没有基线时可为空串）。
+ * @param knownVersions - 已知的其它版本号（版本历史里的待审/被拒/已撤回行）。
+ *   缺省空数组 ⇒ 只看 `current`（拿不到版本历史时的退化行为）。
+ * @returns 建议的版本号，或 `null`（一条都不可解析 ⇒ 不猜）。
+ */
+export function suggestNextVersion(current: string, knownVersions: readonly string[] = []): string | null {
+  const base = newestVersion([current, ...knownVersions])
+  if (base === null) return null
+  const parsed = parseVersion(base)
+  if (parsed === null) return null
+  const [major, minor, patch] = parsed.core
+  // 进位：`1.2.999` 之后不是 `1.2.1000` 而是 `1.3.0`（保持三段语义）。
+  if (patch + 1 > 999) {
+    if (minor + 1 > 999) return `${String(major + 1)}.0.0`
+    return `${String(major)}.${String(minor + 1)}.0`
+  }
+  return `${String(major)}.${String(minor)}.${String(patch + 1)}`
+}
+
 /** 失败：服务端结构化错误**原样**（`details`/`hints` 一字不改）。 */
 export interface PublishFailure {
   ok: false
@@ -275,6 +520,17 @@ export interface PublishSuccess {
   /** true = 进了待审队列（线上仍是旧版本，R17）。 */
   pending: boolean
   /**
+   * 本次发布之后**线上生效的版本号**（服务端 `release.current_version`，U-02）。
+   *
+   * 三态，缺一不可：
+   *  - 非空 ⇒ 线上就是这一版；待审时它表示"线上仍是这个旧版本"；
+   *  - `''` ⇒ **线上没有任何版本**（首版待审 / 首版被拒）：此时"线上仍是旧版本"
+   *    是假话，分享深链也是假的（同事点开得到"应用不存在"）；
+   *  - `undefined` ⇒ 服务端没下发这个字段（旧服务端）。客户端**不许**据此推断
+   *    "有旧版本"，也不许推断"这是首版" —— 只能说"审核通过后才生效"。
+   */
+  liveVersion: string | undefined
+  /**
    * 应用**当前是否上架**（服务端 `app.enabled`）。
    *
    * 服务端的发布响应**确实**带这个字段（`api/publish.go:682`；已存在应用的
@@ -304,6 +560,11 @@ export interface RequestDeps {
 /** {@link submitPublish} 的可注入依赖。 */
 export interface SubmitDeps extends RequestDeps {
   onPhase?: (phase: PublishPhase) => void
+  /**
+   * 这一次是不是首版（F-02）：决定声明字段是"全发"还是"空的省略"。
+   * 调用方传 `initial.firstRelease`；缺省 `true` 只服务旧调用点。
+   */
+  firstRelease?: boolean
 }
 
 /** {@link requestJSON} 的结果：成功给解析后的载荷，失败给结构化失败（永不抛）。 */
@@ -430,9 +691,39 @@ export function encodeBase64(bytes: Uint8Array): string {
  * 免得把"没填"变成一个看起来像"填了空"的值。
  * @param draft - 表单草稿。
  * @param wasmBase64 - 产物字节（base64）。
+ * @param options - `firstRelease` 缺省 **false**（安全方向，见 {@link ValidateOptions}：
+ *   缺省 `true` 会让漏传选项的调用点显式发空串、清空上一版声明）。
  * @returns 请求体对象。
  */
-export function buildPublishBody(draft: PublishDraft, wasmBase64: string): Record<string, unknown> {
+export function buildPublishBody(
+  draft: PublishDraft,
+  wasmBase64: string,
+  options: { firstRelease?: boolean } = {},
+): Record<string, unknown> {
+  // 缺省 `false`（R-06）：缺省必须落在"省略声明"这一侧 —— 显式空串在服务端是
+  // "清空声明"，而漏传选项是**静默**的（没有编译错误、没有测试红）。
+  const firstRelease = options.firstRelease ?? false
+  /**
+   * 声明的三个字段（F-02）。
+   *
+   * **首版**：三个都发（本地校验已经保证非空；服务端 `appcfg.Validate(true)` 也要求）。
+   * **发新版**：只发作者**真的填了**的那些。为什么不能一律发：服务端的继承语义是
+   * "**字段缺席**才沿用上一版"，显式空串是"显式清空"（`appcfg/inherit.go` 的
+   * `mergeMissing` 注释逐字说明了这一点）—— 修前客户端对已有应用也发 `purpose:""`、
+   * `data_sensitivity:""`，等于**每发一版都把上一版的合规声明抹掉**，而界面上完全
+   * 看不出来（作者会以为"没改就是沿用"）。
+   */
+  const declarations: Record<string, unknown> = firstRelease
+    ? {
+      purpose: draft.config.purpose,
+      data_sensitivity: draft.config.dataSensitivity,
+      owner: draft.config.owner,
+    }
+    : {
+      ...(draft.config.purpose.trim() === '' ? {} : { purpose: draft.config.purpose }),
+      ...(draft.config.dataSensitivity.trim() === '' ? {} : { data_sensitivity: draft.config.dataSensitivity }),
+      ...(draft.config.owner.trim() === '' ? {} : { owner: draft.config.owner }),
+    }
   const body: Record<string, unknown> = {
     app_id: draft.appId.trim(),
     version: draft.version.trim(),
@@ -440,9 +731,7 @@ export function buildPublishBody(draft: PublishDraft, wasmBase64: string): Recor
     config: {
       access: draft.config.access,
       whitelist: [...draft.config.whitelist],
-      purpose: draft.config.purpose,
-      data_sensitivity: draft.config.dataSensitivity,
-      owner: draft.config.owner,
+      ...declarations,
       // 窗口声明（F3/§6）：**只在作者真的声明时**才发这个键 —— 不发等于"不声明"，
       // 而不是"声明了缺省比例"（服务端对缺席有继承语义，客户端不替它写一个值）。
       ...(draft.config.window === undefined ? {} : { window: draft.config.window }),
@@ -466,12 +755,29 @@ export interface ValidationIssue {
 /**
  * 校验选项。
  *
- * `firstRelease` 缺省 `true`：客户端**看不到**服务端的版本历史，无法知道这次是不是首版。
- * 取保守一侧（按首版要求）的理由是首版恰恰是最常见的路径，而漏拦的代价是用户白等一次
- * 90 s 往返后拿到同一句拒绝。服务端仍是裁决者：非首版留空这些字段它**不会**拒。
+ * `firstRelease` 缺省 **`false`**（2026-10-22 反证审计 R-06：修前缺省 `true`）。
+ * 为什么缺省必须落在"不发声明"这一侧：`firstRelease:true` 会把 `purpose`/`data_sensitivity`/
+ * `owner` 三项**显式**发出去（空串 = 显式清空，见 `appcfg/inherit.go` 的 `mergeMissing`），
+ * 而任何漏传这个选项的新调用点就会静默清掉上一版的合规声明。缺省 `false` 的失败形态只是
+ * "首版少问一次、由服务端拒"，可控；缺省 `true` 的失败形态是**不可逆的数据丢失**。
  */
 export interface ValidateOptions {
+  /**
+   * 这一次是不是首版（F-02）。**调用方必须从 `initial.firstRelease` 传** ——
+   * 缺省 `false` 是安全方向（省略声明、不显式发空串）；对已有应用发新版时传错
+   * `true` 会让作者每发一版都被要求重填四项声明（修前的实际行为）。
+   */
   firstRelease?: boolean
+  /**
+   * 已知的版本号（F-03）：本地递增校验的基线取它与 `currentVersion` 的**最大值** ——
+   * 版本号一经提交永久占位，只看线上版本会漏掉更高的待审/被拒/已撤回行。
+   */
+  knownVersions?: readonly string[]
+  /**
+   * 当前线上版本（F-03）：传了就做一次本地递增校验（语义与服务端一致，见
+   * {@link isVersionAfter}）。空串/缺席 ⇒ 不校验（没有基线可比）。
+   */
+  currentVersion?: string
 }
 
 /**
@@ -485,14 +791,15 @@ export interface ValidateOptions {
  *  - 首版 `title`/`purpose`/`data_sensitivity`/`owner` 非空（`appcfg.Validate(true)`）。
  *
  * **只做加法**：这里拦下的一定是服务端也会拒的。不做的事（服务端才知道）：
- * app_id 保留字与企业既有主机名、版本号严格递增、wasm 模块校验。
+ * app_id 保留字与企业既有主机名、wasm 模块校验。
  * @param draft - 表单草稿。
- * @param options - 校验选项（`firstRelease`，缺省 true）。
+ * @param options - 校验选项（`firstRelease` 缺省 **false**：安全方向，见 {@link ValidateOptions}）。
  * @returns 问题列表；空数组 = 可以提交（服务端仍可能拒）。
  */
 export function validatePublishDraft(draft: PublishDraft, options: ValidateOptions = {}): ValidationIssue[] {
   const issues: ValidationIssue[] = []
-  const firstRelease = options.firstRelease ?? true
+  // 缺省 `false`（R-06）：缺省方向必须是"省略声明"，不能是"显式发空串清空上一版"。
+  const firstRelease = options.firstRelease ?? false
   const appId = draft.appId.trim()
   const version = draft.version.trim()
 
@@ -514,6 +821,15 @@ export function validatePublishDraft(draft: PublishDraft, options: ValidateOptio
     issues.push({ field: 'version', code: 'version_required', message: t('appCenter.invalidVersionRequired') })
   } else if (!VERSION_PATTERN.test(version)) {
     issues.push({ field: 'version', code: 'version_shape', message: t('appCenter.invalidVersionShape') })
+  } else if (options.currentVersion !== undefined || (options.knownVersions ?? []).length > 0) {
+    // F-03：与服务端 `MustBeNewer` **同一套语义**（见 {@link compareVersions}）。
+    // 基线取"当前线上版本 + 已知版本历史"的最大值：版本号永久占位，只看线上版本会
+    // 漏掉更高的待审/被拒/已撤回行（R-03 的第二个洞）。`null`（不可比）⇒ **不拦**：
+    // 宁可让服务端裁决，也不把合法版本挡在本地。
+    const baseline = newestVersion([options.currentVersion ?? '', ...(options.knownVersions ?? [])])
+    if (baseline !== null && isVersionAfter(version, baseline) === false) {
+      issues.push({ field: 'version', code: 'version_not_incremented', message: t('appCenter.versionNotIncremented') })
+    }
   }
 
   // 2026-09-19（冻结契约 §4.4）：写侧只接受 login | whitelist。历史 `public` 由**读侧**
@@ -623,6 +939,9 @@ export function parsePublishOutcome(payload: unknown): PublishSuccess | PublishF
   // `app.enabled` 是服务端下发的事实（下架应用发新版时它保持 false）。
   // 缺席 ⇒ true：不能因为服务端没说话就宣称应用已下架（本仓"缺席不等于否定"的口径）。
   const enabled = app.enabled !== false
+  // 线上生效版本（U-02）：`''` 与"缺席"是**两件事**，不要在解析层合并
+  // —— 前者是服务端确认"线上没有版本"（首版待审），后者是"这一跳没拿到事实"。
+  const liveVersion = typeof release.current_version === 'string' ? release.current_version : undefined
   return {
     ok: true,
     appId: typeof app.app_id === 'string' ? app.app_id : '',
@@ -632,6 +951,7 @@ export function parsePublishOutcome(payload: unknown): PublishSuccess | PublishF
     live: (release.current === true || !pending) && enabled,
     pending,
     enabled,
+    liveVersion,
     checksum: typeof release.checksum === 'string' ? release.checksum : '',
     sizeBytes: typeof release.size === 'number' ? release.size : 0,
   }
@@ -812,7 +1132,9 @@ export async function submitPublish(
   const outcome = await requestJSON(PUBLISH_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildPublishBody(draft, wasmBase64)),
+    body: JSON.stringify(buildPublishBody(draft, wasmBase64, {
+      ...(deps.firstRelease === undefined ? {} : { firstRelease: deps.firstRelease }),
+    })),
   }, deps)
   if (!outcome.ok) return outcome
   return parsePublishOutcome(outcome.payload)

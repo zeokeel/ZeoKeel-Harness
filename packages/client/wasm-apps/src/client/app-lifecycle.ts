@@ -19,7 +19,8 @@
  *     （服务端会幂等返回 `changed:false` 与它自己的当前值；乐观更新等于把
  *     "我点了下架"说成"它已经下架了"）。
  *
- * 只做**作者自服务**那一组：冻结/解冻（2026-09-23 R5-B-7 起）、导出、自省、审批
+ * 只做**作者自服务**那一组：冻结/解冻（2026-09-23 R5-B-7 起）、恢复软删（2026-10-22
+ * 生命周期重设计 §5.5，仅协议半边：目录不下发已删行，界面暂不可达）、导出、自省、审批
  * 留给管理端与后续波次（宿主路由有，但员工侧不该在没有产品决策的情况下暴露）。
  *
  * 冻结/解冻为什么进这一组（R5-B-7 的裁决）：服务端**对发布者开着**
@@ -361,6 +362,347 @@ export async function setAppFrozen(
   }, deps)
   if (!outcome.ok) return outcome
   return parseSetFrozenOutcome(appId, outcome.payload)
+}
+
+// ---------------------------------------------------------------------------
+// 恢复软删应用（2026-10-22 生命周期重设计 §5.5；反证审计 R-05）
+// ---------------------------------------------------------------------------
+//
+// ⚠️ **今天没有界面入口，这是刻意的**：作者面的目录（`api/read.go` 的 catalog）
+// 用的是 `ListWasmApps(..., WasmAppFilter{})` —— **不含**软删行（`deleted_at IS NULL`），
+// 所以"已删除的应用"根本不在客户端列表里，详情页也就没有可依附的行。伪造一个
+// 列表里不存在的入口只会变成另一个"点了必然 404"的死按钮。
+//
+// 本函数交付的是**协议半边**：宿主路由（`wasm-apps.ts` 的 `restore` 分支）与服务端
+// `deployments.go` 的 `restoreForApp` 都已就位，补齐客户端调用面之后，"目录什么时候
+// 下发已删行"就是一个纯服务端查询条件的决定（再加详情页一个按钮即可），不需要再动
+// 客户端协议。单测钉住路径/请求形态/`changed` 判据三条。
+
+/** 恢复软删应用的本机后缀（与宿主 `wasm-apps.ts` 的 `restore` 分支逐字一致）。 */
+export const RESTORE_SUFFIX = 'restore'
+
+/**
+ * 恢复路由（发布者本人或超管；服务端 `ownedApp(..., allowDeleted=true)`）。
+ * @param appId - 应用标识。
+ * @returns 本机路径。
+ */
+export function restorePath(appId: string): string {
+  return lifecyclePath(appId, RESTORE_SUFFIX)
+}
+
+/** 恢复的服务端结果（`deployments.go` 的 `restoreForApp`）。 */
+export interface RestoreSuccess {
+  ok: true
+  appId: string
+  /**
+   * 服务端是否**真的**恢复了（幂等分支"没删除过"回 `false`）。
+   *
+   * 它是宿主"是否清该 app origin 浏览器存储"的同一判据（`wasm-apps.ts` 的
+   * `lifecycleActionApplied('restore', …)` 读的就是**顶层** `changed`）：幂等恢复
+   * 既没有变化，也不该清掉员工在这个应用里存的数据。
+   */
+  changed: boolean
+  /** 恢复后的上架状态：设计 §5.5 明写**不自动上架**（`enabled:false`）。 */
+  enabled: boolean
+  /** 服务端给用户的说明（"需要显式 publish 才恢复服务"）。没有就是空串。 */
+  note: string
+  /** 保留期是否已清（服务端 `retention_cleared`；缺席按 false 读）。 */
+  retentionCleared: boolean
+  /** 快照目录清理失败的原因（服务端尽力而为；非空说明磁盘侧有残留）。 */
+  snapshotCleanupError: string
+}
+
+/**
+ * 解析恢复响应：`{app:{app_id,deleted,enabled}, changed, note, retention_cleared?, snapshot_cleanup_error?}`。
+ *
+ * `changed` **必须**是布尔值：它决定"要不要清 localStorage/IndexedDB"，而这是不可逆
+ * 的删数据动作 —— 形状漂移时宁可**不清**（返回形状错误，由界面如实报），也不能猜。
+ * @param appId - 本次请求的 app_id（与回显比对，防串行）。
+ * @param payload - 响应体。
+ * @returns 结构化结果或失败。
+ */
+export function parseRestoreOutcome(appId: string, payload: unknown): RestoreSuccess | PublishFailure {
+  const root = asRecord(payload)
+  const app = asRecord(root.app)
+  if (typeof root.changed !== 'boolean') {
+    return shapeMismatch(appId, payload, t('appCenter.restoreShapeMismatch'))
+  }
+  const echoed = asString(app.app_id)
+  if (echoed !== '' && echoed !== appId) {
+    return shapeMismatch(appId, payload, t('appCenter.restoreShapeMismatch'))
+  }
+  // `deleted:true` 出现在"恢复成功"的响应里就是形状矛盾（恢复后不该还是已删除）。
+  if (app.deleted === true) {
+    return shapeMismatch(appId, payload, t('appCenter.restoreShapeMismatch'))
+  }
+  return {
+    ok: true,
+    appId,
+    changed: root.changed,
+    // 缺席按 `false` 读：恢复**不**自动上架，`false` 是设计里的默认。
+    enabled: app.enabled === true,
+    note: asString(root.note),
+    retentionCleared: root.retention_cleared === true,
+    snapshotCleanupError: asString(root.snapshot_cleanup_error),
+  }
+}
+
+/**
+ * 恢复一个软删的应用（发布者本人；服务端 `ownedApp(..., allowDeleted=true)`）。
+ *
+ * 幂等：没删除过也回 200 + `changed:false`（不写审计）。调用方要**按 `changed`**
+ * 决定界面文案与"是否刷新目录"，不能拿"我点了恢复"当事实。
+ * @param appId - 应用标识。
+ * @param deps - 可注入的 fetch / 取消信号。
+ * @returns 服务端结果或结构化失败（永不抛）。
+ */
+export async function restoreApp(appId: string, deps: RequestDeps = {}): Promise<RestoreSuccess | PublishFailure> {
+  const outcome = await requestJSON(restorePath(appId), { method: 'POST' }, deps)
+  if (!outcome.ok) return outcome
+  return parseRestoreOutcome(appId, outcome.payload)
+}
+
+// ---------------------------------------------------------------------------
+// 部署历史 / 部署（回滚）/ 撤回（2026-10-22 生命周期重设计 §6.1 / §8）
+// ---------------------------------------------------------------------------
+//
+// 后端（L 泳道）与这些端点同批落地；客户端按**契约**先实现并逐条做形状校验：
+// 端点还没上线的环境里会拿到 404/`NOT_FOUND` —— 界面如实显示服务端信封，**不**把
+// "端点不存在"说成"没有部署历史"（那会把契约未就绪伪装成事实）。
+
+/** 部署历史的本机后缀（与宿主 `wasm-apps.ts` 的 `deployments` 分支逐字一致）。 */
+export const DEPLOYMENTS_SUFFIX = 'deployments'
+
+/**
+ * 部署历史列表默认条数（设计 §8「最近 N 条 + 当前版本」）。
+ *
+ * 为什么不拉全量：部署历史**永不删除**（设计 §3.3），一个长期迭代的应用会有上千条；
+ * 面板只需要"最近发生了什么 + 当前是哪一条"。服务端支持 `?limit=`（缺省 50，上限由
+ * 服务端判），客户端显式传自己需要的条数，不依赖服务端缺省。
+ */
+export const DEPLOYMENTS_LIMIT = 20
+
+/**
+ * 部署历史的只读路由（设计 §6.1：`GET /api/client/v2/apps/wasm/:app_id/deployments`）。
+ * @param appId - 应用标识（路径段，必须 URI 编码）。
+ * @param limit - 最近条数（缺省 {@link DEPLOYMENTS_LIMIT}；`0`/负数 ⇒ 不带该参数）。
+ * @returns 以 `/` 开头的本机路径（限流参数进查询串）。
+ */
+export function deploymentsPath(appId: string, limit: number = DEPLOYMENTS_LIMIT): string {
+  const base = lifecyclePath(appId, DEPLOYMENTS_SUFFIX)
+  return limit > 0 ? `${base}?limit=${String(limit)}` : base
+}
+
+/**
+ * 撤回一个**待审**版本的路由（设计 §6.1：`POST …/releases/:version/withdraw`）。
+ * @param appId - 应用标识。
+ * @param version - 版本号（路径段，必须 URI 编码：版本号来自不可信输入）。
+ * @returns 以 `/` 开头的本机路径。
+ */
+export function withdrawReleasePath(appId: string, version: string): string {
+  return `${lifecyclePath(appId, 'releases')}/${encodeURIComponent(version)}/withdraw`
+}
+
+/** 一条部署记录（设计 §4：`wasm_app_deployments` 的一行）。 */
+export interface DeploymentRow {
+  /** 记录 id（服务端自增；同版本可能有多条历史，展示靠它区分）。 */
+  id: number
+  /** 版本号。 */
+  version: string
+  /** `publish` / `review` / `rollback` / `seed` / `legacy`（未知值原样显示）。 */
+  kind: string
+  /** 操作人（`legacy` 回填为空串）。 */
+  actor: string
+  /** 角色（owner / super_admin / admin_session / system / seed / legacy）。 */
+  actorRole: string
+  /** 部署说明（可空）。 */
+  message: string
+  /** 记录时间（服务端 RFC3339 原文）。 */
+  createdAt: string
+  /** 是否**当前**生效的那一条（设计 §2：current = 最新一次 deployment 的指针）。 */
+  current: boolean
+}
+
+/** 部署历史报告（成功）。 */
+export interface DeploymentsReport {
+  ok: true
+  appId: string
+  /** 当前生效版本（服务端下发；空串 = 没有当前版本）。 */
+  currentVersion: string
+  /** 按服务端顺序（新 → 旧），客户端不重排。 */
+  deployments: DeploymentRow[]
+}
+
+/** 安全取数字（非数字/非有限 ⇒ 0）。 */
+function asNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+/**
+ * 解析部署历史响应：`{app_id?, current_version?, deployments:[{id,version,kind,actor,actor_role,message,created_at,current?}]}`。
+ *
+ * 纪律（与版本历史同一条）：`deployments` 缺席/非数组 ⇒ **形状错误**，绝不回落成空
+ * 清单 —— 把"解析坏了"显示成"还没有部署历史"会让运维以为线上没有部署记录。
+ * @param appId - 本次请求的 app_id。
+ * @param payload - 响应体。
+ * @returns 结构化报告或失败。
+ */
+export function parseDeploymentsOutcome(appId: string, payload: unknown): DeploymentsReport | PublishFailure {
+  const root = asRecord(payload)
+  const rows = root.deployments
+  if (!Array.isArray(rows)) {
+    return shapeMismatch(appId, payload, t('appCenter.deploymentsShapeMismatch'))
+  }
+  // `current` 的两处来源要合流：行上的 `current:true`，或顶层 `current_version` 与行
+  // 版本相等（设计 §6.1「含 current 标记」，两种下发形状都容忍）。
+  const currentVersion = asString(root.current_version).trim()
+  const deployments: DeploymentRow[] = rows
+    .filter((row): row is Record<string, unknown> => row !== null && typeof row === 'object')
+    .map(row => {
+      const version = asString(row.version)
+      return {
+        id: asNumber(row.id),
+        version,
+        kind: asString(row.kind),
+        actor: asString(row.actor),
+        actorRole: asString(row.actor_role),
+        message: asString(row.message),
+        createdAt: asString(row.created_at),
+        current: row.current === true || (currentVersion !== '' && version === currentVersion),
+      }
+    })
+  return { ok: true, appId, currentVersion, deployments }
+}
+
+/**
+ * 读部署历史（只读；发布者本人或管理员，服务端仍按 ownedApp 鉴权）。
+ * @param appId - 应用标识。
+ * @param deps - 可注入的 fetch / 取消信号。
+ * @returns 结构化报告或失败（永不抛）。
+ */
+export async function fetchDeployments(appId: string, deps: RequestDeps = {}): Promise<DeploymentsReport | PublishFailure> {
+  const outcome = await requestJSON(deploymentsPath(appId), { method: 'GET' }, deps)
+  if (!outcome.ok) return outcome
+  return parseDeploymentsOutcome(appId, outcome.payload)
+}
+
+/** 部署/回滚的**服务端**结果（设计 §5.1：`{deployment?, changed, app?}`）。 */
+export interface DeploySuccess {
+  ok: true
+  appId: string
+  /** 本次部署的目标版本（服务端原样回显；缺席时用请求值——两者在成功路径上相等）。 */
+  version: string
+  /** 服务端是否真的改了（目标 == 当前 ⇒ `false`，幂等，不写审计）。 */
+  changed: boolean
+  /** 服务端给用户的说明（可空）。 */
+  note: string
+}
+
+/**
+ * 解析部署响应：`{deployment:{version,kind,...}, changed, note?}`。
+ *
+ * `changed` **必须**是布尔值：它是"线上真的换了版本"的唯一凭据（幂等部署回
+ * `changed:false`），回落成"我请求的就是事实"等于把乐观更新伪装成服务端结果。
+ * @param appId - 本次请求的 app_id。
+ * @param requestedVersion - 本次请求的版本（服务端没回显版本时用它）。
+ * @param payload - 响应体。
+ * @returns 结构化结果或失败。
+ */
+export function parseDeployOutcome(appId: string, requestedVersion: string, payload: unknown): DeploySuccess | PublishFailure {
+  const root = asRecord(payload)
+  const deployment = asRecord(root.deployment)
+  if (typeof root.changed !== 'boolean') {
+    return shapeMismatch(appId, payload, t('appCenter.deployShapeMismatch'))
+  }
+  const echoed = asString(deployment.version)
+  return {
+    ok: true,
+    appId,
+    version: echoed === '' ? requestedVersion : echoed,
+    changed: root.changed,
+    note: asString(root.note),
+  }
+}
+
+/**
+ * 部署一个 approved 版本（= **回滚**：用旧版本再部署一次，设计 §3.3）。
+ *
+ * 不重传、不重审：只发 `{version, message?}`。目标版本必须是 approved 且非当前 ——
+ * 服务端会再判一次（`RELEASE_NOT_DEPLOYABLE`），客户端不复刻状态机。
+ * @param appId - 应用标识。
+ * @param version - 目标版本号。
+ * @param deps - 可注入的 fetch / 取消信号 / 说明文字。
+ * @returns 服务端结果或结构化失败（永不抛）。
+ */
+export async function deployVersion(
+  appId: string,
+  version: string,
+  deps: RequestDeps & { message?: string } = {},
+): Promise<DeploySuccess | PublishFailure> {
+  const body: Record<string, unknown> = { version }
+  if (deps.message !== undefined && deps.message !== '') body.message = deps.message
+  // 部署写入不带 `limit`（那是读面参数）：路径与读面同前缀，但查询串对写面无意义。
+  const outcome = await requestJSON(deploymentsPath(appId, 0), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }, deps)
+  if (!outcome.ok) return outcome
+  return parseDeployOutcome(appId, version, outcome.payload)
+}
+
+/** 撤回的**服务端**结果（设计 §5.3：`{release:{version,status:'withdrawn'}, ...}`）。 */
+export interface WithdrawSuccess {
+  ok: true
+  appId: string
+  version: string
+  /** 服务端确认的新状态（恒为 `withdrawn`；缺席即形状错误）。 */
+  status: string
+  /** 服务端给用户的说明（版本号永久占位这件事由它转述；可空）。 */
+  note: string
+}
+
+/**
+ * 解析撤回响应：`{release:{version,status}, note?}`。
+ * @param appId - 本次请求的 app_id。
+ * @param requestedVersion - 本次请求的版本。
+ * @param payload - 响应体。
+ * @returns 结构化结果或失败。
+ */
+export function parseWithdrawOutcome(appId: string, requestedVersion: string, payload: unknown): WithdrawSuccess | PublishFailure {
+  const root = asRecord(payload)
+  // 服务端实际形状（`api/deployments.go` 的 `withdrawForApp`）：
+  //   `{app_id, version, status:"withdrawn", changed:true, note}`
+  // —— 顶层 `status`/`version`，**没有**嵌套的 `release`。同时容忍 `release:{…}`
+  // 这种包装形状（管理面/将来收敛时可能统一），两处都读、只认 `withdrawn`。
+  const release = asRecord(root.release)
+  const status = asString(root.status) !== '' ? asString(root.status) : asString(release.status)
+  if (status !== 'withdrawn') {
+    return shapeMismatch(appId, payload, t('appCenter.withdrawShapeMismatch'))
+  }
+  const echoed = asString(root.version) !== '' ? asString(root.version) : asString(release.version)
+  return {
+    ok: true,
+    appId,
+    version: echoed === '' ? requestedVersion : echoed,
+    status,
+    note: asString(root.note),
+  }
+}
+
+/**
+ * 撤回一个**待审**版本（仅 pending 可撤回；设计 §5.3：字节释放但**版本号永久占用**）。
+ *
+ * 危险动作（不可逆），调用方必须先二次确认。
+ * @param appId - 应用标识。
+ * @param version - 版本号。
+ * @param deps - 可注入的 fetch / 取消信号。
+ * @returns 服务端结果或结构化失败（永不抛）。
+ */
+export async function withdrawRelease(appId: string, version: string, deps: RequestDeps = {}): Promise<WithdrawSuccess | PublishFailure> {
+  const outcome = await requestJSON(withdrawReleasePath(appId, version), { method: 'POST' }, deps)
+  if (!outcome.ok) return outcome
+  return parseWithdrawOutcome(appId, version, outcome.payload)
 }
 
 // ---------------------------------------------------------------------------

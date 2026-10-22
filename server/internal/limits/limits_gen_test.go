@@ -608,7 +608,7 @@ func precededByOtherLimitItem(flat string, at int) bool {
 // TestAuthorDocsMatchAppConcurrency 守"作者文档里的并发语义与 limits 真源一致"。
 //
 // 背景（2026-09-19）：平台把"同应用请求串行"改成"每应用默认 4 个并发（**读并发**；
-// 写仍串行），但单个用户在同一应用内默认仍只有 1 路"，队列/实例等上限从编译期常量
+// 写仍串行），但单个用户在同一应用内默认 2 路"，队列/实例等上限从编译期常量
 // 变成控制台可改项（默认值不变）。生成物由 (a) 逐字节守住，但**散文**两处漂移了；
 // 而 (e) 只守"数字+单位"，守不住"每应用串行""平台没有并发旋钮""平台固定"这类句子。
 //
@@ -662,7 +662,7 @@ func TestAuthorDocsMatchAppConcurrency(t *testing.T) {
 		for _, claim := range concurrencyDriftClaims {
 			if loc := claim.re.FindStringIndex(flat); loc != nil {
 				t.Errorf("%s 出现与真源矛盾的并发表述（%s）：…%s…\n"+
-					"  AppConcurrency=%d 表示同一应用最多 %d 个请求并发（读并发；**写仍串行**；单个用户在同一应用内默认仍只有 1 路），"+
+					"  AppConcurrency=%d 表示同一应用最多 %d 个请求并发（读并发；**写仍串行**；单个用户在同一应用内默认 2 路），"+
 					"运维可在控制台「应用中心 → 限制项」改全局值。\n"+
 					"  正确口径见 %s 的「想调并发 / 队列参数」一行的写法：写成\"作者不可调（运维可在控制台改）\"，不要写成\"平台没有\"。",
 					doc.rel, claim.name, clip(flat[max(0, loc[0]-24):min(len(flat), loc[1]+24)]),

@@ -551,7 +551,10 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
   })
 
   it('平台说"应用不存在"仍要说"应用不存在"（404 不塌缩成"打开失败"）', async () => {
-    const h = deps({ status: 404, body: { error: { code: 'PLATFORM_APP_NOT_FOUND', platform_code: 'app_not_found' } } })
+    // 真实宿主信封：`platform_reason` 才是服务端 `details.reason` 的落点
+    // （`{error:{code,platform_code,platform_reason}}`）；把 `app_not_found` 塞进
+    // `platform_code` 是**伪造形状** —— 那样客户端读不到原因，只能按 404 无 reason 处理。
+    const h = deps({ status: 404, body: { error: { code: 'PLATFORM_NOT_FOUND', platform_code: 'NOT_FOUND', platform_reason: 'app_not_found' } } })
     const result = await openAppEntry('demo', h.deps)
     expect(result.ok).toBe(false)
     if (result.ok) return
@@ -614,15 +617,38 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
     expect(envelope.message).not.toContain('冻结')
   })
 
-  it('缺 platform_reason ⇒ 确定性回落 not-found（不崩溃、不静默成功、不猜冻结）', async () => {
-    // 旧宿主（只有前缀码）与"平台这一版还没下发原因"是同一个形状。
-    const h = deps({ status: 404, body: { error: { code: 'PLATFORM_NOT_FOUND', platform_code: 'NOT_FOUND' } } })
-    const result = await openAppEntry('demo', h.deps)
+  /**
+   * 404 的两义性（U-04 的另一半）：服务端的两个 404 只有 `platform_reason` 能分开。
+   *
+   * - 未登记 / 软删 / 冻结（`open.go`）都**带** `details.reason`；
+   * - "应用还没有可用版本"（首版待审/被拒/审核通过但部署未生效）**不带** reason。
+   *
+   * ⇒ `404 + reason=null` 必须读成 `no-release`（应用在、版本还没上线），不能读成
+   * "应用不存在"（那会让作者以为自己的应用被删了）。认得出的 `app_not_found` 仍是
+   * 不存在；认不出的原因按不存在兜底（保守方向，不把删除说成"还有版本没上线"）。
+   *
+   * 变异：把 `platformReason === null` 从 no-release 分支删掉 ⇒ 第一条红；
+   * 把 app_not_found 也并进 no-release ⇒ 第二条红。
+   */
+  it('404 + 无 reason ⇒ no-release（应用在、还没有可用版本），app_not_found 仍是不存在', async () => {
+    const noRelease = deps({ status: 404, body: { error: { code: 'PLATFORM_NOT_FOUND', platform_code: 'NOT_FOUND' } } })
+    const result = await openAppEntry('demo', noRelease.deps)
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.reason).toBe('app-not-found')
-    expect(openFailureEnvelope(result).message).toBe(zh['appCenter.openAppMissing'])
-    // 认不出的原因同样回落（前向兼容：平台新增档位 ≠ 崩溃、也 ≠ 打开成功）。
+    expect(result.reason).toBe('no-release')
+    expect(result.status).toBe(404)
+    const envelope = openFailureEnvelope(result)
+    expect(envelope.code).toBe('OPEN_NO_RELEASE')
+    expect(envelope.message).toBe(zh['appCenter.openNoRelease'])
+    expect(envelope.message).toContain('还没有可用版本')
+    expect(envelope.message).not.toContain('不存在')
+    // 平台将来给这一档补上显式 reason 时，仍要认（前向兼容）。
+    const explicit = deps({ status: 404, body: { error: { code: 'PLATFORM_NOT_FOUND', platform_code: 'NOT_FOUND', platform_reason: 'no_release' } } })
+    const explicitResult = await openAppEntry('demo', explicit.deps)
+    expect(explicitResult.ok).toBe(false)
+    if (explicitResult.ok) return
+    expect(explicitResult.reason).toBe('no-release')
+    // 认不出的原因仍然按"不存在"兜底（前向兼容：平台新增档位 ≠ 崩溃、也 ≠ 打开成功）。
     const unknown = deps({ status: 404, body: { error: { code: 'PLATFORM_NOT_FOUND', platform_code: 'NOT_FOUND', platform_reason: 'app_quarantined' } } })
     const unknownResult = await openAppEntry('demo', unknown.deps)
     expect(unknownResult.ok).toBe(false)
@@ -631,20 +657,164 @@ describe('打开应用：只有本机路由这一条路（冻结契约 2026-09-1
     expect(openFailureEnvelope(unknownResult).message).toBe(zh['appCenter.openAppMissing'])
   })
 
-  it('410（下架）分支保持不变：仍按"不存在"处理，原因字段不得改写它的语义', async () => {
+  /**
+   * **U-04 的判据本体**（表驱动）：三档失败各自得到**不同的 reason / 错误码 / 文案**，
+   * 且不得互相冒充。
+   *
+   * 修前（2026-10-23 评审）：
+   *  - 410（已下架）与"无可用版本"一起落 `app-not-found` ⇒ 用户被告知"应用不存在（可能
+   *    已被删除或改名）"，而它明明还在目录里挂着「已下架」徽章（可恢复被说成没了）；
+   *  - 平台 500/502/503 落 `unexpected-response` ⇒ 文案说"客户端本机服务的响应与预期不
+   *    一致…通常是版本不一致"（一次平台抖动指成"去升级客户端"）；
+   *  - 403 与 401 一起落 `not-signed-in` ⇒ "尚未登录，请先登录"（审计账号登录多少次都不行）。
+   *
+   * 判据按**行为**写：`reason` / `OPEN_*` 码 / 本地化文案 / 建议四条逐档不同，并断言
+   * 三种"错误归因"的关键词不得越界。删掉任意一档（或把两档并回同一支）⇒ 本用例红。
+   */
+  it('U-04 表驱动：下架 / 平台不可用 / 无权限 各自可辨，且不冒充"不存在 / 版本不一致 / 未登录"', async () => {
+    const cases: Array<{
+      label: string
+      status: number
+      body: { error: Record<string, unknown> }
+      reason: string
+      code: string
+      messageKey: keyof typeof zh
+      hintKey: keyof typeof zh
+      /** 这一档的文案里**不得**出现的说法（别的档的归因）。 */
+      forbidden: string[]
+    }> = [
+      {
+        label: '410 已下架（可恢复）',
+        status: 410,
+        // 服务端 410 不带 details.reason（open.go 的"应用已下架"分支），这里按真实形状造。
+        body: { error: { code: 'PLATFORM_NOT_FOUND', platform_code: 'NOT_FOUND' } },
+        reason: 'app-offline',
+        code: 'OPEN_APP_OFFLINE',
+        messageKey: 'appCenter.openAppOffline',
+        hintKey: 'appCenter.openAppOfflineHint',
+        // 下架 ≠ 不存在；也不得退回"版本不一致"那一类归因。
+        forbidden: ['不存在', '版本', '尚未登录'],
+      },
+      {
+        label: '平台 500（DB 抖动）',
+        status: 500,
+        body: { error: { code: `PLATFORM_${'HTTP_500'}`, platform_code: 'HTTP_500' } },
+        reason: 'platform-unavailable',
+        code: 'OPEN_PLATFORM_UNAVAILABLE',
+        messageKey: 'appCenter.openPlatformUnavailable',
+        hintKey: 'appCenter.openPlatformUnavailableHint',
+        // "版本不一致 / 升级客户端"是修前那一句；平台抖动只需要重试。
+        forbidden: ['版本不一致', '不存在', '尚未登录'],
+      },
+      {
+        // 宿主的 `OPEN_CHECK_FAILED`（平台版本确认不了 / 连不上平台）是**本机**信封，
+        // 不带 `PLATFORM_` 前缀 —— 同样必须落"平台暂不可用 + 重试"，不能说成形状/版本问题。
+        label: '宿主 502 无法确认应用版本（平台不可达）',
+        status: 502,
+        body: { error: { code: 'OPEN_CHECK_FAILED', message: '无法确认应用版本，请稍后重试。' } },
+        reason: 'platform-unavailable',
+        code: 'OPEN_PLATFORM_UNAVAILABLE',
+        messageKey: 'appCenter.openPlatformUnavailable',
+        hintKey: 'appCenter.openPlatformUnavailableHint',
+        forbidden: ['版本不一致', '不存在', '尚未登录'],
+      },
+      {
+        label: '平台 503（关停/过载）',
+        status: 503,
+        body: { error: { code: 'PLATFORM_HTTP_503', platform_code: 'HTTP_503' } },
+        reason: 'platform-unavailable',
+        code: 'OPEN_PLATFORM_UNAVAILABLE',
+        messageKey: 'appCenter.openPlatformUnavailable',
+        hintKey: 'appCenter.openPlatformUnavailableHint',
+        forbidden: ['版本不一致', '不存在', '尚未登录'],
+      },
+      {
+        label: '403 账号无权限（审计/白名单）',
+        status: 403,
+        body: { error: { code: 'PLATFORM_FORBIDDEN', platform_code: 'FORBIDDEN' } },
+        reason: 'not-permitted',
+        code: 'OPEN_NOT_PERMITTED',
+        messageKey: 'appCenter.openNotPermitted',
+        hintKey: 'appCenter.openNotPermittedHint',
+        // 403 不是"未登录"：再登录一次也不会通过。
+        forbidden: ['尚未登录', '不存在', '版本不一致'],
+      },
+      {
+        label: '401 未登录/会话过期（对照）',
+        status: 401,
+        body: { error: { code: 'PLATFORM_AUTH_REQUIRED', platform_code: 'AUTH_REQUIRED' } },
+        reason: 'not-signed-in',
+        code: 'OPEN_NOT_SIGNED_IN',
+        messageKey: 'appCenter.openNotSignedIn',
+        hintKey: 'appCenter.openNotSignedInHint',
+        forbidden: ['没有权限', '不存在'],
+      },
+      {
+        label: '404 无可用版本（对照）',
+        status: 404,
+        body: { error: { code: 'PLATFORM_NOT_FOUND', platform_code: 'NOT_FOUND' } },
+        reason: 'no-release',
+        code: 'OPEN_NO_RELEASE',
+        messageKey: 'appCenter.openNoRelease',
+        hintKey: 'appCenter.openNoReleaseHint',
+        forbidden: ['不存在', '已下架'],
+      },
+    ]
+
+    const seen = new Map<string, { reason: string, message: string, hint: string }>()
+    for (const row of cases) {
+      const h = deps({ status: row.status, body: row.body })
+      const result = await openAppEntry('demo', h.deps)
+      expect(result.ok, row.label).toBe(false)
+      if (result.ok) throw new Error('unreachable')
+      // ① 归因档位 + 原始事实都保留（上报需要 status / 原始 code）。
+      expect(result.reason, row.label).toBe(row.reason)
+      expect(result.status, row.label).toBe(row.status)
+      expect(result.code, row.label).toBe(row.body.error.code)
+      // ② 错误块：稳定码 + 这一档自己的文案与建议。
+      const envelope = openFailureEnvelope(result)
+      expect(envelope.code, row.label).toBe(row.code)
+      expect(envelope.message, row.label).toBe(zh[row.messageKey])
+      expect(envelope.hints?.[0], row.label).toBe(zh[row.hintKey])
+      // ③ 不得冒充别的档的归因。
+      for (const word of row.forbidden) expect(envelope.message, `${row.label} 的文案出现了「${word}」`).not.toContain(word)
+      // ④ 上报用的详情保留**结构化**的原始状态码与原始错误码（不是只有中文文案、
+      //    也不靠诊断串里恰好有数字来"碰巧过"）。
+      const details = envelope.details as { reason?: unknown, status?: unknown, raw_code?: unknown }
+      expect(details.reason, row.label).toBe(row.reason)
+      expect(details.status, row.label).toBe(row.status)
+      expect(details.raw_code, row.label).toBe(row.body.error.code)
+      seen.set(row.reason, { reason: row.reason, message: envelope.message, hint: envelope.hints?.[0] ?? '' })
+    }
+    // ⑤ 相邻档位**互不冒充**：下架 / 平台不可用 / 无权限 / 未登录 / 无版本 五类文案两两不同。
+    const messages = [...seen.values()].map(entry => entry.message)
+    expect(new Set(messages).size).toBe(messages.length)
+    expect(seen.get('app-offline')!.message).not.toBe(seen.get('app-not-found')?.message)
+    expect(seen.get('platform-unavailable')!.message).not.toBe(seen.get('app-not-found')?.message)
+    expect(seen.get('not-permitted')!.message).not.toBe(seen.get('not-signed-in')!.message)
+  })
+
+  it('410（下架）不再被说成"不存在"，且原因字段不得把它改写成"冻结"', async () => {
     const gone = deps({ status: 410, body: { error: { code: 'PLATFORM_GONE', platform_code: 'GONE' } } })
     const result = await openAppEntry('demo', gone.deps)
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.reason).toBe('app-not-found')
+    expect(result.reason).toBe('app-offline')
+    const envelope = openFailureEnvelope(result)
+    expect(envelope.message).toBe(zh['appCenter.openAppOffline'])
+    // 可恢复语义：说"下架/数据仍在"，不说"不存在"。
+    expect(envelope.message).toContain('下架')
+    expect(envelope.message).toContain('数据仍然保留')
+    expect(envelope.message).not.toContain('不存在')
+    expect(envelope.hints?.[0]).toContain('重新上架')
     // 契约之外的 410 + app_frozen 也不得显示成"冻结"：冻结是 404 那一档（只读快照），
     // 下架是另一件事，不能被一个原因字段改写。
     const odd = deps({ status: 410, body: { error: { code: 'PLATFORM_NOT_FOUND', platform_code: 'NOT_FOUND', platform_reason: 'app_frozen' } } })
     const oddResult = await openAppEntry('demo', odd.deps)
     expect(oddResult.ok).toBe(false)
     if (oddResult.ok) return
-    expect(oddResult.reason).toBe('app-not-found')
-    expect(openFailureEnvelope(oddResult).message).toBe(zh['appCenter.openAppMissing'])
+    expect(oddResult.reason).toBe('app-offline')
+    expect(openFailureEnvelope(oddResult).message).toBe(zh['appCenter.openAppOffline'])
   })
 
   it('成功：POST 本机路由（带 app_id + 本机持有性证明头），并断言返回的就是这个应用的协议 URL', async () => {

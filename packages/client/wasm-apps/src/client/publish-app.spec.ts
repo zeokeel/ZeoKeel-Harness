@@ -31,14 +31,18 @@ import {
   buildPublishBody,
   changesAccess,
   checkAppIdAvailability,
+  compareVersions,
   encodeBase64,
   initialFormState,
+  isVersionAfter,
+  newestVersion,
   parseAvailability,
   parseErrorEnvelope,
   parsePublishOutcome,
   PUBLISH_PATH,
   splitWhitelist,
   submitPublish,
+  suggestNextVersion,
   validatePublishDraft,
   windowSpecFromText,
   type PublishDraft,
@@ -229,11 +233,14 @@ describe('前端预校验：与服务端同口径（只做加法，不放行服�
   })
 
   it('首版四条声明字段（title/purpose/data_sensitivity/owner）各自必填', () => {
-    const issues = validatePublishDraft(draftWith({ title: '  ', config: { purpose: '', dataSensitivity: '', owner: '' } }))
+    // R-06（2026-10-22）：缺省不再是首版（缺省 `true` 会让漏传选项的调用点**显式发空串**
+    // 清空上一版声明），所以这条首版判据必须**显式**传 `firstRelease: true`。
+    const firstRelease = { firstRelease: true }
+    const issues = validatePublishDraft(draftWith({ title: '  ', config: { purpose: '', dataSensitivity: '', owner: '' } }), firstRelease)
     expect(issues.map(i => i.code).sort()).toEqual(['data_sensitivity_required', 'owner_required', 'purpose_required', 'title_required'])
     expect(issues.map(i => i.field).sort()).toEqual(['data_sensitivity', 'owner', 'purpose', 'title'])
     // 只声明第一个问题时也只剩一条（其它字段都合法）。
-    expect(validatePublishDraft(draftWith({ config: { owner: '' } })).map(i => i.code)).toEqual(['owner_required'])
+    expect(validatePublishDraft(draftWith({ config: { owner: '' } }), firstRelease).map(i => i.code)).toEqual(['owner_required'])
     // 非首版：这四个字段允许留空（服务端同样只在首版要求）。
     expect(validatePublishDraft(draftWith({ title: '', config: { purpose: '', dataSensitivity: '', owner: '' } }), { firstRelease: false })).toEqual([])
   })
@@ -572,13 +579,31 @@ describe('P1-3：发新版的预填基线与"访问范围改动"判据', () => {
     expect(initial.owner).toBe('alice')
   })
 
-  it('data_sensitivity 没有任何默认值（平台上就没有这个字段的缺省）', () => {
-    const initial = initialFormState(TARGET) as unknown as Record<string, unknown>
-    // 结构性保证：初值类型里根本没有这个键 —— 想塞默认值必须先改类型。
-    expect(Object.keys(initial)).not.toContain('dataSensitivity')
-    expect(Object.keys(initial).some(key => key.toLowerCase().includes('sensitiv'))).toBe(false)
-    // 首版发布同样不带任何默认值。
-    expect(Object.keys(initialFormState() as unknown as Record<string, unknown>)).not.toContain('dataSensitivity')
+  /**
+   * F-02（2026-10-22）：`data_sensitivity` **没有平台默认值**，但**上一次声明过的值**
+   * 必须能预填（否则作者每发一版都要凭空重填一次合规属性）。
+   *
+   * 两条判据同时成立才算对：目录行不带它 ⇒ 空串（不是 `internal` 那种"抹平"默认值）；
+   * 目录行带了它（服务端将来下发时）⇒ 原样预填。
+   */
+  it('data_sensitivity 没有平台默认值，但会沿用上一次声明过的值（F-02）', () => {
+    const withoutDeclaration = initialFormState(TARGET)
+    // 没有声明过的值 ⇒ 空串：硬填 `internal` 会把每个应用的合规声明抹平成同一个值。
+    expect(withoutDeclaration.dataSensitivity).toBe('')
+    // 首版发布同样没有默认值。
+    expect(initialFormState().dataSensitivity).toBe('')
+    // 目录行带了上一次的声明 ⇒ 原样预填（发新版默认沿用；留空也不会清空旧声明）。
+    expect(initialFormState({ ...TARGET, dataSensitivity: 'internal' }).dataSensitivity).toBe('internal')
+  })
+
+  /**
+   * F-02 的核心行为：`firstRelease` 由 `current_version` 推导（不再是恒 `true`）。
+   */
+  it('firstRelease 由 current_version 推导：有生效版本 ⇒ 非首版；没有 ⇒ 首版', () => {
+    expect(initialFormState(TARGET).firstRelease).toBe(false)
+    expect(initialFormState().firstRelease).toBe(true)
+    // 没有生效版本的已有应用（例如首版被拒）⇒ 仍按首版要求（保守方向：只多问）。
+    expect(initialFormState({ ...TARGET, currentVersion: '' }).firstRelease).toBe(true)
   })
 
   it('首版发布（无基线）：缺省仍是 login，但**没有**"当前值"因而没有改动判定', () => {
@@ -768,5 +793,122 @@ describe('parseAvailability：判词字段的 fail-closed 读法', () => {
   it('hints 里的非字符串条目被剔除（服务端契约漂移不污染 UI）', () => {
     const verdict = parseAvailability({ reason: 'invalid', hints: ['a', 7, null, 'b'] })
     expect(verdict!.hints).toEqual(['a', 'b'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F-03（2026-10-22 反证审计 R-03）：版本比较必须与服务端 `util.CompareSemVer` 同语义，
+// 「建议下一版」必须按**已知全部版本**取 max。
+//
+// 缺陷形态（修前）：`versionNumbers` 用 `split('-')[0]` 丢掉预发布段，只比三段数字 ⇒
+// `1.0.0` vs 基线 `1.0.0-beta` 返回 `false`（"不递增"）⇒ 作者被**本地**拦死，而服务端
+// `registry.MustBeNewer` 接受（转正是合法发布）；建议值只看 `currentVersion` ⇒ 存在
+// 更高的 pending 3.1.1 时会建议一个**已被永久占用**的号。
+// ---------------------------------------------------------------------------
+describe('F-03：版本比较与服务端同语义（无预发布 > 有预发布）', () => {
+  it('核心三段按数值比较；相同 ⇒ 0；不可解析 ⇒ null（放行）', () => {
+    expect(compareVersions('1.2.3', '1.2.2')).toBeGreaterThan(0)
+    expect(compareVersions('1.2.2', '1.2.3')).toBeLessThan(0)
+    expect(compareVersions('1.2.3', '1.2.3')).toBe(0)
+    expect(compareVersions('1.10.0', '1.9.0')).toBeGreaterThan(0)
+    // 不可比：形态不符/空基线 ⇒ null（调用方**不**拦，服务端权威）。
+    expect(compareVersions('1.2', '1.2.3')).toBeNull()
+    expect(compareVersions('1.2.3', '')).toBeNull()
+    expect(compareVersions('1.2.3', 'latest')).toBeNull()
+  })
+
+  it('1.0.0 在 1.0.0-beta 之后（转正是合法发布，必须为 true 而不是 false）', () => {
+    // 服务端 `MustBeNewer` 接受这一对（`CompareSemVer("1.0.0","1.0.0-beta") > 0`）。
+    expect(isVersionAfter('1.0.0', '1.0.0-beta')).toBe(true)
+    // 反向：降级到预发布不是"更新"。
+    expect(isVersionAfter('1.0.0-beta', '1.0.0')).toBe(false)
+    // 同一个预发布 ⇒ 不递增。
+    expect(isVersionAfter('1.0.0-beta', '1.0.0-beta')).toBe(false)
+  })
+
+  it('预发布段按 §11.4 比较： rc.2 > rc.1、数字低于字母、前缀相同多者更大', () => {
+    expect(isVersionAfter('1.0.0-rc.2', '1.0.0-rc.1')).toBe(true)
+    expect(isVersionAfter('1.0.0-rc.1', '1.0.0-rc.2')).toBe(false)
+    // 数字标识符优先级低于字母数字标识符（§11.4.3）。
+    expect(isVersionAfter('1.0.0-alpha', '1.0.0-1')).toBe(true)
+    // 前缀相同 ⇒ 标识符多者更大（§11.4.4）。
+    expect(isVersionAfter('1.0.0-beta.1', '1.0.0-beta')).toBe(true)
+    expect(isVersionAfter('1.0.0-beta', '1.0.0-beta.1')).toBe(false)
+  })
+
+  it('已知版本取 max：忽略不可解析条目，一条都没有 ⇒ null', () => {
+    expect(newestVersion(['1.0.0', '3.1.1', '2.0.0'])).toBe('3.1.1')
+    expect(newestVersion(['1.0.0-beta', '1.0.0'])).toBe('1.0.0')
+    expect(newestVersion(['not-a-version', '', '1.2.0'])).toBe('1.2.0')
+    expect(newestVersion(['', 'nope'])).toBeNull()
+  })
+
+  it('建议下一版：按已知全部版本（含待审 3.1.1）取 max 再 +1 ⇒ 3.1.2', () => {
+    // 线上仍是 3.1.0，但待审的 3.1.1 已永久占位 —— 建议 3.1.1 会让作者白传一次。
+    expect(suggestNextVersion('3.1.0', ['3.1.1'])).toBe('3.1.2')
+    // 被拒/已撤回的更高版本同样占位。
+    expect(suggestNextVersion('1.0.0', ['5.0.0', '2.0.0'])).toBe('5.0.1')
+    // 拿不到版本历史 ⇒ 退回只看当前版本（旧行为，不回归）。
+    expect(suggestNextVersion('1.2.3')).toBe('1.2.4')
+    // 预发布基线：丢掉后缀、末段 +1。
+    expect(suggestNextVersion('1.2.3-beta.1')).toBe('1.2.4')
+    // 一条都不可解析 ⇒ 不猜。
+    expect(suggestNextVersion('', [])).toBeNull()
+  })
+
+  it('本地校验按全部已知版本判：待审 3.1.1 时提交 3.1.1 被拦、3.1.2 放行', () => {
+    const base = draftWith({ version: '3.1.1' })
+    expect(validatePublishDraft(base, { firstRelease: false, currentVersion: '3.1.0', knownVersions: ['3.1.1'] })
+      .map(issue => issue.code)).toEqual(['version_not_incremented'])
+    expect(validatePublishDraft(draftWith({ version: '3.1.2' }), {
+      firstRelease: false, currentVersion: '3.1.0', knownVersions: ['3.1.1'],
+    })).toEqual([])
+  })
+
+  it('不可比不误拦：基线是预发布时提交转正版本 / 基线形态不符 ⇒ 零 version 问题', () => {
+    // 修前的反例：`1.0.0` vs 基线 `1.0.0-beta` 返回 false ⇒ 被本地拦死。
+    expect(validatePublishDraft(draftWith({ version: '1.0.0' }), { firstRelease: false, currentVersion: '1.0.0-beta' }))
+      .toEqual([])
+    // 基线不可解析 ⇒ 不拦（放行给服务端）。
+    expect(validatePublishDraft(draftWith({ version: '1.0.0' }), { firstRelease: false, currentVersion: 'weird' }))
+      .toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// R-06（2026-10-22 反证审计）：`firstRelease` 的**缺省方向**必须是安全的。
+//
+// 服务端的继承语义是"字段**缺席**才沿用上一版"，显式空串是"显式清空"
+//（`appcfg/inherit.go` 的 `mergeMissing`）。修前两个函数的缺省都是 `true` ⇒ 任何漏传
+// 该选项的调用点都会**静默**把上一版的 purpose/data_sensitivity/owner 抹掉。
+// ---------------------------------------------------------------------------
+describe('R-06：firstRelease 缺省是安全方向（省略声明，不发空串）', () => {
+  it('buildPublishBody 不传 firstRelease 时不得发空串声明', () => {
+    const draft = draftWith({ config: { purpose: '', dataSensitivity: '', owner: '' } })
+    const body = buildPublishBody(draft, 'AA==')
+    const config = body.config as Record<string, unknown>
+    // 缺省 ⇒ 按"非首版"处理：三个声明字段**一个都不出现**（缺席 = 服务端沿用）。
+    expect(Object.hasOwn(config, 'purpose')).toBe(false)
+    expect(Object.hasOwn(config, 'data_sensitivity')).toBe(false)
+    expect(Object.hasOwn(config, 'owner')).toBe(false)
+    // 修前：`{purpose:'', data_sensitivity:'', owner:''}` ⇒ 服务端把上一版声明清空。
+  })
+
+  it('显式 firstRelease:true 仍发三项（首版路径不受影响）', () => {
+    const config = buildPublishBody(draftWith({ config: { purpose: '值班交接', dataSensitivity: 'internal', owner: 'alice' } }), 'AA==', { firstRelease: true })
+      .config as Record<string, unknown>
+    expect(config.purpose).toBe('值班交接')
+    expect(config.data_sensitivity).toBe('internal')
+    expect(config.owner).toBe('alice')
+  })
+
+  it('validatePublishDraft 缺省不按首版要求四项声明（缺省方向 = 非首版）', () => {
+    // 首版才会要求 title/purpose/data_sensitivity/owner；缺省不能把已有应用当首版
+    // 那样要求重填（那正是 F-02 要消灭的形态），也不能反过来发空串（上一组的判据）。
+    expect(validatePublishDraft(draftWith({ title: '', config: { purpose: '', dataSensitivity: '', owner: '' } })))
+      .toEqual([])
+    // 显式 firstRelease:true 仍然拦（首版必须声明）。
+    expect(validatePublishDraft(draftWith({ title: '', config: { purpose: '', dataSensitivity: '', owner: '' } }), { firstRelease: true })
+      .map(issue => issue.field).sort()).toEqual(['data_sensitivity', 'owner', 'purpose', 'title'])
   })
 })

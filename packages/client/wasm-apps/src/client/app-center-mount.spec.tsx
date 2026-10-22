@@ -426,6 +426,36 @@ describe('打开应用：本机路由 + 失败原因可辨（2026-09-19）', () 
     }
   })
 
+  /**
+   * F-04（P1，2026-10-22 审计）：**`version-unverified` 必须显示成提示条**。
+   *
+   * 修前宿主在"聚焦已开窗口、平台版本暂时确认不了"时确实回了 `warning`，但客户端
+   * 零解析 ⇒ 用户静默看到可能是旧的内容，界面一个字都不说。
+   *
+   * 判据两条：①宿主给了 ⇒ 出现提示条且文案是那句冻结的话；②下一次打开没给 ⇒ 提示条
+   * 消失（提示属于"那一次打开"，不是永久状态 —— 否则它自己就变成新的骗人）。
+   */
+  it('F-04：宿主回 warning=version-unverified ⇒ 显示提示条；下一次没有就撤掉', async () => {
+    let warning: string | null = 'version-unverified'
+    stubFetch((url) => {
+      if (url === OPEN_APP_PATH) {
+        return jsonResponse(200, { url: appURL('roster'), window: 'focused', ...(warning === null ? {} : { warning }) })
+      }
+      return jsonResponse(200, CATALOG_ONE)
+    })
+    await mount()
+    await click('.zeokeel-app-center-open')
+    const banner = container.querySelector('[data-role="version-unverified"]')
+    expect(banner).not.toBeNull()
+    expect(banner!.getAttribute('role')).toBe('status')
+    expect(banner!.textContent).toContain('无法确认最新版本')
+
+    // 下一次打开拿到确定版本 ⇒ 提示条必须撤掉（不留一条过期结论）。
+    warning = null
+    await click('.zeokeel-app-center-open')
+    expect(container.querySelector('[data-role="version-unverified"]')).toBeNull()
+  })
+
   it('本机返回的不是这个应用的协议 URL ⇒ 读作形状错误（不假装已打开）', async () => {
     stubFetch((url) => (url === OPEN_APP_PATH
       ? jsonResponse(200, { url: 'https://roster.apps.example.com/' })
@@ -754,7 +784,64 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
     expect(container.querySelector('[data-role="data-sensitivity-note"]')!.textContent).toContain('没有平台默认值')
   })
 
-  it('data_sensitivity 未声明时提交被本地拦下（不把抹平后的值发出去）', async () => {
+  /**
+   * F-03（P2，2026-10-22 审计）：**版本号没有本地递增校验** ⇒ 作者填了不递增的版本，
+   * 要先把 ≤32 MiB 的 wasm 传完才吃服务端 4xx；而版本号一经提交永久占位（被拒也不
+   * 释放）⇒ 只能盲升再试。
+   *
+   * 修后判据（三条一起）：①选文件/敲版本时**立即**显示本地错误（不等到提交）；
+   * ②「建议下一版」给出一键值（当前 3.1.0 ⇒ 3.1.1）；③错误态下提交**一个字节都不上传**。
+   *
+   * 变异：把 `validatePublishDraft` 的 `currentVersion` 选项去掉 ⇒ 本节 ①③ 红；
+   * 把「建议下一版」按钮删掉 ⇒ ② 红。
+   */
+  it('F-03：版本不递增 ⇒ 本地立即报错且不上传；「建议下一版」一键填入', async () => {
+    stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, CATALOG_OWNED)))
+    await mount()
+    await openPublishNewVersion()
+    await pickFile('.zeokeel-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
+    // 与当前线上版本**相同**（3.1.0）—— 服务端会拒，而版本号一经提交永久占位。
+    await typeIntoPublishForm({ version: '3.1.0' })
+
+    const error = container.querySelector('[data-role="version-error"]')
+    expect(error, '版本不递增必须在本地立即显示（不等一次 32 MiB 上传）').not.toBeNull()
+    expect(error!.textContent).toContain('必须大于')
+    // 「建议下一版」= 末段 +1。
+    const suggest = container.querySelector<HTMLButtonElement>('.zeokeel-app-center-suggest-version')
+    expect(suggest).not.toBeNull()
+    expect(suggest!.textContent).toContain('3.1.1')
+
+    // 错误态下提交：本地拦下，**零**发布请求（不浪费上传）。
+    await click('.zeokeel-app-center-submit')
+    expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(0)
+    expect([...container.querySelectorAll('[data-role="local-error"] li')].map(li => li.getAttribute('data-code')))
+      .toContain('version_not_incremented')
+
+    // 一键填入建议值 ⇒ 错误消失、可以正常提交。
+    await click('.zeokeel-app-center-suggest-version')
+    expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-version')!.value).toBe('3.1.1')
+    expect(container.querySelector('[data-role="version-error"]')).toBeNull()
+    await click('.zeokeel-app-center-submit')
+    const publish = calls.filter(call => call.url === PUBLISH_PATH)
+    expect(publish).toHaveLength(1)
+    expect(JSON.parse(String(publish[0]!.init.body))).toMatchObject({ version: '3.1.1' })
+  })
+
+  /**
+   * F-02（P1，2026-10-22 审计）：**发新版不再被当成首版**。
+   *
+   * 修前：`PublishForm` 调 `validatePublishDraft(draft)` 不传 options ⇒ `firstRelease`
+   * 恒 `true` ⇒ 每发一版都被要求重填标题、用途、数据敏感度、负责人四项声明；而
+   * `data_sensitivity` 还不在目录行里，作者只能每版凭空再声明一次，且**发空串等于
+   * 服务端"显式清空"**（`appcfg/inherit.go`），上一版声明被静默抹掉。
+   *
+   * 修后两条一起成立：①本地不再要求重填（`firstRelease` 由 `current_version` 推导）；
+   * ②留空的声明在请求体里**缺席**（不是空串）⇒ 服务端按缺席继承上次声明。
+   *
+   * 变异：把 `firstRelease: initial.firstRelease` 去掉（回到恒 true）⇒ 本节红；
+   * 把 `buildPublishBody` 的新版分支改回"一律发空串" ⇒ 下面"不发 data_sensitivity"红。
+   */
+  it('发新版：不再要求重填 data_sensitivity，且留空的声明在请求体里缺席（服务端沿用）', async () => {
     stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, CATALOG_OWNED)))
     await mount()
     await openPublishNewVersion()
@@ -762,9 +849,97 @@ describe('P1-3：对已有应用发新版（预填当前配置 + 访问范围改
     await typeIntoPublishForm({ version: '3.2.0' })
     await click('.zeokeel-app-center-submit')
 
-    const local = container.querySelector('[data-role="local-error"]')!
-    expect([...local.querySelectorAll('li')].map(li => li.getAttribute('data-code'))).toContain('data_sensitivity_required')
-    expect(calls.filter(call => call.url === PUBLISH_PATH)).toHaveLength(0)
+    // ① 没有本地错误块（修前这里必有 data_sensitivity_required）。
+    expect(container.querySelector('[data-role="local-error"]')).toBeNull()
+    // ①b 文案与行为一致：这一页必须明说"留空 = 沿用上次声明"（不是"首版必填"）。
+    const inherited = container.querySelector('[data-role="declarations-inherited"]')
+    expect(inherited).not.toBeNull()
+    expect(inherited!.textContent).toContain('沿用上次声明')
+    expect(container.querySelector('[data-role="data-sensitivity-note"]')!.textContent).not.toContain('留空会被首版必填校验拒')
+    // ② 真的提交了，且 data_sensitivity 这个键**不在**请求体里（缺席 = 沿用）。
+    const publish = calls.filter(call => call.url === PUBLISH_PATH)
+    expect(publish).toHaveLength(1)
+    const body = JSON.parse(String(publish[0]!.init.body)) as { config?: Record<string, unknown> }
+    expect(Object.hasOwn(body.config ?? {}, 'data_sensitivity')).toBe(false)
+    // purpose / owner 有预填值 ⇒ 照常发（作者看得见的东西就是会提交的东西）。
+    expect((body.config as Record<string, unknown>).purpose).toBe('值班排班')
+    expect((body.config as Record<string, unknown>).owner).toBe('carol')
+  })
+
+  /**
+   * R-01（2026-10-22 反证审计）：目录行下发的 `data_sensitivity` 必须**一路走到表单**
+   * （服务端 `read.go` 已按 isOwner 下发，`CATALOG_ROW_AUTHOR_FIELDS` 也已声明）。
+   *
+   * 修前的假绿：`publish-app.spec.ts` 只直接喂 `initialFormState`，绕过了
+   * `parseCatalogReport` → `setPublishTarget` 这两跳 —— 把 `AppCenterPanel` 的
+   * `dataSensitivity` 映射删掉，整包仍然全绿。这条判据走**真挂载**：目录行带声明 ⇒
+   * 表单输入框是那个值 ⇒ 提交的请求体里也是那个值（不是空串、不是 internal）。
+   *
+   * 变异：删掉 `parseCatalogReport` 里的 `data_sensitivity` 映射，或删掉
+   * `onPublishNewVersion` 里传 `dataSensitivity` 的那一行 ⇒ 本用例红。
+   */
+  it('R-01：目录行的 data_sensitivity 预填到表单，并随提交发回同一个值', async () => {
+    const OWNED_WITH_SENSITIVITY = {
+      apps: [{
+        ...CATALOG_OWNED.apps[0],
+        data_sensitivity: 'pii',
+      }],
+    }
+    stubFetch((url) => (url === PUBLISH_PATH ? jsonResponse(201, RELEASE_OK) : jsonResponse(200, OWNED_WITH_SENSITIVITY)))
+    await mount()
+    await openPublishNewVersion()
+    const input = container.querySelector<HTMLInputElement>('.zeokeel-app-center-data-sensitivity')!
+    expect(input.value).toBe('pii')
+
+    await pickFile('.zeokeel-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
+    await typeIntoPublishForm({ version: '3.2.0' })
+    await click('.zeokeel-app-center-submit')
+    const publish = calls.filter(call => call.url === PUBLISH_PATH)
+    expect(publish).toHaveLength(1)
+    const config = (JSON.parse(String(publish[0]!.init.body)) as { config?: Record<string, unknown> }).config ?? {}
+    // 作者没改它 ⇒ 发回同一个值（显式同值 = 服务端无变化；不会被抹成空串）。
+    expect(config.data_sensitivity).toBe('pii')
+  })
+
+  /**
+   * R-03（2026-10-22 反证审计）：**「建议下一版」要按已知全部版本取 max**。
+   *
+   * 服务端判"版本号是否更新"用的是全部版本行（含待审/被拒/已撤回），版本号一经提交
+   * 永久占位。线上仍是 3.1.0、但待审里已有 3.1.1 时，按线上 +1 会建议一个**已被占用**
+   * 的号：作者照抄 → 传完 ≤32 MiB 才吃 `VERSION_NOT_NEWER`。
+   *
+   * 变异：`PublishForm` 只按 `initial.currentVersion` 建议（不传 knownVersions）
+   * ⇒ 建议值变回 3.1.1、且 3.1.1 不再被本地拦 ⇒ 两条断言红。
+   */
+  it('R-03：待审 3.1.1 时建议 3.1.2，且提交 3.1.1 被本地拦下', async () => {
+    const RELEASES_WITH_PENDING = {
+      app_id: 'hidden-tool',
+      current_version: '3.1.0',
+      review_required: true,
+      releases: [
+        { version: '3.1.1', status: 'pending', reason: '', created_at: '2026-10-22T10:00:00Z', current: false, checksum: '', size: 1 },
+        { version: '3.1.0', status: 'approved', reason: '', created_at: '2026-10-21T10:00:00Z', current: true, checksum: '', size: 1 },
+      ],
+    }
+    stubFetch((url) => {
+      if (url === PUBLISH_PATH) return jsonResponse(201, RELEASE_OK)
+      if (url.includes('/releases')) return jsonResponse(200, RELEASES_WITH_PENDING)
+      return jsonResponse(200, CATALOG_OWNED)
+    })
+    await mount()
+    await openPublishNewVersion()
+
+    const suggest = container.querySelector<HTMLButtonElement>('.zeokeel-app-center-suggest-version')
+    expect(suggest, '有已知版本就该有建议按钮').not.toBeNull()
+    // 3.1.1 已被待审版本永久占位 ⇒ 建议跳到 3.1.2。
+    expect(suggest!.textContent).toContain('3.1.2')
+
+    await pickFile('.zeokeel-app-center-file', 'hidden-tool.wasm', new Uint8Array([1]))
+    await typeIntoPublishForm({ version: '3.1.1' })
+    expect(container.querySelector('[data-role="version-error"]')).not.toBeNull()
+
+    await typeIntoPublishForm({ version: '3.1.2' })
+    expect(container.querySelector('[data-role="version-error"]')).toBeNull()
   })
 
   it('改动访问范围：出现"当前 X → 提交后 Y"确认，未勾选不许提交，勾选后按新值提交', async () => {
@@ -1550,7 +1725,8 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     await mount()
     await clickIn('值班表', '.zeokeel-app-center-publish-new')
     await pickFile('.zeokeel-app-center-file', 'roster.wasm', new Uint8Array([0, 97, 115, 109]))
-    await typeIntoPublishForm({ version: '2.0.0', changelog: '加了导出', sensitivity: 'internal' })
+    // 版本必须**大于**当前线上版本（2.0.0 ⇒ 2.0.1）：F-03 的本地递增校验在提交前拦。
+    await typeIntoPublishForm({ version: '2.0.1', changelog: '加了导出', sensitivity: 'internal' })
     await click('.zeokeel-app-center-submit')
     // 既有应用的 app_id 不做查重（它必然"存在"），提交直接走发布。
     expect(calls.filter(call => call.url.includes('/availability'))).toHaveLength(0)
@@ -1690,7 +1866,8 @@ describe('应用标识查重：填 app_id 时异步问、提交前复检', () =>
     await mount()
     await clickIn('值班表', '.zeokeel-app-center-publish-new')
     await pickFile('.zeokeel-app-center-file', 'roster.wasm', new Uint8Array([0, 97, 115, 109]))
-    await typeIntoPublishForm({ version: '2.0.0', changelog: '改了窗口', sensitivity: 'internal' })
+    // 版本要递增（当前 2.0.0 ⇒ 2.0.1）：F-03 的本地校验否则会拦住提交。
+    await typeIntoPublishForm({ version: '2.0.1', changelog: '改了窗口', sensitivity: 'internal' })
     // 上一版是 1.5（预填）；作者最后改成 2。
     expect(container.querySelector<HTMLInputElement>('.zeokeel-app-center-window-ratio')!.value).toBe('1.5')
     await type('.zeokeel-app-center-window-ratio', '2')
@@ -1787,5 +1964,141 @@ describe('装载器层（审计 C-01）：确认框上的 Esc 只收起确认框
       column.remove()
       document.documentElement.removeAttribute(PANEL_ACTIVE_ATTR)
     }
+  })
+})
+
+/**
+ * 生命周期 UI（2026-10-22 重设计 §6.1/§8）：**回滚**（设为此版本）与**撤回**，
+ * 以及只读的**部署历史**。
+ *
+ * 契约来源：`docs/planning/2026-10-22-wasm-lifecycle-redesign.md` §6.1（员工面端点）
+ * 与 §8（客户端契约）。后端（L 泳道）与这些端点同批落地；**端点未就绪时界面必须如实
+ * 报错**（服务端信封逐字段显示），绝不把"端点不存在"伪装成"没有部署历史"。
+ *
+ * 变异验证：
+ *  - 回滚按钮不判 `approved && !current`（对 pending/当前版本也渲染）⇒ 本节红；
+ *  - 撤回不做二次确认（一点就发请求）⇒「撤回必须先确认」红；
+ *  - 部署历史读失败后回落成空清单 ⇒「端点未就绪必须报错」红。
+ */
+describe('生命周期 UI：部署历史 / 回滚 / 撤回（设计 §6.1/§8）', () => {
+  const CATALOG = {
+    apps: [
+      { app_id: 'roster', title: '值班表', description: '', responsible: 'carol', access: 'login', enabled: true, current_version: '1.0.0', is_owner: true, purpose: '值班', whitelist: [] },
+    ],
+  }
+  const RELEASES = {
+    app_id: 'roster',
+    current_version: '1.0.0',
+    review_required: true,
+    releases: [
+      { version: '1.0.0', status: 'approved', reason: '', created_at: '2026-09-18T10:00:00Z', current: true, checksum: 'aa', size: 8 },
+      { version: '1.1.0', status: 'pending', reason: '', created_at: '2026-09-19T09:00:00Z', current: false, checksum: 'bb', size: 9 },
+      { version: '1.2.0', status: 'approved', reason: '', created_at: '2026-09-19T10:00:00Z', current: false, checksum: 'cc', size: 10 },
+    ],
+  }
+  const DEPLOYMENTS = {
+    app_id: 'roster',
+    current_version: '1.0.0',
+    deployments: [
+      { id: 7, version: '1.0.0', kind: 'publish', actor: 'carol', actor_role: 'owner', message: '首版上线', created_at: '2026-09-18T10:00:00Z', current: true },
+      { id: 6, version: '1.2.0', kind: 'review', actor: 'admin', actor_role: 'admin_session', message: '', created_at: '2026-09-17T10:00:00Z', current: false },
+    ],
+  }
+
+  const stubLifecycle = (overrides: Record<string, () => Response> = {}): void => {
+    stubFetch((url, init) => {
+      if (url === '/api/zeokeel/apps/wasm') return jsonResponse(200, CATALOG)
+      if (overrides[url] !== undefined) return overrides[url]!()
+      if (url === '/api/zeokeel/apps/wasm/roster/releases') return jsonResponse(200, RELEASES)
+      if (url.startsWith('/api/zeokeel/apps/wasm/roster/deployments')) {
+        return init.method === 'GET'
+          ? jsonResponse(200, DEPLOYMENTS)
+          : jsonResponse(200, { deployment: { version: '1.2.0', kind: 'rollback' }, changed: true, note: '已回滚' })
+      }
+      if (url === '/api/zeokeel/apps/wasm/roster/releases/1.1.0/withdraw') {
+        return jsonResponse(200, { release: { version: '1.1.0', status: 'withdrawn' }, note: '版本号仍占用' })
+      }
+      throw new Error(`unexpected url: ${url}`)
+    })
+  }
+
+  it('版本历史：只有 approved 且非当前版本才有「设为此版本（回滚）」；点它 ⇒ POST 部署目标版本', async () => {
+    stubLifecycle()
+    await mount()
+    await clickIn('值班表', '.zeokeel-app-center-releases-toggle')
+
+    const panel = cardOf('值班表').querySelector('[data-role="releases"]')!
+    const rows = [...panel.querySelectorAll('[data-role="release"]')]
+    const current = rows.find(row => row.getAttribute('data-version') === '1.0.0')!
+    const pendingRow = rows.find(row => row.getAttribute('data-version') === '1.1.0')!
+    const approvedOld = rows.find(row => row.getAttribute('data-version') === '1.2.0')!
+
+    // 当前版本与待审版本都没有回滚入口（回滚只能指向"另一个已通过版本"）。
+    expect(current.querySelector('[data-action="rollback"]')).toBeNull()
+    expect(pendingRow.querySelector('[data-action="rollback"]')).toBeNull()
+    expect(approvedOld.querySelector('[data-action="rollback"]')).not.toBeNull()
+
+    await clickIn('值班表', '[data-action="rollback"][data-version="1.2.0"]')
+    const posted = calls.filter(call => call.url.startsWith('/api/zeokeel/apps/wasm/roster/deployments') && call.init.method === 'POST')
+    expect(posted).toHaveLength(1)
+    expect(JSON.parse(String(posted[0]!.init.body))).toEqual({ version: '1.2.0' })
+    // 成功回执如实显示（服务端 note 原样）。
+    expect(cardOf('值班表').querySelector('[data-role="version-action-done"]')!.textContent).toContain('已回滚')
+  })
+
+  it('撤回：只有 pending 有入口，且**必须先确认**；确认后 POST …/releases/<v>/withdraw', async () => {
+    stubLifecycle()
+    await mount()
+    await clickIn('值班表', '.zeokeel-app-center-releases-toggle')
+
+    const panel = cardOf('值班表').querySelector('[data-role="releases"]')!
+    const rows = [...panel.querySelectorAll('[data-role="release"]')]
+    expect(rows.find(row => row.getAttribute('data-version') === '1.0.0')!.querySelector('[data-action="withdraw"]')).toBeNull()
+    expect(rows.find(row => row.getAttribute('data-version') === '1.2.0')!.querySelector('[data-action="withdraw"]')).toBeNull()
+
+    // 第一次点：只出确认块，**不发请求**（撤回不可逆：字节释放、版本号永久占用）。
+    await clickIn('值班表', '[data-action="withdraw"][data-version="1.1.0"]')
+    expect(calls.filter(call => call.url.includes('/withdraw'))).toHaveLength(0)
+    const confirm = cardOf('值班表').querySelector('[data-role="withdraw-confirm"]')
+    expect(confirm).not.toBeNull()
+    expect(confirm!.textContent).toContain('版本号永久占用')
+
+    await clickIn('值班表', '[data-action="withdraw-confirm"]')
+    const withdrawn = calls.filter(call => call.url === '/api/zeokeel/apps/wasm/roster/releases/1.1.0/withdraw')
+    expect(withdrawn).toHaveLength(1)
+    expect(withdrawn[0]!.init.method).toBe('POST')
+    expect(cardOf('值班表').querySelector('[data-role="version-action-done"]')!.textContent).toContain('已撤回')
+  })
+
+  it('部署历史：只读列表 + current 标记（最近记录、actor/role/时间）', async () => {
+    stubLifecycle()
+    await mount()
+    await clickIn('值班表', '.zeokeel-app-center-releases-toggle')
+
+    const block = cardOf('值班表').querySelector('[data-role="deployments"]')!
+    expect(block).not.toBeNull()
+    const rows = [...block.querySelectorAll('[data-role="deployment"]')]
+    expect(rows.map(row => row.getAttribute('data-version'))).toEqual(['1.0.0', '1.2.0'])
+    expect(rows[0]!.querySelector('[data-role="deployment-current"]')).not.toBeNull()
+    expect(rows[0]!.textContent).toContain('carol')
+    expect(rows[1]!.textContent).toContain('admin_session')
+    // 只读：没有编辑/删除历史的入口（部署历史不可变，设计 §3.3）。
+    expect(block.querySelector('[data-action="delete-deployment"]')).toBeNull()
+  })
+
+  it('部署历史端点未就绪（404）⇒ 如实报错，且不影响已经可用的版本历史', async () => {
+    // 端点未就绪（404）：读面带 `?limit=`，用前缀匹配模拟任何形式。
+    stubLifecycle({
+      '/api/zeokeel/apps/wasm/roster/deployments?limit=20': () => jsonResponse(404, { error: { code: 'NOT_FOUND', message: 'no such route' } }),
+    })
+    await mount()
+    await clickIn('值班表', '.zeokeel-app-center-releases-toggle')
+
+    const card = cardOf('值班表')
+    // 部署历史：服务端信封逐字段显示（**不是**"还没有部署记录"）。
+    expect(card.querySelector('[data-role="deployments-error"]')).not.toBeNull()
+    expect(card.querySelector('[data-role="deployments-empty"]')).toBeNull()
+    // 版本历史照常可用（分开取的意义）。
+    expect(card.querySelector('[data-role="releases-list"]')).not.toBeNull()
   })
 })

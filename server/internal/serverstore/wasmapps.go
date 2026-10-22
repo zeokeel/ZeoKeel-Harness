@@ -71,6 +71,27 @@ type WasmApp struct {
 	// DeletedAt 非空 = 已软删(退役)。GetWasmApp 仍返回该行(R37 冻结期还要
 	// 导出),GetWasmAppByHost 则必须查不到。
 	DeletedAt *time.Time
+
+	// ---- 生命周期重设计(迁移 0086,设计 2026-10-22 §4)----
+	//
+	// CurrentDeploymentID 是**历史链指针**(= 最近一次生效部署的
+	// wasm_app_deployments.id)。运行期唯一真源仍是 CurrentReleaseID —— 本字段只回答
+	// "谁在什么时候把哪一版放上线",不参与任何执行判定。
+	CurrentDeploymentID int64
+	// SnapshotAt 非空 = 只读快照**成功**落盘(真删的前置条件,fail-closed)。
+	SnapshotAt *time.Time
+	// SnapshotPath 是快照目录(<data_root>/apps/<app_id>/snapshots/<RFC3339>)。
+	SnapshotPath string
+	// SnapshotError 是最近一次快照失败的原因(空串 = 无失败);不阻断冻结,阻断真删。
+	SnapshotError string
+	// PurgeAfter = 冻结时刻 + 保留期;真删调度器的唯一到期判据。
+	PurgeAfter *time.Time
+	// PurgedAt 非空 = 数据已真删(元数据与部署历史保留作审计 tombstone)。
+	PurgedAt *time.Time
+	// DataCleanedAt 非空 = **数据目录真的删掉了**（两阶段真删的第二阶段，迁移 0088）。
+	// PurgedAt 是终态（不可恢复），但删盘可能失败/重试 ⇒ 两者必须分开读：
+	// PurgedAt 非空且 DataCleanedAt 为空 = "已不可恢复，但盘上可能还有残留，调度器在重试"。
+	DataCleanedAt *time.Time
 }
 
 // WasmRelease 是一个不可变的 wasm 版本快照。
@@ -110,7 +131,8 @@ type WasmRelease struct {
 // 代码用 appColumns,互不影响)。
 const wasmAppColumns = `app_id, title, description, owner, channel, enabled, purpose,
 	data_sensitivity, config_json, current_release_id, official, frozen_at, deleted_at,
-	created_at, updated_at`
+	created_at, updated_at, current_deployment_id, snapshot_at, snapshot_path, snapshot_error,
+	purge_after, purged_at, data_cleaned_at`
 
 // wasmReleaseListColumns 不含 archive blob:清单查询绝不加载全部制品。
 //
@@ -128,8 +150,14 @@ const wasmReleaseListColumns = `id, app_id, version, title, description, changel
 // PostgreSQL 拉一份 ≤32 MiB 的 TOAST 大字段再丢掉:单请求瞬时堆可达 `并发 × 制品`,
 // 默认档 32 并发下约 1 GiB,而 §4.3 的四笔账里**没有这一笔**。
 //
-// 所以:请求路径一律用本常量(+ LatestApprovedWasmReleaseMeta);需要字节时在冷编译
-// 那一刻调 GetWasmRelease 按需加载。改这一行之前先回答"谁要在请求路径上读制品字节"。
+// 所以:请求路径一律用本常量(+ **CurrentWasmReleaseMeta**,即 apps.current_release_id
+// 指向的那一版);需要字节时在冷编译那一刻调 GetWasmRelease 按需加载。改这一行之前
+// 先回答"谁要在请求路径上读制品字节"。
+//
+// ⚠️ 2026-10-22 反证审计（P0）：上面的注释在生命周期重设计之前写的是
+// "LatestApprovedWasmReleaseMeta(max(id) approved)"。**那是错的**：回滚 = 用旧版本
+// 再部署一次，它只改指针与部署历史、不改 id 顺序 ⇒ 按 max(id) 取版本会让回滚在
+// 管理台成功、在用户侧无效。请求路径一律用 CurrentWasmReleaseMeta。
 const wasmReleaseServeColumns = wasmReleaseListColumns
 
 const wasmReleaseFullColumns = wasmReleaseListColumns + ", archive"
@@ -201,15 +229,24 @@ func scanWasmApp(row interface{ Scan(...any) error }) (*WasmApp, error) {
 	var a WasmApp
 	var enabled int
 	var frozen, deleted, created, updated any
+	var snapshotAt, purgeAfter, purgedAt, dataCleanedAt any
 	if err := row.Scan(&a.AppID, &a.Title, &a.Description, &a.Owner, &a.Channel, &enabled,
 		&a.Purpose, &a.DataSensitivity, &a.ConfigJSON, &a.CurrentReleaseID, &a.Official,
-		&frozen, &deleted, &created, &updated); err != nil {
+		&frozen, &deleted, &created, &updated,
+		// 迁移 0086 的生命周期列:顺序必须与 wasmAppColumns 逐字一致(扫描错位是
+		// 静默的数据损坏,而这里的列集只有一个常量,故只要两边同源就不会漂移)。
+		&a.CurrentDeploymentID, &snapshotAt, &a.SnapshotPath, &a.SnapshotError,
+		&purgeAfter, &purgedAt, &dataCleanedAt); err != nil {
 		return nil, err
 	}
 	a.Enabled = enabled == 1
 	a.FrozenAt = nullableSQLTime(frozen)
 	a.DeletedAt = nullableSQLTime(deleted)
 	a.CreatedAt, a.UpdatedAt = parseSQLTime(created), parseSQLTime(updated)
+	a.SnapshotAt = nullableSQLTime(snapshotAt)
+	a.PurgeAfter = nullableSQLTime(purgeAfter)
+	a.PurgedAt = nullableSQLTime(purgedAt)
+	a.DataCleanedAt = nullableSQLTime(dataCleanedAt)
 	return &a, nil
 }
 
@@ -293,7 +330,26 @@ func GetWasmApp(ctx context.Context, db *sql.DB, appID string) (*WasmApp, error)
 	return a, err
 }
 
-// WasmAppFilter 是 ListWasmApps 的过滤条件(零值 = 全部未删除的应用)。
+// 管理列表的状态筛选取值（`/admin/wasm-apps?status=` 的合法取值）。
+//
+// 为什么词表住在 serverstore 而不是 api：这些取值在 SQL 侧有**同一个语义的唯一实现**
+// （`pending` 需要 EXISTS 子查询，其余四个映射到 apps 的列），api 只做"取值是否合法"
+// 的校验与回显。两处各写一份词表 = 迟早出现"能校验、筛不出"的组合。
+const (
+	// WasmAppListStatusPending 有未处置的待审版本（且应用未被删除/清除 —— 与徽标
+	// `CountPendingReleases` 同一判据集合，否则页头 N 与筛出来的行数会分叉）。
+	WasmAppListStatusPending = "pending"
+	// WasmAppListStatusPublished 在线（未删除、未冻结、已上架）。
+	WasmAppListStatusPublished = "published"
+	// WasmAppListStatusUnpublished 下架（未删除、未冻结、未上架）。
+	WasmAppListStatusUnpublished = "unpublished"
+	// WasmAppListStatusFrozen 冻结（frozen_at 非空）。
+	WasmAppListStatusFrozen = "frozen"
+	// WasmAppListStatusDeleted 已软删（deleted_at 非空；含已清除的行）。
+	WasmAppListStatusDeleted = "deleted"
+)
+
+// WasmAppFilter 是 ListWasmApps / ListWasmAppsPage 的过滤条件(零值 = 全部未删除的应用)。
 type WasmAppFilter struct {
 	// Owner 非空 = 只列该发布者的应用(管理平面按发布者过滤)。
 	Owner string
@@ -301,24 +357,103 @@ type WasmAppFilter struct {
 	Enabled *bool
 	// IncludeDeleted = true 时把已软删(退役)的应用也列出来(R37 运维面)。
 	IncludeDeleted bool
+	// Query 是大小写不敏感的子串搜索（app_id / title / owner）。
+	//
+	// 必须在 **SQL 里**过滤（P1-7 的核心判据）：先分页再从本页里搜，会让"第 201 个
+	// 应用"永远搜不到。`%`/`_`/`\` 按 LIKE 字面量转义（用户的搜索词不是通配符）。
+	Query string
+	// Status 是列表状态筛选（取值见 WasmAppListStatus*；""/"all" = 不筛）。
+	//
+	// 未知取值**报错而不是静默不筛**：静默会让管理员以为筛过了（与 `?status=bogus`
+	// 在 api 层被拒同一条纪律，这里兜住"绕过 api 直接调 DAO"的调用方）。
+	Status string
+	// Limit/Offset 是 SQL 分页（Limit<=0 = 不分页，保持旧行为）。
+	//
+	// 推下 SQL 的理由（审计 2026-10-22 C-13）：此前每次打开管理列表都把**全部**
+	// wasm 应用读进内存再分页，几百/几千应用时是"每页 200 行却扫全表"。
+	Limit int
+	// Offset 是跳过的行数（仅在 Limit>0 时有意义）。
+	Offset int
 }
 
-// ListWasmApps 列出 wasm 应用。默认**不含**软删行。
-func ListWasmApps(ctx context.Context, db *sql.DB, opts WasmAppFilter) ([]WasmApp, error) {
-	q := `SELECT ` + wasmAppColumns + ` FROM apps WHERE kind = $1`
+// wasmAppWhere 把过滤条件编成 WHERE 子句（args 已含 kind 参数）。
+//
+// 唯一的 WHERE 构造点：列表、计数、分页三处必须用**同一份谓词**，否则 total 与
+// 本页行数会来自两个不同的集合（C-13 要消灭的正是这种"两个真源"）。
+func wasmAppWhere(opts WasmAppFilter) (string, []any, error) {
+	where := ` WHERE kind = $1`
 	args := []any{AppKindWasmApp}
-	if !opts.IncludeDeleted {
-		q += ` AND deleted_at IS NULL`
+	// `status=deleted` **蕴含** include_deleted：否则基础谓词 `deleted_at IS NULL` 与
+	// 状态谓词 `deleted_at IS NOT NULL` 互斥 ⇒ 永远 0 行（2026-10-22 反证 F-1 同族形态：
+	// 筛选器给得出、结果永远空）。两处必须同源，所以在这里一次性收敛。
+	includeDeleted := opts.IncludeDeleted ||
+		strings.EqualFold(strings.TrimSpace(opts.Status), WasmAppListStatusDeleted)
+	if !includeDeleted {
+		where += ` AND deleted_at IS NULL`
 	}
 	if opts.Owner != "" {
 		args = append(args, opts.Owner)
-		q += fmt.Sprintf(` AND owner = $%d`, len(args))
+		where += fmt.Sprintf(` AND owner = $%d`, len(args))
 	}
 	if opts.Enabled != nil {
 		args = append(args, boolToInt(*opts.Enabled))
-		q += fmt.Sprintf(` AND enabled = $%d`, len(args))
+		where += fmt.Sprintf(` AND enabled = $%d`, len(args))
 	}
-	q += ` ORDER BY app_id`
+	if q := strings.TrimSpace(opts.Query); q != "" {
+		args = append(args, "%"+escapeLikePattern(q)+"%")
+		n := len(args)
+		// ILIKE 本身大小写不敏感（与 api 层此前的 strings.ToLower + Contains 等价）；
+		// ESCAPE 让搜索词里的 % / _ 按字面量匹配。
+		where += fmt.Sprintf(` AND (app_id ILIKE $%d ESCAPE '\' OR title ILIKE $%d ESCAPE '\'`+
+			` OR owner ILIKE $%d ESCAPE '\')`, n, n, n)
+	}
+	switch status := strings.ToLower(strings.TrimSpace(opts.Status)); status {
+	case "", "all":
+		// 不筛
+	case WasmAppListStatusPending:
+		// 与 CountPendingReleases / PendingWasmReleases 同一判据集合（排除已删除/已清除
+		// 的应用）：那两处是页头徽标的真源，筛出来的行必须与那个数字对得上。
+		args = append(args, ReleaseStatusPending)
+		n := len(args)
+		where += ` AND deleted_at IS NULL AND purged_at IS NULL AND EXISTS (SELECT 1 FROM app_releases r
+			WHERE r.kind = apps.kind AND r.app_id = apps.app_id AND r.status = $` + strconv.Itoa(n) +
+			` AND r.deleted_at IS NULL)`
+	case WasmAppListStatusPublished:
+		where += ` AND deleted_at IS NULL AND frozen_at IS NULL AND enabled = 1`
+	case WasmAppListStatusUnpublished:
+		where += ` AND deleted_at IS NULL AND frozen_at IS NULL AND enabled = 0`
+	case WasmAppListStatusFrozen:
+		where += ` AND frozen_at IS NOT NULL`
+	case WasmAppListStatusDeleted:
+		where += ` AND deleted_at IS NOT NULL`
+	default:
+		return "", nil, fmt.Errorf("wasm app: status 取值不合法: %q", opts.Status)
+	}
+	return where, args, nil
+}
+
+// escapeLikePattern 把 LIKE 模式里的元字符转成字面量（与 ESCAPE '\' 配合）。
+//
+// 顺序要紧：先转义反斜杠本身，否则后两步产生的反斜杠会被二次转义。
+func escapeLikePattern(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+// ListWasmApps 列出 wasm 应用。默认**不含**软删行；Limit>0 时按 SQL 分页。
+func ListWasmApps(ctx context.Context, db *sql.DB, opts WasmAppFilter) ([]WasmApp, error) {
+	where, args, err := wasmAppWhere(opts)
+	if err != nil {
+		return nil, err
+	}
+	q := `SELECT ` + wasmAppColumns + ` FROM apps` + where + ` ORDER BY app_id`
+	if opts.Limit > 0 {
+		args = append(args, opts.Limit)
+		q += fmt.Sprintf(` LIMIT $%d`, len(args))
+		if opts.Offset > 0 {
+			args = append(args, opts.Offset)
+			q += fmt.Sprintf(` OFFSET $%d`, len(args))
+		}
+	}
 	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -333,6 +468,44 @@ func ListWasmApps(ctx context.Context, db *sql.DB, opts WasmAppFilter) ([]WasmAp
 		out = append(out, *a)
 	}
 	return out, rows.Err()
+}
+
+// CountWasmApps 返回与 ListWasmApps **同一谓词**的行数（分页的 total 真源）。
+//
+// 为什么必须有它（审计 2026-10-22 C-13）：分页后的 total 只能是 COUNT(*)，不能是
+// `len(本页)`（那会把 total 变成"这页有几行"，正是 F-1 的"两个待审数"同族缺陷）。
+func CountWasmApps(ctx context.Context, db *sql.DB, opts WasmAppFilter) (int, error) {
+	where, args, err := wasmAppWhere(opts)
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM apps`+where, args...).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// WasmAppPage 是分页查询的结果：本页行 + 同一谓词的全量计数。
+type WasmAppPage struct {
+	Apps  []WasmApp
+	Total int
+}
+
+// ListWasmAppsPage 一次给出"本页行 + total"（管理列表的唯一读路径）。
+//
+// 两条查询共用 wasmAppWhere 的谓词 ⇒ total 恒等于同一筛选条件下的行数，
+// 与 Limit/Offset 无关（这正是"分页元数据可信"的前提）。
+func ListWasmAppsPage(ctx context.Context, db *sql.DB, opts WasmAppFilter) (*WasmAppPage, error) {
+	total, err := CountWasmApps(ctx, db, opts)
+	if err != nil {
+		return nil, err
+	}
+	apps, err := ListWasmApps(ctx, db, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &WasmAppPage{Apps: apps, Total: total}, nil
 }
 
 // SetWasmAppEnabled 上下架(§8;复用 apps.enabled,与审核开关无关)。
@@ -464,6 +637,12 @@ func SetWasmAppDisplay(ctx context.Context, db *sql.DB, appID, title, descriptio
 // SetWasmAppCurrentRelease 把某个版本置为**当前生效版本**(§8:开启审核时新版进
 // 待审队列,线上仍旧版本 ⇒ 生效版本必须显式落库)。
 //
+// ⚠️ **生产写点已全部收敛到 DeployWasmRelease**(迁移 0086,设计 2026-10-22 §5.1):
+// publish / 审批 / 内置应用播种三条路径都改走部署事务(插部署历史 + 切指针 + 写投影
+// 一起提交)。本函数**不再被任何生产代码调用**,只留给测试夹具与存量数据修复:
+// 直接用它改指针会留下"生效版本变了、部署历史里没有这一条"的绕过点 —— 新代码请用
+// DeployWasmRelease。
+//
 // 条件里带 EXISTS 校验:该 release 必须属于本应用且未被软删。否则一次写错的
 // id 会让应用指向别人的版本 —— 应用子域直接交付错误内容,属于越权级事故。
 func SetWasmAppCurrentRelease(ctx context.Context, db *sql.DB, appID string, releaseID int64) error {
@@ -586,11 +765,46 @@ func LatestApprovedWasmReleaseMeta(ctx context.Context, db *sql.DB, appID string
 	return r, err
 }
 
+// CurrentWasmReleaseMeta 取**当前部署指针**（`apps.current_release_id`）指向的版本元数据
+// —— 应用请求路径 / 打开端点 / 发布继承基线的**唯一入口**（设计契约
+// docs/planning/2026-10-22-wasm-lifecycle-redesign.md §3.3：current = 最近一次
+// deployment 的指针，运行期唯一真源）。
+//
+// 为什么不能继续用 max(id) approved（2026-10-22 反证审计 P0，最严重的一条）：
+// 回滚 = "用旧版本再部署一次"，它只改 `current_release_id`/`current_deployment_id`
+// 与部署历史，**不改 id 顺序**。请求路径按 `ORDER BY id DESC` 取版本 ⇒ 回滚后
+// 管理台/部署历史显示 v1、用户实际拿到 v2 ⇒ "回滚"是一次只改数据库记账的假动作。
+// 三个"权威源"（执行面 / 审核面 / GC）必须收敛到指针，否则 GC 保护的是 v1、
+// 服务交付的是 v2，且两者都"看起来正常"。
+//
+// 语义（与 LatestApprovedWasmReleaseMeta 逐条对齐：同一列集、同样不含制品字节）：
+//   - 应用行不存在 / 已软删（含真删）⇒ ErrNotFound；
+//   - `current_release_id = 0`（从未部署过）⇒ ErrNotFound（与"还没有可用版本"同义）；
+//   - 指针指向的版本行必须 `status='approved'` 且未软删，否则 ErrNotFound ——
+//     **绝不回落到 max(id) approved**：静默回落会把"数据不一致"变成"看起来正常的
+//     另一个版本"，而那正是本条要消灭的形态（第 8 条"双源"）。
+//
+// 调用方（serve / open / inheritBase）都把 ErrNotFound 解释成"没有可用版本"，
+// 行为与旧口径在"从未部署/无 approved"场景下完全一致。
+func CurrentWasmReleaseMeta(ctx context.Context, db *sql.DB, appID string) (*WasmRelease, error) {
+	r, err := scanWasmRelease(db.QueryRowContext(ctx, `SELECT `+wasmReleaseServeColumns+`
+		FROM app_releases
+		WHERE kind = $1 AND app_id = $2 AND status = $3 AND deleted_at IS NULL
+		  AND id = (SELECT a.current_release_id FROM apps a
+		            WHERE a.kind = $1 AND a.app_id = $2
+		              AND a.deleted_at IS NULL AND a.current_release_id > 0)`,
+		AppKindWasmApp, normalizeWasmAppID(appID), ReleaseStatusApproved), false)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return r, err
+}
+
 // LatestApprovedWasmReleaseFull 取最新已批准版本的**全部字段(含 archive 字节)**。
 //
 // 名字里的 Full 是**成本提示**,不是风格:这个函数会把整份 ≤32 MiB 的制品从
 // PostgreSQL 拉进内存。允许的调用点只有"本来就要字节"的地方 —— 发布/播种期的
-// 校验与离线诊断;**请求路径一律用 LatestApprovedWasmReleaseMeta**(P0-3)。
+// 校验与离线诊断;**请求路径一律用 CurrentWasmReleaseMeta**(P0-3 + 2026-10-22 反证 P0)。
 func LatestApprovedWasmReleaseFull(ctx context.Context, db *sql.DB, appID string) (*WasmRelease, error) {
 	r, err := scanWasmRelease(db.QueryRowContext(ctx, `SELECT `+wasmReleaseFullColumns+`
 		FROM app_releases
@@ -610,9 +824,15 @@ func LatestApprovedWasmReleaseFull(ctx context.Context, db *sql.DB, appID string
 // 每个应用同时最多积压用户提交的那些版本),调用方按自己列出的 app_id 过滤,
 // 因此不需要 (N 个应用 → N 次查询) 的 N+1。
 func PendingWasmReleases(ctx context.Context, db *sql.DB) (map[string][]string, error) {
-	rows, err := db.QueryContext(ctx, `SELECT app_id, version FROM app_releases
-		WHERE kind = $1 AND status = $2 AND deleted_at IS NULL
-		ORDER BY app_id, id`, AppKindWasmApp, ReleaseStatusPending)
+	// 2026-10-22 反证 F-1：必须与「跨应用待审队列」同一判据集合（排除已删除/已清除
+	// 的应用）。此前只查 app_releases、不 join apps ⇒ 应用在 pending 期间被删除后，
+	// 它的待审版本仍被页头徽标计数，而队列里看不到、approve/reject 又一律 404
+	// ⇒ 这个数字在 UI 里没有任何途径清掉（两个"待审数"来源分叉且不自愈）。
+	rows, err := db.QueryContext(ctx, `SELECT r.app_id, r.version FROM app_releases r
+		JOIN apps a ON a.kind = r.kind AND a.app_id = r.app_id
+		WHERE r.kind = $1 AND r.status = $2 AND r.deleted_at IS NULL
+		  AND a.deleted_at IS NULL AND a.purged_at IS NULL
+		ORDER BY r.app_id, r.id`, AppKindWasmApp, ReleaseStatusPending)
 	if err != nil {
 		return nil, err
 	}

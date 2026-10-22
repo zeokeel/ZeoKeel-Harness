@@ -21,6 +21,8 @@ import {
   clearAppToast,
   currentAppToast,
   foreignDeepLinkToastText,
+  queuedDeepLinkToastText,
+  resumedDeepLinkToastText,
   showAppToast,
 } from './app-toast.tsx'
 import { en, setActiveLocale, zh } from './locales.ts'
@@ -66,6 +68,38 @@ describe('冻结文案（§5.3/§19 Q5 逐字）', () => {
 })
 
 describe('渲染与一次性', () => {
+  /**
+   * U-07：深链入队 / 登录后自动续开的两条提示也要真的渲染出来（不是只存在于 store）。
+   *
+   * 变异：`TOAST_TEXT_KEYS` 里删掉任一档 ⇒ 对应渲染断言红（`t(undefined)` 会抛）；
+   * 把 queued 的键换成它自己的一句话 ⇒「同口径」那条红。
+   */
+  it('深链入队提示与面板路径同一句（U-07：未登录点深链不再毫无反应）', async () => {
+    await renderHost()
+    await act(async () => { showAppToast({ kind: 'deep-link-queued' }) })
+    const toast = container.querySelector('[data-role="app-toast"]')
+    expect(toast).not.toBeNull()
+    expect(toast!.getAttribute('data-toast')).toBe('deep-link-queued')
+    expect(toast!.getAttribute('role')).toBe('status')
+    expect(toast!.textContent).toContain('已记住这次打开')
+    expect(queuedDeepLinkToastText()).toBe(zh['appCenter.openPendingLogin'])
+  })
+
+  it('登录后自动续开的提示是另一句（可感知，且不冒充"已记住"）', async () => {
+    await renderHost()
+    await act(async () => { showAppToast({ kind: 'deep-link-resumed' }) })
+    const toast = container.querySelector('[data-role="app-toast"]')
+    expect(toast).not.toBeNull()
+    expect(toast!.getAttribute('data-toast')).toBe('deep-link-resumed')
+    expect(toast!.textContent).toContain('正在打开')
+    expect(resumedDeepLinkToastText()).toBe(zh['appCenter.toast.deepLinkResumed'])
+    expect(resumedDeepLinkToastText()).not.toBe(queuedDeepLinkToastText())
+    // en 侧同样可读。
+    setActiveLocale('en')
+    expect(resumedDeepLinkToastText()).toBe(en['appCenter.toast.deepLinkResumed'])
+    expect(resumedDeepLinkToastText()).not.toMatch(/[一-龥]/u)
+  })
+
   it('默认不渲染（没有事件就没有 toast）', async () => {
     await renderHost()
     expect(container.querySelector('[data-role="app-toast"]')).toBeNull()

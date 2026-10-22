@@ -347,14 +347,20 @@ var r13geSearchPathInventory = map[string]r13gePinMode{
 	"BalanceLedgerSum":  r13gePinned,    // balance.go
 	// R18C-02：两个认领入口都只是 claimGatewayFile 的薄包装（认领协议的唯一实现，
 	// 已钉写事务在那里），所以它们是 via-caller。
-	"ClaimExpiredGatewayFile":              r13geViaCaller, // gateway_files.go —— claimGatewayFile
-	"ClaimGatewayFileForDeletion":          r13geViaCaller, // gateway_files.go —— claimGatewayFile
-	"claimGatewayFile":                     r13gePinned,    // gateway_files.go —— R18C-02：回收器/删除路径共用的认领唯一实现
-	"CleanupPendingUsage":                  r13gePinned,    // usage.go
-	"DeleteGatewayFileRow":                 r13gePinned,    // gateway_files.go
-	"DeleteGatewayFileRowIfGeneration":     r13gePinned,    // gateway_files.go —— R18C-02：带世代谓词的条件删行
-	"DeleteGatewayProvider":                r13gePinned,    // gateway.go
-	"DeleteSetting":                        r13gePinned,    // settings.go
+	"ClaimExpiredGatewayFile":          r13geViaCaller, // gateway_files.go —— claimGatewayFile
+	"ClaimGatewayFileForDeletion":      r13geViaCaller, // gateway_files.go —— claimGatewayFile
+	"claimGatewayFile":                 r13gePinned,    // gateway_files.go —— R18C-02：回收器/删除路径共用的认领唯一实现
+	"CleanupPendingUsage":              r13gePinned,    // usage.go
+	"DeleteGatewayFileRow":             r13gePinned,    // gateway_files.go
+	"DeleteGatewayFileRowIfGeneration": r13gePinned,    // gateway_files.go —— R18C-02：带世代谓词的条件删行
+	"DeleteGatewayProvider":            r13gePinned,    // gateway.go
+	"DeleteSetting":                    r13gePinned,    // settings.go
+	// 迁移 0087 / wasm_app_limits.go：应用级限流覆盖（族内关系，见 searchPathRelations）。
+	// 四个入口全部经唯一 pin 实现（读：withUsageSearchPathRead；写：withUsageSearchPath）。
+	"GetWasmAppLimitOverride":              r13gePinned,
+	"ListWasmAppLimitOverrides":            r13gePinned,
+	"SetWasmAppLimitOverride":              r13gePinned,
+	"ClearWasmAppLimitOverride":            r13gePinned,
 	"DeleteUsage":                          r13gePinned,    // usage.go
 	"DeleteUser":                           r13gePinned,    // users.go
 	"FinishReapedGatewayFile":              r13gePinned,    // gateway_files.go

@@ -10,7 +10,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const registerSchemesAsPrivileged = vi.fn()
 const defaultHandle = vi.fn()
 const partitionHandle = vi.fn()
-const fromPartition = vi.fn(() => ({ protocol: { handle: partitionHandle } }))
+// F-07：`clearStorageData` 的**精确 origin** 判据（见本文件末尾的 `clearAppStorage` 用例）。
+const defaultClearStorage = vi.fn(async () => undefined)
+const partitionClearStorage = vi.fn(async () => undefined)
+const fromPartition = vi.fn(() => ({ protocol: { handle: partitionHandle }, clearStorageData: partitionClearStorage }))
 const defaultSessionFetch = vi.fn(async () => new Response('ok', { status: 200 }))
 
 /**
@@ -30,11 +33,28 @@ class FakeWebContents {
   windowOpenHandler: ((details: unknown) => unknown) | undefined
   /** 下一次 `loadURL` 的失败（模拟被顶掉/加载错误）。 */
   nextLoadFailure: unknown
+  /** 下一次 `loadURL` **永不 settle**（U-01 看门狗：加载既不 resolve 也不 reject）。 */
+  nextLoadHangs = false
+
+  /** F-06：刷新 / 返回的次数（右键菜单与键盘快捷键共用同一对实现）。 */
+  reloaded = 0
+  readonly navigationHistory = { back: 0, goBack: (): void => { this.navigationHistory.back += 1 } }
+  /** F-05：注入应用页面的脚本（提示条）。 */
+  readonly executed: string[] = []
 
   on(event: string, listener: (...args: never[]) => void): void {
     const list = this.listeners.get(event) ?? []
     list.push(listener)
     this.listeners.set(event, list)
+  }
+
+  reload(): void {
+    this.reloaded += 1
+  }
+
+  executeJavaScript(code: string): Promise<unknown> {
+    this.executed.push(code)
+    return Promise.resolve(undefined)
   }
 
   getURL(): string {
@@ -89,6 +109,11 @@ class FakeBrowserWindow {
   loadURL(url: string): Promise<void> {
     this.loaded.push(url)
     this.webContents.url = url
+    if (this.webContents.nextLoadHangs) {
+      this.webContents.nextLoadHangs = false
+      // 永不 settle：模拟协议 handler 卡死/导航被吞（既不 resolve 也不 reject）。
+      return new Promise(() => {})
+    }
     const failure = this.webContents.nextLoadFailure
     this.webContents.nextLoadFailure = undefined
     if (failure !== undefined) return Promise.reject(failure)
@@ -246,10 +271,13 @@ function makeClientRequest(options: { method: string, url: string, session: unkn
 
 const netRequest = vi.fn((options: { method: string, url: string, session: unknown, redirect: unknown }) => makeClientRequest(options))
 
+const menuPopup = vi.fn()
+const buildFromTemplate = vi.fn((template: unknown[]) => ({ popup: menuPopup, template }))
 vi.mock('electron', () => ({
   protocol: { registerSchemesAsPrivileged },
+  Menu: { buildFromTemplate },
   session: {
-    defaultSession: { protocol: { handle: defaultHandle }, fetch: defaultSessionFetch },
+    defaultSession: { protocol: { handle: defaultHandle }, fetch: defaultSessionFetch, clearStorageData: defaultClearStorage },
     fromPartition,
   },
   BrowserWindow: FakeBrowserWindow,
@@ -279,10 +307,15 @@ beforeEach(() => {
   defaultHandle.mockClear()
   partitionHandle.mockClear()
   fromPartition.mockClear()
+  defaultClearStorage.mockClear()
+  partitionClearStorage.mockClear()
   defaultSessionFetch.mockClear()
   guardEnsureSession.mockClear()
   guardInstallGate.mockClear()
   netRequest.mockClear()
+  // F-06：右键菜单的替身（每次用例从零计数）。
+  buildFromTemplate.mockClear()
+  menuPopup.mockClear()
   netRequests.length = 0
   netScript = {}
 })
@@ -362,6 +395,35 @@ describe('createRealElectronAdapter', () => {
     expect(partitionTarget).toEqual(expect.objectContaining({ protocol: { handle: partitionHandle } }))
     expect(partitionOptions.scheme).toBe('schema-probe-e-app')
     expect(partitionOptions.isAppSurfaceWebContents).toBe(isAppSurface)
+  })
+
+  /**
+   * F-07（P1，2026-10-22 审计）：下架/冻结/删除/恢复之后清**该应用 origin** 的
+   * 浏览器存储 —— 精确到 origin，**不许整分区清**。
+   *
+   * 为什么判据必须落在"入参"上：分区是按**用户**的（`persist:agent-browser-<user>@<hash>`），
+   * 一次不带 `origin` 的 `clearStorageData()` 会把同一账号下其它应用的 localStorage /
+   * IndexedDB 一起打掉 —— 那是不可逆的数据丢失，而界面上看不出任何区别。
+   */
+  it('clearAppStorage 精确到 app origin（分区来自调用方；绝不整分区清）', async () => {
+    const adapter = createRealElectronAdapter()
+    expect(adapter.clearAppStorage, '适配器必须暴露清理能力（否则 F-07 只能记 warn）').toBeDefined()
+    await adapter.clearAppStorage!('persist:agent-browser-alice', 'zeokeel-app://demo')
+
+    // ① 分区来自调用方（应用窗口就落在那里）。
+    expect(fromPartition).toHaveBeenCalledWith('persist:agent-browser-alice')
+    // ② 清理**带 origin**（唯一入参形态）：变异：改成 `clearStorageData()` ⇒ 本断言红。
+    expect(partitionClearStorage).toHaveBeenCalledTimes(1)
+    expect(partitionClearStorage).toHaveBeenCalledWith({ origin: 'zeokeel-app://demo' })
+    // ③ 默认 session 一次都不该被清（应用页面不在默认 session 上）。
+    expect(defaultClearStorage).not.toHaveBeenCalled()
+  })
+
+  it('clearAppStorage：分区为空/缺席时退回默认 session（仍然带 origin）', async () => {
+    const adapter = createRealElectronAdapter()
+    await adapter.clearAppStorage!('', 'zeokeel-app://demo')
+    expect(defaultClearStorage).toHaveBeenCalledWith({ origin: 'zeokeel-app://demo' })
+    expect(partitionClearStorage).not.toHaveBeenCalled()
   })
 
   /**
@@ -552,6 +614,7 @@ describe('createRealElectronWindowAdapter', () => {
       appId,
       url: `${APP_SCHEME}://${appId}/`,
       title: '演示应用 · ZeoKeel Harness',
+      appLabel: '演示应用',
       partition: PARTITION,
       width: 1280,
       height: 720,
@@ -591,6 +654,7 @@ describe('createRealElectronWindowAdapter', () => {
         appId: 'demo',
         url: `${APP_SCHEME}://demo/`,
         title: 'x',
+        appLabel: 'x',
         partition: bad as unknown as string,
         width: 1280,
         height: 720,
@@ -603,9 +667,10 @@ describe('createRealElectronWindowAdapter', () => {
     expect(FakeBrowserWindow.created).toHaveLength(0)
   })
 
-  it('把几何/标题原样交给 BrowserWindow，并用应用 origin 加载（§7.2/§16.1）', () => {
+  it('把几何/标题原样交给 BrowserWindow，并用应用 origin 加载（§7.2/§16.1）', async () => {
     const adapter = createRealElectronWindowAdapter({ appScheme: APP_SCHEME })
     const { win } = createProbeWindow(adapter)
+    await settleRecovery()
 
     expect(win.options).toMatchObject({
       width: 1280,
@@ -620,7 +685,10 @@ describe('createRealElectronWindowAdapter', () => {
     })
     // 应用页面**必须**是应用 origin：加载 http(s) 会把应用当作普通网页（且请求
     // 闸门会拒掉它的应用 scheme 子资源）。
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`])
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`])
+    // U-01：第一次加载是**骨架页**（应用文档在它之后加载）。
+    expect(skeletonLoads(win)).toHaveLength(1)
+    expect(win.loaded[0]!.startsWith('data:text/html')).toBe(true)
     expect(win.menuBarHidden).toBe(true)
     // 沙箱：应用 HTML 是不可信内容，不得拿到 Node。
     expect(win.options.webPreferences).toMatchObject({
@@ -668,15 +736,17 @@ describe('createRealElectronWindowAdapter', () => {
     win.visible = false
 
     adapter.focusAppWindow(handle, `${APP_SCHEME}://demo/settings`)
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`, `${APP_SCHEME}://demo/settings`])
+    // U-01：首个 `loadURL` 是骨架页；聚焦导航落在它之后（初始应用加载被这次导航顶掉，
+    // 这是"打开后立刻又打开另一个路径"的真实序列）。
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/settings`])
     expect(win.minimized).toBe(false)
     expect(win.visible).toBe(true)
     expect(win.focused).toBeGreaterThan(0)
 
     // 同一个 URL 不重复加载（避免每次点"打开"都把应用重置回首页）。
-    const before = win.loaded.length
+    const before = appDocumentLoads(win).length
     adapter.focusAppWindow(handle, `${APP_SCHEME}://demo/settings`)
-    expect(win.loaded).toHaveLength(before)
+    expect(appDocumentLoads(win)).toHaveLength(before)
   })
 
   it('导航闸门只放行同 app origin；跨 app 与 http(s) 一律拒（§7.2 N7）', () => {
@@ -709,6 +779,86 @@ describe('createRealElectronWindowAdapter', () => {
 
     // 弹窗一律拒（§20.2：应用窗口不得 window.open）。
     expect(win.webContents.windowOpenHandler?.({ url: 'https://harness.example.com/' })).toEqual({ action: 'deny' })
+  })
+
+  /**
+   * F-05（2026-10-22 审计）：`window.open` 被 deny 时**必须有反馈**。
+   *
+   * 缺陷形态：一律 `deny` 且 `externalLinkNotice`/`downloadStartedNotice` 两条文案
+   * **零消费方** —— 用户点外链什么都没发生（看起来像链接坏了）。
+   *
+   * 判据：http(s) 外链 ⇒ 仍 deny，但应用页面里被注入一条提示（正文来自
+   * `app-window-copy.ts`，不是硬编码在适配器里）；非 http(s)（`file:`/`javascript:`）
+   * ⇒ deny 且**不**注入（提示条只解释"外链去哪了"，不解释被拦下的攻击面）。
+   *
+   * 变异：删掉 `executeJavaScript` 那一支 ⇒ 第一条红；对任意 scheme 都注入 ⇒ 第二条红。
+   */
+  it('F-05：外链 window.open 被拒时给提示条（http(s) 才注入，非 http(s) 只拒）', () => {
+    const adapter = createRealElectronWindowAdapter({ appScheme: APP_SCHEME, locale: () => 'zh' })
+    const { handle, win } = createProbeWindow(adapter)
+    adapter.installAppWindowGuards?.(handle, 'demo')
+
+    expect(win.webContents.windowOpenHandler?.({ url: 'https://harness.example.com/docs?q=1' })).toEqual({ action: 'deny' })
+    expect(win.webContents.executed).toHaveLength(1)
+    const script = win.webContents.executed[0]!
+    // 文案真源在 `app-window-copy.ts`（逐字断言在那里）；这里只钉"提示条真的注入了"。
+    expect(script).toContain('已在浏览器窗口中打开 harness.example.com')
+    expect(script).toContain('zeokeel-app-notice')
+
+    // 非 http(s)：照样拒，但**不**注入提示条（file:/javascript: 不是"外链"）。
+    for (const url of ['file:///etc/hostname', 'javascript:alert(1)']) {
+      expect(win.webContents.windowOpenHandler?.({ url })).toEqual({ action: 'deny' })
+    }
+    expect(win.webContents.executed).toHaveLength(1)
+  })
+
+  /**
+   * F-06（2026-10-22 审计）：应用窗口**没有刷新、没有返回**（全包 grep
+   * `reload()`/`goBack()` = 0）。修后两条动作各有两个可发现面：右键菜单与键盘。
+   *
+   * 判据：右键菜单真的建出「刷新/返回」两项并能点到动作；Ctrl/Cmd+R 触发
+   * `reload()`，Alt+← / Cmd+[ 触发 `navigationHistory.goBack()`；**不带修饰键的 r
+   * 不刷新**（否则应用自己的输入框永远敲不出 r）。
+   *
+   * 变异：删掉 `before-input-event` 那一段 ⇒ 键盘两条红；删掉 `context-menu` 那段 ⇒
+   * 菜单两条红。
+   */
+  it('F-06：右键菜单与键盘都能刷新/返回（普通按键不触发）', () => {
+    const adapter = createRealElectronWindowAdapter({ appScheme: APP_SCHEME, locale: () => 'zh' })
+    const { handle, win } = createProbeWindow(adapter)
+    adapter.installAppWindowGuards?.(handle, 'demo')
+
+    const key = (input: Record<string, unknown>): ReturnType<typeof vi.fn> => {
+      const preventDefault = vi.fn()
+      win.webContents.emit('before-input-event' as never, { preventDefault } as never, input as never)
+      return preventDefault
+    }
+
+    // 不带修饰键的 r：不刷新（应用自己的输入要能工作）。
+    expect(key({ type: 'keyDown', key: 'r' })).not.toHaveBeenCalled()
+    expect(win.webContents.reloaded).toBe(0)
+
+    expect(key({ type: 'keyDown', key: 'r', control: true })).toHaveBeenCalled()
+    expect(win.webContents.reloaded).toBe(1)
+    // keyUp 不重复触发。
+    key({ type: 'keyUp', key: 'r', control: true })
+    expect(win.webContents.reloaded).toBe(1)
+
+    expect(key({ type: 'keyDown', key: 'ArrowLeft', alt: true })).toHaveBeenCalled()
+    expect(win.webContents.navigationHistory.back).toBe(1)
+    expect(key({ type: 'keyDown', key: '[', meta: true })).toHaveBeenCalled()
+    expect(win.webContents.navigationHistory.back).toBe(2)
+
+    // 右键菜单：两项、文案本地化、点得到动作。
+    win.webContents.emit('context-menu' as never)
+    expect(buildFromTemplate).toHaveBeenCalledTimes(1)
+    const template = buildFromTemplate.mock.calls[0]![0] as Array<{ label: string, click: () => void }>
+    expect(template.map(item => item.label)).toEqual(['刷新', '返回'])
+    expect(menuPopup).toHaveBeenCalledTimes(1)
+    template[0]!.click()
+    expect(win.webContents.reloaded).toBe(2)
+    template[1]!.click()
+    expect(win.webContents.navigationHistory.back).toBe(3)
   })
 
   /**
@@ -745,6 +895,44 @@ describe('createRealElectronWindowAdapter', () => {
     expect(warned.filter(message => message.includes('refused a external navigation'))).toHaveLength(2)
   })
 
+  /**
+   * F-04（P1，2026-10-22 审计）：会话过期页上的「重新登录」必须**真的能点开**。
+   *
+   * 页面本身是宿主渲染的（`pages.ts`），按钮是一个 `<a href>`；而应用窗口的导航闸门
+   * 默认拒绝一切跨 origin 导航 ⇒ 没有这条精确 URL 白名单，那个按钮点了**毫无反应**
+   * （正是审计要消灭的"断头路"）。
+   *
+   * 边界（每条都是判据）：①只放行**精确登记**的那一个 URL；②只对**顶层**导航放行
+   * （子框架不许）；③其它 http(s) 目标仍然拒；④重新登记会覆盖旧值（不是无限追加）。
+   */
+  it('setNavigationAllowlist：只放行精确登记的登录页 URL（顶层），其它外链照旧拒', () => {
+    const adapter = createRealElectronWindowAdapter({ appScheme: APP_SCHEME })
+    const { handle, win } = createProbeWindow(adapter)
+    adapter.installAppWindowGuards?.(handle, 'demo')
+    adapter.setNavigationAllowlist?.(['http://127.0.0.1:41234/login'])
+
+    const navigate = (url: string, isMainFrame = true): boolean => {
+      const event = { preventDefault: vi.fn(), defaultPrevented: false, url, isMainFrame }
+      win.webContents.emit('will-navigate' as never, event as never, url as never)
+      return event.preventDefault.mock.calls.length > 0
+    }
+
+    expect(navigate('http://127.0.0.1:41234/login')).toBe(false)
+    // 精确匹配：同一 origin 的其它路径仍然拒（放行 origin 会给应用页一条"导航到客户端
+    // 任意页面"的路）。
+    expect(navigate('http://127.0.0.1:41234/settings')).toBe(true)
+    // 只对顶层生效：子框架的 http(s) 本来就走另一条既有判据（平台 CSP 兜底），
+    // 白名单不改变它（这里断言的是"白名单不是子框架的放行开关"）。
+    expect(navigate('http://127.0.0.1:41234/login', false)).toBe(false)
+    expect(navigate('https://example.com/embed', false)).toBe(false)
+    // 其它外链（含应用内 window.open 之外的普通导航）仍然拒。
+    expect(navigate('https://example.com/')).toBe(true)
+    // 重新登记 = 覆盖（旧值失效）。
+    adapter.setNavigationAllowlist?.(['http://127.0.0.1:41234/other'])
+    expect(navigate('http://127.0.0.1:41234/login')).toBe(true)
+    expect(navigate('http://127.0.0.1:41234/other')).toBe(false)
+  })
+
   it('比例锁定原样转发给原生窗口，且权限守卫装在**应用分区**（不是默认 session）', () => {
     const adapter = createRealElectronWindowAdapter({ appScheme: APP_SCHEME })
     const { handle, win } = createProbeWindow(adapter)
@@ -778,6 +966,7 @@ describe('createRealElectronWindowAdapter', () => {
       appId: 'demo',
       url: `${APP_SCHEME}://demo/`,
       title: '演示应用 · ZeoKeel Harness',
+      appLabel: '演示应用',
       partition: PARTITION,
       width: 1280,
       height: 720,
@@ -814,6 +1003,26 @@ async function settleRecovery(): Promise<void> {
 }
 
 /**
+ * 应用文档的加载序列（排除骨架页/失败页这些 `data:` 独立文档）。
+ *
+ * U-01 之后 `win.loaded[0]` **恒为骨架页**，所以"应用文档被加载了几次/顺序如何"的
+ * 判据必须过滤 `data:`；直接断言整个数组会把骨架的接线与每一条恢复用例耦死。
+ */
+function appDocumentLoads(win: FakeBrowserWindow): string[] {
+  return win.loaded.filter(url => !url.startsWith('data:'))
+}
+
+/** 骨架页的加载序列（U-01 的接线判据）。 */
+function skeletonLoads(win: FakeBrowserWindow): string[] {
+  return win.loaded.filter(url => url.startsWith('data:') && decodeURIComponent(url).includes('id="zeokeel-loading-skeleton"'))
+}
+
+/** 失败页的加载序列（与骨架页区分：失败页带 `id="retry"`）。 */
+function failureLoads(win: FakeBrowserWindow): string[] {
+  return win.loaded.filter(url => url.startsWith('data:') && decodeURIComponent(url).includes('id="retry"'))
+}
+
+/**
  * R16B-19（第十六轮审计泳道 B，P1）：应用窗口的**崩溃 / 加载失败恢复**。
  *
  * 修前形态：`createAppWindow` 只挂 `page-title-updated`，唯一的加载处理是
@@ -845,6 +1054,7 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
       appId,
       url: `${APP_SCHEME}://${appId}/`,
       title: '演示应用 · ZeoKeel Harness',
+      appLabel: '演示应用',
       partition: PARTITION,
       width: 1280,
       height: 720,
@@ -877,13 +1087,15 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
   it('①渲染进程崩溃后**自动重载一次**（否则永久空白窗口）', async () => {
     const adapter = createRealElectronWindowAdapter({ appScheme: APP_SCHEME, warn: message => warned.push(message) })
     const { win } = openWindow(adapter)
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`])
+    // U-01：先骨架、后应用文档；等初始应用加载落地再制造崩溃。
+    await settleRecovery()
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`])
 
     crash(win)
     await settleRecovery()
 
     // 恰好多一次导航，且目标是**同一个应用 URL**（不是空白页、不是外站）。
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`, `${APP_SCHEME}://demo/`])
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`, `${APP_SCHEME}://demo/`])
     // 崩溃必须有可见痕迹（诊断面）。
     expect(warned.some(message => message.includes('render-process-gone') || message.includes('crashed'))).toBe(true)
   })
@@ -891,18 +1103,18 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
   it('②重载之后再次崩溃 ⇒ 显示带「重试」按钮的失败页（不再自动重载）', async () => {
     const adapter = createRealElectronWindowAdapter({ appScheme: APP_SCHEME, warn: message => warned.push(message) })
     const { win } = openWindow(adapter)
+    await settleRecovery()
 
     crash(win)
     await settleRecovery()
-    expect(win.loaded).toHaveLength(2)
+    expect(appDocumentLoads(win)).toHaveLength(2)
 
     // 第二次崩溃：自动重载额度已用尽 ⇒ 只能给失败页。
     crash(win)
     await settleRecovery()
 
-    expect(win.loaded).toHaveLength(3)
-    const page = win.loaded[2]!
-    expect(page.startsWith('data:text/html')).toBe(true)
+    expect(failureLoads(win)).toHaveLength(1)
+    const page = failureLoads(win)[0]!
     const html = decodeURIComponent(page)
     // 失败页必须带**可点的重试入口**，且重试目标 = 崩溃前的应用 URL（重载前捕获）。
     expect(html).toContain('id="retry"')
@@ -914,6 +1126,7 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
   it('④同一 tick 的两个事件源（崩溃会同时派发进程级 + 导航级）只触发一次重载', async () => {
     const adapter = createRealElectronWindowAdapter({ appScheme: APP_SCHEME, warn: message => warned.push(message) })
     const { win } = openWindow(adapter)
+    await settleRecovery()
 
     // 真机上 `render-process-gone` 与 `did-fail-load` 会先后到达；非单飞的实现会
     // 并发发起两次 `loadURL`（错误页与 reload 谁后完成谁说了算）。
@@ -921,9 +1134,9 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
     failLoad(win)
     await settleRecovery()
 
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`, `${APP_SCHEME}://demo/`])
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`, `${APP_SCHEME}://demo/`])
     // 并发事件加入同一轮恢复 ⇒ 不出现第二个失败页/第二次 reload。
-    expect(win.loaded.filter(url => url.startsWith('data:'))).toHaveLength(0)
+    expect(failureLoads(win)).toHaveLength(0)
   })
 
   it('③子框架 did-fail-load（isMainFrame=false）**不**触发恢复；主框架 -3（被顶掉）也不', async () => {
@@ -933,18 +1146,18 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
     failLoad(win, { errorCode: -312, url: 'https://example.com/embed', isMainFrame: false })
     await settleRecovery()
     // 一次 iframe 失败把整个窗口重载（或换成失败页）会把用户的草稿与视图状态掀掉。
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`])
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`])
     expect(warned.some(message => message.includes('subframe'))).toBe(true)
 
     // 顶层但被后续导航顶掉（ERR_ABORTED）不是故障。
     failLoad(win, { errorCode: -3 })
     await settleRecovery()
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`])
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`])
 
     // 正对照：顶层真失败仍然走恢复（否则上一条断言只是因为"什么都不做"）。
     failLoad(win, { errorCode: -105 })
     await settleRecovery()
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`, `${APP_SCHEME}://demo/`])
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`, `${APP_SCHEME}://demo/`])
   })
 
   it('健康状态订阅：崩溃⇒true、重载成功⇒false、失败页⇒true（模型面 crashed 的唯一真源）', async () => {
@@ -977,10 +1190,10 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
     crash(win)
     await settleRecovery()
 
-    // 序列 = 首次加载 / 自动重载（失败）/ 失败页。
-    expect(win.loaded).toHaveLength(3)
-    expect(win.loaded[1]).toBe(`${APP_SCHEME}://demo/`)
-    expect(win.loaded[2]!.startsWith('data:text/html')).toBe(true)
+    // 序列 = 骨架 /（初始应用加载被崩溃作废）/ 自动重载（失败）/ 失败页。
+    expect(skeletonLoads(win)).toHaveLength(1)
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`])
+    expect(failureLoads(win)).toHaveLength(1)
     expect(health.at(-1)).toBe(true)
   })
 
@@ -1000,6 +1213,262 @@ describe('createRealElectronWindowAdapter — 崩溃 / 加载失败恢复（R16B
     const { win } = openWindow(adapter)
     for (const reason of ['clean-exit', 'killed']) crash(win, reason)
     await settleRecovery()
-    expect(win.loaded).toEqual([`${APP_SCHEME}://demo/`])
+    expect(appDocumentLoads(win)).toEqual([`${APP_SCHEME}://demo/`])
+    expect(failureLoads(win)).toHaveLength(0)
+  })
+})
+
+/**
+ * U-01（打开不再是纯白）与 U-03（应用窗口崩溃/白屏进错误上报链路）—— 2026-10-22
+ * 生产级评审的两条 P1。
+ *
+ * 判据纪律：全部是**行为级**断言（第一次 `loadURL` 的目标、上报出口收到的对象、失败页
+ * 的真实内容），不是"某个字符串常量存在"。
+ *
+ * 变异验证（实测记录见汇报）：
+ *  - 删掉 `createAppWindow` 里的 `showLoadingSkeleton(...)`、改回直接
+ *    `loadAppUrl(...)` ⇒ ①"首次加载目标是骨架"红；
+ *  - 删掉 `reportAppWindowError(...)` 的三处调用 ⇒ ⑤⑥红；
+ *  - 删掉 `webPreferences.preload` ⇒ ④红；
+ *  - 删掉看门狗 `armLoadWatchdog(...)` ⇒ ③红。
+ */
+describe('U-01 骨架页 / U-03 应用窗口错误上报（2026-10-22 评审）', () => {
+  const SCHEME = 'ux-probe-app'
+  const PARTITION = 'persist:agent-browser-alice'
+  let warned: string[] = []
+
+  beforeEach(() => {
+    FakeBrowserWindow.created.length = 0
+    warned = []
+  })
+
+  /** 建一个应用窗口（第一/第二次加载的真实顺序由适配器决定）。 */
+  function openApp(
+    adapter: ReturnType<typeof createRealElectronWindowAdapter>,
+    appId = 'demo',
+    appLabel = '演示应用',
+    url = `${SCHEME}://${appId}/`,
+  ): { handle: ReturnType<ReturnType<typeof createRealElectronWindowAdapter>['createAppWindow']>, win: FakeBrowserWindow } {
+    const handle = adapter.createAppWindow({
+      appId,
+      url,
+      title: `${appLabel} · ZeoKeel Harness`,
+      appLabel,
+      partition: PARTITION,
+      width: 1280,
+      height: 720,
+      x: 0,
+      y: 0,
+      minimumWidth: 320,
+      minimumHeight: 240,
+    })
+    return { handle, win: FakeBrowserWindow.created[FakeBrowserWindow.created.length - 1]! }
+  }
+
+  /** 派发一次渲染进程崩溃（与真机 `render-process-gone` 同形）。 */
+  function crash(win: FakeBrowserWindow, reason = 'crashed', exitCode = 139): void {
+    win.webContents.emit('render-process-gone' as never, { preventDefault: () => {} } as never, { reason, exitCode } as never)
+  }
+
+  it('① 建窗后第一次加载目标是骨架页（含标题/主题适配），应用文档随后', async () => {
+    const adapter = createRealElectronWindowAdapter({ appScheme: SCHEME, locale: () => 'zh' })
+    const { win } = openApp(adapter)
+
+    // 第一次 `loadURL` 在 `createAppWindow` 返回前就已经发起（同步）。
+    expect(win.loaded[0]!.startsWith('data:text/html')).toBe(true)
+    const skeleton = decodeURIComponent(win.loaded[0]!)
+    // 文案复用 `app-window-copy.ts` 的真源（应用名进了标题）。
+    expect(skeleton).toContain('正在打开 演示应用…')
+    expect(skeleton).toContain('首次打开可能需要几秒钟')
+    // 暗色主题不闪白：媒体查询 + `color-scheme` 都在骨架页里。
+    expect(skeleton).toContain('prefers-color-scheme: dark')
+    expect(skeleton).toContain('color-scheme:light dark')
+    // 骨架有自己的稳定标记（判据用它区分骨架 / 失败页，而不是靠文案前缀）。
+    expect(skeleton).toContain('id="zeokeel-loading-skeleton"')
+
+    await settleRecovery()
+    // 应用文档在骨架**之后**加载（第二次 `loadURL`）。
+    expect(win.loaded[1]).toBe(`${SCHEME}://demo/`)
+    expect(appDocumentLoads(win)).toEqual([`${SCHEME}://demo/`])
+  })
+
+  it('①b 骨架页跟随宿主语言；暗色下窗口底色不是白色（消除首帧白闪）', async () => {
+    const adapter = createRealElectronWindowAdapter({
+      appScheme: SCHEME,
+      locale: () => 'en',
+      isDarkTheme: () => true,
+    })
+    const { win } = openApp(adapter, 'notes', 'Notes', `${SCHEME}://notes/`)
+    expect(win.options.backgroundColor).toBe('#151517')
+    const skeleton = decodeURIComponent(win.loaded[0]!)
+    expect(skeleton).toContain('Opening Notes…')
+    expect(skeleton).toContain('lang="en"')
+  })
+
+  it('③ 应用文档迟迟不完成加载 ⇒ 看门狗给可读失败页（不停在骨架）', async () => {
+    const adapter = createRealElectronWindowAdapter({
+      appScheme: SCHEME,
+      locale: () => 'zh',
+      warn: message => warned.push(message),
+    })
+    // U-01：宿主把"协议预算 + 余量"经 `setLoadTimeout` 注入（部署可抬高预算）。
+    adapter.setLoadTimeout?.(10)
+    const { win } = openApp(adapter)
+    // 骨架那次加载已经同步发出；把**下一次**（应用文档）挂住。
+    win.webContents.nextLoadHangs = true
+
+    await new Promise(resolve => { setTimeout(resolve, 40) })
+
+    expect(appDocumentLoads(win)).toEqual([`${SCHEME}://demo/`])
+    expect(failureLoads(win)).toHaveLength(1)
+    expect(decodeURIComponent(failureLoads(win)[0]!)).toContain('id="retry"')
+    // 看门狗走 `{retry:false}`：加载还在飞时不再叠一次同目标导航。
+    expect(appDocumentLoads(win)).toHaveLength(1)
+    expect(warned.some(message => message.includes('did not finish loading'))).toBe(true)
+  })
+
+  it('④ 应用窗口装与 shell 同一份渲染错误 preload（分区不变）', () => {
+    const preload = '/opt/product/lib/preload/renderer-error.cjs'
+    const adapter = createRealElectronWindowAdapter({ appScheme: SCHEME, rendererErrorPreload: preload })
+    const { win } = openApp(adapter)
+    expect(win.options.webPreferences).toMatchObject({ preload, partition: PARTITION })
+    // 没给路径时不写这个键（纯 Node 宿主/旧装配）。
+    const bare = createRealElectronWindowAdapter({ appScheme: SCHEME })
+    const { win: bareWin } = openApp(bare, 'other', 'Other', `${SCHEME}://other/`)
+    expect((bareWin.options.webPreferences as Record<string, unknown>).preload).toBeUndefined()
+  })
+
+  it('⑤ render-process-gone ⇒ 上报出口收到带 app_id/windowKind 的事件（不再只 warn）', async () => {
+    const reports: unknown[] = []
+    const adapter = createRealElectronWindowAdapter({
+      appScheme: SCHEME,
+      reportRendererError: report => reports.push(report),
+    })
+    const { win } = openApp(adapter)
+    await settleRecovery()
+
+    crash(win)
+    await settleRecovery()
+
+    expect(reports).toContainEqual({
+      type: 'render-process-gone',
+      appId: 'demo',
+      windowKind: 'app',
+      reason: 'crashed',
+      exitCode: 139,
+      url: `${SCHEME}://demo/`,
+    })
+    // 恢复路径照旧（上报与恢复解耦）。
+    expect(appDocumentLoads(win)).toEqual([`${SCHEME}://demo/`, `${SCHEME}://demo/`])
+  })
+
+  it('⑥ did-fail-load（顶层）与 unresponsive 也进上报链路；子框架/被顶掉的不进', async () => {
+    const reports: Array<Record<string, unknown>> = []
+    const adapter = createRealElectronWindowAdapter({
+      appScheme: SCHEME,
+      reportRendererError: report => reports.push(report as unknown as Record<string, unknown>),
+    })
+    const { win } = openApp(adapter)
+    await settleRecovery()
+
+    // 子框架失败：只记日志，不恢复、不上报。
+    win.webContents.emit(
+      'did-fail-load' as never,
+      { preventDefault: () => {} } as never,
+      -312 as never,
+      'ERR_BLOCKED' as never,
+      'https://example.com/embed' as never,
+      false as never,
+    )
+    expect(reports).toHaveLength(0)
+
+    // 顶层真失败：上报一条（带 app_id 与目标 URL）。
+    win.webContents.emit(
+      'did-fail-load' as never,
+      { preventDefault: () => {} } as never,
+      -105 as never,
+      'NAME_NOT_RESOLVED' as never,
+      `${SCHEME}://demo/` as never,
+      true as never,
+    )
+    expect(reports).toContainEqual({
+      type: 'did-fail-load',
+      appId: 'demo',
+      windowKind: 'app',
+      reason: '-105: NAME_NOT_RESOLVED',
+      url: `${SCHEME}://demo/`,
+    })
+    await settleRecovery()
+
+    // 卡死（unresponsive）上报，但不触发重载（静默重载会掀掉未保存的草稿）。
+    const before = appDocumentLoads(win).length
+    win.webContents.emit('unresponsive' as never)
+    expect(reports).toContainEqual({
+      type: 'unresponsive',
+      appId: 'demo',
+      windowKind: 'app',
+      reason: 'unresponsive',
+      url: expect.stringContaining(`${SCHEME}://demo/`),
+    })
+    expect(appDocumentLoads(win)).toHaveLength(before)
+  })
+
+  it('⑦ 上报出口抛错不得阻断窗口/恢复（fail-soft）', async () => {
+    const adapter = createRealElectronWindowAdapter({
+      appScheme: SCHEME,
+      reportRendererError: () => { throw new Error('sentry exploded') },
+      warn: message => warned.push(message),
+    })
+    const { win } = openApp(adapter)
+    await settleRecovery()
+    expect(() => { crash(win) }).not.toThrow()
+    await settleRecovery()
+    // 崩溃后的自动重载照旧发生。
+    expect(appDocumentLoads(win)).toEqual([`${SCHEME}://demo/`, `${SCHEME}://demo/`])
+    expect(warned.some(message => message.includes('reporting an application window error failed'))).toBe(true)
+  })
+
+  it('⑧ 失败页带诊断块与「复制诊断」：app_id / URL / 错误 / 客户端版本', async () => {
+    const adapter = createRealElectronWindowAdapter({
+      appScheme: SCHEME,
+      locale: () => 'zh',
+      appVersion: '9.9.9',
+      warn: message => warned.push(message),
+    })
+    const { win } = openApp(adapter)
+    await settleRecovery()
+    crash(win)
+    await settleRecovery()
+    crash(win)
+    await settleRecovery()
+
+    const page = decodeURIComponent(failureLoads(win)[0]!)
+    expect(page).toContain('app_id: demo')
+    expect(page).toContain(`url: ${SCHEME}://demo/`)
+    expect(page).toContain('error: render-process-gone (crashed)')
+    expect(page).toContain('client: 9.9.9')
+    // 复制按钮 + 反馈行（点了必须有反馈，不能"点了没反应"）。
+    expect(page).toContain('id="copy-diag"')
+    expect(page).toContain('id="copy-state"')
+    expect(page).toContain('navigator.clipboard')
+    expect(page).toContain('已复制')
+    expect(page).toContain('复制失败')
+    // U-09：英文页面用 en 的 lang（同一页面的旧缺陷是写死 zh-CN）。
+    expect(page).toContain('lang="zh-CN"')
+  })
+
+  it('⑨ 版本更新提示：注入可关闭的提示条 + 刷新（不静默 reload）', () => {
+    const adapter = createRealElectronWindowAdapter({ appScheme: SCHEME, locale: () => 'zh' })
+    const { handle, win } = openApp(adapter)
+    adapter.showWindowNotice?.(handle, '应用有新版本，点击「刷新」后生效。')
+    expect(win.webContents.executed).toHaveLength(1)
+    const script = win.webContents.executed[0]!
+    expect(script).toContain('应用有新版本')
+    expect(script).toContain('location.reload')
+    // 可关闭（提示不是不可关闭的打断）。
+    expect(script).toContain('关闭')
+    // 已销毁的窗口上是 no-op（不能抛）。
+    adapter.closeAppWindow(handle)
+    expect(() => adapter.showWindowNotice?.(handle, 'x')).not.toThrow()
   })
 })

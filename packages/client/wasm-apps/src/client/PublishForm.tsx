@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { t, type AppCenterKey } from './locales.ts'
 import { WASM_MAX_BYTES, WRITABLE_ACCESS_MODES, type AccessMode } from './appcfg-contract.ts'
 import { appShareLink } from './deep-link.ts'
@@ -18,6 +18,7 @@ import {
   initialFormState,
   splitWhitelist,
   submitPublish,
+  suggestNextVersion,
   validatePublishDraft,
   windowSpecFromText,
 } from './publish-app.ts'
@@ -242,8 +243,8 @@ function availabilityText(availability: AvailabilityState): string {
  *    不会静默改写线上 `access`；
  *  - **改动访问范围要显式确认**：选中值与当前值不同时必须勾选确认框才能提交，
  *    文案写清"当前 X → 提交后 Y"；
- *  - **`data_sensitivity` 永不预填**：平台没有这个字段的默认值
- *    （`appcfg.json`：\"不要指望界面或平台替你填\"），留空并在界面上标注要作者声明。
+ *  - **`data_sensitivity` 有基线就预填**（2026-10-22：服务端 `read.go` 已对发布者下发）；
+ *    首版仍必须由作者声明，发新版时不改 = 提交时省略该键 = 服务端沿用上次声明。
  *
  * @param props - `onClose` 返回目录；`onPublished` 在成功后被调用（面板据此刷新目录）；
  *   `target` 是"对已有应用发新版"的目录行基线（首版发布时不传）。
@@ -263,8 +264,13 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
   const [whitelistText, setWhitelistText] = useState(initial.whitelistText)
   const [purpose, setPurpose] = useState(initial.purpose)
   // **平台没有 data_sensitivity 的默认值**：硬填一个（如 internal）等于把每个应用的
-  // 合规声明统一抹平成同一个值，而作者以为自己声明过了。初值恒为空串。
-  const [dataSensitivity, setDataSensitivity] = useState('')
+  // 合规声明统一抹平成同一个值，而作者以为自己声明过了。
+  //
+  // F-02（2026-10-22）：初值不是恒空串，而是**目录行里上一次的声明**（服务端
+  // `read.go` 对发布者下发 `data_sensitivity`，见 `CATALOG_ROW_AUTHOR_FIELDS`；
+  // 缺席/解析不出才为空）。发新版时留空 = 服务端沿用上次声明（客户端省略该字段，
+  // 见 `buildPublishBody`）；空串**不会**把旧声明清空。
+  const [dataSensitivity, setDataSensitivity] = useState(initial.dataSensitivity)
   const [owner, setOwner] = useState(initial.owner)
   // 窗口声明（F3/§6）：三项都可留空 = 不声明（**不是**"锁了缺省比例"）。
   const [windowRatioText, setWindowRatioText] = useState(initial.windowRatioText)
@@ -291,6 +297,43 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
 
   const busy = state.kind === 'busy'
   const accessChanged = changesAccess(initial, access)
+
+  /**
+   * 版本号的**即时**本地校验（F-03）：作者一边敲一边就能看到"没有递增"，而不是
+   * 传完 ≤32 MiB 之后才吃服务端 4xx（版本号一经提交永久占位，盲试一次很贵）。
+   *
+   * 单独走一遍 `validatePublishDraft` 并只取 `field === 'version'` 的问题：规则的
+   * 唯一实现在那里（本组件不复制一份"版本要比大小"的判据）。
+   */
+  const versionIssues = useMemo<ValidationIssue[]>(() => {
+    if (version.trim() === '') return []
+    return validatePublishDraft({
+      appId: 'placeholder',
+      version,
+      title: 'x',
+      changelog: '',
+      config: { access: 'login', whitelist: [], purpose: 'x', dataSensitivity: 'x', owner: 'x' },
+    }, {
+      firstRelease: false,
+      currentVersion: initial.currentVersion,
+      knownVersions: initial.knownVersions,
+    })
+      .filter(issue => issue.field === 'version')
+  }, [version, initial.currentVersion, initial.knownVersions])
+
+  /**
+   * 「建议下一版」（F-03）：**已知全部版本**（当前版本 + 版本历史的待审/被拒/已撤回行）
+   * 取 max 再 +1；一条都不可解析 ⇒ 不渲染按钮。
+   *
+   * 为什么不是"当前线上版本 +1"：版本号永久占位，存在更高的待审 3.1.1 时线上仍是
+   * 3.1.0，按线上 +1 会建议一个**已被占用**的 3.1.1（作者照抄 → 传完 ≤32 MiB 才被拒）。
+   */
+  const suggestedVersion = useMemo(
+    () => (initial.knownVersions.length === 0 && initial.currentVersion.trim() === ''
+      ? null
+      : suggestNextVersion(initial.currentVersion, initial.knownVersions)),
+    [initial.currentVersion, initial.knownVersions],
+  )
 
   // 卸载时取消在途请求：面板被关掉之后不该还在跑一次 44 MiB 的上传。
   useEffect(() => () => { abortRef.current?.abort() }, [])
@@ -456,7 +499,14 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
     if (accessChanged && !accessConfirmed) {
       issues.push({ field: 'access', code: 'access_change_unconfirmed', message: t('appCenter.accessChangeUnconfirmed') })
     }
-    issues.push(...validatePublishDraft(draft))
+    // F-02/F-03：`firstRelease` 由 `current_version` 推导（不再恒按首版要求四项声明）；
+    // `currentVersion` + `knownVersions` 打开本地递增校验（基线取两者的 max：
+    // 版本号永久占位，待审/被拒/已撤回的更高版本同样占着号）。
+    issues.push(...validatePublishDraft(draft, {
+      firstRelease: initial.firstRelease,
+      currentVersion: initial.currentVersion,
+      knownVersions: initial.knownVersions,
+    }))
     if (issues.length > 0 || file === null) {
       setLocalIssues(issues)
       return
@@ -497,6 +547,8 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
       const result = await submitPublish(draft, file, {
         signal: controller.signal,
         onPhase: phase => { setState({ kind: 'busy', phase }) },
+        // F-02：首版全发声明；发新版省略空声明（服务端按缺席继承，显式空串会清空）。
+        firstRelease: initial.firstRelease,
       })
       abortRef.current = null
       // 被取消时不留"失败"面板：回到可提交的空闲态（用户刚按的就是取消）。
@@ -545,6 +597,11 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
           <div data-role="current-access">
             {`${t('appCenter.currentAccess')}: ${t(ACCESS_LABEL_KEYS[initial.currentAccess])}`}
           </div>
+          {initial.dataSensitivity !== '' && (
+            <div data-role="current-data-sensitivity">
+              {`${t('appCenter.dataSensitivity')}: ${initial.dataSensitivity}`}
+            </div>
+          )}
         </div>
       )}
 
@@ -610,9 +667,37 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
           style={INPUT}
           value={version}
           disabled={busy}
-          placeholder="1.0.0"
+          placeholder={suggestedVersion ?? '1.0.0'}
           onChange={event => { setVersion(event.target.value) }}
         />
+        {/*
+          F-03：本地递增校验**即时**显示（不必等传完 ≤32 MiB 才吃 4xx）。
+          `data-role="version-error"` 是断言钩子；服务端仍是权威（这里只拦"明显不递增"）。
+        */}
+        {versionIssues.length > 0 && (
+          <div style={LABEL} data-role="version-error" role="alert">
+            {versionIssues.map(issue => (
+              <div key={issue.code} data-code={issue.code}>{issue.message}</div>
+            ))}
+          </div>
+        )}
+        {suggestedVersion !== null && (
+          <div style={ROW}>
+            <button
+              type="button"
+              className="zeokeel-app-center-suggest-version"
+              data-action="suggest-version"
+              style={BUTTON}
+              disabled={busy}
+              onClick={() => { setVersion(suggestedVersion) }}
+            >
+              {`${t('appCenter.suggestNextVersion')}: ${suggestedVersion}`}
+            </button>
+            <span style={LABEL} data-role="current-version-note">
+              {`${t('appCenter.currentVersion')}: ${initial.currentVersion}`}
+            </span>
+          </div>
+        )}
       </div>
 
       <div style={FIELD}>
@@ -768,6 +853,14 @@ export function PublishForm({ onClose, onPublished, target }: { onClose: () => v
         */}
         <span style={LABEL} data-role="data-sensitivity-note">{t('appCenter.dataSensitivityNoDefault')}</span>
         <span style={LABEL}>{t('appCenter.declarationsHint')}</span>
+        {/*
+          F-02：对已有应用发新版时**明说"留空 = 沿用"**（文案与行为必须一致）。
+          行为侧见 `buildPublishBody`：空声明发新版时被**省略**，服务端按缺席继承；
+          发空串反而会清空上一版声明。
+        */}
+        {!initial.firstRelease && (
+          <span style={LABEL} data-role="declarations-inherited">{t('appCenter.declarationsInherited')}</span>
+        )}
 
         {/*
           窗口声明（F3/§6）：比例与首次打开的尺寸。**留空 = 不声明** ——
@@ -921,15 +1014,35 @@ export function PublishErrorBlock({ failure, title, role = 'publish-error' }: {
  * 不再下发 `entry_url`；能发给同事的是**渠道深链** `<渠道 scheme>://app/<app_id>`
  * （scheme 由随渠道构建/桌面壳注入，见 `deep-link.ts`）。scheme 拿不到时这一行不渲染
  * —— 宁可少一行，也不显示一条打不开的链接。
+ *
+ * **首版待审（U-02，评审 2026-10-23 P1）**：审核开关打开后发布的**第一个**版本进
+ * pending，而 `current_release_id` 仍是 0 —— 线上**没有**旧版本。旧实现在这一支写死
+ * "待审核（线上仍是旧版本）"并照旧渲染分享深链，于是作者把链接发给同事，同事得到
+ * "这个应用不存在（可能已被删除或改名）"。判据是服务端下发的 `release.current_version`：
+ *   - `''` ⇒ 首版：「首版待审核：审核通过后才会上线」，**不给**分享链接；
+ *   - 非空 ⇒ 既有语义（线上仍是那个旧版本，链接照旧可分享）；
+ *   - 缺席（旧服务端）⇒ 只说"审核通过后才生效"，既不断言有旧版本，也不断言是首版。
  * @param props - 结构化成功结果 + 本次提交的访问级别 + 可选分享 scheme。
  */
 export function PublishSuccessBlock({ result, access, shareScheme }: { result: PublishSuccess, access?: AccessMode, shareScheme?: string }) {
-  const shareLink = appShareLink(result.appId, shareScheme)
+  // 首版待审：线上**没有任何版本**（`''` 是服务端确认的事实，`undefined` 不是）。
+  const firstRelease = result.pending && result.liveVersion === ''
+  // "线上仍有一个版本" —— 只有服务端明确说了版本号才算。
+  const hasLiveVersion = result.liveVersion !== undefined && result.liveVersion !== ''
+  // 分享链接只在"同事真的能打开"时才给：已生效、或待审但线上仍有旧版本。
+  // 首版待审 / 线上状态未知 ⇒ 不给（一条必然失败的链接比少一行更糟）。
+  const shareable = !result.pending || hasLiveVersion
+  const shareLink = shareable ? appShareLink(result.appId, shareScheme) : null
+  const statusText = firstRelease
+    ? t('appCenter.publishedPendingFirst')
+    : result.pending
+      ? (hasLiveVersion ? t('appCenter.publishedPending') : t('appCenter.publishedPendingUnknown'))
+      : t('appCenter.publishedLive')
   return (
     <div style={BOX} data-role="publish-success">
       <div><strong>{t('appCenter.published')}</strong></div>
       <div data-role="published-version">{`${t('appCenter.versionLabel')}: ${result.version}`}</div>
-      {!result.enabled
+      {!result.enabled && !firstRelease
         ? (
             <>
               <div data-role="published-status" data-enabled="false">{t('appCenter.publishedDisabled')}</div>
@@ -937,10 +1050,17 @@ export function PublishSuccessBlock({ result, access, shareScheme }: { result: P
             </>
           )
         : (
-            <div data-role="published-status" data-enabled="true">
-              {result.pending ? t('appCenter.publishedPending') : t('appCenter.publishedLive')}
+            <div
+              data-role="published-status"
+              data-enabled={result.enabled ? 'true' : 'false'}
+              data-first-release={firstRelease ? 'true' : 'false'}
+            >
+              {statusText}
             </div>
           )}
+      {firstRelease && (
+        <div data-role="published-first-release-hint">{t('appCenter.publishedPendingFirstHint')}</div>
+      )}
       {access !== undefined && (
         <div data-role="published-access" data-access={access}>
           {`${t('appCenter.access')}: ${t(ACCESS_LABEL_KEYS[access])}`}

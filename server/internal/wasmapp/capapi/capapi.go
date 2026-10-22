@@ -105,7 +105,10 @@ type HostCall struct {
 // CallMetrics 是一次应用请求的完整计量（§4.9「调用事件」字段集合）。
 // 字段名与设计文档 §4.9 一一对应，落库列名由 events 包负责映射。
 type CallMetrics struct {
-	AppID        string
+	AppID string
+	// Version 是**本次请求实际执行的版本**（app_releases.version）。
+	// 诊断按版本聚合"回滚后是否止血/新版本是否更差"（2026-10-22 生产评审 D-02）。
+	Version      string
 	UserID       int64
 	Outcome      string // ok / error / killed
 	ReasonCode   string // 平台错误码（成功为空）

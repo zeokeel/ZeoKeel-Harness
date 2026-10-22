@@ -135,19 +135,33 @@ There is a publish-review switch on the admin side (setting key `wasm.review_req
 - The author sees the verdict and the rejection reason in their own release history — that is the only author-facing outlet for a review verdict;
 - If the switch **cannot be read**, publishing fails with **503 and writes nothing** (strict read). A lenient read would turn one settings read failure into "an unreviewed release goes live silently".
 
-### Publish, unpublish, freeze, retire
+### Publish, unpublish, freeze, retire, restore
 
 | Action | Who | Effect | Reversible |
 |---|---|---|---|
 | Publish / unpublish | publisher and admins | Unpublish → access returns 410 Gone (data kept, links unchanged) | Yes (publishing again restores it) |
 | Freeze / unfreeze | publisher and admins | Freeze = stop serving (always 404) **and unpublish at the same time**; unfreezing does **not** publish it again | Yes (after unfreezing, publish it again) |
-| Delete (retire) | publisher and admins | The row is soft-deleted; the id and version numbers are **occupied permanently** and never reused | No |
+| Delete (retire) | publisher and admins | **Soft delete plus a read-only snapshot** (control-plane metadata + app database `VACUUM INTO`); the id and version numbers are **occupied permanently** and never reused | **Recoverable during the retention window** (`restore`); if the snapshot fails the delete fails closed and nothing is removed |
+| Restore (`restore`) | publisher and admins | Brings a soft-deleted app back; it returns **unpublished** (`enabled=false`, not re-listed automatically) and the deployment pointer has been reset ⇒ publish/deploy again before use | Repeatable inside the retention window; **not possible once `purged`** (410 `APP_PURGED`) |
+| Hard delete (purge) | platform background job (`wasm_retirement`) | After the retention window (`retirement_snapshot_retention_days`, default **90 days** at compile time) it deletes the artifacts, the app database and the snapshots | **Irreversible** (metadata and deployment history remain for audit; the UI shows "data purged") |
 | Transfer ownership | admins only | Rewrites `apps.owner`, for staff moves and offboarding | — |
 
-Two semantics that are easy to misread:
+Releases and deployment (**rollback is not "undo a publish", and it does not roll the database back**):
+
+| Action | Who | Effect | Reversible |
+|---|---|---|---|
+| Deploy / roll back | publisher and admins | Makes an **`approved`** release the live one; **rolling back = deploying an older release again** (no re-upload, no re-review, history is not rewritten) | Yes (deploy another release to move again) |
+| Withdraw a pending release | publisher and admins | `pending` only: sets `withdrawn`, **releases the artifact bytes**, the version number stays occupied for ever | No (publish a higher version number) |
+| Approve / reject | admins only | Approving deploys **only the release just approved** (and only if it is newer than the live one) ⇒ approval **never undoes** a rollback; rejecting frees the bytes and keeps the version number occupied | A rejected release cannot be approved later (the mirror case is `409 APPROVED_NOT_REJECTABLE`) |
+
+Four semantics that are easy to misread:
 
 - **Publishing claims the name**: `app_id` is held permanently by the first successful publisher; rejection, unpublish and deletion do not release it. Publishing someone else's id returns 409 `NAME_TAKEN` (admins are exempt).
 - **A frozen row is visible only to its owner**: for everyone else a frozen app is byte-for-byte identical to "does not exist" (no existence leak); for the publisher it stays visible in the app centre (marked "frozen"), because otherwise "unfreeze" would have no entry point anywhere in the employee-facing product.
+- **"Deleted" does not mean "erased"**: deletion is a soft delete plus a snapshot, and **`restore` brings it back inside the retention window**; the irreversible step is `purged` after the window expires.
+- **Rollback only switches the artifact version, not the app database**: the database is keyed by `app_id` — one file per app, shared by every release ⇒ after a rollback the old code may read tables the new release renamed ("rolled back but the data looks gone"). Change structure with a new table name plus dual writes, not by relying on a rollback.
+
+Audit action names for these lifecycle steps (filterable in the admin audit page): `wasm_app_deploy` (deploy/rollback), `wasm_app_release_withdraw` (withdraw), `wasm_app_release_approve` / `wasm_app_release_reject` (review), `wasm_app_restore` (restore), `wasm_app_delete` (delete), `wasm_app_freeze` (freeze/unfreeze), `wasm_app_limits_change` (per-app limit override), `wasm_release_purge_stale` (stale pending purge, org-wide).
 
 ### What an author can and cannot see
 
@@ -155,6 +169,8 @@ Two semantics that are easy to misread:
 |---|---|
 | The catalogue and their own rows | Every app (including unpublished ones, marked "unpublished" with opening disabled); their own rows carry the publisher view |
 | Release history | The release list and review verdicts for their own apps (including rejection reasons); the response contains no artefact bytes |
+| Deployment history | Who put which release live and when (rollbacks included); `current` comes from the deployment pointer, not "the newest row" |
+| Rollback / withdraw / restore | Done in the client app centre (**the AI tool surface has none of these three**: the AI can publish, but rollbacks and withdrawals are a human action) |
 | Diagnostics | Call counts, failure counts, recent failures, reason codes and suggestions for a time window, with a retention note |
 | Schema | Tables, columns, row counts and size of the app database |
 | Data browsing | Rows of the app database, **masked by default** (heuristics plus the author's `sensitive_columns`); explicitly showing raw values writes an audit entry |
@@ -228,7 +244,7 @@ Concurrency, memory and time budgets are all adjustable on the admin console's *
 | `app_running` | 1–`max_instances` | 4 | immediately |
 | `app_queue` | 1–4096 | 32 | immediately |
 | `user_global_running` | 1–`max_instances` | 4 | immediately |
-| `user_per_app_running` | 1–`max_instances` | 1 | immediately |
+| `user_per_app_running` | 1–`max_instances` | 2 | immediately |
 | `user_per_app_queued` | 1–4096 | 4 | immediately |
 | `instance_memory_mb` | 16–1024 | 64 | **requires a server restart** |
 | `module_cache_mb` | 8–4096 | 128 | immediately |
@@ -242,6 +258,7 @@ Concurrency, memory and time budgets are all adjustable on the admin console's *
 | `request_wall_clock_seconds` | 6–300 | 60 | immediately |
 | `sql_statement_budget_seconds` | 4–119 | 5 | next new app-database handle |
 | `compile_timeout_seconds` | 1–60 | 60 | immediately |
+| `retirement_snapshot_retention_days` | 1–3650 | 90 | immediately (next freeze/delete) |
 
 Several of these are hard checks at save time, not advice:
 
@@ -290,15 +307,15 @@ Client failures come in two layers; when debugging, first establish which one yo
 
 The following are **current, real boundaries**, not a bug list; they are written down so a deployment can decide whether to stack additional measures on top.
 
-- **Deleting an app soft-deletes it and keeps the name occupied for ever**: after deletion the id and version numbers are never reused and the row stays in the database (the catalogue does not list it);
-- **The retirement snapshot and the hard-delete task are not implemented**: the export endpoint documents "exportable during the retention window → hard-deleted after it", but the periodic snapshot and the hard delete belong to a background task that is **not implemented today**;
+- **Deletion is "soft delete plus snapshot", not "erase now"**: after deletion the id and version numbers are occupied permanently and never reused, and the row stays in the database (the catalogue does not list it); **`restore` brings it back inside the retention window** (it returns unpublished, not re-listed);
+- **Hard deletion is executed by the platform after the retention window**: freezing or soft-deleting produces a read-only snapshot (control-plane metadata plus an app-database `VACUUM INTO` snapshot), and after the retention window (`retirement_snapshot_retention_days`, default 90 days, configurable in App Center → Limits, 1–3650 days, default 90) the `wasm_retirement` background job **really deletes** the artifacts, the application database and the snapshots. Export and restore are possible during the window; **after `purged` the data is unrecoverable** (only metadata and deployment history remain for audit, and the UI shows "data purged");
 - **Compiling and executing share one data root**: the compile process runs under OS-level isolation (`bwrap` plus a read allow-list and its own network namespace), the cache directory is mode 0700, and the executing process opens it read-only; **cache entries carry no content signature**, so a writer with the same uid as the host can still poison them — closing that properly needs a separate uid, a read-only mount or an HMAC manifest (deployment side);
 - **Historical settings rows left behind by the deletion wave**: legacy configuration items such as the app base domain are still in the database but are **no longer read**.
 
 ## Related
 
 - [Desktop client](/en/desktop/) — the app window, permission tiers and local capabilities
-- [Enterprise control plane](/en/admin/) — the app centre admin page: review, freeze, ownership transfer, limits
+- [Enterprise control plane](/en/admin/) — the app centre admin page: review (with a cross-app pending queue), freeze/unfreeze, ownership transfer, delete/restore, export (including database and assets), deployment history and rollback, per-app limit overrides and global limits
 - [Security & compliance](/en/security/) — the full picture of keys, tokens, sandboxing and outbound traffic
 - [System architecture](/en/architecture/) — the three-layer topology and API namespaces
 - [Container deployment](/en/deployment/compose/) — server data directories and memory profiles

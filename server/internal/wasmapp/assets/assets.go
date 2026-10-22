@@ -45,23 +45,23 @@ import (
 )
 
 const (
-	// MaxPathBytes 是包内逻辑路径的长度上限。
+	// MaxPathBytes 是包内逻辑路径的长度上限（单一真源：`limits.AssetMaxPathBytes`）。
 	//
-	// ⚠️ limits 包（本模块不可修改）没有资产路径长度常量；这个 256 是本包
-	// 当前唯一的数值来源，已列入交付说明请求并入 limits（§5.5「数值单一真源」）。
+	// 2026-10-22 审计 A1 修：此前这里是**第二份**字面量（注释还写着 limits 没有该常量），
+	// 而作者文档里的数字由 limits 生成 ⇒ 改 limits（+重生成文档）行为不变、改本包文档
+	// 不变，两边必然漂移。现在本包只保留别名，数值与门禁都由 limits 侧负责。
 	// 取值理由：任何真实资源名（含目录层级）都远小于 256 字节；给一个上限是
 	// 为了让"超长路径"在进入资源集之前就被拒。
-	MaxPathBytes = 256
-	// MaxSegmentBytes 是**单个路径段**的长度上限。
+	MaxPathBytes = limits.AssetMaxPathBytes
+	// MaxSegmentBytes 是**单个路径段**的长度上限（单一真源：`limits.AssetMaxSegmentBytes`）。
 	//
 	// 这条原本来自文件系统事实（POSIX NAME_MAX = 255 字节）。内存模型不再受
 	// NAME_MAX 约束，但**口径刻意不变**：同一个资源在"打包脚本 / 发布校验 /
 	// 运行期读取"三处必须同判，放宽它会让已发布内容的合法性随版本漂移。
-	MaxSegmentBytes = 255
+	MaxSegmentBytes = limits.AssetMaxSegmentBytes
 	// MaxListEntries 是 List() 的条数上限（自省/诊断用，防一次列出巨量条目）。
-	//
-	// ⚠️ 同上，limits 包无对应常量，已列入交付说明。
-	MaxListEntries = 10000
+	// 单一真源：`limits.AssetMaxListEntries`。
+	MaxListEntries = limits.AssetMaxListEntries
 )
 
 // ===== 段 → 资源：唯一一份策略 =====

@@ -70,9 +70,15 @@ func TestFromProfile(t *testing.T) {
 	if l.ModuleCacheMB != 64 {
 		t.Fatalf("small 档模块缓存应为 64 MiB，得到 %d", l.ModuleCacheMB)
 	}
-	// small 档在 992 MiB 机器上必须通过四笔账（与启动自检同一判据）。
-	if b := l.Budget(992 << 20); !b.OK {
-		t.Fatalf("small 档应通过 992 MiB 水位：total=%dMiB limit=%dMiB", b.Total>>20, b.Limit>>20)
+	// small 档在 2 GiB 机器上必须通过内存账（与启动自检同一判据）。
+	//
+	// ⚠️ 机器图 2026-10-22 由 992 MiB 改为 2 GiB（生产评审 P1-3）：账上多了"排队请求体"
+	// 这一笔（256 MiB，= limits.WasmQueueBodyBytesMax），small 档的账面从 645 MiB 变成
+	// 901 MiB。992 MiB 的机器（水位 694 MiB）按规则**应当**判红 —— 645/694 = 93%，
+	// 本来就没有给 Go 堆/协议缓冲留余量。这里改的是"small 档的目标机器"（它自己声明
+	// "适合 2 GB 级机器"），不是把这一笔算成 0。
+	if b := l.Budget(2 << 30); !b.OK {
+		t.Fatalf("small 档应通过 2 GiB 水位：total=%dMiB limit=%dMiB", b.Total>>20, b.Limit>>20)
 	}
 }
 
@@ -447,16 +453,21 @@ func captureStdLog(t *testing.T, fn func()) string {
 
 // TestBudgetFollowsLimits：四笔账随限制项变化（不是常量）。
 func TestBudgetFollowsLimits(t *testing.T) {
-	const available = 992 << 20
+	// 机器图 2026-10-22 由 992 MiB 改为 2 GiB（P1-3：账上多了排队请求体这一笔）。
+	// 与 TestFromProfile 同一条口径：small 档声明的目标机器是"2 GB 级"。
+	const available = 2 << 30
 	small := applimits.Defaults()
 	small.MaxInstances = 3
 	small.InstanceMemoryMB = 64
 	small.ModuleCacheMB = 64
 	b := small.Budget(available)
 	// 192（实例池）+256（编译峰值）+118（上传峰值）+64（模块缓存）+15（页缓存：
-	// 3 句柄 × (1+4) 条连接 × 1 MiB）= 645 MiB。
-	if want := int64(645 << 20); b.Total != want {
-		t.Fatalf("small 组合 total=%dMiB，期望 %dMiB", b.Total>>20, want>>20)
+	// 3 句柄 × (1+4) 条连接 × 1 MiB）+256（排队请求体，P1-3）= 901 MiB。
+	if want := int64(901 << 20); b.Total != want {
+		t.Fatalf("small 组合 total=%dMiB，期望 %dMiB（含排队体这一笔）", b.Total>>20, want>>20)
+	}
+	if b.QueueBody != limits.WasmQueueBodyBytesMax {
+		t.Fatalf("排队体这笔 = %d，want %d（账与运行期硬上界同源）", b.QueueBody, limits.WasmQueueBodyBytesMax)
 	}
 	if !b.OK {
 		t.Fatalf("small 组合应通过：limit=%dMiB", b.Limit>>20)
@@ -464,7 +475,7 @@ func TestBudgetFollowsLimits(t *testing.T) {
 	big := small
 	big.MaxInstances = 32
 	if b2 := big.Budget(available); b2.OK {
-		t.Fatalf("32 并发不该通过 992 MiB 机器：total=%dMiB limit=%dMiB", b2.Total>>20, b2.Limit>>20)
+		t.Fatalf("32 并发不该通过 2 GiB 机器：total=%dMiB limit=%dMiB", b2.Total>>20, b2.Limit>>20)
 	}
 	// 读不到可用内存 ⇒ 只算不判（部署文档兜底）；**0 与"未知"必须区分**（R1-rt-1）。
 	if b3 := big.Budget(readyz.MemoryUnknown); !b3.OK || b3.Known {
@@ -492,8 +503,8 @@ func TestBudgetIncludesAppDBPageCache(t *testing.T) {
 		t.Fatalf("页缓存这笔 = %d MiB，期望 %d MiB（%d 句柄 × %d MiB）",
 			b.AppDBCache>>20, want>>20, def.MaxInstances, wantPerHandle>>20)
 	}
-	if b.Total != b.Instances+b.CompilePeak+b.UploadPeak+b.CacheResident+b.AppDBCache {
-		t.Fatalf("总账必须含页缓存这笔：%+v", b)
+	if b.Total != b.Instances+b.CompilePeak+b.UploadPeak+b.CacheResident+b.AppDBCache+b.QueueBody {
+		t.Fatalf("总账必须含页缓存与排队体这两笔：%+v", b)
 	}
 	if b.AppDBCache == 0 {
 		t.Fatal("页缓存这笔不得为 0（0 等于没算）")
@@ -520,17 +531,23 @@ func TestBudgetIncludesAppDBPageCache(t *testing.T) {
 	small.AppDBReaders = limits.AppDBReadersMax
 	const avail = 12 << 30 // 水位 = 12 GiB × 70% = 8.4 GiB
 	sb := small.Budget(avail)
-	fourAccounts := sb.Instances + sb.CompilePeak + sb.UploadPeak + sb.CacheResident
-	if fourAccounts > sb.Limit {
-		t.Fatalf("前置：不含页缓存的四笔账 %d MiB 已超水位 %d MiB，本用例断言不到页缓存那一笔",
-			fourAccounts>>20, sb.Limit>>20)
+	// 前置口径：**不含页缓存**的账（四笔 + 排队请求体，P1-3）必须放行，
+	// 否则本用例断言不到页缓存那一笔。
+	beforePageCache := sb.Instances + sb.CompilePeak + sb.UploadPeak + sb.CacheResident + sb.QueueBody
+	if beforePageCache > sb.Limit {
+		t.Fatalf("前置：不含页缓存的账 %d MiB 已超水位 %d MiB，本用例断言不到页缓存那一笔",
+			beforePageCache>>20, sb.Limit>>20)
 	}
 	if sb.OK {
-		t.Fatalf("四笔账 %d MiB 放行、加上页缓存 %d MiB 后必须被拒：total=%d MiB limit=%d MiB",
-			fourAccounts>>20, sb.AppDBCache>>20, sb.Total>>20, sb.Limit>>20)
+		t.Fatalf("不含页缓存的账 %d MiB 放行、加上页缓存 %d MiB 后必须被拒：total=%d MiB limit=%d MiB",
+			beforePageCache>>20, sb.AppDBCache>>20, sb.Total>>20, sb.Limit>>20)
 	}
-	if sb.Total != fourAccounts+sb.AppDBCache {
-		t.Fatalf("Total 必须等于四笔账 + 页缓存：%+v", sb)
+	// 总账 = 四笔账 + 页缓存 + 排队请求体（P1-3：这一笔与配置无关，是全局常量）。
+	if want := beforePageCache + sb.AppDBCache; sb.Total != want {
+		t.Fatalf("Total 必须等于四笔账 + 页缓存 + 排队体：%+v", sb)
+	}
+	if sb.QueueBody != limits.WasmQueueBodyBytesMax {
+		t.Fatalf("排队体这笔 = %d，want %d", sb.QueueBody, limits.WasmQueueBodyBytesMax)
 	}
 }
 
@@ -1035,5 +1052,37 @@ func TestBudgetFieldsAreClampedNotWidened(t *testing.T) {
 	}
 	if err := got.Validate(); err != nil {
 		t.Fatalf("钳位后的结果必须合法：%v", err.Message)
+	}
+}
+
+// TestRetirementRetentionConfigurable：退役快照保留期（2026-10-22 管理员 P2）
+// 默认 90 天、控制台可调 1–3650；越界拒绝；旧最小夹具缺字段时补默认（不是 0 天）。
+func TestRetirementRetentionConfigurable(t *testing.T) {
+	def := applimits.Defaults()
+	if def.RetirementSnapshotRetentionDays != 90 {
+		t.Fatalf("默认保留期 = %d，want 90", def.RetirementSnapshotRetentionDays)
+	}
+	if err := def.Validate(); err != nil {
+		t.Fatalf("默认值必须合法：%v", err)
+	}
+	for _, bad := range []int{0, -1, 3651} {
+		l := def
+		l.RetirementSnapshotRetentionDays = bad
+		if err := l.Validate(); err == nil {
+			t.Fatalf("保留期 %d 必须被拒", bad)
+		}
+	}
+	l := def
+	l.RetirementSnapshotRetentionDays = 30
+	if err := l.Validate(); err != nil {
+		t.Fatalf("30 天必须合法：%v", err)
+	}
+	// 旧版本落库（缺字段）= 补默认，而不是当成"保留 0 天"。
+	stored, serr := applimits.ParseStored("{}")
+	if serr != nil {
+		t.Fatalf("ParseStored({}): %v", serr)
+	}
+	if stored.RetirementSnapshotRetentionDays != 90 {
+		t.Fatalf("缺字段补齐 = %d，want 90", stored.RetirementSnapshotRetentionDays)
 	}
 }

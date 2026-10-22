@@ -90,8 +90,9 @@
 | `protocol_line_max_bytes` | 1048576 | bytes | §4.6 | 协议帧单行上限 | 超限 RUNTIME_OUTPUT_OVERRUN |
 | `guest_budget` | 30 | seconds | §4.6 | guest 执行预算 | 进入宿主调用时暂停计时 |
 | `request_wall_clock` | 60 | seconds | §4.6 | 请求端到端墙钟 | 含排队等待，到点即拒 |
-| `app_queue_depth` | 32 | count | §4.6 | 每应用队列长度 | 超出 429 + Retry-After |
-| `user_per_app_running` | 1 | count | §4.6 | 单用户同应用在跑 |  |
+| `app_queue_depth` | 32 | count | §4.6 | 每应用队列长度 | 超出 429 + Retry-After；它只管**条数**，排队字节由下一条封顶 |
+| `wasm_queue_body_bytes_max` | 268435456 | bytes | §4.6 | 排队请求体全局上限 | 全局硬上界（≠ 每应用队列长度 × 请求体上限）：准入前已读入、等待中的请求体合计超过即 429 APP_QUEUE_FULL（details.reason=queue_bytes_exceeded）；同一笔计入 /readyz 内存账 |
+| `user_per_app_running` | 2 | count | §4.6 | 单用户同应用在跑 |  |
 | `user_per_app_queued` | 4 | count | §4.6 | 单用户同应用排队 |  |
 | `user_global_running` | 4 | count | §4.6 | 单用户跨应用全局在跑 |  |
 | `app_concurrency` | 4 | count | §4.6 | 每应用并发 | 同一应用最多 N 个请求同时在跑（控制台对应 app_running）；读并发，写仍串行 |

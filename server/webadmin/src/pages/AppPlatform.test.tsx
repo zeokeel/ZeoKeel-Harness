@@ -46,6 +46,7 @@ const LIMITS = {
   app_db_readers: 4,
   // 时间预算必须排在最后：表单分组顺序 = 服务端下发的字段顺序，新组要落在「内存」之后。
   ...TIME_BUDGETS,
+  retirement_snapshot_retention_days: 90,
 }
 
 const VIEW = {
@@ -88,6 +89,7 @@ const VIEW = {
     request_wall_clock_seconds: { min: 6, max: 300, unit: '秒', restart: false },
     sql_statement_budget_seconds: { min: 4, max: 119, unit: '秒', restart: false },
     compile_timeout_seconds: { min: 1, max: 60, unit: '秒', restart: false },
+    retirement_snapshot_retention_days: { min: 1, max: 3650, unit: '天', restart: false },
   },
   budget: {
     // 服务端 P0-2 起 budget.profile 是 limits/setting 或 limits/profile:<name>，
@@ -97,12 +99,14 @@ const VIEW = {
     compile_peak_bytes: 256 << 20,
     upload_peak_bytes: 118 << 20,
     cache_resident_bytes: 64 << 20,
-    // 页缓存这笔（R1-rt-8）：3 句柄 × (1+4) 条连接 × 1 MiB = 15 MiB ⇒ 四笔账 630 + 15 = 645。
+    // 页缓存这笔（R1-rt-8）：3 句柄 × (1+4) 条连接 × 1 MiB = 15 MiB ⇒ 六笔账 = 实例池 + 编译/上传峰值 + 缓存驻留 + 页缓存 + 排队体 256 = 901。
     appdb_cache_bytes: 15 << 20,
-    total_bytes: 645 << 20,
-    available_bytes: 992 << 20,
+    // 排队请求体全局上界（P1：不再让 4096 × 1 MiB 的排队体绕过预算）。
+    queue_body_bytes: 256 << 20,
+    total_bytes: 901 << 20,
+    available_bytes: 2 * (1 << 30),
     known: true,
-    limit_bytes: 694 << 20,
+    limit_bytes: 1433 << 20,
     ok: true,
   },
   guard_percent: 70,
@@ -270,9 +274,9 @@ describe('应用中心 · 限制项（原应用平台页）', () => {
     expect(await screen.findByRole('heading', { name: '限制项' })).toBeTruthy()
     expect(screen.getByTestId('lim-max_instances')).toHaveProperty('value', '3')
     expect(screen.getByTestId('lim-instance_memory_mb')).toHaveProperty('value', '64')
-    // 理论峰值 = 四笔账 630 + 页缓存 15（编辑期按表单值重算）＝ 645 MiB（R1-rt-8）。
-    expect(screen.getByTestId('budget-line').textContent).toContain('645 MiB')
-    expect(screen.getByTestId('budget-line').textContent).toContain('694 MiB')
+    // 理论峰值 = 实例池 + 峰值 + 页缓存 + 排队体（编辑期按表单值重算）＝ 901 MiB。
+    expect(screen.getByTestId('budget-line').textContent).toContain('901 MiB')
+    expect(screen.getByTestId('budget-line').textContent).toContain('1434 MiB')
     expect(screen.getByTestId('budget-badge').textContent).toContain('正常')
   })
 
@@ -579,14 +583,14 @@ describe('应用中心 · 限制项 · 并发保存(F5)', () => {
 // ---------------------------------------------------------------------------
 
 describe('应用中心 · 限制项 · 未识别账目项进总账(F1)', () => {
-  const EXTRA = 100 << 20
+  const EXTRA = 600 << 20
 
   function withFutureAccount(value: unknown) {
     mockRequest.mockImplementation(async (path: string) => {
       if (path === '/api/server/admin/wasm-apps/limits') {
         return {
           ...VIEW,
-          budget: { ...VIEW.budget, future_account_bytes: value, total_bytes: (645 << 20) + EXTRA },
+          budget: { ...VIEW.budget, future_account_bytes: value, total_bytes: (901 << 20) + EXTRA },
         } as any
       }
       if (path === '/api/server/admin/wasm-apps/runtime') return { runtime: RUNTIME } as any
@@ -594,20 +598,20 @@ describe('应用中心 · 限制项 · 未识别账目项进总账(F1)', () => {
     })
   }
 
-  it('加 100 MiB 新账目项 ⇒ 理论峰值 645 → 745 MiB，水位判定跟着翻成"超出"', async () => {
+  it('加 600 MiB 新账目项 ⇒ 理论峰值 901 → 1501 MiB，水位判定跟着翻成"超出"', async () => {
     withFutureAccount(EXTRA)
     render(<Limits />)
     await screen.findByTestId('budget-unknown-accounts')
 
     const line = screen.getByTestId('budget-line')
-    expect(line.textContent).toContain('745 MiB') // 645 + 100（旧实现恒为 645）
+    expect(line.textContent).toContain('1501 MiB') // 901 + 600（旧实现恒为 901）
     expect(line.textContent).toContain('超出水位')
     const badge = screen.getByTestId('budget-badge')
     expect(badge.textContent).not.toContain('正常')
     // 提示语必须给出金额（"已计入"要能被核对，而不是一句话）
     const box = screen.getByTestId('budget-unknown-accounts')
     expect(box.textContent).toContain('future_account_bytes')
-    expect(box.textContent).toContain('100 MiB')
+    expect(box.textContent).toContain('600 MiB')
     expect(box.textContent).toContain('已计入')
   })
 
@@ -618,8 +622,8 @@ describe('应用中心 · 限制项 · 未识别账目项进总账(F1)', () => {
     expect(box.textContent).toContain('future_account_bytes')
     expect(box.textContent).toContain('不是数字')
     expect(box.textContent).toContain('没有')
-    // 未计入 ⇒ 峰值仍是 645（不含那个解析不出的值）
-    expect(screen.getByTestId('budget-line').textContent).toContain('645 MiB')
+    // 未计入 ⇒ 峰值仍是 901（不含那个解析不出的值）
+    expect(screen.getByTestId('budget-line').textContent).toContain('901 MiB')
   })
 
   // 预览与服务端必须是**同一判据**（同一份账目集合 + 同一份水位规则）：
@@ -627,10 +631,10 @@ describe('应用中心 · 限制项 · 未识别账目项进总账(F1)', () => {
   // 本地只要漏掉任何一笔账（例如新账目项），边界上就会与服务端结论相反。
   it('预览结论 ⇔ 服务端 budget.ok（同一判据，边界两侧都测）', async () => {
     const cases = [
-      { extra: 0, serverOk: true },          // 645 ≤ 694
-      { extra: 49 << 20, serverOk: true },   // 694 ≤ 694（正好在水位上）
-      { extra: 50 << 20, serverOk: false },  // 695 > 694（越界 1 MiB）
-      { extra: 100 << 20, serverOk: false }, // 745 > 694
+      { extra: 0, serverOk: true },          // 901 ≤ 1433.6
+      { extra: 532 << 20, serverOk: true },  // 1433 ≤ 1433.6
+      { extra: 533 << 20, serverOk: false }, // 1434 > 1433.6（越界）
+      { extra: 600 << 20, serverOk: false }, // 1501 > 1433.6
     ]
     for (const c of cases) {
       mockRequest.mockReset()
@@ -641,7 +645,7 @@ describe('应用中心 · 限制项 · 未识别账目项进总账(F1)', () => {
             budget: {
               ...VIEW.budget,
               future_account_bytes: c.extra,
-              total_bytes: (645 << 20) + c.extra,
+              total_bytes: (901 << 20) + c.extra,
               ok: c.serverOk,
             },
           } as any
@@ -655,7 +659,7 @@ describe('应用中心 · 限制项 · 未识别账目项进总账(F1)', () => {
       const localOk = line.includes('可以保存')
       expect(localOk, `新账目项 ${c.extra / (1 << 20)} MiB：本地说"${localOk ? '可以保存' : '会被拒绝'}"`).toBe(c.serverOk)
       // 未编辑时显示的总账必须就是服务端那一份 total_bytes（不是"另一套算法凑出来的数"）
-      expect(line).toContain(`${Math.round(((645 << 20) + c.extra) / (1 << 20))} MiB`)
+      expect(line).toContain(`${Math.round(((901 << 20) + c.extra) / (1 << 20))} MiB`)
       unmount()
     }
   })

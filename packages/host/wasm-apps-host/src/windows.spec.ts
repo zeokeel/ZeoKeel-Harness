@@ -152,6 +152,8 @@ describe('window manager (single window per app)', () => {
     expect(first.window).toBe('opened')
     expect(adapter.created).toHaveLength(1)
     expect(adapter.created[0]?.title).toBe('my-notes · Acme')
+    // U-01：骨架页标题要的是**应用名**（不是带产品名后缀的窗口标题）。
+    expect(adapter.created[0]?.appLabel).toBe('my-notes')
     const again = await windows.open('my-notes', '/notes')
     expect(again.window).toBe('focused')
     expect(adapter.created).toHaveLength(1)
@@ -826,5 +828,48 @@ describe('原生关窗/崩溃事件即时收口（R16B-20 / R16B-19）', () => {
     registry = surfaces.registry
     windows.registerOpenWindows()
     expect(surfaces.registered[0]?.crashed).toBe(true)
+  })
+})
+
+/**
+ * U-06（2026-10-22 评审）：版本更新提示只给**已打开**的窗口，且只提示、不重载。
+ *
+ * 变异：把 `showNotice` 里的 `liveHandle` 查表去掉（直接调适配器）⇒ 第二条红；
+ * 把方法删掉 ⇒ 第一条红。
+ */
+describe('showNotice（U-06 / §5.1b 软闸门）', () => {
+  const urlFor = (appId: string, path: string): string => `zeokeel-app://${appId}${path}`
+  const workArea = () => ({ x: 0, y: 0, width: 1920, height: 1080 })
+
+  it('给已打开窗口的适配器转发提示；未打开/空文案是 no-op', async () => {
+    const dir = await tempDir()
+    const notices: Array<{ handle: unknown, message: string }> = []
+    const adapter = { ...fakeAdapter(), showWindowNotice: (handle: unknown, message: string) => { notices.push({ handle, message }) } }
+    const windows = createWasmAppsWindows({ adapter, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+
+    // 没开窗口：不发。
+    windows.showNotice('my-notes', '有新版本')
+    expect(notices).toHaveLength(0)
+
+    await windows.open('my-notes')
+    windows.showNotice('my-notes', '有新版本')
+    expect(notices).toHaveLength(1)
+    expect(notices[0]?.handle).toEqual({ id: 1 })
+    expect(notices[0]?.message).toBe('有新版本')
+
+    // 空文案不发（不能出现一条空提示条）。
+    windows.showNotice('my-notes', '')
+    expect(notices).toHaveLength(1)
+    // 只提示，不重载：没有新的建窗/聚焦导航。
+    expect(adapter.created).toHaveLength(1)
+    expect(adapter.focused).toHaveLength(0)
+  })
+
+  it('适配器不实现提示面时静默跳过（旧替身/纯 Node 宿主）', async () => {
+    const dir = await tempDir()
+    const adapter = fakeAdapter()
+    const windows = createWasmAppsWindows({ adapter, appScheme: 'zeokeel-app', productName: 'Acme', userDataDir: dir, partition: () => TEST_PARTITION, urlFor, workArea })
+    await windows.open('my-notes')
+    expect(() => { windows.showNotice('my-notes', '有新版本') }).not.toThrow()
   })
 })

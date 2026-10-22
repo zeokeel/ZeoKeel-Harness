@@ -14,8 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 	wasmapi "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/api"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
@@ -28,6 +30,7 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/opens"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/retirement"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/runtime"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/upload"
 )
@@ -51,8 +54,21 @@ type wasmPlatform struct {
 	Events *events.Sink
 	// EventCleanup 是调用事件的 7 天保留期清理调度（§4.9/§5.3）。
 	EventCleanup *events.CleanupScheduler
-	// OpensCleanup 是打开计数的日汇总/过期清理调度（F16/§8.9）。
-	OpensCleanup *opens.Scheduler
+	// ⚠️ 打开计数的清理调度**不再作为 wasmPlatform 字段暴露**（2026-10-22，审计 C-14 /
+	// 反证 F-6）：那是个零消费者的死字段 —— 调度器只被存一份、全仓没有人读它，于是
+	// "装配判据能读到同一个实例"是假的（删掉它不会让任何用例变红）。
+	// 运行读数现在经 `api.Options.OpensHealth` 注入（`GET …/opens/summary` 消费），
+	// 登记经 `registerSchedulerStatus(schedulerWasmOpens, …)` —— 两条都指向**同一个**
+	// 局部实例（`opensSched`），装配判据在 cmd/server 的 wasmapp_opens_wiring_test.go 里。
+	// （本注释刻意不写那个已删除的字段名：该用例是源码字符串判据，出现名字即被当成字段还在。）
+	// Retirement 是**退役真删**调度（设计 2026-10-22 §5.5）：每日一轮，删除
+	// `deleted + 到期 + 有成功快照` 的应用数据目录并置 purged_at。
+	//
+	// 挂在这里（不是 main.go 的 start*Scheduler 接缝）的理由：它属于 wasm 面
+	// （数据根 + 应用库 + 审计动作全是 wasm 语义），随 wasm ctx 一起退出；
+	// 运行读数仍然登记进 scheduler_status（名字 wasm_retirement），因此运维面
+	// 看到的是同一张表。
+	Retirement *retirement.Scheduler
 	// UploadCleanup 是分片上传会话的保留期回收调度（§4.2：会话有效期 30 分钟）。
 	//
 	// 不挂它的后果是**静默的**：断线客户端留下的会话目录会一直占盘，
@@ -252,6 +268,17 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 	qopt.PerUserPerAppRunning = limitsHolder.Get().UserPerAppRunning
 	qopt.PerUserPerAppQueued = limitsHolder.Get().UserPerAppQueued
 	scheduler := queue.New(qopt)
+	// 应用级限流覆盖（迁移 0087，决策 docs/decisions/2026-10-22-wasm-per-app-limits.md §2.2）：
+	// **在队列对外服务之前**从库装载一次。这样"库里已有覆盖"的应用**首个请求**就按覆盖
+	// 判定，而不是等管理员在控制台再保存一次（决策 §2.6 第 6 条）。
+	//
+	// 失败策略：只 warn、**不阻断启动**（覆盖是运营优化，读不出来时平台仍按全局值服务）；
+	// 逐条按当前全局值校验，非法的跳过并 warn（见 loadWasmAppLimitOverrides）。
+	if n, lerr := loadWasmAppLimitOverrides(ctx, db, limitsHolder.Get(), scheduler.SetAppLimitOverrides); lerr != nil {
+		log.Printf("wasm: ⚠️ 读取应用级限流覆盖失败（本次启动所有应用按全局值判定）: %v", lerr)
+	} else if n > 0 {
+		log.Printf("wasm: 应用级限流覆盖已装载 %d 条（NULL=继承全局；与当前全局值冲突的条目已跳过）", n)
+	}
 	eventSink := events.NewSink(db, events.Options{})
 	eventSink.Start(ctx)
 
@@ -344,6 +371,8 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 	//   - `publicMainOrigin` / `baseDomainHolder`：应用基域配置面删除。
 	// 身份一律由桌面客户端持员工 bearer 注入（见 appserver/client.go）。
 
+	// 退役调度器在下方构造；先声明以便管理面 Options 引用（PurgeBacklog 对 nil 安全）。
+	var retirementSched *retirement.Scheduler
 	appSrv, aerr := appserver.New(appserver.Options{
 		DB:                 db,
 		DataRoot:           dataDir,
@@ -393,6 +422,14 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 	applyAll := func(l applimits.Limits) []string {
 		if compiler != nil {
 			compiler.SetTimeout(l.CompileTimeout())
+		}
+		// 全局限制项变化时按**新全局值**重校验在册的 per-app 覆盖（反证 F-6）：
+		// 非法条目从库里删掉并审计，合法条目整表重新下发（替换语义，不会残留旧条目）。
+		// 读失败只 warn：限制项本身仍要能保存/生效。
+		if n, rerr := reconcileWasmAppLimitOverrides(context.Background(), db, l, scheduler.SetAppLimitOverrides); rerr != nil {
+			log.Printf("wasm: ⚠️ 全局限制项变更后重校验应用级限流覆盖失败（本次仍按既有覆盖运行）: %v", rerr)
+		} else if n > 0 {
+			log.Printf("wasm: 全局限制项变更后清除了 %d 条已非法的应用级限流覆盖", n)
 		}
 		return appSrv.ApplyLimits(l)
 	}
@@ -461,6 +498,14 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 		Logger: log.Printf,
 	})
 
+	// 打开计数维护（F16/§8.9）：日汇总 upsert + 明细 90 天清理（**先汇总后清理**）。
+	// 与调用事件同款调度器（启动即跑一次 + 周期），随 wasm ctx 一起退出。
+	//
+	// 为什么在构造 api.Options **之前**建：`GET …/opens/summary` 的 `stale`/
+	// `opens_job` 需要这个实例的运行读数（C-14），而读数注入是构造期的一个闭包。
+	// 启动仍放在 Options 之后（登记 → Start，见下）。
+	opensSched := opens.NewScheduler(db, opens.DefaultTick(), nil)
+
 	api := wasmapi.NewHandlers(wasmapi.Options{
 		DB:                 db,
 		DataRoot:           dataDir,
@@ -499,6 +544,54 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 		LimitsProfile: limitsHolder.ProfileName,
 		LimitsApply:   limitsHolder.Apply,
 		LimitsRestart: limitsHolder.RestartPending,
+		// 应用级限流覆盖的**运行态下发**（决策 2026-10-22 §2.2）：保存路径的顺序是
+		// 落库 → 下发 → 审计（见 api.saveAppLimits）；这里是"下发"那一步的唯一入口。
+		// 不注入 ⇒ 两个写端点 fail-closed 回 INTERNAL（不做只落库不生效的半套）。
+		AppLimitsApply: scheduler.SetAppLimitOverride,
+		// 诊断/作者面要的是**运行期生效值**（与队列判定同一份）：全局 + per-app 覆盖。
+		// 只回显全局默认值会让被单独降额的应用作者按错误并发模型调优。
+		AppLimitsCount: scheduler.AppLimitOverrideCount,
+		// 执行队列/后台调度器读数（生产评审管理员视角 P1）：429 计数与按应用水位、
+		// 退役真删作业的运行快照，全部由组件自记账，装配层只读不推断。
+		QueueStats:   scheduler.Stats,
+		QueueApps:    scheduler.AppWatermarks,
+		PurgeBacklog: retirementSched.PurgeBacklog,
+		SchedulerStatus: func() []wasmapi.SchedulerStatusView {
+			rows := schedulerStatuses()
+			out := make([]wasmapi.SchedulerStatusView, 0, len(rows))
+			for _, st := range rows {
+				v := wasmapi.SchedulerStatusView{
+					Name:             st.Name,
+					TickSeconds:      int64(st.Tick / time.Second),
+					Started:          st.Started,
+					MetricsAvailable: st.MetricsAvailable,
+					Source:           st.Source,
+					Runs:             st.Runs,
+					Errors:           st.Errors,
+					LastError:        st.LastError,
+				}
+				if !st.StartedAt.IsZero() {
+					t := st.StartedAt
+					v.StartedAt = &t
+				}
+				if !st.LastRunAt.IsZero() {
+					t := st.LastRunAt
+					v.LastRunAt = &t
+				}
+				out = append(out, v)
+			}
+			return out
+		},
+		AppLimitsEffective: func(appID string) (limits.Axes, bool) {
+			eff := scheduler.EffectiveOptions(appID)
+			_, hasOverride := scheduler.AppLimitOverride(appID)
+			return limits.Axes{
+				AppRunning:        eff.PerAppRunning,
+				AppQueue:          eff.PerAppQueue,
+				UserPerAppRunning: eff.PerUserPerAppRunning,
+				UserPerAppQueued:  eff.PerUserPerAppQueued,
+			}, hasOverride
+		},
 		// 诊断面要的是**运行时生效**的单实例内存上限，不是"控制台已保存值"（R2-DG-2）：
 		// 保存 instance_memory_mb 之后要重启才生效，在重启窗口里两者可以差出几十上百 MiB
 		//（审计实测：保存 32 MiB / 实际按 128 MiB 跑），而诊断 hints 与发布干跑说的必须是
@@ -510,6 +603,37 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 		// readyz.MemoryUnknown（<0）⇒ 预览只算不判（Known=false 会显示在响应里），
 		// 而不是拿 0 当"内存充足"。
 		MemoryAvailable: func() int64 { return readMemoryAvailability().BudgetBytes() },
+		// 打开计数维护作业的运行读数（C-14）：`GET …/opens/summary` 的
+		// `aggregated_until`/`stale`/`opens_job` 用它回答"看板数字为什么不动"
+		// （作业停摆 vs 真的没人用）。闭包捕获的是**同一个** opensSched 实例
+		// （下面 register/Start 的也是它）—— 另外 new 一个会让读数与真跑的作业分叉。
+		OpensHealth: func() wasmapi.OpensJobHealth {
+			return wasmapi.OpensJobHealth{
+				Started:   opensSched.Started(),
+				StartedAt: opensSched.StartedAt(),
+				Runs:      opensSched.Runs(),
+				Errors:    opensSched.Errors(),
+				LastRunAt: opensSched.LastRunAt(),
+				LastError: opensSched.LastError(),
+				Tick:      opensSched.Tick(),
+			}
+		},
+		// 运行期水位（C-10）：/admin/wasm-apps/runtime 的 module_cache / appdb_handles
+		// 从"unavailable（没有出口）"变成真实值。两个访问器都指向**执行侧同一个**
+		// *appserver.Server（appSrv）—— 另外 new 一个统计对象就只是自欺。
+		ModuleCacheStats: func() wasmapi.ModuleCacheStats {
+			st := appSrv.ModuleCacheStats()
+			return wasmapi.ModuleCacheStats{
+				Entries: st.Entries, CompiledEntries: st.CompiledEntries, Bytes: st.Bytes,
+				MaxBytes: st.MaxBytes, MaxEntries: st.MaxEntries, IdleTTL: st.IdleTTL,
+			}
+		},
+		AppDBPoolStats: func() wasmapi.AppDBPoolStats {
+			st := appSrv.AppDBPoolStats()
+			return wasmapi.AppDBPoolStats{
+				Handles: st.Handles, Max: st.Max, Readers: st.Readers, IdleTimeout: st.IdleTimeout,
+			}
+		},
 	})
 
 	// 分片上传会话的保留期回收（§4.2）：与调用事件同款调度器（启动即清一次 + 周期）。
@@ -517,10 +641,23 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 		upload.CleanupSchedulerOptions{Logger: log.Printf})
 	uploadCleanup.Start(ctx)
 
-	// 打开计数维护（F16/§8.9）：日汇总 upsert + 明细 90 天清理（**先汇总后清理**）。
-	// 与调用事件同款调度器（启动即跑一次 + 周期），随 wasm ctx 一起退出。
-	opensSched := opens.NewScheduler(db, opens.DefaultTick(), nil)
+	// 打开计数维护：**先登记再 Start**（与 wasm_retirement 同一顺序纪律）。
+	// 审计 2026-10-22 C-14：这条作业此前是裸启动 —— 停摆时与"没人用"在运维面上
+	// 同形。登记之后启动/关停日志里有一行 `name=wasm_opens started=… runs=…`，
+	// 装配判据（cmd/server 的 wasmapp_opens_wiring_test.go）钉住这三行的顺序。
+	registerSchedulerStatus(schedulerWasmOpens, opensSched.Tick(), opensSched)
 	opensSched.Start(ctx)
+
+	// 退役真删（设计 2026-10-22 §5.5）：每日一轮，只处理 `deleted + purge_after 到期 +
+	// **有成功快照**` 的应用（无快照的一律跳过并计入 errors，绝不删数据）。
+	//
+	// 必须先登记再 Start：登记是"运维能看见它"的唯一出口，而 Start 会立刻跑一轮
+	// （覆盖停机期间到期的应用）—— 反过来会让第一轮跑在没有读数的情况下。
+	retirementSched = retirement.NewScheduler(retirement.Options{
+		DB: db, DataRoot: dataDir, Tick: retirement.DefaultTick, Logger: log.Printf,
+	})
+	registerSchedulerStatus(schedulerWasmRetirement, retirementSched.Tick(), retirementSched)
+	retirementSched.Start(ctx)
 
 	p := &wasmPlatform{
 		AppServer:     appSrv,
@@ -529,7 +666,7 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 		Events:        eventSink,
 		UploadCleanup: uploadCleanup,
 		EventCleanup:  eventCleanup,
-		OpensCleanup:  opensSched,
+		Retirement:    retirementSched,
 		Compiler:      compiler,
 		CacheOps:      cacheOps,
 		Scheduler:     scheduler,
@@ -566,6 +703,11 @@ func (p *wasmPlatform) Close() {
 	}
 	if p.UploadCleanup != nil {
 		p.UploadCleanup.Close()
+	}
+	// 退役真删调度：先停它（它可能在删数据目录，比其它组件更需要一个明确的退出点；
+	// ctx 取消也会让它退出，但 Close 先停一步可以避免"锁已释放而作业还在删目录"）。
+	if p.Retirement != nil {
+		p.Retirement.Stop()
 	}
 	// 执行侧缓存运维（只有编译子系统缺席时才存在）：先停周期循环，再关下面的组件 ——
 	// 它的回收与"唯一写者"（本进程的执行侧运行时）同生共死，停在最前面最安全。

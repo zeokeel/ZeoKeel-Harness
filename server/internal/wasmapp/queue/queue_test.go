@@ -37,6 +37,10 @@ func TestDefaultsComeFromLimits(t *testing.T) {
 	eq(t, "PerAppQueue(doc)", o.PerAppQueue, 32)
 	eq(t, "PerUserPerAppQueued", o.PerUserPerAppQueued, limits.UserPerAppQueued)
 	eq(t, "PerUserPerAppQueued(doc)", o.PerUserPerAppQueued, 4)
+	eq(t, "PerUserPerAppRunning", o.PerUserPerAppRunning, limits.UserPerAppRunning)
+	// 2026-10-22 由 1 提到 2（决策 docs/decisions/2026-10-22-wasm-per-app-limits.md §1）：
+	// 把"文档值"也钉住 —— 默认值改动必须同时出现在设计文档与这里，否则口口相传会漂移。
+	eq(t, "PerUserPerAppRunning(doc)", o.PerUserPerAppRunning, 2)
 	eq(t, "PerUserGlobalRunning", o.PerUserGlobalRunning, limits.UserGlobalRunning)
 	eq(t, "PerUserGlobalRunning(doc)", o.PerUserGlobalRunning, 4)
 	// 单应用并发不得大于全局并发（否则"每应用上限"永远够不着，配置是骗人的）。
@@ -160,11 +164,16 @@ func TestPerAppSerialWhenLimitIsOne(t *testing.T) {
 // 为什么单列一条（这不是理论担忧）：老实现把"在跑发起者"记成**单个 userID**
 // （`runningUser int64` + "PerAppRunning 恒为 1 ⇒ 单值即可"），PerAppRunning 提到 4
 // 之后，B 的授权会把 runningUser 覆盖成 B ⇒ 再查 A 的在跑数读到 0 ⇒ A 的第二个请求
-// 被直接放行，`user_per_app_running=1` 对先来的用户静默失效。
+// 被直接放行，`user_per_app_running` 对先来的用户静默失效。
 //
 // 变异：把 appState 换回单个 runningUser 字段 ⇒ 本用例必红（A 的第二个请求会被放行）。
 func TestSameUserCannotExceedPerAppRunningNowThatAppsRunConcurrently(t *testing.T) {
+	// 本用例要测的是"在跑发起者必须记成**计数表**"（老实现只记最后一个发起者 ⇒ 先来的
+	// 用户静默失效），因此把单用户同应用并发**显式**钉在 1：默认值已于 2026-10-22 由 1
+	// 改成 2（决策 2026-10-22-wasm-per-app-limits.md §1），而"多用户在跑 + 计数表"这条
+	// 不变量在 2 与 1 下都必须成立（默认 2 的行为判据见 TestDefaultPerUserPerAppRunningAllowsTwo）。
 	o := DefaultOptions()
+	o.PerUserPerAppRunning = 1
 	if o.PerAppRunning < 2 {
 		t.Fatalf("本用例的前提是每应用并发 > 1：PerAppRunning=%d", o.PerAppRunning)
 	}
@@ -210,6 +219,59 @@ func TestSameUserCannotExceedPerAppRunningNowThatAppsRunConcurrently(t *testing.
 		t.Fatal("用户 7 释放后其排队请求未被唤醒")
 	}
 	b1.Release()
+}
+
+// TestDefaultPerUserPerAppRunningAllowsTwo 是 2026-10-22 默认值 1 → 2 的**行为判据**
+// （决策 docs/decisions/2026-10-22-wasm-per-app-limits.md §1）：
+// 同一用户在同一应用内可以同时跑 2 个，第 3 个仍要排队 —— "默认值变大"不等于"没有上限"。
+//
+// 为什么必须有它：只断言 `DefaultOptions().PerUserPerAppRunning == 2` 是"读了常量再比常量"，
+// 分不清"默认值改了但队列没用上"（例如 canRunLocked / pumpAppLocked 里还有一处写死）。
+func TestDefaultPerUserPerAppRunningAllowsTwo(t *testing.T) {
+	o := DefaultOptions()
+	if o.PerUserPerAppRunning != 2 {
+		t.Fatalf("本用例前提：默认单用户同应用并发 = 2，得到 %d", o.PerUserPerAppRunning)
+	}
+	s := New(o)
+	ctx := context.Background()
+
+	first, err := s.Acquire(ctx, "app-a", 42)
+	if err != nil {
+		t.Fatalf("同一用户的第 1 个请求应可运行: %v", err)
+	}
+	second, err := s.Acquire(ctx, "app-a", 42)
+	if err != nil {
+		t.Fatalf("同一用户的第 2 个请求应可运行（默认 2）：%v", err)
+	}
+	done := make(chan *Ticket, 1)
+	go func() {
+		tk, e := s.Acquire(ctx, "app-a", 42)
+		if e != nil {
+			done <- nil
+			return
+		}
+		done <- tk
+	}()
+	waitQueued(t, s, "app-a", 1)
+	select {
+	case tk := <-done:
+		if tk != nil {
+			tk.Release()
+		}
+		t.Fatal("同一用户的第 3 个请求必须排队（单用户同应用上限 2）")
+	case <-time.After(120 * time.Millisecond):
+	}
+	first.Release()
+	select {
+	case tk := <-done:
+		if tk == nil {
+			t.Fatal("释放后排队请求应被授权")
+		}
+		tk.Release()
+	case <-time.After(2 * time.Second):
+		t.Fatal("释放后排队请求未被唤醒")
+	}
+	second.Release()
 }
 
 // TestAppQueueFull：§10.3 第 32 项 —— 同应用 100 并发 ⇒ 队列 32，其余 429。

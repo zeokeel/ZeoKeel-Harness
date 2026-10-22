@@ -250,3 +250,109 @@ describe('状态上报与失败页渲染', () => {
     expect(warned.some(message => message.includes('failure page failed to load'))).toBe(true)
   })
 })
+
+/**
+ * U-03 / U-09（2026-10-22 评审）：失败页的诊断块、复制按钮与页面语言。
+ *
+ * 变异验证：
+ *  · 删掉 `diagnostics` 的渲染 ⇒ 第一条红（页面里没有 app_id/URL/版本）；
+ *  · 删掉复制按钮或回退路径（`execCommand`）⇒ 第二条红；
+ *  · 把 `<html lang>` 写死成 `zh-CN` ⇒ 第三条红。
+ */
+describe('失败页诊断块与「复制诊断」（U-03 / U-09）', () => {
+  const COPY = { heading: 'HALTED', body: 'BODY', retry: 'RETRY' }
+  const DIAG_COPY = {
+    heading: '诊断信息',
+    copy: '复制诊断',
+    copied: '已复制',
+    copyFailed: '复制失败，请手动选中下面的文字',
+  }
+
+  it('诊断块含 app_id / URL / 错误摘要 / 客户端版本，且带可点的复制按钮', () => {
+    const page = renderAppWindowFailurePage({
+      copy: COPY,
+      retryTarget: `${SCHEME}://demo/notes`,
+      diagnostics: { appId: 'demo', url: `${SCHEME}://demo/notes`, clientVersion: '9.9.9' },
+      failure: { kind: 'render-process-gone', reason: 'crashed' },
+      diagnosticCopy: DIAG_COPY,
+      lang: 'zh',
+    })
+    const html = decodeURIComponent(page)
+    expect(html).toContain('app_id: demo')
+    expect(html).toContain(`url: ${SCHEME}://demo/notes`)
+    expect(html).toContain('error: render-process-gone (crashed)')
+    expect(html).toContain('client: 9.9.9')
+    expect(html).toContain('id="diagnostics"')
+    expect(html).toContain('id="copy-diag"')
+    expect(html).toContain('复制诊断')
+  })
+
+  it('复制走 navigator.clipboard，失败回退 textarea+execCommand，并把结果反馈给用户', () => {
+    const page = renderAppWindowFailurePage({
+      copy: COPY,
+      retryTarget: `${SCHEME}://demo/`,
+      diagnostics: { appId: 'demo' },
+      diagnosticCopy: DIAG_COPY,
+    })
+    const html = decodeURIComponent(page)
+    expect(html).toContain('navigator.clipboard')
+    expect(html).toContain('execCommand')
+    // 反馈行（aria-live）：复制成功/失败都必须是用户可见的。
+    expect(html).toContain('id="copy-state"')
+    expect(html).toContain('role="status"')
+    expect(html).toContain(JSON.stringify(DIAG_COPY.copied))
+    expect(html).toContain(JSON.stringify(DIAG_COPY.copyFailed))
+    // 复制目标是**页面上的诊断文本**（不是另一份拼接串）。
+    expect(html).toContain("block.textContent")
+  })
+
+  it('没有诊断来源时**不渲染**诊断块（只有时间戳的块没有排障价值）', () => {
+    const page = renderAppWindowFailurePage({ copy: COPY, retryTarget: `${SCHEME}://demo/` })
+    const html = decodeURIComponent(page)
+    expect(html).not.toContain('id="diagnostics"')
+    expect(html).not.toContain('id="copy-diag"')
+  })
+
+  it('英文页面连诊断按钮也必须是英文（不能只有 lang 换了）', async () => {
+    const { host, loads } = fakeHost()
+    const recovery = createAppWindowRecovery({
+      host,
+      copy: () => ({ heading: 'HALTED', body: 'BODY', retry: 'RETRY' }),
+      diagnostics: () => ({ appId: 'demo', url: `${SCHEME}://demo/`, clientVersion: '9.9.9' }),
+      pageLang: () => 'en',
+    })
+    await recovery.fail({ kind: 'render-process-gone', reason: 'crashed' }, { retry: false })
+    const html = decodeURIComponent(loads.at(-1)!)
+    expect(html).toContain('lang="en"')
+    // 诊断块由 `diagnosticCopy` 决定，与 `<html lang>` 是两件事 —— 只换 lang 的写法会
+    // 让英文界面上出现中文按钮。
+    expect(html).toContain('Copy diagnostics')
+    expect(html).toContain('Diagnostics')
+    expect(html).not.toContain('复制诊断')
+    // 失败页文案来自调用方（本用例固定英文串），这里只确认诊断块被渲染。
+    expect(html).toContain('app_id: demo')
+  })
+
+  it('页面语言按 lang 求值（U-09：英文页面不再声明 zh-CN）', () => {
+    const english = decodeURIComponent(renderAppWindowFailurePage({
+      copy: COPY,
+      retryTarget: `${SCHEME}://demo/`,
+      diagnostics: { appId: 'demo' },
+      lang: 'en',
+    }))
+    expect(english).toContain('lang="en"')
+    expect(english).not.toContain('lang="zh-CN"')
+  })
+
+  it('看门狗路径（retry:false）只给失败页：不再自动重载一次', async () => {
+    const { host, loads } = fakeHost()
+    const recovery = createAppWindowRecovery({ host, copy: () => COPY })
+    await recovery.fail({ kind: 'did-fail-load', reason: 'timeout' }, { retry: false })
+    // 加载还在飞：不发起任何"再给一次机会"的导航，直接失败页。
+    expect(loads).toHaveLength(1)
+    expect(loads[0]!.startsWith('data:text/html')).toBe(true)
+    expect(recovery.phase()).toBe('failed')
+    expect(recovery.crashed()).toBe(true)
+    expect(recovery.lastFailure()).toEqual({ kind: 'did-fail-load', reason: 'timeout' })
+  })
+})

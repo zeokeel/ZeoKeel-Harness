@@ -21,6 +21,8 @@
 package appcfg
 
 import (
+	"fmt"
+
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/abi"
 )
@@ -239,20 +241,27 @@ func WindowFields() []FieldSpec {
 		},
 		{
 			Key:      FieldWindow + ".width",
-			Type:     "string",
+			Type:     "integer",
 			Required: false,
-			Desc:     "首次打开的窗口宽度（像素，正整数）：缺省 1280；与 ratio 冲突时以 ratio 为准",
+			Max:      WindowSizeMax,
+			Desc: fmt.Sprintf("首次打开的窗口宽度（像素，正整数 %d–%d）：缺省 1280；与 ratio 冲突时以 ratio 为准",
+				WindowSizeMin, WindowSizeMax),
 			Hints: []string{
-				"合法区间见 `window_fields` 的 max（越界 ⇒ `APP_CONFIG_INVALID`）",
-				`写字符串（"1280px"）或小数一律拒`,
+				fmt.Sprintf("必须是**正整数**：字符串（\"1280px\"）、小数、0、负数、超出 %d–%d 一律拒（`APP_CONFIG_INVALID`）",
+					WindowSizeMin, WindowSizeMax),
 			},
 		},
 		{
 			Key:      FieldWindow + ".height",
-			Type:     "string",
+			Type:     "integer",
 			Required: false,
-			Desc:     "首次打开的窗口高度（像素，正整数）：缺省 720；与 ratio 冲突时以 ratio 为准",
-			Hints:    []string{"只写 height 时宽度按 ratio 推导"},
+			Max:      WindowSizeMax,
+			Desc: fmt.Sprintf("首次打开的窗口高度（像素，正整数 %d–%d）：缺省 720；与 ratio 冲突时以 ratio 为准",
+				WindowSizeMin, WindowSizeMax),
+			Hints: []string{
+				"只写 height 时宽度按 ratio 推导",
+				`与 width 同一条判据：字符串/小数/0/负数一律拒`,
+			},
 		},
 	}
 }

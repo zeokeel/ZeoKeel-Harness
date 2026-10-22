@@ -7,7 +7,8 @@
 
 ## 背景：数值为什么在编译期
 
-`internal/wasmapp/limits` 是平台全部上限的**单一真源**（§5.5），时间预算自然也在那里：
+`internal/limits` 是平台全部上限的**单一真源**（§5.5；2026-10-14 feature-split 前叫
+`internal/wasmapp/limits`），时间预算自然也在那里：
 `GuestBudget` / `DryRunBudget` / `RequestWallClock` / `HostCallBudgetDefault` /
 `SQLStatementBudget` / `CompileTimeout`。这套做法对**协议常量与安全不变量**是对的
 （改一次就该重新评审），但对"某个应用就是慢"这类**部署差异**是错的：线上遇到慢应用，
@@ -139,7 +140,7 @@ AssertionError: 客户端出站超时 30s 必须严格大于 guest_budget 30s: e
   它们是 HTTP 传输层常量，且 `客户端上传超时 > 服务端 ReadTimeout` 是 §10.5 第 58 项的
   配置断言；`compile_timeout_seconds` 的上界直接取 `ServerReadTimeout`，所以用户仍然
   改不动这条关系。
-- **预算不随部署档位（memprofile）缩放**：档位管的是内存四笔账，与时间无关；
+- **预算不随部署档位（memprofile）缩放**：档位管的是内存六笔账，与时间无关；
   `FromProfile` 不动这六项。
 
 ## 2026-10-02 勘误（回归审计 S4-01 / S4-02，两处与本文冲突）
@@ -182,10 +183,19 @@ AssertionError: 客户端出站超时 30s 必须严格大于 guest_budget 30s: e
    —— 管理员点保存时视口停在按钮上（真机实测 `scrollTop=1476`、视口 900，页头在内容坐标
    142 ⇒ 旧位置的错误块必然在视口外），表单又被拉回服务端真值，于是"看不见任何反馈"。
    现在反馈区渲染在**动作按钮上方**，且保存被拒时按 `details.field` 定位到那一格
-   （`aria-invalid` + 格内错误全文 + 滚动/聚焦过去）；服务端没点名字段（如四笔账水位）
+   （`aria-invalid` + 格内错误全文 + 滚动/聚焦过去）；服务端没点名字段（如六笔账水位）
    时退回滚动到错误块。判据在 `AppPlatform.test.tsx`，另有真机探针
    （headless Chromium + CDP，见 `temp/limits-ui-probe/`，不入库）实测两条反馈都在视口内。
 
 **没有放宽任何执行期闸门**：编译超时仍然 ≤ 60 s（传输层 `ReadTimeout` 是不可配置常量），
 变的只是"控制台把能填的范围写对、以及拒绝时说清楚为什么"。要让编译预算更大，出路是
 拆小应用产物，或由运维调整服务端 `ReadTimeout` 后重建镜像。
+
+## 附：第六笔账 —— 排队请求体（2026-10-23，生产级整改）
+
+`limits.WasmQueueBodyBytesMax = 256 MiB`：所有应用所有等待者**已读入**的请求体合计的
+全局硬上界（不是 `app_queue(4096) × 1 MiB` 的乘积）。它同时是：
+① 调度器准入判据（`queue.AcquireWithSize`，超限 429 `APP_QUEUE_FULL` /
+`reason=queue_bytes_exceeded`）；② `readyz.MemoryPlan/Budget` 的第六笔
+`queue_body_bytes`（计入 `total`，默认档 2710 → 2966 MiB、small 645 → 901 MiB）。
+账上数与运行期硬上界同源（跨包断言钉住），不存在"账上 256 MiB、实跑 4 GiB"。

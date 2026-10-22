@@ -75,7 +75,7 @@ func TestMemorySelfCheckFailClosedWhenEnabled(t *testing.T) {
 	plan := readyz.DefaultMemoryPlan()
 	need := readyz.InstancePoolBytes + readyz.CompilePeakBytes +
 		int64(limits.UploadPeakPerUploadBytes) + readyz.CacheResidentBytes +
-		int64(plan.Instances)*plan.AppDBPageCachePerHandleBytes
+		int64(plan.Instances)*plan.AppDBPageCachePerHandleBytes + limits.WasmQueueBodyBytesMax
 	guard := int64(limits.MemoryPeakGuardPercent)
 	avail := (need*100 + guard - 1) / guard
 	if err := checkStartupMemory(memAvail(avail), readyz.DefaultMemoryPlan(), func(string, ...any) {}); err != nil {

@@ -1,6 +1,6 @@
 /** ZeoKeel Harness executable: minimal Electron bootstrap around the Host Cordis root. */
 
-import { app, crashReporter, dialog, safeStorage, shell } from 'electron'
+import { app, crashReporter, dialog, nativeTheme, safeStorage, shell } from 'electron'
 import type { Context } from '@deepseek-ai/cordis'
 import { join } from 'node:path'
 import {
@@ -50,6 +50,9 @@ import { performFatalRecovery, type FatalRecoveryTargets } from './fatal-recover
 import { beginSafeModeBoot, finishSafeModeBoot, safeModeMarkerPath } from './desktop-safe-mode.ts'
 import { resolveFatalExit } from './fatal-exit.ts'
 import { provideWasmAppsWindows } from './wasm-apps-windows.ts'
+import { RENDERER_ERROR_PRELOAD } from './window-options.ts'
+import { registerRendererErrorAppScheme, reportRendererError } from './renderer-error-capture.ts'
+import { toRendererErrorReport } from './app-window-error-report.ts'
 import { applyInstallDshHome, isSystemWorkingDirectory } from './desktop-home.ts'
 import { macAppBundlePath, writeMacosUpdateBootFailureMarker } from './macos-update-install.ts'
 import { desktopUserDataDirectoryName } from './desktop-user-data.ts'
@@ -145,6 +148,11 @@ const DEEP_LINK_SCHEME = CHANNEL_PROFILE?.deepLinkScheme ?? DEFAULT_DEEP_LINK_SC
  * 已经 fail-loud（`AppOriginSchemeError`），这里只会拿到"官方缺省"或合法渠道值。
  */
 const APP_ORIGIN_SCHEME = CHANNEL_PROFILE?.appOriginScheme ?? DEFAULT_APP_ORIGIN_SCHEME
+
+// U-03(2026-10-22 评审):渲染进程错误上报要能识别"这条错误来自哪个应用窗口"。
+// 判据是 URL 的 scheme(= 本安装的应用源 scheme,渠道值),所以在这里登记一次;
+// 判据只有一份,在 `renderer-error-capture.ts` 的 `reportRendererError` 入口。
+registerRendererErrorAppScheme(APP_ORIGIN_SCHEME)
 
 /**
  * 出口策略（2026-09-22 定案，见 `network-policy.ts` 与
@@ -743,6 +751,17 @@ async function start(): Promise<void> {
             // 拿不到客户端字典，只能由宿主按**当时**的语言渲染 —— 所以传 thunk 而
             // 不是值（用户在应用内切语言后，失败页也必须跟着换）。
             locale: () => runtime.locale,
+            // U-03（2026-10-22 评审）：应用窗口与 shell 装**同一份**渲染错误 preload
+            // （此前应用窗口 webPreferences 里没有 preload ⇒ 页面里的未捕获错误一条
+            // 都到不了主进程/Sentry）。
+            rendererErrorPreload: RENDERER_ERROR_PRELOAD,
+            // 应用窗口的主进程侧故障（崩溃/加载失败/无响应）进**同一条**上报链路。
+            // 映射是纯函数（`app-window-error-report.ts`，有独立判据）；这里是唯一接线。
+            reportRendererError: report => { reportRendererError(toRendererErrorReport(report)) },
+            // 失败页诊断块的 `client:` 一行（用户截图之外的定位信息）。
+            appVersion: app.getVersion(),
+            // 暗色主题下窗口底色跟主题（否则从建窗到骨架首绘那一帧会闪白）。
+            isDarkTheme: () => nativeTheme.shouldUseDarkColors,
           }),
         )
         // 安装密钥仓库（§23.1）：私钥进 OS 钥匙串（`safeStorage`），无钥匙串时

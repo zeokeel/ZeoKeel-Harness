@@ -81,6 +81,7 @@
       "edge",
       "events",
       "hostcap",
+      "lifecycle",
       "logbuf",
       "memprofile",
       "opens",
@@ -91,6 +92,7 @@
       "refapp/stdprobe",
       "refapp/wasiprobe",
       "registry",
+      "retirement",
       "runtime",
       "upload",
       "wasmmod"

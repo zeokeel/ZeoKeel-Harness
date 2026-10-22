@@ -36,14 +36,40 @@
  * @module @zeokeel/dsh-wasm-apps/client/app-ai
  */
 
-import { fetchWithHostProof } from './host-proof.ts'
+import { fetchWithHostProof, hostProofFailure } from './host-proof.ts'
 
 /**
  * 本机保留路径（§21.2 冻结：协议 handler 本地处理，绝不转发平台）。
  *
  * 这条路径**不是**平台 URL：它只在本机被消费（所以这里既不带服务端地址，也不带 token）。
+ *
+ * ⚠️ 它**只对应用窗口**成立：该路径由**应用 origin 的协议 handler**（`handler.ts`）
+ * 负责。客户端主渲染页（应用中心详情页）的 origin 上没有这条路径的服务方 —— 那是
+ * 2026-10-22 审计的 P0（F-01）。详情页一律走 {@link APP_AI_HOST_CHAT_PATH}。
+ *
+ * 生产可达性（2026-10-22 反证审计 R-07 注）：本包的应用内 AI 由**应用自己** fetch
+ * （应用页里没有 React 面板），所以这条分支在今天的生产构建里**没有调用点** ——
+ * 它是给"应用窗口里的宿主面板"预留的兼容面，不是死代码清理对象（删掉会让协议 handler
+ * 的这条保留路径失去客户端契约的一半）。注释不再暗示"应用窗口那半边还有调用方"。
  */
 export const APP_AI_CHAT_PATH = '/__zeokeel/ai/chat'
+
+/**
+ * 客户端页 origin 上的应用 AI 路由（F-01；宿主 `WASM_APP_AI_CHAT_ROUTE` 同值）。
+ *
+ * 为什么需要第二条路径而不是复用上面那条：`AppAiPanel` 渲染在**客户端主渲染页**
+ * （应用中心详情页），那个 origin 上只有宿主经 `createHostRequestSurface` 注册的
+ * 本机命名路由（`open` / `channel` / `ai/consent` + 本条的 `ai/chat`）。
+ * `/__zeokeel/ai/chat` 是**应用 origin** 的保留面，只在应用窗口里有人服务；
+ * 详情页打过去永远没人接（落成 `app_ai_protocol` / `app_ai_unavailable`，
+ * 两条都在指错方向）。
+ *
+ * 语义与协议 handler 那条路**逐条相同**（授权闸 用户⊕服务端⊕应用、隐藏会话
+ * `app:<app_id>#<账号作用域>`、SSE 帧、取消、五个错误码）：宿主把请求转给**同一个**
+ * `handleAiChat`，客户端这里的差别只有两处 —— 目标路径，以及请求体里多了
+ * `app_id`（详情页没有"当前应用 origin"可读，标识只能显式传）。
+ */
+export const APP_AI_HOST_CHAT_PATH = '/api/zeokeel/wasm-apps/ai/chat'
 
 /** `messages` 条数上限（§21.2 冻结）。 */
 export const APP_AI_MESSAGES_MAX = 64
@@ -254,6 +280,17 @@ export interface AppAiStreamOptions {
   onDelta?: (delta: string, content: string) => void
   /** 是否要求流式（缺省 true；`false` = 非流式，读 `{content}`）。 */
   stream?: boolean
+  /**
+   * 当前应用标识（**客户端主渲染页必传**）。
+   *
+   * 传了 ⇒ 打宿主本机命名路由 {@link APP_AI_HOST_CHAT_PATH}（F-01：详情页 origin 上
+   * 只有宿主路由在服务），并带上持有性证明头；不传 ⇒ 打应用 origin 的保留路径
+   * {@link APP_AI_CHAT_PATH}（应用窗口内的兼容面；今天由应用自己 fetch，见那条注释）。
+   *
+   * `app_id` 是**不可信输入**（来自目录/详情行），宿主会按平台规则重新校验；
+   * 这里只保证空串等价于"不传"（避免拼出 `app_id: ''` 那种"看起来有值"的请求）。
+   */
+  appId?: string
 }
 
 /**
@@ -261,7 +298,7 @@ export interface AppAiStreamOptions {
  *
  * 失败**永不抛**：每一种失败都是一个带 `code` 的结果。
  * @param messages - 对话消息（会先过 {@link validateAppAiRequest}）。
- * @param options - 依赖 / 取消信号 / 增量回调。
+ * @param options - 依赖 / 取消信号 / 增量回调 / 应用标识（详情页必传）。
  * @returns 累计正文，或结构化失败。
  */
 export async function streamAppAiChat(messages: readonly AppAiMessage[], options: AppAiStreamOptions = {}): Promise<AppAiResult> {
@@ -270,15 +307,41 @@ export async function streamAppAiChat(messages: readonly AppAiMessage[], options
 
   const deps = options.deps ?? { fetch: (...args: Parameters<typeof fetch>) => fetch(...args) }
   const stream = options.stream !== false
-  let response: Response
+  const appId = options.appId === undefined ? '' : options.appId.trim()
+  let response: Response | null
   try {
-    response = await deps.fetch(APP_AI_CHAT_PATH, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', accept: stream ? 'text/event-stream' : 'application/json' },
-      body: JSON.stringify({ messages, stream }),
-      credentials: 'same-origin',
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    })
+    if (appId === '') {
+      response = await deps.fetch(APP_AI_CHAT_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', accept: stream ? 'text/event-stream' : 'application/json' },
+        body: JSON.stringify({ messages, stream }),
+        credentials: 'same-origin',
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      })
+    } else {
+      // 客户端页 origin：本机命名路由 + 持有性证明头（与 `ai/consent` 同一个 seam）。
+      // `fetchWithHostProof` 已经实现了"证明问题只重取一次令牌并重放一次"。
+      response = await fetchWithHostProof(APP_AI_HOST_CHAT_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', accept: stream ? 'text/event-stream' : 'application/json' },
+        body: JSON.stringify({ app_id: appId, messages, stream }),
+        credentials: 'same-origin',
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      }, { fetch: deps.fetch })
+      if (response === null) {
+        // 拿不到持有性证明 ⇒ **请求根本没发出**。绝不能说成"服务端拒绝/额度不足"
+        // （那会把本机凭据问题指成平台问题），也不用 5xx 假状态冒充 HTTP 结果。
+        const reason = hostProofFailure()
+        return {
+          ok: false,
+          failure: {
+            code: 'app_ai_transport',
+            message: `the host proof could not be issued, so the app AI request was not sent: ${reason === null ? 'unknown reason' : reason.message}`,
+            status: null,
+          },
+        }
+      }
+    }
   } catch (cause) {
     // 取消不是"错误"：页面关闭/用户点取消就走这一支（§21.1 第 15 条）。
     if (isAbort(cause) || options.signal?.aborted === true) {
@@ -470,11 +533,23 @@ export async function loadAppAiIdentity(deps: AppAiDeps = { fetch: (...args: Par
   }
 }
 
-/** 读/写/删所需的存储子集（`localStorage` 满足它）。 */
+/**
+ * 读/写/删所需的存储子集（`localStorage` 满足它）。
+ *
+ * 枚举成员（`length`/`key` 或 `keys`）是**可选**的：设置页的"已授权应用"汇总需要
+ * 知道"授过几个应用"，而权限判定（`hasAppAiConsent`）与撤销单条完全不需要它。
+ * 真 `localStorage` 提供 `length` + `key(i)`；测试替身可以直接给 `keys()`。
+ */
 export interface AppAiConsentStore {
   getItem: (key: string) => string | null
   setItem: (key: string, value: string) => void
   removeItem: (key: string) => void
+  /** 可选：一次拿到全部键（替身用）。 */
+  keys?: () => string[]
+  /** 可选：键数量（真 `localStorage` 的 `length`）。 */
+  length?: number
+  /** 可选：按下标取键（真 `localStorage` 的 `key(i)`）。 */
+  key?: (index: number) => string | null
 }
 
 /**
@@ -520,6 +595,117 @@ function normalizeAppAiScope(scope: AppAiScope | null | undefined): AppAiScope |
   if (user === '' || server === '') return null
   if (hasNul(user) || hasNul(server)) return null
   return { userId: user, serverURL: server }
+}
+
+
+/**
+ * 枚举存储里的全部键（**尽力而为**：存储不支持枚举 ⇒ 空数组，不是抛错）。
+ *
+ * 为什么需要它：撤销"应用 AI"授权此前**只有应用详情页一个入口** —— 用户授过几个
+ * 应用、分别是哪些，界面上无处可查（2026-10-22 审计 F-09）。汇总视图必须先能列出键。
+ * 真 `localStorage` 没有 `keys()`，只有 `length` + `key(i)`（两种形态都支持）。
+ * @param store - 存储实现。
+ * @returns 键名数组；不支持枚举 ⇒ `[]`。
+ */
+export function appAiConsentStoreKeys(store: AppAiConsentStore | null): string[] {
+  if (store === null) return []
+  try {
+    if (typeof store.keys === 'function') return store.keys()
+    const length = typeof store.length === 'number' ? store.length : 0
+    if (typeof store.key !== 'function') return []
+    const keys: string[] = []
+    for (let index = 0; index < length; index += 1) {
+      const key = store.key(index)
+      if (typeof key === 'string' && key !== '') keys.push(key)
+    }
+    return keys
+  } catch {
+    // 跨源/隐私模式下的 `localStorage` 读写都可能抛：汇总视图退化成"没有授权"，
+    // 权限判定那条路（`hasAppAiConsent`）仍然各自 fail-closed。
+    return []
+  }
+}
+
+/** 一条"已授权"记录（汇总视图的一行）。 */
+export interface AppAiConsentGrant {
+  /** 应用标识（已从存储键里解码）。 */
+  appId: string
+  /** 该授权的存储键（撤销时原样用，不再重新拼一次）。 */
+  key: string
+}
+
+/**
+ * 列出**这个用户 × 这台服务端上**已授权使用 AI 的全部应用（F-09 的汇总视图）。
+ *
+ * 三个维度都在键里：`<前缀>:<user>:<server>:<app>`；这里只枚举**前两段与本作用域
+ * 逐字相同**的那些键 —— 换账号/换服务端之后，上一份授权既不该被列出，也不该被撤销
+ * （那是另一个作用域的授权）。
+ * @param scope - 用户 + 服务端；`null`/缺任一段 ⇒ 空数组（不知道是谁就不猜）。
+ * @param store - 存储实现（缺省渲染进程 `localStorage`）。
+ * @returns 已授权应用（按 app_id 排序，去重）。
+ */
+export function listAppAiConsents(
+  scope: AppAiScope | null | undefined,
+  store: AppAiConsentStore | null = defaultAppAiConsentStore(),
+): AppAiConsentGrant[] {
+  const normalized = normalizeAppAiScope(scope)
+  if (store === null || normalized === null) return []
+  const prefix = `${APP_AI_CONSENT_PREFIX}:${encodeURIComponent(normalized.userId)}:${encodeURIComponent(normalized.serverURL)}:`
+  const grants = new Map<string, AppAiConsentGrant>()
+  for (const key of appAiConsentStoreKeys(store)) {
+    if (!key.startsWith(prefix)) continue
+    const appId = decodeAppSegment(key.slice(prefix.length))
+    if (appId === '') continue
+    let granted = false
+    try {
+      // 直接读**这个键**的值（不重新拼键：拼一次就可能与枚举到的键不是同一个）。
+      granted = store.getItem(key) === 'granted'
+    } catch {
+      granted = false
+    }
+    if (!granted) continue
+    if (!grants.has(appId)) grants.set(appId, { appId, key })
+  }
+  return [...grants.values()].sort((left, right) => left.appId < right.appId ? -1 : left.appId > right.appId ? 1 : 0)
+}
+
+/**
+ * 撤销**当前作用域**下的全部应用 AI 授权（F-09 的"一键撤销"）。
+ *
+ * 只清本作用域（用户 × 服务端）的键：另一个账号/服务端的授权是同一个人不该被
+ * 这次点击影响的另一份决定。
+ * @param scope - 用户 + 服务端。
+ * @param store - 存储实现。
+ * @returns 被撤销的 app_id 列表（供界面回溯"撤了哪些"）。
+ */
+export function revokeAllAppAiConsents(
+  scope: AppAiScope | null | undefined,
+  store: AppAiConsentStore | null = defaultAppAiConsentStore(),
+): string[] {
+  const grants = listAppAiConsents(scope, store)
+  if (store === null) return []
+  const revoked: string[] = []
+  for (const grant of grants) {
+    try {
+      // 用记录下来的键（不再重新拼一次：键与作用域是同一次归一化的产物）。
+      store.removeItem(grant.key)
+      revoked.push(grant.appId)
+    } catch { /* 单条失败不阻断其余：界面按返回列表如实报"撤了哪些" */ }
+  }
+  return revoked
+}
+
+/**
+ * 从存储键的 app 段解出 app_id（`encodeURIComponent` 的逆；解不出 ⇒ 空串）。
+ * @param segment - 键的第三段原文。
+ * @returns app_id，或空串（形态不合法的键按"不认识"处理）。
+ */
+function decodeAppSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return ''
+  }
 }
 
 /**

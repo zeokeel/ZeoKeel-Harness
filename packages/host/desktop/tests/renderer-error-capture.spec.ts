@@ -29,8 +29,10 @@ import {
   type RendererErrorPayload,
 } from '../src/renderer-error-contract.ts'
 import {
+  appIdFromRendererErrorReport,
   hasRendererErrorSink,
   installRendererErrorCapture,
+  registerRendererErrorAppScheme,
   reportRendererError,
   setRendererErrorSink,
   type RendererErrorIpc,
@@ -434,6 +436,92 @@ describe('installRendererErrorCapture:主进程侧收口', () => {
     expect(() => ipc.emit(RENDERER_ERROR_CHANNEL, { type: 'error', message: 'boom' })).not.toThrow()
     expect(reportRendererError({ type: 'render-process-gone', reason: 'oom', exitCode: 5 })).toBe(false)
     disposeCapture()
+    disposeSink()
+  })
+})
+
+/**
+ * U-03（2026-10-22 评审）：应用窗口里的错误要带 `app_id` 标签。
+ *
+ * 判据：按**已登记的应用源 scheme** 从 URL 里补 `appId`/`windowKind`，且不改写
+ * 非应用 URL 的报告。scheme 是渠道值，所以先登记（生产在 `main.ts` 模块作用域登记）。
+ *
+ * 变异：删掉 `reportRendererError` 里的 `enrichRendererErrorReport(...)` 调用 ⇒
+ * 第一条与第三条红；把 scheme 比较写死成某个字面量 ⇒ 第二条红。
+ */
+describe('应用窗口 app_id 标签(U-03)', () => {
+  beforeEach(() => {
+    registerRendererErrorAppScheme('probe-app')
+  })
+
+  function fakeIpc(): RendererErrorIpc & { emit: (channel: string, payload: unknown) => void } {
+    const handlers = new Map<string, (event: unknown, payload: unknown) => void>()
+    return {
+      on: (channel, listener) => { handlers.set(channel, listener) },
+      removeListener: (channel) => { handlers.delete(channel) },
+      emit: (channel, payload) => { handlers.get(channel)?.({}, payload) },
+    }
+  }
+
+  it('渲染进程错误的应用 URL ⇒ 补 appId/windowKind；主进程崩溃载荷同样补', () => {
+    const sink = vi.fn()
+    const disposeSink = setRendererErrorSink(sink)
+    const ipc = fakeIpc()
+    const dispose = installRendererErrorCapture(ipc)
+
+    ipc.emit(RENDERER_ERROR_CHANNEL, { type: 'error', message: 'boom', url: 'probe-app://demo/notes' })
+    expect(sink.mock.calls[0]![0]).toMatchObject({ appId: 'demo', windowKind: 'app' })
+
+    // 应用窗口崩溃（主进程构造的载荷）在 `reportRendererError` 入口补标签。
+    expect(reportRendererError({
+      type: 'render-process-gone',
+      reason: 'crashed',
+      exitCode: 139,
+      url: 'probe-app://notes/',
+    })).toBe(true)
+    expect(sink.mock.calls[1]![0]).toMatchObject({ appId: 'notes', windowKind: 'app' })
+
+    dispose()
+    disposeSink()
+  })
+
+  it('非应用 URL / 畸形 app_id 不补标签（只用于打 tag，不做授权决定）', () => {
+    const sink = vi.fn()
+    const disposeSink = setRendererErrorSink(sink)
+    const ipc = fakeIpc()
+    const dispose = installRendererErrorCapture(ipc)
+
+    ipc.emit(RENDERER_ERROR_CHANNEL, { type: 'error', message: 'boom', url: 'https://harness.example.com/x' })
+    expect(sink.mock.calls[0]![0]).not.toHaveProperty('appId')
+    expect(sink.mock.calls[0]![0]).not.toHaveProperty('windowKind')
+    expect(appIdFromRendererErrorReport({
+      type: 'render-process-gone', reason: 'crashed', exitCode: 1, url: 'probe-app://NOT%20VALID/',
+    })).toBeUndefined()
+
+    dispose()
+    disposeSink()
+  })
+
+  it('已有 windowKind 的报告原样透传（幂等：不重复改写）', () => {
+    const sink = vi.fn()
+    const disposeSink = setRendererErrorSink(sink)
+    const report = reportRendererError({
+      type: 'render-process-gone',
+      reason: 'crashed',
+      exitCode: 1,
+      appId: 'demo',
+      windowKind: 'app',
+      url: 'https://elsewhere.example.com/',
+    })
+    expect(report).toBe(true)
+    expect(sink.mock.calls[0]![0]).toEqual({
+      type: 'render-process-gone',
+      reason: 'crashed',
+      exitCode: 1,
+      appId: 'demo',
+      windowKind: 'app',
+      url: 'https://elsewhere.example.com/',
+    })
     disposeSink()
   })
 })

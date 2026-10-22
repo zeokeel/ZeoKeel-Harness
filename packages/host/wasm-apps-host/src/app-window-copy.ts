@@ -37,6 +37,80 @@ export function loadingSkeletonTitle(locale: HostLocale, appLabel: string): stri
   return hostCopy(locale, `正在打开 ${appLabel}…`, `Opening ${appLabel}…`)
 }
 
+/**
+ * 骨架屏的第二行（U-01，2026-10-22 生产级评审）。
+ *
+ * 为什么需要它：标题只说"正在打开"，而冷启动首次编译/排队可以持续几十秒。用户看不到
+ * "为什么慢"时，最自然的结论是"卡死了"。这里**不**编造进度百分比（宿主拿不到编译进度），
+ * 只解释"慢是正常的、还在动" —— 与 `loadingSkeletonTitle` 一起构成骨架页的完整文案。
+ *
+ * @param locale - 宿主语言（按调用解析）。
+ * @returns 一行解释。
+ */
+export function loadingSkeletonHint(locale: HostLocale): string {
+  return hostCopy(
+    locale,
+    '首次打开可能需要几秒钟，请稍候。',
+    'The first launch can take a few seconds — please wait.',
+  )
+}
+
+/**
+ * 失败页 / 会话过期页的「复制诊断」文案组（U-03 / U-10，2026-10-22 评审）。
+ *
+ * 用户手上只有一张截图时，`app_id + URL + 错误摘要 + 客户端版本` 是可定位问题的最小集合；
+ * 这些串出现在页面上（按钮、复制成功/失败的反馈），所以与其余 chrome 文案同源。
+ */
+export interface AppWindowDiagnosticCopy {
+  /** 诊断块的标题（小标题）。 */
+  heading: string
+  /** 复制按钮。 */
+  copy: string
+  /** 复制成功的反馈（`aria-live`）。 */
+  copied: string
+  /** 复制失败的反馈：告诉用户"手动选中下面的文字"而不是只说失败。 */
+  copyFailed: string
+}
+
+/**
+ * 诊断文案（按调用求值）。
+ * @param locale - 宿主语言。
+ * @returns 四条文案。
+ */
+export function appWindowDiagnosticCopy(locale: HostLocale): AppWindowDiagnosticCopy {
+  return {
+    heading: hostCopy(locale, '诊断信息', 'Diagnostics'),
+    copy: hostCopy(locale, '复制诊断', 'Copy diagnostics'),
+    copied: hostCopy(locale, '已复制', 'Copied'),
+    copyFailed: hostCopy(locale, '复制失败，请手动选中下面的文字', 'Copy failed — select the text below manually'),
+  }
+}
+
+/**
+ * 已开窗口的版本更新提示（U-06，2026-10-22 评审）。
+ *
+ * 平台发了新版本而应用窗口还开着：窗口继续跑旧前端，而请求已被导到新资源 ——
+ * 轻则界面"变了又没变"，重则旧页面打新后端 404。这里给一条**可关、不强制**的提示，
+ * 由用户点「刷新」才真正重载（有未保存草稿的应用不能被静默掀掉）。
+ *
+ * 与 {@link versionUnverifiedBanner} 的区别：那条是"确认不了版本"（软闸门），这条是
+ * "确认有新版本"（动作明确），两条文案不得混用。
+ * @param locale - 宿主语言。
+ * @returns 提示条正文。
+ */
+export function updateAvailableBanner(locale: HostLocale): string {
+  return hostCopy(
+    locale,
+    '应用有新版本，点击「刷新」后生效。',
+    'A new version of this app is available — click “Reload” to use it.',
+  )
+}
+
+/** 关闭提示条（U-06：提示**必须可关**，不能变成不可关闭的打断）。 */
+export function dismissNoticeAction(locale: HostLocale): string {
+  return hostCopy(locale, '关闭', 'Dismiss')
+}
+
 /** 冻结（§19 Q3：目录不列；直接打开给可辨文案「已被管理员停用」）。 */
 export function frozenAppTitle(locale: HostLocale): string {
   return hostCopy(locale, '应用已被管理员停用', 'This app has been disabled by an administrator')
@@ -70,6 +144,23 @@ export function versionUnverifiedBanner(locale: HostLocale): string {
     '无法确认最新版本，当前显示的内容可能不是最新的。',
     'The latest version could not be confirmed; what you see may be out of date.',
   )
+}
+
+/**
+ * 应用窗口右键菜单的两条动作（F-06，2026-10-22 审计）。
+ *
+ * 缺陷形态：应用窗口**没有刷新、没有返回**（全包 grep `reload()`/`goBack()` = 0）——
+ * 应用内导航进了一个坏页面、或前端状态卡住时，用户唯一能做的是关窗重开（等于把
+ * 应用重置回首页）。这两条是菜单项的文字（`externalLinkNotice` 那两条同理：文案在
+ * 本包，不在客户端）。
+ */
+export function reloadAction(locale: HostLocale): string {
+  return hostCopy(locale, '刷新', 'Reload')
+}
+
+/** 「返回」（应用窗口内上一页；F-06）。 */
+export function backAction(locale: HostLocale): string {
+  return hostCopy(locale, '返回', 'Back')
 }
 
 /** 重试（软闸门横幅上的动作，§5.1b）。 */

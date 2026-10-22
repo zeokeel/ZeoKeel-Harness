@@ -371,7 +371,10 @@ describe('单一真源对拍：目录行字段（read.go 的 catalog ↔ 客户�
     }
     // 自证：把 `whitelist` 挪成 gin.H 的字面量键（= 对所有人下发），这条判据变红。
     // 锚点用正则（键名 + 冒号 + 任意空白）：抄一整行的对齐空格会随 gofmt 重排而烂掉。
-    const leaked = mutateCatalog(source, /"enabled":\s+a\.Enabled,/, '"enabled": a.Enabled,\n\t\t\t"whitelist": cfg.Whitelist,')
+    // 锚点跟着实现走：U-02 之后目录行的 `"enabled"` 值不再是 `a.Enabled`（首版行要下发
+    // false），所以这里锚"键名 + 冒号"而不是某一侧的表达式（与上面那条同样的理由：
+    // 判据要绑语义，不绑实现细节）。
+    const leaked = mutateCatalog(source, /"enabled":\s+[^,]+,/, '"enabled": true,\n\t\t\t"whitelist": cfg.Whitelist,')
     expect(catalogRowKeysFromReadGo(leaked)!.literal).toContain('whitelist')
   })
 })

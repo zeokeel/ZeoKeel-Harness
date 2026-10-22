@@ -336,6 +336,10 @@ export function captureRendererError(payload: RendererErrorPayload): boolean {
     if (typeof payload.stack === 'string' && payload.stack !== '') error.stack = payload.stack
     const tags: Record<string, string> = { 'zeokeel.process': 'renderer', 'zeokeel.kind': payload.type }
     if (typeof payload.url === 'string' && payload.url !== '') tags['zeokeel.url'] = payload.url
+    // U-03(2026-10-22 评审):应用窗口里的未捕获错误要能按应用聚合。`appId` 由主进程
+    // 按应用源 scheme 的 URL 补写(渲染进程伪造的值在归一化时已被丢弃)。
+    if (typeof payload.appId === 'string' && payload.appId !== '') tags['zeokeel.app_id'] = payload.appId
+    if (payload.windowKind !== undefined) tags['zeokeel.window'] = payload.windowKind
     const extra: Record<string, unknown> = {
       source: payload.source,
       lineno: payload.lineno,
@@ -368,7 +372,16 @@ export function captureRendererError(payload: RendererErrorPayload): boolean {
  *   一次筛出"渲染进程相关问题"。现在改成 `captureMessage(message, { level, tags,
  *   extra })`(CaptureContext 形式),tag 与异常分支保持一致。
  */
-export function captureRendererGone(details: { reason: string; exitCode?: number }): boolean {
+export function captureRendererGone(details: {
+  reason: string
+  exitCode?: number
+  /** 出事的应用窗口 id(U-03;主进程侧补写)。 */
+  appId?: string
+  /** 窗口种类(应用窗口崩溃为 `app`)。 */
+  windowKind?: 'shell' | 'app'
+  /** 崩溃时的文档 URL。 */
+  url?: string
+}): boolean {
   if (sentry === null) return false
   const mod = SentryNode as unknown as {
     captureMessage?: (m: string, context?: unknown) => string
@@ -383,6 +396,10 @@ export function captureRendererGone(details: { reason: string; exitCode?: number
       'zeokeel.reason': details.reason,
       'zeokeel.exit_code': String(exitCode),
     }
+    // U-03：应用窗口崩溃带 app_id/window（否则后台只看到"某处渲染进程崩了"）。
+    if (typeof details.appId === 'string' && details.appId !== '') tags['zeokeel.app_id'] = details.appId
+    if (details.windowKind !== undefined) tags['zeokeel.window'] = details.windowKind
+    if (typeof details.url === 'string' && details.url !== '') tags['zeokeel.url'] = details.url
     const extra: Record<string, unknown> = { reason: details.reason, exitCode }
     if (typeof mod.captureMessage === 'function') {
       // CaptureContext 形式:`{ level, tags, extra }`(不再是 `captureMessage(msg, level)`)。
@@ -408,7 +425,18 @@ export function captureRendererGone(details: { reason: string; exitCode?: number
  */
 export type RendererErrorReportLike =
   | RendererErrorPayload
-  | { type: 'render-process-gone'; reason: string; exitCode: number }
+  | {
+    type: 'render-process-gone'
+    reason: string
+    exitCode: number
+    /**
+     * 出事的**应用窗口** id(U-03,2026-10-22 评审)。主进程侧补写(按应用源 scheme
+     * 的 URL 判),渲染进程 IPC 载荷不携带 —— 见 desktop 的 `renderer-error-capture.ts`。
+     */
+    appId?: string
+    windowKind?: 'shell' | 'app'
+    url?: string
+  }
 
 /** 渲染进程上报的错误载荷(preload 侧构造;已做长度上限)。 */
 export interface RendererErrorPayload {
@@ -420,6 +448,9 @@ export interface RendererErrorPayload {
   lineno?: number
   colno?: number
   url?: string
+  /** 产生这条报告的**应用窗口** id(主进程侧补写;U-03)。 */
+  appId?: string
+  windowKind?: 'shell' | 'app'
 }
 
 /**
@@ -667,7 +698,13 @@ export function apply(ctx: Context): void {
     if (typeof runtime?.setRendererErrorSink === 'function') {
       ctx.effect?.(() => runtime.setRendererErrorSink!((report) => {
         if (report.type === 'render-process-gone') {
-          captureRendererGone({ reason: report.reason, exitCode: report.exitCode })
+          captureRendererGone({
+            reason: report.reason,
+            exitCode: report.exitCode,
+            ...(report.appId === undefined ? {} : { appId: report.appId }),
+            ...(report.windowKind === undefined ? {} : { windowKind: report.windowKind }),
+            ...(report.url === undefined ? {} : { url: report.url }),
+          })
           return
         }
         captureRendererError(report)

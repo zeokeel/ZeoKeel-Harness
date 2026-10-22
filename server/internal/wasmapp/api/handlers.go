@@ -35,9 +35,25 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appproof"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/events"
+	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
 )
+
+// SchedulerStatusView 是 /admin/runtime 的调度器快照（与 cmd/server 的
+// schedulerStatuses() 一一对应；读数不可得时 MetricsAvailable=false 且不填 0）。
+type SchedulerStatusView struct {
+	Name             string     `json:"name"`
+	TickSeconds      int64      `json:"tick_seconds"`
+	Started          bool       `json:"started"`
+	StartedAt        *time.Time `json:"started_at,omitempty"`
+	MetricsAvailable bool       `json:"metrics_available"`
+	Source           string     `json:"source"`
+	Runs             int64      `json:"runs"`
+	Errors           int64      `json:"errors"`
+	LastRunAt        *time.Time `json:"last_run_at,omitempty"`
+	LastError        string     `json:"last_error,omitempty"`
+}
 
 // ---------------------------------------------------------------------------
 // 装配面（Handler 供给面，路由由 internal/router 声明）
@@ -111,6 +127,43 @@ type Options struct {
 	LimitsRestart   func() []string
 	MemoryAvailable func() int64
 
+	// AppLimitsApply 把**某个应用**的限流覆盖下发到运行中的调度器
+	//（决策 docs/decisions/2026-10-22-wasm-per-app-limits.md §2.2）。
+	//
+	// 与上面那组 Limits* 的关系：那一组管**全局**四轴（保存后下发给所有应用），
+	// 本钩子只改**一个应用**的四轴（queue.Scheduler.SetAppLimitOverride）。
+	// nil = 未装配 ⇒ 两个写端点 fail-closed 回 INTERNAL（不做"只落库不生效"的半套，
+	// 那种状态重启前后行为不同，排障无从下手）。
+	AppLimitsApply func(appID string, ov limits.AppOverride)
+
+	// AppLimitsEffective 返回某应用**运行期生效**的并发四轴（全局 + per-app 覆盖）。
+	//
+	// 为什么需要它（生产化评审）：诊断出口与作者看到的 429 hints 必须说"这个应用"
+	// 实际被判成多少，而不是全局默认值 —— 管理员把某应用单独调成 1 路之后，作者若
+	// 看到"默认 2 路"会按错误的并发模型调优（诊断第一消费者是 AI）。
+	// 第二个返回值 = 该应用是否存在显式覆盖（用于把来源如实标成 override/global）。
+	// nil = 未装配 ⇒ 回落全局值（兼容最小装配/单测），不静默给假"生效值"。
+	AppLimitsEffective func(appID string) (limits.Axes, bool)
+
+	// AppLimitsCount 返回当前**运行期**持有覆盖的应用数（管理员运行视图用）。
+	// nil = 未装配 ⇒ runtime 视图不出现 app_limits 段（不伪造 0）。
+	AppLimitsCount func() int
+
+	// QueueStats 返回执行队列水位（含 429 拒绝计数）；nil ⇒ runtime 不出现 queue 段。
+	// QueueApps 返回按"在跑+等待"排序的应用水位（管理面回答"哪个应用在拖垮平台"）。
+	QueueStats func() queue.Stats
+	QueueApps  func(limit int) []queue.AppWatermark
+
+	// SchedulerStatus 返回全部后台调度器的运行快照（含 wasm_retirement/wasm_opens）。
+	// nil ⇒ runtime 不出现 schedulers 段。生产评审管理员视角 P1：
+	// 退役作业停摆与"本来没到期"在运维面上必须可分。
+	SchedulerStatus func() []SchedulerStatusView
+
+	// PurgeBacklog 返回退役作业最近一轮的积压：到期但无快照删不掉的应用、
+	// 已 purged 但数据目录待清理的应用数。nil ⇒ runtime 不出现 purge 段。
+	// （2026-10-22 反证 R2-P2-2：只有 runs/errors 无法回答"哪些应用卡住"。）
+	PurgeBacklog func() (blocked []string, cleanupPending int)
+
 	// EffectiveMemoryPages 返回**运行时真正生效**的单实例线性内存页数（0/nil = 未注入）。
 	//
 	// 为什么必须与 Limits 分开（R2-DG-2）：`Limits` 是"控制台**已保存**的值"，而
@@ -180,6 +233,72 @@ type Options struct {
 	// 为什么返回 error 而不是让实现自己吞掉：调用方必须能记那条 warn
 	// （"计数失败"要看得见，否则运营数据静默缺失会被当成"没人用"）。
 	Opens func(ctx context.Context, appID string, userID int64, clientVersion string) error
+
+	// OpensHealth 返回**打开计数维护作业**的运行读数（C-14，审计 2026-10-22）。
+	//
+	// 为什么需要注入：作业的 Runs/Errors/LastRunAt 住在 `internal/wasmapp/opens`
+	// 的 Scheduler 上，而本包（api）不认识它（依赖方向：api ← 装配层）。装配点把
+	// 同一个实例的读数转成 OpensJobHealth 交进来，`GET …/opens/summary` 才能回答
+	// "看板数字为什么不动"（停摆 vs 没人用）。
+	//
+	// nil = 未装配 ⇒ 响应里 `opens_job` 段如实报不可得（started/runs 等为 null），
+	// 且 `stale` 只能按**库里的最后汇总时间**判定 —— 绝不因为读不到作业读数就
+	// 谎报"作业正常"（本仓对"自报 0"有明确纪律）。
+	OpensHealth func() OpensJobHealth
+
+	// ModuleCacheStats / AppDBPoolStats 返回进程内模块缓存与**应用库句柄池**的当前
+	// 占用（C-10，审计 2026-10-22）。
+	//
+	// 为什么需要注入：这两个数住在 appserver 的私有 moduleCache / appDBPool 上
+	// （`Server.ModuleCacheStats()` / `Server.AppDBPoolStats()` 是它们的唯一出口），
+	// 而本包不 import appserver（依赖方向）。装配点把读数转成下面两个**本包类型**。
+	//
+	// nil = 未装配 ⇒ `/admin/wasm-apps/runtime` 的对应项进 `unavailable` 段并说明
+	// "接哪里"—— **不填 0**：把"没有出口"渲染成 0 会让管理员把一次装配事故读成
+	// "缓存正好是空的"（本仓对"自报 0"有明确纪律）。
+	ModuleCacheStats func() ModuleCacheStats
+	AppDBPoolStats   func() AppDBPoolStats
+}
+
+// ModuleCacheStats 是进程内模块缓存的**当前**占用（appserver.Server.ModuleCacheStats
+// 的跨包投影；字段一一对应，见该方法的注释：Bytes 是记账口径而不是 RSS）。
+type ModuleCacheStats struct {
+	Entries         int
+	CompiledEntries int
+	Bytes           int64
+	MaxBytes        int64
+	MaxEntries      int
+	IdleTTL         time.Duration
+}
+
+// AppDBPoolStats 是应用库句柄池的**当前**占用（appserver.Server.AppDBPoolStats 的投影）。
+type AppDBPoolStats struct {
+	Handles     int
+	Max         int
+	Readers     int
+	IdleTimeout time.Duration
+}
+
+// OpensJobHealth 是打开计数维护作业的**可读快照**（装配层从 opens.Scheduler 现取）。
+//
+// 字段与 `cmd/server` 的 observableScheduler 面同形，但**不共用类型**：那个接口住在
+// main 包（api 不能 import main）。Ops 面只读这几项，多一项都要重新过一遍
+// "谁在消费它"。
+type OpensJobHealth struct {
+	// Started = 后台循环是否已启动（false ⇒ 这个进程里没有任何人在汇总）。
+	Started bool
+	// StartedAt 是启动时刻（零值 = 未启动）。
+	StartedAt time.Time
+	// Runs 是已执行的轮数（含启动先跑的那一轮）。
+	Runs int64
+	// Errors 是以错误结束的轮数（<= Runs）。
+	Errors int64
+	// LastRunAt 是最近一轮的结束时刻（零值 = 未跑过）。
+	LastRunAt time.Time
+	// LastError 是最近一轮的错误文案（空串 = 最近一轮无错）。
+	LastError string
+	// Tick 是维护间隔（零值 = 未知；`stale` 的阈值按它推导）。
+	Tick time.Duration
 }
 
 // Handlers 是操作面 handler 集合（§8 全表）。
@@ -207,6 +326,15 @@ type Handlers struct {
 	// 审核开启后这是作者唯一能拿到"结论 + 理由"的出口（非发布者一律 404）。
 	MyReleases gin.HandlerFunc // GET  /apps/wasm/:app_id/releases
 
+	// ---- 生命周期重设计（迁移 0086，设计 2026-10-22 §6.1）----
+	//
+	// 部署（Deployment）是"把某个不可变版本指为线上"的一次不可变动作：
+	// 发布/回滚都追加一条历史，撤回与恢复是版本/应用状态机的两条边。
+	Deployments     gin.HandlerFunc // GET  /apps/wasm/:app_id/deployments（部署历史，含 current 标记）
+	DeployRelease   gin.HandlerFunc // POST /apps/wasm/:app_id/deployments（部署/回滚，body {version,message?}）
+	WithdrawRelease gin.HandlerFunc // POST /apps/wasm/:app_id/releases/:version/withdraw（撤回 pending）
+	RestoreApp      gin.HandlerFunc // POST /apps/wasm/:app_id/restore（恢复软删，未 purge）
+
 	// ---- 客户端专属访问模型（2026-09-19）：应用请求的唯一执行入口 ----
 	//
 	// 客户端注册的协议 handler 把 `zeokeel-app://<app_id>/…` 上的请求包成信封
@@ -233,14 +361,20 @@ type Handlers struct {
 
 	// ---- 管理面 /api/server/admin/wasm-apps ----
 	// 平台限制项（并发/内存）：GET 读当前值 + 四笔账预览，PUT 保存并下发。
-	AdminLimitsGet     gin.HandlerFunc // GET /wasm-apps/limits
-	AdminLimitsPut     gin.HandlerFunc // PUT /wasm-apps/limits
-	AdminList          gin.HandlerFunc // GET    ""
-	AdminUnpublish     gin.HandlerFunc // POST   /:app_id/unpublish
-	AdminPublish       gin.HandlerFunc // POST   /:app_id/publish（与下架对称，管理员处置完能恢复）
-	AdminTransferOwner gin.HandlerFunc // PUT    /:app_id/owner
-	AdminFreeze        gin.HandlerFunc // POST   /:app_id/freeze
-	AdminReview        gin.HandlerFunc // PUT    /review  (R17 审核开关)
+	AdminLimitsGet gin.HandlerFunc // GET /wasm-apps/limits
+	AdminLimitsPut gin.HandlerFunc // PUT /wasm-apps/limits
+	// 应用级限流覆盖（迁移 0087，决策 2026-10-22 §2.3）：GET 读视图、PUT 保存、
+	// DELETE 清空（等价 PUT null）。三条都挂 `/:app_id/limits`，与静态段 `/limits`
+	// 不同层（静态段是**全局**四轴，通配段是**单个应用**的覆盖）。
+	AdminAppLimitsGet    gin.HandlerFunc // GET    /:app_id/limits（capability:read）
+	AdminAppLimitsPut    gin.HandlerFunc // PUT    /:app_id/limits（capability:write）
+	AdminAppLimitsDelete gin.HandlerFunc // DELETE /:app_id/limits（capability:write）
+	AdminList            gin.HandlerFunc // GET    ""
+	AdminUnpublish       gin.HandlerFunc // POST   /:app_id/unpublish
+	AdminPublish         gin.HandlerFunc // POST   /:app_id/publish（与下架对称，管理员处置完能恢复）
+	AdminTransferOwner   gin.HandlerFunc // PUT    /:app_id/owner
+	AdminFreeze          gin.HandlerFunc // POST   /:app_id/freeze
+	AdminReview          gin.HandlerFunc // PUT    /review  (R17 审核开关)
 	// 审核队列（P0-1）：待审清单 + 通过/拒绝。R17 的开关一旦打开，新版本就停在
 	// pending —— 没有这三条，开关就等于"全组织再也发不出新版本"。
 	AdminReleases       gin.HandlerFunc // GET  /:app_id/releases?status=pending|approved|rejected|all
@@ -259,6 +393,18 @@ type Handlers struct {
 	AdminAppOpens     gin.HandlerFunc // GET /:app_id/opens（capability:read；F16 打开计数，§8.9）
 	AdminOpensSummary gin.HandlerFunc // GET /opens/summary（capability:read；W5 C2 看板概览）
 	AdminAppAIUsage   gin.HandlerFunc // GET /:app_id/ai-usage（capability:read；W5 C4 应用维度 AI 用量）
+	// 管理面生命周期动作（迁移 0086，设计 2026-10-22 §6.2）：导出/删除/恢复/回滚/待审清单。
+	// 与员工面的差别只有鉴权（cookie 会话 + capability:read|write）与 actor_role
+	// （admin_session）—— 实现全部复用员工面同一段（见 lifecycle_actions.go）。
+	AdminPendingReleases gin.HandlerFunc // GET    /releases/pending（capability:read；跨应用待审清单）
+	// AdminPurgeStaleReleases 是 POST /releases/purge-stale（capability:write）：
+	// 审核开关**关闭**后把失去意义的积压 pending 批量标 withdrawn（设计 §5.7 / C-08）。
+	AdminPurgeStaleReleases gin.HandlerFunc
+	AdminDeployments        gin.HandlerFunc // GET    /:app_id/deployments（capability:read）
+	AdminDeployRelease      gin.HandlerFunc // POST   /:app_id/deployments（capability:write；部署/回滚）
+	AdminRestoreApp         gin.HandlerFunc // POST   /:app_id/restore（capability:write）
+	AdminDeleteApp          gin.HandlerFunc // DELETE /:app_id（capability:write；软删 + 快照）
+	AdminExport             gin.HandlerFunc // GET    /:app_id/export（capability:read；同员工面参数）
 }
 
 // SettingReviewRequired 是发布审核开关的 settings 键（R17）。
@@ -284,6 +430,10 @@ func NewHandlers(opt Options) *Handlers {
 	h.Catalog = h.catalog
 	h.Availability = h.availability
 	h.MyReleases = h.myReleases
+	h.Deployments = h.deployments
+	h.DeployRelease = h.deployRelease
+	h.WithdrawRelease = h.withdrawRelease
+	h.RestoreApp = h.restoreApp
 	h.ClientRequest = h.clientRequest
 	h.AppProofIssue = h.appProofIssue
 	h.OpenApp = h.openApp
@@ -303,6 +453,9 @@ func NewHandlers(opt Options) *Handlers {
 	h.AdminRejectRelease = h.adminRejectRelease
 	h.AdminLimitsGet = h.adminLimitsGet
 	h.AdminLimitsPut = h.adminLimitsPut
+	h.AdminAppLimitsGet = h.adminAppLimitsGet
+	h.AdminAppLimitsPut = h.adminAppLimitsPut
+	h.AdminAppLimitsDelete = h.adminAppLimitsDelete
 	h.AdminDiagnostics = h.adminDiagnostics
 	h.AdminRows = h.adminRows
 	h.AdminSchema = h.adminSchema
@@ -310,6 +463,13 @@ func NewHandlers(opt Options) *Handlers {
 	h.AdminAppOpens = h.adminAppOpens
 	h.AdminOpensSummary = h.adminOpensSummary
 	h.AdminAppAIUsage = h.adminAppAIUsage
+	h.AdminPendingReleases = h.adminPendingReleases
+	h.AdminPurgeStaleReleases = h.adminPurgeStaleReleases
+	h.AdminDeployments = h.adminDeployments
+	h.AdminDeployRelease = h.adminDeployRelease
+	h.AdminRestoreApp = h.adminRestoreApp
+	h.AdminDeleteApp = h.adminDeleteApp
+	h.AdminExport = h.adminExport
 	return h
 }
 
@@ -459,7 +619,14 @@ func (h *Handlers) auditApp(appID, username, action, detail string) {
 	if h.opt.DB == nil {
 		return
 	}
-	_ = serverstore.AuditLogApp(h.opt.DB, appID, username, action, detail)
+	// 失败**必须留日志**（2026-10-22 反证 P2-1）：此前是裸 `_ =`，审计写失败时
+	// "每次真实状态变更一条审计"这条承诺静默落空 —— 运维看不到任何痕迹，只会在
+	// 事后查审计链时发现缺行。业务不因审计失败而失败（审计不是前置条件），但缺失
+	// 必须是**可观测**的（对比：真删调度器把审计失败计入 Errors）。
+	if err := serverstore.AuditLogApp(h.opt.DB, appID, username, action, detail); err != nil {
+		log.Printf("api: 审计写入失败（业务动作已完成，审计缺失）app=%s user=%s action=%s: %v",
+			appID, username, action, err)
+	}
 }
 
 // auditOrg 写一条**组织级**审计（无 app 维度，如审核开关）。

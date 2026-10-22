@@ -87,6 +87,7 @@ interface Limits {
   request_wall_clock_seconds: number
   sql_statement_budget_seconds: number
   compile_timeout_seconds: number
+  retirement_snapshot_retention_days: number
   /**
    * 服务端**新加**的旋钮也走这里。
    *
@@ -111,6 +112,7 @@ interface Budget {
    * 服务端判定，也进这里的编辑期估算（否则界面显示"未超水位"而保存被服务端拒绝）。
    */
   appdb_cache_bytes: number
+  queue_body_bytes: number
   total_bytes: number
   available_bytes: number
   /** known=false 表示服务端**没读到**可用内存（available_bytes = -1）⇒ 只算不判。 */
@@ -181,7 +183,7 @@ interface RuntimeView {
 type FieldKey = string
 
 /** 表单分组：三组已知字段 + 一组"服务端新加、本页还没有描述"的兜底分组。 */
-type FieldGroup = '并发' | '内存' | '时间预算' | '服务端新增'
+type FieldGroup = '并发' | '内存' | '时间预算' | '生命周期' | '服务端新增'
 
 interface FieldRow {
   key: FieldKey
@@ -217,6 +219,7 @@ const FIELDS: FieldRow[] = [
   { key: 'request_wall_clock_seconds', label: '请求端到端墙钟', group: '时间预算', hint: '含排队等待；到点即拒。必须严格大于 guest 预算。注意：客户端应用请求的出站预算是随包固定的 75 秒（必须晚于本值，否则员工只会看到网络错误）' },
   { key: 'sql_statement_budget_seconds', label: '单条 SQL 硬超时', group: '时间预算', hint: '到点由看门狗回滚并打污染标记；必须严格小于宿主调用预算，也不得超过端到端墙钟。**下一个应用库句柄生效**（不是立即）' },
   { key: 'compile_timeout_seconds', label: '编译超时', group: '时间预算', hint: '单次编译（含执行侧装载模块）的超时；不得超过服务端 ReadTimeout（60 秒，传输层常量不可配置）' },
+  { key: 'retirement_snapshot_retention_days', label: '退役快照保留', group: '生命周期', hint: '冻结/删除时 purge_after = 冻结时刻 + 本值（1–3650 天）；到期后 wasm_retirement 才真删数据，期间可恢复/导出。调小会缩短可恢复窗口' },
 ]
 
 /** 按 key 索引的元数据（未知 key ⇒ 用兜底行，见 fieldRows）。 */
@@ -226,13 +229,13 @@ const FIELD_META: Record<string, FieldRow> = Object.fromEntries(FIELDS.map((f) =
 const UNKNOWN_FIELD_GROUP: FieldGroup = '服务端新增'
 
 /**
- * 账目项 key（与 `readyz.MemoryBudget` 的 json tag 逐字一致，五笔）。
+ * 账目项 key（与 `readyz.MemoryBudget` 的 json tag 逐字一致，六笔）。
  *
  * 覆盖门禁（AppPlatform.test.tsx）从 Go 源码里读这组 tag 并要求每笔都有渲染行 ——
  * 2026-09-19 服务端把"应用库页缓存"加成第五笔时，既有 421 条用例一条都没红，正是缺口。
  */
 const ACCOUNT_KEYS = [
-  'instances_bytes', 'compile_peak_bytes', 'upload_peak_bytes', 'cache_resident_bytes', 'appdb_cache_bytes',
+  'instances_bytes', 'compile_peak_bytes', 'upload_peak_bytes', 'cache_resident_bytes', 'appdb_cache_bytes', 'queue_body_bytes',
 ] as const
 
 /** 不是"账目项"的 `*_bytes`：预算入参 available、派生上限 limit、合计 total。 */
@@ -414,7 +417,9 @@ export default function Limits() {
     const instances = form.max_instances * form.instance_memory_mb * (1 << 20)
     const cache = form.module_cache_mb * (1 << 20)
     const appdbCache = (1 + form.app_db_readers) * form.appdb_cache_kib * 1024 * form.max_instances
+    // 固定项 + 随表单变化的三项 + 排队请求体全局上界（P1：预算第六笔，服务端常量）。
     const total = instances + view.budget.compile_peak_bytes + view.budget.upload_peak_bytes + cache + appdbCache
+      + (view.budget.queue_body_bytes ?? 0)
       // F1（审计 A2）：服务端新增、本页还没有明细的账目项**必须进总账**。旧实现只加
       // 四笔已知账 + 表单三项，而下面的提示语却写着"已计入上面的理论峰值" —— 服务端加
       // 第六笔账时页面显示的水位比真实值低，管理员看到"可以保存"后撞上服务端 400。
@@ -659,6 +664,10 @@ export default function Limits() {
             <div data-testid="budget-account-appdb_cache_bytes">
               <div className="text-muted-foreground">应用库页缓存（SQLite）</div>
               <div className="font-medium">{mb(preview.appdbCache)} MiB</div>
+            </div>
+            <div data-testid="budget-account-queue_body_bytes">
+              <div className="text-muted-foreground">排队请求体（全局上界）</div>
+              <div className="font-medium">{mb(view.budget.queue_body_bytes)} MiB</div>
             </div>
           </div>
           {/* 服务端新增了本页还不认识的账目项 ⇒ 明说，且金额**真的**计入理论峰值（F1）。 */}

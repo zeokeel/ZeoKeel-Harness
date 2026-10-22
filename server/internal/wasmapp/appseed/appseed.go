@@ -128,6 +128,13 @@ type Options struct {
 	Logger func(format string, args ...any)
 	// Audit 写审计（nil ⇒ 只记日志）。动作名与客户端面同一套。
 	Audit func(username, action, detail string)
+	// AuditApp 是**应用维度**审计（`audit_logs.app_id` + 哈希链 v2）。
+	//
+	// 为什么播种需要它（2026-10-22 反证 P2-2）：播种走的是部署事务（kind=seed），
+	// 但审计此前走 `Audit`（`serverstore.AuditLog`：app_id=NULL、hash_version=1）⇒
+	// "谁在什么时候把哪一版上线"在该应用的审计列表里**查不到**（ListAuditLogsByApp
+	// 按 app_id 过滤）。nil ⇒ 回落 Audit（保持最小装配可用）。
+	AuditApp func(appID, username, action, detail string)
 }
 
 // Seeder 是加载好的播种器。
@@ -331,8 +338,38 @@ func (s *Seeder) seedOne(ctx context.Context, d Demo, appID string) error {
 	//
 	// 两个写动作都不建新版本：任一步失败 ⇒ 已落的行留着，下次播种由 healIncomplete
 	// 补齐（幂等，不需要人工删行）。
-	if err := serverstore.SetWasmAppCurrentRelease(ctx, s.opt.DB, appID, relID); err != nil {
+	if err := s.pointSeedRelease(ctx, appID, relID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// pointSeedRelease 把播种出来的版本置为**生效版本**（走部署事务，kind=seed）。
+//
+// 为什么不直接写 apps.current_release_id（设计 2026-10-22 §3.3/§5.1）：部署历史是
+// 生命周期重设计建立的唯一事实来源 —— "谁在什么时候把哪一版放上线"必须连播种也答得出。
+// 绕开部署事务的写点会让历史里缺一条，而从历史看就是"这个应用从来没有部署过"。
+// 播种的 actor_role=seed、actor 留空（来源可辨：不是任何员工的处置）。
+//
+// 返回错误语义与旧实现一致（失败 ⇒ 已落的行留着，下次播种由 healIncomplete 补齐）。
+func (s *Seeder) pointSeedRelease(ctx context.Context, appID string, relID int64) error {
+	dep, changed, err := serverstore.DeployWasmRelease(ctx, s.opt.DB, serverstore.DeployWasmReleaseInput{
+		AppID: appID, ReleaseID: relID, Kind: serverstore.DeployKindSeed,
+		ActorRole: serverstore.ActorRoleSeed, Message: "内置演示应用播种",
+	})
+	if err != nil {
 		return fmt.Errorf("指向当前版本: %w", err)
+	}
+	// 审计：detail 含 deployment_id/version/kind/actor_role（与其它部署路径同口径）。
+	// 幂等分支（changed=false，版本已是当前）不写审计：没有状态变更，重复播种不该刷屏。
+	if changed && dep != nil {
+		detail := fmt.Sprintf("wasm_app:%s 播种部署 deployment_id=%d version=%s kind=%s actor_role=%s",
+			appID, dep.ID, dep.Version, dep.Kind, dep.ActorRole)
+		if s.opt.AuditApp != nil {
+			s.opt.AuditApp(appID, s.opt.Owner, "wasm_app_deploy", detail)
+		} else if s.opt.Audit != nil {
+			s.opt.Audit(s.opt.Owner, "wasm_app_deploy", detail)
+		}
 	}
 	return nil
 }
@@ -482,8 +519,8 @@ func (s *Seeder) healIncomplete(ctx context.Context, appID string, app *serverst
 			// 状态/制品不是随安装的这一份：不碰（理由如实给出，别笼统说"已存在"）。
 			return healOutcome{Reason: "已存在但版本行不是随安装播种的那一份（不碰）"}, nil
 		}
-		if err := serverstore.SetWasmAppCurrentRelease(ctx, s.opt.DB, appID, rel.ID); err != nil {
-			return healOutcome{}, fmt.Errorf("指向当前版本: %w", err)
+		if err := s.pointSeedRelease(ctx, appID, rel.ID); err != nil {
+			return healOutcome{}, err
 		}
 		return healOutcome{Healed: true, Reason: "已存在但缺生效版本（版本行是随安装播种的那一份）⇒ 已指向该版本"}, nil
 	}
@@ -527,8 +564,8 @@ func (s *Seeder) healMissingRelease(ctx context.Context, appID string, app *serv
 	if err != nil {
 		return healOutcome{}, fmt.Errorf("重建版本行: %w", err)
 	}
-	if err := serverstore.SetWasmAppCurrentRelease(ctx, s.opt.DB, appID, relID); err != nil {
-		return healOutcome{}, fmt.Errorf("指向当前版本: %w", err)
+	if err := s.pointSeedRelease(ctx, appID, relID); err != nil {
+		return healOutcome{}, err
 	}
 	return healOutcome{Healed: true, Reason: "已存在但一个版本行都没有（上次播种中断）⇒ 已重建版本行并置为生效版本"}, nil
 }

@@ -15,10 +15,11 @@
  *   - `loadAppAiIdentity` 在缺 `serverURL` 时仍返回作用域 ⇒ 它的 fail-closed 条红。
  */
 import { describe, expect, it } from 'vitest'
-import { HOST_PROOF_PATH, setHostProofToken } from './host-proof.ts'
+import { HOST_PROOF_HEADER, HOST_PROOF_PATH, setHostProofToken } from './host-proof.ts'
 import {
   APP_AI_CHAT_PATH,
   APP_AI_CONSENT_PATH,
+  APP_AI_HOST_CHAT_PATH,
   APP_AI_IDENTITY_PATH,
   APP_AI_ERROR_CODES,
   APP_AI_MESSAGE_MAX_BYTES,
@@ -337,6 +338,101 @@ describe('首次授权：按 **用户×服务端×应用** 记一次，可撤销
 
   it('默认存储实现：node 环境没有 localStorage ⇒ null（不抛）', () => {
     expect(defaultAppAiConsentStore()).toBeNull()
+  })
+})
+
+
+/**
+ * F-01（P0，2026-10-22 审计）：详情页的「发送」必须打到**客户端页 origin 上真的有人
+ * 服务**的路径。
+ *
+ * 修前面板无条件打相对路径 `/__zeokeel/ai/chat` —— 那是**应用 origin** 的保留面
+ * （只有应用窗口的协议 handler 在服务），客户端主渲染页上永远没人接。客户端这一半的
+ * 判据因此是"**目标路径取决于调用场景**"：传了 `appId`（= 详情页）就必须走宿主本机
+ * 命名路由并带持有性证明；不传（= 应用页）则维持原路径不变。
+ *
+ * 宿主那一半（路由真实注册 + 请求真的到达执行面 + 未注册路径不假装 200）在
+ * `packages/host/wasm-apps-host/src/index.spec.ts` 的「F-01…」一组。
+ */
+describe('F-01：详情页发送走宿主本机命名路由（不是应用 origin 的保留路径）', () => {
+  /** 造一个"宿主机"：引导端点发令牌，对话路由回 SSE 并记录请求。 */
+  function hostStub(reply: Response = sseResponse([
+    'event: delta\ndata: {"delta":"你"}\n\n',
+    'event: done\ndata: {}\n\n',
+  ])): { calls: Array<{ url: string, init: RequestInit }>, fetch: typeof fetch } {
+    const calls: Array<{ url: string, init: RequestInit }> = []
+    const impl = (async (input: unknown, init?: RequestInit) => {
+      const url = String(input)
+      if (url === HOST_PROOF_PATH) {
+        return new Response(JSON.stringify({ proof: 'proof-token', expires_at: Date.now() + 300_000 }), { status: 200 })
+      }
+      calls.push({ url, init: init ?? {} })
+      return reply.clone()
+    }) as unknown as typeof fetch
+    return { calls, fetch: impl }
+  }
+
+  it('传 appId ⇒ 打宿主本机命名路由、请求体带 app_id、带持有性证明头', async () => {
+    setHostProofToken(null)
+    const host = hostStub()
+    const result = await streamAppAiChat(MESSAGES, { deps: { fetch: host.fetch }, appId: 'my-notes' })
+    expect(result).toMatchObject({ ok: true, content: '你' })
+    expect(host.calls).toHaveLength(1)
+    expect(host.calls[0]?.url).toBe(APP_AI_HOST_CHAT_PATH)
+    expect(JSON.parse(String(host.calls[0]?.init.body))).toEqual({
+      app_id: 'my-notes',
+      messages: MESSAGES,
+      stream: true,
+    })
+    // 证明头是本机面的**唯一**授权凭据（不依赖 Cookie/Host/Origin/端口）。
+    const headers = (host.calls[0]?.init.headers ?? {}) as Record<string, string>
+    expect(headers[HOST_PROOF_HEADER]).toBe('proof-token')
+  })
+
+  it('不传 appId ⇒ 仍打应用 origin 的保留路径（应用窗口内那半边语义不变）', async () => {
+    const h = recordingFetch(sseResponse([
+      'event: delta\ndata: {"delta":"你"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ]))
+    const result = await streamAppAiChat(MESSAGES, { deps: { fetch: h.fetch } })
+    expect(result.ok).toBe(true)
+    expect(h.calls.map(call => call.url)).toEqual([APP_AI_CHAT_PATH])
+    expect(JSON.parse(String(h.calls[0]?.init.body))).toEqual({ messages: MESSAGES, stream: true })
+  })
+
+  it('appId 传空串等价于不传（不拼出一个看起来有值的 app_id 请求）', async () => {
+    const h = recordingFetch(sseResponse(['event: done\ndata: {}\n\n']))
+    await streamAppAiChat(MESSAGES, { deps: { fetch: h.fetch }, appId: '   ' })
+    expect(h.calls.map(call => call.url)).toEqual([APP_AI_CHAT_PATH])
+  })
+
+  it('拿不到持有性证明 ⇒ 一个业务请求都不发，且报 app_ai_transport（不是"服务端拒绝"）', async () => {
+    setHostProofToken(null)
+    const calls: string[] = []
+    const refused = (async (input: unknown) => {
+      calls.push(String(input))
+      return new Response('{}', { status: 403 })
+    }) as unknown as typeof fetch
+    const result = await streamAppAiChat(MESSAGES, { deps: { fetch: refused }, appId: 'demo' })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failure.code).toBe('app_ai_transport')
+    expect(result.failure.status).toBeNull()
+    // 只碰了引导端点：证明没拿到时发业务请求必然 401，还会把"证明没拿到"掩盖成"接口拒绝"。
+    expect(calls).toEqual([HOST_PROOF_PATH])
+  })
+
+  it('宿主路由的错误信封按同一套分层读出（503 + app_ai_unavailable 仍是"不可用"）', async () => {
+    setHostProofToken(null)
+    const host = hostStub(new Response(JSON.stringify({ error: { code: 'app_ai_unavailable', message: 'no AI loop' } }), {
+      status: 503,
+      headers: { 'content-type': 'application/json' },
+    }))
+    const result = await streamAppAiChat(MESSAGES, { deps: { fetch: host.fetch }, appId: 'demo' })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failure.code).toBe('app_ai_unavailable')
+    expect(result.failure.status).toBe(503)
   })
 })
 

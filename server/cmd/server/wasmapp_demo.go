@@ -60,6 +60,11 @@ func seedDemoApps(ctx context.Context, db *sql.DB, dataRoot string) {
 		Logger:   log.Printf,
 		// 复用 serverstore 的审计入口（哈希链在它里面；直接 INSERT 会断链）。
 		Audit: func(username, action, detail string) { _ = serverstore.AuditLog(db, username, action, detail) },
+		// 应用维度审计：播种的**部署**必须能按 app_id 查到（反证 P2-2 —— 用 Audit
+		// 会写成 app_id=NULL/hash_version=1，ListAuditLogsByApp 看不到）。
+		AuditApp: func(appID, username, action, detail string) {
+			_ = serverstore.AuditLogApp(db, appID, username, action, detail)
+		},
 	})
 	if err != nil {
 		log.Printf("appseed: ⚠️ 演示应用装载失败（跳过播种）：%v", err)

@@ -45,6 +45,10 @@ const LIVE = {
   data_sensitivity: '内部', current_release_id: 12, current_version: '1.0.2',
   pending_releases: [] as string[], pending_count: 0,
   frozen_at: null as string | null, deleted_at: null as string | null,
+  // 生命周期四列（服务端列表真实下发，设计 §4/§7）：夹具带上它们，测试才能按
+  // "服务端未下发"与"未设置"两种情况分别断言（反证 F-5 要改 snapshot_at）。
+  purge_after: null as string | null, snapshot_at: null as string | null,
+  snapshot_error: null as string | null, purged_at: null as string | null,
   created_at: '2026-09-18T10:00:00Z', updated_at: '2026-09-18T11:00:00Z',
 }
 const OFF = {
@@ -244,6 +248,9 @@ function listPage(params: URLSearchParams) {
     offset,
     // 服务端把生效的筛选值原样回显（L6 契约依赖；缺它前端按"不支持"降级）。
     access,
+    // 退役快照保留期（设计 §5.4 的 RetirementSnapshotRetentionDays）：冻结/删除确认框
+    // 必须显示 purge_after 的**具体日期**，动作发生前只有保留期天数可用。
+    retirement_snapshot_retention_days: 90,
   }
 }
 
@@ -521,7 +528,11 @@ describe('AppCenter 应用中心', () => {
     expect(within(row).queryByRole('button', { name: '下架' })).toBeNull()
   })
 
-  it('冻结必须先确认(P2-6):确认框列出停服/保留期/到期/解冻,确认后才发请求', async () => {
+  it('冻结必须先确认:确认框按**真实语义**写清快照前置条件与清理日期,确认后才发请求', async () => {
+    // C-01 的承诺面就在这里：此前确认框写「保留期结束后由后台任务真正删除(不可恢复)」，
+    // 而那个后台任务并不存在 —— 冻结实际是可逆的永久封存，UI 却对外承诺了合规履约。
+    // 现在的口径（设计 §5.4）：冻结 = 立即停服 + 立即尝试只读快照 + purge_after；
+    // **快照不存在时不允许清理**。断言因此从"四个短语存在"改成"承诺与语义对得上"。
     await renderList()
 
     fireEvent.click(within(rowOf('share-note')).getByRole('button', { name: '冻结' }))
@@ -531,10 +542,24 @@ describe('AppCenter 应用中心', () => {
       '/api/server/admin/wasm-apps/share-note/freeze',
       expect.anything(),
     )
-    // 文案必须写清代价,否则"确认"只是个形式
-    for (const t of ['立即停服', '数据保留', '到期处理', '如何解冻']) {
+    // ① 仍是二次确认：说清代价与回滚方式
+    for (const t of ['立即停服', '只读快照', '如何解冻']) {
       expect(dialog).toHaveTextContent(t)
     }
+    // ② 快照是清理的前置条件（设计 §5.4/§5.5）：没有快照不得删数据
+    expect(dialog).toHaveTextContent('快照生成前不会删除任何数据')
+    // ③ 清理日期是**具体时刻**，不是"到期会自动删"。夹具下发保留期 90 天，页面据此
+    //    给出「预计清理日期 = 现在 + 90 天」并标明以服务端 purge_after 为准。
+    expect(dialog).toHaveTextContent('保留期 90 天')
+    expect(dialog).toHaveTextContent('预计清理日期')
+    const expected = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+    const expectedDay = `${expected.getFullYear()}/${expected.getMonth() + 1}/${expected.getDate()}`
+    expect(dialog).toHaveTextContent(expectedDay)
+    // ④ 禁止再出现没有执行者的"后台任务"措辞（C-01 的书面形态）
+    expect(dialog).not.toHaveTextContent('后台任务')
+    expect(dialog).not.toHaveTextContent('未实现')
+    // ⑤ 不可逆边界仍然明写（但不是"到期就删"）
+    expect(dialog).toHaveTextContent('不可恢复')
 
     fireEvent.click(screen.getByTestId('freeze-confirm'))
     await waitFor(() => {
@@ -547,6 +572,10 @@ describe('AppCenter 应用中心', () => {
     await waitFor(() => {
       expect(within(rowOf('share-note')).getByText('已冻结')).toBeInTheDocument()
     })
+    // 回执同样按真实语义：说清快照状态与清理日期（不再只 flash「已冻结」一句）
+    const flashMsg = await screen.findByTestId('apps-flash')
+    expect(flashMsg).toHaveTextContent('已冻结')
+    expect(flashMsg).toHaveTextContent('清理日期')
   })
 
   it('取消冻结确认框 → 不发任何写请求', async () => {
@@ -570,6 +599,134 @@ describe('AppCenter 应用中心', () => {
         { method: 'POST', body: JSON.stringify({ frozen: false }) },
       )
     })
+  })
+
+  it('解冻成功后**重新拉列表**（服务端是唯一真源）:快照与清理时间线一并消失（反证 F-5）', async () => {
+    // 夹具:已冻结 + 有快照 + 有清理日期。解冻（设计 §5.4）会清时间线并**尽力删除快照目录**,
+    // 解冻响应只回 frozen_at:null/enabled ⇒ 本地必须清 + 拉一次列表,否则生命周期块会继续
+    // 显示一个磁盘上已被删除的快照时间。
+    let unfrozen = false
+    appsFixture = [{
+      ...FROZEN,
+      purge_after: '2026-12-16T09:00:00Z',
+      snapshot_at: '2026-09-17T09:00:05Z',
+      snapshot_error: 'permission denied: snapshots/share-note',
+    }]
+    mockRequest.mockImplementation(async (path: string) => {
+      const base = String(path).split('?')[0]!
+      const params = new URLSearchParams(String(path).split('?')[1] ?? '')
+      if (base === '/api/server/admin/wasm-apps') {
+        const out = listPage(params)
+        if (!unfrozen) return out
+        // 服务端解冻后：时间线清空（本轮的真实语义）
+        return {
+          ...out,
+          apps: out.apps.map((a: any) => ({
+            ...a,
+            frozen_at: null,
+            purge_after: null,
+            snapshot_at: null,
+            snapshot_error: null,
+          })),
+        }
+      }
+      if (base.endsWith('/freeze')) {
+        unfrozen = true
+        // 真实信封（lifecycle_actions.go 的 frozenAppJSON(&WasmApp{AppID,Enabled}, true)）
+        return { app: { app_id: 'legacy-board', frozen: false, changed: true, enabled: false, frozen_at: null } }
+      }
+      if (base.endsWith('/releases')) return { app_id: 'legacy-board', status: 'pending', current_version: '', releases: [] }
+      if (base.endsWith('/deployments')) return { app_id: 'legacy-board', current_version: '', deployments: [] }
+      if (base.endsWith('/diagnostics')) return { diagnostics: DIAGNOSTICS }
+      return {}
+    })
+    render(<Apps />)
+    await screen.findByText('旧看板')
+
+    // ① 解冻前:生命周期块显示快照时间与失败原因
+    fireEvent.click(within(rowOf('legacy-board')).getByRole('button', { name: '详情' }))
+    let dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByTestId('lifecycle-snapshot_at')).toHaveTextContent('2026')
+    expect(within(dialog).getByTestId('lifecycle-snapshot-error')).toHaveTextContent('permission denied')
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭' }))
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+
+    // ② 解冻:请求 body 是 {"frozen":false}
+    const before = listCalls().length
+    fireEvent.click(within(rowOf('legacy-board')).getByRole('button', { name: '解冻' }))
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/server/admin/wasm-apps/legacy-board/freeze',
+        { method: 'POST', body: JSON.stringify({ frozen: false }) },
+      )
+    })
+    // ③ **重新拉列表**（变异:去掉 load() ⇒ 这条断言红）
+    await waitFor(() => { expect(listCalls().length).toBeGreaterThan(before) })
+
+    // ④ 再开详情:快照时间/失败原因/清理日期全部清空（变异:只清 purge_after ⇒ 红）
+    await waitFor(() => { expect(within(rowOf('legacy-board')).queryByRole('button', { name: '解冻' })).toBeNull() })
+    fireEvent.click(within(rowOf('legacy-board')).getByRole('button', { name: '详情' }))
+    dialog = await screen.findByRole('dialog')
+    await within(dialog).findByTestId('lifecycle-block')
+    expect(within(dialog).getByTestId('lifecycle-snapshot_at')).toHaveTextContent('—')
+    expect(within(dialog).getByTestId('lifecycle-purge_after')).toHaveTextContent('—')
+    expect(within(dialog).queryByTestId('lifecycle-snapshot-error')).toBeNull()
+  })
+
+  it('解冻后列表还没回来(挂起)时也**不**展示已删除的快照:本地先清（反证 F-5 的本地半边）', async () => {
+    // 为什么这条必须存在：真实环境里"解冻成功 → 列表刷新返回"之间有窗口期，而抽屉是
+    // 从**本地行**渲染的。如果只在列表回来后由服务端覆盖，这个窗口里界面会继续宣称
+    // 「快照时间 2026-…」「快照生成失败」，而服务端刚刚尽力删掉了那个目录。
+    let hangList = false
+    appsFixture = [{
+      ...FROZEN,
+      purge_after: '2026-12-16T09:00:00Z',
+      snapshot_at: '2026-09-17T09:00:05Z',
+      snapshot_error: 'permission denied: snapshots/share-note',
+    }]
+    mockRequest.mockImplementation(async (path: string) => {
+      const base = String(path).split('?')[0]!
+      const params = new URLSearchParams(String(path).split('?')[1] ?? '')
+      if (base === '/api/server/admin/wasm-apps') {
+        if (hangList) return new Promise(() => {}) // 刷新迟迟不回（真实网络/慢查询）
+        return listPage(params)
+      }
+      if (base.endsWith('/freeze')) {
+        return { app: { app_id: 'legacy-board', frozen: false, changed: true, enabled: false, frozen_at: null } }
+      }
+      if (base.endsWith('/releases')) return { app_id: 'legacy-board', status: 'pending', current_version: '', releases: [] }
+      if (base.endsWith('/deployments')) return { app_id: 'legacy-board', current_version: '', deployments: [] }
+      if (base.endsWith('/diagnostics')) return { diagnostics: DIAGNOSTICS }
+      return {}
+    })
+    render(<Apps />)
+    await screen.findByText('旧看板')
+
+    // ① 抽屉打开着（它从本地行渲染），先把快照事实读出来。
+    //    先抓住行元素：抽屉打开后 `app_id` 在抽屉标题里也出现一次，getByText 会撞成两个。
+    const row = rowOf('legacy-board')
+    fireEvent.click(within(row).getByRole('button', { name: '详情' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByTestId('lifecycle-snapshot_at')).toHaveTextContent('2026')
+    expect(within(dialog).getByTestId('lifecycle-snapshot-error')).toHaveTextContent('permission denied')
+
+    // ② 抽屉不关，直接点行上的「解冻」；随后列表刷新挂起（永远不回）
+    hangList = true
+    // 抽屉是模态的 ⇒ 遮罩外的行被标了 aria-hidden，必须 hidden: true 才能取到按钮。
+    fireEvent.click(within(row).getByRole('button', { name: '解冻', hidden: true }))
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/server/admin/wasm-apps/legacy-board/freeze',
+        { method: 'POST', body: JSON.stringify({ frozen: false }) },
+      )
+    })
+
+    // ③ 抽屉里必须已经清干净（变异：只清 purge_after ⇒ 快照时间断言红）
+    await waitFor(() => {
+      expect(within(dialog).getByTestId('lifecycle-snapshot_at')).toHaveTextContent('—')
+    })
+    expect(within(dialog).getByTestId('lifecycle-purge_after')).toHaveTextContent('—')
+    expect(within(dialog).queryByTestId('lifecycle-snapshot-error')).toBeNull()
   })
 
   it('冻结行的「上架」按钮禁用(P2-6:交付面一律 404,上架没有意义)', async () => {
@@ -1137,7 +1294,7 @@ describe('应用中心 · 更新审批开关二次确认', () => {
     expect(screen.getByRole('switch', { name: '更新审批' })).toHaveAttribute('data-state', 'unchecked')
   })
 
-  it('关闭开关也要确认:明确说明已 pending 的版本不会自动转正', async () => {
+  it('关闭开关也要确认:明说**现存 N 个待审版本将失去意义**，并给出两条真实出路（反证 F-2）', async () => {
     // 夹具改为"当前已开启",这样点开关是关闭方向。
     appsFixture = APP_LIST
     mockRequest.mockImplementation(async (path: string, init?: RequestInit) => {
@@ -1162,8 +1319,14 @@ describe('应用中心 · 更新审批开关二次确认', () => {
     fireEvent.click(sw)
     const dialog = await screen.findByTestId('review-confirm-dialog')
     expect(dialog).toHaveTextContent('关闭')
-    expect(screen.getByTestId('review-close-warning')).toHaveTextContent('不会')
-    expect(screen.getByTestId('review-close-warning')).toHaveTextContent('重新发布')
+    // 关闭方向的代价必须带 **N**（夹具里 review-me 有 2 个待审版本 ⇒ 徽标 2）。
+    // 旧实现这里只写「不会自动转正 / 发布者需要重新发布更高版本」：既无数字，
+    // 又与设计 §5.3 新增的 withdraw（作者可撤回）冲突。
+    const closeWarning = screen.getByTestId('review-close-warning')
+    expect(closeWarning).toHaveTextContent('2 个待审版本')
+    expect(closeWarning).toHaveTextContent('失去意义')
+    expect(closeWarning).toHaveTextContent('作者撤回')
+    expect(closeWarning).toHaveTextContent('逐个通过/拒绝')
 
     fireEvent.click(screen.getByTestId('review-confirm'))
     await waitFor(() => {
@@ -1172,6 +1335,48 @@ describe('应用中心 · 更新审批开关二次确认', () => {
         { method: 'PUT', body: JSON.stringify({ required: false }) },
       )
     })
+    // 回执同样带 N 与两条出路（不是一句「已关闭更新审批」）
+    const flashMsg = await screen.findByTestId('apps-flash')
+    expect(flashMsg).toHaveTextContent('已关闭更新审批')
+    expect(flashMsg).toHaveTextContent('2 个待审版本')
+    expect(flashMsg).toHaveTextContent('作者撤回')
+  })
+
+  it('服务端在关闭响应里给了 note/pending_releases ⇒ 原样采用（服务端才是语义真源）', async () => {
+    appsFixture = APP_LIST
+    const serverNote = '审核开关已关闭；现有 7 个待审版本将失去意义（作者可撤回，管理面可逐个通过/拒绝）'
+    mockRequest.mockImplementation(async (path: string, init?: RequestInit) => {
+      const base = String(path).split('?')[0]!
+      const params = new URLSearchParams(String(path).split('?')[1] ?? '')
+      if (base === '/api/server/admin/wasm-apps') return { ...listPage(params), review_required: true }
+      if (base === '/api/server/admin/wasm-apps/review') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { required?: boolean }
+        return {
+          review_required: body.required ?? false,
+          changed: true,
+          setting_key: 'wasm.review_required',
+          // 服务端真实响应（wasmapp/api/admin.go 的 AdminReview）
+          pending_releases: 7,
+          note: serverNote,
+        }
+      }
+      return {}
+    })
+    render(<Apps />)
+    await screen.findByText('共享便签')
+    fireEvent.click(screen.getByRole('switch', { name: '更新审批' }))
+    await screen.findByTestId('review-confirm-dialog')
+    // 确认框里的 N 来自列表（服务端 pending_count），回执里的 N/语义来自开关响应
+    fireEvent.click(screen.getByTestId('review-confirm'))
+    const flashMsg = await screen.findByTestId('apps-flash')
+    expect(flashMsg).toHaveTextContent(serverNote)
+    // 服务端回报的积压数接管徽标（7 ≠ 列表的 2，说明前端确实读了响应而不是自算）；
+    // 且**不会**再拉一次列表把它盖回去（开关不改版本状态，重拉只会让两个数字打架）。
+    await waitFor(() => {
+      expect(screen.getByTestId('org-pending-count')).toHaveTextContent('待审 7')
+    })
+    const listCalls = mockRequest.mock.calls.filter(([p]) => String(p).startsWith('/api/server/admin/wasm-apps?'))
+    expect(listCalls).toHaveLength(1)
   })
 })
 
@@ -1654,7 +1859,23 @@ describe('应用中心 · 公告模板（§19 Q13）', () => {
     expect(clientBody).not.toMatch(/https?:\/\//)
   })
 
-  it('复制走剪贴板并回显"已复制"；失败时明说请手动复制', async () => {
+  it('明说「平台不发送通知」（C-12）：没有通道、没有回执，复制只是拿到文案', async () => {
+    await renderList()
+    fireEvent.click(screen.getByTestId('announcement-open'))
+    const dialog = await screen.findByTestId('announcement-dialog')
+    const note = within(dialog).getByTestId('announcement-no-send')
+    expect(note).toHaveTextContent('平台')
+    expect(note).toHaveTextContent('不发送')
+    expect(note).toHaveTextContent('IM')
+    expect(note).toHaveTextContent('邮件')
+    expect(note).toHaveTextContent('没有「已通知」回执')
+    // 每份模板旁边也要有"自行发送"的提示（不能只写一次藏在顶部）
+    for (const id of ['access-login-only', 'client-only-open', 'ops-converge-legacy']) {
+      expect(within(dialog).getByTestId(`announcement-send-hint-${id}`)).toHaveTextContent('自行发送')
+    }
+  })
+
+  it('复制走剪贴板并回显"已复制"；回执**不说已发送**；失败时明说请手动复制', async () => {
     const writeText = vi.fn(async (_text: string) => {})
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
     await renderList()
@@ -1663,7 +1884,13 @@ describe('应用中心 · 公告模板（§19 Q13）', () => {
     await waitFor(() => { expect(writeText).toHaveBeenCalledTimes(1) })
     const copied = String(writeText.mock.calls[0]![0])
     expect(copied).toContain('桌面客户端')
-    expect(await screen.findByTestId('announcement-flash')).toHaveTextContent('已复制')
+    const flash = await screen.findByTestId('announcement-flash')
+    expect(flash).toHaveTextContent('已复制')
+    // C-12：平台没有发送通道 ⇒ 回执只能说"进了剪贴板 + 请自行发送"，
+    // 任何"已发送/已通知"都是假承诺（旧实现是「已复制公告全文」，容易被读成"发出去了"）。
+    expect(flash).toHaveTextContent('自行发送')
+    expect(flash).not.toHaveTextContent('已发送')
+    expect(flash).not.toHaveTextContent('已通知')
 
     // 剪贴板不可用（http 内网 + execCommand 也不支持）⇒ 必须明说，不假装成功。
     vi.stubGlobal('navigator', { ...navigator, clipboard: undefined })

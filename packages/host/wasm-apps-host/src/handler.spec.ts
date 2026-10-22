@@ -51,6 +51,8 @@ interface Harness {
   fetch: ReturnType<typeof vi.fn>
   clearSession: ReturnType<typeof vi.fn>
   warnings: string[]
+  /** U-08：过期通知 / 清会话的先后顺序。 */
+  events: Array<{ kind: 'expired', appId: string, path: string } | { kind: 'cleared' }>
   setLocale: (locale: 'zh' | 'en' | undefined) => void
 }
 
@@ -65,17 +67,29 @@ function harness(
     cache?: AppSchemeHandlerDeps['cache']
     cacheScope?: AppSchemeHandlerDeps['cacheScope']
     cacheVersion?: AppSchemeHandlerDeps['cacheVersion']
+    /** F-04：客户端登录页 URL（不给 ⇒ 页面只给「重试」）。 */
+    signInHref?: () => string | undefined
+    /** U-08：会话在应用窗口里过期时的通知（不给 ⇒ 只看 clearSession）。 */
+    onSessionExpired?: (expired: { appId: string, path: string }) => void
   } = {},
 ): Harness {
   const fetchMock = vi.fn(respond)
   const clearSession = vi.fn()
+  /** U-08：过期通知与清会话的**相对顺序**（页面必须先被宿主记下再清会话）。 */
+  const events: Array<{ kind: 'expired', appId: string, path: string } | { kind: 'cleared' }> = []
   const warnings: string[] = []
   let locale: 'zh' | 'en' | undefined = 'zh'
   const deps: AppSchemeHandlerDeps = {
     appOriginScheme: 'zeokeel-app',
     session: () => session,
     fetch: fetchMock as unknown as AppSchemeHandlerDeps['fetch'],
-    clearSession,
+    clearSession: () => {
+      events.push({ kind: 'cleared' })
+      clearSession()
+    },
+    ...(options.onSessionExpired === undefined
+      ? {}
+      : { onSessionExpired: (expired: { appId: string, path: string }) => { events.push({ kind: 'expired', ...expired }); options.onSessionExpired!(expired) } }),
     hostLocale: (acceptLanguage) => locale ?? (acceptLanguage?.startsWith('en') === true ? 'en' : 'zh'),
     warn: message => warnings.push(message),
     // 默认给一个**能签发**的 proof 提供者：真实链路上它总在（安装密钥仓库由桌面壳
@@ -88,12 +102,14 @@ function harness(
     ...(options.cache === undefined ? {} : { cache: options.cache }),
     ...(options.cacheScope === undefined ? {} : { cacheScope: options.cacheScope }),
     ...(options.cacheVersion === undefined ? {} : { cacheVersion: options.cacheVersion }),
+    ...(options.signInHref === undefined ? {} : { signInHref: options.signInHref }),
   }
   return {
     handler: createAppSchemeHandler(deps),
     fetch: fetchMock,
     clearSession,
     warnings,
+    events,
     setLocale: (next) => { locale = next },
   }
 }
@@ -212,6 +228,104 @@ describe('app scheme handler — platform failures', () => {
     expect(h.clearSession).toHaveBeenCalledTimes(1)
     expect(response.status).toBe(401)
     expect(await response.text()).toContain('登录已过期')
+  })
+
+  /**
+   * U-08（2026-10-22 评审）：401 时先把"哪一扇应用窗口、哪个路径"通知宿主，**再**清
+   * 会话 —— 顺序反了宿主就只能看到一个已经消失的窗口（清理链同步关窗）。
+   *
+   * 变异：把 `deps.onSessionExpired?.()` 挪到 `deps.clearSession()` 之后 ⇒ 顺序断言红；
+   * 删掉那段 ⇒ 事件数组里没有 `expired` ⇒ 红。
+   */
+  it('401 时先通知宿主"哪个应用窗口过期了"、再清会话（U-08）', async () => {
+    const expired: Array<{ appId: string, path: string }> = []
+    const h = harness(
+      async () => new Response(JSON.stringify({ error: { code: 'AUTH_REQUIRED', message: 'no token' } }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      undefined,
+      { onSessionExpired: value => { expired.push(value) } },
+    )
+    const response = await h.handler(appRequest('/notes?tab=2', { headers: { accept: 'text/html' } }))
+    expect(response.status).toBe(401)
+    expect(expired).toEqual([{ appId: 'demo', path: '/notes' }])
+    expect(h.events).toEqual([
+      { kind: 'expired', appId: 'demo', path: '/notes' },
+      { kind: 'cleared' },
+    ])
+  })
+
+  /**
+   * F-04（P1，2026-10-22 审计）：会话过期/未登录页**必须能自救**。
+   *
+   * 修前这两页只有文案（页面壳结构上没有按钮位），用户按字面指示去"重新登录"却发现
+   * 没有入口。判据：页面里真的出现重试链接（目标 = 这一次请求的 URL）和登录页链接
+   * （目标 = 宿主注入的客户端登录页），且**拿不到登录页地址时不渲染那个按钮**。
+   *
+   * 变异：把 `pageActionsFor(request)` 从 401 分支去掉 ⇒ 本节红。
+   */
+  it('平台 401 页带「重试 + 重新登录」两个可点动作（F-04）', async () => {
+    const h = harness(async () => new Response(JSON.stringify({ error: { code: 'AUTH_REQUIRED', message: 'no token' } }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    }), undefined, { signInHref: () => 'http://127.0.0.1:41234/login' })
+    const response = await h.handler(appRequest('/notes?tab=2', { headers: { accept: 'text/html' } }))
+    const body = await response.text()
+    expect(response.status).toBe(401)
+    // 重试目标 = 这一次请求的 URL（会话恢复后同一条请求就能成功）。
+    expect(body).toContain('href="zeokeel-app://demo/notes?tab=2"')
+    expect(body).toContain('>重试</a>')
+    // 登录页 = 宿主注入的客户端登录页（唯一允许应用窗口导航到的跨 origin 目标）。
+    expect(body).toContain('href="http://127.0.0.1:41234/login"')
+    expect(body).toContain('>重新登录</a>')
+  })
+
+  it('未登录页同样带动作；拿不到登录页地址就只给「重试」（不造死按钮）', async () => {
+    const withLogin = harness(async () => envelopeResponse('nope'), null, { signInHref: () => 'http://127.0.0.1:41234/login' })
+    const body = await (await withLogin.handler(appRequest('/', { headers: { accept: 'text/html' } }))).text()
+    expect(body).toContain('>重试</a>')
+    expect(body).toContain('>重新登录</a>')
+
+    const withoutLogin = harness(async () => envelopeResponse('nope'), null)
+    const bare = await (await withoutLogin.handler(appRequest('/', { headers: { accept: 'text/html' } }))).text()
+    expect(bare).toContain('>重试</a>')
+    expect(bare).not.toContain('>重新登录</a>')
+  })
+
+  /**
+   * F-04 / 反证审计 R-04：**平台 500 与本地错误页同样必须能自救**。
+   *
+   * 修前只有 401 两页接了动作（页面壳有了槽位，只接了两处）—— 而用户最常撞到的
+   * 恰恰是 404/410/500 与"编译失败"这些 `localError` 出来的页面：一句"打不开"，
+   * 零个可点的东西。判据 = 页面里真的出现指向**这一次请求 URL** 的重试链接。
+   *
+   * 变异：把 `actions: pageActionsFor(request)` 从 `localError` 去掉 ⇒ 本节两条红。
+   */
+  it('平台 500（信封错误）文档导航页必须含可点重试（R-04）', async () => {
+    const h = harness(async () => new Response(JSON.stringify({
+      error: { code: 'INTERNAL', message: 'server exploded' },
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } }))
+    const response = await h.handler(appRequest('/notes?tab=2', { headers: { accept: 'text/html' } }))
+    expect(response.status).toBe(500)
+    const body = await response.text()
+    expect(body).toContain('>重试</a>')
+    // 重试目标 = 这一次请求的 URL（会话/瞬时故障恢复后同一条请求就能成功）。
+    expect(body).toContain('href="zeokeel-app://demo/notes?tab=2"')
+    // 没注入登录页地址 ⇒ 不渲染"死按钮"（与 401 两页同一判据）。
+    expect(body).not.toContain('>重新登录</a>')
+  })
+
+  it('本地错误页（平台响应不可读 ⇒ 502 localError）也给重试动作（R-04）', async () => {
+    const h = harness(async () => new Response(JSON.stringify({ nope: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    const response = await h.handler(appRequest('/', { headers: { accept: 'text/html' } }))
+    expect(response.status).toBe(502)
+    const body = await response.text()
+    expect(body).toContain('>重试</a>')
+    expect(body).toContain('href="zeokeel-app://demo/"')
   })
 
   it('renders the platform error envelope for a document navigation', async () => {

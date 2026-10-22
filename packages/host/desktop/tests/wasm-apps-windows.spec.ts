@@ -177,6 +177,29 @@ describe('provideWasmAppsWindows（桌面壳 → 插件的服务接线）', () =
     const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8')
     expect(main).toMatch(/createRealElectronWindowAdapter\(\{[\s\S]{0,600}?locale: \(\) => runtime\.locale/)
   })
+
+  /**
+   * U-03（2026-10-22 评审）：应用窗口的渲染错误 preload 与主进程上报出口**必须在
+   * main.ts 的装配点接上**。三者任何一条缺失，现象都是"窗口照常打开、Sentry 零信号"，
+   * 而所有离线门禁（host 包的行为判据用的是替身）仍然全绿 —— 所以这一条打在接线形状上。
+   *
+   * 变异：删掉 `rendererErrorPreload: RENDERER_ERROR_PRELOAD` ⇒ 第一条红；删掉
+   * `reportRendererError:` 映射 ⇒ 第二条红；删掉 scheme 登记 ⇒ 第三条红。
+   */
+  it('U-03：main.ts 给应用窗口接上同一份 preload + 上报出口 + 应用 scheme 登记', () => {
+    const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8')
+    expect(main).toContain("import { RENDERER_ERROR_PRELOAD } from './window-options.ts'")
+    expect(main).toMatch(/createRealElectronWindowAdapter\(\{[\s\S]{0,1200}?rendererErrorPreload: RENDERER_ERROR_PRELOAD/)
+    expect(main).toMatch(/reportRendererError: report => \{ reportRendererError\(toRendererErrorReport\(report\)\) \}/)
+    expect(main).toMatch(/registerRendererErrorAppScheme\(APP_ORIGIN_SCHEME\)/)
+    // 失败页诊断要有客户端版本与主题（暗色不闪白 / 诊断块 `client:` 一行）。
+    expect(main).toMatch(/appVersion: app\.getVersion\(\)/)
+    expect(main).toMatch(/isDarkTheme: \(\) => nativeTheme\.shouldUseDarkColors/)
+    // 同一份 preload 也仍然是 shell 窗口的（不得为了应用窗口把它从 shell 拿掉）。
+    const windowOptions = readFileSync(new URL('../src/window-options.ts', import.meta.url), 'utf8')
+    expect(windowOptions).toMatch(/export const RENDERER_ERROR_PRELOAD = /)
+    expect(windowOptions).toMatch(/preload: RENDERER_ERROR_PRELOAD/)
+  })
 })
 
 /** 防止"用替身把契约换掉"：真实适配器的构造入口必须存在（形状由另一个 spec 钉住）。 */

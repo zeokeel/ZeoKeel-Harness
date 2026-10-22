@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { AI_CHAT_PATH, AI_HIDDEN_SESSION_PREFIX, AI_CHAT_MAX_MESSAGES, AI_CHAT_MAX_CONTENT_BYTES } from './ai-chat.ts'
+import { WASM_APP_AI_CHAT_ROUTE, WASM_APPS_LOCAL_PREFIX } from './index.ts'
 
 const CLIENT_SOURCE = fileURLToPath(new URL('../../../../packages/client/wasm-apps/src/client/app-ai.ts', import.meta.url))
 
@@ -65,5 +66,25 @@ describe('AI 桥保留路径：客户端真源逐字对拍（L7 §五② / J6）
     // `app-session-id-contract.spec.ts`（与服务端 app-session-id.json 同一份语料）。
     expect(AI_HIDDEN_SESSION_PREFIX).toBe('app:')
     expect(clientSource()).toContain('app:<app_id>')
+  })
+
+  /**
+   * F-01（P0，2026-10-22 审计）：**客户端页 origin 上的那条路径必须两端同名**。
+   *
+   * 上面几条只对拍"应用 origin 的保留路径"，而 F-01 的形态恰好是"这条路径在**另一个
+   * origin** 上没人服务"—— 对拍再严也证明不了可达性。`index.spec.ts` 的「F-01…」一组
+   * 用**真装配路径**证明路由真实注册且请求到达执行面；这里补的是**两端常量对拍**
+   * （宿主注册的 path 与客户端打的 path 逐字相同，任一侧改名当场红）。
+   */
+  it('客户端页 origin 的 AI 路由：客户端常量逐字等于宿主注册的 WASM_APP_AI_CHAT_ROUTE', () => {
+    const raw = clientSource()
+    expect(literalOf(raw, 'APP_AI_HOST_CHAT_PATH')).toBe(WASM_APP_AI_CHAT_ROUTE)
+    // 它挂在**本机命名路由前缀**下（不是应用 origin 的 `/__zeokeel` 保留面：那条留在
+    // 应用窗口的协议 handler 里，职责不同）。
+    expect(WASM_APP_AI_CHAT_ROUTE).toBe(`${WASM_APPS_LOCAL_PREFIX}/ai/chat`)
+    expect(WASM_APP_AI_CHAT_ROUTE.startsWith('/__zeokeel')).toBe(false)
+    // 客户端必须**按场景分流**：传 appId ⇒ 上面那条本机路由；不传 ⇒ 保留路径。
+    expect(raw).toContain('APP_AI_HOST_CHAT_PATH')
+    expect(raw).toContain('APP_AI_CHAT_PATH')
   })
 })

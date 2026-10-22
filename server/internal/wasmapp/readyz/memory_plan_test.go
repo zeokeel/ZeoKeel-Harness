@@ -38,14 +38,23 @@ func TestDefaultPlanPreservesHistoricalNumbers(t *testing.T) {
 	if want := int64(limits.GlobalInstances) * readyz.DefaultAppDBPageCachePerHandleBytes; b.AppDBCache != want {
 		t.Fatalf("默认档页缓存账 = %d，期望 %d", b.AppDBCache, want)
 	}
-	if b.Total != b.Instances+b.CompilePeak+b.UploadPeak+b.CacheResident+b.AppDBCache {
-		t.Fatalf("总账必须包含页缓存这笔：%+v", b)
+	// 排队请求体这笔也必须进默认档的账（P1-3）：= limits.WasmQueueBodyBytesMax。
+	if b.QueueBody != limits.WasmQueueBodyBytesMax {
+		t.Fatalf("默认档排队体账 = %d，期望 %d", b.QueueBody, limits.WasmQueueBodyBytesMax)
+	}
+	if b.Total != b.Instances+b.CompilePeak+b.UploadPeak+b.CacheResident+b.AppDBCache+b.QueueBody {
+		t.Fatalf("总账必须包含页缓存与排队体这两笔：%+v", b)
 	}
 }
 
 // TestPlanScalesFourAccounts：换档位必须真的改变四笔账（而不是只改个名字）。
 func TestPlanScalesFourAccounts(t *testing.T) {
-	const available = 992 << 20
+	// ⚠️ 机器图 2026-10-22 由 992 MiB 改为 2 GiB（生产评审 P1-3）：内存账多了"排队请求体"
+	// 这一笔（256 MiB，= limits.WasmQueueBodyBytesMax，与运行期硬上界同源）。small 档的
+	// 账面因此从 645 MiB 变成 901 MiB —— 992 MiB 的机器（水位 694 MiB）按规则**应当**判红
+	// （645/694 = 93%，本来就没有给 Go 堆/协议缓冲留余量）。这里没有把这笔算成 0 来维持
+	// 旧期望，而是把机器图换成 small 档自己声明的目标档位（"适合 2 GB 级机器"）。
+	const available = 2 << 30
 	small := readyz.MemoryPlan{
 		Profile:             "small",
 		Instances:           3,
@@ -54,15 +63,19 @@ func TestPlanScalesFourAccounts(t *testing.T) {
 	}
 	b := readyz.ComputeMemoryBudgetFor(available, small)
 	// 3 × 64 MiB = 192 MiB；+256 +118 +64 = 630 MiB；再 + 应用库页缓存这笔
-	// （3 句柄 × 默认每句柄 (1+4) MiB = 15 MiB）⇒ 645 MiB。
-	if want := int64(645 << 20); b.Total != want {
-		t.Fatalf("small 档 total = %dMiB，期望 %dMiB", b.Total>>20, want>>20)
+	// （3 句柄 × 默认每句柄 (1+4) MiB = 15 MiB）⇒ 645 MiB；
+	// 再 + 排队请求体 256 MiB ⇒ 901 MiB。
+	if want := int64(901 << 20); b.Total != want {
+		t.Fatalf("small 档 total = %dMiB，期望 %dMiB（含排队体这一笔）", b.Total>>20, want>>20)
 	}
 	if want := int64(15 << 20); b.AppDBCache != want {
 		t.Fatalf("small 档的页缓存这笔 = %dMiB，期望 %dMiB（句柄数 = plan.Instances）", b.AppDBCache>>20, want>>20)
 	}
+	if b.QueueBody != limits.WasmQueueBodyBytesMax {
+		t.Fatalf("small 档也必须计入排队体 %d，得到 %d", limits.WasmQueueBodyBytesMax, b.QueueBody)
+	}
 	if !b.OK {
-		t.Fatalf("small 档应通过 992 MiB 机器的水位检查：limit=%dMiB", b.Limit>>20)
+		t.Fatalf("small 档应通过 2 GiB 机器的水位检查：limit=%dMiB", b.Limit>>20)
 	}
 	if b.Profile != "small" {
 		t.Fatalf("档位名应透传，得到 %q", b.Profile)

@@ -466,6 +466,30 @@
       "file": "0085_usage_search_billing.sql",
       "bytes": 1624,
       "sha256": "acd119f55ca9fa75fa829bc63307c2b73ad1c02c0c80992eef85d57349352cd0"
+    },
+    {
+      "version": "0086",
+      "file": "0086_wasm_app_deployments.sql",
+      "bytes": 7783,
+      "sha256": "1f4af18c0a8c567bdc504a97cb1b6ba068e8b7535f8076d48e77463749e49fea"
+    },
+    {
+      "version": "0087",
+      "file": "0087_wasm_app_limits.sql",
+      "bytes": 4670,
+      "sha256": "4f0dc184df3fb49b64a0716553ffbd2cdc1b703e2856055fdff7b3162419fb6d"
+    },
+    {
+      "version": "0088",
+      "file": "0088_apps_data_cleaned_at.sql",
+      "bytes": 1648,
+      "sha256": "62106699124dbf0fc1924ab4bd6b75590307d1bb9eef8a83bb50225403903691"
+    },
+    {
+      "version": "0089",
+      "file": "0089_wasm_call_events_version.sql",
+      "bytes": 930,
+      "sha256": "b34762ec41a3683d6833410a8506295320358d174eb239ac59ddf130a33764f2"
     }
   ]
 }

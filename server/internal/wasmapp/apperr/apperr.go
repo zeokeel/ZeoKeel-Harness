@@ -19,15 +19,22 @@ type Code string
 
 // §7.4 失败语义表（本清单即文档表格，门禁测试逐条比对）。
 const (
-	CodeRuntimeTimeout          Code = "RUNTIME_TIMEOUT"
-	CodeRuntimeTrap             Code = "RUNTIME_TRAP"
-	CodeRuntimeMemory           Code = "RUNTIME_MEMORY"
-	CodeRuntimeOutputOverrun    Code = "RUNTIME_OUTPUT_OVERRUN"
-	CodeRuntimeNoResponse       Code = "RUNTIME_NO_RESPONSE"
-	CodeRuntimeGuestExit        Code = "RUNTIME_GUEST_EXIT"
-	CodeHostCallOverBudget      Code = "HOST_CALL_OVER_BUDGET"
-	CodeAuthRequired            Code = "AUTH_REQUIRED"
-	CodeModuleKilled            Code = "MODULE_KILLED"
+	CodeRuntimeTimeout       Code = "RUNTIME_TIMEOUT"
+	CodeRuntimeTrap          Code = "RUNTIME_TRAP"
+	CodeRuntimeMemory        Code = "RUNTIME_MEMORY"
+	CodeRuntimeOutputOverrun Code = "RUNTIME_OUTPUT_OVERRUN"
+	CodeRuntimeNoResponse    Code = "RUNTIME_NO_RESPONSE"
+	CodeRuntimeGuestExit     Code = "RUNTIME_GUEST_EXIT"
+	CodeHostCallOverBudget   Code = "HOST_CALL_OVER_BUDGET"
+	CodeAuthRequired         Code = "AUTH_REQUIRED"
+	CodeModuleKilled         Code = "MODULE_KILLED"
+	// CodeModuleLoadQueued 是**平台侧排队**导致的等待超时：请求在等冷编译/冷加载槽位时到期。
+	//
+	// 2026-10-22 审计 A4 新增：此前这两种等待失败复用 MODULE_KILLED，文案写
+	// 「请求已取消（客户端断开或墙钟到点）」—— 把"平台正在编译别的应用、你在排队"
+	// 归因成"你的请求被取消"，作者/用户会去改自己的代码。现在单列一个码（503，
+	// 语义 = 稍后重试可恢复），details 带排队深度 `queue_depth`。
+	CodeModuleLoadQueued        Code = "MODULE_LOAD_QUEUED"
 	CodeDBLimit                 Code = "DB_LIMIT"
 	CodeDBDenied                Code = "DB_DENIED"
 	CodeAppQueueFull            Code = "APP_QUEUE_FULL"
@@ -226,6 +233,7 @@ var codeStatus = map[Code]int{
 	CodeHostCallOverBudget:      http.StatusGatewayTimeout,      // 504
 	CodeAuthRequired:            http.StatusUnauthorized,        // 401
 	CodeModuleKilled:            http.StatusGatewayTimeout,      // 504
+	CodeModuleLoadQueued:        http.StatusServiceUnavailable,  // 503（平台排队，稍后重试可恢复）
 	CodeDBLimit:                 http.StatusInsufficientStorage, // 507
 	CodeDBDenied:                http.StatusForbidden,           // 403
 	CodeAppQueueFull:            http.StatusTooManyRequests,     // 429
@@ -343,5 +351,9 @@ var CommonHints = map[Code][]string{
 	},
 	CodeAppQueueFull: {
 		"应用当前请求过多（该应用的并发与队列都已占满），请稍后重试",
+	},
+	CodeModuleLoadQueued: {
+		"这是**平台侧排队**（冷编译/冷加载是串行的），不是你的应用出错：稍后重试即可",
+		"若持续出现：减少首次打开的并发，或把应用体积/首次编译耗时降下来；运维侧可调编译并发或稍后再试",
 	},
 }

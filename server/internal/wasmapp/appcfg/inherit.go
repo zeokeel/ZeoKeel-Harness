@@ -25,8 +25,9 @@ import (
 //     意图，必须能真的把 access 改成 login、把名单清空、把声明清空；
 //   - 首版（没有上一版）没有可继承的基线 ⇒ 缺省仍是 login（既有语义不回归）。
 //
-// 基线的真源**只有一个**：最新 approved 版本的 `config_json`（api/publish.go 的
-// inheritBase 走 serverstore.LatestApprovedWasmReleaseMeta，与交付面/审批面同源）。
+// 基线的真源**只有一个**：**当前部署版本**（apps.current_release_id 指向的那一版）的
+// `config_json`（api/publish.go 的 inheritBase 走 serverstore.CurrentWasmReleaseMeta，
+// 与交付面/审批面同源）。⚠️ 不是 max(id) approved：回滚后两者不同（2026-10-22 反证 P0）。
 // 它**不是** `apps.config_json` 这一列 —— 那一列是显示投影，首版待审时也曾被写入，
 // 拿它当基线等于让一个没人批准过的配置成为后续版本的默认值（2026-09-19 审计 §1.2）。
 //

@@ -386,8 +386,9 @@ func (endlessReader) Read(p []byte) (int, error) {
 // 把判据 1 的守卫摘掉后判据 2/3 也必红，已实测）。
 //
 // ⚠️ 两个请求必须注入**两个不同员工**（2026-09-19 W4 起身份一律注入）：队列还有一条
-// §4.6 的"单用户同应用同时运行数 = 1"（limits.UserPerAppRunning），同一员工的两次并发
-// 请求会被它**按设计**串行 —— 那不是本用例要测的东西。这里测的是**每应用**并发。
+// §4.6 的"单用户同应用同时运行数"上限（`limits.UserPerAppRunning`，2026-10-22 起默认 2），
+// 同一员工的两次以上并发请求会被它**按设计**排队 —— 那不是本用例要测的东西。
+// 这里测的是**每应用**并发（用两个不同用户把"用户维度"这条闸门排除掉）。
 func TestServe_SameAppRequestsRunConcurrentlyByDefault(t *testing.T) {
 	e := newEnv(t) // 不注入 Scheduler：要测的正是**默认配置**
 	appID := e.appID("concurrent")
@@ -398,8 +399,8 @@ func TestServe_SameAppRequestsRunConcurrentlyByDefault(t *testing.T) {
 		t.Fatalf("默认每应用并发 = %d，必须 > 1（否则默认部署下同应用仍是串行）", perApp)
 	}
 	users := []*serverstore.User{e.ownerUser, e.clientUser("bob-conc")}
-	if got := e.srv.scheduler.Options().PerUserPerAppRunning; got != 1 {
-		t.Fatalf("用例前提：单用户同应用并发应为 1（§4.6），得到 %d", got)
+	if got, want := e.srv.scheduler.Options().PerUserPerAppRunning, limits.UserPerAppRunning; got != want {
+		t.Fatalf("用例前提：单用户同应用并发应等于 limits.UserPerAppRunning=%d（§4.6），得到 %d", want, got)
 	}
 
 	const holdMS = 600

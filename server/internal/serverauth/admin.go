@@ -1281,8 +1281,20 @@ func (a *AdminAPI) usage(c *gin.Context) {
 // report:read 者读原文;库内历史行与哈希链逐字节不动(见 audit_redact.go)。
 func (a *AdminAPI) listAuditLogs(c *gin.Context) {
 	_, size, offset := paginate(c, 50, 500)
-	logs, total, err := serverstore.ListAuditLogsPagedFiltered(a.DB, offset, size,
-		c.Query("action"), c.Query("username"))
+	var (
+		logs  []serverstore.AuditLogEntry
+		total int64
+		err   error
+	)
+	if appID := strings.TrimSpace(c.Query("app_id")); appID != "" {
+		// app 维度过滤（WASM 平台审计：谁在什么时候对这个应用做了什么）。
+		// app_id 为空串 = 不过滤（保持旧行为）；非法形状交给 DAO 归一化（小写/trim）。
+		logs, total, err = serverstore.ListAuditLogsPagedFilteredByApp(a.DB, offset, size,
+			c.Query("action"), c.Query("username"), appID)
+	} else {
+		logs, total, err = serverstore.ListAuditLogsPagedFiltered(a.DB, offset, size,
+			c.Query("action"), c.Query("username"))
+	}
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
 		return

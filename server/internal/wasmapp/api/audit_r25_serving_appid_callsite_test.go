@@ -103,6 +103,14 @@ var servingAppIDCallers = []string{
 	"h.adminFreeze",
 	"h.adminRows",
 	"h.adminSchema",
+	// 应用级限流覆盖（迁移 0087，决策 2026-10-22 §2.3）：三条端点都作用于**既有行**的
+	// `:app_id` 路径参数（覆盖只能挂在已存在的应用上），因此必须走**服务侧**校验 ——
+	// 写侧规则里的"与平台路由静态段同名"套在存量应用上会把正常服务的应用变成 400。
+	// saveAppLimits 是 PUT/DELETE 的共用实现（两条 handler 都经它）。
+	"h.adminAppLimitsGet",
+	"h.adminAppLimitsPut",
+	"h.adminAppLimitsDelete",
+	"h.saveAppLimits",
 	// —— 经 h.reviewRelease ——
 	"h.adminApproveRelease",
 	"h.adminRejectRelease",
@@ -115,6 +123,25 @@ var servingAppIDCallers = []string{
 	"h.freeze",
 	"h.deleteApp",
 	"h.rows",
+	// —— 生命周期重设计（迁移 0086，设计 2026-10-22 §6）：全部作用于**既有行**的
+	// :app_id 路径参数，因此必须走**服务侧**校验（写侧规则含「与平台路由静态段同名」，
+	// 套在存量应用上会把本来正常服务的应用变成 400 —— 正是 Y3-1 的缺陷形态）。
+	//   * 员工面：部署历史/部署（回滚）/撤回/恢复（经 h.ownedApp）；
+	//   * 管理面：部署历史/部署/恢复/删除/导出（经 h.adminLifecycleApp → h.loadAdminApp），
+	//     待审队列是平台级只读（无 app_id 参数，不在这份清单的语义里）。
+	"h.deployments",
+	"h.deployRelease",
+	"h.withdrawRelease",
+	"h.restoreApp",
+	"h.adminLifecycleApp",
+	"h.adminDeployments",
+	"h.adminDeployRelease",
+	"h.adminRestoreApp",
+	"h.adminDeleteApp",
+	"h.adminExport",
+	// 管理面冻结/解冻：委托给共享实现（共享实现本身**不**装载应用 —— 它拿到的
+	// 是已校验过的 app，因此只有这条入口落在服务侧闭包里）。
+	"h.adminFreezeLifecycle",
 }
 
 // writeSideAppIDCallers 是**能抵达写侧入口**的全部节点（反向可达闭包，含入口自身）。

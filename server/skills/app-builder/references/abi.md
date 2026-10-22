@@ -310,6 +310,7 @@ node scripts/pack-assets.mjs --in app.wasm --out dist/app-packed.wasm \
 | `HOST_CALL_OVER_BUDGET` | 504 | 宿主调用超预算 | 拆小单次调用；不要依赖长阻塞 |
 | `AUTH_REQUIRED` | 401 | 身份未验证却调用需要身份的能力 | 平台一律要求登录（历史 `public` 配置读取侧按 `login` 处理）：确认请求来自登录态，或引导用户先登录 |
 | `MODULE_KILLED` | 504 | 请求被取消 / 实例已关闭 | 同超时处理：拆小、重试前先确认状态 |
+| `MODULE_LOAD_QUEUED` | 503 | **平台侧排队**：等待冷编译/冷加载槽位时到期（不是你的应用出错） | 稍后重试可恢复；持续出现就降低首次打开并发、减小体积/首次编译耗时 |
 | `DB_LIMIT` | 507 | **只有**「库写满」（100 MB 上限）—— 以及单行超过 168 KiB（一行都返回不了；"丢掉全部行仍装不进 1 MiB 帧"也回这一档） | 清理旧数据或做汇总表；别把大对象塞进一行。**行数/字节超限不是这个码**（见 §3.3 的 `truncated`） |
 | `RESULT_TOO_LARGE` | 422 | 宿主调用的结果装不进一个协议帧（1 MiB） | 缩小本次调用的返回内容（`db.query` 走分页；`assets.read` 换小资源） |
 | `DB_DENIED` | 403 | 语句被拒（DDL / 多语句 / `WITH`·`EXPLAIN` / 保留列 `_row_id` 及其别名 / 类型不符）、**语句超过 5 秒被中断**（`details.reason = "statement_timeout"`），或事务内调了被禁能力 | 建表用 `db.define`，语句只留四个动词，值走 `args`；保留列规则见 §3.2；事务规则见 §3.4；先读 `details.reason` 再决定是改 SQL 还是加 `LIMIT` |

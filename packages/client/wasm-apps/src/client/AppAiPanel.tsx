@@ -238,6 +238,11 @@ export function AppAiPanel({ appId, scope, store, deps }: {
       ...(deps === undefined ? {} : { deps }),
       signal: abort.signal,
       onDelta: (_delta, accumulated) => { setStreaming(accumulated) },
+      // F-01（P0）：本面板渲染在**客户端主渲染页**（应用中心详情页），那个 origin 上
+      // 只有宿主经 `createHostRequestSurface` 注册的本机命名路由；`/__zeokeel/ai/chat`
+      // 是**应用 origin** 的保留面（只有应用窗口的协议 handler 服务）—— 不传 appId
+      // 会让每一次「发送」都打到一个没人接的路径上（修前实测：必失败）。
+      appId,
     })
     controller.current = null
     setBusy(false)
@@ -270,6 +275,12 @@ export function AppAiPanel({ appId, scope, store, deps }: {
       </div>
       <div style={{ marginTop: 4, color: 'var(--dsw-alias-label-secondary)' }} data-role="ai-tools-note">
         {t('appCenter.ai.toolsNote')}
+      </div>
+      {/* F-08（2026-10-22 审计）：详情页同时摆着两个"AI"（应用内助手 vs 能读数据的
+          构建助手），界面上不说关系 ⇒ 用户以为"允许应用 AI"就等于"允许 AI 读数据"。
+          这一行把两者分开，并指路到数据面板里的另一项授权。 */}
+      <div style={{ marginTop: 4, color: 'var(--dsw-alias-label-secondary)' }} data-role="ai-relation">
+        {t('appCenter.ai.relation')}
       </div>
 
       {/* 首次使用：一次性说明卡（未授权时不渲染输入框 —— 闸门必须在输入之前）。 */}

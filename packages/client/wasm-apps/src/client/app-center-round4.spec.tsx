@@ -23,7 +23,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppCenterPanel } from './AppCenterPanel.tsx'
 import { setAppChannel, type AppChannel } from './channel-seam.ts'
-import { APP_AI_CHAT_PATH, APP_AI_CONSENT_PATH } from './app-ai.ts'
+import { APP_AI_CONSENT_PATH, APP_AI_HOST_CHAT_PATH } from './app-ai.ts'
 import type { OnboardingStore } from './onboarding.ts'
 import { setAppShareScheme } from './deep-link.ts'
 import type { AppAiConsentStore, AppAiScope } from './app-ai.ts'
@@ -362,7 +362,12 @@ describe('空态 ③「全部下架」（§19 Q2 第二档，R1-L3-1）', () => 
     const block = container.querySelector('[data-role="catalog-all-disabled"]')
     expect(block).not.toBeNull()
     expect(block!.textContent).toContain('这些应用都已下架')
-    expect(block!.textContent).toContain('410 Gone')
+    // 2026-10-23 U-04/D-07：下架的空态不再拿 "410 Gone" 与应用地址/链接说事
+    // （那是旧域名模型的残留；应用只在客户端里打开，没有可访问的地址）。
+    expect(block!.textContent).not.toContain('410')
+    expect(block!.textContent).not.toContain('链接')
+    // 可恢复语义 + 下一步（找谁恢复）必须都在。
+    expect(block!.textContent).toContain('数据仍然保留')
     expect(block!.textContent).toContain('联系发布者或管理员')
     // 三档空态互斥：不是"没有应用"、不是"没有匹配"。
     expect(container.querySelector('[data-role="catalog-empty"]')).toBeNull()
@@ -837,8 +842,10 @@ describe('详情页：信息 / 分享 / 应用 AI（§21）', () => {
     await click('.zeokeel-app-ai-send')
     await settle()
     expect(aiCalls).toHaveLength(1)
-    expect(aiCalls[0]!.url).toBe(APP_AI_CHAT_PATH)
-    expect(JSON.parse(String(aiCalls[0]!.init.body))).toMatchObject({ stream: true })
+    // F-01（P0）：详情页在**客户端主渲染页**上 ⇒ 必须打宿主本机命名路由（带 app_id）；
+    // 修前打的是应用 origin 的保留路径 `/__zeokeel/ai/chat`，那个 origin 上没人服务。
+    expect(aiCalls[0]!.url).toBe(APP_AI_HOST_CHAT_PATH)
+    expect(JSON.parse(String(aiCalls[0]!.init.body))).toMatchObject({ app_id: 'shift-notes', stream: true })
     const messages = [...container.querySelectorAll('[data-role="ai-message"]')]
     expect(messages).toHaveLength(2)
     expect(messages[1]!.textContent).toContain('值班便签已更新')

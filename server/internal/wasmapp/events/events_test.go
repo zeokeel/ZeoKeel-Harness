@@ -69,11 +69,11 @@ func TestRingDropsOldestAndCounts(t *testing.T) {
 // 正是它的价值（列清单文本、callEventColumns、args 顺序三者必须同步；0072 加 evidence 列时改过）。
 func TestBuildInsertSQLShape(t *testing.T) {
 	one := buildInsertSQL(1)
-	if !strings.HasSuffix(one, "($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)") {
+	if !strings.HasSuffix(one, "($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)") {
 		t.Fatalf("单行占位符形状错:\n%s", one)
 	}
 	two := buildInsertSQL(2)
-	if !strings.Contains(two, "),($17,") {
+	if !strings.Contains(two, "),($18,") {
 		t.Fatalf("多行占位符编号/括号错:\n%s", two)
 	}
 	if n := strings.Count(two, "$"); n != 2*callEventColumns {
@@ -330,5 +330,28 @@ func TestEvidenceBoundedAndEscapedAtInsert(t *testing.T) {
 	}
 	if bad := got[1].m.Evidence; !utf8.ValidString(bad) {
 		t.Fatalf("非法 UTF-8 必须被替换（否则整批 INSERT 会被 PG 拒掉），得到 %q", bad)
+	}
+}
+
+// TestSinkPersistsVersion：诊断版本维度（迁移 0089 / D-02）——
+// 记录的是**请求实际执行版本**，不是"最新版本"。
+// 变异：insert 不写 version 列 / Record 丢 Version ⇒ 本用例红。
+func TestSinkPersistsVersion(t *testing.T) {
+	db, cleanup := serverstore.NewTestDB(t)
+	defer cleanup()
+	s := NewSink(db, Options{RingSize: 4, FlushInterval: time.Hour})
+	s.Record(capapi.CallMetrics{
+		AppID: "version-app", Version: "1.2.3", UserID: 7,
+		Outcome: capapi.OutcomeOK,
+	})
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	var got string
+	if err := db.QueryRow(`SELECT version FROM wasm_call_events WHERE app_id = 'version-app'`).Scan(&got); err != nil {
+		t.Fatalf("查事件: %v", err)
+	}
+	if got != "1.2.3" {
+		t.Fatalf("落库 version = %q，want 1.2.3", got)
 	}
 }

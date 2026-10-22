@@ -6,6 +6,17 @@
 // 调用点 `probeAuditWrapper2(db, adminUsername(c), "probe_new_action2", conn.ID)`）
 // ⇒ `Audit.test.tsx` 18 用例 `EXIT=0`。
 //
+// 2026-10-22（反证 F-7）又补了一层漏洞：**包级 `const` 实参**。`retirement/scheduler.go`
+// 写的是 `const auditAction = "wasm_app_purge"` + `s.opt.Audit(appID, auditActor, auditAction, detail)`
+// —— 动作名在承载位上是个**标识符**，只认 `"…"` 字面量的旧口径对它失明，于是"新增写点
+// 不补中文标签"这条判据在真源上直接漏掉一整条（审计页会显示裸 id）。
+// 现在承载位上的标识符会被解析到**同包（同目录）的包级 const/var 字符串声明**。
+//
+// 识别 const 实参后多出一个必须处理的干扰：同一出口名存在**多种签名**时，登记表把两种
+// 动作位都挂在同一个名字下，于是 `s.opt.Audit(appID, auditActor, auditAction, detail)` 的
+// 第 1 位（执行者常量）也会被当成承载位。现在按**实参个数**对已声明签名消歧（见
+// `declaredShapes`），执行者常量不会再变成"待补标签的动作"。
+//
 // 本模块把判据从"grep 字面量"升级为**按实际调用图/参数流**判定：
 //   ① 先把"哪些函数能把动作写进审计行"建成闭包：以登记/派生的 sink 为种子，沿调用图
 //      把"承载动作的形参位"向外传播（一层/多层本地包装、把 action 作为形参透传、
@@ -57,12 +68,44 @@ export interface AuditRowWriter {
   actionArg: number | null
 }
 
+/**
+ * 收集**所有** `func(… action …)` 型结构体字段声明（同名可有多份：`Audit` 在
+ * `handlers.Options` 是 3 参、在 `retirement.Scheduler` 是 4 参）。
+ *
+ * `findAuditActionFields`（按名字索引、后者覆盖前者）服务于"完整性登记表"；
+ * 按实参个数消歧需要**全部声明**，所以另开一个不丢声明的收集器。
+ * @param files - 非测试 Go 源文件。
+ * @returns 声明列表。
+ */
+export function findAuditActionFieldList(files: readonly GoSourceFile[]): AuditActionField[] {
+  const out: AuditActionField[] = []
+  for (const file of files) {
+    const text = blankComments(file.text)
+    const lines = text.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const m = FUNC_FIELD_RE.exec(lines[i]!)
+      if (m === null) continue
+      const name = m[1]!
+      const open = lines[i]!.indexOf('(', m.index)
+      const offset = lines.slice(0, i).reduce((acc, l) => acc + l.length + 1, 0) + open
+      const close = matchParen(text, offset)
+      const params = parseParamNames(text.slice(offset + 1, close))
+      const actionArg = actionParamIndex(params)
+      if (actionArg === null) continue
+      out.push({ name, file: file.path, line: i + 1, actionArg, arity: params.length })
+    }
+  }
+  return out
+}
+
 /** `func(… action …)` 型结构体字段（注入式审计出口）。 */
 export interface AuditActionField {
   name: string
   file: string
   line: number
   actionArg: number
+  /** 形参个数（用于按**实参个数**消歧同名出口的多种签名）。 */
+  arity: number
 }
 
 export interface AuditGraphAnalysis {
@@ -298,6 +341,55 @@ export function funcId(f: GoFuncInfo): string {
   return `${f.dir}|${f.receiver ?? ''}|${f.name}`
 }
 
+/** 包级字符串常量/变量（`const X = "…"` / `var X = "…"`，含 `const ( … )` 分组）。 */
+export interface GoStringConst {
+  name: string
+  value: string
+  file: string
+  line: number
+}
+
+const CONST_GROUP_OPEN = /^[\t ]*(?:const|var)[\t ]*\([\t ]*$/u
+const CONST_GROUP_ENTRY = /^[\t ]*([A-Za-z_][A-Za-z0-9_]*)[\t ]*(?:[A-Za-z_][A-Za-z0-9_.\[\]*]*[\t ]+)?=[\t ]*"((?:[^"\\]|\\.)*)"[\t ]*$/u
+const CONST_SINGLE = /^[\t ]*(?:const|var)[\t ]+([A-Za-z_][A-Za-z0-9_]*)[\t ]*(?:[A-Za-z_][A-Za-z0-9_.\[\]*]*[\t ]+)?=[\t ]*"((?:[^"\\]|\\.)*)"[\t ]*$/u
+
+/**
+ * 收集包级字符串常量（键 = `目录|名字`，与函数解析的包近似口径一致）。
+ *
+ * 只处理**单行**赋值形态（Go 里动作名常量都是这个形态）；分组 `const ( … )` 的每个条目
+ * 同样按行解析。字面量里的转义按 Go 语义原样保留（动作名不含转义，不影响正确性）。
+ * @param files - 非测试 Go 源文件。
+ * @returns 常量表。
+ */
+export function collectStringConsts(files: readonly GoSourceFile[]): Map<string, GoStringConst> {
+  const out = new Map<string, GoStringConst>()
+  for (const file of files) {
+    const text = blankComments(file.text)
+    const dir = file.path.split('/').slice(0, -1).pop() ?? ''
+    const lines = text.split('\n')
+    let inGroup = false
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!
+      if (CONST_GROUP_OPEN.test(line)) {
+        inGroup = true
+        continue
+      }
+      if (inGroup) {
+        if (/^[\t ]*\)[\t ]*$/u.test(line)) {
+          inGroup = false
+          continue
+        }
+        const m = CONST_GROUP_ENTRY.exec(line)
+        if (m !== null) out.set(`${dir}|${m[1]!}`, { name: m[1]!, value: m[2]!, file: file.path, line: i + 1 })
+        continue
+      }
+      const single = CONST_SINGLE.exec(line)
+      if (single !== null) out.set(`${dir}|${single[1]!}`, { name: single[1]!, value: single[2]!, file: file.path, line: i + 1 })
+    }
+  }
+  return out
+}
+
 /** 一次调用：被调名 + 限定符（`pkg.Fn` 的 `pkg`）+ 顶层实参。 */
 export interface CallSite {
   name: string
@@ -419,9 +511,10 @@ export function findAuditActionFields(files: readonly GoSourceFile[]): Map<strin
       // 字段可能跨行；用全文偏移找配对括号。
       const offset = lines.slice(0, i).reduce((acc, l) => acc + l.length + 1, 0) + open
       const close = matchParen(text, offset)
-      const actionArg = actionParamIndex(parseParamNames(text.slice(offset + 1, close)))
+      const params = parseParamNames(text.slice(offset + 1, close))
+      const actionArg = actionParamIndex(params)
       if (actionArg === null) continue
-      out.set(name, { name, file: file.path, line: i + 1, actionArg })
+      out.set(name, { name, file: file.path, line: i + 1, actionArg, arity: params.length })
     }
   }
   return out
@@ -514,12 +607,41 @@ export function analyzeAuditGraph(
     for (const f of byName.get(seed.name) ?? []) add(carriers, funcId(f))
   }
 
+  /**
+   * 已**声明**的出口签名（名字 → [{动作形参位, 形参个数}]）。
+   *
+   * 为什么需要它：同一个出口名可能有多种签名（`Audit` 在 `handlers.Options` 里是
+   * `func(username, ACTION, detail)`、在 `retirement.Scheduler` 里是
+   * `func(appID, username, ACTION, detail)`）。登记表把两种动作位都记在**同一个名字**下，
+   * 于是 `s.opt.Audit(cand.AppID, auditActor, auditAction, detail)` 的第 1 位
+   * （`auditActor = "system"`）也会被当成"承载动作的位" —— 识别 const 实参之后，
+   * `"system"` 就会凭空变成一个待补标签的审计动作。
+   *
+   * 按**实参个数**消歧即可：4 个实参的调用只可能是 4 参签名（动作在 2）。
+   */
+  const declaredShapes = new Map<string, { actionArg: number; arity: number }[]>()
+  const addShape = (name: string, actionArg: number, arity: number) => {
+    const list = declaredShapes.get(name)
+    if (list === undefined) declaredShapes.set(name, [{ actionArg, arity }])
+    else if (!list.some((s) => s.actionArg === actionArg && s.arity === arity)) list.push({ actionArg, arity })
+  }
+  for (const f of funcs) {
+    const idx = f.params.indexOf('action')
+    if (idx >= 0) addShape(f.name, idx, f.params.length)
+  }
+  for (const field of findAuditActionFieldList(files)) addShape(field.name, field.actionArg, field.arity)
+
   const carrierArgs = (call: CallSite, callDir: string): Set<number> => {
     const out = new Set<number>(virtual.get(call.name) ?? [])
     for (const f of resolve(call, callDir)) {
       for (const idx of carriers.get(funcId(f)) ?? []) out.add(idx)
     }
-    return out
+    if (out.size === 0) return out
+    // 实参个数能唯一对上某个已声明签名 ⇒ 只认那个签名的动作位（消歧）；
+    // 对不上（未声明/变参）⇒ 保留全部登记位（宁松勿漏）。
+    const matched = (declaredShapes.get(call.name) ?? []).filter((shape) => shape.arity === call.args.length)
+    const narrowed = matched.map((shape) => shape.actionArg).filter((idx) => out.has(idx))
+    return narrowed.length > 0 ? new Set(narrowed) : out
   }
 
   // 不动点：把"承载动作的形参位"沿调用图向外传播（多层包装/形参透传）。
@@ -550,7 +672,11 @@ export function analyzeAuditGraph(
     if (!grew) break
   }
 
-  // 抽动作名：扫描全部文件（含包级复合字面量里的函数字面量体），只认承载位上的字面量。
+  // 抽动作名：扫描全部文件（含包级复合字面量里的函数字面量体），承载位上认两种形态：
+  //   ① 字符串字面量 `"wasm_app_delete"`；
+  //   ② 同包（同目录）的包级 const/var 标识符（反证 F-7：`const auditAction = "wasm_app_purge"`
+  //      ⇒ 承载位上是 `auditAction`，只认字面量的口径会整条漏掉）。
+  const consts = collectStringConsts(files)
   const actions = new Map<string, string>()
   for (const [path, text] of texts) {
     const dir = path.split('/').slice(0, -1).pop() ?? ''
@@ -561,9 +687,15 @@ export function analyzeAuditGraph(
         const arg = call.args[idx]?.trim()
         if (arg === undefined) continue
         const literal = /^"([^"]*)"$/u.exec(arg)
-        if (literal === null) continue
-        const action = literal[1]!
-        if (!actions.has(action)) actions.set(action, `${path}:${lineAt(text, call.argsStart)}`)
+        if (literal !== null) {
+          const action = literal[1]!
+          if (!actions.has(action)) actions.set(action, `${path}:${lineAt(text, call.argsStart)}`)
+          continue
+        }
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(arg)) continue
+        const resolved = consts.get(`${dir}|${arg}`)
+        if (resolved === undefined) continue
+        if (!actions.has(resolved.value)) actions.set(resolved.value, `${resolved.file}:${resolved.line}`)
       }
     }
   }

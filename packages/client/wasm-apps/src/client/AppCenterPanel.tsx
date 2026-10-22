@@ -17,19 +17,26 @@ import {
   type AppOpenCounts,
   type OpenFailure,
   type OpenFailureReason,
+  type OpenWarning,
   type OpenWindowOutcome,
 } from './open-app.ts'
 import { DEFAULT_ACCESS, parseWindowSpec, type AccessMode, type AppWindowSpec } from './appcfg-contract.ts'
 import { formatWindowRatio, parseErrorEnvelope, type PublishFailure, type PublishTarget, type RequestDeps } from './publish-app.ts'
 import {
   deleteApp,
+  deployVersion,
+  fetchDeployments,
   fetchDiagnostics,
   setAppFrozen,
   setAppPublished,
+  withdrawRelease,
   type DeleteSuccess,
+  type DeploymentsReport,
+  type DeploySuccess,
   type DiagnosticsReport,
   type SetFrozenSuccess,
   type SetPublishedSuccess,
+  type WithdrawSuccess,
 } from './app-lifecycle.ts'
 import {
   RELEASE_STATUSES,
@@ -49,6 +56,7 @@ import {
 } from './channel-seam.ts'
 import { ensureHostProof } from './host-proof.ts'
 import { loadAppAiIdentity, type AppAiConsentStore, type AppAiDeps, type AppAiScope } from './app-ai.ts'
+import { AppAiConsentSummary } from './AppAiConsentSummary.tsx'
 import { appShareLink } from './deep-link.ts'
 import {
   CATALOG_PAGE_SIZE,
@@ -102,6 +110,26 @@ import { t, tCount, type AppCenterKey } from './locales.ts'
  */
 
 /** 目录条目（服务端 `catalog` 的字段子集；未知字段一律忽略）。 */
+/**
+ * 首版（**还没有任何生效版本**）的最近一次发布状态。
+ *
+ * 服务端只在**归属人**的目录行上下发它（`read.go` 的 `first_release*` 四个字段，
+ * U-02/评审 2026-10-23 P1）。它存在 = 这个应用占着标识但**打不开**（没有可交付
+ * 版本），且这一行**只有归属人看得到**（非归属人连行都没有，不泄露存在性）。
+ *
+ * 为什么必须走目录而不是新端点：撤回入口、版本历史、被拒理由都已经挂在目录行上
+ * （`GET …/:app_id/releases`），行一消失，这些入口就全部失去依附面 —— 这正是缺陷
+ * 的原形态（作者的首版待审应用在应用中心里"彻底消失"）。
+ */
+export interface FirstReleaseState {
+  /** 服务端 `first_release_status`：`pending` / `rejected` / `withdrawn`（未知状态原样显示）。 */
+  status: string
+  /** 服务端 `first_release_version`：撤回请求的路径参数（空串 = 服务端没下发）。 */
+  version: string
+  /** 服务端 `first_release_reason`：**只在 rejected 行**有内容（被拒理由）。 */
+  reason: string
+}
+
 export interface AppCenterItem {
   appId: string
   title: string
@@ -147,11 +175,27 @@ export interface AppCenterItem {
   /** 准入名单（**仅发布者本人**的目录行有；发新版时预填）。 */
   whitelist?: string[]
   /**
+   * 数据敏感度声明（**仅发布者本人**的目录行有）。
+   *
+   * 2026-10-22 生命周期改造（审计 F-02）：服务端 `read.go` 按 isOwner 下发
+   * `data_sensitivity`，发新版时作为表单初值；缺席 = 服务端没下发（旧版本服务端）
+   * ⇒ 表单留空并按"留空 = 沿用"提交（不静默清空）。
+   */
+  dataSensitivity?: string
+  /**
    * 作者声明的窗口规格（F3/§6：`window.ratio/width/height`）。
    *
    * 缺席 = 服务端没下发（或字段还没落地）⇒ 详情页不显示、也**不声称锁了比例**。
    */
   window?: AppWindowSpec
+  /**
+   * 首版状态（U-02）：服务端 `first_release*` 四个字段归一化后的结果。
+   *
+   * **缺席 = 这是正常应用**（有生效版本；或这一行压根不是首版行）。存在时：
+   * 应用打不开（服务端那一行的 `enabled` 是 false，`title/description/access` 来自
+   * 待审那一版本），行上要标「尚未上线」+ 状态 + 被拒理由，并给出撤回/版本历史。
+   */
+  firstRelease?: FirstReleaseState
 }
 
 /**
@@ -206,6 +250,7 @@ const RELEASE_STATUS_KEYS: Record<ReleaseStatus, AppCenterKey> = {
   pending: 'appCenter.releaseStatus.pending',
   approved: 'appCenter.releaseStatus.approved',
   rejected: 'appCenter.releaseStatus.rejected',
+  withdrawn: 'appCenter.releaseStatus.withdrawn',
 }
 
 /**
@@ -266,6 +311,12 @@ export type DeleteOutcome = DeleteSuccess | PublishFailure
 export type DiagnosticsOutcome = DiagnosticsReport | PublishFailure
 /** {@link SetPublishedOutcome} 的版本历史版本（R1-pm-3：审核结论的作者侧出口）。 */
 export type ReleasesOutcome = MyReleasesReport | PublishFailure
+/** 部署历史（只读；2026-10-22 生命周期重设计 §6.1）。 */
+export type DeploymentsOutcome = DeploymentsReport | PublishFailure
+/** 部署/回滚（写；设计 §3.3：用旧 approved 版本再部署一次）。 */
+export type DeployOutcome = DeploySuccess | PublishFailure
+/** 撤回待审版本（写；设计 §5.3）。 */
+export type WithdrawOutcome = WithdrawSuccess | PublishFailure
 
 /**
  * 删除成功后目录顶部的通知。
@@ -363,14 +414,27 @@ export function parseCatalogReport(payload: unknown): CatalogReport {
       currentVersion: typeof entry.current_version === 'string' ? entry.current_version : '',
       // 归属缺失 ⇒ false：不给"发新版"入口（服务端仍会兜底拒绝，见 ownedApp）。
       isOwner: entry.is_owner === true,
-      // 这两个字段只对发布者下发（作者预填用）；缺席时保持缺席，
+      // 这三个字段只对发布者下发（作者预填用）；缺席时保持缺席，
       // 让"没拿到"和"拿到空值"在类型上可区分。
       ...(typeof entry.purpose === 'string' ? { purpose: entry.purpose } : {}),
       ...(Array.isArray(entry.whitelist)
         ? { whitelist: entry.whitelist.filter((account): account is string => typeof account === 'string') }
         : {}),
+      ...(typeof entry.data_sensitivity === 'string' ? { dataSensitivity: entry.data_sensitivity } : {}),
       // 窗口声明（F3/§6）：服务端下发才带上；解析不出（越界/形态不符）就当没声明。
       ...(windowSpec === null ? {} : { window: windowSpec }),
+      // 首版（U-02）：**只有归属人**的行会带 `first_release:true`。判据用 `=== true`
+      // （服务端事实，不做真值推断），三个子字段逐字段读、缺席即空串 ——
+      // "字段缺一半"（例如状态在、版本号不在）不该让整行变成正常应用。
+      ...(entry.first_release === true
+        ? {
+            firstRelease: {
+              status: typeof entry.first_release_status === 'string' ? entry.first_release_status : '',
+              version: typeof entry.first_release_version === 'string' ? entry.first_release_version : '',
+              reason: typeof entry.first_release_reason === 'string' ? entry.first_release_reason : '',
+            },
+          }
+        : {}),
     })
   }
   return {
@@ -422,6 +486,12 @@ const OPEN_FAILURE_KEYS: Record<OpenFailureReason, AppCenterKey> = {
   // 文案必须说清"只读快照、数据仍保留"，否则用户会去要一个还在的新应用。
   'app-frozen': 'appCenter.openAppFrozen',
   'app-not-found': 'appCenter.openAppMissing',
+  // 2026-10-23 U-04：三档此前被说成别的事（下架/无版本 ⇒ 不存在；5xx ⇒ 版本不一致；
+  // 403 ⇒ 未登录）。每一档必须落到**自己**的文案上（判据见 app-center.spec.tsx 的表驱动用例）。
+  'app-offline': 'appCenter.openAppOffline',
+  'no-release': 'appCenter.openNoRelease',
+  'platform-unavailable': 'appCenter.openPlatformUnavailable',
+  'not-permitted': 'appCenter.openNotPermitted',
   'protocol-not-ready': 'appCenter.openProtocolNotReady',
   'host-unreachable': 'appCenter.openHostUnreachable',
   'unexpected-response': 'appCenter.openUnexpectedResponse',
@@ -439,6 +509,10 @@ const OPEN_FAILURE_HINT_KEYS: Record<OpenFailureReason, AppCenterKey> = {
   'platform-refused': 'appCenter.openPlatformRefusedHint',
   'app-frozen': 'appCenter.openAppFrozenHint',
   'app-not-found': 'appCenter.openAppMissingHint',
+  'app-offline': 'appCenter.openAppOfflineHint',
+  'no-release': 'appCenter.openNoReleaseHint',
+  'platform-unavailable': 'appCenter.openPlatformUnavailableHint',
+  'not-permitted': 'appCenter.openNotPermittedHint',
   'protocol-not-ready': 'appCenter.openProtocolNotReadyHint',
   'host-unreachable': 'appCenter.openHostUnreachableHint',
   'unexpected-response': 'appCenter.openUnexpectedResponseHint',
@@ -448,8 +522,9 @@ const OPEN_FAILURE_HINT_KEYS: Record<OpenFailureReason, AppCenterKey> = {
  * 把打开失败翻译成既有的错误块信封（复用 {@link PublishErrorBlock}：`code` 是稳定
  * 判据、`message` 是本地化说明、`hints` 是可照做的下一步）。
  *
- * `details` 里保留**英文诊断原文**（本机路由/形状细节），维护者据此定位；界面上显示
- * 的是字典文案 —— 不会把英文技术串丢给用户，也不会把原因藏起来。
+ * `details` 里保留**英文诊断原文**与**原始状态/错误码**（本机路由/平台信封的事实），
+ * 维护者与错误上报据此定位；界面上显示的是字典文案 —— 不会把英文技术串丢给用户，
+ * 也不会把原因藏起来（U-04：上报里只有中文文案 = 原始信号丢失）。
  * @param failure - {@link openAppEntry} 的失败结果。
  * @returns 可直接渲染的失败信封。
  */
@@ -459,7 +534,14 @@ export function openFailureEnvelope(failure: OpenFailure): PublishFailure {
     status: failure.status,
     code: `OPEN_${failure.reason.toUpperCase().replace(/-/gu, '_')}`,
     message: t(OPEN_FAILURE_KEYS[failure.reason]),
-    details: { reason: failure.reason, error: failure.error },
+    // `status` / `raw_code` 原样留在详情里：这一格既显示在错误块里，也是错误上报唯一
+    // 能拿到原始事实的地方（`code`/`message` 是本地化后的类目与文案）。
+    details: {
+      reason: failure.reason,
+      status: failure.status,
+      ...(failure.code === undefined ? {} : { raw_code: failure.code }),
+      error: failure.error,
+    },
     hints: [t(OPEN_FAILURE_HINT_KEYS[failure.reason])],
     transport: failure.reason === 'host-unreachable',
   }
@@ -628,6 +710,24 @@ const REJECTION: React.CSSProperties = {
   color: 'var(--dsw-alias-label-primary)',
 }
 
+/**
+ * 版本行内的小动作按钮（回滚 / 撤回；设计 §8）。
+ *
+ * 与确认块按钮同一形状（边框 + 透明底）：这两个动作属于"版本历史"这一块的细节操作，
+ * 用主按钮样式会把它们抬到和「打开」同级，权重不对。
+ */
+const VERSION_ACTION: React.CSSProperties = {
+  border: '1px solid var(--dsw-alias-border-l2)',
+  borderRadius: 8,
+  background: 'transparent',
+  color: 'var(--dsw-alias-label-primary)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: 12,
+  lineHeight: '18px',
+  padding: '3px 10px',
+}
+
 /** 诊断面板（只读；缩进一级，与动作条区分）。 */
 const DIAGNOSTICS: React.CSSProperties = {
   marginTop: 10,
@@ -720,6 +820,13 @@ export function AppCenterPanel({
   const [copied, setCopied] = useState<string | null>(null)
   // 打开动作的反馈（§5.2 的 `window` 字段：新开 / 聚焦；没下发就什么都不说）。
   const [openFeedback, setOpenFeedback] = useState<Record<string, OpenWindowOutcome>>({})
+  /**
+   * F-04：最近一次打开带回的软闸门提示（`version-unverified`），值是 app_id。
+   *
+   * 下一次打开给出新结论时**整体替换**（而不是累加）：提示说的是"你刚才这次打开看到的
+   * 内容可能不是最新版"，它属于那一次动作，不是一条常驻状态。
+   */
+  const [versionWarningAppId, setVersionWarningAppId] = useState<string | null>(null)
   // 「未登录时记住这次打开」（§19 Q4）：登录完成后自动继续，不再要求用户点一次。
   /** 待继续的打开：`at` 是意图记录时刻，轮询按 `OPEN_INTENT_TTL_MS` 判过期（与宿主同口径）。 */
   const [pendingOpen, setPendingOpen] = useState<{ appId: string; at: number } | null>(null)
@@ -1013,6 +1120,54 @@ export function AppCenterPanel({
     [],
   )
 
+  /**
+   * 部署历史（只读；设计 §6.1）：最近 N 条 + current 标记。
+   *
+   * 与版本历史分开取（两条请求）：后端的 `deployments` 端点与前端同批落地，端点还没
+   * 上线的环境里它回 404 —— 这时**只有部署历史这一块**显示服务端信封，已经能用的
+   * 版本历史不被拖下水（分开取的唯一理由）。
+   */
+  const handleDeployments = useCallback(
+    async (item: AppCenterItem): Promise<DeploymentsOutcome> => await fetchDeployments(item.appId),
+    [],
+  )
+
+  /**
+   * 部署 / **回滚**（写；设计 §3.3）：用旧 approved 版本再部署一次 —— 不重传、不重审。
+   * 只有 approved 且非当前版本的行会给这个动作（按钮渲染判据在 `ReleasesBlock`）。
+   */
+  const handleDeployVersion = useCallback(
+    async (item: AppCenterItem, version: string): Promise<DeployOutcome> => await deployVersion(item.appId, version),
+    [],
+  )
+
+  /**
+   * 撤回待审版本（写；设计 §5.3）：不可逆（字节释放、版本号永久占用），行内二次确认。
+   *
+   * 成功后**按服务端确认的 `status` 更新这一行**（U-02）：首版行的状态徽标/撤回按钮都
+   * 由 `firstRelease.status` 驱动，不更新就等于让作者对着一行"待审核"继续等一个已经
+   * 撤回的版本。只有服务端说了 `withdrawn` 才改（`withdrawRelease` 已把形状不符当失败）——
+   * 与上下架"只认服务端返回值"是同一条纪律。
+   */
+  const handleWithdrawVersion = useCallback(
+    async (item: AppCenterItem, version: string): Promise<WithdrawOutcome> => {
+      const result = await withdrawRelease(item.appId, version)
+      if (result.ok && result.status === 'withdrawn') {
+        setState(previous => previous.kind !== 'ready'
+          ? previous
+          : {
+              kind: 'ready',
+              items: previous.items.map(row => (row.appId === result.appId && row.firstRelease !== undefined
+                && row.firstRelease.version === result.version
+                ? { ...row, firstRelease: { ...row.firstRelease, status: result.status, reason: '' } }
+                : row)),
+            })
+      }
+      return result
+    },
+    [],
+  )
+
   return (
     <div className="zeokeel-app-center" data-role="app-center-page">
       <PanelPage
@@ -1042,6 +1197,17 @@ export function AppCenterPanel({
       >
         {view === 'catalog' && pendingOpenFailure !== null && (
           <PublishErrorBlock failure={pendingOpenFailure} title={t('appCenter.actionFailed')} role="lifecycle-error" />
+        )}
+        {/* F-09（2026-10-22 审计）：撤销「应用 AI」授权此前只有详情页一个入口 ——
+            授过几个应用、分别是哪些，界面上无处可查。汇总视图放在目录页顶部
+            （授权就是在这些应用的详情页里产生的），没有授权时它自己不渲染。
+            见 `AppAiConsentSummary` 的模块注释：为什么没放进设置页。 */}
+        {view === 'catalog' && (
+          <AppAiConsentSummary
+            scope={identity}
+            {...(aiConsentStore === undefined ? {} : { store: aiConsentStore })}
+            {...(aiDeps === undefined ? {} : { deps: aiDeps })}
+          />
         )}
         {view === 'publish' && (
           <PublishForm
@@ -1081,12 +1247,13 @@ export function AppCenterPanel({
               channelFailure={channel === null ? channelFailure : null}
               openCounts={openCounts}
               openFeedback={openFeedback}
+              versionWarningAppId={versionWarningAppId}
               copied={copied}
               onCopyLink={async item => await handleCopyLink(item)}
               onOpenDetail={item => { setDetail(item); setView('detail') }}
               onRetry={() => { void load() }}
               onPublish={() => { setPublishTarget(undefined); setView('publish') }}
-              onPublishNewVersion={item => {
+              onPublishNewVersion={(item, knownVersions) => {
                 // 把目录行的当前值交给表单（P1-3）：预填是"不静默改写线上配置"
                 // 的唯一手段 —— 作者不动单选框时提交的就是现状。
                 setPublishTarget({
@@ -1097,7 +1264,13 @@ export function AppCenterPanel({
                   owner: item.responsible,
                   ...(item.purpose === undefined ? {} : { purpose: item.purpose }),
                   ...(item.whitelist === undefined ? {} : { whitelist: item.whitelist }),
+                  // 数据敏感度（2026-10-22）：服务端按 isOwner 下发；带到表单做初值，
+                  // 作者不动它时"留空提交 = 沿用上一次声明"（不会每版重填，也不会清空）。
+                  ...(item.dataSensitivity === undefined ? {} : { dataSensitivity: item.dataSensitivity }),
                   ...(item.window === undefined ? {} : { window: item.window }),
+                  // F-03：版本历史里的全部已知版本（拿不到就缺席 ⇒ 表单退回按
+                  // `currentVersion` 建议/校验）。
+                  ...(knownVersions === undefined ? {} : { knownVersions: [...knownVersions] }),
                 })
                 setView('publish')
               }}
@@ -1107,18 +1280,24 @@ export function AppCenterPanel({
                 saveOpenIntent(item.appId, intentStore === undefined ? {} : { store: intentStore, ...(now === undefined ? {} : { now: now() }) })
                 setPendingOpen({ appId: item.appId, at: (now ?? Date.now)() })
               }}
-              onOpenResult={(item, counts, outcome) => {
+              onOpenResult={(item, counts, outcome, warning) => {
                 // F16：打开端点在同一次调用里回传今日计数 ⇒ 记下来给详情页渲染
                 // （没回传就保持"未知"，不编造）。
                 if (counts !== undefined) setOpenCounts(previous => ({ ...previous, [item.appId]: counts }))
                 // §5.2 的 `window`：新开还是聚焦（没回传就什么都不说）。
                 if (outcome !== undefined) setOpenFeedback(previous => ({ ...previous, [item.appId]: outcome }))
+                // F-04：软闸门结论只认宿主给的（`version-unverified`）；没给就清掉上一次 ——
+                // 否则一条旧提示会永远挂在面板上，变成另一种"骗人"。
+                setVersionWarningAppId(warning === 'version-unverified' ? item.appId : null)
               }}
               onSetPublished={handleSetPublished}
               onSetFrozen={handleSetFrozen}
               onDelete={handleDelete}
               onDiagnostics={handleDiagnostics}
               onReleases={handleReleases}
+              onDeployments={handleDeployments}
+              onDeployVersion={handleDeployVersion}
+              onWithdrawVersion={handleWithdrawVersion}
             />
           )}
       </PanelPage>
@@ -1187,8 +1366,9 @@ async function defaultWriteClipboard(text: string): Promise<void> {
 export function AppCenterBody({
   state, notice, filter, onFilterChange, visible, onShowMore,
   onboardingDismissed, onDismissOnboarding, pendingOpenAppId,
-  shareScheme, channelFailure, openCounts, openFeedback, copied, onCopyLink, onOpenDetail, onOpenResult, onOpenFailure,
+  shareScheme, channelFailure, openCounts, openFeedback, versionWarningAppId, copied, onCopyLink, onOpenDetail, onOpenResult, onOpenFailure,
   onRetry, onPublish, onPublishNewVersion, onSetPublished, onSetFrozen, onDelete, onDiagnostics, onReleases,
+  onDeployments, onDeployVersion, onWithdrawVersion,
 }: {
   state: AppCenterState
   notice?: CatalogNotice | null
@@ -1211,23 +1391,41 @@ export function AppCenterBody({
   openCounts?: Record<string, AppOpenCounts>
   /** 打开结果（§5.2 `window`：新开 / 聚焦），按 app_id。 */
   openFeedback?: Record<string, OpenWindowOutcome>
+  /**
+   * 最近一次打开带回的**软闸门提示**（F-04：`version-unverified`），值是 app_id。
+   *
+   * 修前宿主产出了 `warning` 而客户端零解析 ⇒ 用户"静默看到旧内容"。
+   */
+  versionWarningAppId?: string | null
   /** 刚复制成功的 app_id。 */
   copied?: string | null
   onCopyLink?: (item: AppCenterItem) => Promise<boolean>
   onOpenDetail?: (item: AppCenterItem) => void
   /** 打开动作结束后由行上报（成功时带上服务端回传的计数与 §5.2 的 `window`）。 */
-  onOpenResult?: (item: AppCenterItem, counts: AppOpenCounts | undefined, window: OpenWindowOutcome | undefined) => void
+  onOpenResult?: (item: AppCenterItem, counts: AppOpenCounts | undefined, window: OpenWindowOutcome | undefined, warning: OpenWarning | undefined) => void
   /** 打开**失败**时由行上报（面板据此记住"未登录时的那次打开"）。 */
   onOpenFailure?: (item: AppCenterItem, failure: OpenFailure) => void
   onRetry: () => void
   onPublish?: () => void
-  onPublishNewVersion?: (item: AppCenterItem) => void
+  /**
+   * 「发新版」：把这一行的基线交给发布表单。
+   * `knownVersions`（F-03）是版本历史里的**全部已知版本**（含待审/被拒/已撤回行）：
+   * 「建议下一版」与本地递增校验都要按它们的 max 算（版本号永久占位）。
+   * 拿不到版本历史时缺席 ⇒ 表单退回只看 `current_version`。
+   */
+  onPublishNewVersion?: (item: AppCenterItem, knownVersions?: readonly string[]) => void
   onSetPublished?: (item: AppCenterItem, enabled: boolean) => Promise<SetPublishedOutcome>
   /** 冻结 / 解冻（R5-B-7）。 */
   onSetFrozen?: (item: AppCenterItem, frozen: boolean) => Promise<SetFrozenOutcome>
   onDelete?: (item: AppCenterItem) => Promise<DeleteOutcome>
   onDiagnostics?: (item: AppCenterItem) => Promise<DiagnosticsOutcome>
   onReleases?: (item: AppCenterItem) => Promise<ReleasesOutcome>
+  /** 部署历史（只读；设计 §6.1）。缺省 ⇒ 不渲染那一块。 */
+  onDeployments?: (item: AppCenterItem) => Promise<DeploymentsOutcome>
+  /** 部署 / 回滚（设计 §3.3）。缺省 ⇒ 不渲染「设为此版本（回滚）」按钮。 */
+  onDeployVersion?: (item: AppCenterItem, version: string) => Promise<DeployOutcome>
+  /** 撤回待审版本（设计 §5.3）。缺省 ⇒ 不渲染「撤回」按钮。 */
+  onWithdrawVersion?: (item: AppCenterItem, version: string) => Promise<WithdrawOutcome>
 }) {
   const activeFilter = filter ?? EMPTY_FILTER
   const items = state.kind === 'ready' ? state.items : []
@@ -1237,6 +1435,15 @@ export function AppCenterBody({
   return (
     <>
       {notice !== null && notice !== undefined && <NoticeBlock notice={notice} />}
+      {/*
+        F-04：`version-unverified` 提示条。宿主在"聚焦已开窗口、但版本确认不了"时回这个
+        字段；修前它零消费方（用户静默看到旧内容，不知道可能不是最新版）。
+      */}
+      {versionWarningAppId !== null && versionWarningAppId !== undefined && (
+        <div style={NOTICE} data-role="version-unverified" role="status">
+          <div data-role="version-unverified-message">{t('appCenter.versionUnverified')}</div>
+        </div>
+      )}
       {state.kind === 'loading' && <div style={HINT}>{t('appCenter.loading')}</div>}
 
       {/* 未登录（§19 Q2/Q4 的独立空态）：不是错误、也不是"没有应用"。 */}
@@ -1359,6 +1566,9 @@ export function AppCenterBody({
               {...(onDelete === undefined ? {} : { onDelete })}
               {...(onDiagnostics === undefined ? {} : { onDiagnostics })}
               {...(onReleases === undefined ? {} : { onReleases })}
+              {...(onDeployments === undefined ? {} : { onDeployments })}
+              {...(onDeployVersion === undefined ? {} : { onDeployVersion })}
+              {...(onWithdrawVersion === undefined ? {} : { onWithdrawVersion })}
             />
           ))}
         </div>
@@ -1474,7 +1684,11 @@ export function AppDetailView({
   const [opening, setOpening] = useState(false)
   const [failure, setFailure] = useState<PublishFailure | null>(null)
   const [copyFailed, setCopyFailed] = useState(false)
-  const link = appShareLink(item.appId)
+  // 首版（U-02）：详情页与目录行**同一份判据** —— 没有可交付版本 ⇒ 打不开、
+  // 也没有可分享的链接（分享一条必然失败的链接比少一行更糟）。
+  const firstRelease = item.firstRelease
+  const openable = item.enabled && firstRelease === undefined
+  const link = firstRelease === undefined ? appShareLink(item.appId) : null
   return (
     <div className="zeokeel-app-detail" data-role="app-detail" data-app-id={item.appId}>
       <PanelButton variant="ghost" size="sm" className="zeokeel-app-center-back" icon={<icons.IconBack size={14} />} onClick={onBack}>
@@ -1488,7 +1702,29 @@ export function AppDetailView({
         {item.currentVersion !== '' && (
           <span data-role="detail-version">{` · ${t('appCenter.currentVersion')}: ${item.currentVersion}`}</span>
         )}
+        {firstRelease !== undefined && (
+          <span data-role="detail-first-release-status" data-status={firstRelease.status}>
+            {` · ${releaseStatusLabel(firstRelease.status)} · ${t('appCenter.firstReleaseBadge')}`}
+          </span>
+        )}
       </p>
+
+      {/* 首版（U-02）：为什么打不开 + 被拒理由。详情页是"我发布的"里点进来的那一屏，
+          状态与理由在这里也必须能看到（目录行只是摘要）。 */}
+      {firstRelease !== undefined && (
+        <p style={{ ...ROW_META, whiteSpace: 'normal' }} data-role="detail-first-release-hint">
+          {firstRelease.status === 'rejected'
+            ? t('appCenter.firstReleaseRejectedHint')
+            : firstRelease.status === 'withdrawn'
+              ? t('appCenter.firstReleaseWithdrawnHint')
+              : t('appCenter.firstReleaseNotLive')}
+        </p>
+      )}
+      {firstRelease !== undefined && firstRelease.status === 'rejected' && (
+        <p style={{ ...ROW_META, whiteSpace: 'normal' }} data-role="detail-first-release-reason">
+          {`${t('appCenter.releaseReason')}: ${firstRelease.reason === '' ? t('appCenter.releaseReasonMissing') : firstRelease.reason}`}
+        </p>
+      )}
 
       {/*
         作者声明的窗口规格（F3/§6）。**只在服务端真的下发了 window 时**才显示：
@@ -1529,7 +1765,7 @@ export function AppDetailView({
           className="zeokeel-app-center-open"
           data-action="open-app"
           icon={<icons.IconExternal size={14} />}
-          disabled={!item.enabled || opening}
+          disabled={!openable || opening}
           onClick={() => {
             setOpening(true)
             setFailure(null)
@@ -1617,7 +1853,7 @@ export function NoticeBlock({ notice }: { notice: CatalogNotice }) {
 }
 
 /** 目录行的动作条状态：没有确认、正在确认下架/删除/冻结。 */
-type RowConfirm = 'none' | 'offline' | 'delete' | 'freeze'
+type RowConfirm = 'none' | 'offline' | 'delete' | 'freeze' | 'withdraw'
 
 /** 诊断面板状态（关闭 / 读取中 / 报告 / 失败信封）。 */
 type RowDiagnostics =
@@ -1638,6 +1874,25 @@ type RowReleases =
   | { kind: 'loading' }
   | { kind: 'ready', report: MyReleasesReport }
   | { kind: 'failed', failure: PublishFailure }
+
+/** 行内**部署历史**的状态机（只读；与 {@link RowReleases} 同形）。 */
+type RowDeployments =
+  | { kind: 'closed' }
+  | { kind: 'loading' }
+  | { kind: 'ready', report: DeploymentsReport }
+  | { kind: 'failed', failure: PublishFailure }
+
+/**
+ * 版本动作（回滚 / 撤回）的状态机（设计 §6.1/§8）。
+ *
+ * `version` 是"这一行正在跑哪个版本"：多个版本行并存时，按钮必须只禁用真正在跑的那
+ * 一个（全局 busy 会让整块版本历史看起来都不可用）。
+ */
+type VersionActionState =
+  | { kind: 'idle' }
+  | { kind: 'busy', version: string }
+  | { kind: 'done', version: string, label: string, note: string }
+  | { kind: 'failed', version: string, failure: PublishFailure }
 
 /**
  * 一行应用：名称 / 访问级别 / 当前版本 / 一句话说明 / 负责人 / 打开 /
@@ -1669,6 +1924,7 @@ type RowReleases =
 export function AppCenterRow({
   item, shareScheme, copied, counts, windowOutcome, onCopyLink, onOpenDetail, onOpenResult, onOpenFailure,
   onPublishNewVersion, onSetPublished, onDelete, onDiagnostics, onReleases, onSetFrozen,
+  onDeployments, onDeployVersion, onWithdrawVersion,
 }: {
   item: AppCenterItem
   /** 生效的渠道深链 scheme；`null`/缺席 ⇒ 不渲染「复制链接」（§19 Q6）。 */
@@ -1681,15 +1937,24 @@ export function AppCenterRow({
   windowOutcome?: OpenWindowOutcome
   onCopyLink?: (item: AppCenterItem) => Promise<boolean>
   onOpenDetail?: (item: AppCenterItem) => void
-  onOpenResult?: (item: AppCenterItem, counts: AppOpenCounts | undefined, window: OpenWindowOutcome | undefined) => void
+  onOpenResult?: (item: AppCenterItem, counts: AppOpenCounts | undefined, window: OpenWindowOutcome | undefined, warning: OpenWarning | undefined) => void
   onOpenFailure?: (item: AppCenterItem, failure: OpenFailure) => void
-  onPublishNewVersion?: (item: AppCenterItem) => void
+  /**
+   * 「发新版」：把这一行的基线交给发布表单。
+   * `knownVersions`（F-03）是版本历史里的**全部已知版本**（含待审/被拒/已撤回行）：
+   * 「建议下一版」与本地递增校验都要按它们的 max 算（版本号永久占位）。
+   * 拿不到版本历史时缺席 ⇒ 表单退回只看 `current_version`。
+   */
+  onPublishNewVersion?: (item: AppCenterItem, knownVersions?: readonly string[]) => void
   onSetPublished?: (item: AppCenterItem, enabled: boolean) => Promise<SetPublishedOutcome>
   /** 冻结 / 解冻（R5-B-7；发布者本人）。缺省 ⇒ 不渲染这两个按钮。 */
   onSetFrozen?: (item: AppCenterItem, frozen: boolean) => Promise<SetFrozenOutcome>
   onDelete?: (item: AppCenterItem) => Promise<DeleteOutcome>
   onDiagnostics?: (item: AppCenterItem) => Promise<DiagnosticsOutcome>
   onReleases?: (item: AppCenterItem) => Promise<ReleasesOutcome>
+  onDeployments?: (item: AppCenterItem) => Promise<DeploymentsOutcome>
+  onDeployVersion?: (item: AppCenterItem, version: string) => Promise<DeployOutcome>
+  onWithdrawVersion?: (item: AppCenterItem, version: string) => Promise<WithdrawOutcome>
 }) {
   const [opening, setOpening] = useState(false)
   const [confirm, setConfirm] = useState<RowConfirm>('none')
@@ -1697,6 +1962,12 @@ export function AppCenterRow({
   const [actionFailure, setActionFailure] = useState<PublishFailure | null>(null)
   const [diagnostics, setDiagnostics] = useState<RowDiagnostics>({ kind: 'closed' })
   const [releases, setReleases] = useState<RowReleases>({ kind: 'closed' })
+  // 部署历史（只读；与版本历史分开取，端点未就绪时只影响这一块）。
+  const [deployments, setDeployments] = useState<RowDeployments>({ kind: 'closed' })
+  // 版本动作（回滚/撤回）的状态机：`version` 记住是哪一行在跑，按钮据此禁用。
+  const [versionAction, setVersionAction] = useState<VersionActionState>({ kind: 'idle' })
+  // 撤回的二次确认（值 = 待确认的版本号；`null` = 没有确认块）。
+  const [withdrawConfirm, setWithdrawConfirm] = useState<string | null>(null)
   const [copyFailed, setCopyFailed] = useState(false)
   const confirmRef = useRef<HTMLButtonElement | null>(null)
   // 分享链接在**渲染期**求值：`shareScheme` **缺席**（调用方没传）时读注入值，
@@ -1741,7 +2012,12 @@ export function AppCenterRow({
   // （失败时把 reason 渲染成可读原因，见下面 openFailureEnvelope）。
   // 冻结 = 停止服务（服务端 appserver 对冻结应用一律 404）：打开按钮跟着禁用，
   // 免得用户点出一个必然失败的请求（失败文案虽可辨，但按钮本身就该说真话）。
-  const openable = item.enabled && !item.frozen
+  //
+  // 首版行（U-02）**必然**打不开：服务端那一行的 `enabled=false`（没有可交付版本），
+  // 这里再显式排除一次是判据层面的双保险 —— "没有任何版本"与"下架"是两件事，不能
+  // 靠一个布尔字段的宽窄来解释。
+  const firstRelease = item.firstRelease
+  const openable = item.enabled && !item.frozen && firstRelease === undefined
   const open = (): void => {
     if (!openable || opening) return
     setOpening(true)
@@ -1756,7 +2032,7 @@ export function AppCenterRow({
           onOpenFailure?.(item, result)
           return
         }
-        onOpenResult?.(item, result.counts, result.window)
+        onOpenResult?.(item, result.counts, result.window, result.warning)
       })
       .finally(() => { setOpening(false) })
   }
@@ -1830,14 +2106,109 @@ export function AppCenterRow({
    * 缓存一份"我上次看到的结论"会让作者在一个已经通过的版本上继续等。
    */
   const releasesSeq = useRef(0)
+  const deploymentsSeq = useRef(0)
+  /** 重新取部署历史（动作成功后刷新用；不改 `closed` 状态）。 */
+  const reloadDeployments = async (): Promise<void> => {
+    if (onDeployments === undefined) return
+    const seq = ++deploymentsSeq.current
+    const result = await onDeployments(item)
+    if (seq !== deploymentsSeq.current) return
+    setDeployments(result.ok ? { kind: 'ready', report: result } : { kind: 'failed', failure: result })
+  }
   const toggleReleases = async (): Promise<void> => {
-    if (releases.kind !== 'closed') { releasesSeq.current += 1; setReleases({ kind: 'closed' }); return }
+    if (releases.kind !== 'closed') {
+      releasesSeq.current += 1
+      deploymentsSeq.current += 1
+      setReleases({ kind: 'closed' })
+      setDeployments({ kind: 'closed' })
+      setWithdrawConfirm(null)
+      return
+    }
     if (onReleases === undefined) return
     const seq = ++releasesSeq.current
     setReleases({ kind: 'loading' })
+    // 部署历史与版本历史**并发**取：两块都是只读，串行只会让面板慢一个 RTT。
+    const deploymentsTask = onDeployments === undefined ? undefined : reloadDeployments()
+    setDeployments(onDeployments === undefined ? { kind: 'closed' } : { kind: 'loading' })
     const result = await onReleases(item)
+    await deploymentsTask
     if (seq !== releasesSeq.current) return
     setReleases(result.ok ? { kind: 'ready', report: result } : { kind: 'failed', failure: result })
+  }
+
+  /**
+   * **回滚**：用这个已通过的版本再部署一次（设计 §3.3：不重传、不重审、追加一条部署
+   * 记录）。成功后同时刷新版本历史（`current` 标记变了）与部署历史（多了一条记录）。
+   */
+  const runDeployVersion = async (version: string): Promise<void> => {
+    if (onDeployVersion === undefined) return
+    setVersionAction({ kind: 'busy', version })
+    const result = await onDeployVersion(item, version)
+    if (!result.ok) {
+      setVersionAction({ kind: 'failed', version, failure: result })
+      return
+    }
+    // 服务端的 `changed=false` 是**幂等**结论（目标就是当前版本）：如实说"没有变化"，
+    // 不假装部署过（那会让作者以为线上换了一个版本）。
+    setVersionAction({
+      kind: 'done',
+      version: result.version,
+      label: result.changed ? t('appCenter.rollbackDone') : t('appCenter.deployUnchanged'),
+      note: result.note,
+    })
+    if (onReleases !== undefined) {
+      const refreshed = await onReleases(item)
+      if (refreshed.ok) setReleases({ kind: 'ready', report: refreshed })
+    }
+    await reloadDeployments()
+  }
+
+  /**
+   * **撤回**待审版本（设计 §5.3）：不可逆（字节释放、版本号永久占用），必须先确认。
+   * 确认块由 {@link withdrawConfirm} 驱动（同一时刻只确认一个版本）。
+   */
+  const runWithdrawVersion = async (version: string): Promise<void> => {
+    if (onWithdrawVersion === undefined) return
+    setWithdrawConfirm(null)
+    setVersionAction({ kind: 'busy', version })
+    const result = await onWithdrawVersion(item, version)
+    if (!result.ok) {
+      setVersionAction({ kind: 'failed', version, failure: result })
+      return
+    }
+    setVersionAction({ kind: 'done', version: result.version, label: t('appCenter.withdrawDone'), note: result.note })
+    if (onReleases !== undefined) {
+      const refreshed = await onReleases(item)
+      if (refreshed.ok) setReleases({ kind: 'ready', report: refreshed })
+    }
+  }
+
+  /**
+   * 「发新版」（F-03）：把**已知全部版本**一并交给发布表单。
+   *
+   * 版本历史是按需拉取的（用户没展开就看没有缓存），所以这里先确保拿到了它：没有
+   * 就当场取一次（一个 RTT，远低于"传完 ≤32 MiB 才吃 VERSION_NOT_NEWER"的代价）。
+   * 取不到（端点未就绪/网络失败）⇒ 传 `undefined`，表单退回只看 `current_version`
+   * —— 退化行为，不是编造一个基线。
+   */
+  const [publishFetching, setPublishFetching] = useState(false)
+  const handlePublishNewVersion = async (): Promise<void> => {
+    if (onPublishNewVersion === undefined || publishFetching) return
+    setPublishFetching(true)
+    try {
+      let known = releases.kind === 'ready' ? releases.report.releases.map(row => row.version) : []
+      if (known.length === 0 && onReleases !== undefined) {
+        const seq = ++releasesSeq.current
+        const result = await onReleases(item)
+        if (seq === releasesSeq.current) {
+          setReleases(result.ok ? { kind: 'ready', report: result } : { kind: 'failed', failure: result })
+        }
+        if (result.ok) known = result.releases.map(row => row.version)
+      }
+      onPublishNewVersion(item, known.length === 0 ? undefined : known)
+    } finally {
+      setPublishFetching(false)
+    }
   }
 
   return (
@@ -1870,7 +2241,20 @@ export function AppCenterRow({
             <span className="zeokeel-app-center-access" data-role="access-level" data-access={item.access} style={{ display: 'inline-flex' }}>
               <Chip tone={accessTone(item.access)}>{accessBadge(item.access)}</Chip>
             </span>
-            {!item.enabled && (
+            {/* 首版行（U-02）：状态徽标。**不能**走「已下架」那一支 —— 这个应用从来没有
+                上过线（没有可交付版本），把它说成"被作者下架"是另一种谎报。状态原样来自
+                服务端（`releaseStatusLabel` 对未知状态不做翻译）。 */}
+            {firstRelease !== undefined && (
+              <span className="zeokeel-app-center-first-release" data-role="first-release-status" data-status={firstRelease.status} style={{ display: 'inline-flex' }}>
+                <Chip tone={firstRelease.status === 'rejected' ? 'danger' : 'warn'} plain>{releaseStatusLabel(firstRelease.status)}</Chip>
+              </span>
+            )}
+            {firstRelease !== undefined && (
+              <span className="zeokeel-app-center-not-live" data-role="first-release-badge" style={{ display: 'inline-flex' }}>
+                <Chip tone="neutral" plain>{t('appCenter.firstReleaseBadge')}</Chip>
+              </span>
+            )}
+            {!item.enabled && firstRelease === undefined && (
               <span className="zeokeel-app-center-disabled" data-role="app-disabled" style={{ display: 'inline-flex' }}>
                 <Chip tone="neutral" plain>{t('appCenter.disabled')}</Chip>
               </span>
@@ -1913,7 +2297,34 @@ export function AppCenterRow({
         </p>
       )}
 
-      {canPublish && !item.enabled && (
+      {/* 首版行（U-02）的说明：**为什么打不开**（线上还没有任何版本）+ 状态各档的
+          下一步。徽标只给结论，这一行才回答"我现在该做什么"。 */}
+      {firstRelease !== undefined && (
+        <p
+          style={{ ...ROW_META, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}
+          data-role="first-release-hint"
+          data-status={firstRelease.status}
+        >
+          {firstRelease.status === 'rejected'
+            ? t('appCenter.firstReleaseRejectedHint')
+            : firstRelease.status === 'withdrawn'
+              ? t('appCenter.firstReleaseWithdrawnHint')
+              : t('appCenter.firstReleaseNotLive')}
+        </p>
+      )}
+      {/* 被拒理由：与版本历史里那一行**同一个服务端字段**（`app_releases.reason`），
+          用户不展开版本历史也能看到"为什么没过"。理由为空时说明审核方没填，
+          不假装有理由（与 ReleasesBlock 的 `releaseReasonMissing` 同一口径）。 */}
+      {firstRelease !== undefined && firstRelease.status === 'rejected' && (
+        <p
+          style={{ ...ROW_META, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}
+          data-role="first-release-reason"
+        >
+          {`${t('appCenter.releaseReason')}: ${firstRelease.reason === '' ? t('appCenter.releaseReasonMissing') : firstRelease.reason}`}
+        </p>
+      )}
+
+      {canPublish && !item.enabled && firstRelease === undefined && (
         <p
           style={{ ...ROW_META, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}
           data-role="publish-new-disabled-reason"
@@ -1952,15 +2363,40 @@ export function AppCenterRow({
               icon={<icons.IconPlus size={13} />}
               // 下架状态下**保留按钮但禁用**：发新版不会恢复访问（仍是 410 Gone），
               // 让作者白等一次上传再看到"已生效"是最坏的组合（R1-uxc-1）。
-              disabled={!item.enabled}
-              aria-disabled={!item.enabled}
+              //
+              // 首版行（U-02）是**例外**：它 `enabled=false` 不是因为被下架，而是因为
+              // 没有任何生效版本 —— 这种行上「发新版」恰恰是唯一出路（被拒/撤回后只能
+              // 用更高的版本号重发），因此照旧可点。
+              disabled={!item.enabled && firstRelease === undefined}
+              aria-disabled={!item.enabled && firstRelease === undefined}
               aria-label={`${t('appCenter.publishNewVersionAria')} ${item.title}`}
-              onClick={() => { onPublishNewVersion?.(item) }}
+              onClick={() => { void handlePublishNewVersion() }}
             >
               {t('appCenter.publishNewVersion')}
             </PanelButton>
           )}
-          {onSetPublished !== undefined && (
+          {/* 首版待审的**撤回**入口（U-02）：撤回端点只对 pending 版本开放，而首版待审
+              行原先根本不在目录里（服务端整行跳过）⇒ 撤回按钮虽然挂在版本历史里，作者
+              却点不到（要展开的那一行不存在）。这里直接在行上给动作，确认块复用行内
+              `confirm==='withdraw'`（不可逆：字节释放、版本号永久占用）。
+              判据全部来自服务端下发的 `first_release_status` / `first_release_version`。 */}
+          {firstRelease !== undefined && firstRelease.status === 'pending'
+            && onWithdrawVersion !== undefined && firstRelease.version !== '' && (
+            <PanelButton
+              variant="danger"
+              size="sm"
+              className="zeokeel-app-center-withdraw-first-release"
+              data-action="withdraw-first-release"
+              disabled={versionAction.kind === 'busy'}
+              aria-label={`${t('appCenter.withdrawFirstReleaseAria')} ${item.title}`}
+              onClick={(event) => { confirmTriggerRef.current = event.currentTarget; setActionFailure(null); setConfirm('withdraw') }}
+            >
+              {t('appCenter.withdrawFirstRelease')}
+            </PanelButton>
+          )}
+          {/* 首版行（U-02）没有"上下架"可言：它一次都没上线过。`enabled=false` 来自
+              "没有可交付版本"，把它渲染成「上架」按钮会给出一个改变不了任何事的动作。 */}
+          {onSetPublished !== undefined && firstRelease === undefined && (
             item.enabled
               ? (
                   <PanelButton
@@ -1992,7 +2428,10 @@ export function AppCenterRow({
           {/* 冻结 / 解冻（R5-B-7）：服务端对发布者开着这条端点，文案也一直承诺
               "发布者本人可以解冻" —— 这里就是那个入口。冻结是停服动作，先出确认块；
               解冻不需要确认（它只清 frozen_at，不会自动上架）。 */}
-          {onSetFrozen !== undefined && (
+          {/* 首版行不给"冻结"（没有可停的服务），但**已冻结**的首版行必须能解冻 ——
+              否则这行会显示「已冻结」而没有任何出路（冻结状态是服务端事实，客户端不能
+              把一个可逆状态渲染成死胡同）。 */}
+          {onSetFrozen !== undefined && (firstRelease === undefined || item.frozen) && (
             item.frozen
               ? (
                   <PanelButton
@@ -2087,8 +2526,10 @@ export function AppCenterRow({
               不让用户以为点了没反应（窗口骨架屏在 L2）。 */}
           {opening ? t('appCenter.openOpening') : t('appCenter.open')}
         </PanelButton>
-        {/* 分享（F6/§19 Q6）：只在拿到渠道 scheme 时渲染；未拿到时这一行彻底不存在。 */}
-        {shareLink !== null && onCopyLink !== undefined && (
+        {/* 分享（F6/§19 Q6）：只在拿到渠道 scheme 时渲染；未拿到时这一行彻底不存在。
+            首版行（U-02）**不给**：线上没有任何版本，这条链接同事点开只会得到
+            "应用不存在" —— 与发布成功块同一条判据（宁可少一行，也不给打不开的链接）。 */}
+        {shareLink !== null && onCopyLink !== undefined && firstRelease === undefined && (
           <PanelButton
             variant="secondary"
             size="md"
@@ -2105,6 +2546,35 @@ export function AppCenterRow({
           </PanelButton>
         )}
       </div>
+      {confirm === 'withdraw' && firstRelease !== undefined && (
+        <div style={CONFIRM} data-role="confirm-withdraw-first-release" role="alertdialog" aria-modal="true" aria-label={t('appCenter.withdrawConfirm')}>
+          <div data-role="confirm-message">{t('appCenter.withdrawConfirm')}</div>
+          <div style={CONFIRM_ROW}>
+            <PanelButton
+              variant="danger"
+              size="sm"
+              ref={confirmRef}
+              className="zeokeel-app-center-confirm-withdraw-first-release"
+              data-action="confirm-withdraw-first-release"
+              disabled={versionAction.kind === 'busy'}
+              onClick={() => { setConfirm('none'); void runWithdrawVersion(firstRelease.version) }}
+            >
+              {t('appCenter.withdraw')}
+            </PanelButton>
+            <PanelButton
+              variant="secondary"
+              size="sm"
+              className="zeokeel-app-center-confirm-cancel"
+              data-action="cancel-confirm"
+              disabled={versionAction.kind === 'busy'}
+              onClick={() => { setConfirm('none') }}
+            >
+              {t('appCenter.confirmCancel')}
+            </PanelButton>
+          </div>
+        </div>
+      )}
+
       {confirm === 'offline' && (
         <div style={CONFIRM} data-role="confirm-take-offline" role="alertdialog" aria-modal="true" aria-label={t('appCenter.takeOfflineConfirm')}>
           <div data-role="confirm-message">{t('appCenter.takeOfflineConfirm')}</div>
@@ -2213,7 +2683,35 @@ export function AppCenterRow({
           {releases.kind === 'failed' && (
             <PublishErrorBlock failure={releases.failure} title={t('appCenter.releasesFailed')} role="releases-error" />
           )}
-          {releases.kind === 'ready' && <ReleasesBlock report={releases.report} />}
+          {releases.kind === 'ready' && (
+            <ReleasesBlock
+              report={releases.report}
+              busyVersion={versionAction.kind === 'busy' ? versionAction.version : null}
+              withdrawConfirm={withdrawConfirm}
+              {...(onDeployVersion === undefined ? {} : { onDeploy: (version: string) => { void runDeployVersion(version) } })}
+              {...(onWithdrawVersion === undefined
+                ? {}
+                : {
+                    onWithdraw: (version: string) => { setWithdrawConfirm(version) },
+                    onWithdrawConfirm: (version: string) => { void runWithdrawVersion(version) },
+                    onWithdrawCancel: () => { setWithdrawConfirm(null) },
+                  })}
+            />
+          )}
+          {versionAction.kind === 'failed' && (
+            <PublishErrorBlock failure={versionAction.failure} title={t('appCenter.actionFailed')} role="version-action-error" />
+          )}
+          {versionAction.kind === 'done' && (
+            <div data-role="version-action-done" role="status">
+              {`${versionAction.label}: v${versionAction.version}${versionAction.note === '' ? '' : ` — ${versionAction.note}`}`}
+            </div>
+          )}
+          {/* 部署历史（只读；最近 N 条 + current）。端点未就绪时**只有这一块**报错。 */}
+          {deployments.kind === 'loading' && <div data-role="deployments-loading">{t('appCenter.deploymentsLoading')}</div>}
+          {deployments.kind === 'failed' && (
+            <PublishErrorBlock failure={deployments.failure} title={t('appCenter.deploymentsFailed')} role="deployments-error" />
+          )}
+          {deployments.kind === 'ready' && <DeploymentsBlock report={deployments.report} />}
         </div>
       )}
     </Card>
@@ -2232,7 +2730,19 @@ export function AppCenterRow({
  *  - **状态未知就原样显示**（`releaseStatusLabel`），不假装认识服务端的新状态。
  * @param props - 服务端版本历史报告。
  */
-export function ReleasesBlock({ report }: { report: MyReleasesReport }) {
+export function ReleasesBlock({ report, onDeploy, onWithdraw, onWithdrawConfirm, onWithdrawCancel, busyVersion, withdrawConfirm }: {
+  report: MyReleasesReport
+  /** 「设为此版本（回滚）」：只对 approved 且非当前版本渲染（设计 §8）。 */
+  onDeploy?: (version: string) => void
+  /** 「撤回」：只对 pending 渲染（设计 §8）。 */
+  onWithdraw?: (version: string) => void
+  onWithdrawConfirm?: (version: string) => void
+  onWithdrawCancel?: () => void
+  /** 正在跑的版本（按钮据此禁用；只影响那一行）。 */
+  busyVersion?: string | null
+  /** 待确认撤回的版本号（`null` = 没有确认块）。 */
+  withdrawConfirm?: string | null
+}) {
   return (
     <div className="zeokeel-app-center-releases">
       <div data-role="releases-summary">
@@ -2252,7 +2762,77 @@ export function ReleasesBlock({ report }: { report: MyReleasesReport }) {
                   )}
                   {release.createdAt !== '' && <span data-role="release-created">{` · ${release.createdAt}`}</span>}
                   {release.status === 'pending' && (
-                    <div data-role="release-pending-hint">{t('appCenter.releasePendingHint')}</div>
+                    // U-02：`current_version` 为空 = 线上**还没有任何版本**（首版待审）。
+                    // 这时"线上仍是当前生效版本"是假话（没有那个版本）—— 首版待审必须
+                    // 说清"审核通过后才会首次上线"（判据来自服务端下发的版本号，不推断）。
+                    <div data-role="release-pending-hint" data-first-release={report.currentVersion === '' ? 'true' : 'false'}>
+                      {report.currentVersion === '' ? t('appCenter.releasePendingFirstHint') : t('appCenter.releasePendingHint')}
+                    </div>
+                  )}
+                  {/*
+                    生命周期动作（设计 §8）：**回滚**只对 approved 且非当前版本；**撤回**
+                    只对 pending。两个判据都来自服务端下发的 status/current，不在客户端另推。
+                  */}
+                  {onDeploy !== undefined && release.status === 'approved' && !release.current && (
+                    <div style={HINT_LIST} data-role="release-rollback">
+                      <button
+                        type="button"
+                        className="zeokeel-app-center-rollback"
+                        data-action="rollback"
+                        data-version={release.version}
+                        style={{ ...VERSION_ACTION, ...(busyVersion === release.version ? { opacity: 0.6 } : {}) }}
+                        disabled={busyVersion === release.version}
+                        onClick={() => { onDeploy(release.version) }}
+                      >
+                        {t('appCenter.rollback')}
+                      </button>
+                      <span data-role="rollback-hint">{t('appCenter.rollbackHint')}</span>
+                    </div>
+                  )}
+                  {onWithdraw !== undefined && release.status === 'pending' && (
+                    withdrawConfirm === release.version && onWithdrawConfirm !== undefined && onWithdrawCancel !== undefined
+                      ? (
+                          <div style={REJECTION} data-role="withdraw-confirm" role="alertdialog" aria-label={t('appCenter.withdrawConfirm')}>
+                            <div data-role="withdraw-confirm-text">{t('appCenter.withdrawConfirm')}</div>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                              <button
+                                type="button"
+                                className="zeokeel-app-center-withdraw-confirm"
+                                data-action="withdraw-confirm"
+                                data-version={release.version}
+                                style={VERSION_ACTION}
+                                onClick={() => { onWithdrawConfirm(release.version) }}
+                              >
+                                {t('appCenter.withdraw')}
+                              </button>
+                              <button
+                                type="button"
+                                className="zeokeel-app-center-withdraw-cancel"
+                                data-action="withdraw-cancel"
+                                style={VERSION_ACTION}
+                                onClick={onWithdrawCancel}
+                              >
+                                {t('appCenter.back')}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      : (
+                          <div style={HINT_LIST} data-role="release-withdraw">
+                            <button
+                              type="button"
+                              className="zeokeel-app-center-withdraw"
+                              data-action="withdraw"
+                              data-version={release.version}
+                              style={{ ...VERSION_ACTION, ...(busyVersion === release.version ? { opacity: 0.6 } : {}) }}
+                              disabled={busyVersion === release.version}
+                              onClick={() => { onWithdraw(release.version) }}
+                            >
+                              {t('appCenter.withdraw')}
+                            </button>
+                            <span data-role="withdraw-hint">{t('appCenter.withdrawHint')}</span>
+                          </div>
+                        )
                   )}
                   {release.status === 'rejected' && (
                     <div style={REJECTION} data-role="release-rejection">
@@ -2263,6 +2843,49 @@ export function ReleasesBlock({ report }: { report: MyReleasesReport }) {
                       <div data-role="release-resubmit-hint">{t('appCenter.releaseResubmitHint')}</div>
                     </div>
                   )}
+                </li>
+              ))}
+            </ul>
+          )}
+    </div>
+  )
+}
+
+/**
+ * 部署历史（只读；设计 §6.1「最近 N 条 + current」）。
+ *
+ * 为什么只读：部署是**不可变的追加历史**（设计 §3.3「部署历史永不删除」）—— 它回答
+ * "谁在什么时候把哪一版放上线"，任何"编辑历史"的能力都会让这个回答失效。
+ * `current` 标记只认服务端下发（行上的 `current:true` 或与 `current_version` 相等）。
+ * @param props - 服务端部署历史报告。
+ */
+export function DeploymentsBlock({ report }: { report: DeploymentsReport }) {
+  return (
+    <div className="zeokeel-app-center-deployments" data-role="deployments">
+      <div data-role="deployments-summary">
+        {`${t('appCenter.deployments')}: ${String(report.deployments.length)}`}
+        {` · ${t('appCenter.currentVersion')}: ${report.currentVersion === '' ? '—' : report.currentVersion}`}
+      </div>
+      {report.deployments.length === 0
+        ? <div data-role="deployments-empty">{t('appCenter.deploymentsEmpty')}</div>
+        : (
+            <ul style={HINT_LIST} data-role="deployments-list">
+              {report.deployments.map(deployment => (
+                <li
+                  key={`${String(deployment.id)}:${deployment.version}`}
+                  data-role="deployment"
+                  data-version={deployment.version}
+                  data-kind={deployment.kind}
+                >
+                  <span data-role="deployment-version">{`v${deployment.version}`}</span>
+                  {deployment.kind !== '' && <span data-role="deployment-kind">{` · ${deployment.kind}`}</span>}
+                  {deployment.actor !== '' && <span data-role="deployment-actor">{` · ${deployment.actor}`}</span>}
+                  {deployment.actorRole !== '' && <span data-role="deployment-role">{` (${deployment.actorRole})`}</span>}
+                  {deployment.createdAt !== '' && <span data-role="deployment-created">{` · ${deployment.createdAt}`}</span>}
+                  {deployment.current && (
+                    <span data-role="deployment-current">{` · ${t('appCenter.deploymentCurrent')}`}</span>
+                  )}
+                  {deployment.message !== '' && <div data-role="deployment-message">{deployment.message}</div>}
                 </li>
               ))}
             </ul>

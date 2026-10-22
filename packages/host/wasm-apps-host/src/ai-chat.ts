@@ -90,6 +90,20 @@ export const AI_CHAT_MAX_MESSAGES = 64
 /** 单条 `content` 上限（§21.2 冻结：≤16 KiB）。 */
 export const AI_CHAT_MAX_CONTENT_BYTES = 16 * 1024
 
+/**
+ * AI 桥请求体的**传输上限**（字节）：契约上限 + JSON 信封余量。
+ *
+ * 为什么不是"刚好 64 × 16 KiB"（反证审计 R-09）：`64 × 16 KiB` 恰好是 content 本身的
+ * 字节数，而合法的请求体还要装 `[{"role":"user","content":"…"},…]` 的 JSON 结构 ——
+ * 64 条满额消息光信封就多出约 1.7 KiB，上限卡在 1 MiB 时一条**契约内合法**的请求
+ * 会吃到 413（客户端 `validateAppAiRequest` 放行、宿主拒收，方向全错）。
+ *
+ * 余量取 64 KiB：远大于 64 条消息的 JSON 结构开销（每条约 27 字节 + 转义膨胀），
+ * 也远小于一次模型调用的实际成本；上下两条路径（客户端页 origin 的本机路由与
+ * 应用窗口的协议 handler）**共用这一个常量**，不许各写一份。
+ */
+export const AI_CHAT_BODY_MAX_BYTES = AI_CHAT_MAX_MESSAGES * AI_CHAT_MAX_CONTENT_BYTES + (64 << 10)
+
 /** 允许的角色（仅对话：没有 tool/system 的注入面）。 */
 const AI_ROLES = ['user', 'assistant'] as const
 

@@ -82,10 +82,15 @@ func TestFromEnv(t *testing.T) {
 	}
 }
 
-// TestSmallProfileFitsSmallBox：small 档必须能在**测试机那种 2 GB 机器**上通过
-// §4.3 内存四笔账自检 —— 这是本次改造的直接目的（此前默认档 2550 MiB 必拒）。
+// TestSmallProfileFitsSmallBox：small 档必须能在**2 GB 级机器**上通过内存账自检
+// —— 这是本次改造的直接目的（此前默认档 2550 MiB 必拒）。
+//
+// ⚠️ 机器图 2026-10-22 由 992 MiB 改为 2 GiB（生产评审 P1-3）：内存账多了"排队请求体"
+// 这一笔（256 MiB，= limits.WasmQueueBodyBytesMax，与运行期硬上界同源），small 档账面
+// 645 MiB → 901 MiB。992 MiB 的机器（水位 694 MiB）按规则应当判红：645/694 = 93% 本来
+// 就没有给 Go 堆/协议缓冲留余量。这里改的是"small 档的目标机器"，不是把这一笔算成 0。
 func TestSmallProfileFitsSmallBox(t *testing.T) {
-	const available = 992 << 20 // 测试机实测 MemAvailable
+	const available = 2 << 30 // 2 GB 级机器
 	small := memprofile.Small()
 	plan := readyz.MemoryPlan{
 		Profile:             small.Name,
@@ -95,12 +100,12 @@ func TestSmallProfileFitsSmallBox(t *testing.T) {
 	}
 	budget := readyz.ComputeMemoryBudgetFor(available, plan)
 	if !budget.OK {
-		t.Fatalf("small 档应在 992 MiB 可用内存下通过：total=%dMiB limit=%dMiB",
+		t.Fatalf("small 档应在 2 GiB 可用内存下通过：total=%dMiB limit=%dMiB",
 			budget.Total>>20, budget.Limit>>20)
 	}
 	// 反向对照：默认档在同一台机器上必须仍然被拒（判据没有放宽，只是档位可选）。
 	if def := readyz.ComputeMemoryBudgetFor(available, readyz.DefaultMemoryPlan()); def.OK {
-		t.Fatal("默认档不应在 992 MiB 机器上通过（否则说明判据被放宽了）")
+		t.Fatal("默认档不应在 2 GiB 机器上通过（否则说明判据被放宽了）")
 	}
 }
 

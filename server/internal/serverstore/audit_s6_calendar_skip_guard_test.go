@@ -1211,6 +1211,11 @@ var calendarSkipScanDirRegistry = []string{
 	"../wasmapp/edge",
 	"../wasmapp/events",
 	"../wasmapp/hostcap",
+	// 迁移 0086（生命周期重设计）的新包：retirement 里有"按天/按保留期"的时间判定
+	// （purge_after <= now），必须进"日历派生 ⇒ skip"的扫描面，否则时区/边界类回归
+	// 不会被发现。
+	"../wasmapp/lifecycle",
+	"../wasmapp/retirement",
 	"../wasmapp/logbuf",
 	"../wasmapp/memprofile",
 	"../wasmapp/opens",

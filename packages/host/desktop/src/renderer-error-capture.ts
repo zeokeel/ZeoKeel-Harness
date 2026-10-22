@@ -38,14 +38,86 @@ export function hasRendererErrorSink(): boolean {
 }
 
 /**
+ * 本安装的应用源 scheme(`APP_ORIGIN_SCHEME`,渠道注入;U-03,2026-10-22 评审)。
+ *
+ * 为什么由 main 在模块作用域登记而不是每个调用点传:上报落点(Sentry)收到的报告只有
+ * 结构字段,而"这条错误来自哪个 WASM 应用"只能由 `url` 的 scheme + host 判出来 ——
+ * 判据只有一份,放在**唯一**的主进程上报入口(`reportRendererError`)最不容易漏。
+ * scheme 是渠道值,不在这里写死。
+ */
+let appOriginScheme: string | undefined
+
+/**
+ * 登记本安装的应用源 scheme(启动期一次;重复登记以最后一次为准)。
+ * @param scheme - 不含 `:` 的 scheme(如 `example-app`)。
+ */
+export function registerRendererErrorAppScheme(scheme: string): void {
+  if (typeof scheme !== 'string' || scheme === '') return
+  appOriginScheme = scheme.replace(/:+$/u, '')
+}
+
+/**
+ * 主进程侧补写 `app_id`/`windowKind` 的判据(不可信输入:只用于打 tag)。
+ *
+ * 形状与宿主包的 `APP_ID_PATTERN`(`^[a-z0-9]+(?:-[a-z0-9]+)*$`,≤63)同口径 —— 两边
+ * 发散时,一个合法应用 id 会因为多一个下划线而在后台**静默失去 app_id 标签**。
+ */
+const APP_ID_SHAPE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
+const APP_ID_MAX_LENGTH = 63
+
+/**
+ * 从一条报告里推断它来自哪个应用窗口(U-03)。
+ *
+ * 只在**已登记应用 scheme** 且 host 形如合法 app_id 时才返回:`url` 来自渲染进程
+ * (页面可伪造),所以这里不做任何授权决定,只产出一个**标签**;形状不合法一律当
+ * "不是应用窗口"(不补标签,也不改写原报告)。
+ * @param report - 归一化后的报告(已限定字段与长度)。
+ * @returns app_id;不是应用窗口的 URL ⇒ undefined。
+ */
+export function appIdFromRendererErrorReport(report: RendererErrorReport): string | undefined {
+  if (appOriginScheme === undefined) return undefined
+  const url = (report as { url?: unknown }).url
+  if (typeof url !== 'string' || url === '') return undefined
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return undefined
+  }
+  if (parsed.protocol !== `${appOriginScheme}:`) return undefined
+  const host = parsed.hostname.toLowerCase()
+  return host.length <= APP_ID_MAX_LENGTH && APP_ID_SHAPE.test(host) ? host : undefined
+}
+
+/**
+ * 补写应用窗口标签(幂等:已经有 `windowKind` 的报告原样返回)。
+ *
+ * `render-process-gone`(应用窗口崩溃由本包写 `appId`)与渲染进程 IPC 报告都走这里,
+ * 所以 Sentry 端能用同一个 `zeokeel.app_id` 筛出"某个应用出问题了"。
+ * @param report - 归一化后的报告。
+ * @returns 可能带 `appId`/`windowKind` 的报告。
+ */
+export function enrichRendererErrorReport(report: RendererErrorReport): RendererErrorReport {
+  if (report.windowKind !== undefined) return report
+  if (typeof report.appId === 'string' && report.appId !== '') {
+    return { ...report, windowKind: 'app' }
+  }
+  const appId = appIdFromRendererErrorReport(report)
+  if (appId === undefined) return report
+  return { ...report, appId, windowKind: 'app' }
+}
+
+/**
  * 把一条**已在主进程内**产生的报告交给 sink(如 `render-process-gone`)。
- * 无 sink 时静默丢弃,绝不抛。
+ *
+ * 交出去之前补写应用窗口标签(见 {@link enrichRendererErrorReport})。无 sink 时静默
+ * 丢弃,绝不抛。
  */
 export function reportRendererError(report: RendererErrorReport): boolean {
   const current = sink
   if (current === undefined) return false
   try {
-    current(report)
+    current(enrichRendererErrorReport(report))
     return true
   } catch {
     // 上报落点自身出错不得影响宿主(它在另一端已经 fail-soft,这里是双保险)。

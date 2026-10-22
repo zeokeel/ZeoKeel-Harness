@@ -111,9 +111,15 @@ function countsTowardSectionBudget(name) {
   return !TOOLCHAIN_SECTION_PREFIXES.some(p => name.startsWith(p))
 }
 
-/** assets.MaxPathBytes：包内逻辑路径总长（**字节**，不是字符数）。 */
+/**
+ * `limits.AssetMaxPathBytes`：包内逻辑路径总长（**字节**，不是字符数）。
+ *
+ * 单一真源是服务端 `internal/limits`（作者文档里的数字也由它生成）。脚本必须与它
+ * **同值**：`assets` 包的 `TestAssetPathLimitsMatchPackAssetsScript` 会解析这里的
+ * 字面量与 limits 对拍（2026-10-22 审计 A1 —— 此前这里是第二份数字，两边会静默漂移）。
+ */
 const MAX_PATH_BYTES = 256
-/** assets.MaxSegmentBytes：单个路径段长度（字节）。 */
+/** `limits.AssetMaxSegmentBytes`：单个路径段长度（字节，POSIX NAME_MAX）。 */
 const MAX_SEGMENT_BYTES = 255
 /**
  * limits.SectionTotalMaxBytes：段总量上限（4 MiB）。

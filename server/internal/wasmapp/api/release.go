@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/apperr"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/registry"
@@ -21,8 +19,9 @@ import (
 //   - **下架**（apps.enabled=0）：发布者自主的、可逆的"暂时不服务"；与审核开关无关。
 //   - **冻结**（apps.frozen_at 非空）：R37 退役流程的第一步 —— 停止服务 + 进入
 //     只读快照保留期（limits.RetirementSnapshotRetentionDays = 90 天）。
-//   - **删除**（apps.deleted_at 非空）：软删（标识与版本号永久占位，§4.1 防抢占），
-//     R37 的"真删"由后台任务执行（当前未实现，见交付说明的缺口清单）。
+//   - **删除**（apps.deleted_at 非空）：软删（标识与版本号永久占位，§4.1 防抢占）+
+//     删除前**必须快照成功**；到期真删由 `internal/wasmapp/retirement` 的每日调度器
+//     执行（`wasm_retirement`，设计 2026-10-22 §5.5 —— 不再是"未实现"）。
 //
 // 冻结是否同时下架？**是**（本实现的选择与理由）：
 //  1. R37 把冻结定义为"停止服务"，而 `apps.enabled` 正是"是否服务"的那个列；
@@ -117,6 +116,10 @@ func (h *Handlers) publishTarget(c *gin.Context) (bool, *apperr.Error) {
 }
 
 // freeze 处理 POST .../wasm/:app_id/freeze（R37 第一步；body 可带 {"frozen":false} 解冻）。
+//
+// 实现已收敛到 lifecycle_actions.go 的 freezeForApp / unfreezeForApp（设计 2026-10-22
+// §5.4）：冻结要**同时**写下 purge_after 并**立即尝试快照**，解冻要清时间线并尽力删
+// 快照目录。员工面与管理面共用同一段，差别只有 actor_role。
 func (h *Handlers) freeze(c *gin.Context) {
 	if err := h.requirePlatform(); err != nil {
 		writeErr(c, err)
@@ -146,48 +149,22 @@ func (h *Handlers) freeze(c *gin.Context) {
 			frozen = *b.Frozen
 		}
 	}
-	ctx := c.Request.Context()
+	role := serverstore.ActorRoleOwner
+	if app.Owner != u.Username && isSuperAdmin(u) {
+		role = serverstore.ActorRoleSuperAdmin
+	}
 	if frozen {
-		if app.FrozenAt != nil {
-			c.JSON(http.StatusOK, gin.H{"app": gin.H{"app_id": appID, "frozen": true, "changed": false,
-				"frozen_at": app.FrozenAt, "enabled": app.Enabled}})
-			return
-		}
-		now := h.now().UTC()
-		if err := serverstore.FreezeWasmApp(ctx, h.opt.DB, appID, now); err != nil {
-			writeErr(c, internalErr("冻结失败", err))
-			return
-		}
-		// 冻结 = 停止服务 ⇒ 同时下架（理由见文件头注释）。
-		if app.Enabled {
-			if err := serverstore.SetWasmAppEnabled(ctx, h.opt.DB, appID, false); err != nil {
-				writeErr(c, internalErr("冻结时下架失败", err))
-				return
-			}
-		}
-		h.auditApp(appID, u.Username, "wasm_app_freeze",
-			auditDetail(appID, auditTitleOf(app), fmt.Sprintf("冻结（停止服务，快照保留 %d 天）", limits.RetirementSnapshotRetentionDays)))
-		c.JSON(http.StatusOK, gin.H{"app": gin.H{"app_id": appID, "frozen": true, "changed": true,
-			"frozen_at": now, "enabled": false}})
+		h.freezeForApp(c, app, u.Username, role)
 		return
 	}
-	// 解冻：只清 frozen_at，**不**自动上架（文件头注释第 2 条）。
-	if app.FrozenAt == nil {
-		c.JSON(http.StatusOK, gin.H{"app": gin.H{"app_id": appID, "frozen": false, "changed": false,
-			"enabled": app.Enabled}})
-		return
-	}
-	if err := serverstore.FreezeWasmApp(ctx, h.opt.DB, appID, time.Time{}); err != nil {
-		writeErr(c, internalErr("解冻失败", err))
-		return
-	}
-	h.auditApp(appID, u.Username, "wasm_app_freeze",
-		auditDetail(appID, auditTitleOf(app), "解冻（enabled 保持不变，需要重新上架才恢复服务）"))
-	c.JSON(http.StatusOK, gin.H{"app": gin.H{"app_id": appID, "frozen": false, "changed": true,
-		"enabled": app.Enabled, "note": "解冻不会自动上架：请显式调用 publish"}})
+	h.unfreezeForApp(c, app, u.Username, role)
 }
 
-// deleteApp 处理 DELETE .../wasm/:app_id（R37：软删 + 审计；"真删"由后台任务负责）。
+// deleteApp 处理 DELETE .../wasm/:app_id（R37：软删 + 快照；"真删"由 retirement 调度器负责）。
+//
+// 实现在 lifecycle_actions.go 的 retireForApp：**快照成功是删除的硬前置条件**
+// （fail-closed；设计 2026-10-22 §5.5）。软删会立刻释放全部版本的制品字节
+// （SoftDeleteWasmApp），所以"先快照、后软删"的顺序不能交换。
 func (h *Handlers) deleteApp(c *gin.Context) {
 	if err := h.requirePlatform(); err != nil {
 		writeErr(c, err)
@@ -199,35 +176,19 @@ func (h *Handlers) deleteApp(c *gin.Context) {
 		return
 	}
 	appID := registry.NormalizeAppID(c.Param("app_id"))
+	// allowDeleted=false ⇒ 重复删除回 404「应用不存在」（与"不是你的"同形）：
+	// 删除是**终态动作**，对已删除行再回一个 409 APP_DELETED 等于告诉调用方
+	// "这个标识曾经存在过"（本仓的不泄露存在性纪律，与 ownedApp 注释同源）。
 	app, _, oerr := h.ownedApp(c, appID, false)
 	if oerr != nil {
 		writeErr(c, oerr)
 		return
 	}
-	ctx := c.Request.Context()
-	// R37 的时间线锚点：冻结时刻 + 保留期 = 可删时刻。删除时若从未冻结过，就在这里
-	// 补一个冻结时刻（否则后台任务只能拿 deleted_at 兜底，两个口径会分叉）。
-	if app.FrozenAt == nil {
-		if err := serverstore.FreezeWasmApp(ctx, h.opt.DB, appID, h.now().UTC()); err != nil {
-			writeErr(c, internalErr("删除前冻结失败", err))
-			return
-		}
+	role := serverstore.ActorRoleOwner
+	if app.Owner != u.Username && isSuperAdmin(u) {
+		role = serverstore.ActorRoleSuperAdmin
 	}
-	if err := serverstore.SoftDeleteWasmApp(ctx, h.opt.DB, appID); err != nil {
-		writeErr(c, internalErr("删除失败", err))
-		return
-	}
-	h.auditApp(appID, u.Username, "wasm_app_delete",
-		auditDetail(appID, auditTitleOf(app), fmt.Sprintf("软删（标识与版本号永久占位；制品字节已释放，版本元数据与应用库保留 %d 天待真删）",
-			limits.RetirementSnapshotRetentionDays)))
-	// 删除（软删）即释放进程内驻留：模块与库句柄都没有再留着的理由。
-	h.evictApp(appID)
-	c.JSON(http.StatusOK, gin.H{"app": gin.H{
-		"app_id": appID, "deleted": true, "frozen_at": app.FrozenAt, "deleted_at": h.now().UTC(),
-	}, "retention_days": limits.RetirementSnapshotRetentionDays,
-		// 2026-09-25(R15C-G-03)：文案与实现对齐 —— 软删**已释放**制品字节
-		// （不再计入配额），保留下来的是版本元数据行与应用库（R37 真删未实现）。
-		"note": "R37 的\"真删\"由后台任务执行（当前未实现）：版本元数据行与应用库会保留；制品字节已在软删时释放（不再计入配额）"})
+	h.retireForApp(c, app, u.Username, role)
 }
 
 // ---------------------------------------------------------------------------

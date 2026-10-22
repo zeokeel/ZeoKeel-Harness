@@ -133,6 +133,12 @@ type Limits struct {
 	// 不得超过服务端 HTTP ReadTimeout（`limits.ServerReadTimeout`，不可配置的传输层
 	// 常量 60 s）—— 同步 publish 要在那之前返回。
 	CompileTimeoutSeconds int `json:"compile_timeout_seconds"`
+
+	// ---- 生命周期 ----
+	// RetirementSnapshotRetentionDays 是冻结/退役快照的保留天数（设计 §5.3）：
+	// 冻结时 purge_after = 冻结时刻 + 本值；到期后 wasm_retirement 才真删。
+	// 控制台可调（1–3650），默认 90（limits.RetirementSnapshotRetentionDays）。
+	RetirementSnapshotRetentionDays int `json:"retirement_snapshot_retention_days"`
 }
 
 // defaultAppDBCacheKiB 是**每条 SQLite 连接**页缓存的默认值（KiB）。
@@ -159,12 +165,13 @@ func Defaults() Limits {
 		AppDBCacheKiB:      defaultAppDBCacheKiB,
 		AppDBReaders:       limits.AppDBReaders,
 
-		GuestBudgetSeconds:        int(limits.GuestBudget / time.Second),
-		DryRunBudgetSeconds:       int(limits.DryRunBudget / time.Second),
-		HostCallBudgetSeconds:     int(limits.HostCallBudgetDefault / time.Second),
-		RequestWallClockSeconds:   int(limits.RequestWallClock / time.Second),
-		SQLStatementBudgetSeconds: int(limits.SQLStatementBudget / time.Second),
-		CompileTimeoutSeconds:     int(limits.CompileTimeout / time.Second),
+		GuestBudgetSeconds:              int(limits.GuestBudget / time.Second),
+		DryRunBudgetSeconds:             int(limits.DryRunBudget / time.Second),
+		HostCallBudgetSeconds:           int(limits.HostCallBudgetDefault / time.Second),
+		RequestWallClockSeconds:         int(limits.RequestWallClock / time.Second),
+		SQLStatementBudgetSeconds:       int(limits.SQLStatementBudget / time.Second),
+		CompileTimeoutSeconds:           int(limits.CompileTimeout / time.Second),
+		RetirementSnapshotRetentionDays: limits.RetirementSnapshotRetentionDays,
 	}
 }
 
@@ -268,6 +275,11 @@ func (l Limits) clampCrossFieldReport() (Limits, []adjustment) {
 		adj = append(adj, adjustment{field: field, from: *dst, to: v})
 		*dst = v
 	}
+	// 新字段的零值 = 旧版本/最小夹具没带这一项 ⇒ 补默认（不是"保留 0 天"）。
+	// 显式负数不补，交给 Validate 点名拒绝。
+	if l.RetirementSnapshotRetentionDays == 0 {
+		set("retirement_snapshot_retention_days", &l.RetirementSnapshotRetentionDays, limits.RetirementSnapshotRetentionDays)
+	}
 	if l.MaxInstances > 0 {
 		if l.AppRunning > l.MaxInstances {
 			set("app_running", &l.AppRunning, l.MaxInstances)
@@ -360,8 +372,21 @@ func (l Limits) ClampForTest() Limits { return l.clampCrossField() }
 // 取值范围（**保存路径的硬边界**）。上下限都取"能跑起来"的保守值：
 // 下限防止把平台调到不可用（0 并发、1 MiB 实例内存），上限防止一个手滑把机器打爆。
 const (
-	MinInstances        = 1
-	MaxInstances        = 256
+	MinInstances = 1
+	MaxInstances = 256
+	// MaxAppQueue 是 `app_queue`（每应用队列**条数**）的合法上界：4096。
+	//
+	// ⚠️ 它**不是**内存上界，也**不能**被当成内存上界来推理（生产评审管理员视角 P1-3，
+	// 2026-10-22）：队列里每个等待者的请求体在准入之前就已经读进内存（1 MiB/请求），
+	// 所以"4096 × 1 MiB ≈ 4 GiB"曾经是**合法配置**可得的常驻。现在这条路径由两处共同封顶：
+	//   - 条数：本常量（每应用）；
+	//   - 字节：`limits.WasmQueueBodyBytesMax`（**全局** 256 MiB，超限 fail-closed 429
+	//     `APP_QUEUE_FULL`/`details.reason=queue_bytes_exceeded`），并作为独立一笔进
+	//     `/readyz` 的内存账（`queue_body_bytes`）。
+	//
+	// 因此把 app_queue 调到 4096 的语义是"允许排更多**小**请求"，而不是"允许占用更多内存"：
+	// 排队体字节与条数无关地由全局预算封顶。想真正放开排队内存只有改常量（运维决策），
+	// 不能在控制台配。
 	MaxAppQueue         = 4096
 	MinInstanceMemoryMB = 16
 	MaxInstanceMemoryMB = 1024
@@ -389,6 +414,9 @@ const (
 	// 它直接对应"一个请求占着执行槽多久"；120 s 已经比任何合理的单次计算长得多。
 	// 端到端墙钟、编译、SQL 这些允许配到 300 s（它们包含等待，不全是占用）。
 	MaxGuestBudgetSeconds = 120
+	// MaxRetirementRetentionDays 是退役快照保留期的上限（10 年）：够长到满足
+	// 最严的留存政策，又不至于让"到期"永远不来。
+	MaxRetirementRetentionDays = 3650
 )
 
 // Validate 校验取值范围与内部一致性（fail-loud；返回可直接回控制台的错误信封）。
@@ -515,6 +543,11 @@ func (l Limits) Validate() *apperr.Error {
 				l.SQLStatementBudgetSeconds, l.HostCallBudgetSeconds,
 				l.HostCallBudgetSeconds-1, l.SQLStatementBudgetSeconds+1))
 	}
+	if l.RetirementSnapshotRetentionDays < 1 || l.RetirementSnapshotRetentionDays > MaxRetirementRetentionDays {
+		return bad("retirement_snapshot_retention_days",
+			fmt.Sprintf("退役快照保留天数必须在 1–%d 之间", MaxRetirementRetentionDays)).
+			WithHint("冻结/删除时 purge_after = 冻结时刻 + 本值；到期后 wasm_retirement 真删（不可恢复）")
+	}
 	return nil
 }
 
@@ -526,8 +559,9 @@ func (l Limits) InstanceMemoryPages() uint32 {
 	return uint32(l.InstanceMemoryMB) * (1 << 20) / uint32(limits.WasmPageSize)
 }
 
-// Budget 计算内存账（并发×实例上限 + 编译峰值 + 上传峰值 + 模块缓存 + 应用库页缓存），
-// 与启动自检**同一判据**（availableBytes < 0 ⇒ 读不到 ⇒ 不判定；= 0 ⇒ 真的没有 ⇒ 判失败）。
+// Budget 计算内存账（并发×实例上限 + 编译峰值 + 上传峰值 + 模块缓存 + 应用库页缓存
+// + 排队请求体），与启动自检**同一判据**（availableBytes < 0 ⇒ 读不到 ⇒ 不判定；
+// = 0 ⇒ 真的没有 ⇒ 判失败）。
 //
 // # SQLite 页缓存**在账里**（R1-rt-8，2026-09-19）
 //
@@ -540,6 +574,20 @@ func (l Limits) InstanceMemoryPages() uint32 {
 // （四笔账预览与 ok 都不动）。页缓存只在连接关闭（空闲 appdb_idle_min 或污染回收）时
 // 释放，"可回收所以不计"在"句柄满池"的稳态下并不成立，因此现在把它作为**独立一笔**
 // 计入（不并入模块缓存：两者的失效路径与调节旋钮不同，合并会让"该调小哪一项"不可读）。
+//
+// # 排队请求体**在账里**（生产评审管理员视角 P1-3，2026-10-22）
+//
+// 这一笔同样是"控制台能配出远超物理内存、账却全绿"的形态，但成因不同：
+// 服务端在**准入之前**就把请求体读进内存（慢客户端不得占着执行槽），而排队容量只按
+// **条数**判（`app_queue`，合法上界 MaxAppQueue = 4096）⇒ 4096 × 1 MiB ≈ 4 GiB
+// 已读字节可以合法地挂在队列里，而四笔账 + 页缓存都不含它。
+//
+// 这一笔**不只是账**：它同时是运行期硬上界（`queue.Options.QueueBodyBytes`，
+// 缺省 limits.WasmQueueBodyBytesMax = 256 MiB，超限 fail-closed 429
+// `APP_QUEUE_FULL`/`details.reason=queue_bytes_exceeded`）。因此它**不由控制台配置** ——
+// 与 max_instances / app_running 这些"运营旋钮"不同，它是进程能不能活的判据；
+// BudgetFor 不传它（走 readyz.MemoryPlan 的默认值），保证"账上的数"永远等于
+// "调度器判据读的那个常量"。
 //
 // 标签用默认的 "settings"；需要如实反映来源时用 BudgetFor。
 func (l Limits) Budget(availableBytes int64) readyz.MemoryBudget {
@@ -836,12 +884,13 @@ func Ranges() map[string]Range {
 		// （编译超时 1–300 而实际上限 60、单条 SQL 1–300 而实际是 4–119…），
 		// 表单照着它渲染就会把管理员引到必然被拒的格子里。六项一律取
 		// effectiveBudgetBounds（推导出来的有效区间），见该变量与 Validate 的同一批规则。
-		"guest_budget_seconds":         {effectiveBudgetBounds["guest_budget_seconds"].Min, effectiveBudgetBounds["guest_budget_seconds"].Max, "秒", false},
-		"dry_run_budget_seconds":       {effectiveBudgetBounds["dry_run_budget_seconds"].Min, effectiveBudgetBounds["dry_run_budget_seconds"].Max, "秒", false},
-		"host_call_budget_seconds":     {effectiveBudgetBounds["host_call_budget_seconds"].Min, effectiveBudgetBounds["host_call_budget_seconds"].Max, "秒", false},
-		"request_wall_clock_seconds":   {effectiveBudgetBounds["request_wall_clock_seconds"].Min, effectiveBudgetBounds["request_wall_clock_seconds"].Max, "秒", false},
-		"sql_statement_budget_seconds": {effectiveBudgetBounds["sql_statement_budget_seconds"].Min, effectiveBudgetBounds["sql_statement_budget_seconds"].Max, "秒", false},
-		"compile_timeout_seconds":      {effectiveBudgetBounds["compile_timeout_seconds"].Min, effectiveBudgetBounds["compile_timeout_seconds"].Max, "秒", false},
+		"guest_budget_seconds":               {effectiveBudgetBounds["guest_budget_seconds"].Min, effectiveBudgetBounds["guest_budget_seconds"].Max, "秒", false},
+		"dry_run_budget_seconds":             {effectiveBudgetBounds["dry_run_budget_seconds"].Min, effectiveBudgetBounds["dry_run_budget_seconds"].Max, "秒", false},
+		"host_call_budget_seconds":           {effectiveBudgetBounds["host_call_budget_seconds"].Min, effectiveBudgetBounds["host_call_budget_seconds"].Max, "秒", false},
+		"request_wall_clock_seconds":         {effectiveBudgetBounds["request_wall_clock_seconds"].Min, effectiveBudgetBounds["request_wall_clock_seconds"].Max, "秒", false},
+		"sql_statement_budget_seconds":       {effectiveBudgetBounds["sql_statement_budget_seconds"].Min, effectiveBudgetBounds["sql_statement_budget_seconds"].Max, "秒", false},
+		"compile_timeout_seconds":            {effectiveBudgetBounds["compile_timeout_seconds"].Min, effectiveBudgetBounds["compile_timeout_seconds"].Max, "秒", false},
+		"retirement_snapshot_retention_days": {1, MaxRetirementRetentionDays, "天", false},
 	}
 }
 
@@ -854,5 +903,6 @@ func FieldNames() []string {
 		"appdb_idle_min", "appdb_cache_kib", "app_db_readers",
 		"guest_budget_seconds", "dry_run_budget_seconds", "host_call_budget_seconds",
 		"request_wall_clock_seconds", "sql_statement_budget_seconds", "compile_timeout_seconds",
+		"retirement_snapshot_retention_days",
 	}
 }

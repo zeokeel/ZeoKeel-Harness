@@ -43,6 +43,16 @@ export interface RendererErrorPayload {
   colno?: number
   /** 出错文档地址。 */
   url?: string
+  /**
+   * 产生这条报告的**应用窗口** id(U-03,2026-10-22 评审)。
+   *
+   * 只由**主进程**在 `reportRendererError` 之前补写(按 `<app scheme>://<app_id>` 的
+   * URL 判),IPC 载荷不携带 —— 归一化 `normalizeRendererErrorReport` 只取白名单字段,
+   * 渲染进程伪造的 `appId` 会被丢掉。
+   */
+  appId?: string
+  /** 窗口种类(`shell` = 主界面;`app` = WASM 应用窗口)。同样由主进程补写。 */
+  windowKind?: 'shell' | 'app'
 }
 
 /** 主进程观察到的渲染进程崩溃(`render-process-gone`)。 */
@@ -51,6 +61,12 @@ export interface RendererGonePayload {
   /** Electron 的崩溃原因:crashed / oom / killed / abnormal-exit / clean-exit … */
   reason: string
   exitCode: number
+  /** 出事的应用 id(应用窗口崩溃;由主进程写,Sentry tag `zeokeel.app_id`)。 */
+  appId?: string
+  /** 窗口种类(应用窗口崩溃恒为 `app`)。 */
+  windowKind?: 'shell' | 'app'
+  /** 崩溃时的文档 URL(应用窗口为 `<app scheme>://<app_id>/…`)。 */
+  url?: string
 }
 
 /** 主进程收到的渲染进程报告。 */

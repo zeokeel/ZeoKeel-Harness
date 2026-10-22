@@ -442,6 +442,13 @@ export interface WasmAppsWindowAdapter {
     url: string
     title: string
     /**
+     * 应用名（**不含**产品名后缀；骨架页标题用，U-01）。
+     *
+     * 为什么不从 `title` 里切：`title` 的格式是宿主拼的 `<应用名> · <产品名>`，按分隔符
+     * 切会在"应用名里本来就有 ` · `"时切错；这里直接把 `<应用名>` 显式传下去。
+     */
+    appLabel: string
+    /**
      * 该窗口所在的 Electron session 分区（**按用户**，§7.2/R2S-8 冻结：应用窗口复用
      * 内置浏览器的按用户分区）。
      *
@@ -464,12 +471,43 @@ export interface WasmAppsWindowAdapter {
   focusAppWindow(handle: AppWindowHandle, url: string): void
   /** 关闭窗口。 */
   closeAppWindow(handle: AppWindowHandle): void
+  /**
+   * 在窗口里显示一条**可关闭**的提示条（带「刷新」与「关闭」两个动作）。
+   *
+   * 两个生产消费者（2026-10-22 评审）：
+   *  - U-06：`updateAvailableBanner`（确认有新版本，点刷新才重载）；
+   *  - §5.1b 软闸门：`versionUnverifiedBanner`（拿不到版本，只提示可能不是最新）。
+   * 语义边界：只提示、不重载 —— 重载由用户按「刷新」触发（应用里可能有未保存的草稿）。
+   * 缺席 ⇒ 宿主静默跳过（纯 Node 替身/旧适配器；提示是增强，不是打开的前置）。
+   * @param handle - 目标窗口。
+   * @param message - 已本地化的提示正文（刷新/关闭按钮的文字由适配器按自己的语言给）。
+   */
+  showWindowNotice?(handle: AppWindowHandle, message: string): void
+  /**
+   * 设置"骨架 → 应用文档"的加载看门狗上限（U-01）。
+   *
+   * 由插件在 `apply()` 里按 `Config.requestTimeoutMs` 注入：协议 handler 的单次出站
+   * 预算可以被部署抬高，而适配器构造在插件之前、拿不到那个值 —— 两处不同步会让
+   * 看门狗**早于**协议 handler 自己的超时页面响（用户先看到失败页，几秒后应用又出来）。
+   * 插件传 `requestTimeoutMs + 余量`（见 `index.ts`）。
+   * @param timeoutMs - 上限（毫秒；非正数/非有限值被忽略）。
+   */
+  setLoadTimeout?(timeoutMs: number): void
   /** 锁定宽高比（`extraSize` = 自绘 chrome 的额外高度；程序化 resize 不受它约束）。 */
   setAspectRatio(handle: AppWindowHandle, ratio: number, extraSize: { width: number, height: number }): void
   /** 安装应用面闸门（`will-navigate` / `will-frame-navigate` / `will-redirect` /
    * `setWindowOpenHandler` + session 级 `onBeforeRequest`；归属 = 应用窗口模块，
    * 见 §16.1）。 */
   installAppWindowGuards?(handle: AppWindowHandle, appId: string): void
+  /**
+   * 登记**允许在应用窗口里导航到的精确 URL**（F-04：宿主渲染的会话过期页上的
+   * 「重新登录」按钮）。
+   *
+   * 为什么是精确 URL 而不是 origin：登录页是**唯一**合法的跨 origin 目标
+   * （`<client origin>/login`），放行 origin 等于给应用页一条"把窗口导航到客户端任意
+   * 页面"的路。缺席 ⇒ 维持原样（http(s) 外链一律拒）。
+   */
+  setNavigationAllowlist?(urls: readonly string[]): void
   /**
    * 创建窗口**之前**确保该分区装了权限守卫（§16.1：守卫归属 = 分区初始化）。
    *
@@ -605,6 +643,15 @@ export interface WasmAppsWindows {
   /** 关闭全部并清空映射（登出/切账号/切渠道，§7.2 冻结）。 */
   closeAll(): Promise<void>
   /**
+   * 给**已打开**的窗口显示一条可关闭提示（U-06 版本更新 / §5.1b 软闸门）。
+   *
+   * 只提示、不重载（见 {@link WasmAppsWindowAdapter.showWindowNotice}）。窗口
+   * 不存在/适配器不实现 ⇒ no-op。
+   * @param appId - 应用 id。
+   * @param message - 已本地化的提示正文。
+   */
+  showNotice(appId: string, message: string): void
+  /**
    * 把当前所有活着的应用窗口补注册进 surface 注册表（§16.1）。
    *
    * 为什么需要它：注册表可能**晚于**窗口出现（browser 行在本插件之后加载；深链可以在
@@ -726,8 +773,11 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
     }
   }
 
+  /** 应用名（骨架页标题用；不含产品名后缀，U-01）。 */
+  const appLabelOf = (appId: string): string => options.titleFor?.(appId) ?? appId
+
   const titleOf = (appId: string): string =>
-    `${options.titleFor?.(appId) ?? appId} · ${options.productName}`
+    `${appLabelOf(appId)} · ${options.productName}`
 
   /** 丢掉一个已被原生侧销毁的句柄（用户手动关窗；见 `isAlive` 的契约注释）。 */
   const forget = (appId: string, handle: AppWindowHandle): void => {
@@ -847,6 +897,7 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
         appId,
         url,
         title: titleOf(appId),
+        appLabel: appLabelOf(appId),
         partition,
         width: rect.width,
         height: rect.height,
@@ -923,6 +974,14 @@ export function createWasmAppsWindows(options: WasmAppsWindowsOptions): WasmApps
     },
     isAppSurfaceWebContents(webContentsId) {
       return webContentsId !== undefined && webContentsIds.has(webContentsId)
+    },
+    showNotice(appId, message) {
+      // U-06 / §5.1b：窗口还开着且适配器支持 ⇒ 在窗口里提示（刷新/关闭由用户按）。
+      // 不静默 reload：应用可能有未保存的草稿，重载必须由用户按。
+      const handle = liveHandle(appId)
+      if (handle === undefined) return
+      if (typeof message !== 'string' || message === '') return
+      options.adapter.showWindowNotice?.(handle, message)
     },
   }
 }

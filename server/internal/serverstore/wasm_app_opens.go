@@ -194,6 +194,26 @@ func OldestWasmAppOpen(ctx context.Context, db *sql.DB) (time.Time, bool, error)
 	return at.Time.UTC(), true, nil
 }
 
+// LastWasmAppOpensAggregateAt 返回日汇总表**最后一次被写入**的时刻（无行时 ok=false）。
+//
+// 唯一来源是 `wasm_app_opens_daily.updated_at`（迁移 0075 的注释：这一列的用途就是
+// "这张表最后一次被定时器刷新"可诊断）。它是 `GET …/opens/summary` 的
+// `aggregated_until` 的**库侧真源**（C-14）：看板上的数字来自这张表，表没被刷新过
+// 就说明数字可能已经过期 —— 这不能靠"进程里有没有一个 ticker"来推断。
+//
+// ⚠️ 无行（全新部署 / 从来没有打开过）时返回 ok=false，**不是** time.Now()：把
+// "没有任何汇总"伪装成"刚刚汇总过"正是这条可观测性要消灭的形态。
+func LastWasmAppOpensAggregateAt(ctx context.Context, db *sql.DB) (time.Time, bool, error) {
+	var at sql.NullTime
+	if err := db.QueryRowContext(ctx, `SELECT max(updated_at) FROM wasm_app_opens_daily`).Scan(&at); err != nil {
+		return time.Time{}, false, fmt.Errorf("查最后汇总时刻: %w", err)
+	}
+	if !at.Valid {
+		return time.Time{}, false, nil
+	}
+	return at.Time.UTC(), true, nil
+}
+
 // WasmOpenQuery 是管理端查询的参数（capability:read）。
 type WasmOpenQuery struct {
 	AppID string

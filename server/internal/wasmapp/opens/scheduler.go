@@ -31,6 +31,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
@@ -47,11 +48,33 @@ const defaultTick = 5 * time.Minute
 func DefaultTick() time.Duration { return defaultTick }
 
 // Scheduler 是打开计数的维护调度器。
+//
+// ## 自记账（C-14，审计 2026-10-22）
+//
+// 现场：这条作业此前是**裸启动**（`opens.NewScheduler(...).Start(ctx)`），既不在
+// `cmd/server/scheduler_status.go` 的登记表里，也没有 Runs/Errors —— 作业停摆时看板
+// 只是"数字不涨"，与"真的没人用"在运维面上同形（审计 C-14 原话）。
+//
+// 现在按其它调度器的同一形态自记账：Started/StartedAt/Runs/Errors/LastRunAt/LastError/Tick
+// （= cmd/server 的 observableScheduler 面），并由装配点在 Start **之前**登记为
+// `wasm_opens`。读数口径（写清楚，否则运维会把两个数读混）：
+//   - Runs = 已执行的**轮**数（含启动先跑的那一轮）；
+//   - Errors = 以错误结束的**轮**数（"先汇总后清理"任一步失败即整轮放弃，见 TryRun）：
+//     它与 Runs 同口径（轮），因此 Errors<=Runs 恒成立 —— 与 retirement 的
+//     "失败应用数"口径不同，那条作业的一个应用是一次独立不可逆动作。
 type Scheduler struct {
 	db     *sql.DB
 	tick   time.Duration
 	nowFn  func() time.Time
 	logger func(format string, args ...any)
+
+	mu        sync.Mutex
+	started   bool
+	startedAt time.Time
+	runs      int64
+	errors    int64
+	lastRunAt time.Time
+	lastError string
 }
 
 // NewScheduler 构造调度器（tick/nowFn/logger 可注入，便于测试与装配）。
@@ -66,10 +89,21 @@ func NewScheduler(db *sql.DB, tick time.Duration, nowFn func() time.Time) *Sched
 }
 
 // Start 后台启动（ctx 取消即退出；启动先跑一次，支持停机补齐）。
+//
+// 重复调用只有第一次生效（与 retirement/reports 等同款）：否则一个装配点写两次
+// Start 就会得到**两条**后台循环，而 Runs 只见证其中一条的一半。
 func (s *Scheduler) Start(ctx context.Context) {
 	if s == nil || s.db == nil {
 		return
 	}
+	s.mu.Lock()
+	if s.started {
+		s.mu.Unlock()
+		return
+	}
+	s.started = true
+	s.startedAt = s.nowFn()
+	s.mu.Unlock()
 	go func() {
 		t := time.NewTicker(s.tick)
 		defer t.Stop()
@@ -86,6 +120,10 @@ func (s *Scheduler) Start(ctx context.Context) {
 }
 
 // TryRun 执行一轮"先汇总后清理"。任何失败都只记日志（计数维护不能影响服务可用性）。
+//
+// 自记账在**这里**收口（而不是散落在每个失败分支）：Runs 每轮 +1、Errors 只记
+// "以错误结束的轮"，LastRunAt 取本轮结束时刻 —— 三条读数因此不可能与真实执行
+// 路径分叉（少写一处 return 的记账，就会得到"跑了但没记"的假读数）。
 func (s *Scheduler) TryRun(ctx context.Context) {
 	if s == nil || s.db == nil {
 		return
@@ -93,6 +131,12 @@ func (s *Scheduler) TryRun(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	s.recordRun(s.run(ctx))
+}
+
+// run 是 TryRun 的本体：返回 nil = 本轮完整成功；返回错误 = 本轮提前放弃（先汇总后清理
+// 任一步失败，明细清理**不会**在本轮执行）。
+func (s *Scheduler) run(ctx context.Context) error {
 	now := s.nowFn().UTC()
 	// ⚠️ R19B-01（审计 2026-09-25，P1，**不可逆的数据损坏**）：清理边界与汇总上界
 	// 必须**一起对齐到本地日边界**。修前这里是裸瞬时 cutoff = now-90d（落在某一天
@@ -138,7 +182,7 @@ func (s *Scheduler) TryRun(ctx context.Context) {
 	oldest, hasOld, oerr := serverstore.OldestWasmAppOpen(ctx, s.db)
 	if oerr != nil {
 		s.warnf("opens: 查最早明细失败，本轮不清理（先汇总后清理）: %v", oerr)
-		return
+		return oerr
 	}
 	// 判据放宽到边界日"之内或更早"：边界日当天（oldest 尚未越过 purgeBefore）也必须
 	// 被整日汇总 —— 它是下一个日界整日删除的对象，而 Aggregate 的闭区间恰好覆盖它。
@@ -147,14 +191,14 @@ func (s *Scheduler) TryRun(ctx context.Context) {
 	if hasOld && oldest.Before(serverstore.NextLocalDay(purgeBefore)) {
 		if _, err := serverstore.AggregateWasmAppOpens(ctx, s.db, oldest, purgeBefore); err != nil {
 			s.warnf("opens: 待删区间汇总失败，本轮不清理（先汇总后清理）: %v", err)
-			return
+			return err
 		}
 	}
 	// (b) 活动窗：今天（仍在写入）与昨天（跨零点写入的尾巴）——
 	//     这两天的数字随时在变，每轮都要重算（汇总本身是按天全量覆盖，幂等）。
 	if _, err := serverstore.AggregateWasmAppOpens(ctx, s.db, serverstore.AddLocalDays(now, -2), now); err != nil {
 		s.warnf("opens: 活动窗汇总失败，本轮不清理: %v", err)
-		return
+		return err
 	}
 
 	// ---- ② 后清理 ----
@@ -163,12 +207,72 @@ func (s *Scheduler) TryRun(ctx context.Context) {
 	deleted, err := serverstore.PurgeWasmAppOpens(ctx, s.db, purgeBefore)
 	if err != nil {
 		s.warnf("opens: 明细清理失败（不影响服务，下轮重试）: %v", err)
-		return
+		return err
 	}
 	if deleted > 0 {
 		s.logf("opens: 明细清理完成 purgeBefore=%s deleted=%d", purgeBefore.Format(time.RFC3339), deleted)
 	}
+	return nil
 }
+
+// recordRun 记账一轮（Runs 恒 +1；err != nil 时 Errors +1 并落 LastError）。
+func (s *Scheduler) recordRun(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runs++
+	s.lastRunAt = s.nowFn()
+	if err != nil {
+		s.errors++
+		s.lastError = err.Error()
+	}
+}
+
+// ---- observableScheduler 面（cmd/server/scheduler_status.go 只读这几项）----
+
+// Started 报告后台循环是否已启动。
+func (s *Scheduler) Started() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.started
+}
+
+// StartedAt 返回启动时刻（零值 = 未启动）。
+func (s *Scheduler) StartedAt() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.startedAt
+}
+
+// Runs 返回已执行的轮数（含启动先跑的那一轮）。
+func (s *Scheduler) Runs() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.runs
+}
+
+// Errors 返回以错误结束的轮数（与 Runs 同口径，因此 Errors<=Runs 恒成立）。
+func (s *Scheduler) Errors() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.errors
+}
+
+// LastRunAt 返回最近一轮的结束时刻（零值 = 未跑过）。
+func (s *Scheduler) LastRunAt() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastRunAt
+}
+
+// LastError 返回最近一轮的错误文案（空串 = 最近一轮无错；历史错误不保留）。
+func (s *Scheduler) LastError() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastError
+}
+
+// Tick 返回维护间隔（装配层登记它与 DefaultTick 的一致性）。
+func (s *Scheduler) Tick() time.Duration { return s.tick }
 
 func (s *Scheduler) logf(format string, args ...any) {
 	if s.logger != nil {

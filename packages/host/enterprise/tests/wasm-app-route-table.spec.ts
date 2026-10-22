@@ -89,6 +89,12 @@ describe('R6-B P3：wasm 应用本机路由表（文档 ↔ 代码同源）', ()
   it('对照：路由表本身仍是一张"有内容的表"（判据不是恒真）', () => {
     const rows = tableRows()
     expect(rows.length).toBeGreaterThanOrEqual(6)
-    expect(rows.some(row => row.path === '/:app_id/publish\\|unpublish\\|freeze')).toBe(true)
+    // 生命周期行（2026-10-22 生命周期重设计 §6.1 把它拆成 publish 与
+    // unpublish|freeze|restore 两行：只有后三个动作会广播 F-07 的存储清理事件）。
+    expect(rows.some(row => row.path === '/:app_id/publish')).toBe(true)
+    expect(rows.some(row => row.path === '/:app_id/unpublish\\|freeze\\|restore')).toBe(true)
+    // 新增的员工面端点（部署历史/回滚、撤回）必须在表里 —— 客户端已按契约调用它们。
+    expect(rows.some(row => row.path === '/:app_id/deployments')).toBe(true)
+    expect(rows.some(row => row.path === '/:app_id/releases/:version/withdraw')).toBe(true)
   })
 })

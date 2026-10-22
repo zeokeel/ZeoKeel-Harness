@@ -709,6 +709,29 @@ describe('渲染进程采集(P0-6/D8)', () => {
     expect(hint.tags['zeokeel.kind']).toBe('unhandledrejection')
   })
 
+  /**
+   * U-03（2026-10-22 评审）：应用窗口里的错误/崩溃要能按**应用**聚合。
+   *
+   * 变异：删掉 `captureRendererError`/`captureRendererGone` 里写 `zeokeel.app_id` 的
+   * 两行 ⇒ 本用例红（后台又只能看到"某处渲染进程崩了"）。
+   */
+  it('应用窗口错误/崩溃带 app_id 与 window 标签（U-03）', async () => {
+    await initSentry(GOOD_DSN, 'r1')
+    captureRendererError({ type: 'error', message: 'boom', appId: 'demo', windowKind: 'app', url: 'probe-app://demo/' })
+    const [, hint] = sentryMock.captureException.mock.calls[0]! as [Error, { tags: Record<string, string> }]
+    expect(hint.tags['zeokeel.app_id']).toBe('demo')
+    expect(hint.tags['zeokeel.window']).toBe('app')
+
+    captureRendererGone({ reason: 'crashed', exitCode: 139, appId: 'notes', windowKind: 'app', url: 'probe-app://notes/' })
+    const [, context] = sentryMock.captureMessage.mock.calls[0]! as [
+      string,
+      { tags: Record<string, string> },
+    ]
+    expect(context.tags['zeokeel.app_id']).toBe('notes')
+    expect(context.tags['zeokeel.window']).toBe('app')
+    expect(context.tags['zeokeel.url']).toBe('probe-app://notes/')
+  })
+
   it('captures a renderer crash with reason/exitCode tags (F-10)', async () => {
     await initSentry(GOOD_DSN, 'r1')
     const ok = captureRendererGone({ reason: 'oom', exitCode: 5 })

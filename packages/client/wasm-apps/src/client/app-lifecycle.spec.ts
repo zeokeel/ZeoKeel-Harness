@@ -21,17 +21,28 @@ import { describe, expect, it } from 'vitest'
 import {
   deleteApp,
   deletePath,
+  deployVersion,
+  deploymentsPath,
   diagnosticsPath,
+  fetchDeployments,
   fetchDiagnostics,
   parseDeleteOutcome,
+  parseDeployOutcome,
+  parseDeploymentsOutcome,
   parseDiagnosticsOutcome,
+  parseRestoreOutcome,
   parseRowsOutcome,
   parseSchemaOutcome,
   parseSetPublishedOutcome,
   rowsPath,
   schemaPath,
+  restoreApp,
+  restorePath,
   setAppPublished,
   setPublishedPath,
+  withdrawRelease,
+  withdrawReleasePath,
+  parseWithdrawOutcome,
 } from './app-lifecycle.ts'
 
 describe('本机路径：app_id 是路径段（必须编码），后缀与服务端判据一致', () => {
@@ -298,5 +309,234 @@ describe('作者数据面：路径与形状守卫（2026-09-21 新增）', () =>
     expect(outcome.hasMore).toBe(true)
     expect(outcome.truncatedValues).toBe(1)
     expect(outcome.maskedColumns).toEqual(['api_token'])
+  })
+})
+
+/**
+ * 生命周期 UI 的纯逻辑（2026-10-22 重设计 §6.1：部署历史 / 部署（回滚）/ 撤回）。
+ *
+ * 三条判据与既有模块同一口径：
+ *  1. **路径**：`deployments` 后缀与宿主 `wasm-apps.ts` 的分支逐字一致；撤回路径里的
+ *     版本号必须编码（它是路径段，来自不可信输入）；
+ *  2. **只有服务端说了才算**：`changed` / `status=withdrawn` 缺席或类型不对 ⇒ 结构化
+ *     失败，绝不回落成"我请求的就是事实"；
+ *  3. **形状漂移不伪装成空**：`deployments` 缺席/非数组 ⇒ 形状错误（不是"没有部署"）。
+ */
+describe('部署历史 / 回滚 / 撤回（设计 §6.1/§8）', () => {
+  /** 记录请求的假 fetch（回一个固定 JSON）。 */
+  function stub(token: string | null): { calls: Array<{ url: string, method: string, body: string }>, fetch: typeof fetch } {
+    const calls: Array<{ url: string, method: string, body: string }> = []
+    const impl = (async (input: unknown, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: (init?.method ?? 'GET').toUpperCase(),
+        body: typeof init?.body === 'string' ? init.body : '',
+      })
+      return new Response(token ?? '{}', { status: token === null ? 404 : 200, headers: { 'content-type': 'application/json' } })
+    }) as unknown as typeof fetch
+    return { calls, fetch: impl }
+  }
+
+  it('路径：deployments 后缀与宿主一致；撤回路径里的版本号被编码', () => {
+    // 读面带「最近 N 条」（设计 §8），写面不带（查询串对 POST 无意义）。
+    expect(deploymentsPath('roster')).toBe('/api/zeokeel/apps/wasm/roster/deployments?limit=20')
+    expect(deploymentsPath('roster', 0)).toBe('/api/zeokeel/apps/wasm/roster/deployments')
+    expect(withdrawReleasePath('roster', '1.2.0')).toBe('/api/zeokeel/apps/wasm/roster/releases/1.2.0/withdraw')
+    // 版本号是路径段：`/` 之类的字符不得制造新的路径段。
+    expect(withdrawReleasePath('roster', '1.2.0/../x')).toBe('/api/zeokeel/apps/wasm/roster/releases/1.2.0%2F..%2Fx/withdraw')
+  })
+
+  it('部署历史：解析行、current 标记（行上的 current 或顶层 current_version 两处来源）', () => {
+    const report = parseDeploymentsOutcome('roster', {
+      app_id: 'roster',
+      current_version: '1.0.0',
+      deployments: [
+        { id: 7, version: '1.0.0', kind: 'publish', actor: 'carol', actor_role: 'owner', message: '首版', created_at: '2026-09-18T10:00:00Z' },
+        { id: 6, version: '1.2.0', kind: 'review', actor: 'admin', actor_role: 'admin_session', message: '', created_at: '2026-09-17T10:00:00Z', current: true },
+      ],
+    })
+    expect(report.ok).toBe(true)
+    if (!report.ok) return
+    expect(report.currentVersion).toBe('1.0.0')
+    expect(report.deployments.map(row => row.version)).toEqual(['1.0.0', '1.2.0'])
+    // 两处来源合流：顶层 current_version == 行版本；行上显式 current 也认。
+    expect(report.deployments[0]!.current).toBe(true)
+    expect(report.deployments[1]!.current).toBe(true)
+    expect(report.deployments[0]!.actorRole).toBe('owner')
+  })
+
+  it('部署历史：deployments 缺席/非数组 ⇒ 形状错误（不是"没有部署记录"）', () => {
+    for (const payload of [{ app_id: 'roster' }, { deployments: 'nope' }, null]) {
+      const outcome = parseDeploymentsOutcome('roster', payload)
+      expect(outcome.ok, JSON.stringify(payload)).toBe(false)
+      if (outcome.ok) continue
+      expect(outcome.code).toBe('UNEXPECTED_RESPONSE')
+    }
+  })
+
+  it('部署（回滚）：POST {version}；changed 必须是布尔值（缺席即形状错误）', async () => {
+    const ok = stub(JSON.stringify({ deployment: { version: '1.2.0', kind: 'rollback' }, changed: false, note: '已经是这一版' }))
+    const result = await deployVersion('roster', '1.2.0', { fetch: ok.fetch })
+    expect(ok.calls).toEqual([{ url: deploymentsPath('roster', 0), method: 'POST', body: JSON.stringify({ version: '1.2.0' }) }])
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.changed).toBe(false)
+      expect(result.version).toBe('1.2.0')
+      expect(result.note).toBe('已经是这一版')
+    }
+
+    const missing = stub(JSON.stringify({ deployment: { version: '1.2.0' } }))
+    const refused = await deployVersion('roster', '1.2.0', { fetch: missing.fetch })
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.code).toBe('UNEXPECTED_RESPONSE')
+  })
+
+  it('部署失败（服务端 409 RELEASE_NOT_DEPLOYABLE）⇒ 信封逐字段回来', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (input: unknown) => {
+      calls.push(String(input))
+      return new Response(JSON.stringify({ error: { code: 'RELEASE_NOT_DEPLOYABLE', message: 'only approved releases can be deployed', hints: ['先审批'] } }), {
+        status: 409,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+    const result = await deployVersion('roster', '1.1.0', { fetch: fetchImpl })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.status).toBe(409)
+    expect(result.code).toBe('RELEASE_NOT_DEPLOYABLE')
+    expect(result.hints).toEqual(['先审批'])
+  })
+
+  it('撤回：POST …/releases/<v>/withdraw；status 必须是 withdrawn', async () => {
+    // 服务端实际形状（`api/deployments.go` 的 `withdrawForApp`）：顶层 version/status。
+    const ok = stub(JSON.stringify({ app_id: 'roster', version: '1.1.0', status: 'withdrawn', changed: true, note: '版本号永久占用' }))
+    const result = await withdrawRelease('roster', '1.1.0', { fetch: ok.fetch })
+    expect(ok.calls).toEqual([{ url: withdrawReleasePath('roster', '1.1.0'), method: 'POST', body: '' }])
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.status).toBe('withdrawn')
+      expect(result.note).toBe('版本号永久占用')
+    }
+
+    // 包装形状（`{release:{…}}`）也认 —— 两条面的将来收敛不需要客户端跟着改。
+    const wrapped = parseWithdrawOutcome('roster', '1.1.0', { release: { version: '1.1.0', status: 'withdrawn' } })
+    expect(wrapped.ok).toBe(true)
+
+    // 形状漂移：status 不是 withdrawn ⇒ 失败（不能说"撤回了"）。
+    const wrong = stub(JSON.stringify({ release: { version: '1.1.0', status: 'pending' } }))
+    const refused = await withdrawRelease('roster', '1.1.0', { fetch: wrong.fetch })
+    expect(refused.ok).toBe(false)
+    // 非 pending ⇒ 服务端 409 `RELEASE_NOT_PENDING`，原样透传。
+    const notPending = parseWithdrawOutcome('roster', '1.1.0', { release: { version: '1.1.0', status: 'approved' } })
+    expect(notPending.ok).toBe(false)
+  })
+
+  it('fetchDeployments：GET 本机路由（带 limit 查询串），失败不抛', async () => {
+    const ok = stub(JSON.stringify({ app_id: 'roster', deployments: [] }))
+    const report = await fetchDeployments('roster', { fetch: ok.fetch })
+    expect(ok.calls[0]).toMatchObject({ url: deploymentsPath('roster'), method: 'GET' })
+    expect(report.ok).toBe(true)
+
+    const broken = stub(null)
+    const refused = await fetchDeployments('roster', { fetch: broken.fetch })
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.status).toBe(404)
+  })
+
+  it('parseDeployOutcome / parseDeploymentsOutcome 不读取客户端请求值冒充服务端结论', () => {
+    // 部署成功但服务端没回显版本号 ⇒ 用请求值（两者在成功路径上相等），但 `changed`
+    // 仍必须由服务端给出（这里用 changed:true 才能通过）。
+    const ok = parseDeployOutcome('roster', '1.2.0', { deployment: {}, changed: true })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) expect(ok.version).toBe('1.2.0')
+  })
+})
+
+/**
+ * 恢复软删应用（设计 §5.5；反证审计 R-05）。
+ *
+ * 这一组只钉**协议半边**：作者面目录不下发软删行（`api/read.go` 的 catalog 走
+ * `ListWasmApps(..., WasmAppFilter{})`，默认 `deleted_at IS NULL`），所以今天没有
+ * 可点入口 —— 伪造一个列表里不存在的按钮只会变成"点了必然 404"的死按钮。
+ * `restoreApp` 的作用是：等目录开始下发已删行时，详情页只需要加一个按钮。
+ */
+describe('恢复软删（R-05）：路径 / 请求形态 / changed 判据', () => {
+  it('路径：/:app_id/restore（与宿主 restore 分支逐字一致，app_id 编码）', () => {
+    expect(restorePath('roster')).toBe('/api/zeokeel/apps/wasm/roster/restore')
+    expect(restorePath('a b')).toBe('/api/zeokeel/apps/wasm/a%20b/restore')
+  })
+
+  it('POST 且不带 body（服务端不读 body，身份由 Bearer + 路径决定）', async () => {
+    const seen: Array<{ url: string, init: RequestInit }> = []
+    const result = await restoreApp('roster', {
+      fetch: (async (url: unknown, init?: RequestInit) => {
+        seen.push({ url: String(url), init: init ?? {} })
+        return new Response(JSON.stringify({
+          app: { app_id: 'roster', deleted: false, enabled: false },
+          changed: true,
+          retention_cleared: true,
+          snapshot_cleanup_error: '',
+          note: '已恢复：应用回到下架状态（不自动上架）',
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }) as unknown as typeof fetch,
+    })
+    expect(result.ok).toBe(true)
+    expect(seen[0]!.url).toBe('/api/zeokeel/apps/wasm/roster/restore')
+    expect(seen[0]!.init.method).toBe('POST')
+    expect(seen[0]!.init.body).toBeUndefined()
+  })
+
+  it('真的恢复（changed:true）⇒ changed/enabled/note 全部来自服务端', () => {
+    const outcome = parseRestoreOutcome('roster', {
+      app: { app_id: 'roster', deleted: false, enabled: false },
+      changed: true,
+      retention_cleared: true,
+      snapshot_cleanup_error: 'permission denied',
+      note: '已恢复',
+    })
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) throw new Error('unreachable')
+    // 恢复**不自动上架**（设计 §5.5）：enabled 是 false，界面不能显示"已上线"。
+    expect(outcome.enabled).toBe(false)
+    expect(outcome.changed).toBe(true)
+    expect(outcome.retentionCleared).toBe(true)
+    expect(outcome.snapshotCleanupError).toBe('permission denied')
+    expect(outcome.note).toBe('已恢复')
+  })
+
+  it('幂等恢复（changed:false）⇒ changed=false（宿主据此**不**清存储）', () => {
+    const outcome = parseRestoreOutcome('roster', {
+      app: { app_id: 'roster', deleted: false, enabled: true },
+      changed: false,
+      note: '应用未处于删除状态（幂等：未写审计）',
+    })
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) throw new Error('unreachable')
+    expect(outcome.changed).toBe(false)
+    expect(outcome.enabled).toBe(true)
+    expect(outcome.retentionCleared).toBe(false)
+  })
+
+  it('changed 缺席 / 非布尔 ⇒ 形状错误（宁可不猜：它决定要不要删本地数据）', () => {
+    for (const payload of [
+      { app: { app_id: 'roster', deleted: false } },
+      { app: { app_id: 'roster' }, changed: 'true' },
+      {},
+    ]) {
+      const outcome = parseRestoreOutcome('roster', payload)
+      expect(outcome.ok, JSON.stringify(payload)).toBe(false)
+      if (outcome.ok) throw new Error('unreachable')
+      expect(outcome.code).toBe('UNEXPECTED_RESPONSE')
+    }
+  })
+
+  it('恢复成功的响应里 deleted:true 是形状矛盾；app_id 回显不一致也是', () => {
+    expect(parseRestoreOutcome('roster', {
+      app: { app_id: 'roster', deleted: true }, changed: true,
+    }).ok).toBe(false)
+    expect(parseRestoreOutcome('roster', {
+      app: { app_id: 'other', deleted: false }, changed: true,
+    }).ok).toBe(false)
   })
 })

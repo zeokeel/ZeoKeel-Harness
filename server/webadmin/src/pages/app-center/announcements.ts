@@ -34,6 +34,21 @@ export interface AnnouncementTemplate {
 /** 正文里必须由管理员替换的占位符（复制时提示，不自动替换）。 */
 export const ANNOUNCEMENT_PLACEHOLDERS = ['<生效日期>', '<管理员/IT 支持>', '<发布人>'] as const
 
+/**
+ * 平台的**发送能力口径**（审计 C-12 的原话：「只能一键复制文本，平台内无发送通道/回执」）。
+ *
+ * 这不是免责声明，而是必须说清的产品事实：管理面没有公告端点、没有站内广播、没有邮件/IM
+ * 集成，也没有"已通知 N 人"这种回执。管理员如果以为点了复制就发出去了，员工那边什么都
+ * 收不到 —— 那正是"假承诺"的形态（与 C-01 的「到期后台真删」同一族）。
+ */
+export const ANNOUNCEMENT_DELIVERY_NOTE =
+  '平台**不发送**通知：这里没有站内广播、没有邮件/IM 通道，也没有「已通知」回执。' +
+  '复制下面的正文，用你们自己的 IM 群、邮件或公告栏发出；是否送达以你们的渠道为准。'
+
+/** 复制成功后的回执（**不说"已发送"**；只描述"已经进了剪贴板"这件事）。 */
+export const ANNOUNCEMENT_COPY_HINT =
+  '已复制全文到剪贴板：请粘贴到你们的 IM / 邮件里**自行发送** —— 平台不会代为发送，也不记录发送状态。'
+
 export const ANNOUNCEMENT_TEMPLATES: AnnouncementTemplate[] = [
   {
     id: 'access-login-only',

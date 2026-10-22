@@ -321,6 +321,17 @@ export function readHostPlatformRefusal(payload: unknown): string | null {
 export const PLATFORM_APP_FROZEN_REASON = 'app_frozen'
 
 /**
+ * 平台错误信封里"应用**已登记但还没有可用版本**"这一档 `platform_reason` 的
+ * **前向兼容**字面量（2026-10-23 U-04）。
+ *
+ * 服务端这一版（`open.go` 的"无可用版本"分支）**还没**下发 `details.reason`；
+ * 客户端因此按"404 且没有 reason"推断这一档（见 `open-app.ts` 的
+ * `reasonForPlatformRefusal`）。平台补上这个 reason 之后，那条推断自动退化为
+ * 显式约定 —— 客户端先认字面量，再认同一个推断。
+ */
+export const PLATFORM_NO_RELEASE_REASON = 'no_release'
+
+/**
  * 读平台错误信封里的**结构化原因** `error.platform_reason`（"冻结 vs 不存在"的
  * **唯一**凭据）。与 {@link readHostPlatformRefusal} 并列导出，是因为这两个字段必须
  * 出自**同一份**判定与**同一处**读取 —— 分流点各读一遍就会出现"码说平台拒绝、原因

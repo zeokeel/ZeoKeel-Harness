@@ -9,16 +9,22 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  appWindowDiagnosticCopy,
+  backAction,
+  dismissNoticeAction,
   downloadStartedNotice,
   externalLinkNotice,
   frozenAppHint,
   frozenAppTitle,
+  loadingSkeletonHint,
   loadingSkeletonTitle,
   missingAppTitle,
   onboardingCard,
+  reloadAction,
   retiredAppTitle,
   retryAction,
   signInAgainAction,
+  updateAvailableBanner,
   versionUnverifiedBanner,
 } from './app-window-copy.ts'
 
@@ -30,9 +36,42 @@ describe('应用窗口 chrome 文案（J12：设计总纲为唯一真源）', ()
     expect(downloadStartedNotice('en')).toBe('Download started — see the browser window for progress')
   })
 
+  /**
+   * F-06（2026-10-22 审计）：应用窗口此前没有刷新/返回 —— 右键菜单的两项文案。
+   * 这两条进的是**应用窗口自己的菜单**，所以归本包（与 chrome 其余文案同源）。
+   */
+  it('F-06：应用窗口菜单的「刷新 / 返回」按宿主语言给', () => {
+    expect(reloadAction('zh')).toBe('刷新')
+    expect(reloadAction('en')).toBe('Reload')
+    expect(backAction('zh')).toBe('返回')
+    expect(backAction('en')).toBe('Back')
+  })
+
   it('骨架屏文案带上应用名（先开窗骨架屏 → 校验回来再加载，§19 Q12）', () => {
     expect(loadingSkeletonTitle('zh', '记事本')).toBe('正在打开 记事本…')
     expect(loadingSkeletonTitle('en', 'Notes')).toBe('Opening Notes…')
+    // U-01：第二行解释"慢是正常的"，不编造进度。
+    expect(loadingSkeletonHint('zh')).toContain('几秒')
+    expect(loadingSkeletonHint('en')).toContain('few seconds')
+  })
+
+  /**
+   * U-03 / U-10（2026-10-22 评审）：失败页的「复制诊断」与版本更新提示。
+   * 四条诊断文案缺一条都会让页面出现"点了没反应/不知道复制成功没"。
+   */
+  it('U-03：诊断文案四条齐全且中英可辨；U-06：更新提示可关、与软闸门横幅不同', () => {
+    const diag = appWindowDiagnosticCopy('zh')
+    expect(diag.copy).toBe('复制诊断')
+    expect(diag.copied).toBe('已复制')
+    expect(diag.copyFailed).toContain('手动')
+    expect(diag.heading).toBe('诊断信息')
+    expect(appWindowDiagnosticCopy('en').copy).toBe('Copy diagnostics')
+    expect(updateAvailableBanner('zh')).toContain('新版本')
+    expect(updateAvailableBanner('en')).toContain('new version')
+    // "确认不了版本"与"确认有新版本"是两件事，文案不得混用。
+    expect(updateAvailableBanner('zh')).not.toBe(versionUnverifiedBanner('zh'))
+    expect(dismissNoticeAction('zh')).toBe('关闭')
+    expect(dismissNoticeAction('en')).toBe('Dismiss')
   })
 
   it('冻结 / 下架 / 不存在三档必须彼此可辨（§19 Q3：不说"应用不存在"）', () => {

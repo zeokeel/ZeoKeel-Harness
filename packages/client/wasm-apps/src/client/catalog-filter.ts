@@ -110,7 +110,12 @@ export function catalogEmptyState(
 ): CatalogEmptyState | null {
   if (filtered.length > 0) {
     // 有内容可渲染 —— 除非渲染出来的**每一行**都是下架（§19 Q2 第二档）。
-    return filtered.every(item => !item.enabled) ? 'all-disabled' : null
+    //
+    // 首版行（U-02）不算"已下架"：它 `enabled=false` 是因为**还没有任何生效版本**
+    // （待审/被拒），行上有自己的状态与下一步。把这种行算进"全部已下架"会让作者看到
+    // 一个"都已下架、请在应用中心里上架"的空态 —— 而那个应用从来没过上线，也没法
+    // 靠"上架"救回来。
+    return filtered.every(item => !item.enabled && item.firstRelease === undefined) ? 'all-disabled' : null
   }
   if (items.length === 0) return 'no-apps'
   return isFilterActive(filter) ? 'no-results' : 'no-apps'

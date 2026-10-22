@@ -50,6 +50,58 @@ import (
 // 本表按技能分组进文件末尾的 `seededSkillDigests`：分组键 = `server/skills/` 下的技能
 // 目录名，也是 R13-F-05「技能集合三方对账」的第 3 个集合（判据在 builtin_skills_test.go）。
 var appBuilderSkillDigests = map[string]string{
+	// 2.13.9 = 诊断版本维度的"空版本桶"说明（0089 前老数据 vs 准入前失败），
+	//   避免作者把空 version 笼统当成"旧数据"。
+	"f6160fe1c30720be3496305ca506c95d76337d7e725a180bc6031a3ae52bac00": "2.13.9",
+
+	// 2.13.8 = 诊断版本维度（迁移 0089 / D-02）：诊断 summary 增加按执行版本聚合的
+	//   versions[]，failures[] 增加 version；参考文档补"回滚后对比版本"的固定用法。
+	//   内容变必然提版本（已安装员工靠它判「有更新」）。
+	"3272d5c2a887f6559dbd8c846ff2b0302a17bcab8486e196ae05ab6aac1d24b1": "2.13.8",
+
+	// 2.13.7 = 生命周期与生成物纠错（2026-10-23 生产化评审 D-01/D-03/D-04/D-05）：
+	//   - `references/publishing.md` 新增 §4.1「版本与部署」：回滚 = 用旧版本再部署一次、
+	//     撤回只对 pending、恢复不自动上架、部署历史与审核结论端点，并写明
+	//     「回滚只切制品版本，**不恢复应用库**」这条跨版本语义；
+	//   - 明确 AI 工具面只有六个（无回滚/撤回/恢复）⇒ 这三个动作必须由人在客户端应用中心做；
+	//   - `references/diagnostics.md` §1 补全诊断响应字段（access / whitelist_enforced /
+	//     events_dropped / events_flush_failed / events_available / limits{四轴+source}）；
+	//   - 归因结论反转修正：应用维度归因**已接通**（读隐藏会话 id 的 `app:` 前缀），
+	//     但标签可被持 Bearer 的调用方污染 ⇒ 只作参考口径，不得用于对账/计费；
+	//   - 生成物 `references/app-config.md` 由 `appcfgspec.go` 重生成：
+	//     `window.width`/`window.height` 的 type 由 string 修正为 integer + max=7680
+	//     （真实判据是正整数 320–7680，写 string 会把作者指向 `"1280px"`）。
+	"1b7a0c842332cabec08928b42c5671bba4c46137f5897bc6fac158ef6cc7303b": "2.13.7",
+
+	// 2.13.6 = 限流默认值与 per-app 覆盖（2026-10-22 决策 wasm-per-app-limits）：
+	//   - 诊断参考补「默认 2 路」与「管理员可在应用详情 → 限流里对单个应用覆盖，
+	//     默认继承全局」；作者手册两处同步；SKILL 并发段补 per-app 一句。
+	//   - 生成物（references/limits.md）已在 2.13.5 随 limits 重生成，本版只改手写文案。
+	"1c33b7a174e8291613c48a45c6df379e36a4dded764933e15f03c91d7652ebae": "2.13.6",
+
+	// 2.13.5 = 「单用户同应用在跑」默认值 1 → 2（2026-10-22 限流决策
+	//   docs/decisions/2026-10-22-wasm-per-app-limits.md §1）：
+	//   - `references/limits.md` 由 `go generate ./internal/limits` 重生成，
+	//     `user_per_app_running` 行 1 → 2（与 `internal/limits` 逐字节对拍）；
+	//   - SKILL 首屏「并发与队列」同步改成「单个用户在同一应用内默认只有 2 路」，
+	//     并说明两个账号即可吃满 4 路（此前写的是"不同账号才吃满"）。
+	//   内容变必然提版本（已安装员工靠它判「有更新」）。
+	"be5c56837ad830f1104bcce6579ea3ff660f8459416fcb78e811705831748bcd": "2.13.5",
+
+	// 2.13.4 = 退役语义文档对齐（2026-10-22 生命周期重设计）：publishing.md 不再写
+	//   「定期快照与真删后台任务尚未实现」——平台已实现（快照在冻结/删除时生成、
+	//   90 天保留期后 wasm_retirement 真删）；同时补导出 `?database=1&assets=1` 口径。
+	//   内容变必然提版本（已安装员工靠它判「有更新」）。
+	"f0773628876b2fd7f6a9e794bd0f5d13096688f6b81fb3d3793bba6c9f1c44d6": "2.13.4",
+
+	// 2.13.3 = 诊断/ABI 参考补「平台侧排队」与三层响应体上限（2026-10-22 审计 A4/A7）：
+	//   - 新增失败码 `MODULE_LOAD_QUEUED`（503，平台冷编译/冷加载排队，不是应用出错）；
+	//   - `RUNTIME_OUTPUT_OVERRUN` 文案同时写出 8 MiB / 1 MiB / 保证可交付 168 KiB，
+	//     并明确"8 MiB 是内部总输出闸门、不是可交付上限"；
+	//   - 修正 diagnostics.md 重复的 `## 4.` 编号（「看数据」改成 §5）；
+	//   - 打包脚本注释把路径上限的单一真源改成 `internal/limits`（注入文件参与摘要）。
+	"fc524e813b5f5627c072e1638b779aa35f0a14f0c2dc7a1ec63b401b87517279": "2.13.3",
+
 	// 2.13.2 = 品牌改名的**内容交付**（PicoAide -> ZeoKeel）：SKILL 正文、示例与
 	//   参考文档里的厂商名/`x-abi-version`（zeokeel-app/1）/`zeokeel.app.json` 同名
 	//   文件名全部随之替换（18 个文件中的字符串改动，结构未变）。内容变必然提版本。

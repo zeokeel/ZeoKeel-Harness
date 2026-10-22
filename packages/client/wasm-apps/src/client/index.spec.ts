@@ -14,7 +14,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { apply, inject, name } from './index.ts'
 import { AppToastHostMount } from './AppToastHostMount.tsx'
 import { openAppCenterPanel } from './app-center-surface.tsx'
-import { APP_FOREIGN_DEEP_LINK_EVENT, clearAppToast, currentAppToast } from './app-toast.tsx'
+import { APP_FOREIGN_DEEP_LINK_EVENT, APP_QUEUED_EVENT, clearAppToast, currentAppToast, queuedDeepLinkToastText, resumedDeepLinkToastText } from './app-toast.tsx'
 import { en, setActiveLocale, t, zh } from './locales.ts'
 
 interface Registered {
@@ -158,6 +158,43 @@ describe('客户端半边：异渠道深链 toast 的接缝（§5.3/§19 Q5）',
     f.emit('zeokeel/wasm-app-open', { app_id: 'x' })
     f.emit('zeokeel/channel-changed', null)
     expect(currentAppToast()).toBeNull()
+  })
+
+  /**
+   * **U-07 的判据本体**：未登录时深链入队（宿主广播 `queued`）必须有可见反馈，
+   * 且与面板路径的「已记住这次打开」**同一句话**（同口径）。
+   *
+   * 修前宿主不广播任何事件、客户端也就没有订阅 ⇒ 用户点同事发的
+   * `<scheme>://app/<id>` 后什么都看不到（只有本地 warn），会以为链接坏了。
+   *
+   * 变异：删掉 `ctx.on(APP_QUEUED_EVENT, …)`（或事件名拼错）⇒ 本组三条红；
+   * 把 queued 的文案换成别的键 ⇒「同口径」那条红。
+   */
+  it('订阅深链入队事件（U-07）：`queued` ⇒ toast 文案与面板路径逐字相同', () => {
+    const f = fixture()
+    apply(f.ctx)
+    expect(f.events).toContain(APP_QUEUED_EVENT)
+    f.emit(APP_QUEUED_EVENT, { app_id: 'my-notes', state: 'queued' })
+    expect(currentAppToast()).toEqual({ kind: 'deep-link-queued' })
+    // 同口径：与面板路径「已记住这次打开」是同一个字典键（逐字相同）。
+    expect(queuedDeepLinkToastText()).toBe(zh['appCenter.openPendingLogin'])
+    expect(queuedDeepLinkToastText()).toContain('登录完成后会自动继续')
+    // en 侧同样可读（不是只补中文）。
+    setActiveLocale('en')
+    expect(queuedDeepLinkToastText()).toBe(en['appCenter.openPendingLogin'])
+  })
+
+  it('登录后自动续开也要有可感知反馈（`opening` ⇒ 另一条 toast）', () => {
+    const f = fixture()
+    apply(f.ctx)
+    f.emit(APP_QUEUED_EVENT, { app_id: 'my-notes', state: 'opening' })
+    expect(currentAppToast()).toEqual({ kind: 'deep-link-resumed' })
+    expect(resumedDeepLinkToastText()).toBe(zh['appCenter.toast.deepLinkResumed'])
+    // 两档不能塌缩成一条：用户要能分清"已记住（等登录）"与"登录完成、正在打开"。
+    expect(resumedDeepLinkToastText()).not.toBe(queuedDeepLinkToastText())
+    // 缺 state / 未知 state ⇒ 按"已记住"（保守：不改队列语义，也不静默）。
+    f.emit(APP_QUEUED_EVENT, { app_id: 'my-notes' })
+    expect(currentAppToast()).toEqual({ kind: 'deep-link-queued' })
   })
 })
 

@@ -14,7 +14,7 @@ import type {} from '@zeokeel/dsh-foot-menu/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { AppToastHostMount } from './AppToastHostMount.tsx'
 import { mountAppCenterPanel, openAppCenterPanel } from './app-center-surface.tsx'
-import { APP_FOREIGN_DEEP_LINK_EVENT, showAppToast } from './app-toast.tsx'
+import { APP_FOREIGN_DEEP_LINK_EVENT, APP_QUEUED_EVENT, showAppToast } from './app-toast.tsx'
 import { en, setActiveLocale, t, type AppCenterKey, zh } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -73,6 +73,17 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(
     () => ctx.on(APP_FOREIGN_DEEP_LINK_EVENT, () => { showAppToast({ kind: 'foreign-deep-link' }) }),
     'wasm-apps: foreign deep-link toast',
+  )
+
+  // 未登录深链的可见反馈（U-07）：宿主在入队后广播 `queued`，登录完成后续开时广播
+  // `opening`。修前两者都不广播 ⇒ 用户点了同事发的链接"毫无反应"。
+  // 文案与面板路径同源（`deep-link-queued` 复用 `appCenter.openPendingLogin` 那一句）；
+  // 这里只做一次性提示，不弹模态、不改队列语义。
+  ctx.effect(
+    () => ctx.on(APP_QUEUED_EVENT, (payload?: { state?: 'queued' | 'opening' }) => {
+      showAppToast({ kind: payload?.state === 'opening' ? 'deep-link-resumed' : 'deep-link-queued' })
+    }),
+    'wasm-apps: queued deep-link toast',
   )
 
   // Foot-lane entry: the one `⋯ 更多` row owned by `@zeokeel/dsh-foot-menu`

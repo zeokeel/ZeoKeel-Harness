@@ -13,6 +13,7 @@
  * @module @zeokeel/dsh-wasm-apps-host/pages
  */
 
+import { retryAction, signInAgainAction } from './app-window-copy.ts'
 import { hostCopy, type HostLocale } from './locale.ts'
 
 /** 转义进 HTML 文本/属性（唯一实现）。 */
@@ -25,6 +26,22 @@ export function escapeHtml(value: string): string {
     .replace(/'/gu, '&#39;')
 }
 
+/**
+ * 页面上的一个动作（F-04，2026-10-22 审计）。
+ *
+ * 为什么是 `<a href>` 而不是按钮：这些页面**没有脚本**（自定义协议响应会被套上
+ * 严格 CSP，见 `pages.ts` 的文件头），能用的交互只有导航本身。重试 = 重新发起同一次
+ * 请求（协议 handler 会重新过一遍闸门），重新登录 = 打开客户端的登录页。
+ */
+export interface HostPageAction {
+  /** 按钮文字（已本地化）。 */
+  label: string
+  /** 目标 URL（应用 origin 的同一路径，或客户端登录页）。 */
+  href: string
+  /** 主按钮（重试）；次要动作（重新登录）用描边样式。 */
+  primary?: boolean
+}
+
 /** 一个页面要展示的结构化内容。 */
 export interface HostPageContent {
   /** 大标题。 */
@@ -35,6 +52,18 @@ export interface HostPageContent {
   hints?: readonly string[]
   /** 诊断细节（状态码/错误码/原因），以小字展示。 */
   detail?: string
+  /**
+   * 顶部提示条（F-04：`version-unverified` 这条软闸门结论以前**产出了却没人显示**）。
+   *
+   * 提示条与 `message` 分开：软闸门不是"打不开"，页面照常显示应用内容/旧内容，
+   * 只是要告诉用户"你看到的可能不是最新版"。
+   */
+  notice?: string
+  /**
+   * 页面动作（F-04）。修前会话过期页只有文案、**没有任何可点的东西** —— 用户按页面
+   * 字面指示去做（"请重新登录"），却发现没有入口，只能自己关窗回主窗口。
+   */
+  actions?: readonly HostPageAction[]
 }
 
 /** 页面外壳（纯函数，便于单测直接断言文案）。 */
@@ -46,6 +75,14 @@ function page(locale: HostLocale, content: HostPageContent): string {
   const detail = content.detail === undefined || content.detail === ''
     ? ''
     : `<p class="detail">${escapeHtml(content.detail)}</p>`
+  const notice = content.notice === undefined || content.notice === ''
+    ? ''
+    : `<p class="notice" role="status">${escapeHtml(content.notice)}</p>`
+  const actions = (content.actions ?? []).length === 0
+    ? ''
+    : `<p class="actions">${(content.actions ?? [])
+      .map(action => `<a class="action${action.primary === true ? ' primary' : ''}" href="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`)
+      .join('')}</p>`
   return `<!doctype html>
 <html lang="${locale === 'en' ? 'en' : 'zh-CN'}">
 <head>
@@ -62,14 +99,20 @@ p { margin: 0 0 12px; }
 ul { margin: 0 0 12px; padding-left: 20px; }
 li { margin: 4px 0; }
 .detail { margin-top: 20px; font-size: 12px; opacity: .6; word-break: break-all; }
+.notice { padding: 8px 12px; border-radius: 8px; background: rgba(180, 120, 0, .12); border: 1px solid rgba(180, 120, 0, .35); }
+.actions { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+.action { display: inline-block; padding: 8px 16px; border-radius: 8px; border: 1px solid currentColor; text-decoration: none; font-size: 14px; }
+.action.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
 </style>
 </head>
 <body>
 <main>
 <h1>${escapeHtml(content.title)}</h1>
+${notice}
 <p>${escapeHtml(content.message)}</p>
 ${hints}
 ${detail}
+${actions}
 </main>
 </body>
 </html>
@@ -77,11 +120,44 @@ ${detail}
 }
 
 /**
+ * 页面动作的入参（F-04）：重试目标与登录页地址。
+ *
+ * 两个都是**可选**的：拿不到登录页地址（宿主没有本机 webServer，例如纯 Node 宿主/单测）
+ * 时就不渲染那个按钮 —— 渲染一个点了没反应的按钮比不渲染更糟（那正是修前的形态）。
+ */
+export interface HostPageActionsOptions {
+  /** 重试目标（重新发起同一次请求的 URL）。 */
+  retryHref?: string
+  /** 客户端登录页 URL（`<本机 origin>/login`）。 */
+  signInHref?: string
+}
+
+/**
+ * 把可选的 URL 变成页面动作（**唯一实现**：所有页面共用同一份判据，避免一个页面有
+ * 重试、另一个没有这种"半修" —— 2026-10-22 反证审计 R-04 的成因就是只接了两处）。
+ * @param locale - 宿主语言。
+ * @param options - 重试/登录 URL。
+ * @returns 动作列表（可能为空）。
+ */
+export function retryLoginActions(locale: HostLocale, options: HostPageActionsOptions): HostPageAction[] {
+  const actions: HostPageAction[] = []
+  if (options.retryHref !== undefined && options.retryHref !== '') {
+    actions.push({ label: retryAction(locale), href: options.retryHref, primary: true })
+  }
+  if (options.signInHref !== undefined && options.signInHref !== '') {
+    actions.push({ label: signInAgainAction(locale), href: options.signInHref })
+  }
+  return actions
+}
+
+/**
  * 未登录 / 无会话页（契约 §2：一律要求登录，没有匿名面）。
  * @param locale - 宿主语言。
+ * @param options - 重试/登录动作（F-04：页面必须能自救）。
  * @returns 完整的 HTML 文档。
  */
-export function signInRequiredPage(locale: HostLocale): string {
+export function signInRequiredPage(locale: HostLocale, options: HostPageActionsOptions = {}): string {
+  const actions = retryLoginActions(locale, options)
   return page(locale, {
     title: hostCopy(locale, '请先登录', 'Sign in required'),
     message: hostCopy(
@@ -94,18 +170,26 @@ export function signInRequiredPage(locale: HostLocale): string {
       ['应用只在客户端内可用，浏览器无法直接访问。', '登录后重新打开这个应用即可。'],
       ['Apps only run inside the client; a browser cannot open them directly.', 'Sign in, then open the app again.'],
     ),
+    ...(actions.length === 0 ? {} : { actions }),
   })
 }
 
 /**
  * 会话过期页（平台返回 401：本机会话已被清掉）。
+ *
+ * F-04（P1，2026-10-22 审计）：修前这一页**只有文案** —— 用户按字面指示去"重新登录"，
+ * 却发现没有任何入口（`pages.ts` 的页面壳结构上就没有按钮位），唯一出路是自己关窗回
+ * 主窗口。现在给两个动作（重试 / 重新登录），文案复用 `app-window-copy.ts` 的冻结文案。
  * @param locale - 宿主语言。
+ * @param options - 重试/登录动作。
  * @returns 完整的 HTML 文档。
  */
-export function sessionExpiredPage(locale: HostLocale): string {
+export function sessionExpiredPage(locale: HostLocale, options: HostPageActionsOptions = {}): string {
+  const actions = retryLoginActions(locale, options)
   return page(locale, {
     title: hostCopy(locale, '登录已过期', 'Session expired'),
     message: hostCopy(locale, '请重新登录后再打开应用。', 'Please sign in again before opening apps.'),
+    ...(actions.length === 0 ? {} : { actions }),
   })
 }
 

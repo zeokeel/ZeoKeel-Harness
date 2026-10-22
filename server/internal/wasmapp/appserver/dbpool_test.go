@@ -249,7 +249,7 @@ func TestAppDBPool_HandleOpensOneWriterPlusReadersConnections(t *testing.T) {
 //
 // 变异：去掉 acquire 里的 opening 分支 ⇒ 本用例出现 500（且 fd 数 > 1+N）。
 func TestAppDBPool_ConcurrentFirstRequestsShareOneOpen(t *testing.T) {
-	// ⚠️ 单用户同应用同时运行数默认是 1（§4.6）⇒ 同一个员工的四个请求会被队列串行化，
+	// ⚠️ 单用户同应用同时运行数默认是 2（§4.6，2026-10-22 起）⇒ 同一个员工的四个请求会在第 3 个起排队，
 	// 本用例的前提（并发 Open 撞 WAL 写锁）就消失了（2026-09-19 W4 身份一律注入后实测：
 	// 同用户确实会被串行）。
 	//
@@ -558,7 +558,7 @@ func TestServe_ForeignWriteDuringTransactionIsRejected(t *testing.T) {
 
 	// A：开事务 → 写一行 → 持有 1.2 s → 回滚（远小于 appdb 的 5 s 事务硬超时）。
 	//
-	// ⚠️ B 必须注入**另一个员工**：队列的"单用户同应用同时运行数 = 1"（§4.6）会把同一
+	// ⚠️ B 必须注入**另一个员工**：队列的"单用户同应用同时运行数"上限（§4.6）会把同一
 	// 员工的 B 排队到 A 结束之后 —— 那样 B 永远见不到 A 的事务，本用例会退化成"顺序
 	// 请求"（2026-09-19 W4 身份一律注入后实测：B 拿到的 body 是 null/空）。
 	// 本用例要验证的是**句柄层**的事务所有权守卫，与"谁发起的请求"无关。
@@ -649,7 +649,7 @@ func TestServe_ForeignTxFinishDuringTransactionIsRejected(t *testing.T) {
 
 	// A：开事务 → 写一行 → 持有 1.2 s → 回滚（远小于 appdb 的 5 s 事务硬超时）。
 	// B 用另一个员工（理由同 TestServe_ForeignWriteDuringTransactionIsRejected：
-	// 单用户同应用并发为 1，同一员工会被队列串行化）。
+	// 单用户同应用并发有上限，同一员工会被队列串行化）。
 	bob := e.clientUser("bob-txfin")
 	aDone := make(chan *httptest.ResponseRecorder, 1)
 	go func() { aDone <- e.get(appID, "/slowtx?ms=1200&v=from-A") }()

@@ -264,8 +264,10 @@ func TestAllowPublishIgnoresExecutorFull(t *testing.T) {
 // TestMemoryBudget：§4.3「理论峰值 > 可用内存 70% ⇒ 拒绝启动」。
 func TestMemoryBudget(t *testing.T) {
 	plan := DefaultMemoryPlan()
+	// 这一笔**必须**算进来（生产评审 P1-3）：漏掉它，本用例就会把"边界"算低 256 MiB，
+	// 于是"恰好等于水位"变成真的超水位 —— 用例红的方式与缺陷无关（假红）。
 	need := int64(InstancePoolBytes+CompilePeakBytes+limits.UploadPeakPerUploadBytes+CacheResidentBytes) +
-		int64(plan.Instances)*plan.AppDBPageCachePerHandleBytes
+		int64(plan.Instances)*plan.AppDBPageCachePerHandleBytes + plan.QueueBodyBytes
 	// 恰好卡在 70% 边界：available × 70% >= need ⇒ 通过。
 	// 用向上取整，否则整数除法会让 limit 差 1 字节而误判（这正是本用例要钉的边界）。
 	avail := (need*100 + int64(limits.MemoryPeakGuardPercent) - 1) / int64(limits.MemoryPeakGuardPercent)
@@ -291,8 +293,9 @@ func TestMemoryBudget(t *testing.T) {
 	}
 	// 各笔账都要在分解里可见（不能只算一笔）。
 	b = ComputeMemoryBudget(64 << 30)
-	if b.Instances == 0 || b.CompilePeak == 0 || b.UploadPeak == 0 || b.CacheResident == 0 || b.AppDBCache == 0 {
-		t.Fatalf("各笔账必须各自可见（含应用库页缓存）：%+v", b)
+	if b.Instances == 0 || b.CompilePeak == 0 || b.UploadPeak == 0 || b.CacheResident == 0 ||
+		b.AppDBCache == 0 || b.QueueBody == 0 {
+		t.Fatalf("各笔账必须各自可见（含应用库页缓存与排队请求体）：%+v", b)
 	}
 	if !b.Known {
 		t.Fatal("给出了可用内存就必须标成已知")

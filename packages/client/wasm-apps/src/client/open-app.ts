@@ -77,6 +77,7 @@ import {
   // 逐字节相同，属三份重复之一（另见 `channel-seam.ts`）。
   readJsonQuietly,
   PLATFORM_APP_FROZEN_REASON,
+  PLATFORM_NO_RELEASE_REASON,
 } from './host-proof.ts'
 
 /**
@@ -143,8 +144,45 @@ export type OpenFailureReason =
    * 新应用，维护者也不会去看停用记录（本缺陷的现场）。
    */
   | 'app-frozen'
-  /** 本机路由 404：应用不存在（已被软删 / 从未登记 / 平台未下发原因）。 */
+  /** 本机路由 404 / 平台 404 `app_not_found`：应用不存在（已被软删 / 从未登记）。 */
   | 'app-not-found'
+  /**
+   * 平台 410：这个应用**已下架**（发布者主动下架，数据仍然保留、可恢复）。
+   *
+   * 2026-10-23 U-04：修前 410 与"还没有可用版本"一起被归成 `app-not-found`，
+   * 用户被告知"这个应用不存在（可能已被删除或改名）"，而目录里它明明还挂着
+   * 「已下架」徽章 —— 这正是验收 §1.2 点名要避免的"把可恢复显示成应用没了"。
+   * 下架是**可逆**的发布者动作：文案必须说"已下架、数据仍在、可联系管理员恢复"，
+   * 不能再说"不存在"。
+   */
+  | 'app-offline'
+  /**
+   * 应用**已登记但还没有可用版本**（平台 404，且没有 `app_not_found` 理由）。
+   *
+   * 服务端 `open.go` 的几个 404 只有 `details.reason` 能分开：未登记/软删带
+   * `reason=app_not_found`，冻结带 `reason=app_frozen`，而"还没有可用版本"那一支
+   * （首版待审 / 被拒 / 审核通过但部署还没生效）**不带 reason** —— 所以
+   * `status=404 + reason=null` 在今天的服务端只有一个含义：应用在、版本还没上线。
+   * 说成"应用不存在"会让作者以为自己的应用被删了（U-02/U-04 同源）。
+   */
+  | 'no-release'
+  /**
+   * **平台暂时不可用**（平台侧 500/502/503，或宿主"无法确认应用版本"的 502）。
+   *
+   * 2026-10-23 U-04：修前落进 `unexpected-response` —— 文案说"客户端本机服务的响应
+   * 与预期不一致…通常是客户端与服务端版本不一致"，把一次**重试就好**的平台抖动
+   * （DB 短暂不可达、网关 502）指成了"去升级客户端"。这一档必须说"暂时不可用 +
+   * 稍后重试"，不得暗示版本不一致。
+   */
+  | 'platform-unavailable'
+  /**
+   * **账号无权限**（平台 403：审计/受限账号、不在白名单里的账号）。
+   *
+   * 2026-10-23 U-04：修前 403 与 401 一起映射成 `not-signed-in`（"尚未登录，请先
+   * 登录"）—— 审计账号登录多少次都不会通过，用户被指去做一件永远无效的事。
+   * 401（未登录/会话过期）与 403（已登录、但这个账号被挡）必须分开。
+   */
+  | 'not-permitted'
   /** 本机路由 503：协议 handler / 分区还没就绪（不降级到浏览器）。 */
   | 'protocol-not-ready'
   /** 请求没到达宿主（网络层失败 / 宿主未启动）。 */
@@ -180,7 +218,19 @@ export interface OpenSuccess {
    * 服务端未下发该字段 ⇒ `undefined`（界面就不说"已打开/已聚焦"）。
    */
   window?: OpenWindowOutcome
+  /**
+   * 软闸门结论（F-04，2026-10-22 审计）：宿主在"聚焦已开窗口、但平台版本暂时确认不了"
+   * 时下发 `version-unverified`。
+   *
+   * 修前这个字段**产出了却没人读**（宿主 `requestOpen` 的 `warning`），用户看到的是
+   * "静默显示旧内容"——不知道可能不是最新版。界面据此显示提示条（文案见
+   * `appCenter.versionUnverified`，与宿主 `app-window-copy.ts` 同一句话）。
+   */
+  warning?: OpenWarning
 }
+
+/** 软闸门结论（目前只有一种；形状随宿主冻结字段增长时在这里加）。 */
+export type OpenWarning = 'version-unverified'
 
 /** 打开失败：`reason` 决定 UI 文案，`error` 是诊断细节。 */
 export interface OpenFailure {
@@ -189,6 +239,15 @@ export interface OpenFailure {
   error: string
   /** HTTP 状态；`null` = 请求根本没到达宿主。 */
   status: number | null
+  /**
+   * 失败时拿到的**原始错误码**（宿主/平台信封的 `code`，如 `PLATFORM_NOT_FOUND`、
+   * `OPEN_CHECK_FAILED`、`AUTH_REQUIRED`）；拿不到就是 `undefined`。
+   *
+   * 与 `reason` 分开保存的理由（U-04 的"错误上报保留原始 status/code"）：`reason`
+   * 是给 UI 选文案的**类目**，`status`/`code` 是排障用的**事实** —— 上报里只有中文
+   * 文案等于把原始信号丢掉，维护者无法把一次"平台 500"对回日志。
+   */
+  code?: string
 }
 
 /** {@link openAppEntry} 的结果。 */
@@ -307,6 +366,19 @@ export function parseOpenWindow(payload: unknown): OpenWindowOutcome | null {
 }
 
 /**
+ * 从成功响应里读软闸门结论（F-04）。
+ *
+ * 只认**已知取值**：未知的 warning 串按"没有结论"处理（`undefined`）——拿一个不认识
+ * 的码去查字典会显示空白提示条，那比不显示更糟。
+ * @param payload - `open` 路由的响应体。
+ * @returns 已知的结论，或 `null`。
+ */
+export function parseOpenWarning(payload: unknown): OpenWarning | null {
+  const value = (payload as { warning?: unknown } | null)?.warning
+  return value === 'version-unverified' ? value : null
+}
+
+/**
  * 计数是不是一个合法的非负整数。
  * @param value - 响应里的原始值。
  * @returns true = 可用作计数。
@@ -320,6 +392,15 @@ function isCount(value: unknown): value is number {
  *
  * 401 的两义性在调用点已经分流：`proof_*` ⇒ `proof-required|proof-expired`；
  * 其余 401（宿主的 `AUTH_REQUIRED`）⇒ `not-signed-in`。所以这里保持最保守的映射。
+ *
+ * **本机 403 不是"账号没权限"**（U-04 的边界）：本机路由的 403 只来自本机证明闸
+ * （`proof` 校验），账号级 403 走的是平台信封（`PLATFORM_*`）那一支，由
+ * {@link reasonForPlatformRefusal} 归成 `not-permitted`。两条不能混。
+ *
+ * **`502` 也不再说"版本不一致"**（U-04）：宿主用 502 `OPEN_CHECK_FAILED` 表达
+ * "平台版本确认不了"（`index.ts` 的闸门 `unreachable` 分支）—— 那是**平台/网络**
+ * 暂时不可用，正确下一步是重试。修前它落进 `unexpected-response`（提示"升级客户端"）。
+ * 本机 500 没有定义语义（宿主不发它）⇒ 仍按"未预期形状"兜底，不冒充平台不可用。
  */
 function reasonForStatus(status: number): OpenFailureReason {
   switch (status) {
@@ -327,6 +408,8 @@ function reasonForStatus(status: number): OpenFailureReason {
     case 400: return 'invalid-app-id'
     case 403: return 'proof-required'
     case 404: return 'app-not-found'
+    case 410: return 'app-offline'
+    case 502: return 'platform-unavailable'
     case 503: return 'protocol-not-ready'
     default: return 'unexpected-response'
   }
@@ -336,21 +419,41 @@ function reasonForStatus(status: number): OpenFailureReason {
  * **平台**拒绝（宿主信封 `PLATFORM_*`）→ reason。
  *
  * 与 {@link reasonForStatus} 分开的理由：平台的信封带**它自己的**语义（证明失效 /
- * 登录态失效 / 应用被冻结 / 应用没了 / 关停中），比"HTTP 状态"精确。证明类码落
- * `platform-refused`（面板文案指向"服务端拒绝了这次打开"），其余按状态就近归属 ——
- * 尤其 404/410 仍要说"这个应用不存在"，不能让一次"应用被删"变成"打不开"。
+ * 登录态失效 / 应用被冻结 / 应用没了 / 已下架 / 暂时不可用），比"HTTP 状态"精确。
  *
- * **原因先于状态**（本函数的全部意义）：冻结与"不存在"同码同状态（404 + `NOT_FOUND`），
- * 先按 `status` 分流就永远读不到 `platform_reason` —— 那正是"打开一个仅被冻结的应用
- * 被告知应用不存在"的缺陷本体。只在 404 上认冻结：410（下架）是另一档契约，不允许被
- * 一个原因字段改写语义。
+ * **原因先于状态**：冻结与"不存在"同码同状态（404 + `NOT_FOUND`），先按 `status`
+ * 分流就永远读不到 `platform_reason` —— 那正是"打开一个仅被冻结的应用被告知应用
+ * 不存在"的缺陷本体。原因只在 404 上参与分流（410 是另一档契约，不允许被一个原因
+ * 字段改写成"冻结"）。
+ *
+ * ### 三档可恢复 / 可解释的失败（2026-10-23 U-04）
+ *
+ * 修前这里是"状态码就近归属"：410 与 404 一起说"应用不存在"、403 被并进"尚未
+ * 登录"、500/502 落进"响应与预期不一致（通常是版本不一致）"。三句话都把用户指向
+ * 一个**无效**的下一步（去要新应用 / 再登录一次 / 升级客户端）。现在逐档分开：
+ *
+ * | 状态 | 平台证据 | reason | 下一步 |
+ * |---|---|---|---|
+ * | 500/502/503 | 任何 | `platform-unavailable` | 稍后重试（不是升级客户端） |
+ * | 401 | 非 `proof_*` | `not-signed-in` | 重新登录 |
+ * | 403 | 任何 | `not-permitted` | 找管理员（再登录也没用） |
+ * | 404 | `app_frozen` | `app-frozen` | 发布者解冻 / 找管理员 |
+ * | 404 | `app_not_found` / 其它已知理由 | `app-not-found` | 目录里确认、找发布者 |
+ * | 404 | **无** reason / `no_release` | `no-release` | 等审核 / 找发布者 |
+ * | 410 | 任何 | `app-offline` | 联系管理员恢复（数据仍在） |
+ *
+ * `404 + 无 reason ⇒ no-release` 的依据是服务端现状（`open.go`）：未登记/软删与
+ * 冻结两条 404 **都**带 `details.reason`，唯一不带的是"应用还没有可用版本"。
+ * 平台将来给这一档补上 `reason=no_release` 时（本函数已认），这条推断自动失效为
+ * 显式约定。
  *
  * `proof_*` 判据取前缀而不是枚举：平台新增证明类码（如 `proof_replayed`）时，客户端
  * 不该把它误判成"未登录"。
  * @param status - HTTP 状态。
  * @param platformCode - 平台原码（已归一化为小写，见 `readHostPlatformRefusal`）。
  * @param platformReason - 平台结构化原因（已归一化，见 `readHostPlatformReason`）；
- *   缺省 / 不认识 ⇒ 按状态回落（404/410 ⇒ `app-not-found`），**不崩溃也不当成功**。
+ *   缺省 ⇒ 404 上按"还没有可用版本"解释（见上），其它状态不受它影响。
+ *   **不崩溃也不当成功**。
  * @returns 失败原因。
  */
 export function reasonForPlatformRefusal(
@@ -358,11 +461,21 @@ export function reasonForPlatformRefusal(
   platformCode: string,
   platformReason: string | null,
 ): OpenFailureReason {
-  if (status === 404 && platformReason === PLATFORM_APP_FROZEN_REASON) return 'app-frozen'
-  if (status === 404 || status === 410) return 'app-not-found'
-  if (status === 503) return 'protocol-not-ready'
+  // 平台侧 5xx 先判：任何码（含 `HTTP_502` 这种没有信封的形态）都只能是"平台暂时
+  // 不可用"。放在证明码之前 —— 证明码与 5xx 不会同现，但 5xx 的下一步（重试）比
+  // "重取证明"更接近事实。
+  if (status === 500 || status === 502 || status === 503) return 'platform-unavailable'
   if (platformCode.startsWith('proof_')) return 'platform-refused'
-  if (status === 401 || status === 403) return 'not-signed-in'
+  if (status === 401) return 'not-signed-in'
+  if (status === 403) return 'not-permitted'
+  if (status === 404) {
+    if (platformReason === PLATFORM_APP_FROZEN_REASON) return 'app-frozen'
+    if (platformReason === null || platformReason === PLATFORM_NO_RELEASE_REASON) return 'no-release'
+    // 认得出理由（`app_not_found`）或认不出（平台新增档位）⇒ 保守说"不存在"：
+    // 不能把一次"应用被删"说成"还有版本没上线"。
+    return 'app-not-found'
+  }
+  if (status === 410) return 'app-offline'
   return 'unexpected-response'
 }
 
@@ -472,8 +585,10 @@ export async function openAppEntry(rawAppId: unknown, deps: OpenAppDeps = defaul
     return {
       ok: false,
       reason,
-      error: `the local open route refused ${JSON.stringify(appId)} (HTTP ${String(response.status)}${code === null ? '' : `, ${code}`}): ${reason}`,
+      error: `the local open route refused ${JSON.stringify(appId)} (HTTP ${String(response.status)}${code === null ? '' : `, ${code}`}${platformReason === null ? '' : `, ${platformReason}`}): ${reason}`,
       status: response.status,
+      // 原始码原样带出去（上报/诊断要的是事实，不是本地化文案）。
+      ...(code === null ? {} : { code }),
     }
   }
 
@@ -502,11 +617,14 @@ export async function openAppEntry(rawAppId: unknown, deps: OpenAppDeps = defaul
   // 没下发就不带 —— 界面据此决定要不要渲染"今日已被打开 N 次"。
   const counts = parseAppOpenCounts(payload)
   const window = parseOpenWindow(payload)
+  // F-04 的软闸门结论：宿主产出了就必须显示（修前这条字段没人读 ⇒ 静默显示旧内容）。
+  const warning = parseOpenWarning(payload)
   // 成功 = 本机确认协议 URL 已就绪，且该应用的独立窗口正在加载它（契约 §5.2 的打开路径）。
   return {
     ok: true,
     url,
     ...(counts === null ? {} : { counts }),
     ...(window === null ? {} : { window }),
+    ...(warning === null ? {} : { warning }),
   }
 }

@@ -50,6 +50,11 @@ var wasmGatedRoutes = []string{
 	"PUT /api/server/admin/wasm-apps/review",
 	"GET /api/server/admin/wasm-apps/limits",
 	"PUT /api/server/admin/wasm-apps/limits",
+	// 应用级限流覆盖（迁移 0087，决策 2026-10-22 §2.3）：`/:app_id/limits` 三条与
+	// 静态段 `/limits` 不同层（单应用例外 vs 全局四轴），条件注册 ⇒ 必须登记。
+	"GET /api/server/admin/wasm-apps/:app_id/limits",
+	"PUT /api/server/admin/wasm-apps/:app_id/limits",
+	"DELETE /api/server/admin/wasm-apps/:app_id/limits",
 	// 2026-09-19 审核闭环 + 运行诊断（router.go 已随本轮提交进仓 ⇒ 按约定登记）。
 	// 与本站的历史注释对照：这 5 条曾只存在于并发会话工作树、未提交，那时把它们
 	// 写进本表会让"干净提交态"报"声明表里的路由并未消失"；现在它们已在提交面内，
@@ -68,4 +73,21 @@ var wasmGatedRoutes = []string{
 	// 管理面的只读数据面（2026-09-21）：表结构 + 行浏览（与员工面同实现，只差鉴权）。
 	"GET /api/server/admin/wasm-apps/:app_id/schema",
 	"GET /api/server/admin/wasm-apps/:app_id/rows",
+	// ===== 生命周期重设计（迁移 0086，设计 2026-10-22 §6）=====
+	// 员工面：部署历史 / 部署（回滚）/ 撤回待审 / 恢复软删。
+	"GET /api/client/v2/apps/wasm/:app_id/deployments",
+	"POST /api/client/v2/apps/wasm/:app_id/deployments",
+	"POST /api/client/v2/apps/wasm/:app_id/releases/:version/withdraw",
+	"POST /api/client/v2/apps/wasm/:app_id/restore",
+	// 管理面：跨应用待审清单（静态段，先于 /:app_id 注册）/ 部署历史 / 部署（回滚）/
+	// 恢复 / 删除（软删 + 快照）/ 导出（同员工面参数）。
+	"GET /api/server/admin/wasm-apps/releases/pending",
+	// C-08 的可选清理动作（设计 §5.7）：静态段 `releases/purge-stale`，写动作。
+	"POST /api/server/admin/wasm-apps/releases/purge-stale",
+	"GET /api/server/admin/wasm-apps/:app_id/deployments",
+	"POST /api/server/admin/wasm-apps/:app_id/deployments",
+	"POST /api/server/admin/wasm-apps/:app_id/restore",
+	"DELETE /api/server/admin/wasm-apps/:app_id",
+	"GET /api/server/admin/wasm-apps/:app_id/export",
+	"GET /api/server/admin/wasm-apps/limit-overrides",
 }

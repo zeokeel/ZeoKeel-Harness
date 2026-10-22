@@ -4,7 +4,9 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tetratelabs/wazero"
@@ -112,6 +114,11 @@ type moduleCache struct {
 	now     func() time.Time
 
 	compileSem chan struct{}
+	// compileWaiters 是**正在排队等 compileSem 的请求数**（含持有者？不含：只在阻塞等待期间计数）。
+	//
+	// 2026-10-22 审计 A4：等待失败时要把"平台在排队"与"你取消了"区分开，并把排队深度
+	// 交给诊断/details —— 没有它，作者只能看到一句"请求已取消"。
+	compileWaiters atomic.Int64
 }
 
 // newModuleCache 用 limits 的**进程内**模块缓存上限构造缓存（默认 TTL）。
@@ -166,6 +173,30 @@ func newModuleCacheWith(maxBytes int64, maxEntries int, idleTTL time.Duration, n
 	}
 }
 
+// acquireCompileSlot 取"冷加载/冷编译"的唯一槽位；等待期间 ctx 到期即返回**排队**错误。
+//
+// 为什么不是"取消"（2026-10-22 审计 A4）：这个槽位是平台全局串行的，第二个请求失败
+// 的真实原因是"平台正在给别的应用做冷编译"，不是"调用方取消"。用 MODULE_KILLED +
+// 「请求已取消」会让作者去改自己的代码。这里返回独立的 MODULE_LOAD_QUEUED（503）
+// + `queue_depth` detail，hint 明确写"稍后重试可恢复"。
+func (c *moduleCache) acquireCompileSlot(ctx context.Context, phase string) *apperr.Error {
+	c.compileWaiters.Add(1)
+	defer c.compileWaiters.Add(-1)
+	select {
+	case c.compileSem <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		depth := c.compileWaiters.Load()
+		return apperr.New(apperr.CodeModuleLoadQueued,
+			fmt.Sprintf("等待平台%s槽位超时（当前排队 %d 个请求；冷编译在平台内是串行的）", phase, depth)).
+			WithDetail("queue_depth", depth).
+			WithDetail("phase", phase).
+			WithHint("这是平台侧排队，不是你的应用出错：稍后重试即可").
+			WithHint("若持续出现：降低首次打开并发，或减小应用体积/首次编译耗时；运维可调 compile_concurrency").
+			WithCause(ctx.Err())
+	}
+}
+
 // acquireSet 取一个"资源就绪"的缓存条目；未命中时调用 loader 冷加载
 // （读制品字节 → 抽自定义段 → 构造内存资源集）。
 //
@@ -182,11 +213,8 @@ func (c *moduleCache) acquireSet(ctx context.Context, key moduleKey,
 	}
 
 	// 冷加载串行化（与冷编译共用同一个槽位：两者都要读制品字节，且都是秒级）。
-	select {
-	case c.compileSem <- struct{}{}:
-	case <-ctx.Done():
-		return nil, nil, apperr.New(apperr.CodeModuleKilled, "等待加载槽位时请求已取消（客户端断开或墙钟到点）").
-			WithCause(ctx.Err())
+	if aerr := c.acquireCompileSlot(ctx, "加载"); aerr != nil {
+		return nil, nil, aerr
 	}
 	defer func() { <-c.compileSem }()
 
@@ -264,11 +292,8 @@ func (c *moduleCache) acquire(ctx context.Context, key moduleKey,
 	}
 
 	// 冷编译串行化（§4.3 编译并发 1）。等待期间响应 ctx 取消，绝不无限等。
-	select {
-	case c.compileSem <- struct{}{}:
-	case <-ctx.Done():
-		return nil, nil, apperr.New(apperr.CodeModuleKilled, "等待编译槽位时请求已取消（客户端断开或墙钟到点）").
-			WithCause(ctx.Err())
+	if aerr := c.acquireCompileSlot(ctx, "编译"); aerr != nil {
+		return nil, nil, aerr
 	}
 	defer func() { <-c.compileSem }()
 
@@ -540,7 +565,8 @@ func (c *moduleCache) size() (entries int, bytes int64) {
 
 // loadReleaseWasm 返回带制品字节的版本对象 —— **只在冷编译路径上调用**（P0-3）。
 //
-// 请求路径拿到的 rel 是元数据投影（LatestApprovedWasmReleaseMeta，不含 archive）：
+// 请求路径拿到的 rel 是元数据投影（CurrentWasmReleaseMeta：按 apps.current_release_id
+// 取当前部署版本，不含 archive）：
 // 模块缓存命中时字节没有读者，每请求拉一份 TOAST 大字段纯属浪费（见 serve.go ②
 // 的注释与 serverstore.wasmReleaseServeColumns）。缓存未命中时这里补一次查询取字节
 // ——冷编译本来就是秒级（读盘缓存 + wazero 反序列化/编译），多一次按主键查询可忽略。

@@ -870,12 +870,37 @@ func TestUploadConcurrentDuplicateCompleteReplays(t *testing.T) {
 	if n := env.countReleases(appID); n != 1 {
 		t.Fatalf("版本行数 = %d, want 1（重复发布）", n)
 	}
-	var audits int
-	if err := env.db.QueryRow(`SELECT COUNT(*) FROM audit_logs WHERE app_id = $1`, appID).Scan(&audits); err != nil {
+	// 应用级审计：**每个动作恰好 1 条**，且重复 complete 一条都不新增。
+	//
+	// 为什么是 2 条而不是 1 条（生命周期重设计，迁移 0086，设计 2026-10-22 §3.3）：
+	// 一次成功的发布现在落两条审计 —— `wasm_app_release`（版本落行，既有语义）与
+	// `wasm_app_deploy`（不可变部署历史：谁在什么时候把哪一版放上线）。判据的本意
+	// 是"重放不得再写审计"，所以这里逐动作计数，而不是把新增的那条也算成重复写入。
+	rows, err := env.db.Query(`SELECT action, COUNT(*) FROM audit_logs WHERE app_id = $1 GROUP BY action`, appID)
+	if err != nil {
 		t.Fatalf("统计应用级审计失败: %v", err)
 	}
-	if audits != 1 {
-		t.Fatalf("应用级审计行数 = %d, want 1（重复 complete 又写了一次审计）", audits)
+	defer rows.Close()
+	counts := map[string]int{}
+	for rows.Next() {
+		var action string
+		var n int
+		if err := rows.Scan(&action, &n); err != nil {
+			t.Fatalf("读审计统计: %v", err)
+		}
+		counts[action] = n
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("读审计统计: %v", err)
+	}
+	for _, action := range []string{"wasm_app_release", "wasm_app_deploy"} {
+		if counts[action] != 1 {
+			t.Fatalf("审计动作 %s 的条数 = %d, want 1（重复 complete 又写了一次审计）；全部=%v",
+				action, counts[action], counts)
+		}
+	}
+	if total := len(counts); total != 2 {
+		t.Fatalf("应用级审计动作种类 = %d, want 2（release + deploy）；全部=%v", total, counts)
 	}
 	used, inflight := env.compiler.UploadState(env.ids["alice"], time.Now())
 	if used != 1 {

@@ -45,7 +45,7 @@ import (
 //	             单文件/总量上限（与运行期 assets.Build 同一份判据）
 //	D 干跑        合成帧 Instantiate → _start → 响应帧（2 s 预算）
 //	E 占名落行    UpsertWasmApp → 复读归属 → CreateWasmRelease（拿到 release_id）
-//	F 投影        （仅 approved 时）SetWasmAppConfig + SetWasmAppCurrentRelease
+//	F 部署        （仅 approved 时）DeployWasmRelease（插部署历史 + 切指针 + 写投影，单事务）
 //	G 收尾        审计 → 版本 GC（**数据行**，保留 3 版）
 //
 // ⚠️ 随包资源**不落盘**（2026-09-20 定案，决策文档
@@ -56,7 +56,7 @@ import (
 // （`<data_root>/apps/<app_id>/assets/<release_id>/` 这个布局作废）。
 //
 // ⚠️ 投影有**两条**写路径，两条都必须被 `status == approved` 罩住：
-//   - F1/F2（SetWasmAppConfig + SetWasmAppCurrentRelease）；
+//   - F（DeployWasmRelease：部署历史 + current_release_id + 投影，单事务）；
 //   - E1 的 UPSERT（首版落行 / 已有应用的更新都走它），罩住的列 =
 //     config_json/purpose/data_sensitivity（首版待审时它们曾照写，让"没被任何人批准过的
 //     配置"成了后续版本的继承基线，审计 §1.2）**以及 title/description**（2026-09-19
@@ -69,7 +69,8 @@ import (
 // "卡制品"，配置展示不受控），而且下一版会拿这个未审核的 public 当缺省。待审版本被
 // **拒绝**时同样不能留下未生效的投影；两条审核路径的收口见 admin.go 的
 // recomputeProjection。继承基线的真源已经是版本行（inheritBase 走
-// LatestApprovedWasmReleaseMeta），投影列因此只是显示面 —— 但显示面同样不能提前变。
+// CurrentWasmReleaseMeta：当前部署指针指向的那一版），投影列因此只是显示面 ——
+// 但显示面同样不能提前变。
 //
 // **为什么现在是"零磁盘副作用"**：R18 的判据是"失败的发布不占版本号"。原实现把
 // 全部抽段落盘排在落库之前，好让写盘失败不留库行 —— 但那只是把风险挪了个位置，且
@@ -1326,6 +1327,11 @@ func (h *Handlers) publishCore(c *gin.Context, u *serverstore.User, in publishIn
 		enabled = existing.Enabled
 	}
 
+	deployRole := serverstore.ActorRoleOwner
+	if existing != nil && existing.Owner != u.Username && h.isAdmin(c) {
+		// 超管代发布：审计要能区分"作者自己上线"与"平台接管上线"（C-15）。
+		deployRole = serverstore.ActorRoleSuperAdmin
+	}
 	rel, cerr := h.commitRelease(c, st, commitInput{
 		appID:          appID,
 		version:        version,
@@ -1333,6 +1339,7 @@ func (h *Handlers) publishCore(c *gin.Context, u *serverstore.User, in publishIn
 		changelog:      in.changelog,
 		status:         status,
 		publisher:      u.Username,
+		role:           deployRole,
 		enabled:        enabled,
 		existing:       existing,
 		currentVersion: currentVersionOf(existing, hist),
@@ -1383,13 +1390,31 @@ func (h *Handlers) publishCore(c *gin.Context, u *serverstore.User, in publishIn
 	// ⚠️ `entry_url` 已随 W4 从两侧删除（总纲 §8.4 / §5.2 冻结契约）：应用只在桌面客户端内
 	// 以 `<渠道 app scheme>://<app_id>` 打开，服务端**不再下发任何入口链接**。
 	// 能发给同事的唯一形态是客户端侧生成的渠道深链（见 packages/client/wasm-apps）。
+	// R24 / A6（2026-10-22 功能合理性审计）：`access=whitelist` 是**作者自判**的名单，
+	// 平台不比对 —— 发布回执必须当场说清，否则作者会以为"填了名单就有人替我拦"。
+	// `whitelist_enforced` 恒为 false（平台事实，字段化便于消费方判断），
+	// `warnings` 恒在（空数组而不是 null：与其它响应"数组恒在"的口径一致）。
+	warnings := []string{}
+	if st.config.Access == appcfg.AccessWhitelist {
+		warnings = append(warnings, "access=whitelist：平台不比对白名单（R24），任何登录用户都能打开本应用；"+
+			"需要真正限制时请应用前端读取随包 zeokeel.app.json 的 whitelist 自行判定，并对名单外用户给出明确的拒绝页")
+	}
 	raw, merr := json.Marshal(gin.H{
 		"app": app,
 		"release": gin.H{
-			"id":               rel.ID,
-			"version":          version,
-			"status":           rel.Status,
-			"current":          rel.Current,
+			"id":      rel.ID,
+			"version": version,
+			"status":  rel.Status,
+			"current": rel.Current,
+			// current_version = 本次发布之后**线上生效的版本号**（U-02，评审
+			// 2026-10-23 P1）。待审时 = 旧版本；**首版待审时 = 空串**（线上还没有
+			// 任何版本）。客户端据此区分两件事：
+			//   · `''` ⇒ "首版待审核：审核通过后才上线"，且**不给**分享链接
+			//     （没有可交付版本，同事点开只会得到"应用不存在"）；
+			//   · 非空 ⇒ 既有语义"待审核（线上仍是旧版本）"，分享链接照旧。
+			// 缺了这个字段，客户端只能看到 `current:false` —— 那是"这一版不是当前
+			// 版"，与"线上根本没有版本"是两件事，正是本条缺陷的成因。
+			"current_version":  rel.CurrentVersion,
 			"checksum":         st.checksum,
 			"size":             st.wasmBytes,
 			"assets":           sortedKeys(st.sections),
@@ -1397,8 +1422,10 @@ func (h *Handlers) publishCore(c *gin.Context, u *serverstore.User, in publishIn
 			"compile_ms":       st.compile.CompileMS,
 			"compile_cached":   st.compile.Cached,
 		},
-		"review_required": review,
-		"pruned_releases": pruned,
+		"review_required":    review,
+		"pruned_releases":    pruned,
+		"whitelist_enforced": false,
+		"warnings":           warnings,
 	})
 	if merr != nil {
 		// 版本已经生效：序列化失败只可能是平台缺陷（gin.H 里全是可编码类型）。
@@ -1418,12 +1445,15 @@ type releaseOutcome struct {
 }
 
 type commitInput struct {
-	appID          string
-	version        string
-	title          string
-	changelog      string
-	status         string
-	publisher      string
+	appID     string
+	version   string
+	title     string
+	changelog string
+	status    string
+	publisher string
+	// role 是部署历史的 actor_role（owner / super_admin）：审计要能区分"作者自己上线"
+	// 与"超管代上线"（审计 2026-10-22 C-15）。
+	role           string
 	enabled        bool
 	existing       *serverstore.WasmApp
 	currentVersion string
@@ -1577,47 +1607,48 @@ func (h *Handlers) commitRelease(c *gin.Context, st *staged, in commitInput) (*r
 	// 库里的 wasm 字节才是唯一权威副本（下一版/回滚都从它重建资源集）。
 	cleanupCtx := context.WithoutCancel(ctx)
 	compensate := func() {
+		// 只回收刚建的 release 行（软删 + 释放字节；版本号仍占位）。
+		//
+		// 投影与生效版本的补偿**不再需要**（设计 2026-10-22 §5.1）：F1/F2 已经合并进
+		// `serverstore.DeployWasmRelease` 的**单个事务**（插部署 + 切指针 + 写投影一起提交
+		// 或一起回滚），因此不存在"配置写了、指针没切"的中间态可以回滚。
+		// 旧实现在这里直写 apps.current_release_id —— 那是**绕过部署历史**的写点
+		//（历史里没有"指针被写回"这条事实），本轮全部收敛掉。
 		_ = serverstore.SoftDeleteWasmRelease(cleanupCtx, h.opt.DB, relID)
-		if in.existing == nil {
-			return
-		}
-		if in.existing.CurrentReleaseID > 0 {
-			_ = serverstore.SetWasmAppCurrentRelease(cleanupCtx, h.opt.DB, in.appID, in.existing.CurrentReleaseID)
-		}
-		if in.existing.ConfigJSON != "" {
-			_ = serverstore.SetWasmAppConfig(cleanupCtx, h.opt.DB, in.appID,
-				in.existing.ConfigJSON, in.existing.Purpose, in.existing.DataSensitivity)
-		}
 	}
 
-	// F1 应用配置投影（config_json/purpose/data_sensitivity；访问模式由 config_json 现解）。
+	// F1+F2 生效：**一次部署事务**完成"插部署历史 + 切 current_release_id +
+	// current_deployment_id + 写投影（config_json/purpose/data_sensitivity/title/description）"。
 	//
-	// **只有已生效（approved）的版本才写投影**（R1-pm-9，此前是无条件执行）：
-	// apps 行是目录对**全员**下发的投影（access 徽标 / 负责人 / 用途），待审版本
-	// 没有生效 ⇒ 投影必须一字不动。否则作者提交一个"改成 public"的待审版本后，
-	// 全公司先看到"公开"徽标、点进去却仍被要求登录 —— 审核就只剩"卡制品"。
-	// 待审版本**永不**写投影：拒绝它时目录配置本来就是"上一次 approved"的值，
-	// 不需要任何回滚（这也是"不写"比"写了再回滚"更稳的原因）。通过审核时由
-	// admin.go 的 adminReview 分支把投影按**最新 approved 版本**重算一遍
-	//（SetWasmAppCurrentRelease + SetWasmAppConfig，同一份 config_json 同源同版）。
+	// 为什么要合并（设计 2026-10-22 §3.3/§5.1）：这三件事此前是三条独立 UPDATE，
+	// 中间任何一条失败都会留下"指针切了、投影没切"或"投影写了、没有部署记录"的分叉；
+	// 而部署历史是本次重设计要建立的**唯一事实来源**（谁在什么时候把哪一版放上线）。
+	// 现在它们在一个事务里，与 deployment 行的插入一起提交或一起回滚。
+	//
+	// 只有**已生效（approved）**的版本才部署（R1-pm-9）：待审版本没有经过任何人批准，
+	// 投影一字不动（审核通过时由 admin.go 的审核分支按**最新 approved 版本**走
+	// kind=review 的部署）。审核开启时因此也不会动 current_release_id ⇒ 线上仍旧版本。
 	if in.status == serverstore.ReleaseStatusApproved {
-		if err := serverstore.SetWasmAppConfig(ctx, h.opt.DB, in.appID,
-			string(st.configJSON), st.config.Purpose, st.config.DataSensitivity); err != nil {
-			compensate()
-			return nil, internalErr("应用配置保存失败（本次版本号已占位，请升版本号重发）", err).
-				WithDetail("version", in.version)
+		role := serverstore.ActorRoleOwner
+		if strings.TrimSpace(in.role) != "" {
+			role = in.role
 		}
-	}
-	// F2 生效版本：仅"非待审"时指向新版本。
-	// 审核开启时**不动** current_release_id ⇒ 线上仍旧版本（R17：不中断使用）。
-	if in.status == serverstore.ReleaseStatusApproved {
-		if err := serverstore.SetWasmAppCurrentRelease(ctx, h.opt.DB, in.appID, relID); err != nil {
+		dep, _, derr := serverstore.DeployWasmRelease(ctx, h.opt.DB, serverstore.DeployWasmReleaseInput{
+			AppID: in.appID, ReleaseID: relID, Kind: serverstore.DeployKindPublish,
+			Actor: in.publisher, ActorRole: role, Message: "发布 v" + in.version,
+			Now: h.now().UTC(),
+		})
+		if derr != nil {
 			compensate()
-			return nil, internalErr("生效版本切换失败（本次版本号已占位，请升版本号重发）", err).
+			return nil, internalErr("生效版本切换失败（本次版本号已占位，请升版本号重发）", derr).
 				WithDetail("version", in.version)
 		}
 		out.Current = true
 		out.CurrentVersion = in.version
+		// 审计：detail 含 deployment_id / version / kind / actor_role（设计 §3.3 不变量）。
+		h.auditApp(in.appID, in.publisher, "wasm_app_deploy",
+			auditDetail(in.appID, in.title, "部署 deployment_id="+strconv.FormatInt(dep.ID, 10)+
+				" version="+dep.Version+" kind="+dep.Kind+" actor_role="+dep.ActorRole))
 	}
 	return out, nil
 }
@@ -1829,14 +1860,15 @@ func sameTimePtr(a, b *time.Time) bool {
 	return a.Equal(*b)
 }
 
-// inheritBase 返回**更新发布**的字段继承基线 = 最新 approved 版本的 `config_json`
+// inheritBase 返回**更新发布**的字段继承基线 = **当前部署版本**的 `config_json`
 // （语义与判据见 appcfg.ParseUpdate）。空串 = 没有基线（首版）。
 //
-// 真源是**版本行**（app_releases）里最新 approved 的那一版，**不是** `apps.config_json`
-// 投影列：后者是显示面，待审版本也曾被写进去（2026-09-19 审计 §1.2）—— 拿它当基线
-// 等于让一个没人批准过的配置成为后续版本的默认值。这里与交付面（appserver 的
-// LatestApprovedWasmReleaseMeta）、审批面（admin.go 重算投影用同一个入口）**同源**：
-// 继承基线永远是"线上正在交付的那一版"。
+// 真源是 `apps.current_release_id` 指向的版本行，**不是** `apps.config_json` 投影列：
+// 后者是显示面，待审版本也曾被写进去（2026-09-19 审计 §1.2）—— 拿它当基线等于让一个
+// 没人批准过的配置成为后续版本的默认值。这里与交付面（appserver 的
+// CurrentWasmReleaseMeta）、审批面**同源**：继承基线永远是"线上正在交付的那一版"。
+// （2026-10-22 反证 P0：此前这里取 max(id) approved —— 回滚到 v1 后再发新版会继承
+// 已被回滚掉的 v2 配置，即"回滚"在下一次发布时被静默撤销。）
 //
 // 基线不可用（非空但解析不了）⇒ **拒绝发布**（appcfg.UnusableBaselineError）：
 // 此时按缺省回落 login 对白名单应用是放宽，而"静默放宽"在作者侧零信号。
@@ -1850,10 +1882,10 @@ func (h *Handlers) inheritBase(ctx context.Context, existing *serverstore.WasmAp
 // inheritBaseForApp 是 inheritBase 的"按 app_id 现查"形态（validate 用：预检与发布
 // 必须对同一份载荷给出同一个结论，否则 AI 会看到"预检通过、发布被拒"）。
 func (h *Handlers) inheritBaseForApp(ctx context.Context, appID string) (string, *apperr.Error) {
-	latest, err := serverstore.LatestApprovedWasmReleaseMeta(ctx, h.opt.DB, appID)
+	latest, err := serverstore.CurrentWasmReleaseMeta(ctx, h.opt.DB, appID)
 	switch {
 	case errors.Is(err, serverstore.ErrNotFound):
-		// 没有任何已通过版本（首版，或全部被拒/被回收）：没有可继承的基线，
+		// 没有任何已部署版本（首版，或全部被拒/被回收）：没有可继承的基线，
 		// 缺省按 schema 走（access 落 login）。这不是错误 —— 首版语义不回归。
 		return "", nil
 	case err != nil:

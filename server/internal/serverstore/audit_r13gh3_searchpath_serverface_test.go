@@ -129,10 +129,19 @@ var searchPathRelations = map[string]searchPathRelation{
 	"skill_grants":                  {searchPathRelNonFamily, "技能商城授权：同 app_grants"},
 	"skills":                        {searchPathRelNonFamily, "技能商城目录：遮蔽读 ⇒ 目录可见地空"},
 	"capability_locks":              {searchPathRelNonFamily, "能力名占位锁：遮蔽读 ⇒ 占位失效（后续写入撞唯一键，可见失败）"},
-	"wasm_app_opens":                {searchPathRelNonFamily, "应用打开明细：独立计数面，不与金额/审计同链"},
-	"wasm_app_opens_daily":          {searchPathRelNonFamily, "应用打开日汇总：同上"},
-	"wasm_call_events":              {searchPathRelNonFamily, "应用调用事件：独立计数面"},
-	"brand_snapshots":               {searchPathRelNonFamily, "品牌快照表（0047 建、品牌模块已下线）：全仓无 Go 读面"},
+	// 迁移 0086（生命周期重设计）：部署历史是**追加式不可变**事实记录，遮蔽读的后果
+	// 是"看不见谁在什么时候部署了什么"（可见地为空/历史缺行），不属于静默错金额/错审计
+	// 链 ⇒ non-family。它不被任何金额或审计聚合读，也不参与 shadow 同名表的静默吞写。
+	"wasm_app_deployments": {searchPathRelNonFamily, "部署历史（0086）：不可变追加式事实记录，遮蔽读 ⇒ 历史可见地缺行/为空，不参与金额与审计链"},
+	// 迁移 0087（应用级限流覆盖）：读错对象 ⇒ 错误的并发上限生效；写错对象 ⇒ 管理端
+	// "保存成功 + 审计已写"而真实表一行不动（重启后覆盖消失）。两种都是**静默**的
+	// （健康出口全绿），与 settings 同类 ⇒ 族内关系，DAO 的四个入口全部经
+	// withUsageSearchPath / withUsageSearchPathRead 钉住。
+	"wasm_app_limits":      {searchPathRelFamily, "应用级限流覆盖（0087）：遮蔽读/写 ⇒ 静默按错误上限准入，或静默吞掉管理员保存的例外"},
+	"wasm_app_opens":       {searchPathRelNonFamily, "应用打开明细：独立计数面，不与金额/审计同链"},
+	"wasm_app_opens_daily": {searchPathRelNonFamily, "应用打开日汇总：同上"},
+	"wasm_call_events":     {searchPathRelNonFamily, "应用调用事件：独立计数面"},
+	"brand_snapshots":      {searchPathRelNonFamily, "品牌快照表（0047 建、品牌模块已下线）：全仓无 Go 读面"},
 
 	// —— 迁移期临时表 / 已被后续迁移 DROP ——
 	"agent_presets_new": {searchPathRelNonFamily, "0035 建后立即 RENAME 成 agent_presets（迁移期临时名）"},
@@ -228,26 +237,32 @@ var searchPathGuardPackages = map[string]searchPathPkgClass{
 	// R15C-R-01 ①（2026-09-25）：令牌过期回收调度器。包内**没有**任何族内关系 SQL
 	// （它只调 serverstore.PurgeExpiredTokens），按 no-family-sql 登记；新增包必须
 	// 在这里登记，否则本用例红（R13-GH3 的"面"守卫）。
-	"internal/tokenretention":           searchPathPkgNoFamilySQL,
-	"internal/updatecheck":              searchPathPkgNoFamilySQL,
-	"internal/usageretention":           searchPathPkgNoFamilySQL,
-	"internal/util":                     searchPathPkgNoFamilySQL,
-	"internal/wasmapp/abi":              searchPathPkgNoFamilySQL,
-	"internal/wasmapp/api":              searchPathPkgNoFamilySQL,
-	"internal/wasmapp/appcfg":           searchPathPkgNoFamilySQL,
-	"internal/wasmapp/appdb":            searchPathPkgNoFamilySQL,
-	"internal/wasmapp/apperr":           searchPathPkgNoFamilySQL,
-	"internal/wasmapp/applimits":        searchPathPkgNoFamilySQL,
-	"internal/wasmapp/appproof":         searchPathPkgNoFamilySQL,
-	"internal/wasmapp/appseed":          searchPathPkgNoFamilySQL,
-	"internal/wasmapp/appserver":        searchPathPkgNoFamilySQL,
-	"internal/wasmapp/assets":           searchPathPkgNoFamilySQL,
-	"internal/wasmapp/cachetrust":       searchPathPkgNoFamilySQL,
-	"internal/wasmapp/capapi":           searchPathPkgNoFamilySQL,
-	"internal/wasmapp/compile":          searchPathPkgNoFamilySQL,
-	"internal/wasmapp/diag":             searchPathPkgNoFamilySQL,
-	"internal/wasmapp/edge":             searchPathPkgNoFamilySQL,
-	"internal/wasmapp/events":           searchPathPkgNoFamilySQL,
+	"internal/tokenretention":     searchPathPkgNoFamilySQL,
+	"internal/updatecheck":        searchPathPkgNoFamilySQL,
+	"internal/usageretention":     searchPathPkgNoFamilySQL,
+	"internal/util":               searchPathPkgNoFamilySQL,
+	"internal/wasmapp/abi":        searchPathPkgNoFamilySQL,
+	"internal/wasmapp/api":        searchPathPkgNoFamilySQL,
+	"internal/wasmapp/appcfg":     searchPathPkgNoFamilySQL,
+	"internal/wasmapp/appdb":      searchPathPkgNoFamilySQL,
+	"internal/wasmapp/apperr":     searchPathPkgNoFamilySQL,
+	"internal/wasmapp/applimits":  searchPathPkgNoFamilySQL,
+	"internal/wasmapp/appproof":   searchPathPkgNoFamilySQL,
+	"internal/wasmapp/appseed":    searchPathPkgNoFamilySQL,
+	"internal/wasmapp/appserver":  searchPathPkgNoFamilySQL,
+	"internal/wasmapp/assets":     searchPathPkgNoFamilySQL,
+	"internal/wasmapp/cachetrust": searchPathPkgNoFamilySQL,
+	"internal/wasmapp/capapi":     searchPathPkgNoFamilySQL,
+	"internal/wasmapp/compile":    searchPathPkgNoFamilySQL,
+	"internal/wasmapp/diag":       searchPathPkgNoFamilySQL,
+	"internal/wasmapp/edge":       searchPathPkgNoFamilySQL,
+	"internal/wasmapp/events":     searchPathPkgNoFamilySQL,
+	// 迁移 0086：生命周期共享实现（快照/导出/真删的磁盘半边）。它只读 `VACUUM INTO`
+	// 应用库与写文件，**不持有族内关系 SQL**（库表归 appdb/serverstore）。
+	"internal/wasmapp/lifecycle": searchPathPkgNoFamilySQL,
+	// 迁移 0086：退役真删调度器。它只调 serverstore 的 DAO（不裸写 SQL），按
+	// no-family-sql 登记。
+	"internal/wasmapp/retirement":       searchPathPkgNoFamilySQL,
 	"internal/wasmapp/hostcap":          searchPathPkgNoFamilySQL,
 	"internal/limits":                   searchPathPkgNoFamilySQL,
 	"internal/wasmapp/logbuf":           searchPathPkgNoFamilySQL,

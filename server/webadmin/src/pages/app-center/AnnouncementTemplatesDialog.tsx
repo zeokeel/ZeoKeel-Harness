@@ -10,7 +10,12 @@ import {
   LEGACY_ACCESS_EXPLAIN,
   accessLevelRejectionMessage,
 } from './access-level'
-import { ANNOUNCEMENT_PLACEHOLDERS, ANNOUNCEMENT_TEMPLATES } from './announcements'
+import {
+  ANNOUNCEMENT_COPY_HINT,
+  ANNOUNCEMENT_DELIVERY_NOTE,
+  ANNOUNCEMENT_PLACEHOLDERS,
+  ANNOUNCEMENT_TEMPLATES,
+} from './announcements'
 
 /**
  * 「公告模板」对话框（契约 §19 Q13：访问级别筛选 + **面向员工的公告模板**）。
@@ -39,7 +44,8 @@ export function AnnouncementTemplatesDialog({ open, onOpenChange }: {
     if (ok) {
       setFailed('')
       setCopied(id)
-      flash('已复制公告全文')
+      // C-12：回执只说"进了剪贴板"，**不说"已发送"**（平台没有发送通道）。
+      flash(ANNOUNCEMENT_COPY_HINT)
       return
     }
     setCopied('')
@@ -55,6 +61,15 @@ export function AnnouncementTemplatesDialog({ open, onOpenChange }: {
             把下面的文案发给员工：本次改造有两处变化必须告知 —— 访问级别收敛（历史匿名公开退役）
             与应用只在桌面客户端内打开。复制后请替换掉 {'<…>'} 占位符再发。
           </DialogDescription>
+
+          {/* C-12：这一屏**只产出文案**。没有通道就必须说出来，否则管理员点完复制以为发完了。 */}
+          <p
+            data-testid="announcement-no-send"
+            role="note"
+            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          >
+            {ANNOUNCEMENT_DELIVERY_NOTE}
+          </p>
         </DialogHeader>
 
         {/* 写侧口径（唯一一份校验消息）：两值 + public 已退役。 */}
@@ -97,6 +112,9 @@ export function AnnouncementTemplatesDialog({ open, onOpenChange }: {
               >
                 {t.body}
               </pre>
+              <p className="text-[11px] text-muted-foreground" data-testid={`announcement-send-hint-${t.id}`}>
+                复制后自行发送：平台不会替你把这份公告发出去（无 IM/邮件通道、无送达回执）。
+              </p>
               {failed === t.id && (
                 <p role="alert" aria-live="assertive" data-testid={`announcement-copy-failed-${t.id}`} className="text-xs text-destructive">
                   复制失败（浏览器未授予剪贴板权限）：请在上面的正文里手动选择并复制。

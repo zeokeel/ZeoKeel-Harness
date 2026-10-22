@@ -164,14 +164,19 @@ func TestSpecCoversConfigStructAndKnownFields(t *testing.T) {
 		t.Errorf("ConfigFields() 的键 %v 与 KnownFields %v 必须逐项逐序一致", specKeys, appcfg.KnownFields)
 	}
 	// ③ 每个条目的形态自洽（类型枚举、必填条件取值、enum 必须有取值）。
-	allowedTypes := map[string]bool{"string": true, "string[]": true, "enum": true, "object": true}
+	//
+	// `integer` 是给**对象子字段**（`window.width`/`window.height`）用的：它们的真实判据是
+	// 正整数（`appcfg.go` 的 `WindowSizeMin`–`WindowSizeMax`），此前表里错写成 `string`，
+	// 生成物据此把作者指向 `"1280px"`（实测发布期 `APP_CONFIG_INVALID`）—— 见 2026-10-22
+	// 生产化评审 D-03。
+	allowedTypes := map[string]bool{"string": true, "string[]": true, "enum": true, "object": true, "integer": true}
 	allowedWhen := map[string]bool{"": true}
 	for _, v := range appcfg.RequiredWhenValues {
 		allowedWhen[v] = true
 	}
 	for _, f := range specFields {
 		if !allowedTypes[f.Type] {
-			t.Errorf("%s: type=%q 不在允许集合 {string,string[],enum,object}", f.Key, f.Type)
+			t.Errorf("%s: type=%q 不在允许集合 {string,string[],enum,object,integer}", f.Key, f.Type)
 		}
 		if f.Desc == "" {
 			t.Errorf("%s: Desc 不能为空（它就是生成物里给作者看的那句话）", f.Key)
@@ -458,6 +463,57 @@ func TestFirstReleaseRequirementsMatchBehavior(t *testing.T) {
 	}
 }
 
+// TestWindowFieldTypesAreNumeric 锁定 2026-10-22 生产化评审的 D-03：
+//
+// `window.width` / `window.height` 的真实判据是**正整数**（`appcfg.go` 的
+// `WindowSizeMin`–`WindowSizeMax`，字符串/小数/0/负一律 `APP_CONFIG_INVALID`），
+// 而字段表此前把两者的 `Type` 写成 `string`、`Max` 空着 ⇒ 生成物（作者与 AI 唯一
+// 会读的字段表）把作者指向 `"1280px"` 这种写法。错了两版也没人红，因为没有判据。
+//
+// 判据：两张表（代码里的 `WindowFields()` 与提交的生成物 `window_fields`）都必须
+// 给出数字型 + 上限 = `WindowSizeMax`，且键集合与顺序固定为 ratio/width/height。
+func TestWindowFieldTypesAreNumeric(t *testing.T) {
+	numeric := map[string]bool{"integer": true, "number": true}
+	wantKeys := []string{
+		appcfg.FieldWindow + ".ratio",
+		appcfg.FieldWindow + ".width",
+		appcfg.FieldWindow + ".height",
+	}
+	check := func(where string, fields []appcfg.FieldSpec) {
+		t.Helper()
+		got := make([]string, 0, len(fields))
+		for _, f := range fields {
+			got = append(got, f.Key)
+		}
+		if !reflect.DeepEqual(got, wantKeys) {
+			t.Errorf("%s 的键 %v，want %v（顺序即文档顺序）", where, got, wantKeys)
+		}
+		for _, f := range fields {
+			if f.Key == appcfg.FieldWindow+".ratio" {
+				continue // ratio 是字符串（"W:H"）或浮点，形态不同
+			}
+			if !numeric[f.Type] {
+				t.Errorf("%s 的 %s type=%q，必须是数字型（正整数像素；写 string 会把作者指向 \"1280px\"）",
+					where, f.Key, f.Type)
+			}
+			if f.Max != appcfg.WindowSizeMax {
+				t.Errorf("%s 的 %s max=%d，want %d（与 WindowSizeMax 同源）",
+					where, f.Key, f.Max, appcfg.WindowSizeMax)
+			}
+		}
+	}
+
+	// ① 代码里的表（真源）。
+	check("WindowFields()", appcfg.WindowFields())
+
+	// ② 提交的生成物（TS/客户端/SKILL 读的是它）。
+	doc := loadSpecArtifact(t)
+	if len(doc.WindowFields) == 0 {
+		t.Fatal("生成物 appcfg.json 里没有 window_fields —— 重新生成")
+	}
+	check("appcfg.json#window_fields", doc.WindowFields)
+}
+
 // ===== 通用工具 =====
 
 // specArtifact 是 appcfg.json 的结构（只声明门禁用得到的部分；键名与生成物一致）。
@@ -469,6 +525,7 @@ type specArtifact struct {
 	AccessValues  []string           `json:"access_values"`
 	ConfigFields  []appcfg.FieldSpec `json:"config_fields"`
 	PublishFields []appcfg.FieldSpec `json:"publish_fields"`
+	WindowFields  []appcfg.FieldSpec `json:"window_fields"`
 }
 
 // loadSpecArtifact 读**提交的** appcfg.json（不是从 Go 常量现算：门禁要守的正是

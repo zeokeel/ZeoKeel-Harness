@@ -313,7 +313,7 @@ func (s *Sink) insert(ctx context.Context, batch []event) error {
 	args := make([]any, 0, len(batch)*callEventColumns)
 	for i := range batch {
 		m := batch[i].m
-		args = append(args, m.AppID, m.UserID, m.Outcome, m.ReasonCode, m.CPUMs, m.PeakMemory,
+		args = append(args, m.AppID, m.Version, m.UserID, m.Outcome, m.ReasonCode, m.CPUMs, m.PeakMemory,
 			m.HostCalls, m.HostCallMS, m.QueueWaitMS, m.ResponseSize, m.DBRows, m.DBBytes,
 			m.GuestExitCode, m.StderrTail, m.Evidence, batch[i].at)
 	}
@@ -322,7 +322,7 @@ func (s *Sink) insert(ctx context.Context, batch []event) error {
 }
 
 // callEventColumns 是 wasm_call_events 的写入列数(与 §4.9 字段表一一对应)。
-const callEventColumns = 16
+const callEventColumns = 17
 
 // buildInsertSQL 生成一条多值 INSERT:列顺序必须与 insert 的 args 顺序严格一致。
 // 单独成函数是为了让占位符拼接可被测试直接断言(拼接错了 PG 只会回一句
@@ -330,7 +330,7 @@ const callEventColumns = 16
 func buildInsertSQL(rows int) string {
 	var b strings.Builder
 	b.WriteString(`INSERT INTO wasm_call_events
-		(app_id, user_id, outcome, reason_code, cpu_ms, peak_memory_bytes, host_call_count,
+		(app_id, version, user_id, outcome, reason_code, cpu_ms, peak_memory_bytes, host_call_count,
 		 host_call_ms, queue_wait_ms, response_bytes, db_rows, db_bytes, guest_exit_code,
 		 stderr_tail, evidence, created_at) VALUES `)
 	for i := 0; i < rows; i++ {

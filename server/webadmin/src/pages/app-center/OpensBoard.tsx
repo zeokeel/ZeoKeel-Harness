@@ -21,6 +21,9 @@ import {
   classifyEndpointFailure,
   countText,
   numOrNull,
+  opensHealthNotice,
+  opensJobText,
+  parseOpensSummaryHealth,
   rankTopApps,
   requireOpensSummary,
   shapeDrift,
@@ -28,6 +31,7 @@ import {
   trendValues,
   type EndpointFailure,
   type OpensSummary,
+  type OpensSummaryHealth,
   type OpensTrendPoint,
 } from './opens-contract'
 
@@ -74,6 +78,14 @@ export default function OpensBoard() {
   const [days, setDays] = useState('7')
   const [topN, setTopN] = useState('10')
   const [data, setData] = useState<OpensSummary | null>(null)
+  /**
+   * 汇总健康读数（审计 C-14 / 反证 F-6）：`aggregated_until` / `stale`。
+   *
+   * 与 `data` 分开存：这两个键**当前还没被服务端下发**（见 opens-contract 的
+   * `OpensSummaryHealth` 注释），所以不能塞进 `OpensSummary`（parity 用例对那里做键集相等
+   * 对拍）；缺失时界面必须如实说"服务端未下发"，而不是默认"数据是最新的"。
+   */
+  const [health, setHealth] = useState<OpensSummaryHealth | null>(null)
   const [failure, setFailure] = useState<EndpointFailure | null>(null)
   const [loading, setLoading] = useState(true)
   const [loaded, setLoaded] = useState(false)
@@ -95,14 +107,17 @@ export default function OpensBoard() {
       const parsed = requireOpensSummary(raw)
       if (!parsed.ok) {
         setData(null)
+        setHealth(null)
         setFailure(shapeDrift('打开次数', parsed.detail))
         return
       }
       setData(parsed.value)
+      setHealth(parseOpensSummaryHealth(raw))
       setLoaded(true)
     } catch (err: unknown) {
       if (current !== seq.current) return
       setData(null)
+      setHealth(null)
       setFailure(classifyEndpointFailure(err, '打开次数', OPENS_SUMMARY_PATH))
     } finally {
       if (current === seq.current) setLoading(false)
@@ -212,6 +227,37 @@ export default function OpensBoard() {
             <p className="text-xs text-destructive" data-testid="opens-capped">
               请求窗口长于明细保留期（{retentionDays} 天）：服务端已收敛到保留期并如实回报
               （capped=true）—— 这里显示的是保留期内可算的窗口，不是全部历史。
+            </p>
+          )}
+
+          {/* 汇总健康（C-14 / 反证 F-6）：**没有读数就说"没有读数"**。
+              停摆的作业与"没人用"在数字上同形，唯一的区分面就是这一行。 */}
+          {data !== null && health !== null && (() => {
+            const notice = opensHealthNotice(health)
+            return (
+              <p
+                data-testid={notice.kind === 'missing' ? 'opens-health-missing' : notice.kind === 'stale' ? 'opens-health-stale' : 'opens-health-ok'}
+                className={
+                  notice.kind === 'stale'
+                    ? 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'
+                    : 'text-xs text-muted-foreground'
+                }
+              >
+                {notice.text}
+              </p>
+            )
+          })()}
+          {/* 判陈旧的**证据**（服务端 stale_reasons）与服务端下发的作业读数。
+              这两块是 C-14 的"停摆与没人用可辨"落点：只说 stale 而没有理由/读数，
+              运维仍然不知道是"作业没起"还是"从来没数据"。 */}
+          {data !== null && health !== null && health.staleReasons.length > 0 && (
+            <ul data-testid="opens-health-reasons" className="list-disc space-y-0.5 pl-5 text-xs text-destructive">
+              {health.staleReasons.map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          )}
+          {data !== null && health !== null && (
+            <p data-testid="opens-health-job" className="text-xs text-muted-foreground">
+              {opensJobText(health.job)}
             </p>
           )}
 

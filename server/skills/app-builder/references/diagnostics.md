@@ -14,17 +14,42 @@
 诊断接口：`GET /api/client/v2/apps/wasm/:app_id/diagnostics`
 
 - 缺省返回 50 条，最多 200 条（`limit` 参数）。
-- 响应是**两层包装**：`{"diagnostics":{"app_id":…,"app_enabled":…,"app_frozen":…,
-  "app_deleted":…,"since":…,"window_minutes":…,"retention_days":…,
-  "summary":{…},"failures":[…],"hints":[…]}}` —— 概览在 `diagnostics.summary`、
-  单条在 `diagnostics.failures[]`、建议在 `diagnostics.hints`（**不在** summary 里）。
-- 概览字段：`total` / `ok` / `error` / `killed` / `failed`、按次数降序的 `reasons[]`
-  （每条带 `reason_code`、`count`、`hints`）、去重后的 `hints[]`、
-  `max_cpu_ms` / `max_peak_memory_bytes` / `max_queue_wait_ms` / `last_failure_at`。
-- 单条失败记录：`created_at` / `outcome` / `reason_code` / `guest_exit_code` /
+- 响应是**两层包装**：`{"diagnostics":{…}}`，顶层字段集（与 `server/internal/wasmapp/api/read.go`
+  的 `diagnosticsPayload` 逐项对应）：
+
+  | 字段 | 含义 |
+  | --- | --- |
+  | `app_id` | 应用标识（回显，便于多应用对照） |
+  | `app_enabled` | 是否上架（`false` ⇒ 打开是 410，不是应用报错） |
+  | `app_frozen` | 是否被冻结（`true` ⇒ 一律 404「已被管理员停用」，与"不存在"可辨） |
+  | `app_deleted` | 是否已软删（保留期内；诊断**仍然可读**） |
+  | `access` | 应用配置里的访问模式（`login` / `whitelist`） |
+  | **`whitelist_enforced`** | **恒为 `false`**：平台**不比对**白名单（`access=whitelist` 只是给应用自己读的名单）⇒ 别以为平台替你拦人了；需要限制就在应用里自己判，并给名单外用户一页明确拒绝 |
+  | `since` / `window_minutes` / `retention_days` | 统计窗口起点、窗口分钟数、调用事件保留天数（7 天） |
+  | **`events_dropped`** | 环形缓冲满而**丢弃的事件条数**（0 也下发）。`>0` ⇒ 失败数是**抽样**、真实失败可能更多 |
+  | **`events_flush_failed`** | 写库失败而整批丢弃的条数（0 也下发） |
+  | **`events_available`** | 事件通道**是否接线**。`false` ⇒ 上面两个 0 **不是**"没丢过"，而是"根本没在记"；`failures` 为空同样不代表健康 |
+  | **`limits`** | **该应用当前生效的并发四轴**：`app_running` / `app_queue` / `user_per_app_running` / `user_per_app_queued` + `source`（`override` = 该应用被单独覆盖；`global` = 跟随全局）。429 判据看这里，不要看全局默认值 |
+  | `summary` | 概览：`total` / `ok` / `error` / `killed` / `failed`、按次数降序的 `reasons[]`（每条带 `reason_code`、`count`、`hints`）、去重后的 `hints[]`、`max_cpu_ms` / `max_peak_memory_bytes` / `max_queue_wait_ms` / `last_failure_at`、按**执行版本**聚合的 `versions[]`（`version` / `total` / `failed` / `last_failure_at`；空串 = 0089 前老数据） |
+  | `failures[]` | 单条失败记录（见下） |
+  | `hints[]` | 平台给的建议（**不在** `summary` 里；顶层与 `reasons[].hints` 合并去重） |
+
+- 单条失败记录：`created_at` / **`version`**（这次失败实际执行的版本；空串 = 0089 前老数据）/
+  `outcome` / `reason_code` / `guest_exit_code` /
   `stderr_tail`（最多 2 KiB）/ `evidence`（分类依据，见 §3 的 `RUNTIME_MEMORY`）/
   `cpu_ms` / `peak_memory_bytes` / **`db_rows` / `db_bytes`**（这次请求的应用库读写量
   ——"写没写进去、写了几行"的直接判据）。
+
+三条**先看字段再看数字**的判据（A3/A6 修复后新增，全部 0 也下发）：
+
+1. `events_available=false` ⇒ 这一页什么都证明不了（没有事件通道）。
+2. `events_dropped + events_flush_failed > 0` ⇒ 失败计数偏低的可能原因，不要据此说"在好转"。
+3. `whitelist_enforced=false` ⇒ "谁能用"由应用自己判；平台侧只看"登录 + 归属"。
+
+版本维度（0089 起）的固定用法：**回滚/发新版后先对比 `summary.versions[]`** —— 旧版本
+`failed/total` 与新版本对比才知道"回滚有没有止血、新版本是不是更差"；单条 `failures[].version`
+回答"这次失败是哪个版本跑的"（不要拿 `app_releases` 的最新版本当答案）。
+**空版本桶**：0089 前老数据没有版本；此外**准入前失败**（队列满/墙钟/鉴权/预算等还没进入执行的请求）也可能没有版本 —— 看到空串先看 `reason_code` 是否属于准入层，不要笼统当成"旧数据"。
 
 `outcome` 的三种取值：`ok`（正常返回）、`error`（应用或宿主报错）、`killed`
 （预算耗尽/被取消/被杀）。**`error` 与 `killed` 都是失败**，不要只看 `error`。
@@ -50,10 +75,11 @@
 | `HOST_CALL_OVER_BUDGET` | 哪一类宿主调用 | 单条 SQL 不超过 5 秒；把长任务拆开 |
 | `DB_DENIED` | 具体被拒的语句，以及 `details.reason` | 一次只发一条语句；只用 `SELECT`/`INSERT`/`UPDATE`/`DELETE`；建表走 `db.define`；不碰保留行号列。**参数化不是平台检查项**：字面量 SQL 一样通过，值要用 `args` 占位自己挡住注入。`reason = statement_timeout` 时**不是 SQL 写错**，而是单语句超过 5 秒（加条件/加 `LIMIT`，或拆成多次调用） |
 | `DB_LIMIT` | 是不是「库写满」（507 **只有**这一个含义，外加单行超过 168 KiB 这一种"一行都返回不了"） | 库满 100 MB 是硬上限（平台不给扩容旋钮）⇒ 清理历史数据或做汇总表。**行数/字节超限不报错**：`db.query` 截断并置 `truncated=true` ⇒ 按它分页（`LIMIT`/`OFFSET`）；语句超时看上一行的 `DB_DENIED` |
-| `APP_QUEUE_FULL` | `max_queue_wait_ms` | 应用侧并发压到 1；收到 429 按 `Retry-After`（1 秒）退避，不要立刻重试；把多次小请求合并 |
+| `APP_QUEUE_FULL` | **先读 `diagnostics.limits` 与它的 `source`**（该应用当前生效的 `app_running` / `app_queue` / `user_per_app_running` / `user_per_app_queued`，以及是 `override` 还是 `global`），再看 `max_queue_wait_ms` | 应用侧并发压到 1；收到 429 按 `Retry-After`（1 秒）退避，不要立刻重试；把多次小请求合并。`source=override` ⇒ 这个应用被单独降过额，找运维确认是不是有意为之（不要按全局默认值推算） |
 | 客户端 AI loop 错误码（`app_ai_denied` / `app_ai_unavailable` / `app_ai_invalid` / `ai_balance_insufficient` / `ai_rate_limited` / `ai_cancelled`） | 应用前端的 `fetch('/__zeokeel/ai/chat')` 返回（**不是** wasm 的 `reason_code`：wasm 侧没有任何 AI 能力，日志里不会出现 AI 宿主错误码） | 未授权 ⇒ 引导使用者到**应用详情页的 AI 面板**点「撤销授权」旁边的授权入口重新授权（撤销入口只有这一个，设置页里没有）；宿主不可用 ⇒ 提示稍后重试，**不要绕回 wasm 侧自己实现**；请求体不合法 ⇒ 检查 `messages` 条数与单条长度；余额不足 ⇒ 提示去桌面客户端看余额，**不显示金额、不要重试**；限流 ⇒ 稍后重试、不要在循环里猛调；`ai_cancelled` ⇒ 页面关闭/主动取消导致的正常收尾，不要当故障 |
 | `AUTH_REQUIRED` | `auth.mode` / 请求是否来自登录态 | 平台一律要求登录（没有匿名面；历史 `public` 配置读取侧按 `login` 处理）：确认请求来自已登录的客户端，或引导用户先登录 |
 | `MODULE_KILLED` | 请求是否被取消（用户关页面/超时） | 与超时同处理：拆小、缩短单次工作 |
+| `MODULE_LOAD_QUEUED` | **平台侧排队**（冷编译/冷加载在平台内是串行的） | 这不是你的应用出错：**稍后重试即可**（503，可恢复）。持续出现说明平台在反复冷编译 ⇒ 降低首次打开并发、减小应用体积/首次编译耗时；运维可调 `compile_concurrency`。已应用的 `details.queue_depth` 是当时的排队数 |
 
 平台侧与发布侧的错误码（`IMPORT_*`、`SECTION_*`、`COMPILE_*`、`APP_CONFIG_INVALID`、
 `VERSION_*` 等）见 `references/abi.md` 的失败语义表 —— 它们大多在**预检**阶段就会返回，
@@ -63,14 +89,15 @@
 
 - 同一个 `reason_code` 反复出现：**它一定是确定性的**，改动代码而不是重试。
 - 只在人多的时候失败：先看队列（`APP_QUEUE_FULL` / 429）与单语句耗时，
-  不要靠"调大并发"解决 —— 并发对作者不可调（运维可在控制台「应用中心 → 限制项」改全局值）：
-  同一应用默认最多 4 个请求并发（读并发；**写仍串行**），但单个用户在同一应用内默认只有 1 路；
+  不要靠"调大并发"解决 —— 并发对作者不可调（运维可在控制台「应用中心 → 限制项」改全局值，
+  也可在**应用详情 → 限流**里对单个应用覆盖，默认继承全局）：
+  同一应用默认最多 4 个请求并发（读并发；**写仍串行**），单个用户在同一应用内默认 2 路；
   队列 32、每用户同应用排队 4 个、每用户跨应用在跑 4 个、全局实例 32 都是**默认值**，
   不是固定值（队列可调到 4096、全局实例可调到 256），队列满即 429。
 - 只在某些人身上失败：先看"无权限页显示的那个账号"是否与白名单拼写一致
   （平台不校验账号是否存在）。
 
-## 4. 看数据：schema 与 rows（2026-09-21 新增）
+## 5. 看数据：schema 与 rows（2026-09-21 新增）
 
 "数据对不对"这一类问题，诊断答不了（它只有失败码与计量）。平台补了**只读数据面**，
 两条都是**仅发布者本人**（他人一律 404，与"应用不存在"同形），且每次调用写审计：

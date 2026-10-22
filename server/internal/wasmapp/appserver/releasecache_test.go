@@ -423,7 +423,7 @@ func TestReleaseCache_IdleSweepFreesEntries(t *testing.T) {
 func TestReleaseCache_ConcurrentRequestsAreSafe(t *testing.T) {
 	const workers = 16
 	// 并发用例不再需要"放宽匿名限流"的 mutate（匿名面与限流器随 W4 一起删除），
-	// 但要放宽**队列的单用户同应用并发**（§4.6 默认 1）：本用例要压的是缓存的并发
+	// 但要放宽**队列的单用户同应用并发**（§4.6 默认 2）：本用例要压的是缓存的并发
 	// 正确性，16 个 worker 注入同一个员工时会被队列按设计串行化。
 	e := newEnv(t, func(o *Options) {
 		o.Scheduler = queue.New(queue.Options{

@@ -127,6 +127,23 @@ async function exportCsv(): Promise<string> {
   return captured
 }
 
+describe('按应用查审计（WASM 平台审计的 app 维度）', () => {
+  it('应用 ID 过滤必须进请求参数，且与操作者/动作可叠加', async () => {
+    mockRequest.mockClear()
+    render(<Audit />)
+    await waitForAuditRows(LOGS.length)
+    fireEvent.change(screen.getByLabelText('按应用 ID 过滤'), { target: { value: ' app-a ' } })
+    fireEvent.click(screen.getByRole('button', { name: '筛选' }))
+    await waitFor(() => {
+      const urls = mockRequest.mock.calls.map(([p]) => String(p)).filter((p) => p.includes('/audit?'))
+      const hit = urls.find((u) => u.includes('app_id=app-a'))
+      if (!hit) throw new Error(`没有带 app_id 的审计请求：${urls.join(' | ')}`)
+      expect(hit).toContain('page=1')
+      expect(hit).toContain('size=50')
+    })
+  })
+})
+
 describe('审计日志 CSV 导出(公式注入 + BOM)', () => {
   it("以 = + - @ Tab CR 开头的单元格加 ' 前缀,正常值不动", async () => {
     const csv = await exportCsv()
@@ -148,8 +165,8 @@ describe('审计日志 CSV 导出(公式注入 + BOM)', () => {
     // 正文:detail 里的逗号与引号仍按 CSV 规则加引号 + 双写引号
     expect(csv).toContain('"ip=1.2.3.4, ua=""curl"""')
     // 表头/首行可被解析,且攻击者那格已被中和
-    expect(csv.split('\n')[0]).toBe('id,username,action,detail,created_at')
-    expect(csv.split('\n')[1]).toBe(`1,'${EVIL_DDE},login_fail,ip=10.0.0.9,2026-09-13T10:00:00+08:00`)
+    expect(csv.split('\n')[0]).toBe('id,app_id,username,action,detail,created_at')
+    expect(csv.split('\n')[1]).toBe(`1,,'${EVIL_DDE},login_fail,ip=10.0.0.9,2026-09-13T10:00:00+08:00`)
     // 真的发生了一次下载(锚点点击记录),文件名 = 审核页的当日审计文件名。
     // 少了这条,"导出"可以静默不点锚点而用例全绿。
     expect(downloadAnchors).toEqual([
@@ -413,6 +430,10 @@ const DERIVED_ACTIONS: Record<string, string> = {
   agent_preset_revoke: 'agentshare/routes.go 的 action 变量',
   agent_grant: 'marketplace/agent_api.go 的 action 变量',
   agent_revoke: 'marketplace/agent_api.go 的 action 变量',
+  // 管理端数据面（C-05）的两条：动作名先落在**局部变量**再传进 auditApp，字面量闭包看不见
+  // （与上面几条同形态）。行浏览是管理员在详情抽屉里点「数据」时产生的，必须看得懂。
+  wasm_app_rows_view: 'wasmapp/api/rows.go 的 action 变量（respondRows）',
+  wasm_app_rows_view_unmasked: 'wasmapp/api/rows.go 的 action 变量（respondRows 的 unmask 分支）',
 }
 
 /**
@@ -441,6 +462,24 @@ const LEGACY_ACTIONS: Record<string, string> = {
 }
 
 /**
+ * 服务端**尚未落地**、但契约已经定名的动作（当前只有 per-app 限流覆盖一条）。
+ *
+ * 为什么需要这一桶：管理台必须先把中文标签登记好 —— 否则服务端一落地，审计页当天就把
+ * 这批行渲染成裸 id（R1-uxw-3 的现场形态）。而方向②要求"标签表每一项都能追溯到服务端"，
+ * 此时服务端泳道还没合入 ⇒ 两条判据互相打架。
+ *
+ * **这一桶不是免检**：下面的用例要求每个动作名当前**还不是**服务端真实写点（按调用图
+ * 闭包判定）。服务端一旦写下 `wasm_app_limits_change`，那条用例立刻红，报错里直接说
+ * "把它从 PENDING_SERVER_ACTIONS 删掉" —— 此后由方向①接管（真实写点必须有标签）。
+ * 这样"待落地"是有期限的状态，不会退化成永久豁免。
+ */
+const PENDING_SERVER_ACTIONS: Record<string, string> = {
+  // 2026-10-22：`wasm_app_limits_change` 已由服务端 `api/admin_limits_app.go` 真实写入
+  // （调用图闭包判定），按本桶的期限纪律**已删除登记** —— 此后由方向①（真实写点必须
+  // 有标签）接管。当前没有"契约已定名、服务端未落地"的动作。
+}
+
+/**
  * 直接写 `audit_logs` 行的函数登记表（**完整性判据**：源码里出现 `INSERT INTO audit_logs`
  * 的函数若不在本表 ⇒ 红）。
  *
@@ -465,11 +504,22 @@ const AUDIT_STORE_SINKS: ReadonlyArray<{ name: string; actionArg: number; reason
   { name: 'AuditLogTx', actionArg: 2, reason: '调用方事务内追加（P0-2：改配置即改钱的路径必须同事务）' },
 ]
 
-/** `serverstore` 之外的审计出口（方法 / 注入的闭包字段）；同样要过完整性判据。 */
+/**
+ * `serverstore` 之外的审计出口（方法 / 注入的闭包字段）；同样要过完整性判据。
+ *
+ * 同一个**字段名**允许多种签名（不同包的注入点各自声明自己的形参位）：
+ * 2026-10-22 的生命周期重设计给 `retirement.Scheduler` 加了
+ * `Audit func(appID, username, ACTION, detail) error`，而既有的
+ * `handlers.Options.Audit` / `appseed.Options.Audit` 是 `func(username, ACTION, detail)`。
+ * 两者都叫 `Audit`、动作形参位分别是 2 与 1 —— 登记表因此按"名字 → 允许的形参位集合"
+ * 判定（少登记任何一个形态都会让那个包的写点逃出动作对拍）。
+ */
 const AUDIT_FORWARDING_SINKS: ReadonlyArray<{ name: string; actionArg: number; reason: string }> = [
   { name: 'auditApp', actionArg: 2, reason: 'wasmapp/api 方法 (appID, username, ACTION, detail) → AuditLogApp' },
   { name: 'auditOrg', actionArg: 1, reason: 'wasmapp/api 方法 (username, ACTION, detail) → 注入的 Audit 或 AuditLog' },
   { name: 'Audit', actionArg: 1, reason: 'func(username, ACTION, detail) 型注入字段（handlers.Options / appseed.Options）' },
+  { name: 'Audit', actionArg: 2, reason: 'func(appID, username, ACTION, detail) 型注入字段（retirement.Scheduler，2026-10-22 生命周期重设计）' },
+  { name: 'AuditApp', actionArg: 2, reason: 'func(appID, username, ACTION, detail) 型注入字段（appseed.Options：播种改走部署事务，审计要带 app_id）' },
 ]
 
 /** 闭包种子 = 全部登记的审计出口。 */
@@ -573,12 +623,38 @@ describe('审计动作表 = 服务端写点真源（R1-uxw-3 双向对拍）', (
 
   it('方向②:标签表每一项都能追溯到服务端（活跃写点 / 参数传入 / 已下线三选一）', () => {
     const unexplained = Object.keys(ACTION_LABEL).filter(
-      (a) => !SERVER_AUDIT_ACTIONS.has(a) && !(a in DERIVED_ACTIONS) && !(a in LEGACY_ACTIONS),
+      (a) =>
+        !SERVER_AUDIT_ACTIONS.has(a) &&
+        !(a in DERIVED_ACTIONS) &&
+        !(a in LEGACY_ACTIONS) &&
+        !(a in PENDING_SERVER_ACTIONS),
     )
     expect(
       unexplained,
       `这些标签既没有活跃写点、也不在白名单里（凭空发明的动作名？）：${unexplained.join(', ')}`,
     ).toEqual([])
+  })
+
+  it('待落地自证:PENDING 的动作名还不是服务端真实写点（落地后必须把它从桶里删掉）', () => {
+    // 判据用**调用图闭包**（= 服务端真的会写这个动作），不是"源码里出现过这个串"：
+    // 契约文档、注释、detail 文案里提到动作名都不该让人去改这张表。
+    const landed = Object.keys(PENDING_SERVER_ACTIONS).filter((a) => SERVER_AUDIT_ACTIONS.has(a))
+    expect(
+      landed,
+      `这些动作已经是服务端真实写点：请从 PENDING_SERVER_ACTIONS 删掉（此后由方向①接管，` +
+        `真实写点必须有标签）：${landed.join(', ')}`,
+    ).toEqual([])
+
+    // 三条桶不许重叠：同一动作要么"活跃写点"，要么"参数传入"，要么"已下线"，要么"待落地"。
+    const overlap = Object.keys(PENDING_SERVER_ACTIONS).filter(
+      (a) => a in DERIVED_ACTIONS || a in LEGACY_ACTIONS,
+    )
+    expect(overlap, 'PENDING 桶与 DERIVED/LEGACY 重叠：一个动作只能有一种追溯口径').toEqual([])
+
+    // 标签必须**现在就**在：这一桶存在的唯一目的就是"服务端落地当天审计页不出裸 id"。
+    for (const a of Object.keys(PENDING_SERVER_ACTIONS)) {
+      expect((ACTION_LABEL[a] ?? '').trim(), `${a} 必须已有中文标签`).not.toBe('')
+    }
   })
 
   it('白名单自证:DERIVED 的动作名在源码里仍有字面量，LEGACY 的动作名真的已消失', () => {
@@ -737,17 +813,21 @@ describe('审计写入面完整性（R13-F F-07 / W-2）', () => {
     const derived = AUDIT_GRAPH.auditFields
     expect([...derived.keys()], '审计注入出口字段派生为空：解析器失效或面变了').toContain('Audit')
     const derivedNames = [...derived.keys()].sort()
-    const registeredFields = AUDIT_FORWARDING_SINKS.filter((s) => derivedNames.includes(s.name) || s.name === 'Audit')
-      .map((s) => s.name)
-      .sort()
+    // 同名多签名 ⇒ 按名字去重后对拍（每个名字下允许登记多个形参位）。
+    const registeredFields = [...new Set(
+      AUDIT_FORWARDING_SINKS.filter((s) => derivedNames.includes(s.name) || s.name === 'Audit').map((s) => s.name),
+    )].sort()
     expect(
       derivedNames.filter((n) => !AUDIT_FORWARDING_SINKS.some((s) => s.name === n)),
       '新增了 func(…action…) 型字段但没登记为审计出口（它的调用点会逃出动作对拍）',
     ).toEqual([])
     expect(registeredFields).toEqual(derivedNames)
     for (const name of derivedNames) {
-      const entry = AUDIT_FORWARDING_SINKS.find((s) => s.name === name)!
-      expect(entry.actionArg, `${name} 的动作形参位与声明不一致`).toBe(derived.get(name)!.actionArg)
+      const declared = AUDIT_FORWARDING_SINKS.filter((s) => s.name === name).map((s) => s.actionArg)
+      expect(
+        declared,
+        `${name} 的动作形参位与声明不一致（派生 ${derived.get(name)!.actionArg}，登记 ${declared.join('/')}）`,
+      ).toContain(derived.get(name)!.actionArg)
     }
   })
 

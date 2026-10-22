@@ -46,7 +46,7 @@ export const zh = {
   'appCenter.noResultsHint': '换个关键词，或清掉「我发布的」筛选',
   // 空态 ③：可见的每一行都是下架（§19 Q2「全部下架（说明原因与联系负责人）」）。
   'appCenter.allDisabled': '这些应用都已下架',
-  'appCenter.allDisabledHint': '下架后访问会返回 410 Gone（数据与链接都还在）。需要恢复请联系发布者或管理员。',
+  'appCenter.allDisabledHint': '下架后应用在客户端里打不开（数据仍然保留、可恢复）。需要恢复请联系发布者或管理员。',
   'appCenter.showMore': '显示更多（还有 {n} 个）',
 
   // ---- 分享（F6：只有深链；§19 Q6：未注入渠道 scheme 时**不渲染**）----
@@ -84,6 +84,19 @@ export const zh = {
   'appCenter.ai.title': '应用 AI',
   'appCenter.ai.intro': '这个应用想用 AI 跟你对话。只发送本次对话内容；平台会按你的账号记录这次调用，应用之间互相看不到。',
   'appCenter.ai.toolsNote': '应用 AI 只有对话：没有工具、不能读写文件、不能使用连接器与记忆。',
+  // F-08（2026-10-22 审计）：详情页同时摆着两个"AI"，界面上不说关系 → 用户以为
+  // "允许了应用 AI"就等于"允许 AI 读数据"。这两条把两者**分开说**并相互指路：
+  //   - 应用内助手：只有对话、没有工具（`ai-chat.ts` 的工具集是空的）；
+  //   - 构建助手：通过 `wasm_app_rows` 读应用数据，需要**另一项**授权（数据面板里，默认关）。
+  'appCenter.ai.relation': '这是应用内的对话助手：只能聊天，没有工具。另有一个「构建助手」能在写代码/排障时读这个应用的数据 —— 那是另一项授权（在「数据」面板里，默认关闭），与应用 AI 互相独立。',
+  'appCenter.aiRowsRelation': '这项授权给的是「构建助手」（读应用库里的数据），不是上面那个应用内对话助手；两者互相独立，可以只开一个。',
+  // 「应用 AI 授权」汇总（F-09）：撤过的、授过的都在这一个清单里。
+  'appCenter.aiConsentTitle': '应用 AI 授权',
+  'appCenter.aiConsentHint': '这些是你在应用详情页点过「允许」的应用（按 用户 × 服务端 × 应用 记）。撤销后该应用下次调用会重新询问；应用数据读取授权是另一项，在各应用详情页的「数据」面板里。',
+  'appCenter.aiConsentRevokeAll': '全部撤销',
+  'appCenter.aiConsentRevoked': '已撤销：该应用下次调用会重新询问。',
+  'appCenter.aiConsentRevokedAll': '已全部撤销：这些应用下次调用都会重新询问。',
+  'appCenter.aiConsentRevokedSome': '已撤销 {n} 项；其余没有撤成功（宿主仍在放行），可以重试。',
   'appCenter.ai.allow': '允许',
   'appCenter.ai.deny': '不允许',
   'appCenter.ai.denied': '已拒绝：这个应用不能使用 AI。改主意就点「允许」。',
@@ -159,6 +172,9 @@ export const zh = {
   // 查重**没问成**（宿主/网络故障）：既不能说"可用"也不能说"被占用" ——
   // 说可用会放行一次注定失败的发布，说被占用会把一个合法的名字误杀。
   'appCenter.availabilityUnknown': '暂时无法确认该标识是否可用（不影响提交，提交时服务端会再判一次）',
+  // F-04：宿主软闸门 `version-unverified` 的提示条（与宿主 `app-window-copy.ts` 的
+  // `versionUnverifiedBanner` 同一句话 —— 两个渲染面必须说同一件事）。
+  'appCenter.versionUnverified': '无法确认最新版本，当前显示的内容可能不是最新的。',
   // 查重载荷认不出来（契约漂移）：与"查询失败"分开说，因为处置方式不同。
   'appCenter.availabilityShapeMismatch': '查重结果与客户端预期不一致，无法显示结论',
   'appCenter.availabilityShapeHint': '把这条交给平台维护者：通常意味着服务端刚改了查重字段名',
@@ -180,7 +196,10 @@ export const zh = {
   'appCenter.purpose': '用途',
   'appCenter.dataSensitivity': '数据敏感度',
   'appCenter.owner': '负责人',
-  'appCenter.declarationsHint': '用途 / 数据敏感度 / 负责人为首版必填；之后的版本可以沿用',
+  // F-02：文案必须与**行为**一致 —— 首版必填；发新版留空 = 服务端沿用上次声明
+  //（客户端发版时省略空字段，见 `buildPublishBody`；显式空串在服务端是"清空声明"）。
+  'appCenter.declarationsHint': '用途 / 数据敏感度 / 负责人：首版必填；发新版留空 = 沿用上一次声明',
+  'appCenter.declarationsInherited': '发新版可以不重填上面三项：留空的项由平台沿用上次声明的值（不会把旧声明清空）',
   // ---- 窗口声明（F3/§6）：三项都可留空 = 不声明（不是"锁了缺省比例"）----
   'appCenter.windowRatio': '宽高比（如 16:9）',
   'appCenter.windowWidth': '宽度（像素）',
@@ -192,7 +211,10 @@ export const zh = {
   'appCenter.invalidWindowSize': '窗口尺寸必须是正整数的像素值',
   // 平台**没有** data_sensitivity 的默认值（appcfg.json 的 hints 原话）：界面必须
   // 把这件事说出来，而不是替作者填一个（P1-3 第二条）。
-  'appCenter.dataSensitivityNoDefault': '数据敏感度没有平台默认值：需要你按实际情况声明（留空会被首版必填校验拒）',
+  'appCenter.dataSensitivityNoDefault': '数据敏感度没有平台默认值：首版必须按实际情况声明；发新版留空则沿用上次声明',
+  // F-03：本地递增校验与「建议下一版」按钮的文案（服务端仍是权威）。
+  'appCenter.versionNotIncremented': '版本号必须大于当前线上版本（版本号一经提交永久占位，被拒也不释放）',
+  'appCenter.suggestNextVersion': '建议下一版',
 
   // ---- 「对已有应用发新版」的预填与访问范围改动确认（P1-3）----
   'appCenter.publishNewVersion': '发新版',
@@ -221,11 +243,16 @@ export const zh = {
   'appCenter.takeOfflineAria': '下架该应用',
   'appCenter.bringOnline': '上架',
   'appCenter.bringOnlineAria': '上架该应用',
-  'appCenter.takeOfflineConfirm': '确认下架？所有访问者立刻收到 410 Gone。应用数据保留、链接不变，之后可以随时重新上架。',
+  // U-05（评审 2026-10-23，P1）：下架/删除**同时**清掉该应用 origin 的浏览器存储
+  // （宿主 `wasm-apps-host` 的 `clearAppStorage` → `session.clearStorageData({origin})`，
+  // 见 F-07 的实现与用例）。旧文案只说"应用数据保留"——那是**服务端**的数据，读者会
+  // 顺带以为应用里的本地数据也还在。两件事必须一起说清：服务端数据保留、浏览器本地
+  // 存储会被清理。冻结/解冻**不**清存储（只读快照），所以那条文案不动。
+  'appCenter.takeOfflineConfirm': '确认下架？所有访问者立刻收到 410 Gone。服务端数据保留、链接不变，之后可以随时重新上架；但同一台机器上这个应用的浏览器本地存储（localStorage / IndexedDB / Cookie 等）会被清理 —— 要留存的数据请放在应用的数据库里，别只存在浏览器里。',
   'appCenter.takeOfflineConfirmAction': '确认下架',
   'appCenter.deleteApp': '删除',
   'appCenter.deleteAria': '删除该应用',
-  'appCenter.deleteConfirm': '确认删除？不可恢复。应用标识与版本号永久保留；数据保留期以服务端返回的说明为准。',
+  'appCenter.deleteConfirm': '确认删除？不可恢复。应用标识与版本号永久保留；服务端数据的保留期以服务端返回的说明为准；同一台机器上这个应用的浏览器本地存储（localStorage / IndexedDB / Cookie 等）会被清理。',
   'appCenter.deleteConfirmAction': '确认删除',
   'appCenter.confirmCancel': '取消',
   // ---- 冻结 / 解冻（R5-B-7：发布者本人的出口）----
@@ -265,6 +292,8 @@ export const zh = {
   // 这些消息也会进 en 界面，所以必须走字典（发布块的同类中文是既有缺陷 R1-uxc-7，别扩散）。
   'appCenter.setPublishedShapeMismatch': '服务端返回的上下架结果里没有 enabled 字段（响应形状与客户端预期不一致）',
   'appCenter.setFrozenShapeMismatch': '服务端返回的冻结/解冻结果里没有 frozen 字段（响应形状与客户端预期不一致）',
+  // 恢复（设计 §5.5）：`changed` 决定"要不要清应用内本地数据"，形状漂移时**宁可不猜**。
+  'appCenter.restoreShapeMismatch': '服务端返回的恢复结果里没有 changed 字段（响应形状与客户端预期不一致）',
   'appCenter.deleteShapeMismatch': '服务端没有确认删除（响应里没有 deleted=true）',
   'appCenter.diagnosticsShapeMismatch': '服务端返回的诊断结果形状与客户端预期不一致',
   'appCenter.schemaShapeMismatch': '服务端返回的表结构形状与客户端预期不一致',
@@ -312,6 +341,13 @@ export const zh = {
   // ---- 异渠道深链的一次性 toast（§5.3/§19 Q5 **逐字**冻结）----
   'appCenter.toast.foreignDeepLink': '这个链接属于另一家企业的客户端，请让对方用你们客户端的『复制链接』重发',
   'appCenter.toast.dismiss': '关闭提示',
+  // 2026-10-23 U-07：**未登录时深链入队必须有可见反馈**。
+  //
+  // 修前宿主把链接默默塞进队列（只有一行本地 warn），用户点同事发的
+  // `<scheme>://app/<id>` 后什么都看不到 —— 会以为链接坏了或客户端没装。
+  // `queued` 那一档复用面板路径的同一句话（`appCenter.openPendingLogin`，同口径）；
+  // `resumed` 那一档说清"登录后真的在打开它"，让自动续跑可感知（不是又一个静默开窗）。
+  'appCenter.toast.deepLinkResumed': '登录完成：正在打开刚才记住的应用…',
   // §5.2 的 `window` 字段：新开 vs 聚焦（拿到才说，拿不到不编）。
   'appCenter.openOpening': '正在打开…',
   'appCenter.openWindowOpened': '已打开',
@@ -325,6 +361,23 @@ export const zh = {
   'appCenter.openAppFrozenHint': '冻结是只读快照：数据仍然保留，但不能继续使用；如果你是发布者，可以在应用中心里解冻（解冻后还需重新上架），否则请联系平台管理员',
   'appCenter.openAppMissing': '打开失败：这个应用不存在（可能已被删除或改名）',
   'appCenter.openAppMissingHint': '刷新应用列表确认它还在；若确实已被删除，请向发布者索取新的应用',
+  // 2026-10-23 U-04：**下架 ≠ 不存在**。下架是可逆的发布者动作（数据仍在、恢复上架
+  // 后还是同一个应用），修前与 404 一起说"应用可能已被删除"——用户会去要一个新的。
+  // 这一档也不得提"链接/域名"：应用只在客户端里打开，没有可贴进浏览器的地址。
+  'appCenter.openAppOffline': '打开失败：这个应用已被发布者下架（数据仍然保留）',
+  'appCenter.openAppOfflineHint': '请联系应用发布者或平台管理员重新上架；恢复后仍在应用中心里以同一个应用打开，不需要重新安装',
+  // 2026-10-23 U-04：**"还没有可用版本" ≠ 不存在**。首版待审/被拒、或审核通过但部署
+  // 还没生效时，应用已登记在平台里，只是暂时打不开。
+  'appCenter.openNoRelease': '打开失败：这个应用已经登记，但还没有可用版本（审核通过后就能打开）',
+  'appCenter.openNoReleaseHint': '如果这是你自己的应用，请在应用中心里确认首版审核状态（待审/被拒/已撤回）；否则请联系应用发布者发布一个版本',
+  // 2026-10-23 U-04：平台 5xx / 平台版本确认不了。**下一步是重试**，不是升级客户端 ——
+  // 修前落进"响应与预期不一致…通常是版本不一致"，把一次平台抖动指成了版本问题。
+  'appCenter.openPlatformUnavailable': '打开失败：平台暂时不可用（服务端故障或网络不通）',
+  'appCenter.openPlatformUnavailableHint': '稍后重试即可；持续失败请把详情交给平台维护者（这是平台侧问题，不需要重装或升级客户端）',
+  // 2026-10-23 U-04：**403 ≠ 未登录**。审计/受限账号、白名单外的账号登录多少次都不会
+  // 通过；修前与 401 一起显示"客户端尚未登录，请先登录"。
+  'appCenter.openNotPermitted': '打开失败：当前账号没有权限打开这个应用（需要平台管理员调整权限）',
+  'appCenter.openNotPermittedHint': '审计/受限账号或不在白名单里的账号无法打开应用；如果应该有权限，请联系平台管理员调整账号或应用的访问名单',
   'appCenter.openProtocolNotReady': '打开失败：客户端内打开应用的能力还没就绪',
   'appCenter.openProtocolNotReadyHint': '稍后重试；若持续失败，请把客户端升级到与本服务端同版本后重启',
   // `proof-unavailable`（本页面根本不可能是宿主窗口）才是"一次请求都没发"；
@@ -390,12 +443,47 @@ export const zh = {
   'appCenter.releaseStatus.pending': '待审核',
   'appCenter.releaseStatus.rejected': '已拒绝',
   'appCenter.releaseCurrent': '线上',
+  // ---- 生命周期 UI（2026-10-22 重设计 §6.1/§8：部署历史 / 回滚 / 撤回）----
+  'appCenter.deployments': '部署历史',
+  'appCenter.deploymentsLoading': '正在读取部署历史…',
+  'appCenter.deploymentsFailed': '部署历史读取失败',
+  'appCenter.deploymentsEmpty': '还没有部署记录',
+  'appCenter.deploymentsShapeMismatch': '服务端返回的部署历史形状与客户端预期不一致（不是"没有部署记录"）',
+  'appCenter.deploymentCurrent': '当前',
+  'appCenter.deploymentsRecent': '最近',
+  'appCenter.rollback': '设为此版本（回滚）',
+  'appCenter.rollbackHint': '回滚 = 用这个已通过的版本再部署一次：不重传、不重审、追加一条部署记录',
+  'appCenter.rollbackDone': '已部署',
+  'appCenter.deployUnchanged': '线上已经是这个版本（没有变化）',
+  'appCenter.withdraw': '撤回',
+  'appCenter.withdrawHint': '仅待审版本可撤回；制品会被销毁，但版本号永久占用、不能复用',
+  'appCenter.withdrawConfirm': '确认撤回这个版本？撤回后版本号永久占用，需用更高的版本号重发。',
+  'appCenter.withdrawDone': '已撤回',
+  'appCenter.withdrawShapeMismatch': '服务端返回的撤回结果形状与客户端预期不一致',
+  'appCenter.deployShapeMismatch': '服务端返回的部署结果形状与客户端预期不一致',
+  'appCenter.releaseStatus.withdrawn': '已撤回',
   'appCenter.releaseReason': '拒绝理由',
   'appCenter.releaseReasonMissing': '管理员没有填写理由',
   // 「被拒后怎么办」：被拒版本的版本号**永久占位**、不能复用，唯一出路是升版本号重发。
   // 这句话必须与理由一起出现，否则作者只知道"没过"而不知道下一步做什么。
   'appCenter.releaseResubmitHint': '被拒后可以改好内容、用「更高的版本号」重新提交（例如 1.1.0 被拒 → 发 1.1.1）；被拒版本的版本号已永久占位，不能复用。',
   'appCenter.releasePendingHint': '待审核：线上仍是当前生效版本，审核通过后才会切换。',
+  // ---- 首版（线上还没有任何版本）----
+  // U-02（评审 2026-10-23，P1）：审核开启后发布的**第一个**版本停在 pending，而
+  // `current_release_id` 仍是 0 ⇒ 线上**没有**旧版本。旧实现在成功块里写死"线上仍是
+  // 旧版本"并照旧给出分享深链（同事点开得到"应用不存在"），首版应用还被目录整个隐藏
+  // （看不到状态、点不到撤回）。下面这组文案只在"首版"这一档出现，判据一律是服务端
+  // 下发的事实（`release.current_version === ''` / 目录行的 `first_release`），不做推断。
+  'appCenter.publishedPendingFirst': '首版待审核：审核通过后才会出现在应用中心（线上目前没有任何版本）',
+  'appCenter.publishedPendingFirstHint': '审核通过前同事打不开这个应用，也就没有可分享的链接。回到列表在「我发布的」里可以查看审核状态、被拒理由，或撤回这一版。',
+  'appCenter.publishedPendingUnknown': '待审核：审核通过后才会生效',
+  'appCenter.firstReleaseBadge': '尚未上线',
+  'appCenter.firstReleaseNotLive': '还没有上线：这一版通过审核后，应用才会出现在应用中心并能被打开。',
+  'appCenter.firstReleaseWithdrawnHint': '这一版已撤回：线上仍没有任何版本（应用标识仍被你占用，发新版才能上线）。',
+  'appCenter.firstReleaseRejectedHint': '首版被拒：按理由改好后用更高的版本号重发（被拒的版本号永久占用）。',
+  'appCenter.withdrawFirstRelease': '撤回这一版',
+  'appCenter.withdrawFirstReleaseAria': '撤回首版待审版本',
+  'appCenter.releasePendingFirstHint': '待审核（首版）：线上还没有任何版本，审核通过后才会首次上线。',
 } as const
 
 /** English mirror of {@link zh}. */
@@ -425,7 +513,7 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.noResults': 'No matching apps',
   'appCenter.noResultsHint': 'Try another keyword, or clear the "Published by me" filter',
   'appCenter.allDisabled': 'All of these apps are offline',
-  'appCenter.allDisabledHint': 'An offline app returns 410 Gone (data and link are kept). Ask the publisher or an administrator to bring it back online.',
+  'appCenter.allDisabledHint': 'An offline app cannot be opened from the client (its data is kept and can be restored). Ask the publisher or an administrator to bring it back online.',
   'appCenter.showMore': 'Show more ({n} left)',
 
   // ---- Sharing (F6: deep link only; §19 Q6: not rendered without a channel scheme) ----
@@ -453,6 +541,14 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.ai.title': 'App AI',
   'appCenter.ai.intro': 'This app wants to talk to you with AI. Only this conversation is sent; the platform records the call under your account and apps cannot see each other.',
   'appCenter.ai.toolsNote': 'App AI is chat only: no tools, no file access, no connectors and no memory.',
+  'appCenter.ai.relation': 'This is the in-app chat assistant: chat only, no tools. A separate “builder assistant” can read this app\'s data while writing code or debugging — that is a different authorization (inside the Data panel, off by default) and the two are independent.',
+  'appCenter.aiRowsRelation': 'This authorization is for the builder assistant (reading rows from the app\'s database), not for the in-app chat assistant above; they are independent and you can enable only one.',
+  'appCenter.aiConsentTitle': 'App AI authorizations',
+  'appCenter.aiConsentHint': 'These are the apps where you pressed “Allow” on the app detail page (remembered per user × server × app). Revoking makes that app ask again on its next call; reading app data is a separate authorization, found in the Data panel of each app.',
+  'appCenter.aiConsentRevokeAll': 'Revoke all',
+  'appCenter.aiConsentRevoked': 'Revoked: this app will ask again on its next call.',
+  'appCenter.aiConsentRevokedAll': 'All revoked: every one of these apps will ask again on its next call.',
+  'appCenter.aiConsentRevokedSome': 'Revoked {n}; the rest could not be revoked (the host still allows them) — you can retry.',
   'appCenter.ai.allow': 'Allow',
   'appCenter.ai.deny': 'Do not allow',
   'appCenter.ai.denied': 'Denied: this app cannot use AI. Use "Allow" to change your mind.',
@@ -506,6 +602,7 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.availabilityRetired': 'This App ID belongs to a deleted (retired) app; the ID and its version numbers are taken permanently',
   'appCenter.availabilityRetiredHint': 'A deleted App ID is never reused or released to others: please pick another name',
   'appCenter.availabilityUnknown': 'Could not confirm whether this App ID is available (you can still submit; the server checks again)',
+  'appCenter.versionUnverified': 'The latest version could not be confirmed; what you see may be out of date.',
   'appCenter.availabilityShapeMismatch': 'The availability result does not match what the client expects',
   'appCenter.availabilityShapeHint': 'Report this to the platform maintainer: the server likely renamed an availability field',
   'appCenter.version': 'Version',
@@ -526,7 +623,8 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.purpose': 'Purpose',
   'appCenter.dataSensitivity': 'Data sensitivity',
   'appCenter.owner': 'Responsible person',
-  'appCenter.declarationsHint': 'Purpose / data sensitivity / responsible person are required on the first release; later versions may keep them',
+  'appCenter.declarationsHint': 'Purpose / data sensitivity / responsible person are required on the first release; when publishing a new version leave them empty to keep the previous declarations',
+  'appCenter.declarationsInherited': 'Publishing a new version: leave any of the three declarations empty and the platform keeps the previously declared value (it is not cleared)',
   'appCenter.windowRatio': 'Aspect ratio (e.g. 16:9)',
   'appCenter.windowWidth': 'Width (px)',
   'appCenter.windowHeight': 'Height (px)',
@@ -535,7 +633,9 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.windowSizeLabel': 'Window size',
   'appCenter.invalidWindowRatio': 'Window ratio is invalid: use a ratio such as 16:9 or a decimal (valid range 0.25–4.0)',
   'appCenter.invalidWindowSize': 'Window size must be a positive pixel value',
-  'appCenter.dataSensitivityNoDefault': 'Data sensitivity has no platform default: declare it for your app (leaving it empty fails the first-release check)',
+  'appCenter.dataSensitivityNoDefault': 'Data sensitivity has no platform default: declare it on the first release; on a new version leave it empty to keep the previous declaration',
+  'appCenter.versionNotIncremented': 'The version must be higher than the live version (a submitted version number stays reserved forever, even if rejected)',
+  'appCenter.suggestNextVersion': 'Suggest next version',
 
   // ---- Publishing a new version of an existing app (prefill + access change) ----
   'appCenter.publishNewVersion': 'New version',
@@ -562,11 +662,11 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.takeOfflineAria': 'Take this app offline',
   'appCenter.bringOnline': 'Bring online',
   'appCenter.bringOnlineAria': 'Bring this app online',
-  'appCenter.takeOfflineConfirm': 'Take this app offline? Every visitor immediately gets 410 Gone. App data is kept, the link never changes, and you can bring it back online at any time.',
+  'appCenter.takeOfflineConfirm': 'Take this app offline? Every visitor immediately gets 410 Gone. Server-side data is kept and the link never changes, so you can bring it back online at any time — but this app\'s browser storage on this machine (localStorage / IndexedDB / cookies) is cleared. Put data that must survive in the app database, not only in the browser.',
   'appCenter.takeOfflineConfirmAction': 'Confirm take offline',
   'appCenter.deleteApp': 'Delete',
   'appCenter.deleteAria': 'Delete this app',
-  'appCenter.deleteConfirm': 'Delete this app? This cannot be undone. The app ID and version numbers stay reserved forever; the data retention window follows the note the server returns.',
+  'appCenter.deleteConfirm': 'Delete this app? This cannot be undone. The app ID and version numbers stay reserved forever; the retention window for server-side data follows the note the server returns; this app\'s browser storage on this machine (localStorage / IndexedDB / cookies) is cleared.',
   'appCenter.deleteConfirmAction': 'Confirm delete',
   'appCenter.confirmCancel': 'Cancel',
   'appCenter.frozen': 'Frozen',
@@ -598,6 +698,7 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.publishNewDisabled': 'This app is offline: publishing a new version now does NOT restore access (it still returns 410 Gone). Bring it online first, then publish.',
   'appCenter.setPublishedShapeMismatch': 'The take offline / bring online response has no enabled field, so this client cannot tell the app state',
   'appCenter.setFrozenShapeMismatch': 'The freeze / unfreeze response has no frozen field, so this client cannot tell the app state',
+  'appCenter.restoreShapeMismatch': 'The restore response has no changed field, so this client cannot tell whether the app was actually restored',
   'appCenter.deleteShapeMismatch': 'The server did not confirm the deletion (no deleted=true in the response)',
   'appCenter.diagnosticsShapeMismatch': 'The diagnostics response does not match the shape this client expects',
   'appCenter.schemaShapeMismatch': 'The schema response does not match the shape this client expects',
@@ -638,6 +739,7 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.openPendingLogin': 'This open was remembered: it continues automatically once you sign in — no need to click again',
   'appCenter.toast.foreignDeepLink': 'This link belongs to another company\'s client — ask the sender to use "Copy link" in your client and send it again',
   'appCenter.toast.dismiss': 'Dismiss',
+  'appCenter.toast.deepLinkResumed': 'Signed in: opening the app you clicked before signing in…',
   'appCenter.openOpening': 'Opening…',
   'appCenter.openWindowOpened': 'Opened',
   'appCenter.openWindowFocused': 'Focused (this app already had a window)',
@@ -645,6 +747,14 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.openAppFrozenHint': 'A freeze is a read-only snapshot: the data is still kept, but the app cannot be used; if you are the publisher you can unfreeze it in the App Center (bring it online again afterwards), otherwise contact your platform administrator',
   'appCenter.openAppMissing': 'Could not open: this app does not exist (it may have been deleted or renamed)',
   'appCenter.openAppMissingHint': 'Refresh the app list to confirm it is still there; if it was deleted, ask the publisher for the new app',
+  'appCenter.openAppOffline': 'Could not open: the publisher has taken this app offline (its data is still kept)',
+  'appCenter.openAppOfflineHint': 'Ask the app publisher or your platform administrator to bring it back online; once restored it opens from the App Center under the same app, with nothing to reinstall',
+  'appCenter.openNoRelease': 'Could not open: this app is registered but has no usable version yet (it opens once a version is approved)',
+  'appCenter.openNoReleaseHint': 'If this is your own app, check the first-release review state (pending / rejected / withdrawn) in the App Center; otherwise ask the publisher to publish a version',
+  'appCenter.openPlatformUnavailable': 'Could not open: the platform is temporarily unavailable (server fault or network unreachable)',
+  'appCenter.openPlatformUnavailableHint': 'Retry shortly; if it keeps failing, hand the details to the platform maintainers (this is a platform-side problem — no reinstall or client upgrade is needed)',
+  'appCenter.openNotPermitted': 'Could not open: this account is not permitted to open this app (a platform administrator must adjust access)',
+  'appCenter.openNotPermittedHint': 'Audit / restricted accounts and accounts outside the allow list cannot open apps; if you should have access, ask a platform administrator to adjust your account or this app\'s allow list',
   'appCenter.openProtocolNotReady': 'Could not open: in-client app support is not ready yet',
   'appCenter.openProtocolNotReadyHint': 'Retry in a moment; if it keeps failing, update the client to the same version as this server and restart',
   'appCenter.openProofUnavailable': 'Could not open: this page cannot prove it belongs to the client window, so no request was sent',
@@ -701,10 +811,39 @@ export const en: Record<keyof typeof zh, string> = {
   'appCenter.releaseStatus.pending': 'Pending review',
   'appCenter.releaseStatus.rejected': 'Rejected',
   'appCenter.releaseCurrent': 'Live',
+  'appCenter.deployments': 'Deployment history',
+  'appCenter.deploymentsLoading': 'Loading the deployment history…',
+  'appCenter.deploymentsFailed': 'Failed to load the deployment history',
+  'appCenter.deploymentsEmpty': 'No deployments yet',
+  'appCenter.deploymentsShapeMismatch': 'The deployment history does not match the shape this client expects (this is not "no deployments")',
+  'appCenter.deploymentCurrent': 'Current',
+  'appCenter.deploymentsRecent': 'Recent',
+  'appCenter.rollback': 'Deploy this version (roll back)',
+  'appCenter.rollbackHint': 'Rolling back deploys this approved version again: no re-upload, no re-review, one more deployment record',
+  'appCenter.rollbackDone': 'Deployed',
+  'appCenter.deployUnchanged': 'This version is already live (no change)',
+  'appCenter.withdraw': 'Withdraw',
+  'appCenter.withdrawHint': 'Only pending versions can be withdrawn; the artifact is destroyed but the version number stays reserved',
+  'appCenter.withdrawConfirm': 'Withdraw this version? The version number stays reserved forever; resubmit with a higher version.',
+  'appCenter.withdrawDone': 'Withdrawn',
+  'appCenter.withdrawShapeMismatch': 'The withdraw result does not match the shape this client expects',
+  'appCenter.deployShapeMismatch': 'The deploy result does not match the shape this client expects',
+  'appCenter.releaseStatus.withdrawn': 'Withdrawn',
   'appCenter.releaseReason': 'Rejection reason',
   'appCenter.releaseReasonMissing': 'the reviewer left no reason',
   'appCenter.releaseResubmitHint': 'After a rejection, fix the content and resubmit with a HIGHER version number (e.g. 1.1.0 rejected → publish 1.1.1); a rejected version number stays reserved forever and cannot be reused.',
   'appCenter.releasePendingHint': 'Pending review: the live version is unchanged until the review passes.',
+  // ---- First release (nothing is live yet) ----
+  'appCenter.publishedPendingFirst': 'First release pending review: it appears in the App Center only after approval (nothing is live yet)',
+  'appCenter.publishedPendingFirstHint': 'Colleagues cannot open this app before approval, so there is no shareable link yet. Go back to the list: under "Published by me" you can check the review status, read a rejection reason, or withdraw this release.',
+  'appCenter.publishedPendingUnknown': 'Pending review: it takes effect only after approval',
+  'appCenter.firstReleaseBadge': 'Not live yet',
+  'appCenter.firstReleaseNotLive': 'Not live yet: the app appears in the App Center and can be opened only after this release passes review.',
+  'appCenter.firstReleaseWithdrawnHint': 'This release was withdrawn: nothing is live yet (the app ID is still yours — publish a new version to go live).',
+  'appCenter.firstReleaseRejectedHint': 'First release rejected: fix it and resubmit with a higher version number (a rejected version number stays reserved).',
+  'appCenter.withdrawFirstRelease': 'Withdraw this release',
+  'appCenter.withdrawFirstReleaseAria': 'Withdraw the pending first release',
+  'appCenter.releasePendingFirstHint': 'Pending review (first release): nothing is live yet; it goes live for the first time after approval.',
 }
 
 /** Dictionary key type (zh is authoritative). */

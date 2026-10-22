@@ -105,11 +105,13 @@ appdb_cache_kib × (1 + app_db_readers) × 应用库句柄数（≤ max_instance
 
 1. **控制台**：运维 → 应用中心 → 限制项 → 把「单应用并发」改成 1 保存（`settings.wasm.limits`，
    即时生效、不重启）。适合单次观察/临时救火。
-2. **环境变量/代码**（全局默认）：把 `server/internal/wasmapp/limits/limits.go` 的
+2. **环境变量/代码**（全局默认）：把 `server/internal/limits/limits.go` 的
    `AppConcurrency` 改回 1 —— `AppRuntimeConcurrency` 是它的别名，队列默认值、控制台默认值
    （`applimits.Defaults()`）、生成物（`limits.json`/`limits.md`/SKILL references）都跟着它走；
-   改完必须重跑 `cd server && go generate ./internal/wasmapp/limits`，否则构建期门禁
+   改完必须重跑 `cd server && go generate ./internal/limits`，否则构建期门禁
    （`limits_gen_test.go` 的逐字节比对）会红。
+   （2026-10-22 订正：`internal/wasmapp/limits` 已在 feature-split 迁移到 `internal/limits`；
+   旧路径会让现场回退时先撞"文件不存在"。）
 3. **只读连接数**（与第 2 条配套）：`app_db_readers` 改回 4（或更小）；它只影响下一个句柄，
    回退不需要重启。
 
@@ -336,3 +338,44 @@ appdb 只知道"当前有没有事务"，不知道写的人是**谁**。于是�
 判据：`applimits.TestParseStoredIsForwardCompatible`（旧设置读出、已知字段保留、未知字段忽略、
 补齐后仍非法要拒、严格 Parse 仍拒片段）+ `cmd/server.TestWasmSavedLimitsFromOlderBuildStillApplies`
 （真装配：来源仍是 setting、128 MiB 进了 runtime、缺字段补默认、无待重启残留）。
+
+## 11. 订正（2026-10-22）：`user_per_app_running` 1 → 2，并新增 per-app 覆盖
+
+> 本文 §2.2 结尾那句「`user_per_app_running=1` 不变」以及 §2.3/§9 里"单用户同应用串行"
+> 的表述，**在 2026-10-22 之后不再成立**。本节是订正记录（历史正文不改写：它记录的是
+> 当时的事实与理由）。新的决策文档：`docs/decisions/2026-10-22-wasm-per-app-limits.md`。
+
+### 11.1 为什么还要再改一次
+
+§2.2 的判断是"每应用并发 1 → 4，但单用户在同一个应用内仍只允许 1 个在跑"——理由当时
+只看了一条（防单用户打爆一个应用）。线上按"合理默认"复核后发现这条默认把代价压在**最正常
+的用法**上：
+
+- 前端 `Promise.all([a, b])` 两个请求；
+- 页面初始化同时取"列表 + 当前用户配置"；
+- 应用内 AI 的一次读 + 一次写。
+
+这三类都是合法且常见的形态，却因为单用户单应用只允许 1 个在跑而**串行**，而排队时间还
+计入 60 s 的端到端墙钟（`RequestWallClock`）——用户看到的是"偶尔超时"，原因却是并发默认值。
+
+### 11.2 现在的契约
+
+- **`limits.UserPerAppRunning` 默认 1 → 2**（`limits.go` 是唯一真源；控制台字段
+  `user_per_app_running` 仍在，范围 1–`app_running`，保存即生效）。
+- 取 2 不取 4 的理由：`app_running` 仍为 4，2 ≤ 4 ⇒ **单用户占不满一个应用的全部并发槽**
+  （两个用户即可填满 4 个读槽）；取 4 会让"每用户上限"退化成"和没有一样"。它也不改任何
+  内存账（实例池乘数是 `max_instances`）。
+- **新增 per-app 覆盖**（迁移 0087 `wasm_app_limits`）：管理员可以给**单个应用**覆盖四个
+  并发轴（`app_running` / `app_queue` / `user_per_app_running` / `user_per_app_queued`），
+  NULL = 继承全局，保存后即时生效（收紧不打断在跑请求）。这把"某个应用行为异常只能整体
+  冻结"换成"单独限流/降额"。
+- 继承的**子轴**在父轴被收紧时**向下钳**（`app_running=1` ⇒ 继承来的
+  `user_per_app_running=2` 也变成 1）：否则"把某个应用降成串行"这种最常用的收紧会被
+  判成非法组合。规则只有一处实现（`limits.Axes.Resolve`），队列与管理端视图同源。
+
+### 11.3 判据（变异可打红）
+
+- `applimits.TestDefaultUserPerAppRunningIsTwo`、`queue.TestDefaultPerUserPerAppRunningAllowsTwo`
+  —— 默认值是 2，且"同一用户第 3 个请求仍要排队"（改回 1 时前者红、改成"无上限"时后者红）；
+- `queue.TestAppOverride*` / `api.TestAdminAppLimits*` / `serverstore.TestWasmAppLimitOverride*`
+  / `cmd/server.TestLoadWasmAppLimitOverrides*` —— 覆盖的存取、校验、生效、审计与启动装载。

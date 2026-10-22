@@ -620,6 +620,8 @@ func codeFor(code string) string {
 		return "DB_DENIED"
 	case "RUNTIME_TIMEOUT", "HOST_CALL_OVER_BUDGET", "MODULE_KILLED":
 		return "TIMEOUT"
+	case "MODULE_LOAD_QUEUED":
+		return "BUSY"
 	default:
 		return "INTERNAL"
 	}
@@ -638,6 +640,8 @@ func statusFor(code string) int {
 		return 403
 	case "RUNTIME_TIMEOUT", "HOST_CALL_OVER_BUDGET", "MODULE_KILLED":
 		return 504
+	case "MODULE_LOAD_QUEUED":
+		return 503
 	default:
 		return 500
 	}

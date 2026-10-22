@@ -146,6 +146,8 @@ func limitsPutBody() map[string]any {
 		// 而下面那些用例会以"看不出跟预算有关"的形态失败。
 		"guest_budget_seconds": 30, "dry_run_budget_seconds": 30, "host_call_budget_seconds": 10,
 		"request_wall_clock_seconds": 60, "sql_statement_budget_seconds": 5, "compile_timeout_seconds": 60,
+		// 退役快照保留期（2026-10-23 可配；完整对象同样必须带齐）。
+		"retirement_snapshot_retention_days": 90,
 	}
 }
 

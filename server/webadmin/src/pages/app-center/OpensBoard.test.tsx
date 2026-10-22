@@ -222,3 +222,155 @@ describe('运营看板 · 权限', () => {
     expect(mockRequest).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// 反证 F-6 / 审计 C-14：汇总健康（aggregated_until / stale）
+//
+// 打开计数是"明细 → 日汇总（每 5 分钟 tick）"两层结构：作业停摆时曲线只是不再增长，
+// 与"没人用"在数字上完全同形。看板必须能回答"最后汇总到哪一天、数据新不新"；
+// 而这两个键**服务端还没下发** ⇒ 界面必须如实说"服务端未下发"，不许编一个"数据是新的"。
+// ---------------------------------------------------------------------------
+
+describe('运营看板 · 汇总健康（反证 F-6 / C-14）', () => {
+  /** 覆盖 summary 响应（其余口径不变）。 */
+  function mockSummary(extra: Record<string, unknown>) {
+    mockRequest.mockImplementation(async () => ({ ...SUMMARY, ...extra }))
+  }
+
+  it('服务端未下发 aggregated_until/stale ⇒ 明说"服务端未下发"，且不编造新鲜度', async () => {
+    await renderBoard()
+    const missing = await screen.findByTestId('opens-health-missing')
+    expect(missing).toHaveTextContent('服务端未下发')
+    expect(missing).toHaveTextContent('无法区分「没人用」与「日汇总作业停摆」')
+    // 不能出现任何一种"健康/正常"的断言
+    expect(screen.queryByTestId('opens-health-ok')).toBeNull()
+    expect(screen.queryByTestId('opens-health-stale')).toBeNull()
+  })
+
+  it('stale=true ⇒ 显示「数据可能未更新」+ 最后汇总时间（并可指到运维动作）', async () => {
+    mockSummary({ aggregated_until: '2026-10-15', stale: true })
+    await renderBoard()
+    const stale = await screen.findByTestId('opens-health-stale')
+    expect(stale).toHaveTextContent('数据可能未更新')
+    expect(stale).toHaveTextContent('2026-10-15')
+    expect(stale).toHaveTextContent('停摆')
+    // 停摆提示里必须点出"这不是没人用"，否则管理员会得出相反结论
+    expect(stale).toHaveTextContent('不是"没人用"')
+    expect(screen.queryByTestId('opens-health-ok')).toBeNull()
+    expect(screen.queryByTestId('opens-health-missing')).toBeNull()
+  })
+
+  it('stale=false ⇒ 正常态也要说出"汇总到哪一天"（不只说"正常"）', async () => {
+    mockSummary({ aggregated_until: '2026-10-22', stale: false })
+    await renderBoard()
+    const ok = await screen.findByTestId('opens-health-ok')
+    expect(ok).toHaveTextContent('2026-10-22')
+    expect(ok).toHaveTextContent('stale=false')
+    expect(screen.queryByTestId('opens-health-missing')).toBeNull()
+  })
+
+  it('只下发 stale（缺 aggregated_until）⇒ 仍按"契约未下发"处理（半个契约不算契约）', async () => {
+    mockSummary({ stale: false })
+    await renderBoard()
+    expect(await screen.findByTestId('opens-health-missing')).toHaveTextContent('服务端未下发')
+    expect(screen.queryByTestId('opens-health-ok')).toBeNull()
+  })
+
+  it('端点失败时不渲染健康行（没有数据就没有读数，不是"数据是最新的"）', async () => {
+    mode = 'missing'
+    render(<OpensBoard />)
+    await screen.findByTestId('opens-failure')
+    expect(screen.queryByTestId('opens-health-missing')).toBeNull()
+    expect(screen.queryByTestId('opens-health-ok')).toBeNull()
+    expect(screen.queryByTestId('opens-health-stale')).toBeNull()
+  })
+
+  it('stale_reasons 与 opens_job 读数都渲染出来（停摆 vs 没人用可辨的落点）', async () => {
+    mockSummary({
+      aggregated_until: '2026-10-22T15:03:00+08:00',
+      stale: true,
+      stale_after_seconds: 900,
+      stale_reasons: ['打开计数维护作业未启动（本进程没有任何人在汇总）'],
+      opens_job: {
+        started: false, started_at: null, runs: 0, errors: 0,
+        last_run_at: null, last_error: '', tick_seconds: 300,
+      },
+    })
+    await renderBoard()
+    const stale = await screen.findByTestId('opens-health-stale')
+    // 阈值也说出来（"超过多久算停摆"是管理员最需要的那句话的一半）
+    expect(stale).toHaveTextContent('15 分钟')
+    expect(screen.getByTestId('opens-health-reasons')).toHaveTextContent('作业未启动')
+    const job = screen.getByTestId('opens-health-job')
+    expect(job).toHaveTextContent('未启动')
+    expect(job).toHaveTextContent('已运行 0 轮')
+    expect(job).toHaveTextContent('还没有跑完过任何一轮')
+    expect(job).toHaveTextContent('间隔 300 秒')
+  })
+
+  it('opens_job 为 null（未注入）⇒ 明说"读数未下发"，不把 0 轮当成读数', async () => {
+    mockSummary({ aggregated_until: null, stale: true, opens_job: null })
+    await renderBoard()
+    expect(await screen.findByTestId('opens-health-stale')).toHaveTextContent('未回报最后汇总时间')
+    expect(screen.getByTestId('opens-health-job')).toHaveTextContent('服务端未下发')
+    expect(screen.getByTestId('opens-health-job')).not.toHaveTextContent('已运行 0 轮')
+  })
+
+  it('作业读数里的 last_error 随读数一起渲染（运维下一步要看的字段）', async () => {
+    mockSummary({
+      aggregated_until: '2026-10-22T15:03:00+08:00',
+      stale: false,
+      opens_job: {
+        started: true, started_at: '2026-10-22T09:00:00+08:00', runs: 42, errors: 2,
+        last_run_at: '2026-10-22T15:03:00+08:00', last_error: 'aggregate: context deadline exceeded',
+        tick_seconds: 300,
+      },
+    })
+    await renderBoard()
+    const job = await screen.findByTestId('opens-health-job')
+    expect(job).toHaveTextContent('已启动')
+    expect(job).toHaveTextContent('已运行 42 轮')
+    expect(job).toHaveTextContent('其中 2 轮出错')
+    expect(job).toHaveTextContent('context deadline exceeded')
+    expect(screen.getByTestId('opens-health-ok')).toHaveTextContent('stale=false')
+  })
+
+  it('契约纯函数：缺失 / 半缺 / 正常三态，且键存在但值非法时按缺失处理', async () => {
+    const { opensHealthNotice, opensJobText, parseOpensSummaryHealth } = await import('./opens-contract')
+    expect(parseOpensSummaryHealth({})).toMatchObject({ contractPresent: false, aggregatedUntil: null, stale: null })
+    expect(parseOpensSummaryHealth({ stale: true })).toMatchObject({
+      contractPresent: false, stale: true, aggregatedUntil: null,
+    })
+    expect(parseOpensSummaryHealth({ aggregated_until: '2026-10-22', stale: false })).toMatchObject({
+      contractPresent: true, aggregatedUntil: '2026-10-22', stale: false,
+    })
+    // 非法值：aggregated_until 是数字 / stale 是字符串 ⇒ 值为 null，但"键存在"仍如实记录
+    expect(parseOpensSummaryHealth({ aggregated_until: 3, stale: 'yes' })).toMatchObject({
+      contractPresent: true, aggregatedUntil: null, stale: null,
+    })
+    // kind 是判据面（渲染与用例都按它判，不按字符串猜）
+    // 服务端真实形状（admin_opens.go）：五个键恒在，opens_job 的零值字段用 null
+    const full = parseOpensSummaryHealth({
+      aggregated_until: '2026-10-22T15:03:00+08:00',
+      stale: true,
+      stale_reasons: ['作业未启动', ''],
+      stale_after_seconds: 900,
+      opens_job: { started: false, started_at: null, runs: 0, errors: 0, last_run_at: null, last_error: '', tick_seconds: 300 },
+    })
+    expect(full).toMatchObject({
+      contractPresent: true,
+      aggregatedUntil: '2026-10-22T15:03:00+08:00',
+      stale: true,
+      staleAfterSeconds: 900,
+      // 空串理由被丢掉（不然页面上会出现一条空白 bullet）
+      staleReasons: ['作业未启动'],
+    })
+    expect(full.job).toMatchObject({ started: false, runs: 0, errors: 0, tick_seconds: 300, last_run_at: null })
+    // opensJobText：null 与"0 轮"必须可辨
+    expect(opensJobText(null)).toContain('服务端未下发')
+    expect(opensJobText({ started: false, runs: 0, errors: 0, tick_seconds: 300 })).toContain('已运行 0 轮')
+    expect(opensHealthNotice(parseOpensSummaryHealth({})).kind).toBe('missing')
+    expect(opensHealthNotice(parseOpensSummaryHealth({ aggregated_until: '2026-10-01', stale: true })).kind).toBe('stale')
+    expect(opensHealthNotice(parseOpensSummaryHealth({ aggregated_until: '2026-10-01', stale: false })).kind).toBe('ok')
+  })
+})

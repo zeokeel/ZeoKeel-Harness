@@ -59,6 +59,77 @@ import { isAiRowsConsentScopeError } from './wasm-apps-ai-rows-consent.ts'
 export const WASM_APPS_PREFIX = '/api/zeokeel/apps/wasm'
 
 /**
+ * 生命周期动作的**宿主内部事件**（F-07，2026-10-22 审计）。
+ *
+ * 为什么需要一条事件：清浏览器存储需要 Electron session（`clearStorageData`），
+ * 而那是 `wasm-apps-host` 的适配器面；本模块（应用面路由）只负责把动作转给平台。
+ * 两层的唯一连接点就是这条事件 —— 在路由里直接操作 session 会把 Electron 依赖
+ * 拽进"纯 Node 可测"的路由层（本包的结构纪律）。
+ *
+ * 只在「**平台确认状态真的变了**」时发：幂等重放（`changed:false`）不该清存储
+ * —— 那会让"再点一次下架"变成一次静默的数据丢失。
+ */
+export const WASM_APP_LIFECYCLE_EVENT = 'zeokeel/wasm-app-lifecycle'
+
+/** 会触发浏览器存储清理的生命周期动作。 */
+export type WasmAppLifecycleAction = 'unpublish' | 'freeze' | 'delete' | 'restore'
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /** 一个生命周期动作**已被平台确认生效**（F-07 的清理触发点）。 */
+    'zeokeel/wasm-app-lifecycle'(request: { app_id: string, action: WasmAppLifecycleAction }): void
+  }
+}
+
+/**
+ * 本机生命周期路由的后缀 → 动作（`publish` 不在内：上架不清任何东西）。
+ *
+ * 三个方向共用服务端的端点（`unpublish`/`freeze` 各自一个后缀，`restore` 是新契约
+ * §6.1 的一条），客户端按后缀调用，这里按后缀决定要不要广播清理事件。
+ */
+export const WASM_APP_LIFECYCLE_SUFFIXES = ['unpublish', 'freeze', 'restore'] as const
+
+/**
+ * 本次生命周期动作是否**需要清掉该 app origin 的浏览器存储**（广播事件的唯一判据）。
+ *
+ * 判据来自**产品语义**，不是"上游回了 2xx"：
+ *  - **冻结/解冻：永不清**（`return false`）。冻结是**只读快照**（设计 §5.4、§19 Q3
+ *    "数据保留"），窗口与缓存都保留；解冻只恢复可用性。清存储等于替用户删掉他/她
+ *    在这个应用里攒下的 localStorage/IndexedDB —— 与界面上四处"数据仍然保留"的承诺
+ *    直接冲突（2026-10-22 反证审计 R-02：修前**解冻**也会清一次，因为服务端解冻同样
+ *    回 `changed:true`，所以这里**不能**用 `changed` 当判据）。
+ *  - **上下架**：`app.changed === true`（幂等重放是 `false`）。
+ *  - **删除**：`app.deleted === true`（服务端恒下发它，缺席即形状漂移 ⇒ 不删存储）。
+ *  - **恢复**：**顶层** `changed === true`。服务端 `restoreForApp` 的响应是
+ *    `{app:{app_id,deleted:false,enabled:false}, changed, note}` —— `changed` 在**顶层**，
+ *    不在 `app` 里（幂等分支回 `false`，设计 §5.5）。修前这里无条件 `return true`
+ *    ⇒ "没变化也清"，与"只在真的变了时清"相反（R-05）。
+ * @param action - 生命周期动作。
+ * @param status - 上游 HTTP 状态。
+ * @param payload - 上游响应体（已解析）。
+ * @returns true = 广播事件（清存储）。
+ */
+export function lifecycleActionApplied(action: WasmAppLifecycleAction, status: number, payload: JsonValue | null): boolean {
+  if (status < 200 || status >= 300) return false
+  // 冻结/解冻：只读快照语义 ⇒ 不清任何东西（连响应体都不需要读）。
+  if (action === 'freeze') return false
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return false
+  const root = payload as Record<string, unknown>
+  const app = root.app
+  if (app === null || typeof app !== 'object') return false
+  const row = app as Record<string, unknown>
+  if (action === 'delete') return row.deleted === true
+  if (action === 'restore') {
+    // 顶层优先（服务端真实形状），`app.changed` 作兜底 —— 万一服务端把标记挪进 `app`，
+    // 判据在这里跟着走，不会退回"无条件清"。
+    if (typeof root.changed === 'boolean') return root.changed
+    return row.changed === true
+  }
+  return row.changed === true
+}
+
+
+/**
  * 「允许 AI 读取此应用的数据」的授权后缀（**跨端契约**：客户端 `app-lifecycle.ts`
  * 的 `AI_ROWS_CONSENT_SUFFIX` 是同值的另一份字面量，对拍见客户端
  * `ai-rows-consent.spec.tsx`）。
@@ -1730,10 +1801,13 @@ export async function proxyApp(ctx: Context, session: Session, input: ProxyInput
  * | GET | `/` | 应用中心目录（代理 `catalog`，逐字节透传） |
  * | POST | `/validate` | 预检代理（AI/UI 用来"不占版本号地试一发"） |
  * | POST | `/publish` | **发布编排**：`wasm_base64`/`wasm_path` → 直传或分片续传 |
- * | POST | `/:app_id/publish\|unpublish\|freeze` | 生命周期代理（原样转发 body） |
+ * | POST | `/:app_id/publish` | 上架代理（原样转发 body） |
+ * | POST | `/:app_id/unpublish\|freeze\|restore` | 生命周期代理（原样转发 body；`unpublish` 生效后 / `restore` 真的恢复时广播 F-07 存储清理事件，**`freeze` 永不清**：只读快照、数据保留） |
  * | GET | `/:app_id/diagnostics\|schema\|export\|releases\|rows\|availability` | 只读代理（`rows` 额外要持有性证明） |
+ * | GET/POST | `/:app_id/deployments` | 部署历史（只读）/ 部署或回滚（设计 §6.1；`{version,message?}` 原样转发） |
+ * | POST | `/:app_id/releases/:version/withdraw` | 撤回落一个**待审**版本（设计 §6.1；非 pending 由服务端 409 裁决） |
  * | GET/POST | `/:app_id/ai-rows-consent` | 「允许 AI 读取此应用的数据」授权状态（本机文件；默认关） |
- * | DELETE | `/:app_id` | 删除代理（R37 冻结→导出→真删） |
+ * | DELETE | `/:app_id` | 删除代理（R37 冻结→导出→真删；生效后广播 F-07 存储清理事件） |
  *
  * 这个函数只做**四件 HTTP 层的事**：围栏（guard/持有性证明/auditor）、路径分发、
  * 请求体收集、把编排返回的信封逐字节写出。业务编排一律在模块级函数里
@@ -1938,20 +2012,100 @@ export function createWasmAppsRoute(ctx: Context, fence: WasmAppsFence): WasmApp
       return fence.json(res, 200, { app_id: appID, enabled: row.enabled })
     }
 
-    // POST /:app_id/(publish|unpublish|freeze) —— 生命周期（body 原样转发）
-    if (segments.length === 2 && ['publish', 'unpublish', 'freeze'].includes(segments[1] ?? '')) {
+    // POST /:app_id/publish —— 上架（body 原样转发）
+    //
+    // 上架**不在** {@link WASM_APP_LIFECYCLE_SUFFIXES} 里：它不清任何浏览器存储
+    //（清的是"这个应用被停用之后残留的旧数据"，上架不会让旧数据变成脏数据）。
+    if (segments.length === 2 && segments[1] === 'publish') {
       if (method !== 'POST') return fail(res, { code: 'METHOD_NOT_ALLOWED', message: 'method not allowed', status: 405 })
       const body = await collect()
       if (!body.ok) return write(res, body.response)
       return write(res, await proxyApp(ctx, session, {
-        upstreamPath: `${appPath}/${segments[1]!}`,
+        upstreamPath: `${appPath}/publish`,
         method: 'POST',
         body: new Uint8Array(body.raw),
         locale,
       }))
     }
-    // GET /:app_id/(diagnostics|schema|export|releases|rows|availability) —— 只读
+
+    /**
+     * 生命周期动作的上游响应 → （必要时）广播清理事件（F-07）。
+     *
+     * 判据在 {@link lifecycleActionApplied}：**只在真的需要清存储时**发 —— 幂等重放
+     * （`changed:false`）与冻结/解冻（只读快照，数据保留）都不发：前者没变化，
+     * 后者清一次就是替用户删掉他/她的 localStorage/IndexedDB。
+     * @param action - 动作。
+     * @param response - 上游响应。
+     * @returns 原样返回响应（便于 `return emitLifecycle(..., write(...))` 链式写法）。
+     */
+    const emitLifecycle = (action: WasmAppLifecycleAction, response: WasmResponse): WasmResponse => {
+      if (!lifecycleActionApplied(action, response.status, parseWasmBody(response))) return response
+      ctx.emit(WASM_APP_LIFECYCLE_EVENT, { app_id: appID, action })
+      return response
+    }
+
+    // POST /:app_id/(unpublish|freeze|restore) —— 生命周期（body 原样转发）
     //
+    // `restore`（设计 §6.1，2026-10-22 生命周期重设计）与冻结一样挂在 `:app_id` 下：
+    // 恢复的是**同一个应用身份**（标识与版本号永久占位，恢复不复用版本号）。
+    if (segments.length === 2 && (WASM_APP_LIFECYCLE_SUFFIXES as readonly string[]).includes(segments[1] ?? '')) {
+      if (method !== 'POST') return fail(res, { code: 'METHOD_NOT_ALLOWED', message: 'method not allowed', status: 405 })
+      const body = await collect()
+      if (!body.ok) return write(res, body.response)
+      const response = await proxyApp(ctx, session, {
+        upstreamPath: `${appPath}/${segments[1]!}`,
+        method: 'POST',
+        body: new Uint8Array(body.raw),
+        locale,
+      })
+      return write(res, emitLifecycle(segments[1] as WasmAppLifecycleAction, response))
+    }
+
+    // GET/POST /:app_id/deployments —— 部署历史（只读）/ 部署或回滚（设计 §6.1）
+    //
+    // 为什么两条都要：`GET` 给面板的只读部署历史（最近 N 条 + current 标记），
+    // `POST` 是作者显式部署某个 approved 版本 —— **回滚就是再部署一次旧版本**
+    // （设计 §0/§3.3：不重传、不重审、追加一条历史）。目标版本在 body 的
+    // `{version, message?}` 里，代理层原样转发（不在客户端复刻服务端的判据）。
+    if (segments.length === 2 && segments[1] === 'deployments') {
+      if (method !== 'GET' && method !== 'POST') {
+        return fail(res, { code: 'METHOD_NOT_ALLOWED', message: 'method not allowed', status: 405 })
+      }
+      if (method === 'GET') {
+        return write(res, await proxyApp(ctx, session, {
+          upstreamPath: `${appPath}/deployments${search}`,
+          method: 'GET',
+          locale,
+        }))
+      }
+      const body = await collect()
+      if (!body.ok) return write(res, body.response)
+      return write(res, await proxyApp(ctx, session, {
+        upstreamPath: `${appPath}/deployments`,
+        method: 'POST',
+        body: new Uint8Array(body.raw),
+        locale,
+      }))
+    }
+
+    // POST /:app_id/releases/:version/withdraw —— 作者撤回一个**待审**版本（设计 §6.1）
+    //
+    // 只转发布者的意图：`pending` 之外的状态由服务端 409 `RELEASE_NOT_PENDING` 裁决
+    //（客户端不复刻状态机；版本号永久占位这件事由服务端保证）。
+    if (segments.length === 4 && segments[1] === 'releases' && segments[3] === 'withdraw') {
+      if (method !== 'POST') return fail(res, { code: 'METHOD_NOT_ALLOWED', message: 'method not allowed', status: 405 })
+      const version = segments[2] ?? ''
+      if (version === '') return fail(res, { code: 'NOT_FOUND', message: 'not found', status: 404 })
+      const body = await collect()
+      if (!body.ok) return write(res, body.response)
+      return write(res, await proxyApp(ctx, session, {
+        upstreamPath: `${appPath}/releases/${encodeURIComponent(version)}/withdraw`,
+        method: 'POST',
+        body: new Uint8Array(body.raw),
+        locale,
+      }))
+    }
+    // GET /:app_id/(diagnostics|schema|export|releases|rows|availability|deployments) —— 只读    //
     // `releases`（R1-pm-3）是发布者本人的版本历史 + 审核结论（含被拒理由）：服务端
     // 的员工面出口是 `GET /api/client/v2/apps/wasm/:app_id/releases`。**它必须在这里
     // 的白名单里** —— 这张表是逐后缀分发的，漏一个后缀就是"服务端做完了、客户端永远
@@ -1980,7 +2134,11 @@ export function createWasmAppsRoute(ctx: Context, fence: WasmAppsFence): WasmApp
     // DELETE /:app_id
     if (segments.length === 1) {
       if (method !== 'DELETE') return fail(res, { code: 'METHOD_NOT_ALLOWED', message: 'method not allowed', status: 405 })
-      return write(res, await proxyApp(ctx, session, { upstreamPath: appPath, method: 'DELETE', locale }))
+      // 删除是**软删**（设计 §5.5：快照 → 保留期 → 真删）。删除成功后应用页面即使
+      // 还开在某个窗口里也不该再把"上一世"的 localStorage/IndexedDB 留给同名重发
+      // （F-07 的原始复现路径：下架/删除 → 重发同名 → 读回旧值）。
+      const response = await proxyApp(ctx, session, { upstreamPath: appPath, method: 'DELETE', locale })
+      return write(res, emitLifecycle('delete', response))
     }
     return fail(res, { code: 'NOT_FOUND', message: 'not found', status: 404 })
   }

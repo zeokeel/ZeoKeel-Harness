@@ -27,19 +27,20 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { BROWSER_SURFACE_SERVICE } from '@zeokeel/dsh-browser/surface'
 import { createSessionEpoch } from '@zeokeel/dsh-host-locale/session-events'
-import { DEFAULT_APP_SCHEME, appOrigin, appSchemePrefix, isValidAppId } from './app-protocol.ts'
-import { AI_CHAT_PATH, handleAiChat, type AiChatAuthorization, type AiChatTurnRunner } from './ai-chat.ts'
+import { APP_REQUEST_TIMEOUT_MS, DEFAULT_APP_SCHEME, appOrigin, appSchemePrefix, isValidAppId } from './app-protocol.ts'
+import { AI_CHAT_BODY_MAX_BYTES, AI_CHAT_PATH, AI_CHAT_SSE_HEADERS, handleAiChat, type AiChatAuthorization, type AiChatTurnRunner } from './ai-chat.ts'
 import { AI_CONSENT_FILE_NAME, createAiChatAuthorization, isAiConsentScopeError } from './ai-authorization.ts'
 import { createAppProofProvider, type InstallKeyStore } from './app-proof.ts'
-import { frozenAppHint, frozenAppTitle } from './app-window-copy.ts'
+import { frozenAppHint, frozenAppTitle, updateAvailableBanner, versionUnverifiedBanner } from './app-window-copy.ts'
 import { WasmAppsCache, type CacheScope } from './cache.ts'
 import { createAppOpenGate, type AppOpenCounts, type AppOpenOutcome } from './open-gate.ts'
 import { createDeepLinkQueue, sanitizeAppPath } from './deep-link-queue.ts'
 import { parseAppDeepLink, parseForeignAppDeepLink } from './deep-link.ts'
 import type { AppSchemeRequestHandler, WasmAppsHostAdapter, WasmAppsWindowAdapter } from './electron-adapter.ts'
 import { createAppSchemeHandler } from './handler.ts'
-import { createHostRequestSurface, type SurfaceReply } from './host-request.ts'
+import { createHostRequestSurface, signInPageHref, type SurfaceReply } from './host-request.ts'
 import { registerAppRoutes, type HostLocalRouteFence } from './app-routes.ts'
+import { WASM_APP_LIFECYCLE_EVENT, type WasmAppLifecycleAction } from './wasm-apps.ts'
 import { hostCopy, hostLocaleFrom, type HostLocale } from './locale.ts'
 import { browserPartitionFor, serverPartitionHash } from './partition.ts'
 import { createScopeReset } from './scope-reset.ts'
@@ -114,6 +115,32 @@ export const WASM_APP_CHANNEL_ROUTE = `${WASM_APPS_LOCAL_PREFIX}/channel`
  */
 export const WASM_APP_AI_CONSENT_ROUTE = `${WASM_APPS_LOCAL_PREFIX}/ai/consent`
 
+/**
+ * 本机写路由：**客户端页 origin 上的应用 AI 对话**（F-01，P0；2026-10-22 审计）。
+ *
+ * ## 为什么必须存在这一条
+ *
+ * 应用 AI 的传输契约原本只有一条路径 `/__zeokeel/ai/chat`，而**只有应用窗口的
+ * 协议 handler**（`handler.ts`）在服务它。`AppAiPanel` 却渲染在**客户端主渲染页**
+ * （应用中心的详情页）上，那个 origin 上宿主只注册了 `open` / `channel` /
+ * `ai/consent` 三条本机路由 ⇒ 详情页点「发送」**每一次都失败**，而落到的错误
+ * （`app_ai_protocol` / `app_ai_unavailable`）都在指错方向。
+ *
+ * 判据不能靠"两端字符串对拍"：`ai-chat-parity.spec.ts` 当时只比较
+ * `APP_AI_CHAT_PATH` 与 `AI_CHAT_PATH` 两个常量逐字相等，对拍不到的正是"这条路径
+ * 有没有人接"。所以本路由的用例是**可达性**的（本机路由表里存在 + 请求真的到达
+ * `handleAiChat`/`runTurn` 执行面 + 未注册路径不假装 200）。
+ *
+ * ## 语义与协议 handler 逐条相同（不复制业务逻辑）
+ *
+ * 本路由**只做**：证明闸（seam）→ 严格解析外层 `{app_id, messages, stream}` →
+ * 把 `app_id` 换成路由参数语义、其余字段**原样**交给 `aiChat`（= `handleAiChat`）——
+ * 于是授权闸（用户 ⊕ 服务端 ⊕ 应用）、隐藏会话 `app:<app_id>#<scope>`、SSE 帧、
+ * 取消、五个错误码全部由同一份实现决定。多写一条"第二套 AI 调用"就会让两端语义
+ * 分叉（例如授权维度少一段、或隐藏会话 id 少账号段）。
+ */
+export const WASM_APP_AI_CHAT_ROUTE = `${WASM_APPS_LOCAL_PREFIX}/ai/chat`
+
 /** 打开一个应用时在宿主内部广播的事件（客户端面据此给反馈/开面板）。 */
 export const WASM_APP_OPEN_EVENT = 'zeokeel/wasm-app-open'
 
@@ -126,6 +153,25 @@ export const WASM_APP_OPEN_EVENT = 'zeokeel/wasm-app-open'
  * （§19 Q5 的冻结文案由客户端包持有）。
  */
 export const WASM_APP_DEEP_LINK_FOREIGN_EVENT = 'zeokeel/wasm-app-deep-link-foreign'
+
+/**
+ * 深链**入队 / 续开**事件（2026-10-23 U-07）：未登录时收到的应用深链被记住，
+ * 以及登录后按队列把它打开 —— 两件事都必须让用户**看得见**。
+ *
+ * 修前 `requestOpen` 在 `session === null` 时只是 `pendingLinks.enqueue(...)` 然后
+ * 返回 `{kind:'queued'}`，**一个事件都不发**（只有一行本地 `warn`）。于是同事发来的
+ * `<scheme>://app/<id>` 点下去"毫无反应"（不弹窗、不聚焦、不提示登录），用户大概率
+ * 以为链接坏了或客户端没装 —— 而客户端面板路径（`AppCenterPanel` 的 open-intent）
+ * 对同一件事会显示「已记住这次打开：登录后会自动继续」。
+ *
+ * 载荷只有 app_id 与阶段：
+ *  - `queued`：已记住这次打开，等登录（客户端 toast 复用面板那一句同口径文案）；
+ *  - `opening`：登录完成、宿主正在按队列打开它（自动续跑也要可感知，不是又一个静默开窗）。
+ *
+ * **不改变队列语义**：TTL / 条数上限 / 路径净化全在 `deep-link-queue.ts`，本事件只是
+ * 一个观察口；入队失败与否不由它决定，也不新增任何阻塞式对话框。
+ */
+export const WASM_APP_QUEUED_EVENT = 'zeokeel/wasm-app-queued'
 
 /** 本机路由请求体上限（只有一个 app_id + path，不需要更多）。 */
 const OPEN_REQUEST_BODY_MAX_BYTES = 64 * 1024
@@ -200,6 +246,13 @@ declare module '@deepseek-ai/cordis' {
      * 客户端面据此弹一次性提示；载荷只用于诊断，不用于拼接任何 URL。
      */
     'zeokeel/wasm-app-deep-link-foreign'(request: { app_id: string, scheme: string }): void
+    /**
+     * 未登录的深链被**记住**（`queued`），以及登录后按队列**续开**（`opening`）。
+     *
+     * 客户端面据此给一次性提示（"登录后将打开 …"），与面板路径的「已记住这次打开」
+     * 同口径 —— 见 {@link WASM_APP_QUEUED_EVENT} 的注释（U-07）。
+     */
+    'zeokeel/wasm-app-queued'(request: { app_id: string, state: 'queued' | 'opening' }): void
   }
 }
 
@@ -296,6 +349,17 @@ export function apply(ctx: Context, config: Config = {}): void {
     ? undefined
     : new WasmAppsCache({ root: `${config.userDataDir}/wasm-apps-cache`, warn })
   /**
+   * 会话**在应用窗口里过期**时被保留的那一扇窗口（U-08，2026-10-22 评审）。
+   *
+   * 生命周期：401 命中 → 置位（带当时的会话作用域）→ 作用域清理链保留该窗口 →
+   * 同一账号重登 → 入队并重新打开它 → 清除。换成**另一个账号** ⇒ 先清除再清理
+   * （上一代窗口不得在新账号下复活）。
+   *
+   * 为什么不放宽"登出即拆窗"：用户主动登出/切账号仍然关掉全部窗口；这里只覆盖
+   * "令牌过期"这**一种**可恢复的、不是用户意图的离开。
+   */
+  let sessionExpiryHold: { appId: string, path: string, scope: string } | undefined
+  /**
    * 会话作用域切换时的清理链（第二十八轮 FIX-40 ③；语义见 `scope-reset.ts` 模块头）。
    *
    * 为什么需要它：`cache.clearAll()` 是**真异步**（`rm -rf` 整个缓存根 + 重建），而
@@ -308,7 +372,22 @@ export function apply(ctx: Context, config: Config = {}): void {
   const scopeReset = createScopeReset({
     // 关窗**同步**（见 `ScopeResetTargets.closeWindows`）：`windows.closeAll()` 内部
     // 无 await，调用即同步拆完，所以"登出即拆窗"这条既有语义不退化。
-    closeWindows: () => windows?.closeAll(),
+    //
+    // U-08 的**唯一例外**：会话在应用窗口里过期时（`sessionExpiryHold` 已置位），
+    // 保留那一扇窗口（它是「登录已过期 → 重新登录」页的唯一宿主），其余窗口照关。
+    // 不这么做的话，那张页会被本函数的同步关窗吃掉 —— 用户看到窗口直接消失，重登后
+    // 也回不到那个应用。例外只覆盖"被 401 打中的那一扇"，不是放宽登出语义。
+    closeWindows: () => {
+      const hold = sessionExpiryHold
+      if (hold === undefined || windows === undefined || !windows.has(hold.appId)) {
+        return windows?.closeAll()
+      }
+      for (const appId of windows.openApps()) {
+        if (appId === hold.appId) continue
+        // `close()` 在第一个 await 之前就把原生窗口关掉（同步语义与 closeAll 一致）。
+        void windows.close(appId)
+      }
+    },
     clearCache: () => cache?.clearAll(),
     warn,
   })
@@ -426,6 +505,18 @@ export function apply(ctx: Context, config: Config = {}): void {
         signal,
       )
 
+  /**
+   * 客户端登录页 URL（F-04）：本机 webServer 的 origin + `/login`（auth-gate 的登录页
+   * 路由）。会话过期页上的「重新登录」按钮用它，应用窗口的导航闸门也把它登记成**唯一**
+   * 允许的跨 origin 目标。
+   *
+   * 拿不到 origin（零端口形态 / 纯 Node 宿主 / 单测）⇒ `undefined`：页面只给「重试」，
+   * 不渲染一个点了没反应的按钮。
+   */
+  // 登录页地址由 host-request 的 seam 计算（对 webServer 服务的访问只允许出现在 seam 模块里，
+  // 桌面端的源码字面量判据会红）。拿不到 origin ⇒ undefined，页面只给「重试」。
+  const signInHref = (): string | undefined => signInPageHref(ctx)
+
   const handler = createAppSchemeHandler({
     appOriginScheme: appScheme,
     session: currentSession,
@@ -437,7 +528,15 @@ export function apply(ctx: Context, config: Config = {}): void {
         warn(`zeokeel-wasm-apps-host: clearing the session failed (${cause instanceof Error ? cause.message : String(cause)})`)
       }
     },
+    // U-08：401 命中的那扇应用窗口。**在 clearSession 之前**记下作用域 ——
+    // 会话一清，`scopeKey()` 就是 null 了，而清理链要靠它判断"这是过期还是换账号"。
+    onSessionExpired: (expired) => {
+      const scope = scopeKey()
+      if (scope === null) return
+      sessionExpiryHold = { appId: expired.appId, path: expired.path, scope }
+    },
     hostLocale,
+    signInHref,
     ...(config.requestTimeoutMs === undefined ? {} : { timeoutMs: config.requestTimeoutMs }),
     ...(appProof === undefined ? {} : { appProof }),
     ...(aiChat === undefined ? {} : { aiChat }),
@@ -515,6 +614,53 @@ export function apply(ctx: Context, config: Config = {}): void {
    */
   const currentPartition = (): string => partitionFor(currentSession())
 
+  /**
+   * 清理某个应用 origin 的**浏览器存储**（F-07，2026-10-22 审计；设计 §8）。
+   *
+   * 为什么需要它：应用页面落在 `persist:` 分区里，下架/删除/恢复**都不清**的话，
+   * 同名应用重发之后 localStorage / IndexedDB / cookie 原样读得回来 —— 对员工是
+   * "删了没删干净"，对合规是删除承诺落空（审计 F-07 的复现路径）。
+   *
+   * ⚠️ **冻结/解冻不走这里**（设计 §5.4：只读快照、数据保留）：`wasm-apps.ts` 的
+   * `lifecycleActionApplied('freeze', …)` 恒为 false，所以本函数只会在下架、删除、
+   * 真的恢复（`changed:true`）之后被调用。
+   *
+   * 三条判据（缺一条都会变成数据丢失或假清理）：
+   *  1. **精确到 app origin**（`<scheme>://<app_id>`）：分区是按**用户**的，整分区清
+   *     会把同一账号下其它应用的存储一起打掉；
+   *  2. **用当前会话的分区**（`currentPartition()`）：应用窗口就落在那里，清别的
+   *     session 等于什么都没清；
+   *  3. 适配器没给这个能力（纯 Node 宿主/测试替身）⇒ **记一条 warn**，不假装清过。
+   * @param appId - 已校验的 app_id。
+   * @param reason - 触发原因（进诊断日志；`open-404` / 生命周期动作名）。
+   */
+  const clearAppOriginStorage = async (appId: string, reason: string, generation: number): Promise<void> => {
+    // 代际闸（ENTERPRISE 的会话代际判据，规则 A/C）：清存储是**不可逆**的跨会话副作用，
+    // 必须在取到分区之前确认"还是同一代"。调用方在 await 之后也各有一道检查。
+    if (!sessionEpochs.isCurrent(generation)) {
+      warn(`zeokeel-wasm-apps-host: skipped clearing the browser storage of ${appId} (${reason}): the session changed`)
+      return
+    }
+    const clear = adapter?.clearAppStorage
+    if (clear === undefined) {
+      warn(`zeokeel-wasm-apps-host: the browser storage of ${appId} could not be cleared (${reason}): the adapter does not expose clearAppStorage`)
+      return
+    }
+    const partition = currentPartition()
+    const origin = appOrigin(appScheme, appId)
+    try {
+      await clear.call(adapter, partition, origin)
+      // 换代检查点：适配器调用是异步的；这一代已经过期时不要再把结果记成"已清理"。
+      // 判据要求"await 之后紧跟一次单语句 if + return"，日志留在通过之后。
+      if (!sessionEpochs.isCurrent(generation)) return
+      warn(`zeokeel-wasm-apps-host: cleared the browser storage of ${appId} (${reason}; origin=${origin})`)
+    } catch (cause) {
+      // 清不掉**不阻断**主流程（关窗/拒绝已经发生），但必须留痕：静默失败会让
+      // "下架后数据还在"变成下次审计里再查一遍的未闭合项。
+      warn(`zeokeel-wasm-apps-host: clearing the browser storage of ${appId} failed (${reason}): ${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
   if (adapter === undefined) {
     warn('zeokeel-wasm-apps-host: no Electron adapter was provided; the application protocol stays unregistered')
   } else {
@@ -557,6 +703,13 @@ export function apply(ctx: Context, config: Config = {}): void {
       workArea: () => windowAdapter.workArea?.() ?? { x: 0, y: 0, width: 1280, height: 800 },
       warn,
     })
+
+  // U-01：骨架 → 应用文档的看门狗上限与协议 handler 的**单次出站预算**对齐（+5 s
+  // 余量：让 handler 自己的超时错误页先到，看门狗只兜"既不 resolve 也不 reject"）。
+  // 部署把 `requestTimeoutMs` 抬高时，看门狗不能还用 75 s —— 否则它会先响，用户看到
+  // 失败页几秒后应用又出现（两处预算不同步）。
+  windowAdapter?.setLoadTimeout?.((config.requestTimeoutMs ?? APP_REQUEST_TIMEOUT_MS) + 5_000)
+
   ctx.inject(['browserSurface'], (surfaceCtx) => {
     const registry = surfaceCtx.get(BROWSER_SURFACE_SERVICE) as AppSurfaceRegistrar | undefined
     if (registry === undefined) return
@@ -622,6 +775,10 @@ export function apply(ctx: Context, config: Config = {}): void {
     const session = currentSession()
     if (session === null) {
       pendingLinks.enqueue(appId, path)
+      // U-07：入队必须**可见**。修前这里只入队、不广播，用户在未登录时点深链看不到
+      // 任何反应（不像面板路径会显示「已记住这次打开」）。队列的 TTL/容量/净化语义
+      // 不变 —— 事件只是让客户端面弹一句"登录后将打开 …"。
+      ctx.emit(WASM_APP_QUEUED_EVENT, { app_id: appId, state: 'queued' })
       return { kind: 'queued' }
     }
     const alreadyOpen = windows?.has(appId) === true
@@ -660,6 +817,13 @@ export function apply(ctx: Context, config: Config = {}): void {
         // 换代检查点 ③b（关窗之后）：`refused` 携带的是**上一代**平台答复的结论 ——
         // 换代之后不能再把它当成当前会话的结论交回调用方。
         if (!sessionEpochs.isCurrent(generation)) return { kind: 'unavailable' }
+        // F-07：打不开（404 未登记/软删/无可用版本、410 已下架）⇒ 关窗之后**清掉这个
+        // app origin 的浏览器存储**。只关窗不清存储的话，同名应用重发之后还能读回
+        // 上一世的 localStorage/IndexedDB（审计 F-07 的复现路径）。冻结不走这一支：
+        // 冻结是只读快照（窗口与缓存都保留），清存储等于替用户删数据。
+        await clearAppOriginStorage(appId, `open-${String(gate.status)}`, generation)
+        // 换代检查点 ③c（清存储之后）：`refused` 是上一代平台答复的结论。
+        if (!sessionEpochs.isCurrent(generation)) return { kind: 'unavailable' }
       } else if (frozen) {
         // 窗口与缓存一律保留（只读快照仍是可看的内容）；只记一条诊断。
         warn(`zeokeel-wasm-apps-host: the platform reported ${appId} as frozen (HTTP ${String(gate.status)} ${gate.code}); keeping its window and cache`)
@@ -679,11 +843,24 @@ export function apply(ctx: Context, config: Config = {}): void {
         // `gate.changed` 时旧值已被清掉，但**新值不能由上一代的答复写入**。
         if (!sessionEpochs.isCurrent(generation)) return { kind: 'unavailable' }
         knownVersions.set(appId, gate.version)
+        if (alreadyOpen) {
+          // U-06（2026-10-22 生产级评审）：版本变了但窗口还开着 —— 窗口继续跑旧前端，
+          // 而之后的请求已被导到**新版本**的 wasm/静态资源（`knownVersions` 已更新）。
+          // 给一条**可关闭**的提示，点击「刷新」才真正重载：不静默强制（应用里可能有
+          // 未保存的草稿），也不静默无视（旧页面打新后端 404/500 时用户毫无线索）。
+          windows?.showNotice(appId, updateAvailableBanner(hostLocale()))
+        }
       }
       if (gate.title !== undefined) knownTitles.set(appId, gate.title)
     }
     // 软闸门（`unreachable` + 窗口已开着）在这里继续：内容保留，只回一条提示。
     const warning = gate.kind === 'unreachable' ? 'version-unverified' as const : undefined
+    if (warning === 'version-unverified' && alreadyOpen) {
+      // §5.1b：拿不到版本时，**已开窗口**里也要有一条可见提示（此前 `versionUnverifiedBanner`
+      // 在宿主侧零消费方，只有客户端面回了这条 warning）。只提示、不重载：版本无法确认
+      // 不等于应用坏了，重载可能把用户正在做的事掀掉。
+      windows?.showNotice(appId, versionUnverifiedBanner(hostLocale()))
+    }
     const opens = gate.kind === 'ok' ? gate.opens : undefined
     const extras = { ...(warning === undefined ? {} : { warning }), ...(opens === undefined ? {} : { opens }) }
     if (windows === undefined) {
@@ -708,6 +885,11 @@ export function apply(ctx: Context, config: Config = {}): void {
     // （窗口落在 `currentPartition()`，而 partition 创建即固定）。在上一代的续体里建窗 =
     // 新账号自己的窗口还没开、却先多出一个属于上一代的窗口。
     if (!sessionEpochs.isCurrent(generation)) return { kind: 'unavailable' }
+    // F-04：「重新登录」是**唯一**允许应用窗口导航到的跨 origin 目标（精确 URL）。
+    // 在这里（而不是 `apply()`）求值：本机 webServer 的 origin 是 listen 之后才有的，
+    // 插件装配时端口通常还没绑定 —— 那时登记会把一个 `undefined` 白名单带到底。
+    const loginURL = signInHref()
+    if (loginURL !== undefined) windowAdapter?.setNavigationAllowlist?.([loginURL])
     const result = await windows.open(appId, path, declared)
     // 换代检查点 ⑤（建窗之后）：窗口已经建出来（不可撤回，且它落在**建窗当时**的分区
     // 上），但这次打开的**结论**属于上一代 —— 不向当前会话广播事件、也不把它交回
@@ -724,6 +906,10 @@ export function apply(ctx: Context, config: Config = {}): void {
     for (;;) {
       const next = pendingLinks.shift()
       if (next === undefined) return
+      // U-07 的后半：登录完成后**自动打开**也要可感知。宿主先广播 `opening`，客户端面
+      // 据此显示"正在打开刚才记住的应用"（开窗本身是可见的，但失败时如果不广播，
+      // 用户只会看到提示消失、窗口没出现）。
+      ctx.emit(WASM_APP_QUEUED_EVENT, { app_id: next.appId, state: 'opening' })
       void requestOpen(next.appId, next.path).catch((cause: unknown) => {
         warn(`zeokeel-wasm-apps-host: opening a queued app link failed (${cause instanceof Error ? cause.message : String(cause)})`)
       })
@@ -781,6 +967,15 @@ export function apply(ctx: Context, config: Config = {}): void {
     if (scope !== lastScope) {
       const previous = lastScope
       lastScope = scope
+      // U-08：三种与"保留窗口"有关的换代，必须在**清理链之前**判完。
+      //  - `heldExpiry`：令牌过期（previous = 原账号，scope = null）⇒ 保留那一扇；
+      //  - `heldResume`：**同一账号**重登（previous = null，scope = 原账号）⇒ 保留并在
+      //    清理落地后把它重新打开到原路径；
+      //  - 其它（换账号/换服务端/主动登出）⇒ 上一代的窗口一律不得复活。
+      const hold = sessionExpiryHold
+      const heldExpiry = hold !== undefined && scope === null && previous === hold.scope
+      const heldResume = hold !== undefined && scope !== null && previous === null && scope === hold.scope
+      if (hold !== undefined && !heldExpiry && !heldResume) sessionExpiryHold = undefined
       // 窗口是**作用域资产**：webContents 与它的 session 分区创建即固定，留在映射里
       // 等于"新用户继续用上一个用户的身份"。关掉（`closeAll` 同时注销 surface 与
       // webContents 映射）之后，下一次 open 才会按当前分区新建。
@@ -793,11 +988,23 @@ export function apply(ctx: Context, config: Config = {}): void {
       // session-scope 双保险）。未登录→登录 **不清**：§7.6 明确要求"未登录入队、登录后
       // 打开"，清掉等于把用户点过的深链吞了；每次登录都 rm -rf 也会打掉热缓存。
       if (previous !== null) pendingLinks.clear()
+      // 只有"窗口还在"才值得排队重开：用户自己把窗口关掉之后再登录，不该被一个提示
+      // 后的自动打开打断（U-08 的取向是"别把恢复页吃掉"，不是"强制重开应用"）。
+      if (heldResume && windows?.has(hold.appId) === true) pendingLinks.enqueue(hold.appId, hold.path)
       void scopeReset.start(previous)
       appProof?.invalidate()
       // 会话作用域内的目录缓存（版本/应用名）同样作废：它们是上一个账号的可见信息。
       knownVersions.clear()
       knownTitles.clear()
+      if (heldResume) {
+        // 重开完成（或队列被 TTL/容量挤掉）后解除保留：下一次作用域切换回到
+        // "关掉全部窗口"的原有语义。
+        void scopeReset.settled().then(() => {
+          drainPendingLinks()
+          sessionExpiryHold = undefined
+        })
+        return
+      }
     }
     // 消费待打开队列必须放在**拆卸之后**（换号时的 `closeAll` 会把刚按新账号打开的
     // 窗口一起关掉 —— 深链在未登录时入队，登录后应立即打开一次），也必须放在
@@ -1016,10 +1223,125 @@ export function apply(ctx: Context, config: Config = {}): void {
             json(reply, 200, { app_id: appId, granted: row.granted })
           },
         },
+        {
+          // F-01（P0）：客户端页 origin 上的应用 AI 对话。语义细节见
+          // {@link WASM_APP_AI_CHAT_ROUTE} 的注释 —— 这条路由**只做外层解析**，
+          // 授权/会话/流式/取消全部交给同一个 `aiChat`（= `handleAiChat`）。
+          method: 'POST',
+          path: WASM_APP_AI_CHAT_ROUTE,
+          proof: 'required',
+          // 契约上限 + JSON 信封余量（`AI_CHAT_BODY_MAX_BYTES` = 64 条 × 16 KiB +
+          // 64 KiB）：seam 的全局 64 KiB 是给 `open`/`consent` 的，不能拿它当 AI 对话
+          // 的上限；而**恰好** 64×16 KiB 也不够 —— 满额请求的 JSON 结构本身还要占
+          // ~1.7 KiB，卡在 1 MiB 会让一条契约内合法的请求吃 413（反证审计 R-09）。
+          bodyLimit: AI_CHAT_BODY_MAX_BYTES,
+          handler: async (req, reply) => {
+            const locale = hostLocale(req.headers['accept-language'])
+            const session = currentSession()
+            if (session === null) {
+              json(reply, 401, {
+                error: { code: 'AUTH_REQUIRED', message: hostCopy(locale, '未登录', 'not logged in') },
+              })
+              return
+            }
+            if (aiChat === undefined) {
+              // 没有 AI loop（宿主未接线 / 该构建不含 AI）：如实报不可用，
+              // **不**静默返回空答案（与协议 handler 同一条判据）。
+              json(reply, 503, {
+                error: {
+                  code: 'app_ai_unavailable',
+                  message: 'the application AI bridge is not available in this client',
+                },
+              })
+              return
+            }
+            const parsed = parseJsonBody(req.body)
+            if (parsed === undefined || parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              json(reply, 400, {
+                error: {
+                  code: 'app_ai_invalid',
+                  message: hostCopy(locale, '请求体必须是 JSON 对象', 'the request body must be a JSON object'),
+                },
+              })
+              return
+            }
+            const row = parsed as Record<string, unknown>
+            for (const key of Object.keys(row)) {
+              if (key !== 'app_id' && key !== 'messages' && key !== 'stream') {
+                // 未知字段即拒：与 `handleAiChat` 的严格解析同一条纪律（静默忽略
+                // 会让调用方以为某个字段生效了）。
+                json(reply, 400, {
+                  error: { code: 'app_ai_invalid', message: `unknown field ${JSON.stringify(key)}` },
+                })
+                return
+              }
+            }
+            const rawAppId = row.app_id
+            if (typeof rawAppId !== 'string' || !isValidAppId(rawAppId.trim())) {
+              json(reply, 400, {
+                error: {
+                  code: 'VALIDATION',
+                  message: hostCopy(locale, 'app_id 不合法', 'app_id is invalid'),
+                  hints: ['app_id 由小写字母/数字/单个连字符组成（例如 my-notes）'],
+                },
+              })
+              return
+            }
+            const appId = rawAppId.trim()
+            // **只把 `{messages, stream}` 交给 AI 桥**：`app_id` 在协议 handler 那条路径
+            // 里来自 origin 的 hostname，在桥的请求体里不存在；把它混进去会让
+            // `parseAiChatRequest` 以「未知字段」拒掉每一次对话（客户端看到的是
+            // `app_ai_invalid`，方向全错）。缺席的键**不补**（补 `stream:true` 会
+            // 覆盖调用方显式要的非流式；缺 messages 由桥自己报 400）。
+            const bridgeBody = JSON.stringify({
+              ...(row.messages === undefined ? {} : { messages: row.messages }),
+              ...(row.stream === undefined ? {} : { stream: row.stream }),
+            })
+            const outcome = await aiChat(
+              appId,
+              new Uint8Array(Buffer.from(bridgeBody, 'utf8')),
+              req.signal ?? new AbortController().signal,
+            )
+            if (outcome.kind === 'json') {
+              json(reply, outcome.status, outcome.body)
+              return
+            }
+            // SSE：真流式写出（`reply.stream`）；客户端按帧读增量（`app-ai.ts`）。
+            await reply.stream(AI_CHAT_SSE_HEADERS, outcome.frames)
+          },
+        },
       ],
     })
     return () => { surface.dispose() }
   }, 'zeokeel wasm apps host: local request surface')
+
+  // ---- F-07：生命周期动作生效之后，清掉该应用 origin 的浏览器存储 ----
+  //
+  // 触发源只有**宿主自己的应用面路由**（`/api/zeokeel/apps/wasm/:app_id/{unpublish,
+  // freeze,restore}` 与 `DELETE :app_id`；`wasm-apps.ts` 在平台确认**真的需要清**之后
+  // 广播这条事件 —— `unpublish` 生效 / `delete` deleted:true / `restore` changed:true；
+  // **冻结与解冻永不广播**，冻结是只读快照、数据保留，见 `lifecycleActionApplied`）。
+  // 服务端不会主动推，应用窗口那条 404/410 路径在 `requestOpen` 里单独处理。
+  //
+  // 只清**存储**，不关窗：下架/删除之后还开着的窗口由下一次打开闸门裁决（关窗是窗口
+  // 管理器的动作）；而"存储"是删除承诺里真正会残留的那一半（F-07）。
+  ctx.on(WASM_APP_LIFECYCLE_EVENT, (payload: { app_id: string, action: WasmAppLifecycleAction }) => {
+    // 延迟落地必须绑定发起时的代际（ENTERPRISE 会话代际判据，规则 E）：事件在本进程内
+    // 发出，但清存储是异步且不可逆的 —— 期间换账号/换服务端时不能把它落到新一代身上。
+    const generation = sessionGeneration
+    if (!sessionEpochs.isCurrent(generation)) {
+      warn('zeokeel-wasm-apps-host: ignored a lifecycle event emitted for a previous session generation')
+      return
+    }
+    // 事件载荷来自本进程内的路由，但仍然按**不可信输入**校验一遍：一个拼错的 app_id
+    // 会去清另一个 origin 的存储（那是不可逆的删数据）。
+    const appId = typeof payload?.app_id === 'string' ? payload.app_id.trim() : ''
+    if (appId === '' || !isValidAppId(appId)) {
+      warn(`zeokeel-wasm-apps-host: ignored a lifecycle event with an invalid app_id (${JSON.stringify(payload?.app_id)})`)
+      return
+    }
+    void clearAppOriginStorage(appId, typeof payload.action === 'string' ? payload.action : 'lifecycle', generation)
+  })
 
   // ---- 应用中心（应用平台）的宿主面：`/api/zeokeel/apps/wasm*` + 宿主工具面 ----
   //

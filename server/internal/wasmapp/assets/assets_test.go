@@ -997,3 +997,51 @@ func TestPreviewScriptSharesToolchainSectionPolicy(t *testing.T) {
 		t.Fatal("preview.mjs 定义了 isToolchainSection 却没有调用它（前缀规则是死代码）")
 	}
 }
+
+// TestAssetPathLimitsMatchPackAssetsScript 是 2026-10-22 审计 A1 的判据：
+// 资源路径三个上限的**单一真源**是 `internal/limits`（作者文档也由它生成），
+// 而打包脚本 `pack-assets.mjs` 里还留着两个字面量副本。
+//
+// 只把 Go 侧接上 limits 还不够：脚本会把"路径过长/单段过长"在**作者机器上**先拒，
+// 若脚本与平台不同值，同一份资源会出现"打包能过、发布被拒"（或反过来）。所以这条
+// 用例把脚本里的字面量解析出来，与 limits 逐值对拍；改任一边而不改另一边即红。
+//
+// 变异验证：把 `limits.AssetMaxPathBytes` 改成 257（重生成门禁文档），或把脚本里的
+// `MAX_PATH_BYTES` 改成 512 ⇒ 本条必须红。
+func TestAssetPathLimitsMatchPackAssetsScript(t *testing.T) {
+	raw, err := os.ReadFile(packAssetsScriptPath(t))
+	if err != nil {
+		t.Fatalf("读打包脚本失败：%v", err)
+	}
+	src := string(raw)
+	for _, c := range []struct {
+		name string
+		want int
+	}{
+		{"MAX_PATH_BYTES", limits.AssetMaxPathBytes},
+		{"MAX_SEGMENT_BYTES", limits.AssetMaxSegmentBytes},
+	} {
+		re := regexp.MustCompile(`(?m)^const ` + c.name + ` = (\d+)`)
+		m := re.FindStringSubmatch(src)
+		if m == nil {
+			t.Fatalf("pack-assets.mjs 里找不到 `const %s = <数字>`（解析口径已变，请同步本用例）", c.name)
+		}
+		got, cerr := strconv.Atoi(m[1])
+		if cerr != nil {
+			t.Fatalf("解析 pack-assets.mjs 的 %s 失败：%v", c.name, cerr)
+		}
+		if got != c.want {
+			t.Fatalf("pack-assets.mjs 的 %s=%d，平台 limits 是 %d —— 两边必须同源（否则作者会先被脚本拦住或先通过脚本却被平台拒）", c.name, got, c.want)
+		}
+		// 同值性还要能穿透别名：assets.MaxPathBytes 必须就是 limits 的值（不是第三份）。
+		if c.name == "MAX_PATH_BYTES" && assets.MaxPathBytes != limits.AssetMaxPathBytes {
+			t.Fatalf("assets.MaxPathBytes=%d 与 limits.AssetMaxPathBytes=%d 分叉", assets.MaxPathBytes, limits.AssetMaxPathBytes)
+		}
+		if c.name == "MAX_SEGMENT_BYTES" && assets.MaxSegmentBytes != limits.AssetMaxSegmentBytes {
+			t.Fatalf("assets.MaxSegmentBytes=%d 与 limits.AssetMaxSegmentBytes=%d 分叉", assets.MaxSegmentBytes, limits.AssetMaxSegmentBytes)
+		}
+	}
+	if assets.MaxListEntries != limits.AssetMaxListEntries {
+		t.Fatalf("assets.MaxListEntries=%d 与 limits.AssetMaxListEntries=%d 分叉", assets.MaxListEntries, limits.AssetMaxListEntries)
+	}
+}

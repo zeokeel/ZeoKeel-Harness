@@ -76,7 +76,8 @@ describe('解析：被拒理由必须一路读到界面', () => {
     expect(outcome.ok).toBe(true)
     if (!outcome.ok) throw new Error('unreachable')
     expect(outcome.releases[0]!.status).toBe('superseded')
-    expect(RELEASE_STATUSES).toEqual(['pending', 'approved', 'rejected'])
+    // `withdrawn` 是 2026-10-22 生命周期重设计 §3.2 新增的终态（撤回）。
+    expect(RELEASE_STATUSES).toEqual(['pending', 'approved', 'rejected', 'withdrawn'])
   })
 
   it('缺席字段回落成空/0，而不是编造（reason 例外：它是审核结论，见下一条）', () => {

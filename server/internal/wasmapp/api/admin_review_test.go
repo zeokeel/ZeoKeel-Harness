@@ -592,3 +592,34 @@ func TestAdminRejectRequiresReason(t *testing.T) {
 		t.Fatalf("作者侧必须读到同一句理由：status=%q reason=%q", row.Status, row.Reason)
 	}
 }
+
+// TestAdminApproveFailureStillAuditsStatusChange：审批状态已落库、但部署/投影失败时，
+// 审批结论仍必须进审计（生产评审管理员视角 P2：旧实现早退，审批审计永不写）。
+//
+// 复现：审核开关打开 + 首版 pending → 管理员先冻结应用（部署会被生命周期拒绝）→ 通过审核。
+// 断言：响应非 200；但 `wasm_app_release_approve` 审计存在且写明失败；版本状态确实是 approved。
+func TestAdminApproveFailureStillAuditsStatusChange(t *testing.T) {
+	e := reviewEnv(t)
+	e.publishOK(e.tokens["alice"], "freeze-audit-tool", "1.0.0", testGuestModule(t), goodConfig())
+
+	// 冻结：部署事务会因 APP_FROZEN 失败，但审核状态写入不受影响（现状语义）。
+	e.req(http.MethodPost, "/api/server/admin/wasm-apps/freeze-audit-tool/freeze", "", nil)
+
+	w := e.req(http.MethodPost,
+		"/api/server/admin/wasm-apps/freeze-audit-tool/releases/1.0.0/approve", "", nil)
+	if w.Code == http.StatusOK {
+		t.Fatalf("冻结应用的审批部署应失败（返回 200 等于谎报上线），body=%s", w.Body.String())
+	}
+	// 状态确实已落库（审批结论不可回滚）。
+	status, _, _ := e.releaseState("freeze-audit-tool", "1.0.0")
+	if status != serverstore.ReleaseStatusApproved {
+		t.Fatalf("版本状态 = %q，want approved（状态已落库）", status)
+	}
+	details := e.auditDetails("freeze-audit-tool", "wasm_app_release_approve")
+	if len(details) != 1 {
+		t.Fatalf("审批失败也必须写一条审批审计，得到 %d 条：%v", len(details), details)
+	}
+	if !strings.Contains(details[0], "部署/投影失败") || !strings.Contains(details[0], "1.0.0") {
+		t.Fatalf("审计必须写清版本与失败事实：%q", details[0])
+	}
+}

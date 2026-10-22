@@ -444,6 +444,7 @@
 | ~~`AI_BALANCE_INSUFFICIENT`~~ | **2026-09-19 删除**（总纲 §21）：余额不足现在是**客户端 AI 链路**的错误码 `ai_balance_insufficient`，不再由应用请求管线返回 | 已废除 |
 | ~~`AI_RATE_LIMITED`~~ | **2026-09-19 删除**（总纲 §21）：限流现在是**客户端 AI 链路**的错误码 `ai_rate_limited`，不再由应用请求管线返回 | 已废除 |
 | `MODULE_KILLED` | 已取消/module 已关闭 | 504 |
+| `MODULE_LOAD_QUEUED` | **平台侧排队**：等待冷编译/冷加载槽位超时（2026-10-22 审计 A4 新增，不再复用 `MODULE_KILLED`）；details 带 `queue_depth` | 503（稍后重试可恢复） |
 | `DB_LIMIT` / `DB_DENIED` | 100 MB 满 / 行数超 / 语句被拒 | 507 / 403 |
 | `APP_QUEUE_FULL` | 队列满 | 429 + `Retry-After` |
 | `IMPORT_NOT_ALLOWED` | 导入不在白名单 | 422 |

@@ -321,6 +321,8 @@ function AiRowsConsentCard({ state, saving, failure, onEnable, onRevoke, onRetry
         {enabled ? t('appCenter.aiRowsEnabled') : t('appCenter.aiRowsAllow')}
       </p>
       <p style={{ margin: '2px 0 0', opacity: 0.7 }} data-role="ai-rows-consent-hint">{t('appCenter.aiRowsHint')}</p>
+      {/* F-08：这张卡给的是**构建助手**的数据读取权限，与应用内对话助手是两件事。 */}
+      <p style={{ margin: '2px 0 0', opacity: 0.7 }} data-role="ai-rows-consent-relation">{t('appCenter.aiRowsRelation')}</p>
 
       {state.kind === 'loading' && <p style={HINT} data-role="ai-rows-consent-loading">{t('appCenter.dataLoading')}</p>}
       {state.kind === 'failed' && (

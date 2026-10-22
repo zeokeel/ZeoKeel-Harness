@@ -783,6 +783,17 @@ func ListAuditLogsPagedFiltered(db *sql.DB, offset, limit int, action, username 
 	return listAuditLogs(db, offset, limit, action, username, "")
 }
 
+// ListAuditLogsPagedFilteredByApp 是分页审计 + action/username + **app_id** 过滤
+// （管理端"按应用查审计"的入口；2026-10-22 生产评审管理员视角 P2：DAO 早就有 app
+// 维度，但 HTTP 面只透 action/username，等于"应用维度审计不可查"）。
+func ListAuditLogsPagedFilteredByApp(db *sql.DB, offset, limit int, action, username, appID string) ([]AuditLogEntry, int64, error) {
+	appID = strings.ToLower(strings.TrimSpace(appID))
+	if appID == "" {
+		return nil, 0, errors.New("audit by app: app_id 不能为空")
+	}
+	return listAuditLogs(db, offset, limit, action, username, appID)
+}
+
 // ListAuditLogsByApp 返回某个 wasm 应用的审计条目(最新在前),§4.9「审计的
 // app 维度」的读取入口:发布/上下架/冻结/删除/换票这类操作按应用可查。
 // appID 为空即拒(空串聚合全部应用 = 会把应用维度静默变成全局视图)。

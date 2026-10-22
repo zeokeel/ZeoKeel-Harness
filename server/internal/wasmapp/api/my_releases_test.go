@@ -141,6 +141,9 @@ func TestMyReleasesPublisherSeesRejectedReason(t *testing.T) {
 	wantKeys := map[string]bool{
 		"version": true, "status": true, "reason": true, "created_at": true,
 		"current": true, "checksum": true, "size": true,
+		// 2026-10-22 终轮反证：部署选择器需要"字节已释放"的显式事实
+		// （`size<=0` 推断无法区分"字段缺失"与"真 0 字节"）。
+		"bytes_released": true,
 	}
 	for _, row := range raw.Releases {
 		if len(row) != len(wantKeys) {

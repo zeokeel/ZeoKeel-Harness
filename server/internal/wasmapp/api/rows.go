@@ -128,8 +128,16 @@ func (h *Handlers) adminRows(c *gin.Context) {
 		writeErr(c, apperr.New(apperr.CodeAuthRequired, "未登录"))
 		return
 	}
+	// `?unmask=1` 会读出**未脱敏**的敏感列，只读权限不足：与"导出含数据库"同一纪律，
+	// 要求 capability:write（2026-10-22 生产评审管理员 P2）。
+	if isTruthyQuery(c.Query("unmask")) && !serverauth.HasPermission(admin, serverauth.PermCapabilityWrite) {
+		writeErr(c, apperr.New(apperr.CodeForbidden, "读取未脱敏数据需要 capability:write 权限").
+			WithHint("去掉 unmask=1 可读脱敏视图（敏感列仍显示列名与掩码值）；需要原始值请使用具备 capability:write 的账号").
+			WithDetail("required", serverauth.PermCapabilityWrite))
+		return
+	}
 	appID := registry.NormalizeAppID(c.Param("app_id"))
-	app, aerr := h.adminApp(c, appID)
+	app, aerr := h.loadAdminApp(c, appID, true)
 	if aerr != nil {
 		writeErr(c, aerr)
 		return
@@ -516,7 +524,7 @@ func (h *Handlers) adminSchema(c *gin.Context) {
 		return
 	}
 	appID := registry.NormalizeAppID(c.Param("app_id"))
-	app, aerr := h.adminApp(c, appID)
+	app, aerr := h.loadAdminApp(c, appID, true)
 	if aerr != nil {
 		writeErr(c, aerr)
 		return

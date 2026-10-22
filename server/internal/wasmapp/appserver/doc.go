@@ -6,7 +6,7 @@
 // # 管线顺序（顺序本身就是语义，不要调整）
 //
 //	① 应用反查      §8.1①  app_id（来自路由参数）→ apps(kind=wasm_app)；查不到/软删/冻结 ⇒ 404
-//	② 生效版本      §6.1   LatestApprovedWasmReleaseMeta（**不含制品字节**，P0-3）；无生效版本 ⇒ 404（可读页面）
+//	② 生效版本      §6.1   CurrentWasmReleaseMeta（apps.current_release_id 指针；**不含制品字节**，P0-3）；无生效版本 ⇒ 404（可读页面）
 //	③ 身份          §7.1   帧内 user 的唯一来源：由客户端注入 + 宿主投影（应用伪造不了）
 //	④ 准入          §4.4   一律要求登录（历史公开档位在读取侧即 login）；无身份 ⇒ 401
 //	⑤ 跨源写防护    §8.1⑦ 非幂等方法必须 Origin == `<app scheme>://<app_id>`（自定义协议下 Origin 由 handler 合成）

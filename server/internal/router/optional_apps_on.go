@@ -55,6 +55,21 @@ func registerWasm(r *gin.Engine, d Deps) {
 	// 鉴权沿用 ownedApp：**非发布者一律 404，且与"应用不存在"逐字节同形**
 	// （不泄露存在性）；返回体不含制品字节。
 	wg.GET("/:app_id/releases", d.Wasm.MyReleases)
+
+	// ===== 生命周期重设计（迁移 0086，设计 2026-10-22 §6.1）=====
+	//
+	// 四条端点回答"谁在什么时候把哪一版放上线"：
+	//   * deployments（GET/POST）：部署历史 + 部署/回滚（回滚 = 用旧版本再部署一次，
+	//     不重审、不重传、历史不改写）；
+	//   * releases/:version/withdraw：作者撤回**待审**版本（字节释放、版本号永久占用）；
+	//   * restore：恢复软删（未 purge；恢复后 enabled 仍为 0，不自动上架）。
+	// 路径第二段（deployments / restore / withdraw 的上一层）都会进
+	// `wasmAppIDSuccessorSegments` 的取值域，因此 WasmAppIDReservedSegments 自动跟着
+	// 真实路由表走（不需要手抄清单，见 wasm_appid_segments.go 的注释）。
+	wg.GET("/:app_id/deployments", d.Wasm.Deployments)
+	wg.POST("/:app_id/deployments", d.Wasm.DeployRelease)
+	wg.POST("/:app_id/releases/:version/withdraw", d.Wasm.WithdrawRelease)
+	wg.POST("/:app_id/restore", d.Wasm.RestoreApp)
 	wg.GET("/catalog", d.Wasm.Catalog)
 
 	// ===== 客户端专属访问模型（2026-09-19 决策）=====
@@ -144,6 +159,19 @@ func registerWasm(r *gin.Engine, d Deps) {
 	// 读用 capability:read（与列表同权限点），写用 capability:write。
 	serverauth.AdminRoute(ag, "GET", "/limits", serverauth.PermCapabilityRead, d.Wasm.AdminLimitsGet)
 	serverauth.AdminRoute(ag, "PUT", "/limits", serverauth.PermCapabilityWrite, d.Wasm.AdminLimitsPut)
+	// 应用级限流覆盖（迁移 0087，决策 docs/decisions/2026-10-22-wasm-per-app-limits.md §2.3）：
+	// 单个应用的四个并发轴可以覆盖全局（NULL = 继承）。三条挂在 `/:app_id/limits`，
+	// 与上面的静态段 `/limits`（**全局**四轴）不同层：gin 的静态优先规则让 `/limits`
+	// 不会被 `/:app_id` 吞掉，两者语义也刻意分开（全局设置 vs 单应用例外）。
+	//
+	// 权限点沿用资源类别级：读用 capability:read（与列表/诊断同点），写用
+	// capability:write（与下架/冻结同点）。写动作必写审计（wasm_app_limits_change）。
+	// 覆盖总览（静态段，必须先于 /:app_id/limits 注册的语义由 gin 静态优先保证；
+	// 与全局 /limits 不同层：`/limit-overrides` 是"所有例外"的只读列表）。
+	serverauth.AdminRoute(ag, "GET", "/limit-overrides", serverauth.PermCapabilityRead, d.Wasm.AdminAppLimitsList)
+	serverauth.AdminRoute(ag, "GET", "/:app_id/limits", serverauth.PermCapabilityRead, d.Wasm.AdminAppLimitsGet)
+	serverauth.AdminRoute(ag, "PUT", "/:app_id/limits", serverauth.PermCapabilityWrite, d.Wasm.AdminAppLimitsPut)
+	serverauth.AdminRoute(ag, "DELETE", "/:app_id/limits", serverauth.PermCapabilityWrite, d.Wasm.AdminAppLimitsDelete)
 	// 管理面诊断与运行时水位（2026-09-19，P1-9/P2-4）：两条都是**只读**，
 	// 因此都用 capability:read。
 	//
@@ -171,6 +199,28 @@ func registerWasm(r *gin.Engine, d Deps) {
 	serverauth.AdminRoute(ag, "GET", "/opens/summary", serverauth.PermCapabilityRead, d.Wasm.AdminOpensSummary)
 	// 应用维度 AI 用量（W5 C4）：数据源是 0076 的 usage.app_id（§21.4 的归因列）。
 	serverauth.AdminRoute(ag, "GET", "/:app_id/ai-usage", serverauth.PermCapabilityRead, d.Wasm.AdminAppAIUsage)
+
+	// ===== 管理面生命周期动作（迁移 0086，设计 2026-10-22 §6.2）=====
+	//
+	// 审计 2026-10-22 C-02/C-04/C-07 的三条断头路在这里补齐：管理端此前
+	// 「有已删除筛选、没有删除/恢复动作」「导出只在员工 Bearer 面」「待审只有计数」。
+	// 权限点沿用资源类别级（read 看 / write 处置），审计 actor_role=admin_session。
+	//
+	// ⚠️ 顺序要求：静态段 `releases/pending` 必须**先于** `/:app_id/releases…` 注册。
+	// gin 的静态优先规则会让它照样命中本行，但把静态段写在通配之后是这类路由树里最
+	// 常见的自伤形态（将来换成别的路由引擎或加中间件时行为会变），因此这里显式前置。
+	serverauth.AdminRoute(ag, "GET", "/releases/pending", serverauth.PermCapabilityRead, d.Wasm.AdminPendingReleases)
+	// 清理积压待审版本（设计 §5.7 的可选清理动作 / 审计 C-08）：**静态段**且同样是写动作
+	// （capability:write）—— 它会把一批版本置为终态并释放字节，必须与 approve/reject
+	// 同权限点。同样先于 `/:app_id` 通配注册（理由同上）。
+	serverauth.AdminRoute(ag, "POST", "/releases/purge-stale", serverauth.PermCapabilityWrite, d.Wasm.AdminPurgeStaleReleases)
+	serverauth.AdminRoute(ag, "GET", "/:app_id/deployments", serverauth.PermCapabilityRead, d.Wasm.AdminDeployments)
+	serverauth.AdminRoute(ag, "POST", "/:app_id/deployments", serverauth.PermCapabilityWrite, d.Wasm.AdminDeployRelease)
+	serverauth.AdminRoute(ag, "POST", "/:app_id/restore", serverauth.PermCapabilityWrite, d.Wasm.AdminRestoreApp)
+	// DELETE 是**软删 + 快照**（设计 §5.5）：真删由 wasm_retirement 调度器在保留期
+	// 到期后执行；管理面这一条不承诺"立即删数据"。
+	serverauth.AdminRoute(ag, "DELETE", "/:app_id", serverauth.PermCapabilityWrite, d.Wasm.AdminDeleteApp)
+	serverauth.AdminRoute(ag, "GET", "/:app_id/export", serverauth.PermCapabilityRead, d.Wasm.AdminExport)
 }
 
 // publishWasmReservedAppIDs 把 app_id 保留字收口（X4-1）接到 WASM 路由树上。

@@ -267,10 +267,17 @@ func TestCleanupSchedulerDeletesExpiredRowsOnRealDB(t *testing.T) {
 			t.Fatal(err)
 		}
 		if n == 0 {
-			if s.Deleted() == 0 {
-				t.Fatal("表里删掉了行，但调度器的删除计数仍为 0（可观测断链）")
+			// 删除计数是 Cleanup **返回之后**才累加的（`runOnce`：先 DELETE 提交、
+			// 再 `s.deleted.Add(n)`）⇒ 表先空、计数后到是合法时序。这里等它到账，
+			// 但**不放弃**"必须最终 > 0"这条判据（否则就是可观测断链）。
+			// 2026-10-22：整轮高并发回归下曾因此偶发红（单包复跑 3/3 绿）。
+			for time.Now().Before(deadline) {
+				if s.Deleted() > 0 {
+					return
+				}
+				time.Sleep(5 * time.Millisecond)
 			}
-			return
+			t.Fatalf("表里删掉了行，但调度器的删除计数在 %s 内仍为 0（可观测断链）", 5*time.Second)
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("超期事件未被清理：仍有 %d 行（7 天保留未生效）", n)

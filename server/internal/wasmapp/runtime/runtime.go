@@ -554,8 +554,10 @@ func (r *Runtime) pump(ctx context.Context, req *Request, lim InstanceLimits, cl
 		// §4.6「协议帧单行上限 1 MiB」+ §7.4「单行/总输出超限 ⇒ RUNTIME_OUTPUT_OVERRUN」。
 		// 总量上限取响应体上限（数值唯一真源在 limits，未在别处硬编码）。
 		if counter.n > limits.AppResponseBodyMaxBytes {
-			out.fatal = killError(apperr.CodeRuntimeOutputOverrun,
-				fmt.Sprintf("应用输出超过总上限 %s", fmtBytes(limits.AppResponseBodyMaxBytes)))
+			out.fatal = outputOverrunError(
+				fmt.Sprintf("应用输出超过总上限 %s（单帧上限 %s，保证可交付 %s）",
+					fmtBytes(limits.AppResponseBodyMaxBytes), fmtBytes(abi.MaxFrameBytes), fmtBytes(abi.MaxResponseBodyBytes)),
+				"total")
 			return
 		}
 
@@ -564,8 +566,10 @@ func (r *Runtime) pump(ctx context.Context, req *Request, lim InstanceLimits, cl
 		case errors.Is(err, abi.ErrNotFrame):
 			line, tooLong, lerr := readLogLine(reader, limits.ProtocolLineMaxBytes)
 			if tooLong {
-				out.fatal = killError(apperr.CodeRuntimeOutputOverrun,
-					fmt.Sprintf("stdout 单行超过 %s 且不是协议帧", fmtBytes(limits.ProtocolLineMaxBytes)))
+				out.fatal = outputOverrunError(
+					fmt.Sprintf("stdout 单行超过 %s 且不是协议帧（协议帧单帧上限 %s）",
+						fmtBytes(limits.ProtocolLineMaxBytes), fmtBytes(abi.MaxFrameBytes)),
+					"line")
 				return
 			}
 			if len(line) > 0 {
@@ -579,8 +583,10 @@ func (r *Runtime) pump(ctx context.Context, req *Request, lim InstanceLimits, cl
 			continue
 
 		case errors.Is(err, abi.ErrFrameTooLarge):
-			out.fatal = killError(apperr.CodeRuntimeOutputOverrun,
-				fmt.Sprintf("协议帧超过单帧上限 %s", fmtBytes(abi.MaxFrameBytes)))
+			out.fatal = outputOverrunError(
+				fmt.Sprintf("协议帧超过单帧上限 %s（保证可交付 %s；大列表请分页）",
+					fmtBytes(abi.MaxFrameBytes), fmtBytes(abi.MaxResponseBodyBytes)),
+				"frame")
 			return
 
 		case err != nil:

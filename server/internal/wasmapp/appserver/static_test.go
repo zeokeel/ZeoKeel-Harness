@@ -90,11 +90,25 @@ func TestStatic_VersionIsolation(t *testing.T) {
 		t.Fatalf("同路径不同版本的 ETag 绝不能相同（缓存键必须含 version）: %q", etagV1)
 	}
 
-	// 回滚：软删 v2 ⇒ 生效版本回到 v1 ⇒ 必须重新交付 v1 的字节与 v1 的 ETag
-	//（这条同时钉死静态资源与编译模块缓存两处的键都含版本）。
-	if err := serverstore.SoftDeleteWasmRelease(t.Context(), e.db, rel2.ID); err != nil {
-		t.Fatalf("SoftDeleteWasmRelease: %v", err)
+	// 回滚：用**部署事务**把指针指回 v1（设计 2026-10-22 §3.3：回滚 = 用旧版本再部署
+	// 一次，不重传、不删版本）⇒ 必须重新交付 v1 的字节与 v1 的 ETag（这条同时钉死
+	// 静态资源与编译模块缓存两处的键都含版本）。
+	//
+	// ⚠️ 本用例此前用 `SoftDeleteWasmRelease(v2)` 来"回滚" —— 那是生命周期重设计之前
+	// 平台**唯一**能改变交付版本的手段（删版本），既没有 HTTP 入口也不属于本设计。
+	// 现在生效版本由 apps.current_release_id 决定，删版本反而让指针指向一行已删的版本
+	//（⇒ 服务面 404）。判据不变：回滚后必须交付 v1。
+	v1Row, gerr := serverstore.GetWasmReleaseMeta(t.Context(), e.db, appID, "1.0.0")
+	if gerr != nil {
+		t.Fatalf("读 v1: %v", gerr)
 	}
+	if _, _, derr := serverstore.DeployWasmRelease(t.Context(), e.db, serverstore.DeployWasmReleaseInput{
+		AppID: appID, ReleaseID: v1Row.ID, Kind: serverstore.DeployKindRollback,
+		Actor: "alice", ActorRole: serverstore.ActorRoleOwner, Message: "回滚到 v1",
+	}); derr != nil {
+		t.Fatalf("回滚部署: %v", derr)
+	}
+	_ = rel2
 	rolled := e.get(appID, "/app.js")
 	if rolled.Code != http.StatusOK || rolled.Body.String() != "console.log('v1')" {
 		t.Fatalf("回滚后应交付 v1 字节，得到 %d %q", rolled.Code, rolled.Body.String())

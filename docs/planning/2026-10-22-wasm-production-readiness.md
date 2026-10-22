@@ -272,3 +272,13 @@ wasm E2E 为 0 等）。**工作区 253 个文件尚未提交 git**，交付闭�
 - 因此"三平台打包"只能由 CI 的 `desktop-linux/win/macos` 三个 job 提供证据；本轮已把
   **WASM 打开链路**接进 `e2e-client`（47/47 通过），三平台差异（自定义协议 scheme、
   `clearStorageData({origin})`、应用窗口 preload/CSP）仍需各自 runner 上跑一次。
+
+## 16. 收口证据（2026-10-23 04:40）
+
+- 提交：`102e1679c0`（生产化主体）、`9188381b28` / `6a4c485925` / `37f95f9de1` /
+  `17caa63fa9` / `55d812b07f`（文档、-race 门禁、WASM E2E、跨平台边界、文件级互斥）。
+- 门禁（提交态）：`yarn check` 34/34、根守卫 17/17、webadmin 961、迁移 0001–0089/81 对拍、
+  server 真 PG 受影响包全量、`make test-wasm-race`、打包版 `e2e-client` 47/47（含 WASM
+  打开链路）、Linux AppImage/deb 构建成功。
+- 已知不可在本环境验证的项（Windows/macOS 原生打包、真实 Electron 的骨架/Sentry/存储清理、
+  多实例、磁盘满/大库/备份回滚演练）已在 §10/§15 明确记录；它们不是代码未完成，而是环境边界。

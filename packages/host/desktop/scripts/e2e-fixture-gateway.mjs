@@ -361,6 +361,19 @@ const server = createServer((req, res) => {
     return
   }
 
+  // WASM 应用打开闸门（宿主 open-gate 调的平台端点）：返回稳定版本，让应用窗口能创建。
+  // 只覆盖"打开链路"（窗口/自定义协议/本机路由），不模拟 wasm 执行或静态资源。
+  {
+    const m = /^\/api\/client\/v2\/apps\/wasm\/([^/]+)\/open$/u.exec(url.pathname)
+    if (m !== null) {
+      res.setHeader('content-type', 'application/json; charset=utf-8')
+      res.end(JSON.stringify({
+        version: '1.2.0', release_id: 1, title: '共享便签', changed: true,
+        opens: { today: { pv: 1, uv: 1 } },
+      }))
+      return
+    }
+  }
   if (url.pathname.startsWith('/api/admin') || url.pathname.startsWith('/api/zeokeel')) {
     res.end(JSON.stringify({ ok: true, items: [] }))
     return

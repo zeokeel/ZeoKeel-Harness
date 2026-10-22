@@ -789,7 +789,39 @@ async function main() {
       await evalSafe(cdp, `(() => { const b=[...document.querySelectorAll('[data-role="capability-detail"] button')].find(x=>(x.textContent||'').includes('✕')); if (b) b.click(); return !!b })()`).catch(() => {})
       await wait(500)
     }
+    // WASM 应用打开链路（2026-10-23 生产评审：此前 e2e-client 对 WASM 面零断言）。
+    // 判据 = 点开目录里的应用后，Chromium 真的出现一个**自定义协议**页面目标
+    // （`wasm-app://<app_id>/`），而不是只断言"客户端发了请求"。不模拟 wasm 执行，
+    // 覆盖的是"目录 → 本机打开路由 → 宿主建窗 → 协议导航"这条用户可见链路。
+    if (item.id === 'apps') {
+      const clicked = await evalAsync(cdp, `(() => {
+        const nodes = [...document.querySelectorAll('button, [role="button"], [data-app-id]')]
+        const el = nodes.find(n => (n.textContent || '').includes('共享便签') && n.offsetParent)
+        if (!el) return 'NOT_FOUND'
+        el.click(); return 'CLICKED'
+      })()`)
+      // 卡片点击进入详情页（不是直接打开）；详情里的「打开」才触发本机打开路由。
+      const openClicked = await waitFor(cdp, `(() => {
+        const b = [...document.querySelectorAll('button')].find(x => (x.textContent || '').trim() === '打开' && x.offsetParent)
+        if (b === null) return false
+        b.click(); return true
+      })()`, 5000, 200)
+      const deadline = Date.now() + 20000
+      let wasmTarget = null
+      while (Date.now() < deadline && wasmTarget === null) {
+        try {
+          const list = await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json()
+          wasmTarget = list.find(t => typeof t.url === 'string' && /^[a-z][a-z0-9+.-]*:\/\/shared-notes(\/|$)/iu.test(t.url) && !/^(https?|data|file|devtools|chrome):/iu.test(t.url)) ?? null
+        } catch { /* keep polling */ }
+        if (wasmTarget === null) await wait(300)
+      }
+      reportStep('WASM 应用可在客户端内打开（出现自定义协议窗口）',
+        clicked === 'CLICKED' && openClicked === true && wasmTarget !== null,
+        `click=${clicked} open=${String(openClicked)} target=${wasmTarget?.url ?? 'none'} urls=${JSON.stringify((await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json()).map(t => t.url).slice(-8))}`)
+      await screenshot(cdp, '04e-app-center-wasm-open')
+    }
     // 返回聊天：整页面板的唯一出口，同时摘掉激活态属性。
+    await evalSafe(cdp, `(() => { const b=[...document.querySelectorAll('button')].find(x=>(x.textContent||'').includes('返回聊天') && x.offsetParent); if (b) b.click(); return !!b })()`).catch(() => {})    // 返回聊天：整页面板的唯一出口，同时摘掉激活态属性。
     await evalSafe(cdp, `(() => { const b=[...document.querySelectorAll('button')].find(x=>(x.textContent||'').includes('返回聊天') && x.offsetParent); if (b) b.click(); return !!b })()`).catch(() => {})
     await wait(900)
   }

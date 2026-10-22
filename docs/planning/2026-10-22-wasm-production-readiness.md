@@ -226,3 +226,15 @@ wasm E2E 为 0 等）。**工作区 253 个文件尚未提交 git**，交付闭�
 - webadmin：960 用例（另加生命周期清理态用例后 54 在 apps-lifecycle 文件内）。
 - 反证：第一轮 3 视角（P0=1 已修）、第二轮独立反证（P0=0，新 P1=1 已修）。
 - 结论：**核心链路 P0/P1 已清零、门禁与 -race 通过**；上表取舍项与真机验证仍是"生产级"的剩余门槛。
+
+## 12. 打包与真机验证进展（本轮）
+
+- **Linux 打包成功**：`dist:linux` 产出 `ZeoKeel-Harness-2.9.1-x86_64.AppImage` 与 `.deb`
+  （需把 `XDG_CACHE_HOME/ELECTRON_BUILDER_CACHE` 指到可写目录——沙箱 `/root/.cache` 只读）。
+- **打包版客户端 E2E 全绿**：`e2e:client`（Xvfb + mock gateway + 打包产物）全部断言通过，
+  报告 `packages/host/desktop/.e2e-report.md`。
+- **注意（不能夸大）**：该 E2E 覆盖登录/侧栏/设置/账户/会话等客户端面，**仍未覆盖 WASM
+  应用打开链路**（`e2e-client.mjs` 里 wasm 断言为 0）；Windows/macOS 打包、真实 Electron
+  下应用窗口骨架/Sentry/存储清理、多实例与磁盘满演练仍未做。
+- **提交**：本轮改动已提交 `102e1679c0 feat(wasm): production-grade hardening for the app platform`
+  （257 文件；门禁在提交前全绿）。

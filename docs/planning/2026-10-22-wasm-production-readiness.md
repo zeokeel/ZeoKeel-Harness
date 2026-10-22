@@ -262,3 +262,13 @@ wasm E2E 为 0 等）。**工作区 253 个文件尚未提交 git**，交付闭�
   宿主建窗 → 协议导航"；**未覆盖** wasm 执行/静态资源真实内容、骨架首帧与 Sentry 摄取
   （仍需真实服务端/真机）。
 - 剩余：Windows/macOS 打包、真实 Electron 下骨架/Sentry/存储清理、多实例/磁盘满演练。
+
+## 15. 跨平台打包边界（本环境实测）
+
+- **Linux**：AppImage/deb 构建成功（可写 `ELECTRON_BUILDER_CACHE`）。
+- **Windows**：`dist:win` 在本环境 fail-loud —— `Windows installer must be built on a native
+  Windows host`（脚本自身的设计约束，不是代码缺陷）；需要 Windows runner 才能验证 NSIS/portable。
+- **macOS**：`dist:mac` 只能在 macOS 上构建/签名/公证；本环境无法验证。
+- 因此"三平台打包"只能由 CI 的 `desktop-linux/win/macos` 三个 job 提供证据；本轮已把
+  **WASM 打开链路**接进 `e2e-client`（47/47 通过），三平台差异（自定义协议 scheme、
+  `clearStorageData({origin})`、应用窗口 preload/CSP）仍需各自 runner 上跑一次。

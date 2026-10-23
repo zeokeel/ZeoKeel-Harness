@@ -1876,6 +1876,54 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('program: fileChooser is refused (upload allow-list never comes from the script)', async () => {
+    let message = ''
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+        try {
+          await (bridge['fileChooser'] as unknown as (args: unknown) => Promise<unknown>)({ files: ['/etc/passwd'], allowedDirs: ['/etc'] })
+        } catch (cause) {
+          message = cause instanceof Error ? cause.message : String(cause)
+        }
+        return { result: null }
+      },
+    }
+    const { runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    await runtime.runProgram('x')
+    expect(message).toContain('not wired')
+    // No DOM.setFileInputFiles may be attempted with script-provided paths.
+    expect(message).not.toContain('/etc/passwd')
+    cleanup()
+  })
+
+  it('program: helpers keep the tool semantics (press modifiers/action, type delay, scroll options, fetch header lines)', async () => {
+    const calls: Record<string, unknown[]> = { pressKey: [], typeInto: [], scroll: [], pageFetch: [] }
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+        const call = (name: string): ((args: unknown) => Promise<unknown>) => bridge[name] as unknown as (args: unknown) => Promise<unknown>
+        await call('press')({ key: 'Shift', modifiers: ['ctrl', 'shift'], action: 'down', times: 2 })
+        await call('type')({ target: '#a', text: 'hi', delayMs: 5 })
+        await call('scroll')({ position: { x: 1, y: 2 }, settle: true, untilBottom: false })
+        await call('fetch')({ url: 'https://a.example/x', headers: ['X-Test: 1'] })
+        return { result: null }
+      },
+    }
+    const { adapter, runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: JSON.stringify({ count: 1, selector: '#a', candidates: [] }) } })
+    const spied = runtime as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>
+    spied['pressKey'] = async (...args: unknown[]) => { calls['pressKey'] = args; return undefined }
+    spied['typeInto'] = async (...args: unknown[]) => { calls['typeInto'] = args; return { appliedDelayMs: 5 } }
+    spied['scroll'] = async (...args: unknown[]) => { calls['scroll'] = args; return {} }
+    spied['pageFetch'] = async (...args: unknown[]) => { calls['pageFetch'] = args; return { status: 200, ok: true, url: '', contentType: '', bytes: 0, body: null, truncated: false, bodyOmitted: false } }
+    await runtime.runProgram('x')
+    expect(calls['pressKey']![3]).toMatchObject({ modifiers: 2 | 8, action: 'down', times: 2 })
+    expect(calls['typeInto']![6]).toBe(5)
+    expect(calls['scroll']![4]).toMatchObject({ position: { x: 1, y: 2 }, settle: true, untilBottom: false })
+    expect((calls['pageFetch']![1] as { headers?: Record<string, string> }).headers).toEqual({ 'X-Test': '1' })
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

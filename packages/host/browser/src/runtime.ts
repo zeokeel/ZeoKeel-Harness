@@ -3604,14 +3604,24 @@ export class BrowserRuntime {
       case 'browser_type': {
         const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
         const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
-        return await this.typeInto(tabId, target.selector, String(args['text'] ?? ''), args['clear'] !== false, signal)
+        return await this.typeInto(tabId, target.selector, String(args['text'] ?? ''), args['clear'] !== false, signal, undefined, typeof args['delayMs'] === 'number' ? args['delayMs'] : 0)
       }
       case 'browser_select': {
         const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
         const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
         return await this.selectOptionChoice(tabId, target.selector, args as never, signal)
       }
-      case 'browser_press': return await this.pressKey(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['key'] ?? ''), signal, { ...(typeof args['modifiers'] === 'number' ? { modifiers: args['modifiers'] } : {}), ...(typeof args['times'] === 'number' ? { times: args['times'] } : {}) })
+      case 'browser_press': {
+        const rawModifiers = args['modifiers']
+        const bits = Array.isArray(rawModifiers)
+          ? rawModifiers.reduce((sum: number, name: unknown) => sum + (MODIFIER_BITS[MOD_ALIAS[String(name).toLowerCase()] ?? 'alt'] ?? 0), 0)
+          : typeof rawModifiers === 'number' ? rawModifiers : 0
+        return await this.pressKey(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['key'] ?? ''), signal, {
+          modifiers: bits,
+          ...(args['action'] === 'down' || args['action'] === 'up' || args['action'] === 'press' ? { action: args['action'] } : {}),
+          ...(typeof args['times'] === 'number' ? { times: args['times'] } : {}),
+        })
+      }
       case 'browser_hotkey': return await this.hotkey(Number(args['tab'] ?? this.pool.activeTab ?? 1), (args['keys'] as string[]) ?? [], signal)
       case 'browser_hover': {
         const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
@@ -3629,12 +3639,49 @@ export class BrowserRuntime {
         const to = await this.resolveTargetSelector(tabId, String(args['to'] ?? ''), signal)
         return await this.dragAt(tabId, await this.locateElement(tabId, from.selector, signal), await this.locateElement(tabId, to.selector, signal), signal)
       }
-      case 'browser_scroll': return await this.scroll(Number(args['tab'] ?? this.pool.activeTab ?? 1), Number(args['deltaY'] ?? 0), typeof args['target'] === 'string' ? args['target'] : undefined, signal, { ...(typeof args['deltaX'] === 'number' ? { deltaX: args['deltaX'] } : {}) })
+      case 'browser_scroll': return await this.scroll(Number(args['tab'] ?? this.pool.activeTab ?? 1), Number(args['deltaY'] ?? 0), typeof args['target'] === 'string' ? args['target'] : undefined, signal, {
+        ...(typeof args['deltaX'] === 'number' ? { deltaX: args['deltaX'] } : {}),
+        ...(typeof args['position'] === 'object' && args['position'] !== null ? { position: args['position'] as { x: number, y: number } } : {}),
+        ...(typeof args['untilBottom'] === 'boolean' ? { untilBottom: args['untilBottom'] } : {}),
+        ...(typeof args['settle'] === 'boolean' ? { settle: args['settle'] } : {}),
+      })
       case 'browser_wait_for': return await this.waitFor(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, signal)
-      case 'browser_file_chooser': return await this.chooseFiles(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, (args['allowedDirs'] as string[]) ?? [], signal)
-      case 'browser_download': return await this.downloadUrl(String(args['url'] ?? ''), signal)
+      case 'browser_file_chooser':
+        // SECURITY (audit run8 P0): the upload allow-list is the HOST's session
+        // context (downloads dir + session workspace), never the script's input.
+        // Until programInvoke can obtain that context, this helper is refused —
+        // otherwise a script could upload any local file into the page.
+        throw browserError('policy', 'browser_run: the fileChooser helper is not wired yet — the upload allow-list must come from the session context, not from the program')
+
+      case 'browser_download': {
+        const wait = args['waitForCompletion'] !== false
+        if (!wait) { await this.downloadUrl(String(args['url'] ?? ''), signal); return { started: true } }
+        const before = this.highestDownloadId()
+        await this.downloadUrl(String(args['url'] ?? ''), signal)
+        const owner = this.downloadOwnerTab()
+        const entry = await this.waitForNewDownload(before, 60_000, owner, signal)
+        return entry === null ? { started: true, timedOut: true } : { started: true, download: entry }
+      }
       case 'browser_downloads_list': return { downloads: this.downloads({ ...(typeof args['status'] === 'string' ? { status: args['status'] as never } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
-      case 'browser_fetch': return await this.pageFetch(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, signal)
+      case 'browser_fetch': {
+        const rawHeaders = args['headers']
+        const headers: Record<string, string> = {}
+        if (Array.isArray(rawHeaders)) {
+          for (const line of rawHeaders) {
+            const text = String(line)
+            const index = text.indexOf(':')
+            if (index > 0) headers[text.slice(0, index).trim()] = text.slice(index + 1).trim()
+          }
+        } else if (typeof rawHeaders === 'object' && rawHeaders !== null) {
+          Object.assign(headers, rawHeaders as Record<string, string>)
+        }
+        return await this.pageFetch(Number(args['tab'] ?? this.pool.activeTab ?? 1), {
+          url: String(args['url'] ?? ''),
+          ...(typeof args['method'] === 'string' ? { method: args['method'] } : {}),
+          ...(Object.keys(headers).length === 0 ? {} : { headers }),
+          ...(typeof args['body'] === 'string' ? { body: args['body'] } : {}),
+        }, signal)
+      }
       case 'browser_emulate': return await this.emulate(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, signal)
       case 'browser_clipboard': return args['action'] === 'write' ? await this.clipboardWrite(String(args['text'] ?? ''), signal) : await this.clipboardRead(signal)
       case 'browser_history_search': return { entries: this.history({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }

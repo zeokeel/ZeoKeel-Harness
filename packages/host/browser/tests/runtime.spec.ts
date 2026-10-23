@@ -2243,8 +2243,44 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     await sleep(20)
     await runtime.closeAll(true)
     expect(runtime.listTabs()).toHaveLength(0)
+    // Forced path must run the SAME finish (R7): no origin credential bookkeeping
+    // is allowed to survive the switch.
+    const internals = runtime as unknown as { credentialOrigins: Map<unknown, unknown> }
+    expect(internals.credentialOrigins.size).toBe(0)
     cleanup()
   }, 30_000)
+
+  it('D1: busy reflects concurrent tabs and op log keeps per-tab order', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    await runtime.open('https://b.example')
+    const views = adapter.views
+    let releaseA!: () => void
+    const gateA = new Promise<void>((resolve) => { releaseA = resolve })
+    let startedA!: () => void
+    const enteredA = new Promise<void>((resolve) => { startedA = resolve })
+    views[0]!.transport.handler = async () => {
+      startedA()
+      await gateA
+      return { result: { value: 'a' } }
+    }
+    views[1]!.transport.handler = () => ({ result: { value: 'b' } })
+    const first = runtime.eval(1, '1')
+    await enteredA
+    const second = runtime.eval(2, '2')
+    await second
+    // Two tabs are in flight at once: busy must be true (no global serialization)
+    // and both operations must be attributed to their own tab in the op log.
+    expect(runtime.pool.isBusy()).toBe(true)
+    releaseA()
+    await first
+    expect(runtime.pool.isBusy()).toBe(false)
+    // Per-tab attribution: each op logged against the tab it ran on (order across
+    // tabs is not part of the contract; per-tab order is).
+    const evals = runtime.opLog.filter(entry => entry.tool === 'browser_eval')
+    expect(evals.map(entry => entry.tab).sort()).toEqual([1, 2])
+    cleanup()
+  })
 
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()

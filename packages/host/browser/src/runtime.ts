@@ -3451,21 +3451,10 @@ export class BrowserRuntime {
       }
       try {
         for (const id of [...this.tabs.keys()]) this.destroyTab(id)
-        // R7: closing EVERYTHING ends the session's origin accounting (account
-        // switch / shell 清除). Destroying one tab deliberately keeps its origin's
-        // value set (a later tab on that origin must still be scrubbed); this is
-        // the boundary where the previous account's values must not survive into
-        // the next one.
-        this.credentialOrigins.clear()
-        this.pool.clear()
-        for (const id of [...this.closingTabs]) this.closingTabs.delete(id)
       } finally {
-        // A window that is already destroyed must not abort the identity
-        // switch before the pool is empty (cross-account browse leak); the
-        // best-effort UI steps below are cosmetic.
-        try { this.relayout() } catch { /* window gone */ }
-        try { this.record('browser_close', 0, 'close browser (all tabs)', false, user ? 'user' : 'ai') } catch { /* log must not break switch */ }
-        try { this.hideWindow() } catch { /* window gone */ }
+        // The SAME finish runs for the normal and the forced path (P3-1): R7's
+        // origin accounting must end here in both, and the UI steps are cosmetic.
+        this.finishCloseAll(user)
       }
     }
     if (user) {
@@ -6039,6 +6028,29 @@ export class BrowserRuntime {
   }
 
   /**
+   * Shared close-all finish: destroys nothing, but ends the session bookkeeping.
+   * Called by the normal body AND by the forced clear, so R7's promise (the
+   * previous account's origin value sets must not survive the switch) holds
+   * whichever path ran.
+   * @param user - actor for the op log entry.
+   */
+  private finishCloseAll(user: boolean): void {
+    // R7: closing EVERYTHING ends the session's origin accounting (account
+    // switch / shell 清除). Destroying one tab deliberately keeps its origin's
+    // value set; this is the boundary where the previous account's values must
+    // not survive into the next one.
+    this.credentialOrigins.clear()
+    this.pool.clear()
+    for (const id of [...this.closingTabs]) this.closingTabs.delete(id)
+    // A window that is already destroyed must not abort the identity switch
+    // before the pool is empty (cross-account browse leak); the UI steps below
+    // are cosmetic.
+    try { this.relayout() } catch { /* window gone */ }
+    try { this.record('browser_close', 0, 'close browser (all tabs)', false, user ? 'user' : 'ai') } catch { /* log must not break switch */ }
+    try { this.hideWindow() } catch { /* window gone */ }
+  }
+
+  /**
    * Run close-all under L10, but NEVER leave tabs behind: a creation segment that
    * outlives the budget is cleared with a forced destroy (recorded). Session
    * switch relies on close-all leaving `listTabs() === 0` (P1-1, BR-1 family).
@@ -6056,7 +6068,8 @@ export class BrowserRuntime {
       // session switch must not proceed with the previous account's tabs alive.
       this.record('browser_close', 0, 'close-all forced after the creation segment did not settle', true)
       for (const id of [...this.tabs.keys()]) this.destroyTab(id)
-      this.pool.clear()
+      // Same finish as the normal path (R7 origin accounting included).
+      this.finishCloseAll(false)
     }
   }
 

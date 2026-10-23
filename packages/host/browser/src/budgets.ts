@@ -79,6 +79,23 @@ export const TAB_SLOT_WAIT_TIMEOUT_MS = 5_000
  * timeout-policy 在 deadline **到达时**替换整条结果，所以内部等待必须在它之前
  * 收手：留 1s 给结果投影、op-log 记录、账本落盘与回程。
  */
+
+/**
+ * Long-running tool budgets (D3: EVERY product latency lives here).
+ *
+ * The download receipt waits 60 s for a terminal status, so its registered
+ * budget must stay above that; the programming tool's budget must stay above the
+ * script budget. Conservation is asserted in `tests/budgets-conservation.spec.ts`.
+ */
+export const DOWNLOAD_COMPLETION_TIMEOUT_MS = 60_000
+export const BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS = DOWNLOAD_COMPLETION_TIMEOUT_MS + 30_000
+export const PROGRAM_SCRIPT_BUDGET_MS = 120_000
+export const BROWSER_PROGRAM_TOOL_TIMEOUT_MS = PROGRAM_SCRIPT_BUDGET_MS + 30_000
+/** Helper-call cap per program (failures count). */
+export const PROGRAM_MAX_HELPER_CALLS = 200
+/** Default/ceiling for the `expect` receipt wait. */
+export const EXPECT_TIMEOUT_DEFAULT_MS = 5_000
+export const EXPECT_TIMEOUT_MAX_MS = 10_000
 export const TOOL_DEADLINE_MARGIN_MS = 1_000
 
 /**

@@ -20,20 +20,28 @@ import type { BrowserSurface } from './surface.ts'
 import { httpOriginOf } from './credential-site.ts'
 import { snapshotNote } from './snapshot.ts'
 import { parseTargetSpec } from './locator.ts'
-import { BROWSER_TOOL_TIMEOUT_MS, BROWSER_WAIT_FOR_DEADLINE_MS, TOOL_DEADLINE_MARGIN_MS, WAIT_FOR_MAX_MS } from './budgets.ts'
-import { MODIFIER_BITS, PROGRAM_MAX_HELPER_CALLS, PROGRAM_SCRIPT_BUDGET_MS } from './runtime.ts'
+import {
+  BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS,
+  BROWSER_PROGRAM_TOOL_TIMEOUT_MS,
+  BROWSER_TOOL_TIMEOUT_MS,
+  BROWSER_WAIT_FOR_DEADLINE_MS,
+  DOWNLOAD_COMPLETION_TIMEOUT_MS,
+  EXPECT_TIMEOUT_DEFAULT_MS,
+  EXPECT_TIMEOUT_MAX_MS,
+  PROGRAM_MAX_HELPER_CALLS,
+  PROGRAM_SCRIPT_BUDGET_MS,
+  TOOL_DEADLINE_MARGIN_MS,
+  WAIT_FOR_MAX_MS,
+} from './budgets.ts'
+
+// Re-exported for the budget-registry tests (single source stays budgets.ts).
+export { BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS, BROWSER_PROGRAM_TOOL_TIMEOUT_MS, DOWNLOAD_COMPLETION_TIMEOUT_MS, EXPECT_TIMEOUT_DEFAULT_MS, EXPECT_TIMEOUT_MAX_MS } from './budgets.ts'
+import { MODIFIER_BITS } from './runtime.ts'
 import type { BrowserInteractionHit, BrowserWaitUntil } from './types.ts'
 
 /** Valid waitUntil values for navigation tools. */
 const WAIT_UNTILS: readonly BrowserWaitUntil[] = ['domcontentloaded', 'load', 'networkidle']
 
-/** Download receipts need more than the 30 s tool budget: the wait itself is 60 s
- * and the registered budget must stay above it (internal wait < registration). */
-export const BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS = 90_000
-/** Programming-mode tool budget: above the 120 s script budget (audit R1/R5). */
-export const BROWSER_PROGRAM_TOOL_TIMEOUT_MS = 150_000
-/** How long a download receipt waits for a terminal status. */
-const DOWNLOAD_COMPLETION_TIMEOUT_MS = 60_000
 
 const WAIT_CONDITIONS = ['element-present', 'element-visible', 'text-appear', 'url-change', 'url-match', 'network-idle', 'settled', 'function', 'popup', 'download', 'file-chooser'] as const
 
@@ -347,10 +355,6 @@ function uploadAllowDirs(runtime: BrowserRuntime, session: AgentProjectInfo['ses
  *   own disposers are not effect-scoped here, so dropping them left 32 tools
  *   registered against a disposed runtime (P2-29).
  */
-/** Default wait for an `expect` receipt. */
-export const EXPECT_TIMEOUT_DEFAULT_MS = 5_000
-/** Hard cap for `expect`: must stay well inside BROWSER_TOOL_TIMEOUT_MS. */
-export const EXPECT_TIMEOUT_MAX_MS = 10_000
 
 /**
  * Clamp the `expectTimeoutMs` tool argument into `[1, EXPECT_TIMEOUT_MAX_MS]`.

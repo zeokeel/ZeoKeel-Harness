@@ -30,6 +30,7 @@ import { appSurfaceAllowsUrl, asSurfaceWebContents, surfaceLabel, type BrowserSu
 import { TabPool, gateRefusal, type TabReservation } from './pool.ts'
 import { BrowserStore, stripSensitiveText, stripSensitiveUrl, type DownloadEntry, type HistoryEntry, type RecordActor } from './store.ts'
 import { maskContentText, validateEvalExpression, wrapEvalExpression, serializeEvalResult } from './eval-policy.ts'
+import { PROGRAM_MAX_HELPER_CALLS, PROGRAM_SCRIPT_BUDGET_MS } from './budgets.ts'
 import { SENSITIVE_KEY_PATTERN, isExactProseSensitiveKey } from './sensitive.ts'
 import { browserError, BrowserError, type BrowserErrorCode } from './errors.ts'
 import { httpOriginOf } from './credential-site.ts'
@@ -6326,11 +6327,6 @@ const MOD_ALIAS: Readonly<Record<string, 'alt' | 'ctrl' | 'meta' | 'shift'>> = {
 /** CDP modifier bitmask (Alt=1, Ctrl=2, Meta=4, Shift=8). */
 /** Cap on the TOTAL delay of a slow `type` (C6): delayMs × chars ≤ this. */
 export const TYPE_TOTAL_DELAY_LIMIT = 5_000
-
-/** Program script budget (tool registration must stay above it). */
-export const PROGRAM_SCRIPT_BUDGET_MS = 120_000
-/** Helper-call cap per program (failures count). */
-export const PROGRAM_MAX_HELPER_CALLS = 200
 
 /** Clipboard read cap (C7/R4): the model never receives an unbounded paste. */
 export const CLIPBOARD_READ_LIMIT = 64 * 1024

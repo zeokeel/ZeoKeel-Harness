@@ -5845,7 +5845,7 @@ export const RESERVED_HOTKEYS: readonly string[] = [
  */
 const SHADOW_QUERY_SOURCE = `
   const __query = (sel) => {
-    const parts = String(sel).split(/\s*>>>\s*/).filter((part) => part !== '');
+    const parts = String(sel).split(/\\s*>>>\\s*/).filter((part) => part !== '');
     let el = null;
     let scope = document;
     for (let index = 0; index < parts.length; index += 1) {
@@ -5863,7 +5863,7 @@ const SHADOW_QUERY_SOURCE = `
 /** Build the page-side element lookup snippet for one selector: the shadow
  * helper is only injected when the selector actually uses `>>>`, so the default
  * expressions stay byte-identical (existing assertion helpers recognise them). */
-function querySnippet(selector: string): string {
+export function querySnippet(selector: string): string {
   const json = JSON.stringify(String(selector))
   return /\s*>>>\s*/.test(String(selector))
     ? `${SHADOW_QUERY_SOURCE}\nconst el = __query(${json});`

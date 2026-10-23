@@ -79,9 +79,9 @@ const ELEMENT_TEXT_CAP = 4_096
 /** Page-side shadow-piercing resolver shared by the text extraction probe
  * (mirrors the runtime helper; `>>>` means shadow boundary and a hop without a
  * shadowRoot is a hard miss, never a silent light-DOM fallback). */
-const TEXT_SHADOW_QUERY = `
+export const TEXT_SHADOW_QUERY = `
   const __query = (sel) => {
-    const parts = String(sel).split(/\s*>>>\s*/).filter((part) => part !== '');
+    const parts = String(sel).split(/\\s*>>>\\s*/).filter((part) => part !== '');
     let el = null;
     let scope = document;
     for (let index = 0; index < parts.length; index += 1) {

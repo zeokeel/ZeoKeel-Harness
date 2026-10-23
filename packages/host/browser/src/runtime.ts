@@ -3830,6 +3830,9 @@ export class BrowserRuntime {
     const programRuntime = this.deps.programRuntime
     if (programRuntime === undefined) throw browserError('policy', 'browser_run: programming mode is not available in this deployment')
     if (signal?.aborted === true) throw browserError('interrupted', 'browser_run: cancelled')
+    // D 类 (driver): browser_run takes NO tab/global lock — its helpers do — but
+    // it must still respect the user gate at start and abort on a takeover.
+    this.assertGateStillOpen()
     const controller = new AbortController()
     const onAbort = (): void => controller.abort()
     signal?.addEventListener('abort', onAbort, { once: true })
@@ -3846,9 +3849,17 @@ export class BrowserRuntime {
     })
     try {
       let executed: { result: unknown, console?: string }
+      const takeover = this.takeoverRejection()
       try {
-        executed = await programRuntime.execute(String(program), bridge.browser as unknown as Readonly<Record<string, unknown>>, { signal: controller.signal })
+        executed = await Promise.race([
+          programRuntime.execute(String(program), bridge.browser as unknown as Readonly<Record<string, unknown>>, { signal: controller.signal }),
+          takeover.promise,
+        ])
       } catch (cause) {
+        if (cause instanceof BrowserError && cause.code === 'window-controlled') {
+          controller.abort()
+          throw cause
+        }
         if (controller.signal.aborted) throw browserError('interrupted', 'browser_run: cancelled (tool abort or user takeover)')
         const message = cause instanceof Error ? cause.message.split('\n')[0] ?? '' : String(cause).split('\n')[0] ?? ''
         throw browserError('policy', `browser_run: script failed — ${redactProgramConsole(message, text => this.redactProgramText(text), 500)}`)

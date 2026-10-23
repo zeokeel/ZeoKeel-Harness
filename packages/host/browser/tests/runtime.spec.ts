@@ -2317,6 +2317,45 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('D1/D 类: two browser_run scripts run concurrently and the run respects the gate', async () => {
+    const runs: Array<{ started: number, ended: number }> = []
+    const fakeProgram = {
+      execute: async (program: string): Promise<{ result: unknown }> => {
+        const entry = { started: Date.now(), ended: 0 }
+        runs.push(entry)
+        await new Promise(resolve => setTimeout(resolve, 80))
+        entry.ended = Date.now()
+        return { result: program }
+      },
+    }
+    const { runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    // D 类: no tab/global lock around the script, so two runs overlap.
+    const started = Date.now()
+    await Promise.all([runtime.runProgram('script-a'), runtime.runProgram('script-b')])
+    const elapsed = Date.now() - started
+    expect(runs).toHaveLength(2)
+    expect(elapsed).toBeLessThan(150)
+    // Gate: a user-held browser refuses to start a program (L1 admission check).
+    runtime.setUserControl(true, 'user')
+    await expect(runtime.runProgram('script-c')).rejects.toMatchObject({ code: 'window-controlled' })
+    runtime.setUserControl(false)
+    // …and a takeover DURING a run aborts it with window-controlled.
+    let release!: () => void
+    fakeProgram.execute = async () => {
+      await new Promise<void>((resolve) => { release = resolve })
+      return { result: null }
+    }
+    const pending = runtime.runProgram('script-d').then(() => 'ran', (error: unknown) => error as { code?: string })
+    await sleep(20)
+    runtime.setUserControl(true, 'user')
+    const outcome = await pending
+    expect((outcome as { code?: string }).code).toBe('window-controlled')
+    release()
+    runtime.setUserControl(false)
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

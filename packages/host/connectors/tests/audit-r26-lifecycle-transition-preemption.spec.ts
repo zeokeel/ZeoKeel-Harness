@@ -86,7 +86,13 @@ const sleep = async (ms: number): Promise<void> => { await new Promise(resolve =
 async function tempHome(): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), 'fix31-lifecycle-'))
   vi.stubEnv('DSH_HOME', home)
-  cleanups.push(async () => { await rm(home, { recursive: true, force: true }) })
+  // CI 实测（2026-10-23，连续两个 run 的 Gate 都因这里红）：后台 lifecycle 任务在
+  // dispose() 之后仍可能落一次盘，rm 与写入竞态 ⇒ ENOTEMPTY: rmdir .../connectors
+  // （与本功能无关的 flaky）。Node 的 maxRetries/retryDelay 对 ENOTEMPTY/EBUSY 重试，
+  // 比 sleep 稳定，也不改变用例语义。
+  cleanups.push(async () => {
+    await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  })
   return home
 }
 

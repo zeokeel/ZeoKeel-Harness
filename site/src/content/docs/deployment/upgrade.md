@@ -84,7 +84,8 @@ docker exec zeokeel-server /app/zeokeel-server --version   # 运行中的版本
 
 也可以直接看管理后台的**服务器信息**页：服务端自己检查更新并显示"发现新版本"（含目标镜像 tag）。
 
-- 检查地址来自 `ZEOKEEL_UPDATE_ENDPOINT`，留空 = 本渠道默认目录 `release.zeokeel.com/<渠道>/latest.json`；
+- 检查地址来自控制台「运维 → 系统配置」的 `deploy.update_endpoint`（保存即生效；`.env` 的
+  `ZEOKEEL_UPDATE_ENDPOINT` 是它的覆盖口，写了优先），留空 = 本渠道默认目录 `release.zeokeel.com/<渠道>/latest.json`；
 - 服务端有 **6 小时缓存**，刚发版时等待属正常延迟；
 - "一直不显示新版本"先看 `docker compose logs server` 里的 `channel resolved: …` 与
   `manifest channel "official" != this server's channel "…"` —— 那是渠道配置不自洽
@@ -114,7 +115,7 @@ df -h /opt | tail -1
 | 管理端存量会话失效（迁移 `0066`：会话令牌只存哈希） | **管理员需重新登录一次**，属预期，不是故障 |
 | 不可逆迁移（`0073` 删表、`0074` 改写应用配置） | 引入这两条的版本线**回滚 ≠ 只换镜像**，必须连库一起退 |
 | 网关限流缺省值变化 | 代码缺省改成"不限速"，但**库里已保存的 `settings.gateway.rate_limit` 不会被自动覆盖** —— 老库仍按旧值限流，要放开请在管理后台「网关」页显式改成 `0` 或清空 |
-| 应用平台内存档位 | 可用内存 < 4GiB 的机器必须显式写 `ZEOKEEL_WASM_MEMORY_PROFILE=small`，否则**升级后容器反复重启**（启动自检拒绝启动） |
+| 应用平台内存档位 | 可用内存 < 4GiB 的机器必须在控制台「运维 → 系统配置」里把 `wasm.memory_profile` 设成 `small`（**保存后需 `docker compose up -d server`**）；若升级后容器起不来、控制台进不去，用逃生口 —— `.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small`（env 优先级最高）。否则**升级后容器反复重启**（启动自检拒绝启动） |
 | 客户端行为变化（例如不再使用系统代理） | 只有"经代理才能出公网"的部署需要处置：打开渠道字段或真实进程环境变量里的退路 |
 | 应用访问模型与客户端同版本要求 | 旧客户端升级后打不开应用，属预期；要确保客户端跟着升 |
 
@@ -380,7 +381,7 @@ echo "$OLD" > VERSION
 | 现象 | 判据 | 恢复动作 |
 |---|---|---|
 | 升级后容器反复重启 | 日志里 `SchemaMismatchError` | **跨代回滚**：按第 7 节四步顺序（停服 → 恢复 `pg_dump` → 回退镜像 → 客户端回退） |
-| 升级后容器反复重启 | 日志里"WASM 应用平台启动自检失败…拒绝启动" | 可用内存 < 4GiB：`.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` 后 `docker compose up -d server` |
+| 升级后容器反复重启 | 日志里"WASM 应用平台启动自检失败…拒绝启动" | 可用内存 < 4GiB：容器起不来时控制台也进不去，只能走逃生口 —— `.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` 后 `docker compose up -d server`；起来后到控制台「运维 → 系统配置」把档位存成 `small` 并删掉这一行 |
 | `--version` 与 `.env` 声称的版本不一致 | 二进制自报值 ≠ 目标版本 | 说明容器没换到新镜像：多栈场景按第 5 节五项断言重做（关键看 `docker inspect <容器> --format '{{.Image}}'`） |
 | 升级后品牌变了 / 门户变成厂商品牌 | `/opt/zeokeel/CHANNEL` ≠ `/api/client/v2/channel` 的 `channel_id` | 用错渠道镜像：改 `.env` 指回本渠道的渠道 tag 后重建；不要继续用它升级 |
 | healthz 一直非 200 | `docker compose ps` / `logs` | 先确认 postgres healthy 与迁移是否仍在跑（首次 1–2 分钟）；仍不通按第 7 节回滚 |

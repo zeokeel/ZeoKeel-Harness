@@ -18,7 +18,7 @@ ZeoKeel Harness 的客户端**不单独发布**：三平台安装包打进服务
 | 前提 | 说明 |
 |---|---|
 | 服务端已部署且 `/healthz` 返回 200 | 见[容器化部署](/deployment/compose/) |
-| 服务端能给客户端一个**绝对 https** 的下载地址 | 反代场景要配 `ZEOKEEL_PUBLIC_BASE_URL`，否则清单按设计拒发 `client` 段 |
+| 服务端能给客户端一个**绝对 https** 的下载地址 | 部署后到控制台「运维 → 网关」页把「对外访问地址」填成本部署对外的 https 地址（settings `server.base_url`，保存即生效）；反代场景必配，否则清单按设计拒发 `client` 段 |
 | 员工机器能访问企业域名 | 只需要这一个地址，不需要任何公网 |
 | 员工客户端与服务端**同版本** | 应用（WASM）只在客户端内打开且要求两端同版本 |
 
@@ -102,10 +102,13 @@ http 链接。为什么后者更糟：客户端丢弃非 https 清单后界面�
 
 ## 下载地址是怎么定的（部署最常踩的一个坑）
 
-服务端按以下优先级推导"客户端可达的绝对地址"：
+服务端按以下优先级推导"客户端可达的绝对地址"。「对外访问地址」是 settings `server.base_url`，
+**主入口是控制台「运维 → 网关」页**（保存即生效；取值非法时不生效并打印一条告警）；
+`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` 只是它的**覆盖口**，非空时优先级最高、压过控制台保存值
+（改了这一行要重建 server 才生效）：
 
-1. `ZEOKEEL_PUBLIC_BASE_URL`（**配了就是唯一权威**）；
-2. 管理后台配置的对外地址（`settings: server.base_url`，取值非法时不生效并打印一条告警）；
+1. `ZEOKEEL_PUBLIC_BASE_URL`（**覆盖口，非空就是唯一权威**）；
+2. 控制台「运维 → 网关」页保存的「对外访问地址」（settings `server.base_url`）；
 3. 反向代理声明的 `X-Forwarded-Proto: https`；
 4. 本请求是 TLS 直连；
 5. 回环地址（本地开发，允许 http）。
@@ -126,8 +129,9 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 ```
 
 - 看到 `client.assets` 且地址是 `https://…` → 正常；
-- 看到 `client_unavailable` → 在 `.env` 补 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 后
-  `docker compose up -d server`。
+- 看到 `client_unavailable` → 登录控制台「运维 → 网关」页，把「对外访问地址」填成 `https://<域名>`
+  （保存即生效）。`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 是这一项的覆盖口（非空则优先，
+  写了要 `docker compose up -d server`），不是主入口。
 
 ## 客户端如何自动升级
 
@@ -194,7 +198,7 @@ curl -sk -o /dev/null -w '%{http_code}\n' -H 'Range: bytes=0-99' \
 
 | 现象 | 判据 | 恢复动作 |
 |---|---|---|
-| 员工端"检查更新永远说已是最新" | 清单里有 `client_unavailable` | 配 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 后 `docker compose up -d server`；反代场景必配 |
+| 员工端"检查更新永远说已是最新" | 清单里有 `client_unavailable` | 登录控制台「运维 → 网关」页把「对外访问地址」填成对外 https 地址（settings `server.base_url`，保存即生效）；`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 是它的覆盖口，写了要 `docker compose up -d server`；反代场景必配 |
 | 门户页没有下载入口 | 清单没有 `client` 段且**没有** `client_unavailable` | 说明镜像里没带客户端资产（`CLIENT-RELEASE.json` 读不到）：确认用的是正式发布包，而不是本地自建镜像。另一种成因是管理端设置 `portal.public=false`（门户不对外开放，根路径会跳转到管理后台登录页）—— 清掉该设置即可 |
 | 下载到一半断流 | 客户端提示可重试 | 属预期：文件大、链路慢；客户端支持 Range 续传，重试会接着下。服务端侧单次响应的写截止 = max(5 分钟, 体积/64 KiB/s)，上限 1 小时 |
 | 下载 404 | 响应是 JSON 信封 `NOT_FOUND` | 文件名不在资产清单里，或扩展名不在白名单内；以清单里的 `file` 为准，不要手拼文件名 |

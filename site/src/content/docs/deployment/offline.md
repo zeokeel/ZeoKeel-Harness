@@ -34,7 +34,9 @@ description: 服务器或员工机器不能访问外网时的 ZeoKeel Harness �
 放在按渠道分目录的 HTTPS 站点上。这样"完全隔离的机房"只需要**一次带外传输**（U 盘/跳板机）
 就能完成部署与升级，而不需要在这台机器上开一个 registry 端口或配一套镜像代理。
 
-**为什么更新检查"留空 ≠ 关闭"。** `ZEOKEEL_UPDATE_ENDPOINT` 留空表示"用本渠道的默认目录"，
+**为什么更新检查"留空 ≠ 关闭"。** 更新清单地址在控制台「运维 → 系统配置」的
+`deploy.update_endpoint` 里改（保存即生效；`.env` 的 `ZEOKEEL_UPDATE_ENDPOINT` 是它的覆盖口，
+写了优先）：留空表示"用本渠道的默认目录"，
 显式写 `off` / `none` / `-` / `disabled` 才是关闭。把"留空"解释成"关闭"会让**所有**默认部署
 静默失去升级提示；反过来，把"关闭"解释成"留空"会向纯内网机器发外网请求。
 两种误读都有真实代价，所以语义必须显式。
@@ -98,13 +100,16 @@ docker load -i image.tar
 ### 3. 关闭或改造更新检查
 
 ```bash
-# 关闭更新检查（纯内网、不希望任何外发请求时）
-ZEOKEEL_UPDATE_ENDPOINT=off
+# 关闭更新检查（纯内网、不希望任何外发请求时）：登录控制台 →「运维 → 系统配置」→
+#   deploy.update_endpoint 填 off（保存即生效）
+# 等价的 env 覆盖口（存量部署的既有写法，改完要 docker compose up -d server）：
+# ZEOKEEL_UPDATE_ENDPOINT=off
 ```
 
 - **留空不等于关闭**：留空 = 用本渠道默认目录；要关闭必须显式写 `off` / `none` / `-` / `disabled`；
 - 内网有自建的静态文件服务时，也可以把镜像包与 `latest.json` 镜像到内网，并把
-  `ZEOKEEL_UPDATE_ENDPOINT` 指向内网地址 —— `latest.json` 的 `channel_id` 必须与本部署渠道一致，
+  `deploy.update_endpoint`（或覆盖口 `ZEOKEEL_UPDATE_ENDPOINT`）指向内网地址 —— `latest.json` 的
+  `channel_id` 必须与本部署渠道一致，
   否则会被判为"检查更新不可用"（这是有意的：宁可明说不可用，也不静默跨渠道升级）；
 - 关闭后管理后台「服务器信息」页不再显示新版本提示，升级由运维按[升级流程](/deployment/upgrade/)手工执行。
 
@@ -142,7 +147,8 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 ```
 
 第二条必须能看到 `client.assets` 且地址为绝对 https —— 内网反代/证书场景下最容易漏配
-`ZEOKEEL_PUBLIC_BASE_URL`，症状是员工端"检查更新永远说已是最新"。
+「对外访问地址」（控制台「运维 → 网关」页的 `server.base_url`；覆盖口是 `.env` 的
+`ZEOKEEL_PUBLIC_BASE_URL`），症状是员工端"检查更新永远说已是最新"。
 注意这一条与"更新检查"是两件事：**客户端从本服务器取包**（这条），**服务端从更新服务器检查新版本**（第 3 步）。
 
 ## 判据
@@ -163,7 +169,7 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 | 目标版本已超出保留窗口（404） | 下载返回 404 | 更新服务器每个渠道**只保留最近 2 个版本**（最新 + 上一个）：从 GitHub Release 取（仅公开渠道），或从本机保留的旧镜像 tag 回滚 |
 | 同版本号重发后拿到的还是旧字节 | 下载内容的 sha256 与新版 `SHA256SUMS` 不一致 | `<渠道>/releases/<版本>/` 下的 zip 与 `SHA256SUMS` 是**不可变长缓存**（`immutable`）：同版本号覆盖后边缘可能仍发旧字节。要么按新版本号发布，要么在 URL 上加一个缓存穿透参数再校验 |
 | 内网镜像的清单被判"检查更新不可用" | 日志里 `manifest channel "…" != this server's channel "…"` | 内网 `latest.json` 的 `channel_id` 必须与本部署渠道一致 —— 这条校验是防止跨渠道升级的，不要绕过 |
-| 纯内网机器仍发外网请求 | 抓包/防火墙日志 | `ZEOKEEL_UPDATE_ENDPOINT` 写的是留空而不是 `off`：留空 = 用默认公网目录 |
+| 纯内网机器仍发外网请求 | 抓包/防火墙日志 | 更新清单地址（控制台「运维 → 系统配置」的 `deploy.update_endpoint`，env 覆盖口 `ZEOKEEL_UPDATE_ENDPOINT`）写的是留空而不是 `off`：留空 = 用默认公网目录 |
 | 员工首次连接报证书不受信任 | 仅 `internal` 模式 | 属预期：分发 Caddy 本地 CA 给员工机器，或改用 `manual` 挂企业证书 |
 | 镜像导入后容器启动即退出 | 日志"渠道不一致"或"渠道配置非法" | 取错了渠道的包：换成本渠道的包重取（见[渠道与白标](/deployment/channels/)） |
 | 离线环境里想回滚却找不到旧镜像 | `docker image ls` 里没有旧版本 tag | 保留策略只覆盖更新服务器：离线部署必须**在本机保留旧镜像 tag**，或提前把旧包带进来 |

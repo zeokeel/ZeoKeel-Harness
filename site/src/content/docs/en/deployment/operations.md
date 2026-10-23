@@ -79,8 +79,9 @@ Restore steps live in the rollback section of [Upgrade, backup & rollback](/en/d
 the upgrade and needs explicit consent).
 
 **Moving to another machine**: copy the whole deployment directory (keep file permissions, especially
-for `zeokeel-data/` and `certs/`), then adjust `DOMAIN` / `ZEOKEEL_PUBLIC_BASE_URL` and the certificate
-mode in `.env`.
+for `zeokeel-data/` and `certs/`), then adjust `DOMAIN` and the certificate mode in `.env`; re-confirm the
+public base URL on the new machine's console **Operations → Gateway** page (`.env`'s
+`ZEOKEEL_PUBLIC_BASE_URL` is its override port).
 
 ## Certificates and reverse proxy
 
@@ -99,7 +100,9 @@ cat > docker-compose.override.yml <<'EOF'
 services:
   server:
     environment:
-      # Mandatory behind a reverse proxy: without a safe https address the manifest refuses to emit download links
+      # The public base URL is preferably filled in on the console's Operations → Gateway page
+      # (effective on save); here it is the compose-level env override port (a non-empty value wins,
+      # which is how reverse-proxy setups often pin it)
       ZEOKEEL_PUBLIC_BASE_URL: ${ZEOKEEL_PUBLIC_BASE_URL:-https://harness.example.com}
     ports:
       # Same address as the existing vhost's upstream (example: a shared Caddy using 172.20.0.1:8082)
@@ -172,15 +175,22 @@ containers on the same machine:
 | Database migrations | `docker compose logs server \| grep -i 'migrate:'` | one line before and after each migration; a `migrate: SLOW migration` line means this upgrade held locks for a long time |
 | Disk | `df -h /opt` | enough headroom for one image archive plus one backup |
 
-Operational knobs worth knowing (all in `.env`; run `docker compose up -d server` after editing):
+Operational knobs worth knowing. **Since 2026-10-23 the main entry point is the console's
+Operations → System config page** (saved values take effect immediately; keys marked "restart required"
+apply after `docker compose up -d server`). The env names below remain **override ports** — they still
+work, and they **win** over the console's saved value (the startup log names them):
 
 | Variable | Purpose | When to touch it |
 |---|---|---|
-| `ZEOKEEL_WASM_MEMORY_PROFILE` | App-platform memory profile (`default` / `small` / `large`) | A host with less than 4 GiB available memory must use `small`, otherwise the startup self-check refuses to start |
-| `ZEOKEEL_COMPILE_ISOLATION` | OS-level isolation for the app compile subprocess (`require` / `auto` / `off`) | Production should use `require`: refuse to start rather than silently degrade |
+| `ZEOKEEL_WASM_MEMORY_PROFILE` | App-platform memory profile (`default` / `small` / `large`) → console `wasm.memory_profile` (**restart required**) | A host with less than 4 GiB available memory must use `small`, otherwise the startup self-check refuses to start. **While the container is down there is no console to reach** — only then write it in `.env` (escape hatch), and once it is up save `small` on the console and delete that line |
+| `ZEOKEEL_COMPILE_ISOLATION` | OS-level isolation for the app compile subprocess (`require` / `auto` / `off`) → console `wasm.compile_isolation` (**restart required**) | Production should use `require`: refuse to start rather than silently degrade |
 | `ZEOKEEL_MIGRATION_LOCK_TIMEOUT_MS` / `ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS` / `ZEOKEEL_MIGRATION_SLOW_MS` | Bounded lock-wait budgets for migrations and the slow-migration warning threshold (milliseconds) | Raise them temporarily when the startup log shows a lock timeout and it is confirmed to be an operations-side long transaction (`pg_dump` / long query / idle in transaction) |
-| `ZEOKEEL_AUDIT_CHAIN_INTERVAL` | Audit hash-chain verification interval (Go duration, default `1h`) | It trades the tamper-visibility window against one full read-only table scan per round |
+| `ZEOKEEL_AUDIT_CHAIN_INTERVAL` | Audit hash-chain verification interval (Go duration, default `1h`) → console `audit.chain_interval` (**restart required**) | It trades the tamper-visibility window against one full read-only table scan per round |
 | `ZEOKEEL_DB_MAX_OPEN_CONNS` | Database connection pool ceiling | Lower it for multi-instance deployments or a managed PostgreSQL with a tight quota |
+
+> The three migration budgets and `ZEOKEEL_DB_MAX_OPEN_CONNS` are **deliberately not stored in the
+> database** (they must take effect before the database is usable) and stay in `.env` only; adjust the
+> other three on the console's **Operations → System config** page.
 
 Two hot-adjustable groups in the admin console (effective immediately, no restart):
 
@@ -226,7 +236,7 @@ holds, diagnose with the next section instead of waiting it out.
 
 | Symptom | Criterion (how to confirm) | Recovery |
 |---|---|---|
-| Containers keep restarting | `docker compose ps` shows a rising restart count; `docker compose logs --tail=100 server` | Two most common causes: the PostgreSQL password does not match `pg-data`; or available memory is below 4 GiB while the profile is `default` (the log says the startup self-check refused to start) ⇒ set `small` and recreate |
+| Containers keep restarting | `docker compose ps` shows a rising restart count; `docker compose logs --tail=100 server` | Two most common causes: the PostgreSQL password does not match `pg-data`; or available memory is below 4 GiB while the profile is `default` (the log says the startup self-check refused to start) ⇒ there is no console to reach while the container is down, so use the escape hatch: write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env` and recreate; once it is up, save `small` on the console's **Operations → System config** page and delete that line |
 | healthz stays non-200 | `docker compose ps` to see whether postgres is healthy | The first start needs 1–2 minutes for migrations; if it still fails, read `logs postgres` and `logs server` |
 | The container exits at startup with `SchemaMismatchError` | the log names the migration version | **Cross-generation rollback**: stop the service → restore the pre-upgrade `pg_dump` → roll the image back → roll clients back; the image alone is not enough |
 | caddy fails to create: `not a directory` | `docker compose ps` shows no caddy | `TLS_MODE` is misspelled (the mount source `Caddyfile.<mode>` does not exist) |
@@ -234,7 +244,7 @@ holds, diagnose with the next section instead of waiting it out.
 | Subnet conflict | an existing network uses the same subnet | Change `NETWORK_SUBNET` and the three fixed IPs; if `zeokeel-net` exists with a different subnet, confirm before touching it |
 | postgres exits immediately, the log mentions `OLD_DATABASES` / `unused mount` | log keywords | Old PG16-era data layout: migrate with PostgreSQL's dump/restore; do not experiment with the mount point |
 | Certificate warnings / clients cannot connect | `internal` / `auto` mode only | `internal` needs Caddy's local CA distributed to employee machines; `auto` requires the domain to reach this host directly with 80/443 open (a CDN breaks it) |
-| Employees see "always up to date" | The manifest contains `client_unavailable` | Set `ZEOKEEL_PUBLIC_BASE_URL` and recreate the server (see [Client delivery & updates](/en/deployment/client-delivery/)) |
+| Employees see "always up to date" | The manifest contains `client_unavailable` | Fill in the public base URL on the console's **Operations → Gateway** page (effective on save; `.env`'s `ZEOKEEL_PUBLIC_BASE_URL` is the override port and needs a server recreate), see [Client delivery & updates](/en/deployment/client-delivery/) |
 | "New version available" never appears | the startup log's `channel resolved: …` and `manifest channel "…" != …` | The three channel values disagree, or the endpoint is set to `off`; the server caches for 6 hours, so a delay right after a release is normal |
 | Apps open but publishing a new version is refused | `/readyz`'s publish blockers and `actions` | Usually a full app-platform compile cache: clear the derived cache under `<deployment directory>/zeokeel-data/_compile-cache/` (no restart needed) and retry the publish |
 | The super admin **password** is forgotten | is there **another** super admin? | Yes: have them reset it in the admin console under users → reset password (that revokes all of the account's sessions and forces a password change on next sign-in). No: `--reset-mfa <user>` does **not** reset the password (it only clears MFA and revokes sessions), so with a single super admin and no password the only way is to rewrite that account's `users.password_hash` in the database (an Argon2id-encoded string, format in `server/internal/util/password.go`) and set `password_must_change` to 1, then sign in and change it immediately; **back up first** |

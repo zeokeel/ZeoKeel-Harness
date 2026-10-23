@@ -84,12 +84,12 @@ Three mandatory variables (**confirm them with the user; do not invent them**):
 | `TLS_MODE` | Certificate mode: `internal` / `auto` / `manual` | Intranet IP → `internal` |
 | `ZEOKEEL_ADMIN_PASSWORD` | Initial super admin password (≥ 10 characters) | Generate a strong password on site |
 
-Plus two that are strongly recommended:
+Plus two that are strongly recommended (**since 2026-10-23 both live in the console, not in `.env`**):
 
-| Variable | Why |
-|---|---|
-| `ZEOKEEL_PUBLIC_BASE_URL` | This server's absolute public https address. Download URLs in the client update manifest must be absolute https, and when the server cannot derive a safe address it **refuses to emit** the `client` section by design (`client_unavailable`) — users then see "the update check always says it is already up to date". Mandatory in reverse-proxy setups |
-| `ZEOKEEL_WASM_MEMORY_PROFILE` | The app-platform memory profile. A host with less than 4 GiB available memory must select `small`, otherwise the startup self-check refuses to start (the container restarts in a loop) |
+| Item | Where to configure it | Why |
+|---|---|---|
+| Public base URL | Console **Operations → Gateway** page (setting `server.base_url`) | This server's absolute public https address. Download URLs in the client update manifest must be absolute https, and when the server cannot derive a safe address it **refuses to emit** the `client` section by design (`client_unavailable`) — users then see "the update check always says it is already up to date". Mandatory in reverse-proxy setups. `.env`'s `ZEOKEEL_PUBLIC_BASE_URL` is its override port (a non-empty value wins) |
+| App-platform memory profile | Console **Operations → System config** page (`wasm.memory_profile`, **applies after `docker compose up -d server`**) | A host with less than 4 GiB available memory must select `small`, otherwise the startup self-check refuses to start (the container restarts in a loop). `.env`'s `ZEOKEEL_WASM_MEMORY_PROFILE` is still an override port, and the **only escape hatch when the container will not come up** (see below) |
 
 ## Procedure
 
@@ -203,28 +203,39 @@ ADMIN_USER=admin
 ZEOKEEL_ADMIN_PASSWORD=<generated admin password>
 PG_PASSWORD=<generated database password>
 TZ=Asia/Shanghai
-# Absolute public address: mandatory behind a reverse proxy, otherwise the client manifest refuses to emit download links
-ZEOKEEL_PUBLIC_BASE_URL=https://<confirmed domain>
-# Hosts with less than 4 GiB available memory must select small
+# Absolute public address: preferred route is the console's Operations → Gateway page ("public base URL")
+# after deployment; a reverse-proxy setup may also set it here explicitly (env override port, highest
+# priority, the pre-existing form for long-lived deployments)
+# ZEOKEEL_PUBLIC_BASE_URL=https://<confirmed domain>
+# Escape hatch when the host has less than 4 GiB available memory AND the container will not come up
+# (no console to reach): bring it up with this, then save the profile as small on the console's
+# Operations → System config page and delete this line
 # ZEOKEEL_WASM_MEMORY_PROFILE=small
 EOF
 chmod 600 .env
 ```
 
 Only `DOMAIN`, `TLS_MODE`, `ZEOKEEL_ADMIN_PASSWORD` and `PG_PASSWORD` are mandatory; every other key
-has a default. Common optional keys:
+has a default.
+
+**Since 2026-10-23 the main entry point for runtime knobs is the console's Operations → System config
+page** (saved values take effect immediately; keys marked "restart required" apply after
+`docker compose up -d server`), so day-to-day operations do not have to write them into `.env`. The same
+environment variable in `.env` remains an **override port**: it still works, and it **wins** over the
+console's saved value (the startup log names the keys it overrode). The table below lists what can still
+go into `.env` — for the rows that name a console page, new deployments should configure it there.
 
 | Variable | Default | Notes |
 |---|---|---|
 | `SERVER_IMAGE` | `zeokeel-harness-server:latest` | **Always write an explicit version tag**; `latest` is not reproducible and cannot anchor a rollback |
-| `ZEOKEEL_PUBLIC_BASE_URL` | derived from the request | When set it is the **only authority**; client download URLs must be absolute https |
+| `ZEOKEEL_PUBLIC_BASE_URL` | derived from the request | Override port: the main entry is the public base URL on the console's **Operations → Gateway** page (setting `server.base_url`); client download URLs must be absolute https, and when set the env value is the **only authority** |
 | `ZEOKEEL_TRUSTED_PROXIES` | derived from `CADDY_IP` | Trusted proxy addresses; login/MFA/OIDC rate limits resolve the real client IP from them. Only set explicitly when the proxy changes |
 | `ZEOKEEL_CHANNEL` | empty (use the image's channel) | **Leave it empty**; if set it must match the channel inside the image or the server refuses to start |
-| `ZEOKEEL_UPDATE_ENDPOINT` | empty = this channel's default directory | **Empty does not mean off**; write `off` to disable update checks |
-| `ZEOKEEL_LOGIN_MAX_ATTEMPTS` | server default | Test environments only — otherwise repeated sign-ins can lock the admin account |
+| `ZEOKEEL_UPDATE_ENDPOINT` | empty = this channel's default directory | Console: `deploy.update_endpoint` on **Operations → System config** (effective on save); **empty does not mean off** — write `off` to disable update checks. An env value still works and wins |
+| `ZEOKEEL_LOGIN_MAX_ATTEMPTS` | server default | Console: `auth.login_max_attempts` on **Operations → System config**; test environments only — otherwise repeated sign-ins can lock the admin account (env is the override port) |
 | `NETWORK_SUBNET` / `CADDY_IP` / `SERVER_IP` / `PG_IP` | `172.28.0.0/24` and `.2/.3/.4` | Change them together when the subnet conflicts |
 | `CADDY_HTTP_PORT` / `CADDY_HTTPS_PORT` | `80` / `443` | Changing them means editing the Caddyfile too |
-| `ZEOKEEL_COMPILE_ISOLATION` | `auto` | OS-level isolation for the app compile subprocess; production should use `require` (refuse to start when isolation is unavailable) |
+| `ZEOKEEL_COMPILE_ISOLATION` | `auto` | Console: `wasm.compile_isolation` on **Operations → System config** (**applies after recreating the server**); OS-level isolation for the app compile subprocess, production should use `require` (refuse to start when isolation is unavailable). Env is the override port |
 
 > `ZEOKEEL_ADMIN_PASSWORD` is used only on the **first start** to create the super admin (idempotently
 > skipped once `admin` exists); after the first successful sign-in you can blank the line to stop
@@ -279,6 +290,8 @@ If `CADDY_HTTPS_PORT` is not 443, replace both `443` occurrences with the real p
 
 ### 5. Deployment self-check
 
+**One mandatory step on a first deployment**: sign in to the console (`https://$DOMAIN/admin/`) → **Operations → Gateway** → fill in the public base URL as this deployment's public https address (for example `https://<domain>`; setting `server.base_url`, **effective on save**). If it is empty or not https, the update manifest refuses to emit the `client` section by design (`client_unavailable`) and employees see "the update check always says it is already up to date". `.env`'s `ZEOKEEL_PUBLIC_BASE_URL` is the **override port** for that item (a non-empty value wins; writing it requires `docker compose up -d server`) — it is not the main entry.
+
 ```bash
 cd /opt/zeokeel
 docker compose ps                                   # three containers Up
@@ -289,9 +302,10 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/channel"
 ```
 
-The last two must show `client.assets` with **absolute https** URLs; `client_unavailable` means
-`ZEOKEEL_PUBLIC_BASE_URL` is not set. The `channel_id` from `/api/client/v2/channel` must equal
-`/opt/zeokeel/CHANNEL`.
+The last two must show `client.assets` with **absolute https** URLs; `client_unavailable` means the
+public base URL is not set (console **Operations → Gateway** page, or `.env`'s
+`ZEOKEEL_PUBLIC_BASE_URL` — env is the override port for that setting). The `channel_id` from
+`/api/client/v2/channel` must equal `/opt/zeokeel/CHANNEL`.
 
 ### 6. Hand over to employees
 
@@ -323,9 +337,9 @@ The last two must show `client.assets` with **absolute https** URLs; `client_una
 | Subnet conflict | `docker network ls` already shows the same subnet | Change `NETWORK_SUBNET` and the three fixed IPs; if `zeokeel-net` exists with a different subnet, confirm before touching it |
 | caddy fails to create: `not a directory` | `docker compose ps` shows no caddy | `TLS_MODE` is misspelled (the mount source `Caddyfile.<mode>` does not exist) |
 | postgres exits immediately | the log mentions `OLD_DATABASES` / `unused mount` | Old PG16-era data layout: migrate with PostgreSQL's dump/restore first, then deploy |
-| The server restarts in a loop | the log says the WASM platform self-check refused to start | Less than 4 GiB available memory: write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env`, then `docker compose up -d server` |
+| The server restarts in a loop | the log says the WASM platform self-check refused to start | Less than 4 GiB available memory: there is no console to reach here, so write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env` and run `docker compose up -d server` to bring it up, then save the profile as `small` on the console's **Operations → System config** page and delete that line |
 | healthz still non-200 after 2 minutes | `docker compose ps` shows postgres not healthy | Read `docker compose logs --tail=100 postgres` first (password not matching `pg-data` is the most common), then the server log |
-| `client_unavailable` in the manifest | that field is present | Set `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>`, then `docker compose up -d server` |
+| `client_unavailable` in the manifest | that field is present | Fill in the public base URL on the console's **Operations → Gateway** page (effective on save); `.env`'s `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` is the override port — write it and run `docker compose up -d server` |
 | First client connection reports an untrusted certificate | `internal` mode only | Distribute Caddy's local CA to employee machines, or switch to `manual` |
 | Channel mismatch | `/opt/zeokeel/CHANNEL` ≠ `channel_id` from `/api/client/v2/channel` | The container refuses to start: check whether `.env` still carries `ZEOKEEL_CHANNEL=official` (branded deployments must delete that line) |
 

@@ -267,6 +267,13 @@ Several of these are hard checks at save time, not advice:
 - **`instance_memory_mb` is the only entry that needs a restart**: it lives in the runtime's immutable configuration. Everything else is pushed immediately; the three "next new app-database handle" entries neither block the save nor require a restart.
 - Precedence: **saved console value > deployment memory profile (environment variable) > compile-time default**. At startup, a saved setting above the watermark is **rolled back to the profile with a warning** instead of refusing to start (so one bad setting cannot lock the server out).
 
+Note that `settings.wasm.limits` and `wasm.memory_profile` are **two different chains** — do not conflate them:
+
+- `settings.wasm.limits` (console **App centre → Limits**) is the **runtime limit set**; "saved console value" above refers to it. It **takes precedence over** the deployment profile, and only fields never saved in the console fall back to the profile's numbers;
+- `wasm.memory_profile` (console **Operations → System config**) is the **profile itself**: concurrency × per-instance memory × module cache (theoretical peak, with the startup self-check and runtime enforcement sharing one set of numbers). Saving it **requires `docker compose up -d server`** to rebuild the container.
+
+The environment variables in these two chains (`ZEOKEEL_WASM_MEMORY_PROFILE`) are **override ports only**, never the configuration entry: day-to-day changes are made in the console, and env is used only as the escape hatch when the container will not come up (and hence the console is unreachable).
+
 ## Boundaries and failure behaviour
 
 ### A two-layer error model

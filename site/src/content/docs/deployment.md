@@ -222,6 +222,12 @@ https://release.zeokeel.com/<渠道>/releases/<版本>/SHA256SUMS           ← 
 | 5 | 客户端清单里有 `client.assets`，地址是**绝对 https** | `curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/updates/manifest"` |
 | 6 | 本栈渠道与镜像一致 | `docker exec zeokeel-server cat /opt/zeokeel/CHANNEL` 与 `GET /api/client/v2/channel` 的 `channel_id` 相同 |
 
+> **首次部署必做的一步（第 5 条成立的前提）**：登录控制台 →「**运维 → 网关**」→ 把「对外访问地址」
+> 填成本部署对外的 https 地址（settings `server.base_url`，保存即生效）。不填或填成非 https 时，
+> 更新清单会按设计拒发 `client` 段（`client_unavailable`），员工端表现为"检查更新永远说已是最新"。
+> `.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` 是这一项的覆盖口（非空则优先，写了要 `docker compose up -d server`），
+> 不是主入口。
+
 **怎么算失败**：第 2 条 120 秒仍非 200、第 3 条版本不符、第 5 条出现 `client_unavailable`、
 第 6 条两个渠道不一致 —— 任何一条不成立都**不要**报"部署完成"，按[边界与失败行为](#边界与失败行为)
 定位；升级场景下任何一条不成立都直接走[回滚](/deployment/upgrade/)。
@@ -233,10 +239,10 @@ https://release.zeokeel.com/<渠道>/releases/<版本>/SHA256SUMS           ← 
 | 服务端起来但员工连不上 | `internal` 模式下客户端提示证书不受信任 | 属预期：把 Caddy 本地 CA 分发给员工机器导入信任库，或改用 `manual` 挂企业证书 |
 | `auto` 模式证书一直签不下来 | Caddy 日志里是 ACME 校验失败 | 域名必须**直连**本机且 80/443 对公网开放；经 CDN / 只有 IP ⇒ 改用 `manual` / `internal` |
 | caddy 容器创建失败，报 `not a directory` | 挂载源 `Caddyfile.<mode>` 不存在 | `TLS_MODE` 拼写错误（只有 `internal` / `auto` / `manual` 三个取值） |
-| 容器反复重启 | `docker compose logs --tail=100 server` | 常见两种：PG 密码与 `pg-data` 不一致；可用内存 < 4GiB 而档位仍是 `default`（日志里是"WASM 应用平台启动自检失败…拒绝启动"）⇒ 在 `.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` |
+| 容器反复重启 | `docker compose logs --tail=100 server` | 常见两种：PG 密码与 `pg-data` 不一致；可用内存 < 4GiB 而档位仍是 `default`（日志里是"WASM 应用平台启动自检失败…拒绝启动"）⇒ 这是**唯一留给 env 的场景**（逃生口）：容器起不来时控制台也进不去，只能在 `.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` 把服务拉起来，再进控制台「运维 → 系统配置」把档位存成 `small` 并删掉这一行 |
 | healthz 一直非 200 | `docker compose ps` 看 postgres 是否 healthy | 首次启动要跑全部数据库迁移，需要 1–2 分钟；超过仍不通看服务端日志 |
 | `docker compose up` 报端口/网段冲突 | `ss -tlnp`、`docker network inspect` | 改端口要**同步改 Caddyfile**；网段冲突改 `NETWORK_SUBNET` 与三个固定 IP；已有 `zeokeel-net` 且子网不一致时**停下来确认**，不要 `docker network rm` |
-| 员工端"检查更新永远说已是最新" | 清单里出现 `client_unavailable` | 服务端给不出绝对 https 下载地址：在 `.env` 配 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 后 `docker compose up -d server` |
+| 员工端"检查更新永远说已是最新" | 清单里出现 `client_unavailable` | 服务端给不出绝对 https 下载地址：在控制台「运维 → 网关」页填「对外访问地址」（settings `server.base_url`，保存即生效）；`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 是它的覆盖口，写了要 `docker compose up -d server`，且优先级最高 |
 | 应用打不开 / 提示不可用 | 客户端版本低于服务端 | 应用只在桌面客户端内打开且要求两端同版本：把客户端升到配套版本；旧客户端打不开是预期行为，不是故障 |
 | 80/443 已被同机别的服务占用 | `ss -tlnp \| grep -E ':(80\|443)\b'` | 不要抢端口：只起 `server + postgres` 并入现有反代，见[运维与排障](/deployment/operations/) |
 

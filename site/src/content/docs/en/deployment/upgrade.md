@@ -96,8 +96,9 @@ docker exec zeokeel-server /app/zeokeel-server --version   # running version
 The admin console's **server info** page also shows a "new version available" hint (including the
 target image tag), because the server performs the update check itself.
 
-- The check address comes from `ZEOKEEL_UPDATE_ENDPOINT`; empty = this channel's default directory
-  `release.zeokeel.com/<channel>/latest.json`;
+- The check address comes from `deploy.update_endpoint` on the console's **Operations → System config**
+  page (effective on save; `.env`'s `ZEOKEEL_UPDATE_ENDPOINT` is its override port and wins when set);
+  empty = this channel's default directory `release.zeokeel.com/<channel>/latest.json`;
 - The server caches the result for **6 hours**, so a delay right after a release is normal;
 - If no new version ever appears, look at `channel resolved: …` and
   `manifest channel "official" != this server's channel "…"` in `docker compose logs server` — that is a
@@ -130,7 +131,7 @@ automatically.
 | Existing admin sessions are invalidated (migration `0066`: session tokens are stored hashed) | **Administrators must sign in once more**; that is expected, not a fault |
 | Irreversible migrations (`0073` drops tables, `0074` rewrites app configuration) | For version lines that introduced them, **a rollback is not just an image swap** — the database must roll back with it |
 | The default gateway rate limit changed | The code default became "no rate limit", but **an already-stored `settings.gateway.rate_limit` is not overwritten** — an old database keeps the old limit. To lift it, set the value to `0` (or clear it) explicitly on the admin **gateway** page |
-| App-platform memory profile | A host with less than 4 GiB available memory must set `ZEOKEEL_WASM_MEMORY_PROFILE=small`, otherwise the container **restarts in a loop after the upgrade** (the startup self-check refuses to start) |
+| App-platform memory profile | A host with less than 4 GiB available memory must set `wasm.memory_profile` to `small` on the console's **Operations → System config** page (**applies after `docker compose up -d server`**); if the container will not come up after the upgrade and the console is unreachable, use the escape hatch — write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env` (env wins). Otherwise the container **restarts in a loop after the upgrade** (the startup self-check refuses to start) |
 | Client behaviour changes (for example, no longer using the system proxy) | Only deployments that can reach the internet *solely* through a proxy need action: enable the escape hatch in the channel field or in the real process environment |
 | App access model and the same-version requirement | Old clients cannot open apps after the upgrade; that is expected — make sure clients upgrade too |
 
@@ -417,7 +418,7 @@ echo "$OLD" > VERSION
 | Symptom | Criterion | Recovery |
 |---|---|---|
 | Containers restart in a loop after the upgrade | the log shows `SchemaMismatchError` | **Cross-generation rollback**: follow the four steps in section 7 (stop → restore `pg_dump` → roll the image back → roll clients back) |
-| Containers restart in a loop after the upgrade | the log says the WASM platform startup self-check refused to start | Less than 4 GiB available memory: write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env`, then `docker compose up -d server` |
+| Containers restart in a loop after the upgrade | the log says the WASM platform startup self-check refused to start | Less than 4 GiB available memory: there is no console to reach while the container is down, so use the escape hatch — write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env`, then `docker compose up -d server`; once it is up, save the profile as `small` on the console's **Operations → System config** page and delete that line |
 | `--version` disagrees with what `.env` claims | the binary reports something other than the target version | The container was not replaced: on multi-stack hosts redo the five assertions in step 5 (the key one is `docker inspect <container> --format '{{.Image}}'`) |
 | Branding changed after the upgrade / the portal shows vendor branding | `/opt/zeokeel/CHANNEL` ≠ `channel_id` from `/api/client/v2/channel` | Wrong channel image: point `.env` back at this channel's channel tag and recreate; do not keep upgrading from it |
 | healthz stays non-200 | `docker compose ps` / `logs` | First confirm postgres is healthy and whether migrations are still running (1–2 minutes on a first start); otherwise roll back per section 7 |

@@ -20,7 +20,7 @@ in → how auto-upgrade works → criteria and failure behaviour.
 | Prerequisite | Notes |
 |---|---|
 | The server is deployed and `/healthz` returns 200 | See [Container deployment](/en/deployment/compose/) |
-| The server can produce an **absolute https** download URL for clients | Behind a reverse proxy, set `ZEOKEEL_PUBLIC_BASE_URL`, otherwise the manifest refuses to emit the `client` section by design |
+| The server can produce an **absolute https** download URL for clients | After deployment, fill in the public base URL on the console's **Operations → Gateway** page — the deployment's public https address (setting `server.base_url`, effective on save); mandatory behind a reverse proxy, otherwise the manifest refuses to emit the `client` section by design |
 | Employee machines can reach the enterprise domain | That single address is all they need; no public internet |
 | The employee client and the server are on the **same version** | Apps (WASM) open only inside the client and require matching versions |
 
@@ -114,11 +114,14 @@ publish separately.
 
 ## How the download URL is determined (the most common deployment pitfall)
 
-The server derives the client-reachable absolute address in this order:
+The server derives the client-reachable absolute address in this order. The "public base URL" is the
+setting `server.base_url`, and **its main entry is the console's Operations → Gateway page** (effective
+on save; an invalid value is ignored with a warning). `.env`'s `ZEOKEEL_PUBLIC_BASE_URL` is only its
+**override port**: when non-empty it wins over the saved console value, and changing that line requires
+recreating the server:
 
-1. `ZEOKEEL_PUBLIC_BASE_URL` (**when set, it is the only authority**);
-2. the public address configured in the admin console (`settings: server.base_url`; an invalid value is
-   ignored with a warning);
+1. `ZEOKEEL_PUBLIC_BASE_URL` (**override port; when non-empty it is the only authority**);
+2. the public base URL saved on the console's Operations → Gateway page (setting `server.base_url`);
 3. `X-Forwarded-Proto: https` declared by the reverse proxy;
 4. this request arriving over TLS;
 5. a loopback address (local development, http allowed).
@@ -139,8 +142,10 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 ```
 
 - `client.assets` with `https://…` URLs → fine;
-- `client_unavailable` → add `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` to `.env` and run
-  `docker compose up -d server`.
+- `client_unavailable` → sign in to the console, open **Operations → Gateway** and fill in the public
+  base URL as `https://<domain>` (effective on save). `.env`'s
+  `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` is the override port for that item (a non-empty value wins;
+  writing it requires `docker compose up -d server`) — it is not the main entry.
 
 ## How the client auto-upgrades
 
@@ -221,7 +226,7 @@ curl -sk -o /dev/null -w '%{http_code}\n' -H 'Range: bytes=0-99' \
 
 | Symptom | Criterion | Recovery |
 |---|---|---|
-| Employees see "always up to date" | The manifest contains `client_unavailable` | Set `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` and run `docker compose up -d server`; mandatory behind a reverse proxy |
+| Employees see "always up to date" | The manifest contains `client_unavailable` | Sign in to the console, open **Operations → Gateway** and fill in the public base URL as the deployment's public https address (setting `server.base_url`, effective on save); `.env`'s `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` is its override port — write it and run `docker compose up -d server`. Mandatory behind a reverse proxy |
 | The portal shows no download entry point | The manifest has no `client` section **and no** `client_unavailable` | The image carries no client assets (`CLIENT-RELEASE.json` unreadable): make sure this is a released package, not a locally built image. The other cause is the admin setting `portal.public=false` (the portal is not public, so the root path redirects to the admin sign-in page) — clear that setting |
 | A download dies midway | The client offers a retry | Expected: the file is large and links are slow; the client resumes over Range. Server-side the write deadline is max(5 minutes, size/64 KiB/s), capped at 1 hour |
 | Download returns 404 | The body is a JSON `NOT_FOUND` envelope | The file name is not in the asset manifest, or its extension is not whitelisted; use the `file` value from the manifest instead of assembling a name by hand |

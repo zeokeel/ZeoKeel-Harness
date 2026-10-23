@@ -1493,5 +1493,17 @@ describe('upload dirs are deployment config, not a tool argument（2026-10-23 A1
     }
     await defaulted.call('browser_upload_file', { paths: ['/tmp/vetted/a.txt'] })
     expect(seenDefault[0]).not.toContain('/tmp/vetted')
+    // Trailing slashes collapse and the filesystem root is refused outright.
+    const messy = track(makeHarness({ uploadDirs: ['/tmp/vetted/', '/'] }))
+    await messy.runtime.open('https://a.example')
+    const seenMessy: string[][] = []
+    ;(messy.runtime as unknown as { uploadFile: (...args: unknown[]) => Promise<{ uploaded: number }> }).uploadFile = async (...args: unknown[]) => {
+      seenMessy.push(args[3] as string[])
+      return { uploaded: 1 }
+    }
+    await messy.call('browser_upload_file', { paths: ['/tmp/vetted/a.txt'] })
+    expect(seenMessy[0]).toContain('/tmp/vetted')
+    expect(seenMessy[0]).not.toContain('/tmp/vetted/')
+    expect(seenMessy[0]).not.toContain('/')
   })
 })

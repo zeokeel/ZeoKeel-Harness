@@ -321,10 +321,18 @@ function uploadAllowDirs(runtime: BrowserRuntime, session: AgentProjectInfo['ses
   // Single source: the deployment's configured upload dirs (never a tool or
   // script argument) plus the downloads dir and the session cwd. Duplicates are
   // collapsed so a misconfiguration cannot widen the list accidentally.
-  const dirs = new Set<string>([runtime.options.downloadDir, ...runtime.options.uploadDirs])
+  const normalize = (dir: string): string => dir.trim().replace(/\/+$/u, '')
+  const dirs = new Set<string>()
+  for (const raw of [runtime.options.downloadDir, ...runtime.options.uploadDirs]) {
+    const dir = normalize(raw)
+    // '/' would make the whole filesystem uploadable; relative paths depend on
+    // the process cwd and are refused (deployment config must be absolute).
+    if (dir === '' || dir === '/' || !dir.startsWith('/')) continue
+    dirs.add(dir)
+  }
   const cwd = session?.header?.cwd ?? session?.meta?.cwd ?? session?.cwd
-  if (typeof cwd === 'string' && cwd.trim() !== '') dirs.add(cwd.trim())
-  return [...dirs].filter(dir => dir !== '')
+  if (typeof cwd === 'string' && normalize(cwd) !== '') dirs.add(normalize(cwd))
+  return [...dirs]
 }
 
 /**

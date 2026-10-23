@@ -338,7 +338,12 @@ func ListWasmDeployments(ctx context.Context, db *sql.DB, appID string, limit in
 		return nil, err
 	}
 	defer rows.Close()
-	out := make([]WasmDeployment, 0, limit)
+	// 刻意**不按 `limit` 预分配容量**（CodeQL `go/slice-memory-allocation`）：
+	// limit 来自 HTTP 查询参数，上面虽然已经钳到 500，但静态扫描沿两条 if 赋值
+	// 无法完成边界推断，会把这里的 `make(..., 0, limit)` 报成"用户可控的过量分配"。
+	// 列表上限 500 条，预分配本来就只是微优化 —— 去掉容量参数既消除告警，也避免
+	// 将来有人放宽钳位时，这里跟着静默放大一次分配。
+	out := make([]WasmDeployment, 0)
 	for rows.Next() {
 		d, err := scanWasmDeployment(rows)
 		if err != nil {

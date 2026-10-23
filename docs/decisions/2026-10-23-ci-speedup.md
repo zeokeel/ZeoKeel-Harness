@@ -136,3 +136,40 @@ job log 按步骤拆开，**7.7 min 全在一步打包**，而 CI 的 channel �
 
 > 为什么不动 `compression: maximum`：AppImage 是**交付物**（PR artifact 与 release 都用它），
 > 为省 ~50s 让 PR 产物与 release 产物压缩级别不同，属于"交付面不一致"，不做。
+
+## 第二轮的真实 CI 数字（PR #2 `38979fbd` 的 push 跑，全绿）
+
+| 指标 | 第一轮后（`fbd32497`） | 第二轮（`38979fbd`） |
+| --- | --- | --- |
+| `desktop-linux` job | 10 min | **5.4 min**（打包段 462s → ≈180s） |
+| `gate (tests + workspace build)` | 6 min | 5.5 min |
+| `Go server` | 11 min | 9.1 min |
+| `webadmin-variants` | 5 min | 5.0 min |
+| `desktop-windows` / `desktop-macos` | 5 / 6 min | 5.9 / 5.5 min |
+| **整条墙钟** | 19 min | **16 min** |
+
+从最初 25/26 min 算：**−38% → −38%（16/26）**；单看服务端 job 是 21→9 min。
+
+### 当前关键路径（不是产物，是排队）
+
+`gate`(5.5) → 三个 desktop job 同时起（`desktop-linux` 5.4 / `desktop-windows` 5.9 /
+`desktop-macos` 5.5，但 macOS runner 这次**排队 3.3 min** 才拿到）⇒ 墙钟 16 min 里有
+≈3 min 是 macOS 托管 runner 的排队，不是我们的构建。剩余可压的次序：
+
+1. `gate`（5.5 min）：它里面 17 条根守卫与 `gate-guards` job（2.1 min）**重复**执行
+   （同一次运行、同一个 SHA）。去掉重复需要改 `[SK-8]` 的"`yarn check` 参数向量必须为空"
+   口径 —— 属于覆盖面决策，必须先写决策再动，收益 ≈1–2 min。
+2. `Go server`（9.1 min，其中 go test 7.4 min）：可以试 `-p 6`，但这些用例大量等 PG，
+   IO-bound，收益不确定，要拿一次真实跑验证（本机 4 核受负载干扰，测不出结论）。
+3. `macOS` 排队：外部因素，除非把 macOS 从 PR 跑里摘出去（发布面决策，不建议只为提速改）。
+
+### 顺带修的两条 CI flake（`-p 4` 暴露的时序断言，都在 `cmd/server`）
+
+- `TestWasmCacheFallbackReclaimIsMutuallyExclusiveWithCompiler` 的"启动轮日志"断言原来
+  即时读一次 ⇒ CI 上偶发读到空日志；改成有预算的轮询（10s）。
+- 同一用例的同步回收断言原来与 10ms 周期循环共享实例 ⇒ 偶发 `removed=0`（循环先删掉了）；
+  删除行为改用独立 root + 未启动循环的实例判，接线判据仍留在原实例上。
+
+**已知未解 flake**：`connectors/tests/audit-r8b-credential-change.spec.ts` 的 R8-B-2
+（`grants 期望 1 实得 2`）在同一批 4 路并发门禁下偶发；本轮通过 rerun 放行，
+需要单独查明（两次刷新是并发竞态还是断言口径过窄）。

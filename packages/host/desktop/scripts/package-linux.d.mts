@@ -23,6 +23,14 @@ export interface PackageLinuxOptions {
   /** 本次构建的渠道 id（日志用）。 */
   readonly channelId: string
   /**
+   * 目标格式（缺省 `['AppImage', 'deb']`）。
+   *
+   * CI 的 Linux 交付面只收 AppImage（deb 不进入任何 artifact/镜像/发布面），而 deb 是
+   * electron-builder 里最慢的一段（2026-10-23 实测 ≈284s/次 vs AppImage ≈108s）⇒
+   * CI 传 `--no-deb`（= 本字段 `['AppImage']`）。本地与 release 入口不传 ⇒ 行为不变。
+   */
+  readonly formats?: readonly string[]
+  /**
    * 打包输入暂存（见 `pack-app-root.mjs`）。**只有测试注入替身**：生产调用一律走
    * 缺省的真实现（能力级接线判据的对象就是这条缺省路径）。
    */

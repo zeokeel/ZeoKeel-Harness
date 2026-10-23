@@ -390,6 +390,44 @@ describe('五个打包脚本的缺省路径就是真暂存（能力级接线判�
       rmSync(desktopRoot, { recursive: true, force: true })
     }
   })
+  it('package-linux 的目标格式可收窄（CI 用 --no-deb：deb 不进任何交付面却最慢）', async () => {
+    const root = fakePackageRoot()
+    const calls: StageObservation[] = []
+    try {
+      // 缺省：AppImage + deb（本地与 release 入口的行为不变）。
+      await packageLinux({
+        desktopRoot: root,
+        builderCli: join(root, 'fake-electron-builder-cli.js'),
+        channelConfigArgs: () => [],
+        channelId: 'official',
+        run: recordingRun(root, calls),
+        log: () => undefined,
+      })
+      const defaultArgs = calls[calls.length - 1]!.args
+      expect(defaultArgs.slice(defaultArgs.indexOf('--linux'), defaultArgs.indexOf('--linux') + 3))
+        .toEqual(['--linux', 'AppImage', 'deb'])
+
+      // 收窄：只 AppImage（CI 传 `--no-deb`）。这是"打包段最贵的一段被砍掉"的判据 ——
+      // 2026-10-23 实测 deb ≈284s/次、AppImage ≈108s/次。
+      calls.length = 0
+      await packageLinux({
+        desktopRoot: root,
+        builderCli: join(root, 'fake-electron-builder-cli.js'),
+        channelConfigArgs: () => [],
+        channelId: 'official',
+        formats: ['AppImage'],
+        run: recordingRun(root, calls),
+        log: () => undefined,
+      })
+      const narrowed = calls[calls.length - 1]!.args
+      expect(narrowed.slice(narrowed.indexOf('--linux'), narrowed.indexOf('--linux') + 2))
+        .toEqual(['--linux', 'AppImage'])
+      expect(narrowed).not.toContain('deb')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
 })
 
 /**

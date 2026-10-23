@@ -59,6 +59,11 @@ function defaultOptions() {
  * @param options - 注入缝；缺省 = 生产路径。
  */
 export function packageLinux(options = defaultOptions()) {
+  // 目标格式可收窄：CI 的 Linux 交付面**只收 AppImage**（见 `ci.yml` 的说明——
+  // deb 只是留在 runner 上的中间产物，不进任何 artifact/镜像/发布面），而 deb 在
+  // electron-builder 里是**最慢**的一段（2026-10-23 实测：AppImage ≈108s、deb ≈284s）。
+  // 缺省仍是 AppImage+deb（本地开发者与 release 入口行为不变）。
+  const formats = options.formats ?? ['AppImage', 'deb']
   // 打包输入走暂存白名单副本（见 pack-app-root.mjs）：否则 src/tests/scripts/temp
   // 与根级 sourcemap 会随包出厂。
   const staged = (options.stagePackAppRoot ?? withStagedPackAppRoot)(options.desktopRoot, 'dist')
@@ -66,8 +71,7 @@ export function packageLinux(options = defaultOptions()) {
     options.run(process.execPath, [
       options.builderCli,
       '--linux',
-      'AppImage',
-      'deb',
+      ...formats,
       '--x64',
       '--publish',
       'never',
@@ -97,6 +101,9 @@ if (isDirectInvocation(import.meta)) {
   // electron-builder 之前**。CI 打包一律 `--no-prebuild`（构建产物来自 gate job），
   // brand-prepare 不会经 prebuild 被触发 —— 少了这一步，渠道包会带官方图标出厂。
   const channel = await prepareChannelPackaging()
-  console.log(`package-linux: 渠道 ${channel.channelId}`)
-  packageLinux()
+  // `--no-deb`：只产 AppImage。CI 用它（deb 不进任何交付面却占 ≈284s/次）；
+  // 本地与 release 入口不传 ⇒ 行为不变。
+  const formats = process.argv.includes('--no-deb') ? ['AppImage'] : ['AppImage', 'deb']
+  console.log(`package-linux: 渠道 ${channel.channelId}；目标 ${formats.join('+')}`)
+  packageLinux({ ...defaultOptions(), formats })
 }

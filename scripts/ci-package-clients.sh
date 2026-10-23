@@ -12,7 +12,11 @@
 # 用法:
 #   scripts/ci-package-clients.sh --list channels.list --stage-dir client-assets \
 #     --patterns '*.AppImage' --verify-app-dir dist/linux-unpacked \
-#     -- yarn workspace dsh-plugin-desktop dist:linux --no-prebuild
+#     -- yarn workspace dsh-plugin-desktop dist:linux --no-prebuild --no-deb
+#
+# `--no-deb`（2026-10-23 起 CI 传）：Linux 交付面只收 AppImage，deb 不进入任何
+# artifact/镜像/发布面，但在 electron-builder 里是最慢的一段（实测 ≈284s/次 vs
+# AppImage ≈108s）。本地 `yarn dist:linux` 不传 ⇒ 仍产 AppImage+deb。
 #
 # 参数:
 #   --verify-app-dir <dir>  每个渠道打包后拆开 <dir>/resources/app.asar 做端到端

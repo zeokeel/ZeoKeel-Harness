@@ -121,3 +121,4 @@
 5. **参数互斥**：fullPage×clip、frame×includeFrames、reset×其它。
 6. **页面脚本无拼接**：fetch/emulate 一律 `callFunctionOn` arguments。
 7. **模拟状态可观察**：op log 有记录，切 tab 不串。
+8. **frame 动作的 5 条必红变异（P2 复审指定）**：①删 `contextId`/`sessionId` 传递 → 动作落主帧；②删 stale 判定 → iframe 重载后旧编号仍能点；③帧内 `__query` 必须在**该帧 document** 上跑（不得复用主帧 document）；④`frame + x,y` 参数错误扩展到全部动作；⑤frame 编号与 P1 快照 `frame:N` 共用 `resolveFrame`（不复制解析），嵌套帧编号口径一致。

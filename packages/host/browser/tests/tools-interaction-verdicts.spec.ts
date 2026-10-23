@@ -1505,5 +1505,17 @@ describe('upload dirs are deployment config, not a tool argument（2026-10-23 A1
     expect(seenMessy[0]).toContain('/tmp/vetted')
     expect(seenMessy[0]).not.toContain('/tmp/vetted/')
     expect(seenMessy[0]).not.toContain('/')
+    // Relative paths are refused by the allow-list itself (they would resolve
+    // against the process cwd, not a deployment decision).
+    const relative = track(makeHarness({ uploadDirs: ['relative/dir', ''] }))
+    await relative.runtime.open('https://a.example')
+    const seenRelative: string[][] = []
+    ;(relative.runtime as unknown as { uploadFile: (...args: unknown[]) => Promise<{ uploaded: number }> }).uploadFile = async (...args: unknown[]) => {
+      seenRelative.push(args[3] as string[])
+      return { uploaded: 1 }
+    }
+    await relative.call('browser_upload_file', { paths: ['/tmp/x.txt'] })
+    expect(seenRelative[0]).not.toContain('relative/dir')
+    expect(seenRelative[0]).not.toContain('')
   })
 })

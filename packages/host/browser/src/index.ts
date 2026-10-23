@@ -352,6 +352,17 @@ export function createCredentialResolver(options: {
   }
 }
 
+/**
+ * Normalise the deployment upload-directory list for the runtime options.
+ * Absolute paths only; empty strings and `/` (which would allow the whole
+ * filesystem) are dropped. Single source for the plugin injection point.
+ * @param config - parsed plugin config.
+ * @returns the effective upload dirs.
+ */
+export function uploadDirsForRuntime(config: Config): string[] {
+  return (config.uploadDirs ?? []).map(dir => dir.trim()).filter(dir => dir !== '' && dir !== '/' && dir.startsWith('/'))
+}
+
 export const Config: z<Config> = z.object({
   maxTabs: z.number(),
   timeoutMs: z.number(),
@@ -621,7 +632,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     createRealElectronAdapter(undefined, () => hostLocale()),
     {
       ...config,
-      uploadDirs: (config.uploadDirs ?? []).filter(dir => dir.trim() !== '' && dir.trim() !== '/'),
+      uploadDirs: uploadDirsForRuntime(config),
       downloadDir: config.downloadDir ?? (userDataDir !== undefined ? join(userDataDir, 'downloads') : join(fallbackDataRoot(), 'downloads')),
     },
     credentialResolver,

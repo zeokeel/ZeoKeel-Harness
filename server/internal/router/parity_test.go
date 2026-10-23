@@ -159,6 +159,11 @@ var productionOnlyAdminRoutes = map[string]string{
 	"PUT " + NamespaceServer + "/admin/report-subscriptions/:id":       "报表订阅（同上）",
 	"DELETE " + NamespaceServer + "/admin/report-subscriptions/:id":    "报表订阅（同上）",
 	"POST " + NamespaceServer + "/admin/report-subscriptions/:id/test": "报表订阅（同上）",
+	// 系统配置（2026-10-23）：部署期配置注册表的管理出口。handler 由
+	// `serverauth.NewDeployConfigAdminHandlers(db)` 单独供给，不经 serverauth 的
+	// RegisterAdminRoutes 镜像（那个镜像只建登录/会话/RBAC/用户/部门/审计面）。
+	"GET " + NamespaceServer + "/admin/config": "系统配置注册表读：serverauth 镜像不建这组后台配置路由",
+	"PUT " + NamespaceServer + "/admin/config": "系统配置注册表写（同上）",
 }
 
 // productionOnlyReasonFor 返回该生产独有路由的登记理由；未登记返回 ok=false（判红）。

@@ -9,13 +9,14 @@
 // 未声明 perms 的条目 fail-closed(仅超管可见),防止以后新增页面漏声明。
 import {
   HardDrive,
-  Users, Settings2, KeyRound, BarChart3, Store, ScrollText, Network, Server, Bug, Plug, Boxes,
+  Users, Settings2, SlidersHorizontal, KeyRound, BarChart3, Store, ScrollText, Network, Server, Bug, Plug, Boxes,
   type LucideIcon,
 } from 'lucide-react'
 import {
   PERM_AUDIT_READ,
   PERM_AUTH_READ,
   PERM_CAP_READ,
+  PERM_CONFIG_READ,
   PERM_CONNECTOR_READ,
   PERM_DEPT_READ,
   PERM_GATEWAY_READ,
@@ -76,6 +77,14 @@ const CORE_NAV_ENTRIES_HEAD: NavEntry[] = [
   // 页面实际不可达。Go 真源里承载错误监控配置面的是 server-info:read。
   { to: '/error-monitoring', label: '错误监控', icon: Bug, section: '运维', perms: [PERM_SERVERINFO_READ] },
   { to: '/usage', label: '用量中心', icon: BarChart3, section: '运维', perms: [PERM_USAGE_READ] },
+  // 2026-10-23「系统配置」：部署期配置注册表（internal/deployconfig）的控制台出口。
+  // 过去这些旋钮只能改 .env + 重建容器；现在按 category 分组展示/修改。
+  // 权限点 config:read **刻意不给 auditor**（键名与取值即部署拓扑，见
+  // serverauth/rbac.go 的 PermConfigRead 注释），所以侧栏对审计员不出现。
+  // 图标用 SlidersHorizontal 而不是 Settings2：Settings2 已是「网关」条目，
+  // `nav.test.ts` 的「侧栏没有两条同图标入口」判据会拒绝重复图标（该判据来自
+  // 「应用平台」并入「应用中心」那次回归，不应为这一页破例）。
+  { to: '/system-config', label: '系统配置', icon: SlidersHorizontal, section: '运维', perms: [PERM_CONFIG_READ] },
 ]
 
 /** 与变体无关的条目（模块条目之后的剩余部分）。 */

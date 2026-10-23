@@ -360,6 +360,17 @@ func registerServer(srv *gin.RouterGroup, d Deps) {
 	serverauth.AdminRoute(authed, "PUT", "/auth", serverauth.PermAuthWrite, d.Admin.SetAuthConfig)
 	serverauth.AdminRoute(authed, "POST", "/auth/test", serverauth.PermAuthWrite, d.Admin.TestConn)
 
+	// 系统配置(2026-10-23):把**部署期配置注册表**(internal/deployconfig)暴露到
+	// 控制台 —— 过去只能改 .env + 重建容器的旋钮(wasm 内存/编译隔离档、OIDC
+	// 信任主机、登录失败上限、遥测/审计间隔…)现在可读可写。
+	//
+	// handler 单独供给(不塞进 AdminAPI):deployconfig 是独立于业务域的基础设施
+	// 注册表,只依赖 db。权限点刻意只给 super_admin(键名与取值即部署拓扑,
+	// 读面说明见 serverauth/rbac.go 的 PermConfigRead 注释)。
+	configAdmin := serverauth.NewDeployConfigAdminHandlers(d.DB)
+	serverauth.AdminRoute(authed, "GET", "/config", serverauth.PermConfigRead, configAdmin.Get)
+	serverauth.AdminRoute(authed, "PUT", "/config", serverauth.PermConfigWrite, configAdmin.Put)
+
 	// 网关管理
 	serverauth.AdminRoute(authed, "GET", "/providers", serverauth.PermGatewayRead, d.Gateway.ListProviders)
 	serverauth.AdminRoute(authed, "GET", "/providers/:id/balance", serverauth.PermGatewayRead, d.Gateway.ProviderBalance)

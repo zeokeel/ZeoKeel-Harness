@@ -155,6 +155,9 @@ export const ACTION_LABEL: Record<string, string> = {
   admin_mfa_reset: '重置管理员 MFA',
   role_change: '变更角色',
   audit_retention_change: '审计保留策略变更',
+  // 2026-10-23「系统配置」：部署期配置注册表的批量保存（detail = 逐键 old→new）。
+  // 缺了这条，审计页会把 deploy_config 行渲染成裸 action id（方向①的判据也会红）。
+  deploy_config: '系统配置变更',
   ldap_sync: 'LDAP 同步',
   // 能力中心归属转移与报表订阅。
   app_owner_transfer: '转移能力归属',

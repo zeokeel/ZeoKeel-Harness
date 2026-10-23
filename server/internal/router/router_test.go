@@ -108,6 +108,9 @@ func TestNamespaces(t *testing.T) {
 		"GET " + nsServer + "/admin/audit",
 		"PUT " + nsServer + "/admin/audit/settings",
 		"GET " + nsServer + "/admin/portal",
+		// 2026-10-23: 部署期配置注册表(「系统配置」页的读写面;仅 super_admin)
+		"GET " + nsServer + "/admin/config",
+		"PUT " + nsServer + "/admin/config",
 		// 2026-08-31: 按模型并发状态(当前/峰值/目标,扩容申请)
 		"GET " + nsServer + "/admin/concurrency",
 		"PUT " + nsServer + "/admin/apps/:kind/:app_id/owner",

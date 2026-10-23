@@ -3,7 +3,7 @@
  * bounded by the documented floor/ceiling.
  */
 import { describe, expect, it } from 'vitest'
-import { MAX_TAB_QUOTA, MIN_TAB_QUOTA, TAB_MEMORY_PER_TAB_BYTES, defaultTabQuota, effectiveMemoryBytes, tabQuotaForMemory } from '../src/capacity.ts'
+import { MAX_TAB_QUOTA, MIN_TAB_QUOTA, TAB_MEMORY_PER_TAB_BYTES, cgroupMemoryLimit, defaultTabQuota, effectiveMemoryBytes, tabQuotaForMemory } from '../src/capacity.ts'
 import { TabPool } from '../src/pool.ts'
 
 describe('tabQuotaForMemory', () => {
@@ -53,5 +53,22 @@ describe('capacity literals and cgroup clamping', () => {
     const pool = new TabPool({ maxTabs: 40 })
     expect(pool.options.maxTabs).toBe(MAX_TAB_QUOTA)
     pool.dispose()
+  })
+
+  it('reads the cgroup limit through the injectable reader', () => {
+    // v2 unlimited sentinel and a value.
+    expect(cgroupMemoryLimit(() => 'max')).toBeUndefined()
+    expect(cgroupMemoryLimit(() => '2147483648')).toBe(2 * 1024 * 1024 * 1024)
+    // v1 reports a huge page-rounded sentinel when unlimited -> ignored.
+    expect(cgroupMemoryLimit(() => String(Number.MAX_SAFE_INTEGER))).toBeUndefined()
+    // First path missing: falls back to the v1 path.
+    const files: string[] = []
+    const limit = cgroupMemoryLimit((path) => {
+      files.push(path)
+      if (path.endsWith('memory.max')) throw new Error('ENOENT')
+      return '1073741824'
+    })
+    expect(limit).toBe(1024 * 1024 * 1024)
+    expect(files.some(path => path.includes('memory.limit_in_bytes'))).toBe(true)
   })
 })

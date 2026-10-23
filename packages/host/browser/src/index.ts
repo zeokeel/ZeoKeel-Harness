@@ -21,6 +21,7 @@
  * @module @zeokeel/dsh-browser
  */
 
+import { defaultTabQuota } from './capacity.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { createRequire } from 'node:module'
@@ -632,6 +633,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     createRealElectronAdapter(undefined, () => hostLocale()),
     {
       ...config,
+      ...(config.maxTabs === undefined ? { maxTabs: defaultTabQuota() } : {}),
       uploadDirs: uploadDirsForRuntime(config),
       downloadDir: config.downloadDir ?? (userDataDir !== undefined ? join(userDataDir, 'downloads') : join(fallbackDataRoot(), 'downloads')),
     },

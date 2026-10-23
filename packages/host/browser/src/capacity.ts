@@ -5,9 +5,15 @@
  * derived from the memory available to this process (cgroup-aware where the
  * runtime exposes it) with a fixed per-tab cost. Product latency budgets stay in
  * `budgets.ts` — this module must never be wired to a timing decision.
+ *
+ * Domain boundary: `scripts/build-capacity.mjs` sizes BUILD parallelism (CPU
+ * budget + memory per concurrent build task); this module sizes the PRODUCT's
+ * tab quota from the machine's available memory. The per-task and per-tab prices
+ * are different domains and must not be merged.
  * @module @zeokeel/dsh-browser
  */
 
+import { readFileSync } from 'node:fs'
 import { totalmem } from 'node:os'
 
 /** Memory assumed per browser tab (Electron renderer + its page). */
@@ -43,13 +49,20 @@ export function effectiveMemoryBytes(totalBytes: number, cgroupMax?: number): nu
   return Math.min(totalBytes, cgroupMax)
 }
 
-/** Read the cgroup memory limit when the host exposes one (best effort). */
-export function cgroupMemoryLimit(): number | undefined {
+/**
+ * Read the cgroup memory limit when the host exposes one (best effort).
+ *
+ * Only the ROOT cgroup path is probed: a nested systemd slice can live deeper
+ * than `/sys/fs/cgroup/<name>`, so this is intentionally best-effort (never a
+ * security boundary — it only keeps the tab quota from overshooting memory).
+ * @param read - file reader (injectable for tests).
+ * @returns the effective limit, or undefined when unlimited/unknown.
+ */
+export function cgroupMemoryLimit(read: (path: string) => string = path => readFileSync(path, 'utf8')): number | undefined {
   try {
-    const fs = require('node:fs') as typeof import('node:fs')
     for (const file of ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes']) {
       try {
-        const raw = fs.readFileSync(file, 'utf8').trim()
+        const raw = read(file).trim()
         if (raw === 'max') return undefined
         const value = Number(raw)
         // v1 reports a page-rounded huge number when unlimited.

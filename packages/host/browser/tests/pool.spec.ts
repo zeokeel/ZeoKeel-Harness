@@ -293,3 +293,22 @@ describe('TabPool — mutex cancellation (2026-09-08 P0-4)', () => {
     expect(pool.isBusy()).toBe(false)
   })
 })
+
+describe('D2 quota behaviour', () => {
+  it('reports its own quota error, releases on close and does not leak a failed reservation', async () => {
+    const pool = new TabPool({ maxTabs: 1, tabSlotWaitTimeoutMs: 10 })
+    const reservation = await pool.reserveTab()
+    pool.registerTab(101, 'https://a.example', 'A', reservation)
+    // N+1 is refused with the pool's executable quota message (not a generic timeout).
+    await expect(pool.reserveTab()).rejects.toMatchObject({ code: 'quota' })
+    // Closing the tab frees the slot immediately.
+    pool.removeTab(101, 'closed')
+    const second = await pool.reserveTab()
+    // A reservation that is rolled back must not consume the slot.
+    pool.releaseReservation(second)
+    const third = await pool.reserveTab()
+    expect(third).toBeDefined()
+    pool.releaseReservation(third)
+    pool.dispose()
+  })
+})

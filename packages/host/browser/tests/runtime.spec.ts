@@ -1924,6 +1924,50 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('program: a mistyped modifier or malformed header line is an error, not a silent default', async () => {
+    const messages: string[] = []
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+        const call = (name: string): ((args: unknown) => Promise<unknown>) => bridge[name] as unknown as (args: unknown) => Promise<unknown>
+        try { await call('press')({ key: 'a', modifiers: ['ctril'] }) } catch (cause) { messages.push(cause instanceof Error ? cause.message : String(cause)) }
+        try { await call('fetch')({ url: 'https://a.example/x', headers: ['broken-header'] }) } catch (cause) { messages.push(cause instanceof Error ? cause.message : String(cause)) }
+        return { result: null }
+      },
+    }
+    const { adapter, runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: 1 } })
+    await runtime.runProgram('x')
+    expect(messages.some(message => message.includes('unknown modifier'))).toBe(true)
+    expect(messages.some(message => message.includes('header line must look like'))).toBe(true)
+    cleanup()
+  })
+
+  it('program: download helper honours waitForCompletion', async () => {
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+        const call = (name: string): ((args: unknown) => Promise<unknown>) => bridge[name] as unknown as (args: unknown) => Promise<unknown>
+        const waited = await call('download')({ url: 'https://files.example/x.zip' }) as { download?: { status?: string } }
+        const immediate = await call('download')({ url: 'https://files.example/y.zip', waitForCompletion: false }) as { started?: boolean }
+        return { result: { waited, immediate } }
+      },
+    }
+    const { adapter, runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: 1 } })
+    const recorder = (runtime as unknown as {
+      downloadRecorder: () => { add: (entry: Record<string, unknown>) => number, update: (id: number, patch: Record<string, unknown>) => void }
+    }).downloadRecorder()
+    ;(runtime as unknown as { downloadUrl: (...args: unknown[]) => Promise<void> })['downloadUrl'] = async () => {
+      const id = recorder.add({ url: 'https://files.example/x.zip', fileName: 'x.zip', path: '', size: 1, status: 'in-progress', actor: 'ai', group: '' })
+      recorder.update(id, { status: 'done' })
+    }
+    const outcome = await runtime.runProgram('x') as unknown as { result: { waited: { download?: { status?: string } }, immediate: { started?: boolean } } }
+    expect(outcome.result.waited.download?.status).toBe('done')
+    expect(outcome.result.immediate.started).toBe(true)
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

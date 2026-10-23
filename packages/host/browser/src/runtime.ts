@@ -3614,7 +3614,12 @@ export class BrowserRuntime {
       case 'browser_press': {
         const rawModifiers = args['modifiers']
         const bits = Array.isArray(rawModifiers)
-          ? rawModifiers.reduce((sum: number, name: unknown) => sum + (MODIFIER_BITS[MOD_ALIAS[String(name).toLowerCase()] ?? 'alt'] ?? 0), 0)
+          ? rawModifiers.reduce((sum: number, name: unknown) => {
+            const alias = MOD_ALIAS[String(name).toLowerCase()]
+            // A typo must never fall back to Alt (it would fire a different shortcut).
+            if (alias === undefined) throw browserError('policy', `browser_run: unknown modifier: ${String(name)}`)
+            return sum + MODIFIER_BITS[alias]
+          }, 0)
           : typeof rawModifiers === 'number' ? rawModifiers : 0
         return await this.pressKey(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['key'] ?? ''), signal, {
           modifiers: bits,
@@ -3670,7 +3675,9 @@ export class BrowserRuntime {
           for (const line of rawHeaders) {
             const text = String(line)
             const index = text.indexOf(':')
-            if (index > 0) headers[text.slice(0, index).trim()] = text.slice(index + 1).trim()
+            // Match the tool: a malformed header line is an error, never dropped.
+            if (index <= 0) throw browserError('policy', `browser_run: header line must look like "Name: value": ${text}`)
+            headers[text.slice(0, index).trim()] = text.slice(index + 1).trim()
           }
         } else if (typeof rawHeaders === 'object' && rawHeaders !== null) {
           Object.assign(headers, rawHeaders as Record<string, string>)

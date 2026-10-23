@@ -225,12 +225,12 @@ class MockAdapter implements ElectronAdapter {
   }
 }
 
-function makeRuntime(options: { maxTabs?: number; evalEnabled?: boolean; timeoutMs?: number } = {}, credentials?: unknown) {
+function makeRuntime(options: { maxTabs?: number; evalEnabled?: boolean; timeoutMs?: number; programEnabled?: boolean } = {}, credentials?: unknown, extraDeps?: Record<string, unknown>) {
   const adapter = new MockAdapter()
   const dir = join(process.cwd(), 'tests', `.rt-store-${Math.random().toString(36).slice(2)}`)
   mkdirSync(dir, { recursive: true })
   const store = new BrowserStore({ dir })
-  const runtime = new BrowserRuntime(adapter as never, options, credentials as never, undefined, { store })
+  const runtime = new BrowserRuntime(adapter as never, options, credentials as never, undefined, { store, ...(extraDeps ?? {}) } as never)
   const cleanup = () => { runtime.dispose(); rmSync(dir, { recursive: true, force: true }) }
   return { adapter, runtime, store, cleanup }
 }
@@ -1791,6 +1791,48 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     expect(internal.emulationOverrides.size).toBe(1)
     await runtime.closeTab(1, true)
     expect(internal.emulationOverrides.size).toBe(0)
+    cleanup()
+  })
+
+  it('program: abort/takeover terminate the script through the execute signal', async () => {
+    let received: AbortSignal | undefined
+    const fakeProgram = {
+      execute: async (_program: string, _bridge: unknown, options?: { signal?: AbortSignal }): Promise<{ result: unknown, console?: string }> => {
+        received = options?.signal
+        await new Promise<void>((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+        })
+        return { result: null }
+      },
+    }
+    const { runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    const controller = new AbortController()
+    const started = Date.now()
+    const pending = runtime.runProgram('await sleep(60000)', controller.signal).catch((cause: unknown) => cause as { code?: string })
+    await sleep(20)
+    expect(received).toBeDefined()
+    controller.abort()
+    const error = await pending
+    expect(error).toMatchObject({ code: 'interrupted' })
+    expect(Date.now() - started).toBeLessThan(1_000)
+    cleanup()
+  })
+
+  it('program: helper calls are counted live and console is preserved and redacted', async () => {
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>, _options?: { signal?: AbortSignal }) => {
+        // Two failing helper calls: failures must count too.
+        await (bridge['navigate'] as unknown as () => Promise<unknown>)().catch(() => undefined)
+        await (bridge['navigate'] as unknown as () => Promise<unknown>)().catch(() => undefined)
+        return { result: { ok: true }, console: 'line one\nline two' }
+      },
+    }
+    const { runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    const outcome = await runtime.runProgram('return 1')
+    expect(outcome.helperCalls).toBe(2)
+    expect(outcome.console).toContain('line one')
+    expect(outcome.console).toContain('line two')
+    expect(outcome.result).toEqual({ ok: true })
     cleanup()
   })
 

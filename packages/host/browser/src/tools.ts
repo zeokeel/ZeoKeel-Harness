@@ -2379,7 +2379,7 @@ function formatCredentials(value: unknown): string {
  * {@link parseToolGroups} 与 `index.ts` 的 `toolGroups` 字段注释（2026-09-26
  * R21 F-02：先把"企业策略可禁用"这条承诺撤回，等渠道包真的接上生产者再恢复）。
  */
-const GROUP_OF: Record<string, 'navigate' | 'interact' | 'read' | 'write' | 'memory' | 'artifacts' | 'control'> = {
+const GROUP_OF: Record<string, 'navigate' | 'interact' | 'read' | 'write' | 'memory' | 'artifacts' | 'control' | 'script'> = {
   browser_open: 'navigate', browser_navigate: 'navigate', browser_reload: 'navigate',
   browser_go_back: 'navigate', browser_go_forward: 'navigate', browser_list_tabs: 'navigate',
   browser_switch_tab: 'navigate', browser_close_tab: 'navigate',
@@ -2427,7 +2427,7 @@ export const DEFAULT_GROUPS: ReadonlySet<string> = new Set(['navigate', 'interac
  */
 export function parseToolGroups(value: string[] | undefined): ReadonlySet<string> {
   if (value === undefined) return DEFAULT_GROUPS
-  const allowed = new Set(['navigate', 'interact', 'read', 'write', 'memory', 'artifacts', 'control'])
+  const allowed = new Set(['navigate', 'interact', 'read', 'write', 'memory', 'artifacts', 'control', 'script'])
   const set = new Set<string>()
   for (const item of value) if (allowed.has(item)) set.add(item)
   return set

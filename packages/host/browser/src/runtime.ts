@@ -23,7 +23,7 @@ import { BrowserGuard, ensureSessionGuard, isLocalHostname, looksLikeAbsoluteUrl
 import { extractSnapshotWithMeta, extractTextWithMeta, type SnapshotExtractionMeta, SNAPSHOT_DEFAULT_LIMIT, TEXT_DEFAULT_LIMIT } from './snapshot.ts'
 import { locatorProbe, parseTargetSpec } from './locator.ts'
 import { TabEventBus } from './events.ts'
-import { createProgramBridge, programErrorText, truncateProgramResult, type ProgramRuntime } from './program.ts'
+import { createProgramBridge, redactProgramConsole, truncateProgramResult, type ProgramRuntime } from './program.ts'
 import { captureScreenshot, captureScreenshotViaCdp, SCREENSHOT_MAX_BYTES, type ScreenshotOptions } from './shots.ts'
 import { snapshotExtrasProbe, type SnapshotExtrasOptions } from './snapshot.ts'
 import { appSurfaceAllowsUrl, asSurfaceWebContents, surfaceLabel, type BrowserSurface, type SurfaceControlOwner, type SurfaceRegistry, type SurfaceWebContents } from './surface.ts'
@@ -3556,16 +3556,24 @@ export class BrowserRuntime {
       signal: controller.signal,
     })
     try {
-      const executed = await programRuntime.execute(String(program), bridge.browser as unknown as Readonly<Record<string, unknown>>)
+      let executed: { result: unknown, console?: string }
+      try {
+        executed = await programRuntime.execute(String(program), bridge.browser as unknown as Readonly<Record<string, unknown>>, { signal: controller.signal })
+      } catch (cause) {
+        if (controller.signal.aborted) throw browserError('interrupted', 'browser_run: cancelled (tool abort or user takeover)')
+        const message = cause instanceof Error ? cause.message.split('\n')[0] ?? '' : String(cause).split('\n')[0] ?? ''
+        throw browserError('policy', `browser_run: script failed — ${redactProgramConsole(message, text => this.redactProgramText(text), 500)}`)
+      }
       const projected = truncateProgramResult(executed.result)
       const consoleText = typeof executed.console === 'string' ? executed.console : ''
       return {
         result: projected.value as never,
-        console: programErrorText({ message: consoleText }, text => this.redactProgramText(text)).slice(0, 64 * 1024),
+        console: redactProgramConsole(consoleText, text => this.redactProgramText(text)),
         truncated: projected.truncated,
         helperCalls: bridge.calls,
       }
     } finally {
+      this.record('browser_run', 0, `program finished: ${String(bridge.calls)} helper calls`, false, 'ai')
       // R2: let in-flight helpers settle so the global browser mutex is released
       // before the tool reports back.
       await Promise.allSettled([...bridge.pending])

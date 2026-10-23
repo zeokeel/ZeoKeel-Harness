@@ -73,7 +73,7 @@ export interface ProgramResult {
 
 /** What the tool needs from an injected ptc runtime (fake in tests). */
 export interface ProgramRuntime {
-  execute(program: string, bridge: Readonly<Record<string, unknown>>): Promise<{ result: unknown, console?: string }>
+  execute(program: string, bridge: Readonly<Record<string, unknown>>, options?: { signal?: AbortSignal }): Promise<{ result: unknown, console?: string }>
 }
 
 /**
@@ -85,7 +85,7 @@ export interface ProgramRuntime {
 export function createProgramBridge(
   invoke: (tool: string, args: Record<string, unknown>) => Promise<unknown>,
   options: ProgramBridgeOptions,
-): { browser: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>, calls: number, pending: Set<Promise<unknown>> } {
+): { browser: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>, readonly calls: number, pending: Set<Promise<unknown>> } {
   const state = { calls: 0, pending: new Set<Promise<unknown>>() }
   const browser: Record<string, (...args: never[]) => Promise<unknown>> = {}
   for (const [helper, tool] of Object.entries(PROGRAM_HELPERS)) {
@@ -106,7 +106,7 @@ export function createProgramBridge(
       }
     }) as never
   }
-  return { browser: Object.freeze(browser), calls: state.calls, pending: state.pending }
+  return { browser: Object.freeze(browser), get calls(): number { return state.calls }, pending: state.pending }
 }
 
 /** JSON-safe projection of a program result (256 KiB cap, never invalid JSON). */
@@ -118,8 +118,32 @@ export function truncateProgramResult(value: unknown, maxBytes = 256 * 1024): { 
     throw new Error('browser_run: the program result is not serializable — return a JSON value')
   }
   if (text === undefined) return { value: null, truncated: false }
-  if (text.length <= maxBytes) return { value: JSON.parse(text) as unknown, truncated: false }
-  return { value: text.slice(0, maxBytes), truncated: true }
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) return { value: JSON.parse(text) as unknown, truncated: false }
+  // Cut on a UTF-8 boundary and keep the value JSON-valid (a string), never a
+  // half-encoded document (audit P3: UTF-16 length is not bytes).
+  let cut = text
+  while (Buffer.byteLength(cut, 'utf8') > maxBytes && cut.length > 0) cut = cut.slice(0, -1)
+  return { value: cut, truncated: true }
+}
+
+/**
+ * Redact program console output line by line with a cumulative byte cap
+ * (audit P2-2: the console used to be flattened into "[object Object]").
+ * @param consoleText - raw console text from the runtime.
+ * @param redact - text redactor.
+ * @param maxBytes - cumulative cap.
+ */
+export function redactProgramConsole(consoleText: string, redact: (text: string) => string, maxBytes = 64 * 1024): string {
+  const lines: string[] = []
+  let used = 0
+  for (const line of consoleText.split('\n')) {
+    const redacted = redact(line)
+    const bytes = Buffer.byteLength(redacted, 'utf8') + 1
+    if (used + bytes > maxBytes) { lines.push('… (console output truncated)'); break }
+    lines.push(redacted)
+    used += bytes
+  }
+  return lines.join('\n')
 }
 
 /**

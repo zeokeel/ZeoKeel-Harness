@@ -82,6 +82,10 @@ export interface BrowserSnapshotElement {
   readonly visible: boolean
   /** Whether the element is disabled. */
   readonly disabled: boolean
+  /** Present when this entry came from an iframe (1-based DOM index; audit C16). */
+  frame?: number
+  /** Present when this entry came from an open shadow root (selector uses `>>>`). */
+  shadow?: boolean
 }
 
 /**

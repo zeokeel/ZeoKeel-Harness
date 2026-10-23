@@ -1311,12 +1311,15 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     description: '[read] List the numbered interactable elements of your tab (links, buttons, inputs, selects, textareas) plus page header info (url/title). Numbers are the targets for click/type/select/scroll — and they always mean "this snapshot", never a re-numbered live page: after the page navigates, a stale number is refused (stale-snapshot) so you can never act on an element you have not seen. Password fields are listed (number/selector usable) but never expose their value: the text reads the field label or "(password field)". On a tab that received credentials through browser_fill_credentials, the injected values are masked (****) in the element text, url and title — VERBATIM occurrences only (a value the page transformed is not covered). The list is bounded: when it was cut, or when the page contains sub-frames / shadow roots whose content this snapshot does NOT include, `truncated`/`total`/`note` say so — an absent element is not proof it does not exist.',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      includeShadow: { type: 'boolean', description: 'Also list elements inside OPEN shadow roots (append-only; their selector uses " >>> "; default false keeps the output identical to before).' },
+      includeFrames: { type: 'boolean', description: 'Also list elements inside same-origin iframes (append-only, entries carry frame:N; cross-origin frames are reported, their DOM is not readable; default false).' },
     },
     output: {
       schema: {
         type: 'object',
         additionalProperties: false,
         properties: {
+          crossOriginFrames: { type: 'array', items: { type: 'integer' }, description: 'Frames skipped because they are cross-origin (only with includeFrames).' },
           elements: {
             type: 'array',
             items: {
@@ -1329,6 +1332,8 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
                 selector: { type: 'string' },
                 visible: { type: 'boolean' },
                 disabled: { type: 'boolean' },
+                frame: { type: 'integer' },
+                shadow: { type: 'boolean' },
               },
             },
           },
@@ -1353,7 +1358,11 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     async execute(args, exec) {
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf((args as { tab?: number }).tab)
-      const { elements, meta, generation } = await runtime.modelSnapshot(tabId, exec.signal)
+      const extras = {
+        ...(args as { includeShadow?: boolean }).includeShadow === true ? { includeShadow: true } : {},
+        ...(args as { includeFrames?: boolean }).includeFrames === true ? { includeFrames: true } : {},
+      }
+      const { elements, meta, generation } = await runtime.modelSnapshot(tabId, exec.signal, extras)
       exec.signal.throwIfAborted()
       const state = runtime.tabState(tabId)
       // R7（2026-09-13）P0：`selector` 由页面可控的 id/class 拼成（`el.id = password`
@@ -1372,7 +1381,12 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       })
       const note = snapshotNote(meta)
       return {
-        elements: safeElements,
+        elements: safeElements.map((element) => ({
+          ...element,
+          ...(element.shadow === true ? { shadow: true } : {}),
+          ...(typeof element.frame === 'number' ? { frame: element.frame } : {}),
+        })),
+        ...(meta.crossOriginFrames === undefined || meta.crossOriginFrames.length === 0 ? {} : { crossOriginFrames: meta.crossOriginFrames }),
         url: state.url,
         title: state.title,
         snapshot: generation,

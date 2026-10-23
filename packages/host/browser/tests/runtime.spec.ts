@@ -1275,6 +1275,54 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('snapshot extras: default output is byte-identical, shadow/frame entries are append-only', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const mainProbeValue = {
+      elements: [{ kind: 'button', text: 'Save', selector: '#save', visible: true, disabled: false }],
+      total: 1,
+      truncated: false,
+      frames: 1,
+      shadowRoots: 1,
+      shadowScanCapped: false,
+      countCapped: false,
+    }
+    let extrasCalls = 0
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        extrasCalls += 1
+        return {
+          result: {
+            value: JSON.stringify({
+              entries: [
+                { selector: '#host >>> button:nth-child(1)', kind: 'button', text: 'Inner', shadow: true },
+                { selector: '#frame >>> a:nth-child(1)', kind: 'link', text: 'Link', frame: 2 },
+              ],
+              crossOrigin: [3],
+            }),
+          },
+        }
+      }
+      return { result: { value: mainProbeValue } }
+    }
+    const plain = await runtime.modelSnapshot(1)
+    const explicitFalse = await runtime.modelSnapshot(1, undefined, { includeShadow: false, includeFrames: false })
+    expect(plain.elements).toEqual(explicitFalse.elements)
+    expect(extrasCalls).toBe(0)
+    expect(plain.elements).toHaveLength(1)
+    const withExtras = await runtime.modelSnapshot(1, undefined, { includeShadow: true, includeFrames: true })
+    expect(extrasCalls).toBe(1)
+    // Append-only: the existing entry keeps index 1, new ones come after.
+    expect(withExtras.elements[0]).toMatchObject({ index: 1, selector: '#save' })
+    expect(withExtras.elements[1]).toMatchObject({ index: 2, shadow: true })
+    expect(withExtras.elements[2]).toMatchObject({ index: 3, frame: 2 })
+    expect(withExtras.meta.crossOriginFrames).toEqual([3])
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

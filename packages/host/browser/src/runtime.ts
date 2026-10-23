@@ -24,6 +24,7 @@ import { extractSnapshotWithMeta, extractTextWithMeta, type SnapshotExtractionMe
 import { locatorProbe, parseTargetSpec } from './locator.ts'
 import { TabEventBus } from './events.ts'
 import { captureScreenshot, captureScreenshotViaCdp } from './shots.ts'
+import { snapshotExtrasProbe, type SnapshotExtrasOptions } from './snapshot.ts'
 import { appSurfaceAllowsUrl, asSurfaceWebContents, surfaceLabel, type BrowserSurface, type SurfaceControlOwner, type SurfaceRegistry, type SurfaceWebContents } from './surface.ts'
 import { TabPool, gateRefusal, type TabReservation } from './pool.ts'
 import { BrowserStore, stripSensitiveText, stripSensitiveUrl, type DownloadEntry, type HistoryEntry, type RecordActor } from './store.ts'
@@ -3192,7 +3193,7 @@ export class BrowserRuntime {
    * 取值来源，`runtime.snapshot` 的每个调用方都被覆盖。R7 的顺序也不动 —— 先
    * 在**整段**元素文本上擦除，再做 200 字符的模型面截断，否则跨界的口令会被切成
    * 任何值规则都认不出的明文残片。 */
-  async snapshotWithMeta(tabId: number, signal?: AbortSignal): Promise<{ elements: BrowserSnapshotElement[]; meta: SnapshotExtractionMeta }> {
+  async snapshotWithMeta(tabId: number, signal?: AbortSignal, extras: SnapshotExtrasOptions = {}): Promise<{ elements: BrowserSnapshotElement[]; meta: SnapshotExtractionMeta }> {
     const resolved = this.resolveTab(tabId)
     const out = await this.agentRun('browser_get_snapshot', async () => {
       const tab = this.tab(resolved)
@@ -3201,7 +3202,43 @@ export class BrowserRuntime {
         this.options.snapshotLimit,
         (elementText, textContext) => redactFilledSecretsText(tab, elementText, { tailMayBeTruncated: textContext.truncated }),
       )
-      return { elements: redactFilledSecrets(tab, snapshot.elements), meta: snapshot.meta }
+      const elements = redactFilledSecrets(tab, snapshot.elements)
+      const meta = snapshot.meta
+      if (extras.includeShadow !== true && extras.includeFrames !== true) return { elements, meta }
+      // APPEND-ONLY (audit R1): the default path above is untouched; these entries
+      // come after every existing one, so old indices never shift.
+      const remaining = Math.max(0, this.options.snapshotLimit - elements.length)
+      if (remaining === 0) return { elements, meta }
+      try {
+        const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
+          expression: snapshotExtrasProbe(extras.includeShadow === true, extras.includeFrames === true, remaining),
+          returnByValue: true,
+        })
+        const parsed = JSON.parse(String(result.result?.value ?? '{}')) as {
+          entries?: Array<{ selector?: unknown, kind?: unknown, text?: unknown, frame?: unknown, shadow?: unknown }>
+          crossOrigin?: unknown
+        }
+        const appended: BrowserSnapshotElement[] = []
+        for (const entry of parsed.entries ?? []) {
+          if (typeof entry.selector !== 'string' || entry.selector === '') continue
+          const kind = entry.kind === 'link' || entry.kind === 'button' || entry.kind === 'select' || entry.kind === 'textarea' ? entry.kind : entry.kind === 'input' ? 'input' : 'other'
+          appended.push({
+            index: elements.length + appended.length + 1,
+            kind,
+            text: redactFilledSecretsText(tab, String(entry.text ?? '').slice(0, 200)),
+            selector: entry.selector,
+            visible: true,
+            disabled: false,
+            ...(typeof entry.frame === 'number' ? { frame: entry.frame } : {}),
+            ...(entry.shadow === true ? { shadow: true } : {}),
+          })
+        }
+        meta.crossOriginFrames = Array.isArray(parsed.crossOrigin) ? parsed.crossOrigin.filter((value): value is number => typeof value === 'number') : []
+        elements.push(...appended)
+      } catch {
+        meta.crossOriginFrames = []
+      }
+      return { elements, meta }
     }, signal)
     this.record('browser_get_snapshot', resolved, `snapshot: ${out.elements.length} elements`)
     return out
@@ -3217,9 +3254,9 @@ export class BrowserRuntime {
    * @param signal - abort 信号。
    * @returns 元素清单、抽取元数据与该份快照的世代号。
    */
-  async modelSnapshot(tabId: number, signal?: AbortSignal): Promise<{ elements: BrowserSnapshotElement[]; meta: SnapshotExtractionMeta; generation: number }> {
+  async modelSnapshot(tabId: number, signal?: AbortSignal, extras: SnapshotExtrasOptions = {}): Promise<{ elements: BrowserSnapshotElement[]; meta: SnapshotExtractionMeta; generation: number }> {
     const resolved = this.resolveTab(tabId)
-    const out = await this.snapshotWithMeta(resolved, signal)
+    const out = await this.snapshotWithMeta(resolved, signal, extras)
     const generation = ++this.snapshotGeneration
     this.snapshotAnchors.set(resolved, { generation, url: this.tabState(resolved).url, elements: out.elements })
     return { elements: out.elements, meta: out.meta, generation }

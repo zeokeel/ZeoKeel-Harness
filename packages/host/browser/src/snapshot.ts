@@ -280,6 +280,10 @@ export interface SnapshotExtractionMeta {
   shadowScanCapped: boolean
   /** Counting hit its bound (`total` is a lower bound). */
   countCapped: boolean
+  /** Frames that were skipped because they are cross-origin (1-based indices;
+   * only populated when the caller asked for `includeFrames`; audit R2 — their
+   * DOM is not readable from the main world). */
+  crossOriginFrames?: number[]
 }
 
 /** Result of {@link extractSnapshotWithMeta}. */
@@ -295,6 +299,118 @@ export interface SnapshotExtraction {
  * 2026-09-15 审计 P2：静默截断与盲区都要有可读提示。文案是模型面字符串，
  * 与本包其它模型面文案一致用英文（注释/内部报告用中文）。
  */
+/** Hard cap on open-shadow-root depth walked by the snapshot extras (C16). */
+export const SHADOW_DEPTH_LIMIT = 8
+
+/** Options for the append-only snapshot extras (audit R1: default false). */
+export interface SnapshotExtrasOptions {
+  /** Append open-shadow-root descendants (selector form `host >>> inner`). */
+  includeShadow?: boolean
+  /** Append same-origin iframe descendants (entry carries `frame: N`). */
+  includeFrames?: boolean
+}
+
+/**
+ * Extra probe for open shadow roots and same-origin iframes (C16/B4).
+ *
+ * APPEND-ONLY by design: the main probe is untouched, so the default snapshot is
+ * byte-identical to the pre-2026-10-23 one (audit R1). This probe never runs
+ * unless the caller explicitly asks for the extras.
+ * @param includeShadow - walk open shadow roots.
+ * @param includeFrames - walk same-origin iframes.
+ * @param remaining - how many entries may still be appended.
+ * @returns a page script returning JSON.
+ */
+export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boolean, remaining: number): string {
+  return `
+(() => {
+  const SEL = 'a,button,input,select,textarea,[role="button"],[role="link"],[role="menuitem"],[tabindex]:not([tabindex="-1"])';
+  const MAX = ${Math.max(0, Math.floor(remaining))};
+  const WANT_SHADOW = ${includeShadow ? 'true' : 'false'};
+  const WANT_FRAMES = ${includeFrames ? 'true' : 'false'};
+  const TEXT_CAP = 200;
+  const out = [];
+  const crossOrigin = [];
+  const kindOf = (el) => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'a' && el.href) return 'link';
+    if (tag === 'button') return 'button';
+    if (tag === 'input') return 'input';
+    if (tag === 'select') return 'select';
+    if (tag === 'textarea') return 'textarea';
+    return 'other';
+  };
+  const textOf = (el) => {
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      const type = String(el.type || '').toLowerCase();
+      if (type === 'password') return (el.getAttribute('placeholder') || '(password field)').slice(0, TEXT_CAP);
+      return (el.getAttribute('placeholder') || el.value || '').slice(0, TEXT_CAP);
+    }
+    const t = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+    return t.slice(0, TEXT_CAP);
+  };
+  const pathOf = (el, root) => {
+    if (el.id) return '#' + CSS.escape(el.id);
+    const parts = [];
+    let node = el;
+    while (node && node !== root && node.nodeType === 1) {
+      const tag = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (!parent) { parts.unshift(tag); break; }
+      const index = Array.prototype.indexOf.call(parent.children, node) + 1;
+      parts.unshift(tag + ':nth-child(' + index + ')');
+      node = parent;
+    }
+    return parts.join(' > ');
+  };
+  const push = (el, selector, shadow, frame) => {
+    if (out.length >= MAX) return;
+    out.push({ selector, kind: kindOf(el), text: textOf(el), ...(shadow ? { shadow: true } : {}), ...(frame === undefined ? {} : { frame }) });
+  };
+  if (WANT_SHADOW) {
+    const all = document.querySelectorAll('*');
+    const scanCap = Math.min(all.length, 20000);
+    for (let i = 0; i < scanCap && out.length < MAX; i += 1) {
+      const el = all[i];
+      const root = el.shadowRoot;
+      if (!root || root.mode !== 'open') continue;
+      const hostPath = pathOf(el, document.documentElement);
+      let depth = 0;
+      let walk = [root];
+      while (walk.length > 0 && depth < ${SHADOW_DEPTH_LIMIT} && out.length < MAX) {
+        const next = [];
+        for (const scope of walk) {
+          for (const inner of scope.querySelectorAll(SEL)) {
+            push(inner, hostPath + ' >>> ' + pathOf(inner, scope), true, undefined);
+            if (inner.shadowRoot && inner.shadowRoot.mode === 'open') next.push(inner.shadowRoot);
+            if (out.length >= MAX) break;
+          }
+          if (out.length >= MAX) break;
+        }
+        walk = next;
+        depth += 1;
+      }
+    }
+  }
+  if (WANT_FRAMES) {
+    const frames = document.querySelectorAll('iframe,frame');
+    for (let index = 0; index < frames.length && out.length < MAX; index += 1) {
+      const frame = frames[index];
+      let doc = null;
+      try { doc = frame.contentDocument; } catch (cause) { doc = null; }
+      if (doc === null) { crossOrigin.push(index + 1); continue; }
+      const path = pathOf(frame, document.documentElement);
+      for (const el of doc.querySelectorAll(SEL)) {
+        push(el, path + ' >>> ' + pathOf(el, doc.documentElement), false, index + 1);
+        if (out.length >= MAX) break;
+      }
+    }
+  }
+  return JSON.stringify({ entries: out, crossOrigin });
+})()
+`
+}
+
 export function snapshotNote(meta: SnapshotExtractionMeta): string | undefined {
   const parts: string[] = []
   if (meta.truncated) {

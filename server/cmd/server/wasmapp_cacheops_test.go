@@ -129,9 +129,7 @@ func TestWasmCacheFallbackReclaimIsMutuallyExclusiveWithCompiler(t *testing.T) {
 		t.Fatal("接手之后周期回收必须在跑（R5-A-1 ②）")
 	}
 	waitForCacheOpsAtMost(t, ops, 1000, 10*time.Second)
-	if !strings.Contains(cap.joined(), "执行侧/启动") {
-		t.Fatalf("启动轮必须留一行可 grep 的日志：%s", cap.joined())
-	}
+	waitForCacheLog(t, cap, "执行侧/启动", 10*time.Second)
 
 	// 同步回收钩子也要接到执行侧（否则"超限"这条理由在缺席形态下永远无解）。
 	hook := compileReclaimHook(nil, ops)
@@ -307,6 +305,28 @@ func (l *logRecorder) joined() string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return strings.Join(l.lines, "\n")
+}
+
+// waitForCacheLog 轮询到日志里出现某条子串（或超时失败）。
+//
+// 为什么不是即时读一次：启动轮的日志由回收侧写出，与测试并发；CI 的 `go test -p N`
+// 让同机多个包抢占调度（2026-10-23 实测 CI 上 `cmd/server` 与另外 3 个包并行时，这条
+// 即时读偶发读到空日志 ⇒ 判据红了一次）。断言本身没变松——仍然要求那一行**真的**出现，
+// 只是给它一个与其它等待同一口径的预算（10s），而不是把调度抖动当成产品缺陷。
+func waitForCacheLog(t *testing.T, rec *logRecorder, want string, budget time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(budget)
+	var last string
+	for {
+		last = rec.joined()
+		if strings.Contains(last, want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("日志里没有出现 %q（%s 内）：%s", want, budget, last)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // waitForCacheOpsAtMost 轮询到执行侧水位达标（或超时失败）。

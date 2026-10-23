@@ -21,8 +21,8 @@
 
 - **默认值（审计 R1）**：`includeFrames` / `includeShadow` 默认 **false**（显式开启）——默认参数下快照输出与 2026-10-23 之前**逐字节一致**，编号/stale/400 上限的既有语义不变；开启后新增条目追加在既有条目之后（主帧优先、shadow 紧随宿主、同源子帧最后），因此旧编号不会重排。
 - 截断优先级：主帧文档序 → shadow（宿主处）→ 同源子帧（1..）；达到上限时先截断列表尾部并报 `truncated`。
-- **并入后的盲区语义（P1 复审 P2-1）**：开启 extras 后，被覆盖的 frames/shadowRoots 从 note 的 "NOT included" 计数中移除；仍存在的盲区（`nestedFrames` 只数顶层帧、跨域帧 `crossOriginFrames`）单独列出。
-- **frame 条目的 visible**：以**帧内**元素的 rect 为准（iframe 自身被隐藏时条目仍可能是 visible:true）；`frame:N` 只数顶层帧。
+- **并入后的盲区语义（P1 复审 P2-1）**：开启 extras 后，被覆盖的 frames/shadowRoots 从 note 的 "NOT included" 计数中移除；仍存在的盲区只有跨域帧（`crossOriginFrames`），单独列出。
+- **frame 条目的 visible**：以**帧内**元素的 rect 为准（iframe 自身被隐藏时条目仍可能是 visible:true）；`frame:N` 使用深度优先全帧编号（同域递归、跨域帧占号）。
 - **帧编号单一来源（P2 审计 P1-1）**：extras 的 `frame:N` 与 `resolveFrame` 使用同一**深度优先文档序**（同源帧递归、跨域帧消耗编号但只记 `crossOriginFrames`）；两边共用帧树顺序。
 - **frame 动作 v1 边界**：仅 `browser_click` / `browser_get_text` 支持 `frame`；frame 点击为 DOM 派发（`isTrusted:false`，左键单击、无修饰键；disabled → policy）；frame 读取只接受 CSS / `>>>` 选择器；**frame 级 stale 尚未实现**（iframe 重载后旧编号不失效），实现前文档不声称。
 - 跨域 iframe：**不含** DOM（协议不允许跨世界读取），只报 `crossOrigin: true` 与 frame 序号。**不承诺** `browser_eval(frame:N)` 能进跨域帧的 world，除非实现前确认（审计 R2；确认前文档只写"看 crossOrigin，动作会被拒绝"）。crossOrigin 判定用帧 document 的实际 origin（srcdoc/blob/data/about:blank 继承、sandbox 无 allow-same-origin → 跨源），**异常一律 fail-closed 视为跨源**。

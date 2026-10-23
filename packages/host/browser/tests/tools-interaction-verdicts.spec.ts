@@ -496,7 +496,7 @@ describe('expect receipts（2026-10-23 C2）', () => {
 })
 
 describe('snapshot extras at the tool layer（2026-10-23 P1）', () => {
-  it('browser_get_snapshot exposes nestedFrames to the model', async () => {
+  it('browser_get_snapshot exposes cross-origin frames to the model', async () => {
     const harness = track(makeHarness())
     await harness.runtime.open('https://a.example')
     const view = harness.adapter.lastView()

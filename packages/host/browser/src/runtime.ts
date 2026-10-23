@@ -3908,8 +3908,30 @@ export class BrowserRuntime {
     const resolved = this.resolveTab(tabId)
     return await this.agentRun('browser_locate', async () => {
       const tab = this.tab(resolved)
-      const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
-        expression: `
+      // Shadow-piercing ('>>>') is used ONLY when the selector asks for it: the
+      // default path stays byte-identical to the pre-2026-10-23 expression.
+      const shadowPiercing = String(selector).includes(' >>> ')
+      const expression = shadowPiercing
+        ? `
+          (() => {
+            try {
+              const parts = ${JSON.stringify(String(selector))}.split(' >>> ');
+              let el = null;
+              let root = document;
+              for (const part of parts) {
+                el = root.querySelector(part);
+                if (!el) return { error: 'element not found' };
+                root = el.shadowRoot || el;
+              }
+              el.scrollIntoView({ block: 'center', inline: 'center' });
+              const r = el.getBoundingClientRect();
+              return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+            } catch (e) {
+              return { error: String(e) };
+            }
+          })()
+        `
+        : `
           (() => {
             try {
               const el = document.querySelector(${JSON.stringify(String(selector))});
@@ -3921,7 +3943,9 @@ export class BrowserRuntime {
               return { error: String(e) };
             }
           })()
-        `,
+        `
+      const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
+        expression,
         returnByValue: true,
       })
       const value = result.result?.value as { x?: number; y?: number; error?: string } | undefined

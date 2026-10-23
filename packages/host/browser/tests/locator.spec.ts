@@ -98,3 +98,10 @@ describe('locatorProbe', () => {
     expect(() => locatorProbe({ kind: 'index', index: 1 })).toThrow(/locatorProbe/u)
   })
 })
+
+describe('shadow-piercing selectors（2026-10-23 C16 P2）', () => {
+  it('keeps a bare >>> selector as CSS (resolved by the action, not the probe)', () => {
+    expect(parseTargetSpec('#host >>> button')).toEqual({ kind: 'css', selector: '#host >>> button' })
+    expect(parseTargetSpec('css=my-card >>> button')).toEqual({ kind: 'css', selector: 'my-card >>> button' })
+  })
+})

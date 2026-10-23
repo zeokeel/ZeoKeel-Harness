@@ -495,6 +495,32 @@ describe('expect receipts（2026-10-23 C2）', () => {
   })
 })
 
+describe('snapshot extras at the tool layer（2026-10-23 P1）', () => {
+  it('browser_get_snapshot exposes nestedFrames to the model', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        return { result: { value: JSON.stringify({ entries: [], crossOrigin: [], truncated: false, frames: 1, nestedFrames: 1 }) } }
+      }
+      return {
+        result: {
+          value: {
+            elements: [], total: 0, truncated: false, frames: 1, shadowRoots: 0, shadowScanCapped: false, countCapped: false,
+          },
+        },
+      }
+    }
+    const value = await harness.call('browser_get_snapshot', { includeFrames: true }) as { nestedFrames?: number, elements: unknown[] }
+    expect(value.elements).toEqual([])
+    // The blind spot must be observable by the MODEL, not only in runtime meta.
+    expect(value.nestedFrames).toBe(1)
+  })
+})
+
 describe('wait_for 扩展条件（2026-10-23 C14）', () => {
   it('function needs a non-empty expression', async () => {
     const harness = track(makeHarness())

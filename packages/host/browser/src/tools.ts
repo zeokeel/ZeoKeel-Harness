@@ -864,6 +864,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
           return sum + bit
         }, 0)
         const pointClick = spec.name === 'browser_click' && typeof interactArgs.x === 'number' && typeof interactArgs.y === 'number'
+        if (pointClick && interactArgs.target !== undefined) throw new Error('target and x/y are mutually exclusive — pass one addressing form')
         if (!pointClick && interactArgs.target === undefined) throw new Error('target is required (or pass x and y for a coordinate click)')
         const target = pointClick ? undefined : await resolveTarget(runtime, tabId, interactArgs.target as number | string, exec.signal)
         const outcome = await runWithExpectedEvent(runtime, tabId, interactArgs, exec.signal, async () => {

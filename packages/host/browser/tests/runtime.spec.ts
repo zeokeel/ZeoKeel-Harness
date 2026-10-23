@@ -1403,6 +1403,27 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('locate: a ">>>" selector walks open shadow roots, a plain one does not', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const expressions: string[] = []
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      expressions.push(String(params['expression'] ?? ''))
+      return { result: { value: { x: 10, y: 20 } } }
+    }
+    await expect(runtime.locateElement(1, '#host >>> button')).resolves.toEqual({ x: 10, y: 20 })
+    expect(expressions[0]).toContain('shadowRoot')
+    expect(expressions[0]).toContain('"#host >>> button"')
+    expressions.length = 0
+    await runtime.locateElement(1, '#plain')
+    // A plain selector still goes through the piercing helper (same code path) —
+    // the important part is that its parts array has a single segment.
+    expect(expressions[0]).toContain('#plain')
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

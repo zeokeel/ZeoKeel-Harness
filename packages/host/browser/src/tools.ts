@@ -93,6 +93,8 @@ function safeHit(runtime: BrowserRuntime, tabId: number, hit: BrowserInteraction
 interface ResolvedTarget {
   readonly selector: string
   readonly hit: BrowserInteractionHit
+  /** Snapshot entries that live in an iframe carry their frame index (C16). */
+  readonly frame?: number
 }
 
 /**
@@ -131,6 +133,7 @@ function anchoredTarget(runtime: BrowserRuntime, tabId: number, target: number):
   const { element, generation } = runtime.resolveSnapshotIndex(tabId, target)
   return {
     selector: element.selector,
+    ...(typeof element.frame === 'number' ? { frame: element.frame } : {}),
     hit: {
       index: element.index,
       snapshot: generation,
@@ -881,7 +884,10 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
         if (pointClick && interactArgs.target !== undefined) throw new Error('target and x/y are mutually exclusive — pass one addressing form')
         if (!pointClick && interactArgs.target === undefined) throw new Error('target is required (or pass x and y for a coordinate click)')
         const target = pointClick ? undefined : await resolveTarget(runtime, tabId, interactArgs.target as number | string, exec.signal)
-        const frameIndex = typeof interactArgs.frame === 'number' && interactArgs.frame > 0 ? interactArgs.frame : 0
+        const frameIndex = typeof interactArgs.frame === 'number' && interactArgs.frame > 0
+          ? interactArgs.frame
+          : (target?.frame ?? 0)
+        if (frameIndex > 0) await runtime.assertFrameFresh(tabId, frameIndex)
         const outcome = await runWithExpectedEvent(runtime, tabId, interactArgs, exec.signal, async () => {
           if (frameIndex > 0) {
             await runtime.clickInFrame(tabId, frameIndex, (target as { selector: string }).selector, exec.signal)

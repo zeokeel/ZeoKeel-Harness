@@ -531,6 +531,8 @@ export interface SnapshotAnchor {
   /** 抽这份快照时该 tab 的 URL。 */
   readonly url: string
   readonly elements: readonly BrowserSnapshotElement[]
+  /** frame:N → identity captured with this snapshot (index 0 = root frame). */
+  readonly frames?: ReadonlyArray<{ frameId: string, url: string }>
 }
 
 /**
@@ -3269,7 +3271,21 @@ export class BrowserRuntime {
     const resolved = this.resolveTab(tabId)
     const out = await this.snapshotWithMeta(resolved, signal, extras)
     const generation = ++this.snapshotGeneration
-    this.snapshotAnchors.set(resolved, { generation, url: this.tabState(resolved).url, elements: out.elements })
+    // Capture frame identities WITH the snapshot: an iframe reload changes the
+    // frame document but not the tab URL, so the numbered entries of that frame
+    // would otherwise stay "valid" (frame-level stale, 2026-10-23 C16).
+    let frames: Array<{ frameId: string, url: string }> | undefined
+    try {
+      frames = (await this.frameIndex(this.tab(resolved))).map(frame => ({ frameId: frame.frameId, url: frame.url }))
+    } catch {
+      frames = undefined
+    }
+    this.snapshotAnchors.set(resolved, {
+      generation,
+      url: this.tabState(resolved).url,
+      elements: out.elements,
+      ...(frames === undefined ? {} : { frames }),
+    })
     return { elements: out.elements, meta: out.meta, generation }
   }
 
@@ -3298,6 +3314,31 @@ export class BrowserRuntime {
       throw browserError('not-found', `browser: snapshot #${anchor.generation} has no element ${index} — call browser_get_snapshot first (${anchor.elements.length} elements)`)
     }
     return { element, generation: anchor.generation }
+  }
+
+  /**
+   * Fail with `stale-snapshot` when the frame a numbered element lives in has
+   * been reloaded/navigated since the snapshot was taken (frame-level stale).
+   * Honest boundary: a reload of the SAME url is detected through the frameId;
+   * a same-document navigation inside the frame is not.
+   * @param tabId - target tab.
+   * @param frame - 1-based frame index (0/undefined = main frame, no check).
+   */
+  async assertFrameFresh(tabId: number, frame: number | undefined): Promise<void> {
+    if (frame === undefined || frame <= 0) return
+    const resolved = this.resolveTab(tabId)
+    const anchor = this.snapshotAnchors.get(resolved)
+    const expected = anchor?.frames?.[frame]
+    if (anchor === undefined || expected === undefined) return
+    const live = await this.frameIndex(this.tab(resolved)).catch(() => undefined)
+    const current = live?.[frame]
+    if (current === undefined) return
+    if (current.frameId !== expected.frameId) {
+      throw browserError('stale-snapshot', `browser: frame ${String(frame)} was replaced after snapshot #${anchor.generation} — take a new snapshot before using its numbers`)
+    }
+    if (current.url !== expected.url) {
+      throw browserError('stale-snapshot', `browser: frame ${String(frame)} navigated after snapshot #${anchor.generation} (was ${JSON.stringify(expected.url)}, now ${JSON.stringify(current.url)}) — take a new snapshot`)
+    }
   }
 
   async text(tabId: number, selector: string | undefined, signal?: AbortSignal): Promise<string> {

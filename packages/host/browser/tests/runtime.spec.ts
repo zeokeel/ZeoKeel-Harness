@@ -21,13 +21,13 @@ class MockTransport implements CdpTransport {
   attached = false
   /** When true, sendCommand never settles (wedged-renderer simulation). */
   hang = false
-  readonly sent: Array<{ method: string; params: Record<string, unknown> }> = []
+  readonly sent: Array<{ method: string; params: Record<string, unknown>, sessionId?: string }> = []
   handler: ((method: string, params: Record<string, unknown>) => unknown) | undefined
   isAttached(): boolean { return this.attached }
   attach(): void { this.attached = true }
   detach(): void { this.attached = false }
-  sendCommand(method: string, params: Record<string, unknown>): Promise<unknown> {
-    this.sent.push({ method, params })
+  sendCommand(method: string, params: Record<string, unknown>, sessionId?: string): Promise<unknown> {
+    this.sent.push({ method, params, ...(sessionId === undefined ? {} : { sessionId }) })
     if (this.hang) return new Promise(() => {})
     return Promise.resolve(this.handler?.(method, params) ?? {})
   }
@@ -1483,6 +1483,51 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     // is evaluated with the frame's contextId (or its session id).
     frameValue = 'body text'
     await expect(runtime.textInFrame(1, 1, undefined)).rejects.toMatchObject({ code: 'not-found' })
+    cleanup()
+  })
+
+  it('frame actions: same-process frames use contextId, OOPIF frames use the session id', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = (method: string) => (method === 'Runtime.evaluate' ? { result: { value: 'clicked' } } : {})
+    const internal = runtime as unknown as { resolveFrame: (tab: unknown, frame: number) => Promise<unknown> }
+    internal.resolveFrame = async () => ({ frameId: 'F1', url: 'https://a.example/frame', depth: 1, contextId: 7 })
+    await runtime.clickInFrame(1, 1, '#go')
+    const sameProcess = view.transport.sent.filter(entry => entry.method === 'Runtime.evaluate').at(-1)!
+    expect(sameProcess.params['contextId']).toBe(7)
+    expect(sameProcess.sessionId).toBeUndefined()
+    internal.resolveFrame = async () => ({ frameId: 'F2', url: 'https://other.example/frame', depth: 1, sessionId: 'SESSION-1' })
+    await runtime.clickInFrame(1, 1, '#go')
+    const oopif = view.transport.sent.filter(entry => entry.method === 'Runtime.evaluate').at(-1)!
+    expect(oopif.sessionId).toBe('SESSION-1')
+    // A disabled element inside the frame is refused instead of "clicked".
+    view.transport.handler = () => ({ result: { value: 'disabled' } })
+    await expect(runtime.clickInFrame(1, 1, '#off')).rejects.toMatchObject({ code: 'policy' })
+    cleanup()
+  })
+
+  it('frame-level stale: a replaced or navigated frame refuses the old numbering', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = (method: string) => (method === 'Runtime.evaluate'
+      ? { result: { value: { elements: [], total: 0, truncated: false, frames: 1, shadowRoots: 0, shadowScanCapped: false, countCapped: false } } }
+      : {})
+    const internal = runtime as unknown as { frameIndex: (tab: unknown) => Promise<unknown> }
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1', url: 'https://a.example/frame', depth: 1, contextId: 3 },
+    ]
+    await runtime.modelSnapshot(1)
+    await expect(runtime.assertFrameFresh(1, 1)).resolves.toBeUndefined()
+    // The frame document was replaced (reload) — same url, different frameId —
+    // WITHOUT taking a new snapshot: the old numbering must go stale.
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1-NEW', url: 'https://a.example/frame', depth: 1, contextId: 4 },
+    ]
+    await expect(runtime.assertFrameFresh(1, 1)).rejects.toMatchObject({ code: 'stale-snapshot' })
     cleanup()
   })
 

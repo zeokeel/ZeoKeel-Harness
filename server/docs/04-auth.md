@@ -76,10 +76,16 @@ ZEOKEEL_ADMIN_PASSWORD=x bin/zeokeel-server -data ./data --bootstrap-admin admin
 
 超限返回 `429 RATE_LIMITED`。
 
+> **登录失败上限 = 控制台「系统配置」→「认证与安全」→「登录失败上限」**
+> （settings `auth.login_max_attempts`，缺省 10，5 分钟窗口；两条登录路径共用同一阈值）。
+> 保存即生效，**不需要**重建容器。兼容覆盖口是 env `ZEOKEEL_LOGIN_MAX_ATTEMPTS`（存量部署的
+> `.env` 里若还有它，env **优先**且启动日志会点名）—— 新部署不要再写进 `.env`。
+
 > **升级说明（2026-09-22）**：网关限流的**默认值**由 60/min 改为 0（不限制），但改的是代码缺省，
 > **库里已保存的 `settings.gateway.rate_limit = 60` 不会被自动覆盖** —— 老库升级后仍按 60/min 限流。
 > 要按官方口径放开（官方只限账号级并发、不设请求速率上限），需在管理后台网关页把该值显式改为 0
-> 或清空。并发侧仍由 in-flight 闸门兜底（每用户 32，`ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER` 可调）。
+> 或清空。并发侧仍由 in-flight 闸门兜底（每用户 32；在控制台「系统配置」→「AI 网关」里可改，
+> 兼容覆盖口 `ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER`）。
 
 ## 7. 用户模型
 

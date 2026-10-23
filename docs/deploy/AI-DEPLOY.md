@@ -74,19 +74,30 @@
   VERSION                      ← 当前部署版本（用于比对是否需要升级）
 ```
 
-### 2.2 三个对外变量（**先向用户确认，不要自己编**）
+### 2.2 四个引导变量（`.env` 只需要这 4 个键；**先向用户确认，不要自己编**）
 
 | 变量 | 含义 | 示例 |
 |---|---|---|
-| `DOMAIN` | 员工访问的地址（域名或 IP） | `ai.example.com` 或 `10.0.0.5` |
+| `DOMAIN` | 员工访问的地址（域名或 IP） | `harness.example.com` 或 `10.0.0.5` |
 | `TLS_MODE` | 证书模式，见 §2.3 | `internal` / `auto` / `manual` |
 | `ZEOKEEL_ADMIN_PASSWORD` | 初始超管密码（≥10 位） | 由你生成强密码 |
+| `PG_PASSWORD` | 内置 PostgreSQL 容器密码（首次部署时创建） | 由你生成强密码 |
 
-另外有一个**强烈建议一并确认**的变量（不确认也能跑，但反代场景下会踩坑）：
+另有一个可选项：`SERVER_IMAGE`（服务端镜像标签，只有升级时才需要改，见 §6.5）。
 
-| 变量 | 含义 | 何时必须配 |
+**其余运行期配置都不在 `.env` 里** —— 它们已经迁移到控制台「系统配置」页（见 §2.6）。
+新部署不要为了"调一个限流/间隔"去改 `.env` 再重建容器。
+
+#### 对外访问地址：控制台「网关」页（env 仍兼容）
+
+「本服务端对外可达地址」现在在**控制台「网关」页的「对外访问地址」**里配置
+（settings `server.base_url`）。环境变量 `ZEOKEEL_PUBLIC_BASE_URL` 仍然有效，
+且**优先级更高**（存量部署的 `.env` 里就有这一行，行为不变；启动日志会点名它）：
+
+| 入口 | 含义 | 何时必须配 |
 |---|---|---|
-| `ZEOKEEL_PUBLIC_BASE_URL` | 本服务端对外的**绝对 https 地址** | 宿主机已有别的反代（附录 A）、或反代不设 `X-Forwarded-Proto`、或服务端判断不出协议时 |
+| 控制台「网关」→「对外访问地址」 | 本服务端对外的**绝对 https 地址** | 宿主机已有别的反代（附录 A）、或反代不设 `X-Forwarded-Proto`、或服务端判断不出协议时 |
+| `.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` | 同上，env 覆盖口（兼容存量部署） | 同上；配了就是唯一权威 |
 
 > 为什么重要：客户端更新清单里的下载地址必须是**绝对 https**（客户端会整份丢弃非
 > https 的清单）。服务端推不出安全地址时会**按设计拒发** `client` 段并给出
@@ -135,9 +146,14 @@
 WASM 应用平台启动自检失败：INTERNAL: 理论内存峰值超过可用内存的安全水位，拒绝启动
 ```
 
-处置（升级前就做，成本为零）：在 `.env` 里显式指定档位，并确认 `docker-compose.yml` 的
-`server.environment` 里透传了 `ZEOKEEL_WASM_MEMORY_PROFILE`（仓库模板自 2.7.6 起已内置该行；
-2026-09-20 之前建好的部署目录需要手工补一行）：
+处置（升级前就做，成本为零）：在控制台「系统配置」→ 分组「应用平台」把「应用平台内存档位」
+设为 `small`，保存后执行 `docker compose up -d server`（档位是**启动期一次性装配**的，
+保存后必须重建容器才生效）。
+
+**若容器已经起不来（连控制台都进不去）**：用环境变量这个"容器外的开关"临时救一次，
+服务起来后到控制台把同一项存成 `small`，再删掉 `.env` 里那一行（`docker-compose.yml`
+的 `server.environment` 自 2.7.6 起已内置该行的透传；2026-09-20 之前建好的部署目录
+需要手工补一行）：
 
 ```bash
 # 3 并发实例 × 64 MiB 单实例内存 + 64 MiB 模块缓存 ≈ 630 MiB —— 2 GiB 级机器足够
@@ -151,7 +167,7 @@ ZEOKEEL_WASM_MEMORY_PROFILE=small
 | `large` | 64 | 64 MiB | 256 MiB | ≈4.7 GiB | 大机器、应用多 |
 
 档位之外，管理端「运维 → 应用平台」还能热调 11 项限制项（并发/队列/单实例内存/缓存等），
-但那组设置**不改变档位本身**；改档位要改 `.env` 并 `docker compose up -d server`。
+但那组设置**不改变档位本身**；改档位走上面的「系统配置」路径 + `docker compose up -d server`。
 自检通过后若还想把并发调高，注意新组合仍在同一水位内（控制台保存时用同一份账本校验）。
 
 ### 2.5 存量部署清理（**从旧版本升级的机器必读**）
@@ -184,7 +200,8 @@ docker compose up -d server
 docker compose logs --tail=200 server | grep -i 'APPS_BASE_DOMAIN'   # 该变量已废除，此处只用于确认残留告警
 
 # 2) 检查启动日志是否仍有基域残留告警（有 ⇒ 说明还有别处写着，按告警里的键名继续清）
-#    保留的变量只有 ZEOKEEL_TRUSTED_PROXIES（客户端 IP 归属）与 ZEOKEEL_APPS_EXTRA_RESERVED（保留字）
+#    保留的变量只有 ZEOKEEL_TRUSTED_PROXIES（客户端 IP 归属）与 ZEOKEEL_APPS_EXTRA_RESERVED
+#    （保留字；该项已可在控制台「系统配置」里改，env 只是兼容覆盖口）
 
 # 3) 控制台设置里的旧值（已废弃）：管理后台「应用中心 → 设置」不再有「应用基域」项；
 #    如启动日志点名 wasm.apps_base_domain（该设置项已删除）仍存在，用管理端设置接口清理该键：
@@ -192,9 +209,56 @@ docker compose logs --tail=200 server | grep -i 'APPS_BASE_DOMAIN'   # 该变量
 ```
 
 > 三个保留项的口径：`ZEOKEEL_TRUSTED_PROXIES`（客户端 IP 归属，继续用）、
-> `ZEOKEEL_APPS_EXTRA_RESERVED`（应用名保留字，继续用）；
+> `ZEOKEEL_APPS_EXTRA_RESERVED`（应用名保留字；主入口已迁移到控制台「系统配置」的
+> 「应用保留名」，env 只是兼容覆盖口）；
 > **已删除**：`ZEOKEEL_APPS_BASE_DOMAIN`、`ZEOKEEL_TRUSTED_PROXIES_EXPLICIT`、
 > 控制台设置项 `wasm.apps_base_domain`（**均已删除**，留着的旧值不生效、只会让启动日志告警）。
+
+### 2.6 系统配置在控制台，不在 `.env`（2026-10-23 起）
+
+**新部署的 `.env` 只需要 §2.2 那 4 个键。** 其余运行期配置统一在服务端控制台
+**「系统配置」**页改（管理端侧栏「运维 → 系统配置」；接口 `GET/PUT /api/server/admin/config`，
+权限 `config:read` / `config:write`）。
+
+| 控制台分组 | 控制台设置键 | 环境变量（兼容覆盖口） | 生效时机 |
+|---|---|---|---|
+| 认证与安全 | `auth.login_max_attempts` | `ZEOKEEL_LOGIN_MAX_ATTEMPTS` | 保存即生效 |
+| 认证与安全 | `auth.ldap_allow_plaintext` | `ZEOKEEL_LDAP_ALLOW_PLAINTEXT` | 保存即生效 |
+| 对外地址与更新 | `deploy.update_endpoint` | `ZEOKEEL_UPDATE_ENDPOINT` | 保存即生效 |
+| 网络与反代 | `deploy.trusted_hosts` | `ZEOKEEL_TRUSTED_HOSTS` | 保存即生效 |
+| AI 网关 | `gateway.max_inflight_per_user` | `ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER` | 保存即生效 |
+| 遥测 | `telemetry.max_per_min` | `ZEOKEEL_TELEMETRY_MAX_PER_MIN` | 保存即生效 |
+| 遥测 | `telemetry.max_per_skill_per_min` | `ZEOKEEL_TELEMETRY_MAX_PER_SKILL_PER_MIN` | 保存即生效 |
+| 遥测 | `telemetry.error_reporting_max_per_min` | `ZEOKEEL_TELEMETRY_ERROR_REPORTING_MAX_PER_MIN` | 保存即生效 |
+| 审计 | `audit.chain_interval` | `ZEOKEEL_AUDIT_CHAIN_INTERVAL` | **需重启/重建容器** |
+| 应用平台 | `wasm.apps_extra_reserved` | `ZEOKEEL_APPS_EXTRA_RESERVED` | **需重启/重建容器** |
+| 应用平台 | `wasm.memory_profile` | `ZEOKEEL_WASM_MEMORY_PROFILE` | **需重启/重建容器** |
+| 应用平台 | `wasm.compile_isolation` | `ZEOKEEL_COMPILE_ISOLATION` | **需重启/重建容器** |
+
+优先级（所有键统一）：**显式环境变量（非空） > 控制台保存的值 > 内置默认**。
+
+- **为什么 env 仍排第一**：存量部署的 `.env` 里就写着这些键，改成"库优先"会让升级后的
+  行为静默变化；而 `wasm.memory_profile` / `wasm.compile_isolation` 是**启动闸门** ——
+  库里的值配错会让容器起不来，那时只有"容器外的开关"能救（见 §2.4.1 的逃生口）。
+- **不静默**：env 压过库值时，控制台该页会给"环境变量覆盖"提示，**启动日志也会点名**
+  （`deployconfig: 以下配置来自环境变量…`）。要以控制台为准，就删掉 `.env` 里那一行。
+- **怎么改**：登录 `https://$DOMAIN/admin/` → 侧栏「运维 → 系统配置」→ 改 → 保存。
+  标注「需重启/重建容器」的键（生效时机 `restart`）保存后执行 `docker compose up -d server`
+  —— 这些值在容器启动时一次性装配（调度器 tick、平台内存档位），不重建只是库里变了。
+- **非法值**：控制台保存时**直接拒绝**（页面显示错误原因）；读取路径若遇到库里残留的非法
+  值，会回落到下一个来源并打一次 WARNING（不让一条写错的配置把服务端起不来）。
+- 只读路径：`GET /api/server/admin/config` 返回每项的生效值、来源（`env` / `setting` /
+  `default`）、默认值、取值域与生效时机；`env_overrides` 列出被 env 覆盖的键。
+
+**AI 代理怎么做**：默认**不写**这些环境变量。只有三种情况用 env：
+① 存量部署里已经有这些行（保留即可，行为不变，升级时不要顺手删）；
+② 启动自检失败、容器起不来（§2.4.1 的逃生口）；
+③ 明确要求"控制台不可改"的企业级覆盖（env 优先，启动日志可查）。
+
+> **有意不进库的部署旋钮**（网络拓扑、数据库连接/迁移预算、镜像内路径、主密钥等）
+> 仍只在 `.env` / `docker-compose.yml` 里配。完整清单与理由见决策记录
+> [`docs/decisions/2026-10-23-db-backed-deployment-config.md`](../decisions/2026-10-23-db-backed-deployment-config.md)
+> 的「不可入库清单」。
 
 ---
 
@@ -313,16 +377,19 @@ ADMIN_USER=admin
 ZEOKEEL_ADMIN_PASSWORD=<刚生成的超管密码>
 PG_PASSWORD=<刚生成的数据库密码>
 TZ=Asia/Shanghai
-# 对外绝对地址(§2.2):反代场景必配,否则客户端更新清单拒发下载链接
-ZEOKEEL_PUBLIC_BASE_URL=https://<确认过的域名>
-# 仅测试环境建议放开登录失败上限,免得反复登录锁死管理员账号
-# ZEOKEEL_LOGIN_MAX_ATTEMPTS=100000
+# 对外绝对地址(§2.2):首选登录控制台「网关」页填「对外访问地址」;
+# 反代场景也可以在下面显式设置(env 优先,存量部署的既有写法)
+# ZEOKEEL_PUBLIC_BASE_URL=https://<确认过的域名>
 EOF
 chmod 600 .env
 ```
 
 > `ZEOKEEL_ADMIN_PASSWORD` 只在**首次启动**用于创建超管（已有 admin 时幂等跳过）。
 > 首次登录成功后可以把该行置空，避免明文长期留在文件里。
+>
+> **其余运行期配置不要写进 `.env`** —— 首次部署完成后在控制台「系统配置」页改
+> （清单与生效时机见 §2.6）。`.env` 里多写的 `ZEOKEEL_*` 仍会生效（env 覆盖口），
+> 但会压过控制台并让"改了没生效"变成谜；新部署从零开始就不要写。
 
 ### 4.4 `manual` 模式才需要：放置证书
 
@@ -383,6 +450,7 @@ ls -1 /opt/zeokeel/zeokeel-data/master.key        # master.key 存在（**必须
 
 1. `zeokeel-data/master.key` 必须长期保留并单独备份 —— 丢失后数据库内加密的上游密钥不可恢复；
 2. 登录 webadmin 后到「网关」页填写「对外访问地址」= `https://$DOMAIN`；
+   其余运行期配置在「系统配置」页（§2.6）—— 新部署不需要改 `.env`；
 3. 员工客户端安装包由服务器对外提供（员工从 `https://$DOMAIN` 下载或由客户端自动更新）。
 
 ---
@@ -437,7 +505,7 @@ df -h /opt | tail -1
 - **网关限流（2026-09-22 起）**：代码缺省由 60/min 改为 `0`（不限制，与官方口径一致：官方只限账号级
   并发、不设请求速率上限），但**库里已保存的 `settings.gateway.rate_limit` 不会被自动覆盖** ——
   老库升级后仍按旧值限流。要放开请在管理后台「网关」页把该值显式改为 `0` 或清空。并发侧照旧由
-  每用户 in-flight 闸门兜底（缺省 32，`ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER` 可调）。
+  每用户 in-flight 闸门兜底（缺省 32，在控制台「系统配置」→「AI 网关」里可改，见 §2.6）。
 - **网关出站体闸门（同批）**：`gateway.max_file_refs`（缺省 600，对齐官方"单请求最多 600 张图"）与
   `gateway.body_parse_budget_mb`（缺省 128MiB）也在「网关」页可配；内存预算打满时慢路径请求返回
   `503 SERVER`（可重试）。小内存机器建议下调到 64（一次只加工一个最大请求体），大机器按
@@ -775,15 +843,19 @@ docker exec zeokeel-postgres psql -U zeokeel -d zeokeel -c '\dt' | head
 ### 配渠道时三个值必须自洽
 
 ```bash
-# .env 追加（三者必须指向同一个渠道）
-ZEOKEEL_CHANNEL=<channel-id>                                                  # 本部署属于哪个渠道
-ZEOKEEL_UPDATE_ENDPOINT=https://release.zeokeel.com/<channel-id>/latest.json # 从哪个目录取
-# 该目录里的 latest.json 必须声明 "channel_id": "<channel-id>"
+# ① 渠道声明由镜像自带（一般不用配）;只有覆盖镜像声明时才在 .env 写:
+# ZEOKEEL_CHANNEL=<channel-id>            # 本部署属于哪个渠道(必须与镜像内一致)
+
+# ② 更新清单地址的**主入口 = 控制台「系统配置」→「更新清单地址」**;
+#    下面是兼容存量部署的 env 覆盖口(写了就优先,启动日志会点名):
+# ZEOKEEL_UPDATE_ENDPOINT=https://release.zeokeel.com/<channel-id>/latest.json
+
+# ③ 该目录里的 latest.json 必须声明 "channel_id": "<channel-id>"
 ```
 
 | 现象 | 原因 |
 |---|---|
-| webadmin 一直不显示"发现新版本" | 三者不一致（最常见：改了 `ZEOKEEL_CHANNEL` 却没改端点，或反之）。`docker compose logs server` 会打印 `manifest channel "official" != this server's channel "acme"`。也可能是 `ZEOKEEL_UPDATE_ENDPOINT` 被显式设成了 `off` |
+| webadmin 一直不显示"发现新版本" | 三者不一致（最常见：镜像渠道与控制台「系统配置」里的「更新清单地址」指向不同目录，或 `.env` 的 `ZEOKEEL_UPDATE_ENDPOINT` 覆盖口还写着旧值）。`docker compose logs server` 会打印 `manifest channel "official" != this server's channel "acme"`。也可能是更新清单地址被显式设成了 `off` |
 | 容器启动即退出并打印 `渠道配置非法…` | `ZEOKEEL_CHANNEL`（或镜像内的渠道标记）不是合法渠道 id。**服务端不会回落到 official** —— 回落会让渠道部署接受官方清单、把品牌洗掉，所以直接拒绝启动。修好拼写或去掉覆盖 |
 | 容器启动即退出并打印 `渠道不一致…` | 镜像里的渠道内容（`channels/<id>/channel.json`）与本进程按的渠道不同，典型成因是 `.env`/compose 覆盖了镜像自带的渠道声明。去掉 `ZEOKEEL_CHANNEL` 覆盖，或改成与镜像一致的值 |
 | 升级后品牌没了 | 正常路径下**不应该发生**（启动期两道校验 + 清单渠道比对）。若发生说明有人手工指定了错误的镜像/清单，立即停止升级并排查 |
@@ -799,14 +871,14 @@ ZEOKEEL_UPDATE_ENDPOINT=https://release.zeokeel.com/<channel-id>/latest.json # �
 
 - `ZEOKEEL_CHANNEL` **留空即可**；填了就必须与镜像内的渠道一致，否则拒绝启动。
   （compose 默认不再写死 `official` —— 那会覆盖镜像渠道，正是"品牌被洗掉"的入口。）
-- `ZEOKEEL_UPDATE_ENDPOINT` **留空 = 用本渠道的默认目录**
-  （`release.zeokeel.com/<channel>/latest.json`）。**留空不等于关闭**；
-  要关闭请显式写 `off` / `none` / `-` / `disabled`。
+- **「更新清单地址」在控制台「系统配置」里改**（分组「对外地址与更新」）：
+  留空 = 用本渠道的默认目录（`release.zeokeel.com/<channel>/latest.json`）。
+  **留空不等于关闭**；要关闭请填 `off` / `none` / `-` / `disabled`。
+  存量部署的 `.env` 里若还有 `ZEOKEEL_UPDATE_ENDPOINT`，它仍然生效且**优先**于控制台
+  （启动日志会点名）—— 想改走控制台，先删掉 `.env` 那一行。
 - 从端点路径推导渠道只在**既没有 env、也没有镜像标记**时才生效（本地开发）。
   镜像部署一律以镜像标记为准 —— 否则"把端点指向哪个目录就变成哪个渠道"，
   渠道校验会自我实现、形同虚设。
-
-`ZEOKEEL_UPDATE_ENDPOINT` 设为 `off` / `none` / `-` 可关闭更新检查（纯内网、不希望检查时使用）。
 
 **渠道不影响员工客户端**：客户端永远从**这台服务器**取包，所以服务端属于哪个渠道，
 它的员工客户端就属于哪个渠道 —— 不存在"客户端渠道与服务端渠道不一致"的状态。
@@ -881,15 +953,19 @@ zeokeel-harness.example.com {
 - [ ] 镜像已导入，`--version` 输出 == 目标版本（§3.2-3.4）
 - [ ] 部署文件已导出到 `/opt/zeokeel`（§3.3）
 - [ ] 网段与端口无冲突（§4.1）
-- [ ] `.env` 已创建、权限 600、`DOMAIN`/`TLS_MODE` 经用户确认（§4.3）
+- [ ] `.env` 已创建、权限 600、`DOMAIN`/`TLS_MODE`/`ZEOKEEL_ADMIN_PASSWORD`/`PG_PASSWORD`
+      经用户确认（§2.2、§4.3）；**其余运行期配置不要写进 `.env`**（§2.6）
 - [ ] `manual` 模式证书就位（§4.4）
 - [ ] `docker compose up -d` 后三容器 Up（§4.5）；**宿主机已有反代时只起 server+postgres**（附录 A）
 - [ ] **healthz 返回 200**（§4.6）
 - [ ] `/api/client/v2/updates/manifest` 里有 `client.assets` 且 url 是**绝对 https**
-      （反代场景必查；出现 `client_unavailable` = `ZEOKEEL_PUBLIC_BASE_URL` 没配，§2.2）
+      （反代场景必查；出现 `client_unavailable` = 控制台「网关」页的「对外访问地址」没配，
+      `.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` 是等价的环境变量覆盖口，§2.2）
 - [ ] `zeokeel-data/master.key` 存在（§4.7）
 - [ ] 客户端安装包可下载：`/updates/client/<平台包>` 返回 206（§5）
 - [ ] 已向用户报告地址/账号/密码，并提示 master.key 必须备份（§4.7）
+- [ ] 已登录控制台确认「系统配置」页可打开（§2.6），并知道改 restart 类配置要
+      `docker compose up -d server`
 
 升级：
 

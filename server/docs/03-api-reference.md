@@ -70,6 +70,8 @@
 | POST | `/api/server/admin/tokens/:id/revoke` | 吊销指定 token |
 | GET | `/api/server/admin/usage` | 用量汇总(按用户/模型/时间;`group=user` 展示用户名) |
 | GET | `/api/server/admin/server-info` | 版本/数据库驱动(PG)/迁移版本/运行环境摘要 + `update_check`(实时更新服务器版本检查:current/latest/update_available/image_tag/manifest_url,失败为 null) |
+| GET | `/api/server/admin/config` | **部署运行期配置**(2026-10-23,`config:read`,页面 = webadmin「系统配置」):`{items:[…], env_overrides:[…]}`,每项 `{key, env, title, description, category, kind, value, source(default\|setting\|env), default, applies_at(hot\|restart), min, max, choices, env_value, setting_value, invalid}`。键的唯一真源是 `internal/deployconfig` 注册表(12 项:登录失败上限/明文 LDAP/更新清单地址/OIDC 回跳信任主机/单用户并发上限/三项遥测限流/审计链间隔/应用保留名/内存档位/编译隔离);`source=env` 表示被 `.env` 覆盖(控制台改不动) |
+| PUT | `/api/server/admin/config` | 写部署运行期配置(`config:write`;`auditor` 不给):body `{values:{key:value}}` → `{saved:[…], warnings:[…]}`。只接受注册表认识的键(未知键 400 VALIDATION);值用 `Key.Parse` 校验(非法 400);**空串 = 删除该 settings 行**(回落 env/默认);写库 + 审计(`action=deploy_config`,detail `key: old→new`)同事务;生效值来自环境变量的键在 `warnings` 里点名。`applies_at=restart` 的键保存后需 `docker compose up -d server` 重建容器才生效 |
 | GET | `/api/server/admin/concurrency` | 按模型并发状态(2026-08-31):当前 in-flight + 90 天峰值(`model_concurrency_stats`)+ 目标(`default_params.concurrency_target`),扩容申请依据 |
 | GET | `/api/server/admin/providers` | 网关上游列表(含 `protocol`:openai/anthropic/both) |
 | POST | `/api/server/admin/providers` | 添加上游 `{name, base_url, api_key, models, enabled, protocol?, channel?}`(api_key 服务端加密存储;protocol 缺省 openai) |

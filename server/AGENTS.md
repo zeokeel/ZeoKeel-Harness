@@ -27,6 +27,7 @@
 6. **管理端 HTTP 走 `/api/server/admin/*`(session + CSRF)**:错误统一信封 `{"error":{"code":"ERR_CODE","message":"..."}}`。
 7. **对外内容只走渠道配置(2026-09-10)**:客户端登录页/界面与服务端门户看到的一切（名称、标语、欢迎语、标识、主题色）来自**渠道配置**（镜像内 `/opt/zeokeel/channel/`，构建时由私有仓 `zeokeel/channels` 注入，见 `internal/channel`）。**不要再新增在线编辑这些内容的接口** —— 改内容 = 改渠道配置并重新构建镜像，这样内容可审计。旧的 `internal/brand`（上传/快照/开关）与 `brand:*` 权限已删除。
 8. **镜像只从更新服务器分发**：不经任何镜像仓库（GHCR 已下线）。客户端安装包随服务端镜像发布，由服务端自身下发（`internal/clientrelease`）。
+9. **运行期配置只走 `internal/deployconfig`(2026-10-23)**：部署期旋钮（登录失败上限 / 遥测限流 / 单用户并发 / 审计链间隔 / OIDC 信任主机 / 应用平台档位与隔离档……）**一律先在 `server/internal/deployconfig/keys.go` 的注册表里声明**（settings 键 + 历史 env 覆盖口 + 类型/默认值/取值域/生效时机），读取一律走 `deployconfig.Resolve/String/Int/Bool/Duration/CSV`；**禁止**在业务包里新增裸的 `os.Getenv("ZEOKEEL_*")`（存量读取点已全部接线，`cmd/server/compose_env_test.go` 的两个方向判据会拦住"文档说可调、部署够不到"和"注册表有、compose 断供"）。优先级固定为**显式 env > 控制台 settings > 内置默认**（升级安全 + 启动闸门逃生口 + 被覆盖时控制台与启动日志都点名），控制台出口 = webadmin「运维 → 系统配置」页（`GET/PUT /api/server/admin/config`，权限 `config:read|write` 仅 super_admin）。**引导必需项刻意不入库**：PG DSN/`PG_PASSWORD`、主密钥、初始超管密码、镜像内渠道声明与资产路径、`TZ`、连接池上限、启动期迁移预算、网络拓扑（可信代理/固定 IP/网段）—— 判据是"库还不可用时要读它 / 进库等于把秘密复制进它保护的库 / 描述的是进程外事实"，详见 `docs/decisions/2026-10-23-db-backed-deployment-config.md`。
 
 ## 4. 架构总览
 

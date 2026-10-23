@@ -267,6 +267,13 @@ export interface ElectronAdapter {
    * non-Electron hosts can omit it (the runtime then fails loudly).
    */
   getSession?(partition: string): NativeSession | undefined
+  /**
+   * System clipboard (2026-10-23 C7). Optional so test adapters/non-Electron
+   * hosts can omit it — the runtime then fails loudly instead of pretending.
+   * This is the OS clipboard, NOT `navigator.clipboard` permissions.
+   */
+  readClipboardText?(): string | Promise<string>
+  writeClipboardText?(text: string): void | Promise<void>
 }
 
 /**
@@ -635,6 +642,17 @@ export function createRealElectronAdapter(
     // P2-28: resolve an existing partition session without creating a view,
     // so `clearData` can still clear cookies/storage when no tab has been
     // materialized yet. Electron's Session satisfies NativeSession.
+    // 2026-10-23 C7: the OS clipboard (main-process API). Not `navigator.clipboard`.
+    readClipboardText: () => {
+      const { clipboard } = electron as { clipboard?: typeof import('electron').clipboard }
+      if (clipboard === undefined) throw new Error('browser: clipboard is unavailable in this runtime')
+      return clipboard.readText()
+    },
+    writeClipboardText: (text) => {
+      const { clipboard } = electron as { clipboard?: typeof import('electron').clipboard }
+      if (clipboard === undefined) throw new Error('browser: clipboard is unavailable in this runtime')
+      clipboard.writeText(text)
+    },
     getSession: (partition) => {
       const sessions = (electron as { session?: typeof import('electron').session }).session
       if (sessions === undefined || typeof sessions.fromPartition !== 'function') return undefined

@@ -20,7 +20,9 @@ import {
 import { CdpSession } from './cdp.ts'
 import { BROWSER_PARTITION, BROWSER_SHELL_TOOLBAR_HEIGHT, type ElectronAdapter, type NativeBrowserWindow, type NativeSession, type NativeView } from './electron-adapter.ts'
 import { BrowserGuard, ensureSessionGuard, isLocalHostname, looksLikeAbsoluteUrl } from './guard.ts'
-import { extractSnapshotWithMeta, extractTextWithMeta, type SnapshotExtractionMeta } from './snapshot.ts'
+import { extractSnapshotWithMeta, extractTextWithMeta, type SnapshotExtractionMeta, SNAPSHOT_DEFAULT_LIMIT, TEXT_DEFAULT_LIMIT } from './snapshot.ts'
+import { locatorProbe, parseTargetSpec } from './locator.ts'
+import { TabEventBus } from './events.ts'
 import { captureScreenshot, captureScreenshotViaCdp } from './shots.ts'
 import { appSurfaceAllowsUrl, asSurfaceWebContents, surfaceLabel, type BrowserSurface, type SurfaceControlOwner, type SurfaceRegistry, type SurfaceWebContents } from './surface.ts'
 import { TabPool, gateRefusal, type TabReservation } from './pool.ts'
@@ -388,9 +390,13 @@ export function browserDefaultTitle(locale: HostLocale): string {
 }
 
 export interface WaitForOptions {
-  condition: 'element-present' | 'element-visible' | 'text-appear' | 'url-change' | 'network-idle' | 'settled'
+  condition: 'element-present' | 'element-visible' | 'text-appear' | 'url-change' | 'url-match' | 'network-idle' | 'settled' | 'function' | 'popup' | 'download' | 'file-chooser'
   selector?: string | undefined
   text?: string | undefined
+  /** `url-match`: glob pattern (`*` wildcard) matched against location.href. */
+  pattern?: string | undefined
+  /** `function`: JS expression polled until truthy (validated like browser_eval). */
+  expression?: string | undefined
   timeoutMs?: number | undefined
   /**
    * Absolute instant the whole tool call must return by (armed by the tool's
@@ -399,6 +405,20 @@ export interface WaitForOptions {
    * wait instead of pushing the tool past its deadline (2026-09-16 audit R3-C).
    */
   deadlineAt?: number | undefined
+}
+
+/** One pending page-authored dialog (2026-10-23 C1). */
+export interface BrowserDialogState {
+  /** CDP dialog type: alert / confirm / prompt / beforeunload. */
+  readonly type: string
+  /** Redacted dialog text (page-controlled content). */
+  readonly message: string
+  /** Redacted origin URL the dialog opened on. */
+  readonly url: string
+  /** Default text of a `prompt` (page-controlled: redacted like every other exit). */
+  readonly defaultPrompt?: string
+  /** When the dialog opened (epoch ms). */
+  readonly at: number
 }
 
 /** Control/turn state shared by the shell payload, the sidebar hint and the
@@ -516,6 +536,77 @@ export interface SnapshotAnchor {
  * The embedded browser service (v4.2 single pool). Constructed by the plugin
  * with the real adapter; tests inject a mock adapter plus optional deps.
  */
+
+/**
+ * Page script for `selectOptionChoice`: selects by value/label/index or clears,
+ * dispatching input+change. Kept as a module-level builder so tests can run the
+ * exact page logic under jsdom (audit P2-1: page-side logic had zero coverage).
+ *
+ * Selection is fail-loud: an ambiguous value/label (two options with the same
+ * value or the same visible label) is refused with its hit count instead of
+ * silently taking the first match (audit P1-3).
+ * @param selector - resolved CSS selector of the `<select>`.
+ * @param choice - selection request (values/labels/indexes/clear).
+ * @returns the script source.
+ */
+export function selectPageScript(selector: string, choice: {
+  readonly value?: string | readonly string[] | undefined
+  readonly label?: string | readonly string[] | undefined
+  readonly index?: number | readonly number[] | undefined
+  readonly clear?: boolean | undefined
+}): string {
+  return `
+          (() => {
+            const el = document.querySelector(${JSON.stringify(String(selector))});
+            if (!el) return { error: 'element not found' };
+            if (el.tagName !== 'SELECT') return { error: 'not a select element' };
+            const choice = ${JSON.stringify({ value: choice.value, label: choice.label, index: choice.index, clear: choice.clear === true })};
+            const list = (x) => x === undefined ? [] : Array.isArray(x) ? x : [x];
+            const options = [...el.options];
+            const norm = (s) => String(s === undefined || s === null ? '' : s).replace(/\\s+/g, ' ').trim();
+            const pick = (values, labels, indexes) => {
+              const picked = [];
+              for (const index of indexes) {
+                const option = options[index];
+                if (option === undefined) return { error: 'option index out of range: ' + String(index) };
+                picked.push(option);
+              }
+              for (const value of values) {
+                const hits = options.filter((o) => o.value === String(value));
+                if (hits.length === 0) return { error: 'option not found by value: ' + String(value) };
+                if (hits.length > 1) return { error: 'value is ambiguous — ' + String(hits.length) + ' options share value ' + String(value) };
+                picked.push(hits[0]);
+              }
+              for (const label of labels) {
+                const wanted = norm(label);
+                const exact = options.filter((o) => norm(o.label || o.textContent) === wanted);
+                const hits = exact.length > 0 ? exact : options.filter((o) => norm(o.label || o.textContent).toLowerCase() === wanted.toLowerCase());
+                if (hits.length === 0) return { error: 'option not found by label: ' + String(label) };
+                if (hits.length > 1) return { error: 'label is ambiguous — ' + String(hits.length) + ' options are labelled ' + JSON.stringify(String(label)) };
+                picked.push(hits[0]);
+              }
+              return { picked };
+            };
+            const wanted = pick(list(choice.value), list(choice.label), list(choice.index));
+            if (wanted.error !== undefined) return wanted;
+            if (choice.clear === true) {
+              for (const option of options) option.selected = false;
+              // A single <select> re-selects its first option when none is
+              // selected, so clearing needs the explicit -1 (audit P2-2).
+              if (el.multiple === false) el.selectedIndex = -1;
+            } else {
+              if (wanted.picked.length === 0) return { error: 'no selection given (value/label/index or clear)' };
+              if (el.multiple === false && wanted.picked.length > 1) return { error: 'this select is not multiple — give exactly one target or pass clear' };
+              for (const option of wanted.picked) option.selected = true;
+            }
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            const selected = options.filter((o) => o.selected).map((o) => o.value);
+            return { selected, count: selected.length };
+          })()
+        `
+}
+
 export class BrowserRuntime {
   private readonly tabs = new Map<number, BrowserTab>()
   private nextTabId = 1
@@ -547,6 +638,27 @@ export class BrowserRuntime {
    * the sidebar hint and `browser_list_tabs` can all say the same thing.
    */
   private gateBlock: { at: number; tool: string } | null = null
+  /** Pending page-authored dialogs per tab (2026-10-23 C1). A dialog blocks the
+   * renderer, so every page operation on that tab fails fast with a pointer to
+   * `browser_dialog` instead of hanging until the tool budget runs out. */
+  private readonly dialogs = new Map<number, BrowserDialogState>()
+  /** Per-tab event bus for "arm → act → receipt" (2026-10-23 C2). */
+  private readonly tabEvents = new Map<number, TabEventBus>()
+  /** Download id → tab that was active when the download STARTED (bounded). The
+   * completion event must be attributed to the same tab even if the user/agent
+   * switched tabs in between (audit M2 P2-3). */
+  private readonly downloadTabs = new Map<number, number>()
+  /** Pending file choosers per tab (2026-10-23 C3). A CDP-intercepted chooser has
+   * NO native UI, so it must be answered or cancelled explicitly. */
+  private readonly choosers = new Map<number, { backendNodeId: number, mode: string }>()
+  /** Last requested chooser interception state per tab (dedupe takeover toggles). */
+  private readonly chooserInterception = new Map<number, boolean>()
+  /** Keys currently held DOWN per tab (audit R2): the runtime owns the ledger so
+   * a crashed/aborted sequence can never leave a modifier stuck. */
+  private readonly heldKeys = new Map<number, Set<string>>()
+  /** Tabs whose interception still needs re-enabling: a dialog blocked the CDP
+   * call at release time, so it is retried when the dialog goes away. */
+  private readonly chooserReenable = new Set<number>()
   /** Redacted display paths of downloads, keyed by download id (R-5). The store
    * keeps the real on-disk path for `downloads_open`; only the model-facing
    * projection swaps this in. Bounded by {@link DOWNLOAD_DISPLAY_PATH_LIMIT}. */
@@ -589,6 +701,11 @@ export class BrowserRuntime {
   private readonly listeners = new Set<(event: BrowserStreamEvent) => void>()
   private shellOrigin: string | undefined
   private lastAgentId = ''
+  /** In-flight `browser_eval` calls per tab id: page-initiated top-level navigation
+   * is refused for THAT tab while its eval runs (2026-10-23 audit P0-1 —
+   * `window.location` is unforgeable, so the only real enforcement is the
+   * navigation gate). Keyed per tab so an eval on tab A never freezes tab B. */
+  private readonly evalInFlight = new Map<number, number>()
   /**
    * Deadline **ownership stack**: one entry per agent operation currently inside
    * the pool's critical section (epoch ms), innermost last — R4-B-15, C3-01.
@@ -649,8 +766,8 @@ export class BrowserRuntime {
       // 字段注释）。这是一条安全相关的缺省，改它要同时改那份注释与
       // `tests/tool-groups-policy.spec.ts` 的缺省方向断言。
       evalEnabled: options.evalEnabled ?? true,
-      snapshotLimit: options.snapshotLimit ?? 200,
-      textLimit: options.textLimit ?? 32 * 1024,
+      snapshotLimit: options.snapshotLimit ?? SNAPSHOT_DEFAULT_LIMIT,
+      textLimit: options.textLimit ?? TEXT_DEFAULT_LIMIT,
       screenshotMaxWidth: options.screenshotMaxWidth ?? 1280,
       screenshotQuality: options.screenshotQuality ?? 70,
       downloadDir: options.downloadDir ?? '.zeokeel-downloads',
@@ -1151,7 +1268,29 @@ export class BrowserRuntime {
     // upstream timeout-policy replaces the runtime's own diagnosis with a
     // generic `tool call timed out`. Outside an agent operation (prewarm,
     // restore, user paths) nothing changes.
-    const cdp = new CdpSession(view.webContents.cdp, { timeoutMs: () => this.cdpCallBudgetMs() })
+    const cdp = new CdpSession(view.webContents.cdp, {
+      timeoutMs: () => this.cdpCallBudgetMs(),
+      // Single choke point: ANY page command on a tab with a pending dialog fails
+      // fast. Only the commands that answer/manage the dialog itself (and the
+      // domain toggle) are exempt — otherwise `browser_dialog` would deadlock.
+      beforeCommand: (method: string) => {
+        // Exemptions, each for a reason (2026-10-23 M1 audit):
+        //  - Page.handleJavaScriptDialog: the ANSWER itself — refusing it while a
+        //    dialog is open would deadlock the model (the C1 P0).
+        //  - Page.enable / Runtime.enable: domain management, not page work; they
+        //    must keep working so the tab can be inspected/wired.
+        // NOT exempt: DOM.setFileInputFiles and friends. A file chooser is not a
+        // JS dialog, so M3's chooser work must not borrow this exemption.
+        if (method === 'Page.handleJavaScriptDialog' || method === 'Page.enable' || method === 'Runtime.enable') return
+        const dialog = this.dialogs.get(id)
+        if (dialog === undefined) return
+        throw browserError('policy', hostCopy(
+          this.locale(),
+          `页面正在显示 ${dialog.type} 对话框（${dialog.message.slice(0, 160)}），请先调用 browser_dialog`,
+          `the page is showing a ${dialog.type} dialog (${dialog.message.slice(0, 160)}) — call browser_dialog first`,
+        ))
+      },
+    })
     try {
       await cdp.attach()
     } catch (cause) {
@@ -1165,7 +1304,9 @@ export class BrowserRuntime {
       if (opener !== undefined) tab.filledSecrets.push(...opener.filledSecrets)
     }
     this.tabs.set(id, tab)
+    this.tabEvents.set(id, new TabEventBus())
     this.pool.registerTab(id, '', '', reservation)
+    this.wireDialogEvents(tab)
 
     try {
       // User-created tabs (shell ＋ / address bar) surface the window; agent-created
@@ -1210,7 +1351,11 @@ export class BrowserRuntime {
         // R-5 (F7): the popup inherits this tab's redaction value set — the
         // opener commonly puts the injected value in the popup URL, and an
         // empty set on the child tab published it in cleartext.
-        void this.open(target, undefined, userInitiated, id).catch((cause: unknown) => {
+        void this.open(target, undefined, userInitiated, id).then((created) => {
+          // Receipt AFTER the tab exists: the popup event must carry the real tab
+          // id (audit M2 口径 3), never a placeholder.
+          this.tabEvents.get(id)?.push('popup', { tab: created.id, url: created.url, title: created.title, actor: userInitiated ? 'user' : 'ai' })
+        }).catch((cause: unknown) => {
           const message = cause instanceof Error ? cause.message : String(cause)
           this.record('browser_window_open', id, `window.open failed: ${message}`, true)
         })
@@ -1234,13 +1379,25 @@ export class BrowserRuntime {
       const refuseLocalNavigation = (...args: unknown[]): void => {
         const event = args[0] as { preventDefault?: () => void } | undefined
         const target = typeof args[1] === 'string' ? args[1] : ''
-        if (!this.isForbiddenLocalTarget(target)) return
+        // `browser_eval` must not navigate the tab (2026-10-23 audit P0-1).
+        // `window.location` is own + non-configurable in real Chromium, so a page-side
+        // shim cannot intercept it; the Electron gate is the enforcement point. While
+        // an eval is in flight every top-level navigation is refused, whatever the
+        // target — `location.assign`, `href=`, form submit and meta refresh included.
+        const evalDriven = (this.evalInFlight.get(id) ?? 0) > 0
+        if (!evalDriven && !this.isForbiddenLocalTarget(target)) return
         event?.preventDefault?.()
-        this.record('navigate', id, hostCopy(
-          this.locale(),
-          `导航被拒（本机目标，${stripSensitiveUrl(target).slice(0, 120)}）`,
-          `navigation denied (local target, ${stripSensitiveUrl(target).slice(0, 120)})`,
-        ), true)
+        this.record('navigate', id, evalDriven
+          ? hostCopy(
+            this.locale(),
+            `导航被拒（browser_eval 执行期间的页面导航，${stripSensitiveUrl(target).slice(0, 120)}）`,
+            `navigation denied (page navigation during browser_eval, ${stripSensitiveUrl(target).slice(0, 120)})`,
+          )
+          : hostCopy(
+            this.locale(),
+            `导航被拒（本机目标，${stripSensitiveUrl(target).slice(0, 120)}）`,
+            `navigation denied (local target, ${stripSensitiveUrl(target).slice(0, 120)})`,
+          ), true)
       }
       view.webContents.on('will-navigate', refuseLocalNavigation)
       view.webContents.on('will-redirect', refuseLocalNavigation)
@@ -1351,7 +1508,18 @@ export class BrowserRuntime {
       // Chromium re-announced the current document on enable, doing it after an
       // injection would immediately close a window that had just opened. Here no
       // window can exist yet, so the notification is inert.
-      void tab.cdp.send('Page.enable').catch(() => { /* mock/older protocol: `did-navigate` still closes the window */ })
+      // File chooser interception (C3): without it a click on <input type=file>
+      // opens a dialog nobody can see or answer.
+      void tab.cdp.send('Page.setInterceptFileChooserDialog', { enabled: true }).catch(() => {
+        this.record('browser_file_chooser', tab.id, 'file chooser interception unavailable on this tab', true)
+      })
+      tab.disposers.push(tab.cdp.on('Page.fileChooserOpened', (params) => { this.noteChooserOpened(tab.id, params) }))
+      void tab.cdp.send('Page.enable').catch(() => {
+        // Observable on purpose: without the Page domain there is no dialog
+        // interception and no protocol-level navigation signal, so a silent
+        // catch would mean "fail-fast looks installed but is not".
+        this.record('browser_page_state', tab.id, 'Page.enable failed — dialog interception unavailable on this tab', true)
+      })
 
       const session = view.webContents.session
       // 分区级幂等（§16.1：归属 = 分区初始化，不是建 tab 时）。重复调用是 no-op，
@@ -2152,6 +2320,234 @@ export class BrowserRuntime {
     this.window.setTitle(title === fallback ? title : `${title} — ${fallback}`)
   }
 
+  /** Refuse a page operation while a dialog is blocking that tab. */
+  private assertNoDialog(tabId: number): void {
+    const dialog = this.dialogs.get(tabId)
+    if (dialog === undefined) return
+    const detail = hostCopy(
+      this.locale(),
+      `页面正在显示 ${dialog.type} 对话框（${dialog.message.slice(0, 160)}），请先调用 browser_dialog`,
+      `the page is showing a ${dialog.type} dialog (${dialog.message.slice(0, 160)}) — call browser_dialog first`,
+    )
+    throw browserError('policy', `browser: ${detail}`)
+  }
+
+  /** Record one `Page.javascriptDialogOpening` event for a tab. */
+  private noteDialogOpened(tabId: number, params: unknown): void {
+    const raw = (params ?? {}) as { type?: unknown, message?: unknown, url?: unknown, defaultPrompt?: unknown }
+    const type = typeof raw.type === 'string' ? raw.type : 'alert'
+    const tab = this.tabs.get(tabId)
+    // The dialog text is page-controlled: push it through the same value-level
+    // redactor as every other text exit before it can reach the model.
+    const message = tab === undefined
+      ? stripSensitiveText(String(raw.message ?? ''))
+      : redactFilledSecretsText(tab, stripSensitiveText(String(raw.message ?? '')), { verbatim: true })
+    // url / defaultPrompt are page-controlled too: the keyword list alone does
+    // not know a value that was injected into this tab, so run both through the
+    // tab's value set (audit M1 P1-2).
+    const redact = (text: string): string => tab === undefined
+      ? stripSensitiveText(text)
+      : redactFilledSecretsText(tab, stripSensitiveText(text), { verbatim: true })
+    const url = typeof raw.url === 'string' ? redact(stripSensitiveUrl(raw.url)) : ''
+    // A dialog blocks the renderer, so the command that caused it (if any) must
+    // not keep the mutex until its CDP budget expires — abort it now.
+    this.tabs.get(tabId)?.cdp.abortPending(new Error('browser: page is blocked by a dialog'))
+    this.dialogs.set(tabId, {
+      type,
+      message,
+      url,
+      ...(typeof raw.defaultPrompt === 'string' ? { defaultPrompt: redact(raw.defaultPrompt) } : {}),
+      at: Date.now(),
+    })
+    this.tabEvents.get(tabId)?.push('dialog', this.dialogs.get(tabId))
+    this.record('browser_dialog_open', tabId, hostCopy(
+      this.locale(),
+      `页面弹出 ${type} 对话框（等待 browser_dialog）`,
+      `page opened a ${type} dialog (waiting for browser_dialog)`,
+    ))
+    this.emitAll('state')
+  }
+
+  /** Event bus for one tab (undefined for a closed tab). */
+  eventBus(tabId: number): TabEventBus | undefined {
+    return this.tabEvents.get(this.resolveTab(tabId))
+  }
+
+  /** Current pending dialog (model-facing snapshot), if any. */
+  dialogState(tabId: number): BrowserDialogState | undefined {
+    return this.dialogs.get(tabId)
+  }
+
+  /**
+   * Answer the pending dialog of one tab (accept or dismiss).
+   * @param tabId - tab id (defaults to the active tab at the tool layer).
+   * @param action - accept or dismiss.
+   * @param promptText - value for a `prompt` dialog (accept only).
+   * @param signal - caller cancellation.
+   * @returns the dialog that was answered.
+   */
+  async handleDialog(
+    tabId: number,
+    action: 'accept' | 'dismiss',
+    promptText?: string,
+    signal?: AbortSignal,
+  ): Promise<BrowserDialogState> {
+    // RULE: the entry that ANSWERS an event is never blocked by that event's
+    // fail-fast. `assertNoDialog` belongs to page operations only — a dialog
+    // handler that refused to run while a dialog is open would deadlock the model.
+    const resolved = this.resolveTab(tabId)
+    const dialog = this.dialogs.get(resolved)
+    if (dialog === undefined) {
+      throw browserError('not-found', 'browser: there is no pending dialog on this tab')
+    }
+    if (promptText !== undefined) {
+      if (dialog.type !== 'prompt') {
+        throw browserError('policy', `browser: promptText only applies to prompt dialogs (this one is ${dialog.type})`)
+      }
+      if (action !== 'accept') throw browserError('policy', 'browser: promptText only applies when accepting')
+    }
+    return await this.agentRun('browser_dialog', async () => {
+      const tab = this.tab(resolved)
+      this.assertScopeUnchanged(this.scopeGeneration(), 'browser_dialog', tab)
+      await tab.cdp.send('Page.handleJavaScriptDialog', {
+        accept: action === 'accept',
+        ...(promptText === undefined ? {} : { promptText }),
+      }, signal === undefined ? {} : { signal })
+      this.dialogs.delete(resolved)
+      this.flushChooserReenable()
+      this.record('browser_dialog', resolved, action === 'accept' ? 'dialog accepted' : 'dialog dismissed', false, 'ai')
+      this.emitAll('state')
+      return dialog
+    }, signal)
+  }
+
+  /** Wire the dialog events for one freshly created tab.
+   *
+   * `Page.enable` is sent ONCE per tab by the tab-wiring block in `open()`
+   * (2026-10-23 audit: a second send here was both redundant and silently
+   * swallowed its failure). This method only subscribes. */
+  private wireDialogEvents(tab: BrowserTab): void {
+    tab.disposers.push(
+      tab.cdp.on('Page.javascriptDialogOpening', (params) => { this.noteDialogOpened(tab.id, params) }),
+      tab.cdp.on('Page.javascriptDialogClosed', () => {
+        if (this.dialogs.delete(tab.id)) this.emitAll('state')
+        this.flushChooserReenable()
+      }),
+    )
+  }
+
+  /** Record one `Page.fileChooserOpened` event for a tab. */
+  private noteChooserOpened(tabId: number, params: unknown): void {
+    const raw = (params ?? {}) as { backendNodeId?: unknown, mode?: unknown }
+    if (typeof raw.backendNodeId !== 'number') return
+    const mode = raw.mode === 'selectMultiple' ? 'selectMultiple' : 'selectSingle'
+    this.choosers.set(tabId, { backendNodeId: raw.backendNodeId, mode })
+    this.tabEvents.get(tabId)?.push('file-chooser', { backendNodeId: raw.backendNodeId, mode, tab: tabId })
+    this.record('browser_file_chooser', tabId, `file chooser opened (${mode}) — waiting for browser_file_chooser`, false)
+    this.emitAll('state')
+  }
+
+  /** Pending file chooser of one tab (model-facing snapshot). */
+  chooserState(tabId: number): { backendNodeId: number, mode: string } | undefined {
+    return this.choosers.get(this.resolveTab(tabId))
+  }
+
+  /**
+   * Answer the pending file chooser of one tab (C3).
+   *
+   * `cancel` sends an EMPTY `DOM.setFileInputFiles` — the chooser is already
+   * intercepted by CDP (no native UI), so the only way to close it is to complete
+   * it; an empty list means "the user picked nothing" and does not replay the
+   * interception (audit M3 口径 4).
+   * @param tabId - target tab.
+   * @param action - files to select, or cancel.
+   * @param allowedDirs - upload whitelist (same single source as browser_upload_file).
+   * @param signal - caller cancellation.
+   * @returns what was applied.
+   */
+  async chooseFiles(
+    tabId: number,
+    action: { files: string[] } | { cancel: true },
+    allowedDirs: string[],
+    signal?: AbortSignal,
+  ): Promise<{ files?: string[], cancelled?: true }> {
+    const resolved = this.resolveTab(tabId)
+    const pending = this.choosers.get(resolved)
+    if (pending === undefined) {
+      throw browserError('not-found', 'browser: there is no pending file chooser on this tab (click a file input first, or pass expect:"file-chooser")')
+    }
+    return await this.agentRun('browser_file_chooser', async () => {
+      const tab = this.tab(resolved)
+      if ('cancel' in action) {
+        await tab.cdp.send('DOM.setFileInputFiles', { files: [], backendNodeId: pending.backendNodeId }, signal === undefined ? {} : { signal })
+        this.choosers.delete(resolved)
+        this.record('browser_file_chooser', resolved, 'file chooser cancelled (empty selection)', false)
+        this.emitAll('state')
+        return { cancelled: true as const }
+      }
+      if (allowedDirs.length === 0) {
+        throw browserError('policy', 'browser: file uploads are not available in this deployment (no allowed directories)')
+      }
+      if (pending.mode === 'selectSingle' && action.files.length > 1) {
+        throw browserError('policy', 'browser: this file chooser accepts a single file — pass one path or cancel')
+      }
+      const vetted = action.files.map(file => this.assertAllowedUploadPath(file, allowedDirs))
+      await tab.cdp.send('DOM.setFileInputFiles', { files: vetted, backendNodeId: pending.backendNodeId }, signal === undefined ? {} : { signal })
+      this.choosers.delete(resolved)
+      this.record('browser_file_chooser', resolved, `file chooser: ${vetted.length} file(s) selected`, false)
+      this.emitAll('state')
+      return { files: vetted }
+    }, signal)
+  }
+
+  /** Toggle the CDP file-chooser interception for one tab (user takeover path). */
+  private setChooserInterception(tabId: number, enabled: boolean): void {
+    const tab = this.tabs.get(tabId)
+    if (tab === undefined) return
+    // A pending dialog blocks every page command (including this one), so the
+    // re-enable is queued and flushed when the dialog closes (audit M3 ③).
+    if (enabled && this.dialogs.has(tabId)) {
+      this.chooserReenable.add(tabId)
+      this.record('browser_file_chooser', tabId, 'file chooser interception re-enable deferred until the dialog is answered', false)
+      return
+    }
+    if (this.chooserInterception.get(tabId) === enabled) return
+    this.chooserInterception.set(tabId, enabled)
+    void tab.cdp.send('Page.setInterceptFileChooserDialog', { enabled }).catch(() => {
+      this.record('browser_file_chooser', tabId, `could not ${enabled ? 'enable' : 'disable'} file chooser interception`, true)
+    })
+    if (!enabled) this.choosers.delete(tabId)
+  }
+
+  /** Flush queued re-enables (a dialog closed). */
+  private flushChooserReenable(): void {
+    for (const tabId of [...this.chooserReenable]) {
+      this.chooserReenable.delete(tabId)
+      this.setChooserInterception(tabId, true)
+    }
+  }
+
+  /** Dismiss and forget a pending dialog (tab close / session switch / dispose). */  /** Dismiss and forget a pending dialog (tab close / session switch / dispose). */
+  private async discardDialog(tabId: number): Promise<void> {
+    if (!this.dialogs.has(tabId)) return
+    const tab = this.tabs.get(tabId)
+    if (tab === undefined) {
+      this.dialogs.delete(tabId)
+      return
+    }
+    try {
+      // Dismiss BEFORE forgetting: the state must never disappear while the
+      // renderer is still blocked (that would 30s-timeout every later call and
+      // lose the only clue about why).
+      await tab.cdp.send('Page.handleJavaScriptDialog', { accept: false }, { timeoutMs: 2_000 })
+      this.record('browser_dialog', tabId, 'dialog dismissed on tab teardown', false, 'ai')
+    } catch {
+      this.record('browser_dialog', tabId, 'dialog could not be dismissed on teardown', true)
+    } finally {
+      this.dialogs.delete(tabId)
+    }
+  }
+
   private releaseTabDisposers(id: number): void {
     const tab = this.tabs.get(id)
     if (tab === undefined) return
@@ -2380,6 +2776,7 @@ export class BrowserRuntime {
   }
 
   private async navigateInternal(id: number, url: string, waitUntil: BrowserWaitUntil, actor: RecordActor, deadlineAt?: number): Promise<void> {
+    this.assertNoDialog(id)
     if (!this.navigationAllowed(url)) {
       // R-1: the refusal text is model-facing (tool error) — echo the
       // *redacted* URL, exactly like history/op-log do.
@@ -2424,6 +2821,7 @@ export class BrowserRuntime {
       this.assertScopeUnchanged(scope, 'browser_navigate', tab)
     }
     this.updateTabState(tab)
+    void this.releaseHeldKeys(id)
     this.record('browser_navigate', id, hostCopy(this.locale(), `打开网页：${url}`, `navigate: ${url}`), false, actor, NAVIGATE_SUMMARY_LIMIT)
     // R-5 (2026-09-13): the persisted history is a model-facing exit
     // (`browser_history_search`, the shell's history panel, `<dir>/history.jsonl`),
@@ -2601,6 +2999,7 @@ export class BrowserRuntime {
   }
 
   async reload(tabId: number, signal?: AbortSignal, user = false, deadlineAt?: number): Promise<void> {
+    this.assertNoDialog(this.resolveTab(tabId))
     const body = async (): Promise<void> => {
       const tab = this.tab(tabId)
       const wc = tab.view.webContents
@@ -2625,6 +3024,7 @@ export class BrowserRuntime {
   }
 
   async goBack(tabId: number, signal?: AbortSignal, user = false, deadlineAt?: number): Promise<void> {
+    this.assertNoDialog(this.resolveTab(tabId))
     const body = async (): Promise<void> => {
       const tab = this.tab(tabId)
       const wc = tab.view.webContents
@@ -2642,6 +3042,7 @@ export class BrowserRuntime {
   }
 
   async goForward(tabId: number, signal?: AbortSignal, user = false, deadlineAt?: number): Promise<void> {
+    this.assertNoDialog(this.resolveTab(tabId))
     const body = async (): Promise<void> => {
       const tab = this.tab(tabId)
       const wc = tab.view.webContents
@@ -2674,15 +3075,29 @@ export class BrowserRuntime {
 
   async closeTab(tabId: number, user = false, signal?: AbortSignal): Promise<void> {
     const body = async (): Promise<void> => {
+      // Never leave a key held down in a tab that is going away (audit R2).
+      await this.releaseHeldKeys(tabId)
+      // Answer a pending dialog BEFORE the tab (and its CDP session) goes away,
+      // so the renderer is not left blocked with no one to talk to.
+      await this.discardDialog(tabId)
       this.destroyTab(tabId)
       this.relayout()
       this.record('browser_close_tab', tabId, `close tab ${tabId}`, false, user ? 'user' : 'ai')
     }
-    if (user) return await body()
+    // Escape hatch: with a dialog pending the tab's renderer is blocked, so the
+    // mutex may be held by the very click that triggered it. Closing must not
+    // queue behind that and degrade into "wait one CDP timeout".
+    if (user || this.dialogs.has(tabId)) return await body()
     return await this.agentRun('browser_close_tab', body, signal)
   }
 
   private destroyTab(id: number): void {
+    void this.discardDialog(id)
+    this.tabEvents.get(id)?.dispose()
+    this.tabEvents.delete(id)
+    this.choosers.delete(id)
+    this.chooserInterception.delete(id)
+    this.chooserReenable.delete(id)
     // BR-2：标签没了，崩溃计数与退避定时器一起丢（定时器不然会加载进已销毁视图）。
     this.clearCrashState(id)
     // R15B-01：标签没了，它的模型面快照锚点一起丢 —— tab id 会被复用，
@@ -2775,7 +3190,7 @@ export class BrowserRuntime {
    *
    * 值级擦除（P0-A depth layer）留在这条漏斗里：无论文本来自探针还是未来别的
    * 取值来源，`runtime.snapshot` 的每个调用方都被覆盖。R7 的顺序也不动 —— 先
-   * 在**整段**元素文本上擦除，再做 80 字符的模型面截断，否则跨界的口令会被切成
+   * 在**整段**元素文本上擦除，再做 200 字符的模型面截断，否则跨界的口令会被切成
    * 任何值规则都认不出的明文残片。 */
   async snapshotWithMeta(tabId: number, signal?: AbortSignal): Promise<{ elements: BrowserSnapshotElement[]; meta: SnapshotExtractionMeta }> {
     const resolved = this.resolveTab(tabId)
@@ -2844,8 +3259,8 @@ export class BrowserRuntime {
   /** {@link text} plus the REAL truncation flag (2026-09-15 审计 P2).
    *
    * 现场：`browser_get_text` 的 `truncated` 由工具用 `text.length >=
-   * runtime.options.textLimit` 推算，而实际生效上限是 `min(textLimit, 32KiB)`
-   * ——`textLimit=65536` 时工具拿着 65536 去比一条早被 32KiB 截断的文本，标记
+   * runtime.options.textLimit` 推算，而实际生效上限是 `min(textLimit, 64KiB)`
+   * ——`textLimit=65536` 时工具拿着 65536 去比一条被硬顶截断的文本，标记
    * 完全失真。长度只有这里（投影之后、截断之前）知道，所以判定也必须在这里。 */
   async textWithMeta(tabId: number, selector: string | undefined, signal?: AbortSignal): Promise<{ text: string; truncated: boolean }> {
     const resolved = this.resolveTab(tabId)
@@ -2858,7 +3273,7 @@ export class BrowserRuntime {
       // as the snapshot/eval funnels — one implementation, three exits.
       //
       // R7 (2026-09-13): same order as the snapshot funnel — redact, then apply
-      // the 32KiB cap. Slicing first turned a credential straddling the cap into
+      // the hard cap. Slicing first turned a credential straddling the cap into
       // a plaintext head fragment.
       return await extractTextWithMeta(
         (m, p) => tab.cdp.send(m, p),
@@ -2873,6 +3288,10 @@ export class BrowserRuntime {
 
   async screenshot(tabId: number, signal?: AbortSignal): Promise<string> {
     const resolved = this.resolveTab(tabId)
+    // Screenshot captures through Electron's `capturePage` (not CDP), so the
+    // session-level dialog hook cannot see it — this is one of the few explicit
+    // guards that must stay next to the CDP choke point.
+    this.assertNoDialog(resolved)
     // R-4 credential-activity window: checked BEFORE the capture `try`, so the
     // policy refusal below is not rewritten into the generic "screenshot failed"
     // wrapper (which would hide both the code and the reason). This lock-free
@@ -3120,7 +3539,10 @@ export class BrowserRuntime {
       // R-4: `frame: N` is a DOM position. Resolve it through the reconciled
       // index (same-process frames + out-of-process iframes) or refuse.
       const target = typeof frame === 'number' && frame > 0 ? await this.resolveFrame(tab, frame) : undefined
-      const evalResult = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
+      this.evalInFlight.set(resolved, (this.evalInFlight.get(resolved) ?? 0) + 1)
+      const evalResult = await (async (): Promise<EvalResult> => {
+        try {
+          return await tab.cdp.send<EvalResult>('Runtime.evaluate', {
         expression: wrapEvalExpression(expression),
         returnByValue: true,
         // awaitPromise: true — a Promise result (fetch/XHR/async expression)
@@ -3136,7 +3558,13 @@ export class BrowserRuntime {
         // semantics. A cross-origin frame is addressed by its flat CDP session
         // on the TRANSPORT (third argument), not as a command parameter.
         ...(target?.contextId === undefined ? {} : { contextId: target.contextId }),
-      }, target?.sessionId === undefined ? {} : { sessionId: target.sessionId })
+          }, target?.sessionId === undefined ? {} : { sessionId: target.sessionId })
+        } finally {
+          const remaining = (this.evalInFlight.get(resolved) ?? 1) - 1
+          if (remaining <= 0) this.evalInFlight.delete(resolved)
+          else this.evalInFlight.set(resolved, remaining)
+        }
+      })()
       // A long awaited promise may resolve after the user took over; discard
       // the result instead of handing it to the model as a live page read.
       this.assertAgentStillAllowed('browser_eval')
@@ -3158,10 +3586,10 @@ export class BrowserRuntime {
       //
       // F-5 (2026-09-13 round 2): the projection is handed to
       // `serializeEvalResult` itself, so it runs on every string value and key
-      // BEFORE `maskString`'s 4 KB cap and the 8 KB serialized cap — those two
+      // BEFORE `maskString`'s per-string cap and the serialized cap — those two
       // cuts used to run first, and a password straddling either one came back
       // as a plaintext head fragment. The outer pass stays as the backstop for
-      // anything the per-value projection cannot see (it is cheap: ≤ 8 KB).
+      // anything the per-value projection cannot see (it is cheap at the result cap).
       return redactFilledSecretsText(
         tab,
         serializeEvalResult(evalResult.result?.value, (text) => redactFilledSecretsText(tab, text)),
@@ -3462,9 +3890,82 @@ export class BrowserRuntime {
    * 与留痕），不进任何模型面文案 —— 参与点击的坐标不受它影响。缺省时行为与
    * 以前逐字相同（`click at (x, y)`），旧调用点不需要改。
    */
-  async clickAt(tabId: number, point: { x: number; y: number }, signal?: AbortSignal, hit?: BrowserInteractionHit): Promise<void> {
+  /**
+   * Resolve one model-supplied target string to a CSS selector.
+   *
+   * Snapshot-index spellings (`12`, `@12`, `ref=12`) stay anchored to the last
+   * snapshot (stale refs fail loud). `css=`/bare selectors keep their existing
+   * first-match semantics. `text=` / `role=` / `xpath=` / `loc=` run ONE page
+   * probe and must match exactly one element: zero matches and multiple matches
+   * both fail with the candidate list instead of acting on an arbitrary one.
+   * @param tabId - target tab.
+   * @param raw - the target as the model wrote it.
+   * @param signal - caller cancellation.
+   * @returns the resolved CSS selector.
+   */
+  async resolveTargetSelector(tabId: number, raw: string, signal?: AbortSignal): Promise<{ selector: string }> {
+    const resolved = this.resolveTab(tabId)
+    const spec = parseTargetSpec(raw)
+    if (spec.kind === 'index') {
+      const { element } = this.resolveSnapshotIndex(resolved, spec.index)
+      return { selector: element.selector }
+    }
+    if (spec.kind === 'css') return { selector: spec.selector }
+    return await this.agentRun('browser_locate', async () => {
+      const tab = this.tab(resolved)
+      this.assertAgentStillAllowed('browser_locate')
+      const result = await tab.cdp.send<{ result?: { value?: unknown } }>('Runtime.evaluate', {
+        expression: locatorProbe(spec),
+        returnByValue: true,
+        awaitPromise: false,
+        timeout: Math.min(this.options.timeoutMs, 10_000),
+      })
+      const text = typeof result.result?.value === 'string' ? result.result.value : ''
+      let parsed: { count?: number, selector?: string | null, candidates?: string[], error?: string }
+      try {
+        parsed = JSON.parse(text) as typeof parsed
+      } catch {
+        throw browserError('not-found', `browser: ${raw} could not be resolved (the locator probe returned no data)`)
+      }
+      if (parsed.error !== undefined) throw browserError('policy', `browser: ${parsed.error}`)
+      const count = typeof parsed.count === 'number' ? parsed.count : 0
+      if (count === 0) throw browserError('not-found', `browser: no element matched ${raw}`)
+      // Candidate text is page content: it goes through the same value-level
+      // redaction as every other text exit, then the cap (audit P1-2).
+      const describe = (message: string): string => {
+        const redacted = redactFilledSecretsText(tab, stripSensitiveText(message), { verbatim: true })
+        return redacted.slice(0, WAIT_FOR_REASON_LIMIT)
+      }
+      if (count > 1) {
+        const candidates = (parsed.candidates ?? []).join(' | ')
+        throw browserError('not-found', describe(`browser: ${raw} matched ${String(count)} elements — make the locator unique${candidates === '' ? '' : ` (candidates: ${candidates})`}`))
+      }
+      if (typeof parsed.selector !== 'string' || parsed.selector === '') {
+        // count === 1 but the node cannot be addressed uniquely from the document
+        // root (shadow DOM is the common case): acting would hit a different element.
+        throw browserError('not-found', describe(`browser: ${raw} matched one element that cannot be addressed uniquely (e.g. inside a shadow root) — use a CSS selector that reaches it or browser_eval`))
+      }
+      return { selector: parsed.selector }
+    }, signal)
+  }
+
+  /**
+   * Click at a viewport point.
+   * @param tabId - target tab.
+   * @param point - viewport coordinates.
+   * @param signal - caller cancellation.
+   * @param hit - interaction identity for the op log.
+   * @param options - button / clickCount / modifiers / doubleClick (audit C5).
+   */
+  async clickAt(tabId: number, point: { x: number; y: number }, signal?: AbortSignal, hit?: BrowserInteractionHit, options: { button?: 'left' | 'right' | 'middle'; clickCount?: number; modifiers?: number; doubleClick?: boolean } = {}): Promise<void> {
     const resolved = this.resolveTab(tabId)
     const suffix = hitSuffix(hit)
+    const button = options.button ?? 'left'
+    const modifiers = options.modifiers ?? 0
+    const doubleClick = options.doubleClick === true || (options.clickCount ?? 1) >= 2
+    const clickCount = doubleClick ? 2 : Math.max(1, Math.floor(options.clickCount ?? 1))
+    const buttons = button === 'right' ? 2 : button === 'middle' ? 4 : 1
+    const custom = button !== 'left' || modifiers !== 0 || doubleClick || clickCount > 1
     await this.agentRun('browser_click', async () => {
       const tab = this.tab(resolved)
       // 2026-09-12: synthesized OS-level input (CDP `Input.dispatchMouseEvent`)
@@ -3478,14 +3979,42 @@ export class BrowserRuntime {
       // So: real input when the window can receive it, DOM-level activation
       // (elementFromPoint + a full bubbling event sequence) otherwise. The
       // dispatch path is recorded in the op log so the difference stays visible.
+      if (!this.windowCanReceiveInput() && custom) {
+        // Right/middle/double clicks and modifier clicks need real input events:
+        // a synthetic DOM click cannot carry them (audit C5).
+        throw browserError('policy', 'browser: right/middle/double/modifier clicks need a window that can receive real input (the browser window is currently hidden)')
+      }
       if (this.windowCanReceiveInput()) {
-        await tab.cdp.send('Input.dispatchMouseEvent', {
-          type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1,
-        })
-        await tab.cdp.send('Input.dispatchMouseEvent', {
-          type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1,
-        })
-        this.record('browser_click', resolved, `click at (${Math.round(point.x)}, ${Math.round(point.y)})${suffix}`, false, 'ai', CLICK_SUMMARY_LIMIT)
+        const mouse = async (type: 'mousePressed' | 'mouseReleased', targetClickCount: number): Promise<void> => {
+          await tab.cdp.send('Input.dispatchMouseEvent', {
+            type,
+            x: point.x,
+            y: point.y,
+            button,
+            clickCount: targetClickCount,
+            modifiers,
+            ...(type === 'mousePressed' ? { buttons } : { buttons: 0 }),
+          }, type === 'mouseReleased' ? { timeoutMs: 2_000 } : {})
+        }
+        try {
+          if (doubleClick) {
+            // Two PAIRS with clickCount 1 then 2 — the second pair is what makes
+            // Chromium emit `dblclick` (audit C5 ②).
+            await mouse('mousePressed', 1)
+            await mouse('mouseReleased', 1)
+            await mouse('mousePressed', 2)
+            await mouse('mouseReleased', 2)
+          } else {
+            await mouse('mousePressed', clickCount)
+            await mouse('mouseReleased', clickCount)
+          }
+        } catch (cause) {
+          // R1: never leave the button pressed, and never let the cleanup be
+          // cancelled by the caller's aborted signal.
+          await mouse('mouseReleased', 0).catch(() => {})
+          throw cause
+        }
+        this.record('browser_click', resolved, `click at (${Math.round(point.x)}, ${Math.round(point.y)})${doubleClick ? ' (double)' : ''}${button === 'left' ? '' : ` (${button})`}${modifiers === 0 ? '' : ` (modifiers ${String(modifiers)})`}${suffix}`, false, 'ai', CLICK_SUMMARY_LIMIT)
         return
       }
       const target = await this.activateAtPoint(tab, point)
@@ -3502,6 +4031,118 @@ export class BrowserRuntime {
       if (target === 'none') {
         throw browserError('not-found', `browser: nothing to click at (${Math.round(point.x)}, ${Math.round(point.y)}) — the point is outside any element`)
       }
+    }, signal)
+  }
+
+  /**
+   * Move the pointer over a viewport point (triggers :hover / mouseenter).
+   * @param tabId - target tab.
+   * @param point - viewport coordinates.
+   * @param signal - caller cancellation.
+   */
+  async hoverAt(tabId: number, point: { x: number; y: number }, signal?: AbortSignal): Promise<void> {
+    const resolved = this.resolveTab(tabId)
+    await this.agentRun('browser_hover', async () => {
+      const tab = this.tab(resolved)
+      if (this.windowCanReceiveInput()) {
+        await tab.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', buttons: 0 })
+      } else {
+        // Hidden window: express the hover through DOM events (no real input).
+        await tab.cdp.send<EvalResult>('Runtime.evaluate', {
+          expression: `(() => {
+            const el = document.elementFromPoint(${JSON.stringify(point.x)}, ${JSON.stringify(point.y)});
+            if (!el) return 'none';
+            const base = { bubbles: true, cancelable: true, composed: true, clientX: ${JSON.stringify(point.x)}, clientY: ${JSON.stringify(point.y)} };
+            el.dispatchEvent(new PointerEvent('pointerover', { ...base, pointerType: 'mouse', pointerId: 1 }));
+            el.dispatchEvent(new MouseEvent('mouseover', base));
+            el.dispatchEvent(new PointerEvent('pointerenter', { ...base, bubbles: false, pointerType: 'mouse', pointerId: 1 }));
+            el.dispatchEvent(new MouseEvent('mouseenter', { ...base, bubbles: false }));
+            el.dispatchEvent(new MouseEvent('mousemove', base));
+            return 'hovered';
+          })()`,
+          returnByValue: true,
+        })
+      }
+      this.record('browser_hover', resolved, `hover at (${Math.round(point.x)}, ${Math.round(point.y)})`, false, 'ai', CLICK_SUMMARY_LIMIT)
+    }, signal)
+  }
+
+  /**
+   * Pointer drag from one viewport point to another (v1 = pointer events only:
+   * HTML5 dragstart/drop are NOT synthesized — audit decision).
+   * @param tabId - target tab.
+   * @param from - start point.
+   * @param to - end point.
+   * @param signal - caller cancellation.
+   */
+  async dragAt(tabId: number, from: { x: number; y: number }, to: { x: number; y: number }, signal?: AbortSignal): Promise<void> {
+    const resolved = this.resolveTab(tabId)
+    await this.agentRun('browser_drag', async () => {
+      const tab = this.tab(resolved)
+      if (!this.windowCanReceiveInput()) {
+        throw browserError('policy', 'browser: drag needs a window that can receive real input (the browser window is currently hidden)')
+      }
+      const send = async (type: 'mousePressed' | 'mouseMoved' | 'mouseReleased', x: number, y: number): Promise<void> => {
+        await tab.cdp.send('Input.dispatchMouseEvent', {
+          type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1,
+        }, type === 'mouseReleased'
+          ? { timeoutMs: 2_000 }
+          : (signal === undefined ? {} : { signal }))
+      }
+      try {
+        await send('mouseMoved', from.x, from.y)
+        await send('mousePressed', from.x, from.y)
+        // Intermediate moves: Chromium needs a few to start a drag session.
+        for (let step = 1; step <= 3; step += 1) {
+          const ratio = step / 4
+          await send('mouseMoved', from.x + (to.x - from.x) * ratio, from.y + (to.y - from.y) * ratio)
+        }
+        await send('mouseMoved', to.x, to.y)
+        await send('mouseReleased', to.x, to.y)
+      } catch (cause) {
+        await send('mouseReleased', to.x, to.y).catch(() => {})
+        throw cause
+      }
+      this.record('browser_drag', resolved, `drag (${Math.round(from.x)}, ${Math.round(from.y)}) → (${Math.round(to.x)}, ${Math.round(to.y)}) [pointer mode]`, false, 'ai', CLICK_SUMMARY_LIMIT)
+    }, signal)
+  }
+
+  /**
+   * Read the OS clipboard (C7). Capped and truncated: a clipboard is an
+   * unbounded data-exfiltration surface, so the model gets at most 64 KiB.
+   * @param signal - caller cancellation.
+   * @returns the (possibly truncated) text.
+   */
+  async clipboardRead(signal?: AbortSignal): Promise<{ text: string, truncated: boolean }> {
+    const read = this.adapter.readClipboardText
+    if (read === undefined) throw browserError('policy', 'browser: clipboard is unavailable in this deployment')
+    return await this.agentRun('browser_clipboard', async () => {
+      const raw = String(await read())
+      signal?.throwIfAborted()
+      // P1-2: the clipboard is a data-exfiltration surface — mask it exactly like
+      // every other text exit (keyword list + the union of live tab value sets).
+      const masked = redactSecretsText(this.liveSecrets(), stripSensitiveText(raw), { verbatim: true })
+      const text = masked.slice(0, CLIPBOARD_READ_LIMIT)
+      this.record('browser_clipboard', 0, `clipboard read (${text.length}${raw.length > CLIPBOARD_READ_LIMIT ? '+, truncated' : ''} chars)`, false, 'ai')
+      return { text, truncated: raw.length > CLIPBOARD_READ_LIMIT }
+    }, signal)
+  }
+
+  /**
+   * Write the OS clipboard (C7).
+   * @param text - content (≤1 MiB).
+   * @param signal - caller cancellation.
+   */
+  async clipboardWrite(text: string, signal?: AbortSignal): Promise<void> {
+    const write = this.adapter.writeClipboardText
+    if (write === undefined) throw browserError('policy', 'browser: clipboard is unavailable in this deployment')
+    if (text.length > CLIPBOARD_WRITE_LIMIT) {
+      throw browserError('policy', `browser: clipboard write is limited to ${String(CLIPBOARD_WRITE_LIMIT)} characters`)
+    }
+    await this.agentRun('browser_clipboard', async () => {
+      await write(text)
+      signal?.throwIfAborted()
+      this.record('browser_clipboard', 0, `clipboard write (${text.length} chars)`, false, 'ai')
     }, signal)
   }
 
@@ -3550,10 +4191,16 @@ export class BrowserRuntime {
     return result.result?.value === 'element' ? 'element' : 'none'
   }
 
-  async typeInto(tabId: number, selector: string, text: string, clear = true, signal?: AbortSignal, hit?: BrowserInteractionHit): Promise<void> {
+  /**
+   * Type text into a field.
+   * @param delayMs - per-character delay (total delay capped at 5000 ms; the
+   *   applied value is returned so the tool can report it).
+   * @returns the applied per-character delay.
+   */
+  async typeInto(tabId: number, selector: string, text: string, clear = true, signal?: AbortSignal, hit?: BrowserInteractionHit, delayMs = 0): Promise<{ appliedDelayMs: number }> {
     const resolved = this.resolveTab(tabId)
     const suffix = hitSuffix(hit)
-    await this.agentRun('browser_type', async () => {
+    return await this.agentRun('browser_type', async () => {
       const tab = this.tab(resolved)
       const before = await this.textFieldState(tab, selector)
       if (before === null) throw this.interactionError(tab, 'not-found', `browser: cannot locate element ${selector}`)
@@ -3569,7 +4216,20 @@ export class BrowserRuntime {
         `,
         returnByValue: true,
       })
-      await tab.cdp.send('Input.insertText', { text })
+      // C6: slow typing is per character; the TOTAL delay is capped (audit ④), so
+      // a long text cannot blow the tool budget.
+      const appliedDelayMs = delayMs > 0 && text.length > 0
+        ? Math.max(0, Math.min(Math.floor(delayMs), Math.floor(TYPE_TOTAL_DELAY_LIMIT / text.length)))
+        : 0
+      if (appliedDelayMs === 0) {
+        await tab.cdp.send('Input.insertText', { text })
+      } else {
+        for (const character of text) {
+          signal?.throwIfAborted()
+          await tab.cdp.send('Input.insertText', { text: character })
+          await sleep(appliedDelayMs)
+        }
+      }
       // 2026-09-12: `Input.insertText` 与鼠标/键盘事件同属输入域，隐藏窗口下未必送达
       // （真机自检报告把 browser_type 记成"返回成功"，但没验效果）。这里不做平台假设，
       // 直接读回校验：内容没变就退到 DOM 写入（原生 setter + input/change，React 受控
@@ -3578,7 +4238,7 @@ export class BrowserRuntime {
       if (this.contentChanged(before, after)) {
         this.record('browser_type', resolved, `type into ${selector}${suffix}`)
         await this.afterChangeSummary(tab)
-        return
+        return { appliedDelayMs }
       }
       const outcome = await this.insertTextViaDom(tab, selector, text, clear)
       this.record(
@@ -3591,6 +4251,7 @@ export class BrowserRuntime {
         throw this.interactionError(tab, 'not-found', `browser: cannot type into ${selector} (${outcome})`)
       }
       await this.afterChangeSummary(tab)
+      return { appliedDelayMs }
     }, signal)
   }
 
@@ -3611,7 +4272,11 @@ export class BrowserRuntime {
       })
       const value = result.result?.value
       return typeof value === 'string' ? value : value === null ? null : ''
-    } catch {
+    } catch (cause) {
+      // A policy refusal (dialog blocking the tab, credential window, budget) is
+      // an OPERATIONAL state, not "the field is missing": swallowing it turned
+      // the actionable browser_dialog message into a misleading not-found.
+      if (cause instanceof BrowserError && cause.code === 'policy') throw cause
       return null
     }
   }
@@ -3699,35 +4364,164 @@ export class BrowserRuntime {
     return typeof value === 'string' && value !== 'none' ? value : null
   }
 
-  async pressKey(tabId: number, key: string, signal?: AbortSignal): Promise<void> {
+  /**
+   * Press / hold / release one key.
+   * @param tabId - target tab.
+   * @param key - key name (KEY_CODES) or a single character.
+   * @param signal - caller cancellation (NOT used for the cleanup keyUp).
+   * @param options - modifiers bitmask, action (press/down/up) and repeat count.
+   */
+  async pressKey(tabId: number, key: string, signal?: AbortSignal, options: { modifiers?: number; action?: 'press' | 'down' | 'up'; times?: number } = {}): Promise<void> {
     const resolved = this.resolveTab(tabId)
     await this.agentRun('browser_press', async () => {
       const tab = this.tab(resolved)
       const code = KEY_CODES[key] ?? key
       const vk = KEY_VK[key] ?? 0
+      const modifiers = options.modifiers ?? 0
+      const action = options.action ?? 'press'
+      const times = Math.min(50, Math.max(1, Math.floor(options.times ?? 1)))
+      const held = this.heldKeys.get(resolved) ?? new Set<string>()
+      this.heldKeys.set(resolved, held)
+      if (action === 'up' && !held.has(key)) {
+        throw browserError('policy', `browser: cannot release ${key} — it is not held down on this tab`)
+      }
+      if (action === 'down' && held.has(key)) {
+        throw browserError('policy', `browser: ${key} is already held down on this tab`)
+      }
       const target = await this.keyReceivableTarget(tab)
       if (target === null) {
-        // 与隐藏窗口路径同一出口：记失败，由工具层的 assertNoFailedOp 统一报
-        // not-found（消息里带 "not delivered"），不在 runtime 里另造一套文案。
         this.record('browser_press', resolved, `press ${key} — no element able to receive the key`, true)
         return
       }
-      // 2026-09-12：与 browser_click 同源。键盘事件也属输入域，隐藏窗口下协议层接受、
-      // 页面收不到（真机自检报告把 browser_press 记成"返回成功"，但没有验证效果）。
       if (this.windowCanReceiveInput()) {
-        await tab.cdp.send('Input.dispatchKeyEvent', {
-          type: 'keyDown', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk,
-        })
-        await tab.cdp.send('Input.dispatchKeyEvent', {
-          type: 'keyUp', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk,
-        })
-        // 可见窗口同样要有读回：先把"谁在接收"读出来再记成功（P3）。
-        // target 来自页面（activeElement.tagName，无长度上限）⇒ 摘要必须带上限（S02-04）。
-        this.record('browser_press', resolved, `press ${key} → ${target}`, false, 'ai', PRESS_TARGET_SUMMARY_LIMIT)
+        const send = async (type: 'keyDown' | 'keyUp'): Promise<void> => {
+          // Cleanup must never be cancelled by the caller's abort (audit R1).
+          await tab.cdp.send('Input.dispatchKeyEvent', {
+            type, key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers,
+          }, type === 'keyUp' ? { timeoutMs: 2_000 } : {})
+        }
+        if (action === 'down') {
+          await send('keyDown')
+          held.add(key)
+          this.record('browser_press', resolved, `key down ${key}${modifiers === 0 ? '' : ` (modifiers ${String(modifiers)})`} → ${target}`, false, 'ai', PRESS_TARGET_SUMMARY_LIMIT)
+          return
+        }
+        if (action === 'up') {
+          await send('keyUp')
+          held.delete(key)
+          this.record('browser_press', resolved, `key up ${key}`, false, 'ai', PRESS_TARGET_SUMMARY_LIMIT)
+          return
+        }
+        for (let index = 0; index < times; index += 1) {
+          await send('keyDown')
+          try {
+            await send('keyUp')
+          } catch (cause) {
+            // The press already happened; a release that never runs leaves the
+            // page in a held-key state, so retry once outside the caller signal.
+            await send('keyUp').catch(() => {})
+            throw cause
+          }
+        }
+        this.record('browser_press', resolved, `press ${key}${times > 1 ? ` ×${String(times)}` : ''}${modifiers === 0 ? '' : ` (modifiers ${String(modifiers)})`} → ${target}`, false, 'ai', PRESS_TARGET_SUMMARY_LIMIT)
         return
       }
-      const outcome = await this.dispatchKeyViaDom(tab, key, code, vk)
-      this.record('browser_press', resolved, `press ${key} via DOM dispatch (hidden window) — ${outcome}`, outcome === 'none')
+      // Hidden window: DOM-level dispatch (no real input delivery). A separated
+      // keyDown/keyUp cannot be modelled there, so it fails loud instead of
+      // pretending (audit R2).
+      if (action !== 'press') {
+        throw browserError('policy', 'browser: keyDown/keyUp (action down|up) needs a window that can receive real input — press the key instead')
+      }
+      for (let index = 0; index < times; index += 1) {
+        const outcome = await this.dispatchKeyViaDom(tab, key, code, vk, modifiers)
+        this.record('browser_press', resolved, `press ${key} via DOM dispatch (hidden window) — ${outcome}`, outcome === 'none')
+      }
+    }, signal)
+  }
+
+  /** Release every key this tab holds (navigation / close / takeover / dispose). */
+  private async releaseHeldKeys(tabId: number): Promise<void> {
+    const held = this.heldKeys.get(tabId)
+    if (held === undefined || held.size === 0) return
+    this.heldKeys.delete(tabId)
+    const tab = this.tabs.get(tabId)
+    if (tab === undefined) return
+    for (const key of held) {
+      try {
+        await tab.cdp.send('Input.dispatchKeyEvent', {
+          type: 'keyUp', key, code: KEY_CODES[key] ?? key, windowsVirtualKeyCode: KEY_VK[key] ?? 0, nativeVirtualKeyCode: KEY_VK[key] ?? 0,
+        }, { timeoutMs: 2_000 })
+      } catch {
+        // Best-effort: the tab may already be gone.
+      }
+    }
+  }
+
+  /**
+   * Press a chord: every key down in order, then up in reverse (audit R2).
+   * Reserved application shortcuts are refused before any event.
+   * @param tabId - target tab.
+   * @param keys - chord keys, modifier first (1–4).
+   * @param signal - caller cancellation.
+   */
+  async hotkey(tabId: number, keys: string[], signal?: AbortSignal): Promise<void> {
+    const resolved = this.resolveTab(tabId)
+    await this.agentRun('browser_hotkey', async () => {
+      const tab = this.tab(resolved)
+      if (keys.length < 1 || keys.length > 4) throw browserError('policy', 'browser: a chord needs 1–4 keys')
+      // Validate every key BEFORE any event: an unknown name would be passed
+      // through to CDP and could "succeed" without doing anything.
+      for (const key of keys) {
+        const known = MOD_ALIAS[key.toLowerCase()] !== undefined || KEY_CODES[key] !== undefined || [...key].length === 1
+        if (!known) throw browserError('policy', `browser: unknown key in chord: ${JSON.stringify(key)}`)
+      }
+      // Modifiers must come first (the description says so): anything but the
+      // last key has to be a modifier, otherwise the chord order is ambiguous.
+      for (const key of keys.slice(0, -1)) {
+        if (MOD_ALIAS[key.toLowerCase()] === undefined) {
+          throw browserError('policy', `browser: chord modifiers must come first — ${JSON.stringify(key)} is not a modifier`)
+        }
+      }
+      const mods = keys.filter(key => MOD_ALIAS[key.toLowerCase()] !== undefined && key !== keys[keys.length - 1])
+      const main = keys[keys.length - 1] ?? ''
+      const combo = [...mods.map(mod => MOD_ALIAS[mod.toLowerCase()]).sort(), main.toLowerCase()].join('+')
+      if (RESERVED_HOTKEYS.includes(combo)) {
+        throw browserError('policy', `browser: ${combo} is a browser-application shortcut — it is not sent to the page`)
+      }
+      const bits = mods.reduce((sum, mod) => sum + MODIFIER_BITS[MOD_ALIAS[mod.toLowerCase()]!], 0)
+      if (!this.windowCanReceiveInput()) {
+        throw browserError('policy', 'browser: a chord needs a window that can receive real input (the browser window is currently hidden)')
+      }
+      const target = await this.keyReceivableTarget(tab)
+      if (target === null) {
+        this.record('browser_hotkey', resolved, `hotkey ${combo} — no element able to receive the key`, true)
+        return
+      }
+      const pressed: string[] = []
+      const held: string[] = []
+      const send = async (type: 'keyDown' | 'keyUp', key: string): Promise<void> => {
+        await tab.cdp.send('Input.dispatchKeyEvent', {
+          type, key, code: KEY_CODES[key] ?? key, windowsVirtualKeyCode: KEY_VK[key] ?? 0, nativeVirtualKeyCode: KEY_VK[key] ?? 0, modifiers: bits,
+        }, type === 'keyUp' ? { timeoutMs: 2_000 } : {})
+      }
+      try {
+        for (const key of keys) {
+          await send('keyDown', key)
+          pressed.push(key)
+          held.push(key)
+        }
+        for (const key of [...pressed].reverse()) {
+          await send('keyUp', key)
+          held.pop()
+        }
+      } finally {
+        // R1: release whatever is still down, regardless of how we got here.
+        while (held.length > 0) {
+          const key = held.pop() as string
+          await send('keyUp', key).catch(() => {})
+        }
+      }
+      this.record('browser_hotkey', resolved, `hotkey ${combo} → ${target}`, false, 'ai', PRESS_TARGET_SUMMARY_LIMIT)
     }, signal)
   }
 
@@ -3742,14 +4536,15 @@ export class BrowserRuntime {
    *
    * @returns a short outcome label for the op log.
    */
-  private async dispatchKeyViaDom(tab: BrowserTab, key: string, code: string, vk: number): Promise<string> {
+  private async dispatchKeyViaDom(tab: BrowserTab, key: string, code: string, vk: number, modifiers = 0): Promise<string> {
     const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
       expression: `
         (() => {
           const key = ${JSON.stringify(key)};
           const target = document.activeElement ?? document.body;
           if (!target) return 'none';
-          const base = { key, code: ${JSON.stringify(code)}, keyCode: ${JSON.stringify(vk)}, which: ${JSON.stringify(vk)}, bubbles: true, cancelable: true, composed: true };
+          const base = { key, code: ${JSON.stringify(code)}, keyCode: ${JSON.stringify(vk)}, which: ${JSON.stringify(vk)}, bubbles: true, cancelable: true, composed: true,
+            altKey: ${JSON.stringify((modifiers & 1) !== 0)}, ctrlKey: ${JSON.stringify((modifiers & 2) !== 0)}, metaKey: ${JSON.stringify((modifiers & 4) !== 0)}, shiftKey: ${JSON.stringify((modifiers & 8) !== 0)} };
           const down = new KeyboardEvent('keydown', base);
           const allowed = target.dispatchEvent(down);
           target.dispatchEvent(new KeyboardEvent('keypress', base));
@@ -3776,52 +4571,141 @@ export class BrowserRuntime {
     return typeof value === 'string' ? value : 'dispatched'
   }
 
-  async selectOption(tabId: number, selector: string, value: string, signal?: AbortSignal, hit?: BrowserInteractionHit): Promise<void> {
+  /**
+   * Select options by value, visible label, zero-based index, or clear the
+   * selection (2026-10-23 C9). Every form accepts an array for a multi-select.
+   * @param tabId - target tab.
+   * @param selector - resolved CSS selector of the `<select>`.
+   * @param choice - what to select (at least one of value/label/index, or clear).
+   * @param signal - caller cancellation.
+   * @param hit - interaction identity for the result/op log.
+   * @returns the values selected after the change.
+   */
+  async selectOptionChoice(
+    tabId: number,
+    selector: string,
+    choice: {
+      value?: string | readonly string[] | undefined
+      label?: string | readonly string[] | undefined
+      index?: number | readonly number[] | undefined
+      clear?: boolean | undefined
+    },
+    signal?: AbortSignal,
+    hit?: BrowserInteractionHit,
+  ): Promise<{ selected: string[], count: number }> {
     const resolved = this.resolveTab(tabId)
     const suffix = hitSuffix(hit)
+    let outcome: { selected: string[], count: number } = { selected: [], count: 0 }
     await this.agentRun('browser_select', async () => {
       const tab = this.tab(resolved)
       const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
-        expression: `
-          (() => {
-            const el = document.querySelector(${JSON.stringify(String(selector))});
-            if (!el) return { error: 'element not found' };
-            if (el.tagName !== 'SELECT') return { error: 'not a select element' };
-            const wanted = ${JSON.stringify(value)};
-            el.value = wanted;
-            // Assigning an unknown value silently falls back to '' (or the
-            // first option). Report it instead of claiming success (P2-32).
-            if (el.value !== wanted) return { error: 'option not found: ' + wanted };
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            return {};
-          })()
-        `,
+        expression: selectPageScript(selector, choice),
         returnByValue: true,
       })
-      if (result.result?.value !== undefined && (result.result.value as { error?: string }).error !== undefined) {
-        throw this.interactionError(tab, 'not-found', `browser: select failed — ${(result.result.value as { error: string }).error}`)
+      const value = result.result?.value as { error?: string, selected?: string[], count?: number } | undefined
+      if (value !== undefined && value.error !== undefined) {
+        throw this.interactionError(tab, 'not-found', `browser: select failed — ${value.error}`)
       }
+      outcome = { selected: value?.selected ?? [], count: value?.count ?? 0 }
     }, signal)
-    this.record('browser_select', resolved, `select ${selector} = ${value}${suffix}`, false, 'ai', `select ${selector} = `.length + SELECT_VALUE_SUMMARY_LIMIT + suffix.length)
+    const summary = choice.clear === true ? 'clear' : `now [${outcome.selected.join(', ')}]`
+    this.record('browser_select', resolved, `select ${selector} = ${summary}${suffix}`, false, 'ai', `select ${selector} = `.length + SELECT_VALUE_SUMMARY_LIMIT + suffix.length)
+    return outcome
   }
 
-  async scroll(tabId: number, deltaY: number, selector: string | undefined, signal?: AbortSignal): Promise<void> {
+  async selectOption(tabId: number, selector: string, value: string, signal?: AbortSignal, hit?: BrowserInteractionHit): Promise<void> {
+    await this.selectOptionChoice(tabId, selector, { value }, signal, hit)
+  }
+
+  /**
+   * Scroll the tab (C8): vertical/horizontal delta, absolute position, or until
+   * the bottom; optionally wait for the scroll height to settle (lazy loading).
+   * @param tabId - target tab.
+   * @param deltaY - vertical delta (ignored with position/untilBottom-with-target validation is in the tool).
+   * @param selector - optional element to bring into view.
+   * @param signal - caller cancellation.
+   * @param options - deltaX / position / untilBottom / settle.
+   * @returns the actual scroll position (and whether the bottom was reached).
+   */
+  async scroll(tabId: number, deltaY: number, selector: string | undefined, signal?: AbortSignal, options: { deltaX?: number; position?: { x: number; y: number }; untilBottom?: boolean; settle?: boolean } = {}): Promise<{ reachedBottom?: boolean; bottomReason?: 'reached' | 'no-progress' | 'step-limit'; scrollX?: number; scrollY?: number }> {
     const resolved = this.resolveTab(tabId)
+    let outcome: { reachedBottom?: boolean; bottomReason?: 'reached' | 'no-progress' | 'step-limit'; scrollX?: number; scrollY?: number } = {}
     await this.agentRun('browser_scroll', async () => {
       const tab = this.tab(resolved)
-      const targeted = selector !== undefined && selector !== ''
-      const expression = !targeted
-        ? `window.scrollBy({ top: ${Math.round(deltaY)}, behavior: 'instant' }); 'ok'`
-        : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); if (!el) return 'not found'; el.scrollIntoView({ block: 'center' }); return 'ok'; })()`
-      const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', { expression, returnByValue: true })
-      // 页内判定必须回传（2026-09-15 审计残留）：旧实现丢掉返回值，选择器没命中
-      // 也报成功，模型以为已经滚到了目标位置。
-      if (targeted && result.result?.value === 'not found') {
-        throw this.interactionError(tab, 'not-found', `browser: scroll target not found — ${String(selector)}`)
+      const read = async (): Promise<{ scrollX: number; scrollY: number; scrollHeight: number; innerHeight: number }> => {
+        const state = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
+          expression: '({ scrollX: window.scrollX, scrollY: window.scrollY, scrollHeight: document.documentElement.scrollHeight, innerHeight: window.innerHeight })',
+          returnByValue: true,
+        })
+        const value = (state.result?.value ?? {}) as { scrollX?: number; scrollY?: number; scrollHeight?: number; innerHeight?: number }
+        return {
+          scrollX: value.scrollX ?? 0,
+          scrollY: value.scrollY ?? 0,
+          scrollHeight: value.scrollHeight ?? 0,
+          innerHeight: value.innerHeight ?? 0,
+        }
       }
+      const settle = async (): Promise<void> => {
+        const deadline = Date.now() + 2_000
+        let previous = -1
+        while (Date.now() < deadline) {
+          const state = await read()
+          if (state.scrollHeight === previous) return
+          previous = state.scrollHeight
+          await sleep(100)
+        }
+      }
+      if (options.position !== undefined) {
+        const position = options.position
+        await tab.cdp.send('Runtime.evaluate', {
+          expression: `(() => { window.scrollTo({ left: ${Math.round(position.x)}, top: ${Math.round(position.y)}, behavior: 'instant' }); return 'ok'; })()`,
+          returnByValue: true,
+        })
+        const actual = await read()
+        outcome = { scrollX: actual.scrollX, scrollY: actual.scrollY }
+      } else if (options.untilBottom === true) {
+        let reached = false
+        let reason: 'reached' | 'no-progress' | 'step-limit' = 'step-limit'
+        let noProgress = 0
+        let lastY = -1
+        for (let step = 0; step < 20; step += 1) {
+          abortErrorIfAborted(signal)
+          const state = await read()
+          if (state.scrollY + state.innerHeight >= state.scrollHeight - 2) { reached = true; reason = 'reached'; break }
+          if (state.scrollY === lastY) {
+            noProgress += 1
+            if (noProgress >= 2) { reason = 'no-progress'; break }
+          } else {
+            noProgress = 0
+          }
+          lastY = state.scrollY
+          await tab.cdp.send('Runtime.evaluate', {
+            expression: `window.scrollBy({ top: Math.max(1, Math.floor(window.innerHeight * 0.9)), behavior: 'instant' }); 'ok'`,
+            returnByValue: true,
+          })
+          await sleepAbortable(100, signal)
+        }
+        outcome = { reachedBottom: reached, bottomReason: reason, scrollY: (await read()).scrollY }
+      } else {
+        const targeted = selector !== undefined && selector !== ''
+        const expression = !targeted
+          ? `window.scrollBy({ top: ${Math.round(deltaY)}, left: ${Math.round(options.deltaX ?? 0)}, behavior: 'instant' }); 'ok'`
+          : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); if (!el) return 'not found'; el.scrollIntoView({ block: 'center' }); return 'ok'; })()`
+        const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', { expression, returnByValue: true })
+        // 页内判定必须回传（2026-09-15 审计残留）：旧实现丢掉返回值，选择器没命中
+        // 也报成功，模型以为已经滚到了目标位置。
+        if (targeted && result.result?.value === 'not found') {
+          throw this.interactionError(tab, 'not-found', `browser: scroll target not found — ${String(selector)}`)
+        }
+        if (!targeted) {
+          const actual = await read()
+          outcome = { scrollX: actual.scrollX, scrollY: actual.scrollY }
+        }
+      }
+      if (options.settle === true) await settle()
     }, signal)
     this.record('browser_scroll', resolved, selector === undefined || selector === '' ? `scroll ${Math.round(deltaY)}px` : `scroll to ${selector}`)
+    return outcome
   }
 
   async fillCredentials(tabId: number, connectorId: string, signal?: AbortSignal, expectedOrigin?: string): Promise<{ username: boolean; password: boolean }> {
@@ -4061,6 +4945,27 @@ export class BrowserRuntime {
   /** Wait for a page condition. */
   async waitFor(tabId: number, options: WaitForOptions, signal?: AbortSignal): Promise<{ ok: boolean; reason: string }> {
     const resolved = this.resolveTab(tabId)
+    // Event-kind conditions never touch the page, so they are checked BEFORE the
+    // dialog fail-fast: a page blocked by a dialog can still deliver a popup or a
+    // download (audit M2 P3).
+    if (options.condition === 'popup' || options.condition === 'download' || options.condition === 'file-chooser') {
+      const bus = this.tabEvents.get(resolved)
+      if (bus === undefined) return { ok: false, reason: `wait_for ${options.condition}: no event bus for this tab` }
+      const deadlineAt = options.deadlineAt ?? Date.now() + (options.timeoutMs ?? 30_000)
+      const remaining = Math.max(1, Math.min(options.timeoutMs ?? 30_000, deadlineAt - Date.now()))
+      const armed = bus.arm(options.condition, remaining)
+      try {
+        await armed.promise
+        return { ok: true, reason: options.condition }
+      } catch {
+        return { ok: false, reason: `wait_for ${options.condition} timed out` }
+      } finally {
+        armed.cancel()
+      }
+    }
+    // The poll loop catches CDP failures as "page not ready"; a dialog would then
+    // be retried until the deadline instead of reporting the actionable state.
+    this.assertNoDialog(resolved)
     // `options.deadlineAt` is the tool's own (longer) registered deadline: pass it
     // through so the queue budget and the CDP budget are derived from THAT
     // deadline instead of the generic 30 s tool budget (R4-B-15).
@@ -4078,19 +4983,53 @@ export class BrowserRuntime {
       // the constant WAIT_FOR_FUNCTION_DECLARATION, so selector/text/URL values
       // can never become page-side syntax (they are data, not code).
       const payload = waitForPayload(options, startUrl)
+      const functionExpression = options.condition === 'function' ? (options.expression ?? '').trim() : ''
+      if (options.condition === 'function') {
+        if (functionExpression === '') throw browserError('policy', 'browser: wait_for function needs a non-empty expression')
+        // Same destructive-surface guard as browser_eval: a wait predicate is page
+        // code too, and a navigation scheduled from a poll would bypass the
+        // tool-level navigation policy.
+        validateEvalExpression(functionExpression)
+      }
+      // Statements/`return`/top-level await are accepted by the validator, so the
+      // poll expression is wrapped exactly like browser_eval (a bare
+      // `Boolean(${expr})` is a syntax error for a statement program and used to
+      // time out silently — audit P2-4).
+      const functionProgram = options.condition === 'function' ? wrapEvalExpression(functionExpression) : ''
       while (Date.now() < deadline) {
         if (signal !== undefined && signal.aborted) throw browserError('interrupted', 'browser: wait aborted')
         this.assertAgentStillAllowed('browser_wait_for')
         try {
-          const state = await tab.cdp.send<EvalResult>('Runtime.callFunctionOn', {
-            functionDeclaration: WAIT_FOR_FUNCTION_DECLARATION,
-            // Re-resolved every poll: a navigation destroys the old object (and
-            // with it the id), which is exactly the state `url-change` waits on.
-            objectId: await pageGlobalObjectId(tab),
-            arguments: [{ value: payload }],
-            returnByValue: true,
-          })
-          if (state.result?.value === true) {
+          const state = options.condition === 'function'
+            ? await (async (): Promise<EvalResult> => {
+              // Runtime.evaluate bypasses the page CSP (a page's `unsafe-eval`
+              // policy would make an in-page `new Function` silently always-false).
+              const pollTabId = resolved
+              this.evalInFlight.set(pollTabId, (this.evalInFlight.get(pollTabId) ?? 0) + 1)
+              try {
+                return await tab.cdp.send<EvalResult>('Runtime.evaluate', {
+                  expression: functionProgram,
+                  returnByValue: true,
+                  awaitPromise: true,
+                })
+              } finally {
+                const remaining = (this.evalInFlight.get(pollTabId) ?? 1) - 1
+                if (remaining <= 0) this.evalInFlight.delete(pollTabId)
+                else this.evalInFlight.set(pollTabId, remaining)
+              }
+            })()
+            : await tab.cdp.send<EvalResult>('Runtime.callFunctionOn', {
+              functionDeclaration: WAIT_FOR_FUNCTION_DECLARATION,
+              // Re-resolved every poll: a navigation destroys the old object (and
+              // with it the id), which is exactly the state `url-change` waits on.
+              objectId: await pageGlobalObjectId(tab),
+              arguments: [{ value: payload }],
+              returnByValue: true,
+            })
+          // JS truthiness, not a hand-rolled list: `NaN` / `0n` are falsy and a
+          // wrapper program returns the last expression's value (element, number,
+          // string, …) — audit P1-B + P2.
+          if (Boolean(state.result?.value)) {
             this.updateTabState(tab)
             return { ok: true, reason: options.condition }
           }
@@ -4206,6 +5145,17 @@ export class BrowserRuntime {
    * paths, 'ai' for the browser_takeover/browser_release tools. No-op changes
    * are not recorded (the gate is idempotent). */
   setUserControl(active: boolean, actor: RecordActor = 'user'): void {
+    // A CDP-intercepted file chooser has NO native UI: while the user holds the
+    // browser they could never answer it, so interception is switched off on
+    // takeover (and back on when the agent gets control again). A CDP-intercepted
+    // dialog is dismissed for the same "nobody can answer it" reason.
+    for (const tabId of this.tabs.keys()) {
+      this.setChooserInterception(tabId, !active || actor !== 'user')
+      if (active && actor === 'user') void this.releaseHeldKeys(tabId)
+    }
+    if (active && actor === 'user') {
+      for (const tabId of [...this.dialogs.keys()]) void this.discardDialog(tabId)
+    }
     const was = this.pool.controlled
     // 控制权一换，胶囊/蒙版的可见性就变了 ⇒ 提示矩形归还（缺陷 #7）。
     this.setOverlayNotice(false)
@@ -4279,6 +5229,66 @@ export class BrowserRuntime {
     return this.store.removeDownload(id)
   }
 
+  /**
+   * Wait for the download record `id` to reach a terminal state (C4).
+   * @param id - download id.
+   * @param timeoutMs - how long to wait.
+   * @param signal - caller cancellation.
+   * @returns the redacted model-facing entry, or `null` on timeout.
+   */
+  async waitForDownload(id: number, timeoutMs: number, signal?: AbortSignal): Promise<DownloadEntry | null> {
+    const deadline = Date.now() + Math.max(1, timeoutMs)
+    while (Date.now() < deadline) {
+      abortErrorIfAborted(signal)
+      const entry = this.downloads({ limit: 200 }).find(candidate => candidate.id === id)
+      if (entry !== undefined && entry.status !== 'in-progress') return entry
+      await sleepAbortable(Math.min(200, Math.max(1, deadline - Date.now())), signal)
+    }
+    return null
+  }
+
+  /**
+   * Wait for the first download NEWER than `afterId` to reach a terminal state.
+   * `browser_download` uses it to return a receipt instead of "started".
+   * @param afterId - highest download id observed before the trigger.
+   * @param timeoutMs - how long to wait.
+   * @param signal - caller cancellation.
+   * @returns the redacted model-facing entry, or `null` on timeout.
+   */
+  async waitForNewDownload(afterId: number, timeoutMs: number, tabId?: number, signal?: AbortSignal): Promise<DownloadEntry | null> {
+    const deadline = Date.now() + Math.max(1, timeoutMs)
+    while (Date.now() < deadline) {
+      abortErrorIfAborted(signal)
+      const newer = this.downloads({ limit: 200 }).filter(entry => entry.id > afterId)
+      // STRICT when a tab is given: never fall back to another tab's download
+      // (audit M4 P2-1). Every new download gets a `downloadTabs` record in
+      // `add`, so a missing record means it is not ours.
+      const candidates = tabId === undefined
+        ? newer
+        : newer.filter(entry => this.downloadTabs.get(entry.id) === tabId)
+      const terminal = candidates.find(entry => entry.status !== 'in-progress')
+      if (terminal !== undefined) return terminal
+      await sleepAbortable(Math.min(200, Math.max(1, deadline - Date.now())), signal)
+    }
+    return null
+  }
+
+  /** Tab recorded as the owner of a download id (best-effort attribution). */
+  downloadOwnerOf(id: number): number | undefined {
+    return this.downloadTabs.get(id)
+  }
+
+  /** Tab id that would own a programmatic download started right now (best-effort). */
+  downloadOwnerTab(): number | undefined {
+    return this.pool.activeTab ?? undefined
+  }
+
+  /** Highest download id currently known (receipt baseline for `browser_download`). */
+  highestDownloadId(): number {
+    const entries = this.downloads({ limit: 200 })
+    return entries.reduce((max, entry) => Math.max(max, entry.id), 0)
+  }
+
   /** Open a downloaded file with the OS default handler (downloads viewer). */
   async openDownloadPath(id: number): Promise<{ ok: boolean; error?: string }> {
     const entry = this.store.queryDownloads({ limit: 500 }).find((d) => d.id === id)
@@ -4303,6 +5313,20 @@ export class BrowserRuntime {
    * headers are not a model-facing exit). `path` must stay the real handle for
    * `downloads_open`, so its redacted variant is remembered separately and used
    * by the model-facing projection (`runtime.downloads`). */
+  /**
+   * Publish one download event. Downloads are a SESSION-level Electron event with
+   * no tab identity, so attribution is best-effort: the event goes to the tab that
+   * is active when it happens, and carries that fact (audit M2 口径 2).
+   * @param payload - model-facing download snippet.
+   */
+  private pushDownloadEvent(payload: Record<string, unknown>): void {
+    const tabId = typeof payload['tab'] === 'number'
+      ? payload['tab']
+      : this.pool.activeTab
+    if (tabId === undefined || tabId === 0) return
+    this.tabEvents.get(tabId)?.push('download', { ...payload, tab: tabId, attribution: 'best-effort' })
+  }
+
   private downloadRecorder(): { add: (entry: Omit<DownloadEntry, 'id' | 'createdAt'>) => number; update: (id: number, patch: Partial<Pick<DownloadEntry, 'status' | 'path' | 'size'>>) => void } {
     return {
       add: (entry) => {
@@ -4313,11 +5337,19 @@ export class BrowserRuntime {
           fileName: redactSecretsText(secrets, entry.fileName, { verbatim: true }),
         })
         if (entry.path !== '') this.rememberDownloadPath(record.id, secrets, entry.path)
+        // Remember where the download started: completion events reuse it.
+        this.downloadTabs.set(record.id, this.pool.activeTab ?? 0)
+        if (this.downloadTabs.size > 500) {
+          const oldest = this.downloadTabs.keys().next().value
+          if (oldest !== undefined) this.downloadTabs.delete(oldest)
+        }
+        this.pushDownloadEvent({ id: record.id, fileName: record.fileName, status: record.status })
         return record.id
       },
       update: (id, patch) => {
         if (patch.path !== undefined && patch.path !== '') this.rememberDownloadPath(id, this.liveSecrets(), patch.path)
         this.store.updateDownload(id, patch)
+        if (patch.status !== undefined) this.pushDownloadEvent({ id, status: patch.status, size: patch.size, tab: this.downloadTabs.get(id) ?? this.pool.activeTab })
       },
     }
   }
@@ -4388,6 +5420,8 @@ export class BrowserRuntime {
 
   /** Trigger a programmatic download of a URL. */
   async downloadUrl(url: string, signal?: AbortSignal): Promise<void> {
+    const activeTab = this.pool.activeTab
+    if (activeTab !== undefined) this.assertNoDialog(activeTab)
     if (!this.navigationAllowed(url)) {
       throw browserError('navigation-blocked', `browser: download denied — ${stripSensitiveUrl(url).slice(0, 200)}`)
     }
@@ -4467,6 +5501,7 @@ export class BrowserRuntime {
       // Releasing the per-tab disposers (permission guard + ref-counted
       // download guard) matters: a dropped ref-count keeps the download
       // listener installed forever (P2-28).
+      void this.discardDialog(id)
       this.releaseTabDisposers(id)
       const tab = this.tabs.get(id)
       if (tab !== undefined) {
@@ -4478,6 +5513,8 @@ export class BrowserRuntime {
         }
       }
     }
+    for (const bus of this.tabEvents.values()) bus.dispose()
+    this.tabEvents.clear()
     this.tabs.clear()
     this.windowResizeDisposer?.()
     this.windowClosedDisposer?.()
@@ -4499,10 +5536,13 @@ export class BrowserRuntime {
  * selector/text/URL value can only ever be a string value, never a syntax node
  * (`js/bad-code-sanitization`). */
 export interface WaitForPayload {
-  condition: WaitForOptions['condition']
+  /** Only the page-polled conditions reach the constant predicate. */
+  condition: Exclude<WaitForOptions['condition'], 'popup' | 'download' | 'file-chooser'>
   /** `null` when the condition has no selector — `querySelector(null)` yields null. */
   selector: string | null
   text: string | null
+  /** `url-match` glob pattern, `null` for other conditions. */
+  pattern: string | null
   startUrl: string
   networkIdleMs: number
 }
@@ -4535,6 +5575,18 @@ const WAIT_FOR_FUNCTION_DECLARATION = `function (payload) {
     case 'url-change':
       // TRUE only when the page actually navigated away from the captured URL.
       return location.href !== payload.startUrl;
+    case 'url-match': {
+      // Glob match with star wildcards, evaluated as data (never as syntax).
+      const parts = String(payload.pattern === null ? '' : payload.pattern).split('*');
+      let cursor = 0;
+      for (const part of parts) {
+        if (part === '') continue;
+        const found = location.href.indexOf(part, cursor);
+        if (found < 0) return false;
+        cursor = found + part.length;
+      }
+      return true;
+    }
     case 'network-idle': {
       // TRUE once the last resource has been quiet for at least
       // payload.networkIdleMs (or the document is already complete with no
@@ -4556,9 +5608,10 @@ const WAIT_FOR_FUNCTION_DECLARATION = `function (payload) {
  * condition only succeeds on an ACTUAL navigation. */
 function waitForPayload(options: WaitForOptions, startUrl = ''): WaitForPayload {
   return {
-    condition: options.condition,
+    condition: options.condition as WaitForPayload['condition'],
     selector: options.selector ?? null,
     text: options.text ?? null,
+    pattern: options.pattern ?? null,
     startUrl,
     networkIdleMs: NETWORK_IDLE_TICK_MS,
   }
@@ -4646,6 +5699,32 @@ async function withScreenshotBudget(attempt: Promise<string>, budgetMs: number):
   }
 }
 
+/** Throw the runtime's `interrupted` error when the signal is already aborted. */
+function abortErrorIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted === true) throw browserError('interrupted', 'browser: download wait cancelled')
+}
+
+/**
+ * Sleep that rejects with `interrupted` as soon as the signal aborts, instead of
+ * finishing the current 200ms tick (audit M4 P3).
+ * @param ms - duration.
+ * @param signal - cancellation.
+ */
+function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted === true) { reject(browserError('interrupted', 'browser: download wait cancelled')); return }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(browserError('interrupted', 'browser: download wait cancelled'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, Math.max(0, ms))
@@ -4653,7 +5732,40 @@ function sleep(ms: number): Promise<void> {
   })
 }
 
-/** Common key → CDP `code`. */
+/** Canonical modifier name: `Control`/`Ctrl` → `ctrl`, `Cmd`/`Command` → `meta`. */
+const MOD_ALIAS: Readonly<Record<string, 'alt' | 'ctrl' | 'meta' | 'shift'>> = {
+  control: 'ctrl', ctrl: 'ctrl', alt: 'alt', shift: 'shift', meta: 'meta', cmd: 'meta', command: 'meta',
+}
+
+/** CDP modifier bitmask (Alt=1, Ctrl=2, Meta=4, Shift=8). */
+/** Cap on the TOTAL delay of a slow `type` (C6): delayMs × chars ≤ this. */
+export const TYPE_TOTAL_DELAY_LIMIT = 5_000
+
+/** Clipboard read cap (C7/R4): the model never receives an unbounded paste. */
+export const CLIPBOARD_READ_LIMIT = 64 * 1024
+/** Clipboard write cap (C7). */
+export const CLIPBOARD_WRITE_LIMIT = 1024 * 1024
+
+export const MODIFIER_BITS: Readonly<Record<'alt' | 'ctrl' | 'meta' | 'shift', number>> = {
+  alt: 1, ctrl: 2, meta: 4, shift: 8,
+}
+
+/**
+ * Application-level shortcuts that must not be reachable from a page-driven key
+ * press (audit R3): they target the BROWSER APPLICATION (close tab/window,
+ * devtools, reload) rather than the page. Blocked by name before any event is
+ * dispatched; the real-machine probe list lives in the planning doc.
+ */
+export const RESERVED_HOTKEYS: readonly string[] = [
+  'ctrl+w', 'ctrl+shift+w', 'alt+f4', 'f12',
+  'ctrl+shift+i', 'ctrl+shift+j', 'ctrl+shift+c',
+  'ctrl+r', 'f5', 'ctrl+shift+r', 'f11',
+  'ctrl+t', 'ctrl+n', 'ctrl+shift+n', 'ctrl+shift+t',
+  // macOS application shortcuts (same class as the Windows/Linux ones).
+  'meta+q', 'meta+w', 'meta+h', 'meta+m', 'meta+alt+escape',
+]
+
+/** Common key on a page → CDP `code`. */
 const KEY_CODES: Record<string, string> = {
   Enter: 'Enter',
   Tab: 'Tab',

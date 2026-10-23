@@ -17,7 +17,7 @@ import {
   WAIT_FOR_MAX_MS,
 } from '../src/budgets.ts'
 import { TabPool } from '../src/pool.ts'
-import { applyBrowserTools } from '../src/tools.ts'
+import { applyBrowserTools, BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS } from '../src/tools.ts'
 import type { BrowserRuntime } from '../src/runtime.ts'
 import { NO_CONTROL_HINT, readControlHint, showsWaitingHint } from '../src/client/control-hint.ts'
 
@@ -44,6 +44,13 @@ const EXPECTED_DEADLINES: Record<string, number> = {
   browser_list_tabs: BROWSER_TOOL_TIMEOUT_MS,
   browser_switch_tab: BROWSER_TOOL_TIMEOUT_MS,
   browser_close_tab: BROWSER_TOOL_TIMEOUT_MS,
+  browser_dialog: BROWSER_TOOL_TIMEOUT_MS,
+  browser_file_chooser: BROWSER_TOOL_TIMEOUT_MS,
+  browser_hover: BROWSER_TOOL_TIMEOUT_MS,
+  browser_dblclick: BROWSER_TOOL_TIMEOUT_MS,
+  browser_drag: BROWSER_TOOL_TIMEOUT_MS,
+  browser_hotkey: BROWSER_TOOL_TIMEOUT_MS,
+  browser_clipboard: BROWSER_TOOL_TIMEOUT_MS,
   browser_click: BROWSER_TOOL_TIMEOUT_MS,
   browser_type: BROWSER_TOOL_TIMEOUT_MS,
   browser_select: BROWSER_TOOL_TIMEOUT_MS,
@@ -61,8 +68,8 @@ const EXPECTED_DEADLINES: Record<string, number> = {
   browser_bookmarks_list: BROWSER_TOOL_TIMEOUT_MS,
   browser_bookmarks_remove: BROWSER_TOOL_TIMEOUT_MS,
   browser_history_search: BROWSER_TOOL_TIMEOUT_MS,
-  browser_download: BROWSER_TOOL_TIMEOUT_MS,
-  browser_downloads_list: BROWSER_TOOL_TIMEOUT_MS,
+  browser_download: BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS,
+  browser_downloads_list: BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS,
   browser_downloads_remove: BROWSER_TOOL_TIMEOUT_MS,
   browser_takeover: BROWSER_TOOL_TIMEOUT_MS,
   browser_fill_credentials: BROWSER_TOOL_TIMEOUT_MS,

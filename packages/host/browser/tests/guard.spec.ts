@@ -90,8 +90,8 @@ describe('navigation policy', () => {
 })
 
 describe('download bound', () => {
-  it('caps downloads at 100MB', () => {
-    expect(MAX_DOWNLOAD_BYTES).toBe(100 * 1024 * 1024)
+  it('caps downloads at 2 GiB (2026-10-23 capability unlock)', () => {
+    expect(MAX_DOWNLOAD_BYTES).toBe(2 * 1024 * 1024 * 1024)
   })
 })
 
@@ -176,6 +176,71 @@ describe('download guard ref counting (2026-09-08 P0-5)', () => {
       on: () => {},
     } as unknown as NativeDownloadItem
   }
+
+  it('size threshold: the cap itself is kept, cap+1 is cancelled and recorded rejected', async () => {
+    const guard = new BrowserGuard({} as never)
+    const session = fakeSession()
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-downloads-'))
+    dirs.push(dir)
+    const updates: Array<Record<string, unknown>> = []
+    const recorder: DownloadRecorder = {
+      add: () => 1,
+      update: (_id, patch) => { updates.push(patch as Record<string, unknown>) },
+    }
+    const callbacks = new Map<string, (...args: unknown[]) => void>()
+    let received = MAX_DOWNLOAD_BYTES
+    const cancel = vi.fn()
+    const item = {
+      getFilename: () => 'report.txt',
+      getURL: () => 'https://example.com/report.txt',
+      getReceivedBytes: () => received,
+      getTotalBytes: () => received,
+      setSavePath: vi.fn(),
+      cancel,
+      on: (event: string, listener: (...args: unknown[]) => void) => { callbacks.set(event, listener) },
+    } as unknown as NativeDownloadItem
+    const dispose = guard.installDownloadGuard(session as unknown as NativeSession, () => {}, recorder, '', 'ai', dir)
+    session.emit(item)
+    // Let the async body reach `setSavePath` (and register the 'done' handler).
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(cancel).not.toHaveBeenCalled()
+    callbacks.get('updated')?.({}, 'progress')
+    expect(cancel).not.toHaveBeenCalled()
+    received = MAX_DOWNLOAD_BYTES + 1
+    callbacks.get('updated')?.({}, 'progress')
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(updates.some(patch => patch['status'] === 'rejected')).toBe(true)
+    // A late 'cancelled' done-event must not overwrite the rejected verdict.
+    callbacks.get('done')?.({}, 'cancelled')
+    expect(updates.filter(patch => patch['status'] === 'cancelled')).toHaveLength(0)
+    dispose()
+  })
+
+  it('an already-over-limit item is recorded as rejected, not left in-progress', async () => {
+    const guard = new BrowserGuard({} as never)
+    const session = fakeSession()
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-downloads-'))
+    dirs.push(dir)
+    const updates: Array<Record<string, unknown>> = []
+    const recorder: DownloadRecorder = { add: () => 1, update: (_id, patch) => { updates.push(patch as Record<string, unknown>) } }
+    const cancel = vi.fn()
+    const item = {
+      getFilename: () => 'big.bin',
+      getURL: () => 'https://example.com/big.bin',
+      getReceivedBytes: () => MAX_DOWNLOAD_BYTES + 5,
+      getTotalBytes: () => MAX_DOWNLOAD_BYTES + 5,
+      setSavePath: vi.fn(),
+      cancel,
+      on: vi.fn(),
+    } as unknown as NativeDownloadItem
+    const dispose = guard.installDownloadGuard(session as unknown as NativeSession, () => {}, recorder, '', 'ai', dir)
+    session.emit(item)
+    await Promise.resolve()
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(updates).toContainEqual({ size: MAX_DOWNLOAD_BYTES + 5, status: 'rejected' })
+    dispose()
+  })
 
   it('keeps the shared session listener until the LAST tab releases it', () => {
     const guard = new BrowserGuard({} as never)

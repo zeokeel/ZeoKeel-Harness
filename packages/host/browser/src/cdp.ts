@@ -43,6 +43,12 @@ export interface CdpSessionOptions {
    * own diagnosis with a generic `tool call timed out` (R4-B-15).
    */
   timeoutMs?: number | (() => number)
+  /**
+   * Per-command veto, evaluated before every `send` (2026-10-23 C1 choke point).
+   * The runtime uses it to fail every page command fast while a dialog blocks the
+   * tab — one place instead of one guard per call site. Throw to refuse.
+   */
+  beforeCommand?: (method: string) => void
 }
 
 /** One established CDP session over a transport. */
@@ -50,6 +56,9 @@ export class CdpSession {
   private readonly listeners = new Map<string, Set<(params: unknown, sessionId?: string) => void>>()
   private readonly messageListener: (event: unknown, method: string, params: unknown, sessionId?: string) => void
   private closed = false
+  /** Aborts every in-flight command of this session (2026-10-23 M1 audit: a
+   * blocked renderer must not delay the dialog answer behind a 10s CDP budget). */
+  private pending = new AbortController()
 
   constructor(
     private readonly transport: CdpTransport,
@@ -88,12 +97,32 @@ export class CdpSession {
     callOptions: { timeoutMs?: number; signal?: AbortSignal; sessionId?: string } = {},
   ): Promise<T> {
     if (this.closed) throw new Error(`browser: CDP session closed (${method})`)
+    this.options.beforeCommand?.(method)
     const configured = callOptions.timeoutMs ?? this.options.timeoutMs
     const timeoutMs = typeof configured === 'function' ? configured() : configured ?? CDP_CALL_TIMEOUT_MS
+    // Capture the abort channel BEFORE the command is sent: an event handler may
+    // call `abortPending()` synchronously from inside `sendCommand`, which swaps
+    // the controller — reading it afterwards would pick up the fresh (unaborted)
+    // signal and the command would never be aborted (audit M2 P2-1).
+    const signal = callOptions.signal === undefined
+      ? this.pending.signal
+      : AbortSignal.any([callOptions.signal, this.pending.signal])
     const wire = callOptions.sessionId === undefined
       ? this.transport.sendCommand(method, params)
       : this.transport.sendCommand(method, params, callOptions.sessionId)
-    return await withTimeout(wire, timeoutMs, method, callOptions.signal) as T
+    return await withTimeout(wire, timeoutMs, method, signal) as T
+  }
+
+  /**
+   * Abort every command currently in flight on this session (the next `send`
+   * starts with a fresh controller). Used when the page blocks on a dialog: the
+   * command that triggered it would otherwise hold the caller (and the global
+   * mutex) until its CDP budget runs out.
+   * @param reason - abort reason passed to the in-flight waits.
+   */
+  abortPending(reason?: unknown): void {
+    this.pending.abort(reason)
+    this.pending = new AbortController()
   }
 
   /** Subscribe to one CDP method; returns a disposer. `sessionId` (second
@@ -116,6 +145,7 @@ export class CdpSession {
   detach(): void {
     if (this.closed) return
     this.closed = true
+    this.pending.abort(new Error('browser: CDP detached'))
     this.listeners.clear()
     this.transport.removeListener('message', this.messageListener)
     if (this.transport.isAttached()) {

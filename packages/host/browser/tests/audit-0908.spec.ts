@@ -337,8 +337,9 @@ describe('P2-29 tool registrations are fiber-scoped', () => {
 
     const all = applyBrowserTools(ctx, runtime)
     // 2026-09-15 审计 P1：`browser_release` 已从模型工具面移除（控制权只能由用户的
-    // 「交给 AI」按钮交回，模型不能单方面撤销用户闸），所以是 31 而不是 32。
-    expect(registered.length).toBe(31)
+    // 「交给 AI」按钮交回，模型不能单方面撤销用户闸）。2026-10-23 C1 新增
+    // browser_dialog，所以是 32。
+    expect(registered.length).toBe(38)
     expect(registered).not.toContain('browser_release')
     all()
     expect(registered).toEqual([])
@@ -403,10 +404,11 @@ describe('P2-32 browser_select verifies the assignment', () => {
     await runtime.open('https://a.example')
     adapter.lastView().transport.handler = (method, params) => {
       if (method !== 'Runtime.evaluate') return {}
-      // Emulate a select whose value assignment did not stick.
-      return String(params?.expression).includes('el.value !== wanted')
-        ? { result: { value: { error: 'option not found: zz' } } }
-        : { result: { value: {} } }
+      // Emulate the locator/select probe contract: the page script reports an
+      // option that does not exist, which the runtime must surface as not-found.
+      return String(params?.expression).includes('option not found by value')
+        ? { result: { value: { error: 'option not found by value: zz' } } }
+        : { result: { value: { selected: ['zz'], count: 1 } } }
     }
     await expect(runtime.selectOption(1, 'select#size', 'zz')).rejects.toMatchObject({ code: 'not-found' })
     runtime.dispose(); rmSync(dir, { recursive: true, force: true })

@@ -127,9 +127,9 @@ export interface BrowserToolOptions {
    * see `index.ts`'s `evalEnabled` field, R21 F-02).
    */
   evalEnabled?: boolean
-  /** Cap on snapshot entries per call (default 200). */
+  /** Cap on snapshot entries per call (default 400). */
   snapshotLimit?: number
-  /** Cap on extracted text characters per call (default 32768). */
+  /** Cap on extracted text characters per call (default 65536; hard cap MAX_TEXT_LIMIT). */
   textLimit?: number
   /** Screenshot max width in CSS pixels (default 1280). */
   screenshotMaxWidth?: number

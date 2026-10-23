@@ -20,8 +20,8 @@ import type { DownloadEntry, RecordActor } from './store.ts'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join, dirname, basename, extname } from 'node:path'
 
-/** Maximum accepted download size in bytes (100 MB). */
-export const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
+/** Maximum accepted download size in bytes (2026-10-23 capability unlock: was 100 MB, now 2 GiB). */
+export const MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024
 
 /** Default downloads directory (overridden by the runtime wiring). */
 export const DEFAULT_DOWNLOAD_DIR = '.zeokeel-downloads'
@@ -355,7 +355,7 @@ export class BrowserGuard {
         if (received > MAX_DOWNLOAD_BYTES && !rejected) {
           rejected = true
           item.cancel()
-          onDownload(`download rejected (>100MB): ${filename}`)
+          onDownload(`download rejected (>2GiB): ${filename}`)
           if (recordId !== undefined) {
             record?.update(recordId, { size: received, status: 'rejected' })
           }
@@ -367,7 +367,8 @@ export class BrowserGuard {
       if (item.getReceivedBytes() > MAX_DOWNLOAD_BYTES) {
         rejected = true
         item.cancel()
-        onDownload(`download rejected (>100MB): ${filename}`)
+        onDownload(`download rejected (>2GiB): ${filename}`)
+        if (recordId !== undefined) record?.update(recordId, { size: item.getReceivedBytes(), status: 'rejected' })
         return
       }
       void (async () => {

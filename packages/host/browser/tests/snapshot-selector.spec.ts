@@ -487,36 +487,42 @@ describe('2026-09-15 P2：快照的截断与盲区必须对模型可见', () => 
 describe('2026-09-15 P2：get_text 的 truncated 由提取侧给出（不是工具推算）', () => {
   const sendWith = (value: unknown) => async (): Promise<never> => ({ result: { value } }) as never
 
-  it('textLimit=65536 + 40000 字符 ⇒ truncated=true（生效上限其实是 32768）', async () => {
-    const out = await extractTextWithMeta(sendWith('a'.repeat(40_000)), undefined, 65_536)
-    expect(MAX_TEXT_LIMIT).toBe(32 * 1024)
-    expect(out.text).toHaveLength(32 * 1024)
+  it('textLimit=65536 + 80000 字符 ⇒ truncated=true（生效上限是 65536）', async () => {
+    const out = await extractTextWithMeta(sendWith('a'.repeat(80_000)), undefined, 65_536)
+    expect(MAX_TEXT_LIMIT).toBe(64 * 1024)
+    expect(out.text).toHaveLength(64 * 1024)
     expect(out.truncated).toBe(true)
-    // 反向对照：工具旧口径 `text.length >= runtime.options.textLimit` 会判 false
-    expect(out.text.length >= 65_536).toBe(false)
   })
 
   it('恰好等于生效上限、其实没截断 ⇒ truncated=false（旧 `>=` 的误报消失）', async () => {
-    const out = await extractTextWithMeta(sendWith('a'.repeat(32 * 1024)), undefined, 32 * 1024)
-    expect(out.text).toHaveLength(32 * 1024)
+    const out = await extractTextWithMeta(sendWith('a'.repeat(64 * 1024)), undefined, 64 * 1024)
+    expect(out.text).toHaveLength(64 * 1024)
     expect(out.truncated).toBe(false)
     // 反向对照：旧公式在这里给 true
-    expect(out.text.length >= 32 * 1024).toBe(true)
+    expect(out.text.length >= 64 * 1024).toBe(true)
+  })
+
+  it('原始文本未超限、投影后超限 ⇒ truncated=true（第二分支隔离）', async () => {
+    // Raw length stays below the limit; only the projection inflates it.
+    const out = await extractTextWithMeta(sendWith('a'.repeat(100)), undefined, 200, (text) => text + 'x'.repeat(500))
+    expect(out.total).toBe(100)
+    expect(out.text).toHaveLength(200)
+    expect(out.truncated).toBe(true)
   })
 
   it('投影（脱敏）之后仍然超长 ⇒ truncated=true', async () => {
     const secret = 'S3cr3tPass-xyz'
-    const raw = 'x'.repeat(32 * 1024 - 4) + secret
-    const out = await extractTextWithMeta(sendWith(raw), undefined, 32 * 1024, (text) => text.split(secret).join('****'))
-    expect(out.text).toHaveLength(32 * 1024)
+    const raw = 'x'.repeat(64 * 1024 - 4) + secret
+    const out = await extractTextWithMeta(sendWith(raw), undefined, 64 * 1024, (text) => text.split(secret).join('****'))
+    expect(out.text).toHaveLength(64 * 1024)
     expect(out.truncated).toBe(true)
     expect(out.text.endsWith('****')).toBe(true)
   })
 
   it('短文本不报截断（也不受元素级 80 字符窗口影响）', async () => {
-    const out = await extractTextWithMeta(sendWith('hello'), undefined, 32 * 1024)
+    const out = await extractTextWithMeta(sendWith('hello'), undefined, 64 * 1024)
     expect(out).toEqual({ text: 'hello', truncated: false, total: 5 })
-    expect(SNAPSHOT_TEXT_LIMIT).toBe(80)
+    expect(SNAPSHOT_TEXT_LIMIT).toBe(200)
   })
 })
 

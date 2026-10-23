@@ -9,13 +9,17 @@
 
 import type { BrowserSnapshotElement } from './types.ts'
 
-/** Default cap on snapshot entries per call. */
-const SNAPSHOT_LIMIT = 200
+/** Default cap on snapshot entries per call (2026-10-23 capability unlock: was 200). */
+export const SNAPSHOT_DEFAULT_LIMIT = 400
+/** @deprecated kept for the existing internal call sites. */
+const SNAPSHOT_LIMIT = SNAPSHOT_DEFAULT_LIMIT
 /** Hard safety cap on snapshot entries (a deployment may raise the limit up to
  * this bound; the probe itself is bounded so a hostile page cannot flood). */
 const SNAPSHOT_MAX_LIMIT = 2_000
-/** Cap on extracted text characters per call. */
-const TEXT_LIMIT = 32 * 1024
+/** Cap on extracted text characters per call (2026-10-23 capability unlock: was 32 KiB). */
+export const TEXT_DEFAULT_LIMIT = 64 * 1024
+/** @deprecated kept for the existing internal call sites. */
+const TEXT_LIMIT = TEXT_DEFAULT_LIMIT
 
 /** Hard cap on extracted text characters per call (exported: the effective
  * limit is `min(textLimit, this)` and BOTH the extraction and every caller that
@@ -23,8 +27,8 @@ const TEXT_LIMIT = 32 * 1024
  * {@link effectiveTextLimit}).
  *
  * 2026-09-15 审计 P2：`browser_get_text` 曾用 `text.length >= runtime.options.
- * textLimit` 自己推算 `truncated`，而真正生效的上限是 `min(textLimit, 32768)`
- * ——`textLimit=65536` 时工具会拿 65536 去比一条已经被 32KiB 截断的文本，标记
+ * textLimit` 自己推算 `truncated`，而真正生效的上限是 `min(textLimit, 65536)`
+ * ——`textLimit=65536` 时工具会拿 65536 去比一条被硬顶截断的文本，标记
  * 与实际相反。 */
 export const MAX_TEXT_LIMIT = TEXT_LIMIT
 
@@ -43,9 +47,9 @@ const SNAPSHOT_ELEMENT_COUNT_EXTRA = 1_000
  * roots (a hostile page must not turn a snapshot into an O(page) walk). */
 const SNAPSHOT_SHADOW_SCAN_CAP = 20_000
 /** Model-facing cap on one snapshot element's text (the probe's documented
- * "80 chars"). Applied by {@link extractSnapshot} AFTER the caller's value
+ * "200 chars", 2026-10-23). Applied by {@link extractSnapshot} AFTER the caller's value
  * projection, never inside the page (R7). */
-export const SNAPSHOT_TEXT_LIMIT = 80
+export const SNAPSHOT_TEXT_LIMIT = 200
 /**
  * Page-side cap on one element's text (R7, 2026-09-13).
  *
@@ -57,7 +61,7 @@ export const SNAPSHOT_TEXT_LIMIT = 80
  * a megabyte of `innerText` per element over CDP); the real cap now runs
  * host-side, after redaction.
  */
-const ELEMENT_TEXT_CAP = 1_024
+const ELEMENT_TEXT_CAP = 4_096
 
 /**
  * Probe script: collect interactable elements in DOM order. The page can see
@@ -444,11 +448,11 @@ export interface TextExtraction {
  * Extract visible text of the page (or of `selector` when given).
  *
  * `projectText` (R7, 2026-09-13) runs on the WHOLE extracted text and the cap is
- * applied afterwards: the previous order (slice 32KiB, then redact) left the
+ * applied afterwards: the previous order (slice at the cap, then redact) left the
  * first characters of a credential that straddled the cap in cleartext.
  *
  * 2026-09-15 审计 P2：截断标记由这里（唯一知道投影前长度与生效上限的地方）
- * 算出来，工具不再用 `Math.min(textLimit, 32768)` 自己推算。
+ * 算出来，工具不再用 `Math.min(textLimit, 硬顶)` 自己推算。
  */
 export async function extractTextWithMeta(
   send: <T>(method: string, params?: Record<string, unknown>) => Promise<T>,
@@ -475,7 +479,7 @@ export async function extractTextWithMeta(
   //    字符留在页面上（`textLimit=65536` + 40000 字符的实测形状走这条）。
   //  · `projected.length > limit`：擦除**之后**仍然超长 ⇒ 这次返回被切了尾巴。
   // 旧实现把判定放在工具里用 `text.length >= runtime.options.textLimit` 推算，
-  // 上限取错（65536 vs 生效的 32768）且 `>=` 在"恰好等于上限、其实没截断"时误报。
+  // 上限取错（配置值 vs 生效的硬顶）且 `>=` 在"恰好等于上限、其实没截断"时误报。
   return { text: projected.slice(0, limit), truncated: text.length > limit || projected.length > limit, total: text.length }
 }
 

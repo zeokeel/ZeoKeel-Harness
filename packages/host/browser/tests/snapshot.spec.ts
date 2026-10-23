@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { extractSnapshot, extractText } from '../src/snapshot.ts'
+import { SNAPSHOT_DEFAULT_LIMIT, extractSnapshot, extractText, MAX_TEXT_LIMIT } from '../src/snapshot.ts'
 import type { BrowserSnapshotElement } from '../src/types.ts'
 
 type Send = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -210,9 +210,17 @@ describe('extractText', () => {
     await expect(extractText(sendWith(null, { text: 'boom' }), undefined)).rejects.toThrow('browser: text extraction failed on this page')
   })
 
+  it('defaults the entry cap to 400 (2026-10-23 capability unlock)', async () => {
+    expect(SNAPSHOT_DEFAULT_LIMIT).toBe(400)
+    const send = sendWith([])
+    await extractSnapshot(send)
+    const [, params] = sendArgs(send)
+    expect(String(params['expression'])).toContain('400')
+  })
+
   it('truncates to a bounded limit', async () => {
     const send = sendWith('a'.repeat(100_000))
-    const text = await extractText(send, undefined, 32 * 1024)
-    expect(text.length).toBe(32 * 1024)
+    const text = await extractText(send, undefined, MAX_TEXT_LIMIT)
+    expect(text.length).toBe(MAX_TEXT_LIMIT)
   })
 })

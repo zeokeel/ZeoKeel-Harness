@@ -1332,7 +1332,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
       includeShadow: { type: 'boolean', description: 'Also list elements inside OPEN shadow roots (append-only; their selector uses " >>> "; default false keeps the output identical to before).' },
-      includeFrames: { type: 'boolean', description: 'Also list elements inside same-origin iframes (append-only, entries carry frame:N; cross-origin frames are reported, their DOM is not readable; default false).' },
+      includeFrames: { type: 'boolean', description: 'Also list elements inside same-origin iframes, depth-first (append-only; entries carry frame:N using the same numbering as browser_eval(frame:N); cross-origin frames consume a number and are reported as unreadable; default false).' },
     },
     output: {
       schema: {
@@ -1340,7 +1340,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
         additionalProperties: false,
         properties: {
           crossOriginFrames: { type: 'array', items: { type: 'integer' }, description: 'Frames skipped because they are cross-origin (only with includeFrames).' },
-          nestedFrames: { type: 'integer', description: 'Same-origin frames found INSIDE a listed frame (not walked; only with includeFrames).' },
+          nestedFrames: { type: 'integer', description: 'Nested frames that could not be read (readable nested frames are walked; only with includeFrames).' },
           elements: {
             type: 'array',
             items: {

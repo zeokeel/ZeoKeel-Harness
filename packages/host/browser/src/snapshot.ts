@@ -304,8 +304,9 @@ export interface SnapshotExtractionMeta {
    * only populated when the caller asked for `includeFrames`; audit R2 — their
    * DOM is not readable from the main world). */
   crossOriginFrames?: number[]
-  /** Same-origin frames found INSIDE a frame that was scanned (not walked in v1,
-   * only counted; audit P3). */
+  /** Nested frames that could NOT be walked (unreadable). Readable nested frames
+   * are traversed by the extras probe, so this stays 0 unless a child document
+   * turns out unreadable; kept for the model-facing blind-spot note. */
   nestedFrames?: number
 }
 
@@ -504,7 +505,7 @@ export function snapshotNote(meta: SnapshotExtractionMeta): string | undefined {
     parts.push(`${blind.join(' and ')} are NOT included — use browser_eval(frame:N) or browser_get_text(selector) if the element you need is inside one`)
   }
   if ((meta.nestedFrames ?? 0) > 0) {
-    parts.push(`${meta.nestedFrames} nested frame${meta.nestedFrames === 1 ? '' : 's'} inside a frame ${meta.nestedFrames === 1 ? 'is' : 'are'} not walked (only top-level frames are listed)`)
+    parts.push(`${meta.nestedFrames} nested frame${meta.nestedFrames === 1 ? '' : 's'} inside a frame could not be read and ${meta.nestedFrames === 1 ? 'is' : 'are'} not listed`)
   }
   return parts.length === 0 ? undefined : `snapshot: ${parts.join('; ')}.`
 }

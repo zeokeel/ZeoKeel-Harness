@@ -115,3 +115,32 @@ describe('snapshotExtrasProbe: entry facts', () => {
     expect(result.truncated).toBe(true)
   })
 })
+
+describe('snapshotExtrasProbe: frame numbering matches resolveFrame (depth-first)', () => {
+  it('nested frames are numbered depth-first and cross-origin frames consume a number', () => {
+    const target = page('<iframe id="outer"></iframe><iframe id="cross"></iframe><iframe id="third"></iframe>')
+    const document = target.window.document
+    const outer = document.getElementById('outer') as HTMLIFrameElement
+    const cross = document.getElementById('cross') as HTMLIFrameElement
+    const third = document.getElementById('third') as HTMLIFrameElement
+    const outerDoc = document.implementation.createHTMLDocument('outer')
+    outerDoc.body.innerHTML = '<button id="a">a</button><iframe id="nested"></iframe>'
+    Object.defineProperty(outer, 'contentDocument', { get: () => outerDoc })
+    const nested = outerDoc.getElementById('nested') as HTMLIFrameElement
+    const nestedDoc = document.implementation.createHTMLDocument('nested')
+    nestedDoc.body.innerHTML = '<button id="deep">deep</button>'
+    Object.defineProperty(nested, 'contentDocument', { get: () => nestedDoc })
+    Object.defineProperty(cross, 'contentDocument', { get: () => null })
+    const thirdDoc = document.implementation.createHTMLDocument('third')
+    thirdDoc.body.innerHTML = '<button id="c">c</button>'
+    Object.defineProperty(third, 'contentDocument', { get: () => thirdDoc })
+    const result = target.run(false, true, 100)
+    const bySelector = (suffix: string): ExtrasResult['entries'][number] | undefined => result.entries.find(entry => entry.selector.endsWith(suffix))
+    // 0=root, 1=outer, 2=nested, 3=cross, 4=third — the same order resolveFrame uses.
+    expect(bySelector('#a')?.frame).toBe(1)
+    expect(bySelector('#deep')?.frame).toBe(2)
+    expect(bySelector('#c')?.frame).toBe(4)
+    expect(result.crossOrigin).toEqual([3])
+    expect(result.frames).toBe(4)
+  })
+})

@@ -521,6 +521,17 @@ describe('snapshot extras at the tool layer（2026-10-23 P1）', () => {
   })
 })
 
+describe('frame action parameter validation（2026-10-23 C16 frame）', () => {
+  it('rejects a negative frame, right-button frame clicks and frame reads with a locator', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    await expect(harness.call('browser_click', { target: '#a', frame: -1 })).rejects.toThrow(/frame must be >= 0/u)
+    await expect(harness.call('browser_click', { target: '#a', frame: 1, button: 'right' })).rejects.toThrow(/left-button only/u)
+    await expect(harness.call('browser_click', { target: '#a', frame: 1, clickCount: 2 })).rejects.toThrow(/single-click only/u)
+    await expect(harness.call('browser_get_text', { frame: 1, selector: 'text=x' })).rejects.toThrow(/CSS or >>> selector only/u)
+  })
+})
+
 describe('click addressing errors（2026-10-23 C16 P2）', () => {
   it('target and x/y are mutually exclusive, and a lone coordinate is rejected', async () => {
     const harness = track(makeHarness())

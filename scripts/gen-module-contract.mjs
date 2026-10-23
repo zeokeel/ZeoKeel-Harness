@@ -224,7 +224,7 @@ export const GENERATED_SITES = [
         id: 'ci.test-tags',
         label: 'go test 步的 -tags=',
         body: ({ idsText }) => [
-          `go test -tags=${idsText} ./... -count=1 -p 1 -timeout 15m -json > go-test.json || GO_TEST_STATUS=$?`,
+          `go test -tags=${idsText} ./... -count=1 -p 4 -timeout 25m -json > go-test.json || GO_TEST_STATUS=$?`,
         ],
       },
     ],

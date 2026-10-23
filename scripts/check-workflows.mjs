@@ -481,7 +481,7 @@ const SELFTEST_MIN_RED_SAMPLES = 30
  * `taskset -c 0` / 冻结启动器表达式后面的真命令必须仍然绿）。
  * 2026-10-14 合并后审计 P1：175 → **176**（新增 `b14-timeout-budget-below-registered`：
  * `server` 的 `timeout-minutes` 被削到登记值以下的合成负例 —— 这条判据是"预算只许 ≥
- * `CI_JOB_BUDGET_MINUTES` 的登记值"唯一的钉子，删掉它 60→45 会重新静默）。
+ * `CI_JOB_BUDGET_MINUTES` 的登记值"唯一的钉子，删掉它 75→60 会重新静默）。
  */
 const SELFTEST_MIN_REQUIRED_SAMPLES = 176
 /**
@@ -754,7 +754,7 @@ const SELFTEST_REQUIRED_SAMPLES = [
   { id: 'z21-wrapper-real-command-interp-green', policy: null },
   // 2026-10-14 合并后审计 P1：`[SK-7b]` 的**逐 job 预算登记**判据（预算不许低于
   // `CI_JOB_BUDGET_MINUTES` 的登记值）。这格是这条判据唯一的合成负例 —— 删掉它，
-  // 把 `ci.yml` 的 `server` 预算从 60 改回 45 会重新变成静默放行（审计实测修前 exit 0）。
+  // 把 `ci.yml` 的 `server` 预算从 75 改回 60 会重新变成静默放行（审计实测修前 exit 0）。
   { id: 'b14-timeout-budget-below-registered', policy: '[SK-7b]' },
 ]
 
@@ -1141,7 +1141,7 @@ export function checkWorkflowText(name, text, options = {}) {
 // ===== SK-7:三条"静默变绿"的静态策略(2026-09-19 第二轮审计 §3.3 / R2-SK-7)=====
 //
 // 为什么要有这一批(子审计实测):把 CI 里的验证步骤改成 `|| true`、给它加
-// `continue-on-error: true`、或把 `go test -timeout 15m` 放宽成 `-timeout 120m`,
+// `continue-on-error: true`、或把 `go test -timeout 25m` 放宽成 `-timeout 120m`,
 // 三种变异**全部静默通过** —— 语法门禁看得见它们(bash -n 完全合法),但没有任何策略拦。
 // 三条策略分别覆盖:
 //
@@ -3663,7 +3663,7 @@ const CI_JUDGEMENT_ARGV_PREFIXES = [
  * 时候不会被静默"，但**不证明它还在**。实测：删掉 `.github/workflows/ci.yml` 的
  * `go vet` 步骤（或 server job 的 `npm test` 步骤）后，`check-workflows.mjs` 与
  * `check-integration-tests.mjs` **都 EXIT=0**（同族的 `|| true` / `continue-on-error` /
- * `-timeout 15m→120m` / 删整个 `release` job 四种形态早已闭合）。根因就是缺"步骤清单双向对账"：
+ * `-timeout 25m→120m` / 删整个 `release` job 四种形态早已闭合）。根因就是缺"步骤清单双向对账"：
  * 那两步从未进任何表，删掉它们不产生任何观测差（[SK-7] 的"YAML 步骤数 = `bash -n` 块数"
  * 是**抽取覆盖率**对账，两边同步减少仍自洽）。
  *
@@ -3711,7 +3711,7 @@ const REQUIRED_CI_STEPS = [
     job: 'server',
     argv: ['go', 'test'],
     pinnedId: 'wasm-case-gate',
-    label: '`go test ./... -p 1 -timeout 15m -json` + 用例级判定（Go 全量测试）',
+    label: '`go test ./... -p 4 -timeout 25m -json` + 用例级判定（Go 全量测试）',
     why: '与 `wasm-case-gate` 同一步：`-json` 报告 + `check-go-test-json.mjs` 的"用例级 0 skip /'
       + '三条关键用例确实 pass"全靠这一步产出；删掉它，Go 侧一条测试都不跑而别的检查仍绿',
   },
@@ -7323,7 +7323,7 @@ const CI_JOB_FIXED_OVERHEAD_MINUTES = 14
  * **不低于**它）。
  *
  * 为什么需要这张表：`[SK-7b]` 只判**下界** `2X + F ≤ budget` —— 把 `server` 的
- * `timeout-minutes: 60` 静默改回 45 时 `2×15+14 = 44 ≤ 45` 仍然成立，判据照绿
+ * `timeout-minutes: 75` 静默改回 45 时 `2×15+14 = 44 ≤ 45` 仍然成立，判据照绿
  * （2026-10-14 合并后审计 P1 的现场：60→45 这个变异在补本表之前是 exit 0）。而 45 min 下
  * happy path ≈39.3 min 只剩 ~1.14× 余量，runner 稍慢就先撞 job 上限被整体取消 ——
  * `panic: test timed out` + goroutine dump + 用例名全丢，正是 R2-SK-7 要防的形态。
@@ -7331,7 +7331,10 @@ const CI_JOB_FIXED_OVERHEAD_MINUTES = 14
  * 语义：**预算只许 ≥ 我们承诺过的值**；要往下调必须先显式改这张表（进 diff、可评审）。
  * 未登记的 job 不走这条判断（登记面只覆盖"有承诺预算"的 job）。
  */
-const CI_JOB_BUDGET_MINUTES = { server: 60 }
+// 2026-10-23：server 从 60 提到 75 —— CI 的 go test 换成与本地同一组参数
+// `-p 4 -timeout 25m` 后，[SK-7b] 的序关系变成 2×25+14 = 64 ≤ 75。
+// 改回 60 会当场判红（这条登记是"承诺值不许静默缩水"的唯一钉子）。
+const CI_JOB_BUDGET_MINUTES = { server: 75 }
 
 /**
  * [SK-7b] `go test … -timeout X` 与所在 job `timeout-minutes` 的序关系。
@@ -7402,11 +7405,11 @@ function checkGoTestTimeoutBudget(file, document, blocks, notes) {
             + `  命令:${command}\n`
             + '  ⇒ Go 的 `-timeout` 只认 time.ParseDuration 形态(`30s`/`15m`/`2h`),'
             + '**裸数字不是合法 duration**;变量或 `${{ }}` 表达式则让静态门禁无法证明预算。\n'
-            + '  请就地写死一个字面量(例:`-timeout 15m`)—— 门禁宁可报"读不出",也不假装它安全。')
+            + '  请就地写死一个字面量(例:`-timeout 25m`)—— 门禁宁可报"读不出",也不假装它安全。')
           continue
         }
         // 环境变量注入的第二条 `-timeout`(F3-1 的 `$EXTRA_FLAGS` 形态):
-        // `env: EXTRA_FLAGS: -timeout=120m` + `go test … -timeout 15m $EXTRA_FLAGS` 时,
+        // `env: EXTRA_FLAGS: -timeout=120m` + `go test … -timeout 25m $EXTRA_FLAGS` 时,
         // Go 的 flag 解析是后者覆盖前者 ⇒ 实际生效 120m,而字面值看起来是 15m。
         // 只对**本命令引用到的**变量报(裸变量的 `-timeout` 在别的变量里无关紧要)。
         const injected = []
@@ -7427,7 +7430,7 @@ function checkGoTestTimeoutBudget(file, document, blocks, notes) {
           report(`同一条命令里出现 ${flags.length} 个不同的 \`-timeout\`(${flags.map(v => `\`${v}\``).join(', ')})\n`
             + `  命令:${command}\n`
             + '  ⇒ Go 的 flag 解析是**后者覆盖前者**,生效的超时不是写在明面上的那个'
-            + '(审计实测:`-timeout 15m $EXTRA_FLAGS` 而 `EXTRA_FLAGS=-timeout=120m` 时实际生效 120m)。\n'
+            + '(审计实测:`-timeout 25m $EXTRA_FLAGS` 而 `EXTRA_FLAGS=-timeout=120m` 时实际生效 120m)。\n'
             + '  只留一个,或用显式变量并在本文件登记理由。')
           continue
         }
@@ -7456,7 +7459,7 @@ function checkGoTestTimeoutBudget(file, document, blocks, notes) {
             + `${formatMinutes(budget)}m:happy path 的余量会掉到约 1.1×(而注释口径是 ≥1.4×),`
             + 'runner 稍慢或某个包多花几分钟就先撞 job 上限被整体取消 —— `panic: test timed out` '
             + '+ goroutine dump + 用例名全丢,只剩"gate 红、查不出原因"\n'
-            + '  (2026-10-14 合并后审计 P1 的现场:把 `timeout-minutes: 60` 改回 45 时本判据'
+            + '  (2026-10-14 合并后审计 P1 的现场:把 `timeout-minutes: 75` 改回 45 时本判据'
             + '此前全绿)。\n'
             + `  ⇒ 要下调预算必须先显式改 \`CI_JOB_BUDGET_MINUTES\` 的 \`${item.jobId}\` `
             + '登记值(进 diff、可评审);否则请把 `timeout-minutes` 保持在 ≥ '
@@ -7728,7 +7731,7 @@ function hasErrexitOnly(content) {
  * @param options - 见上。
  * @returns workflow 文本。
  */
-function selftestWorkflow(steps, { timeoutMinutes = 45, jobContinueOnError = false, jobIf = '', jobNeeds = '', triggers = ['push'] } = {}) {
+function selftestWorkflow(steps, { timeoutMinutes = 75, jobContinueOnError = false, jobIf = '', jobNeeds = '', triggers = ['push'] } = {}) {
   return [
     'name: selftest',
     'on:',
@@ -12115,7 +12118,7 @@ export function selfTestPolicies() {
       // 预算取 60 = **与真 `ci.yml` 的 `server` job 同形**（`CI_JOB_BUDGET_MINUTES` 是
       // 逐 job 的登记面，写 45 会让"预算低于登记值"这条判据在合成绿样本上假红；
       // 与 `GATE_SELFTEST_RUNS_ON` 同一条纪律：合成样本必须复刻真树的取值）。
-      '    timeout-minutes: 60',
+      '    timeout-minutes: 75',
       ...(option.pg ? [
         '    env:',
         '      PG_DSN_TEST: postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable',
@@ -12133,7 +12136,7 @@ export function selfTestPolicies() {
       '        run: |',
       '          set -euo pipefail',
       '          GO_TEST_STATUS=0',
-      `          go test ./... -count=1 -p 1 -timeout 15m -json > ${option.report} || GO_TEST_STATUS=$?`,
+      `          go test ./... -count=1 -p 4 -timeout 25m -json > ${option.report} || GO_TEST_STATUS=$?`,
       ...(swallow ? ['          yarn check || true'] : []),
       '          CHECK_STATUS=0',
       `          node ../${WASM_CASE_GATE_SCRIPT} ${option.read} \\`,
@@ -12160,7 +12163,7 @@ export function selfTestPolicies() {
     '      - name: go test 被吞',
     '        run: |',
     '          set -euo pipefail',
-    '          go test ./... -count=1 -timeout 15m || true',
+    '          go test ./... -count=1 -timeout 25m || true',
   ])
   expect(tags(swallowOr, '[SK-7a]').some(failure => failure.detail.includes('go test 被吞')),
     '[SK-7a] 自检:报错没有点名 step')
@@ -12214,7 +12217,7 @@ export function selfTestPolicies() {
   expectRed('a9-bash-c-pipeline', '[SK-7c]', [
     '      - run: |',
     '          set -euo pipefail',
-    '          bash -c \'go test ./... -timeout 15m | tail -5\'',
+    '          bash -c \'go test ./... -timeout 25m | tail -5\'',
   ])
   expectRed('a10-quoted-unreadable', '[SK-7c]', [
     '      - run: |',
@@ -12332,27 +12335,29 @@ export function selfTestPolicies() {
   ])
 
   // ---- 策略 2:超时序关系 ----
+  // 预算显式给 60（默认 75 已满足 2×25+14=64）：这样红的原因只可能是"超时序关系"。
   const tooLong = expectRed('b1-timeout-25m', '[SK-7b]', [
     '      - name: 单包 25m',
-    '        run: go test ./... -count=1 -p 1 -timeout 25m',
-  ])
+    '        run: go test ./... -count=1 -p 4 -timeout 25m',
+  ], { timeoutMinutes: 60 })
   // 2026-10-14：算术里的固定开销由写死的 `+5` 换成 `CI_JOB_FIXED_OVERHEAD_MINUTES`（先后是
   // 12、14 —— 14 把那片新增的 `check-go-build-tags` 步骤 1.9 min 一并算进去）⇒ 这条自检的
   // 期望串跟着复算（25m 那条从 `2×25+5=55` → `2×25+12=62` → `2×25+14=64`）。断言本身没变松：
   // 仍然逐字要求报错写出算术。
   const budgetFailure = tags(tooLong, '[SK-7b]')
-  expect(budgetFailure.some(failure => failure.detail.includes('2×25+14=64 > 45')),
-    '[SK-7b] 自检:报错里没有写出算术(2×25+14=64 > 45)')
+  expect(budgetFailure.some(failure => failure.detail.includes('2×25+14=64 > 60')),
+    '[SK-7b] 自检:报错里没有写出算术(2×25+14=64 > 60)')
   expect(budgetFailure.some(failure => failure.detail.includes('单包 25m')),
     '[SK-7b] 自检:报错没有点名 step')
   expectGreen('b2-timeout-15m-ok', [
-    '      - name: 单包 15m',
-    '        run: go test ./... -count=1 -p 1 -timeout 15m',
+    '      - name: 单包 25m',
+    '        run: go test ./... -count=1 -p 4 -timeout 25m',
   ])
-  // 2026-10-14 合并后审计 P1 的验收样本：`server` 的预算被削到 **45**（登记值 60）时必须红。
+  // 2026-10-14 合并后审计 P1 的验收样本；2026-10-23 CI 换 `-p 4 -timeout 25m` 后
+  // 预算登记值变成 75 ⇒ 样本预算取 **65**（满足 2×25+14=64，但低于 75）。
   // 这是"预算只许 ≥ 登记值"那条判据的**唯一**钉子 —— 删掉它，把 `ci.yml` 的
-  // `timeout-minutes: 60` 改回 45 会重新变成静默放行（审计实测修前 exit 0）。
-  // 形状与 b2 相同（`-timeout 15m`、`2×15+14 = 44 ≤ 45` 本来会绿），只有 job 名换成
+  // `timeout-minutes: 75` 改回 45 会重新变成静默放行（审计实测修前 exit 0）。
+  // 形状与 b2 相同（`-timeout 25m`、`2×25+14 = 64 ≤ 65` 本来会绿），只有 job 名换成
   // 登记表里的 `server` ⇒ 红的原因只可能是"预算低于登记值"（`raw` 样本按既有手法传空
   // 的 steps，整份 workflow 由 `raw` 给出）。
   const budgetRollback = expectRed('b14-timeout-budget-below-registered', '[SK-7b]', [], {
@@ -12363,20 +12368,21 @@ export function selfTestPolicies() {
       'jobs:',
       '  server:',
       `    runs-on: ${GATE_SELFTEST_RUNS_ON}`,
-      '    timeout-minutes: 45',
+      // 65 = 满足 2×25+14=64 的序关系、但低于登记值 75 ⇒ 红的原因只可能是"预算低于登记值"。
+      '    timeout-minutes: 65',
       '    steps:',
       '      - uses: actions/checkout@v7',
-      '      - name: 单包 15m',
-      '        run: go test ./... -count=1 -p 1 -timeout 15m',
+      '      - name: 单包 25m',
+      '        run: go test ./... -count=1 -p 4 -timeout 25m',
       '',
     ].join('\n'),
   })
   const rollbackFailure = tags(budgetRollback, '[SK-7b]')
-  expect(rollbackFailure.some(failure => failure.detail.includes('低于登记值 60m')),
-    '[SK-7b] 自检:预算被削到登记值以下时没有报"低于登记值 60m"(P1 的判据形同不存在)')
+  expect(rollbackFailure.some(failure => failure.detail.includes('低于登记值 75m')),
+    '[SK-7b] 自检:预算被削到登记值以下时没有报"低于登记值 75m"(P1 的判据形同不存在)')
   expectRed('b3-timeout-no-job-budget', '[SK-7b]', [
     '      - name: 没有 job 预算',
-    '        run: go test ./... -timeout 15m',
+    '        run: go test ./... -timeout 25m',
   ], { timeoutMinutes: null })
   // F2-2:`-timeout 0` 在 Go 里是**关闭超时**(实测 `-timeout 0s` 时 3 秒用例照跑)。
   expectRed('b4-timeout-zero-s', '[SK-7b]', [
@@ -12415,11 +12421,11 @@ export function selfTestPolicies() {
     '      - name: 后者覆盖前者',
     '        env:',
     '          EXTRA_FLAGS: -timeout=120m',
-    '        run: go test ./... -count=1 -p 1 -timeout 15m $EXTRA_FLAGS',
+    '        run: go test ./... -count=1 -p 4 -timeout 25m $EXTRA_FLAGS',
   ])
   expectRed('b12-timeout-two-literal-values', '[SK-7b]', [
     '      - name: 字面两个超时',
-    '        run: go test ./... -count=1 -p 1 -timeout 15m -timeout=120m',
+    '        run: go test ./... -count=1 -p 4 -timeout 25m -timeout=120m',
   ])
   // F3-2:注释里的历史命令不得误报(块里另有一条真命令维持存在性对账)。
   expectGreen('b13-timeout-in-comment', [
@@ -12427,12 +12433,12 @@ export function selfTestPolicies() {
     '        run: |',
     '          set -euo pipefail',
     '          # 旧写法: go test ./... -timeout 120m',
-    '          go test ./... -count=1 -p 1 -timeout 15m',
+    '          go test ./... -count=1 -p 4 -timeout 25m',
   ])
 
   // ---- 策略 3:单行退出码语义 ----
   expectRed('c1-pipeline', '[SK-7c]', [
-    '      - run: go test ./... -timeout 15m | tail -5',
+    '      - run: go test ./... -timeout 25m | tail -5',
   ])
   expectRed('c2-or-echo', '[SK-7a]', [
     '      - run: yarn check || echo skipped',
@@ -12441,7 +12447,7 @@ export function selfTestPolicies() {
     '      - run: test -f package.json; ! yarn check',
   ])
   expectGreen('c4-pipefail-ok', [
-    '      - run: set -o pipefail; go test ./... -timeout 15m | tail -5',
+    '      - run: set -o pipefail; go test ./... -timeout 25m | tail -5',
   ])
   expectGreen('c5-exit-one-ok', [
     ...GATE_CHECKOUT(),
@@ -12509,7 +12515,7 @@ export function selfTestPolicies() {
     '      - name: 块首声明了 pipefail',
     '        run: |',
     '          set -euo pipefail',
-    '          go test ./... -timeout 15m | tail -5',
+    '          go test ./... -timeout 25m | tail -5',
   ])
   expectGreen('n2-if-not-pipeline-condition', [
     '      - name: if ! a | b(取反结果交给分支处理)',
@@ -12546,7 +12552,7 @@ export function selfTestPolicies() {
   ])
   expectRed('n7-double-dash-timeout-flag', '[SK-7b]', [
     '      - name: --timeout 是另一个 flag(不受 -timeout 约束,但也不许假装有预算)',
-    '        run: go test ./... --timeout 15m',
+    '        run: go test ./... --timeout 25m',
   ])
   expectRed('n8-timeout-2h-over-budget', '[SK-7b]', [
     '      - name: 2h 超上界',
@@ -12732,7 +12738,7 @@ export function selfTestPolicies() {
     `    runs-on: ${GATE_SELFTEST_RUNS_ON}`,
     `    needs: ${gateNeeds}`,
     `    if: ${gateIf}`,
-    '    timeout-minutes: 60',
+    '    timeout-minutes: 75',
     '    steps:',
     ...(linkStep ? [
       '      - name: Root guards must have passed',
@@ -14210,7 +14216,7 @@ export function selfTestPolicies() {
     'jobs:',
     '  gate:',
     `    runs-on: ${GATE_SELFTEST_RUNS_ON}`,
-    '    timeout-minutes: 60',
+    '    timeout-minutes: 75',
     '    steps:',
     '      - uses: actions/checkout@v7',
     '        with:',

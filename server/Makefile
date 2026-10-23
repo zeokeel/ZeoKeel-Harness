@@ -20,8 +20,10 @@ VERSION ?= $(shell git describe --tags --always 2>/dev/null | sed 's/^v//')
 # `make check` 仍带 -count=1(发布门禁,永远真跑)。
 .PHONY: test test-server test-server-fast build-server webadmin webadmin-check-features webadmin-variant-tests docker-image check check-fast check-tags
 
-# 并行测试包的并发数(CI 的 `go test -p 1` 见 .github/workflows/ci.yml,
-# 那里串行是为了 service 容器的 max_connections,不是性能考虑)。
+# 并行测试包的并发数。**CI 用同一组参数**（`.github/workflows/ci.yml` 的
+# `go test … -p 4 -timeout 25m`，2026-10-23 起；此前是 `-p 1` —— 那是 PG 容器
+# `max_connections` 还是默认 100 时的约束，而容器早已用 `max_connections=500` 启动，
+# 旧约束过期后一直没人回收）。
 #
 # 2026-10-23：本地缺省值改为**机器自适应** —— 唯一口径是 `scripts/build-capacity.mjs`
 # （CPU 配额 + 可用内存 / 每包内存单价，4 核 8GB 机器给 4，16 核 4GB 容器给 2）。
@@ -126,8 +128,8 @@ FEATURES ?= $(if $(strip $(GO_TAGS)),$(GO_TAGS),none)
 #
 # 25m 的推导：p1 最坏一轮 llmgateway 298.9s × 2.5（并行膨胀）≈ 750s，再乘 2× 单包抖动
 # ≈ 1500s < 25m；同时远小于 CI job 的 45min，真挂时仍打得完 goroutine dump 与用例名。
-# `make check` 走 test-server ⇒ 也拿到 25m。CI 的 `go test -p 1 -timeout 15m` 是
-# .github/workflows/ci.yml 里写死的字面量（**不受本文件任何变量影响**），口径未变。
+# `make check` 走 test-server ⇒ 也拿到 25m。CI 的 `go test -p 4 -timeout 25m` 是
+# .github/workflows/ci.yml 里写死的字面量（**不受本文件任何变量影响**），与这里同值。
 # 注意：放宽单包超时不能替代 CI 的 job 预算——两者必须满足
 # 「job timeout > 单包超时 + 其余包耗时」，否则真挂时 job 先被整体取消，
 # 诊断反而比默认 10m 更差（见 .github/workflows/ci.yml 的 server job 与

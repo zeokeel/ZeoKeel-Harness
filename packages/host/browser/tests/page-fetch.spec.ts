@@ -41,14 +41,17 @@ describe('PAGE_FETCH_FUNCTION', () => {
     expect(seen[0]?.['redirect']).toBe('error')
   })
 
-  it('returns metadata only for a non-text response', async () => {
+  it('returns metadata only for a non-text response (small content-length, so the byte cap cannot mask it)', async () => {
     const dom = fakeDom()
     const reply = await run(dom, async () => ({
       status: 200, ok: true, url: 'https://a.example/a.bin',
-      headers: { get: (name: string) => name === 'content-type' ? 'application/octet-stream' : '4096' },
-      arrayBuffer: async () => new ArrayBuffer(4096),
+      // Below byteLimit: the ONLY thing that can produce metadata-only here is
+      // the content-type classification (audit: a declared-oversize body used to
+      // mask a broken `readable` check).
+      headers: { get: (name: string) => name === 'content-type' ? 'application/octet-stream' : '100' },
+      arrayBuffer: async () => new ArrayBuffer(100),
     }), basePayload)
-    expect(reply).toMatchObject({ bodyOmitted: true, body: null, bytes: 4096 })
+    expect(reply).toMatchObject({ bodyOmitted: true, body: null, bytes: 100 })
   })
 
   it('caps the text and flags truncation', async () => {

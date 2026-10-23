@@ -1141,7 +1141,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_fetch',
-    description: '[write] Run an HTTP request from INSIDE the page (same-origin cookies are sent automatically) without navigating. Redirects are NOT followed (`redirect:error`): a 3xx response fails instead of silently hitting another host. Auth headers are ambient and cannot be overridden; the body is capped and the response is bounded (non-text responses return metadata only).',
+    description: '[write] Run an HTTP request from INSIDE the page (same-origin cookies are sent automatically) without navigating. Redirects are NOT followed (`redirect:error`): a 3xx response fails instead of silently hitting another host. Auth headers are ambient and cannot be overridden; the body is capped and the response is bounded: text is decoded as UTF-8 and capped, non-text responses return metadata only (bytes comes from content-length when present).',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
       url: { type: 'string', required: true, description: 'Absolute http(s) URL.' },

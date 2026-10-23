@@ -1782,7 +1782,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       // Clamp the wait itself so gate (10s) + wait (<=40s) stay inside the tool
       // deadline with margin; otherwise timeout-policy replaces the tool's own
       // result with the generic `tool call timed out` at the boundary.
-      const waitMs = Math.min(timeoutMs ?? 30_000, WAIT_FOR_MAX_MS)
+      const waitMs = Math.min(timeoutMs ?? BROWSER_TOOL_TIMEOUT_MS, WAIT_FOR_MAX_MS)
       return await runtime.waitFor(tabId, {
         condition, selector, text, pattern, expression, timeoutMs: waitMs,
         // The registered deadline is armed at dispatch; leave 1s margin for the

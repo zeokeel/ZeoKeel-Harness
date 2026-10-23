@@ -46,6 +46,20 @@ const (
 	PermPortalRead      = "portal:read"           // 门户首页
 	PermPortalWrite     = "portal:write"
 	PermServerInfoRead  = "server-info:read" // 服务器信息(含错误监控配置面,2026-09-08:删除零消费的 error-monitoring:read)
+	// PermConfigRead / PermConfigWrite 是**部署期配置注册表**
+	// （internal/deployconfig，「系统配置」页）的读写面（2026-10-23）。
+	//
+	// 读写都**刻意不进 AuditorPermissions**（只读三元组 audit:read/usage:read/
+	// user:read）：这张表连同取值就是部署拓扑 —— 有没有反代、信任哪些回跳主机
+	// （deploy.trusted_hosts）、应用平台内存档位与编译隔离档（wasm.memory_profile /
+	// wasm.compile_isolation，两者是**启动闸门**：选错会让容器起不来）、审计链校验
+	// 间隔（决定"篡改多久能被发现"）、登录失败上限（安全预算）…… 只读账号能枚举
+	// 它，就能反推"这台部署该怎么被攻破 / 哪些安全预算可以被压到最低"，与
+	// report:read（hook_url 是凭据本体，因此不进 auditor）同一条口径。写面更敏感：
+	// 改这些键可以把登录失败上限压到 1、关闭编译隔离、打开明文 LDAP，所以只给
+	// super_admin。
+	PermConfigRead  = "config:read"
+	PermConfigWrite = "config:write"
 )
 
 // AllPermissions is the full permission set (super_admin).
@@ -61,9 +75,12 @@ var AllPermissions = []string{
 	PermAuditRead, PermAuditRetention,
 	PermPortalRead, PermPortalWrite,
 	PermServerInfoRead,
+	PermConfigRead, PermConfigWrite,
 }
 
 // AuditorPermissions is the read-only triple allowed to the auditor role.
+// 刻意**不含** config:read/config:write（键名与取值即部署拓扑 + 安全预算，
+// 理由见上面权限点常量块的注释）。
 var AuditorPermissions = []string{
 	PermAuditRead, PermUsageRead, PermUserRead,
 }

@@ -22,7 +22,7 @@ import { AlertTriangle, RotateCcw, RefreshCw, Save } from 'lucide-react'
  * 应用中心子页,老书签不 404。
  *
  * 三件事必须一眼看清（否则运营改完不知道发生了什么）：
- *  1. **当前值与来源**：控制台保存过的设置 > 部署档位（env）> 编译期默认；
+ *  1. **当前值与来源**：控制台保存过的设置 > 部署档位（`wasm.memory_profile`）> 编译期默认；
  *  2. **四笔账预览**：并发×单实例上限 + 编译峰值 + 上传峰值 + 模块缓存驻留，
  *     与可用内存的 70% 水位比较 —— 与启动自检同一判据（保存超限服务端直接拒）；
  *  3. **生效范围**：哪些字段即时生效、哪些要重启（只有单实例内存上限要重启）。
@@ -617,7 +617,7 @@ export default function Limits() {
                   「控制台保存（wasm.limits）（wasm.limits）」。设置键的显示**只有一处
                   实现**（服务端 limitsSourceLabel）——回落分支也不要再拼一次。 */}
               来源：{view.source_label
-                || (view.source === 'setting' ? '控制台保存' : view.source === 'profile' ? '部署档位（环境变量）' : '默认值')}
+                || (view.source === 'setting' ? '控制台保存' : view.source === 'profile' ? '部署档位（系统配置）' : '默认值')}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">

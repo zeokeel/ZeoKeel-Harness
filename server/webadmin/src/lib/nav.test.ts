@@ -659,6 +659,7 @@ const PERM_ARG_POSITIVE_FIXTURES: PermArgPositiveFixture[] = [
   { rel: 'pages/app-center/Apps.tsx', arg: 'PERM_CAP_WRITE', testFile: 'pages/AppCenter.test.tsx', testName: '点「下架」→ POST /wasm-apps/<id>/unpublish，并按响应把该行切回「上架」', kind: 'behavior' },
   { rel: 'pages/Audit.tsx', arg: 'PERM_AUDIT_RETENTION_WRITE', testFile: 'pages/Audit.test.tsx', testName: 'super_admin 仍然可编辑并可保存(不误伤)', kind: 'behavior' },
   { rel: 'pages/GatewayFiles.tsx', arg: 'PERM_GATEWAY_WRITE', testFile: 'pages/GatewayFiles.test.tsx', testName: '写面收敛：持有 gateway:write 时删除/清理入口可见', kind: 'behavior' },
+  { rel: 'pages/SystemConfig.tsx', arg: 'PERM_CONFIG_WRITE', testFile: 'pages/SystemConfig.test.tsx', testName: '持有 config:write 时保存按钮可用（正向夹具）', kind: 'behavior' },
 ]
 
 /**
@@ -705,6 +706,7 @@ const PERM_WITHOUT_NAV_ENTRY: Record<string, string> = {
   'capability:write': '写面：能力中心/应用中心的处置动作',
   'connector:write': '写面：连接器页（connector:read 进入）内的动作',
   'audit:retention:write': '写面：审计页（audit:read 进入）内的保留策略卡片',
+  'config:write': '写面：系统配置页（config:read 进入）内的保存动作',
   'portal:read': '门户页无独立管理入口（相关配置在「服务器信息」页）',
   'portal:write': '写面：门户配置动作',
 }

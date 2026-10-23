@@ -54,6 +54,19 @@ export const PERM_AUDIT_READ = 'audit:read'
 export const PERM_AUDIT_RETENTION_WRITE = 'audit:retention:write'
 /** 报表订阅列表(hook_url 是凭据本体;服务端**刻意**不发给 auditor,见 rbac.go)。 */
 export const PERM_REPORT_READ = 'report:read'
+/**
+ * 部署期配置注册表（「系统配置」页）的读面（服务端 `serverauth.PermConfigRead`，
+ * 2026-10-23）。
+ *
+ * 这张表把原本只能改 `.env` 的部署旋钮（wasm 内存/编译隔离档、OIDC 信任主机、
+ * 登录失败上限、遥测/审计间隔…）暴露成可枚举的键；**键名与取值本身就是部署
+ * 拓扑**（有没有反代、信任哪些主机、哪些安全预算被压到什么档），因此服务端
+ * 刻意把它排除在 auditor 的只读三元组之外 —— 前端导航按同一点隐藏入口，
+ * 缺权限时该页 403（服务端 RequirePermission 才是护栏）。
+ */
+export const PERM_CONFIG_READ = 'config:read'
+/** 系统配置写面（保存部署期旋钮；只给 super_admin，与 `PermConfigWrite` 对齐）。 */
+export const PERM_CONFIG_WRITE = 'config:write'
 
 // 当前登录管理员的模块级快照:App 在 /me 成功后写入(见 App.tsx),页面用
 // hasPermission 做"体验层"判定 —— 隐藏拿不到的入口、**不请求必然 403 的接口**。

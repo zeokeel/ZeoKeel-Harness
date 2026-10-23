@@ -18,7 +18,7 @@ export interface ProgramChild {
   readonly pid?: number
   /** stdin/stdout are line-oriented JSON channels. */
   readonly stdin: { write(chunk: string): boolean | void } | null
-  readonly stdout: { on(event: 'data', listener: (chunk: Buffer | string) => void): void } | null
+  readonly stdout: { on(event: 'data' | 'end', listener: (chunk?: Buffer | string) => void): void } | null
   stderr?: { on(event: 'data', listener: (chunk: Buffer | string) => void): void } | null
   kill(signal?: string): void
   /** Resolves once the OS process is gone (never a zombie). */
@@ -57,7 +57,14 @@ export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRunt
       // An already-aborted signal must not spawn a process that would run to the
       // deadline (addEventListener never fires for an already-aborted signal).
       if (execOptions?.signal?.aborted === true) throw Object.assign(new Error('browser_run: cancelled'), { code: 'interrupted' })
-      const child = options.spawn(program)
+      const spawned = options.spawn(program)
+      const child = spawned
+      const stdin = child.stdin
+      const stdout = child.stdout
+      if (stdin === null || stdout === null) {
+        void child.kill()
+        throw new Error('browser_run: the program runtime did not expose a stdin/stdout bridge')
+      }
       const timeoutMs = Math.max(1, options.timeoutMs ?? 120_000)
       let killed = false
       const kill = async (): Promise<void> => {
@@ -85,14 +92,9 @@ export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRunt
           }
           timer = setTimeout(() => { fail(Object.assign(new Error('browser_run: the program deadline passed'), { code: 'timeout' })) }, timeoutMs)
           execOptions?.signal?.addEventListener('abort', () => fail(Object.assign(new Error('browser_run: cancelled'), { code: 'interrupted' })), { once: true })
-          child.stdout?.on('data', (chunk) => {
-            // Decode across chunk boundaries: a multi-byte UTF-8 character split
-            // between two chunks must not corrupt (or silently drop) a message.
-            buffer += decoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
-            if (Buffer.byteLength(buffer, 'utf8') > PTC_MAX_LINE_BYTES) {
-              fail(new Error('browser_run: a bridge message exceeded the 1 MiB limit'))
-              return
-            }
+          let consoleTruncated = false
+          const handle = (text: string): void => {
+            buffer += text
             let index = buffer.indexOf('\n')
             while (index >= 0) {
               const line = buffer.slice(0, index)
@@ -102,8 +104,9 @@ export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRunt
               let message: ChildMessage
               try { message = JSON.parse(line) as ChildMessage } catch { continue }
               if (message.type === 'console') {
+                if (consoleTruncated) continue
                 consoleBytes += Buffer.byteLength(message.text, 'utf8') + 1
-                if (consoleBytes > PTC_MAX_CONSOLE_BYTES) { consoleText += '\n… (console output truncated)\n'; continue }
+                if (consoleBytes > PTC_MAX_CONSOLE_BYTES) { consoleText += '\n… (console output truncated)\n'; consoleTruncated = true; continue }
                 consoleText += `${message.text}\n`
                 continue
               }
@@ -112,25 +115,38 @@ export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRunt
               if (message.type === 'call') {
                 const helper = (bridge as Record<string, unknown>)[message.tool]
                 if (typeof helper !== 'function') {
-                  child.stdin?.write(`${JSON.stringify({ id: message.id, error: `browser_run: unknown helper ${message.tool}` })}\n`)
+                  stdin.write(`${JSON.stringify({ id: message.id, error: `browser_run: unknown helper ${message.tool}` })}\n`)
                   continue
                 }
                 void (helper as (args: unknown) => Promise<unknown>)(message.args).then(
                   result => {
-                    const line = JSON.stringify({ id: message.id, result })
-                    if (Buffer.byteLength(line, 'utf8') > PTC_MAX_RESULT_BYTES) {
-                      child.stdin?.write(`${JSON.stringify({ id: message.id, error: 'browser_run: helper result exceeds the 4 MiB bridge limit (return an attachment reference instead of raw bytes)' })}\n`)
+                    const line2 = JSON.stringify({ id: message.id, result })
+                    if (Buffer.byteLength(line2, 'utf8') > PTC_MAX_RESULT_BYTES) {
+                      stdin.write(`${JSON.stringify({ id: message.id, error: 'browser_run: helper result exceeds the 4 MiB bridge limit (return an attachment reference instead of raw bytes)' })}\n`)
                       return
                     }
-                    child.stdin?.write(`${line}\n`)
+                    stdin.write(`${line2}\n`)
                   },
-                  error => child.stdin?.write(`${JSON.stringify({ id: message.id, error: error instanceof Error ? error.message : String(error), code: (error as { code?: string }).code })}\n`),
+                  error => stdin.write(`${JSON.stringify({ id: message.id, error: error instanceof Error ? error.message : String(error), code: (error as { code?: string }).code })}\n`),
                 )
               }
             }
+            // Only an INCOMPLETE trailing line may trip the cap: a block of many
+            // legal lines that happens to arrive together must not be refused.
+            if (Buffer.byteLength(buffer, 'utf8') > PTC_MAX_LINE_BYTES) {
+              fail(new Error('browser_run: a bridge message exceeded the 1 MiB limit'))
+            }
+          }
+          stdout.on('data', (chunk) => {
+            // Decode across chunk boundaries: a multi-byte UTF-8 character split
+            // between two chunks must not corrupt (or silently drop) a message.
+            const value = chunk
+            handle(decoder.write(Buffer.isBuffer(value) ? value : Buffer.from(String(value ?? ''))))
           })
-          // Exit WITHOUT a result is a protocol failure regardless of the code:
-          // a crashed adapter must not hang the run until the deadline.
+          stdout.on('end', () => {
+            handle(decoder.end())
+            if (buffer.trim() !== '') handle('\n')
+          })
           child.exit.then(code => { if (!settled) fail(new Error(`browser_run: the program process exited (code ${String(code)}) before returning a result`)) }).catch(error => fail(error))
         })
         return outcome

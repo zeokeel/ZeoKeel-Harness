@@ -6,21 +6,25 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createPtcProgramRuntime, type ProgramChild } from '../src/program-ptc.ts'
 
-function fakeChild(): { child: ProgramChild, emit: (message: unknown) => void, written: string[], killed: () => boolean, exitNow: (code?: number) => void } {
+function fakeChild(): { child: ProgramChild, emit: (message: unknown) => void, emitRaw: (chunk: Buffer) => void, end: () => void, written: string[], killed: () => boolean, exitNow: (code?: number) => void } {
   const output: Array<(chunk: string) => void> = []
+  const ends: Array<() => void> = []
   let exitResolve: (code: number) => void = () => {}
   let exited = false
   const written: string[] = []
   let wasKilled = false
   const child: ProgramChild = {
     stdin: { write: (chunk: string) => { written.push(chunk) } },
-    stdout: { on: (_event, listener) => { output.push(listener) } },
+    stdout: { on: (event: string, listener: (chunk?: Buffer | string) => void) => { if (event === 'end') ends.push(() => listener()); else output.push(listener) } },
     kill: () => { wasKilled = true; if (!exited) { exited = true; exitResolve(137) } },
     exit: new Promise<number>(resolve => { exitResolve = (code) => { exited = true; resolve(code) } }),
   }
+  const emitRaw = (chunk: Buffer): void => { for (const listener of output) listener(chunk) }
   return {
     child,
     emit: (message) => { for (const listener of output) listener(`${JSON.stringify(message)}\n`) },
+    emitRaw,
+    end: () => { for (const listener of ends) listener() },
     written,
     killed: () => wasKilled,
     exitNow: (code = 0) => exitResolve(code),
@@ -90,31 +94,19 @@ describe('createPtcProgramRuntime', () => {
     const runtime = createPtcProgramRuntime({ spawn: () => fake.child })
     const pending = runtime.execute('x', {})
     const bytes = Buffer.from(`${JSON.stringify({ type: 'result', result: '中文é' })}\n`, 'utf8')
-    // Split in the middle of the multi-byte character.
     const cut = bytes.indexOf(Buffer.from('中', 'utf8')) + 1
-    ;(fake as unknown as { emitRaw: (chunk: Buffer) => void }).emitRaw?.(bytes.subarray(0, cut))
-    // Fall back to the normal channel for the rest when the helper is absent.
-    const raw = fake as unknown as { emitChunk?: (chunk: Buffer) => void }
-    if (raw.emitChunk === undefined) {
-      // No raw helper: deliver through a fresh fake that supports chunks.
-      const chunks: Array<(chunk: Buffer) => void> = []
-      const child = {
-        stdin: { write: () => {} },
-        stdout: { on: (_e: string, listener: (chunk: Buffer) => void) => { chunks.push(listener) } },
-        kill: () => {},
-        exit: new Promise<number>(() => {}),
-      }
-      const rt = createPtcProgramRuntime({ spawn: () => child as never })
-      const p2 = rt.execute('x', {})
-      for (const listener of chunks) {
-        listener(bytes.subarray(0, cut))
-        listener(bytes.subarray(cut))
-      }
-      await expect(p2).resolves.toMatchObject({ result: '中文é' })
-      return
-    }
-    raw.emitChunk?.(bytes.subarray(cut))
+    fake.emitRaw(bytes.subarray(0, cut))
+    fake.emitRaw(bytes.subarray(cut))
     await expect(pending).resolves.toMatchObject({ result: '中文é' })
+  })
+
+  it('flushes a final message without a trailing newline on stdout end', async () => {
+    const fake = fakeChild()
+    const runtime = createPtcProgramRuntime({ spawn: () => fake.child })
+    const pending = runtime.execute('x', {})
+    fake.emitRaw(Buffer.from(JSON.stringify({ type: 'result', result: 7 }), 'utf8'))
+    fake.end()
+    await expect(pending).resolves.toMatchObject({ result: 7 })
   })
 
   it('caps console bytes and rejects an oversized bridge message', async () => {
@@ -127,7 +119,35 @@ describe('createPtcProgramRuntime', () => {
     const fake2 = fakeChild()
     const runtime2 = createPtcProgramRuntime({ spawn: () => fake2.child })
     const pending2 = runtime2.execute('x', {})
-    fake2.emit({ type: 'console', text: 'y'.repeat(2 * 1024 * 1024) })
+    // An INCOMPLETE line over the cap (no newline yet) is refused.
+    fake2.emitRaw(Buffer.from('y'.repeat(2 * 1024 * 1024), 'utf8'))
     await expect(pending2).rejects.toThrow(/1 MiB limit/u)
+  })
+
+  it('a helper result over 4 MiB is replaced by an error line; 3 MiB passes', async () => {
+    const fake = fakeChild()
+    const runtime = createPtcProgramRuntime({ spawn: () => fake.child })
+    const pending = runtime.execute('x', {
+      big: () => Promise.resolve('x'.repeat(5 * 1024 * 1024)),
+      medium: () => Promise.resolve('y'.repeat(3 * 1024 * 1024)),
+    })
+    fake.emit({ type: 'call', id: 1, tool: 'big', args: {} })
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(fake.written.join('')).toContain('4 MiB bridge limit')
+    fake.emit({ type: 'call', id: 2, tool: 'medium', args: {} })
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(fake.written.join('')).toContain('"id":2')
+    fake.emit({ type: 'result', result: null })
+    await expect(pending).resolves.toMatchObject({ result: null })
+  })
+
+  it('several legal lines arriving in one chunk are not mistaken for an oversized line', async () => {
+    const fake = fakeChild()
+    const runtime = createPtcProgramRuntime({ spawn: () => fake.child })
+    const pending = runtime.execute('x', {})
+    const batch = [1, 2, 3].map(() => JSON.stringify({ type: 'console', text: 'z'.repeat(500 * 1024) })).join('\n') + '\n'
+    fake.emitRaw(Buffer.from(batch, 'utf8'))
+    fake.emit({ type: 'result', result: 'ok' })
+    await expect(pending).resolves.toMatchObject({ result: 'ok' })
   })
 })

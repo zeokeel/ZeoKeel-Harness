@@ -67,3 +67,13 @@
 
 - `browser_run`：工具数 40 → 41；组 `script`；`isConcurrencySafe:false`；`timeoutMs=150_000`（登记到预算表与 0916/c3 注册表）。
 - 描述里明确：能力=helper 列表；无 fs/net/process/CDP/cookie；脚本返回值必须可序列化。
+
+---
+
+## 9. 宿主接线状态（2026-10-23）
+
+- ✅ screenshot helper → 宿主 attachment store 返回 ref（无裸 base64 过 4 MiB 桥）。
+- ✅ fileChooser helper → 与工具共用 `uploads.ts` 单一真源（downloads dir + `Config.uploadDirs` + session cwd）；脚本 `allowedDirs` 构造上被忽略；端到端用例（真实 chooser + `/etc/passwd` policy 拒绝）。
+- ⏳ `attachments` / `sessionCwd` 尚未在 desktop 装配注入 → 生产形态 screenshot helper 仍 policy 拒（登记待办）。
+- ⏳ 真实 ptc `spawn` 注入与 `Config → apply → programRuntime` 装配 fixture。
+- ⏳ A11/Config 注入行端到端 fixture、真机进程级 R2。

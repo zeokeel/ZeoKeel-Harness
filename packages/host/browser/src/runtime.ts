@@ -3967,7 +3967,15 @@ export class BrowserRuntime {
           uploadDirs: this.options.uploadDirs,
           ...(this.deps.sessionCwd?.() === undefined ? {} : { sessionCwd: this.deps.sessionCwd() }),
         })
-        return await this.chooseFiles(Number(args['tab'] ?? this.pool.activeTab ?? 1), (args['paths'] === undefined && args['files'] === undefined ? args : { paths: args['paths'] ?? args['files'] }) as never, dirs, signal)
+        // `chooseFiles` takes `{files}` / `{cancel}`; build that shape explicitly
+        // (a wrong shape surfaced as a TypeError instead of a browser error).
+        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
+        if (args['cancel'] === true) return await this.chooseFiles(tabId, { cancel: true }, dirs, signal)
+        const selected = args['paths'] ?? args['files']
+        if (!Array.isArray(selected) || selected.length === 0) {
+          throw browserError('policy', 'browser_run: the fileChooser helper needs a non-empty paths array (or {cancel:true})')
+        }
+        return await this.chooseFiles(tabId, { files: selected.map(String) }, dirs, signal)
       }
 
       case 'browser_download': {

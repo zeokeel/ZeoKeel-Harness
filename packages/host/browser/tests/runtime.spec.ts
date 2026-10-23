@@ -2427,6 +2427,38 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('program: fileChooser works end-to-end (real chooser, vetted paths, /etc refused)', async () => {
+    const results: unknown[] = []
+    const fakeProgram = {
+      execute: async (program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>): Promise<{ result: unknown }> => {
+        const call = bridge['fileChooser'] as unknown as (args: unknown) => Promise<unknown>
+        const args = program === 'vetted' ? { paths: ['/tmp/vetted/a.txt'], allowedDirs: ['/etc'] } : { paths: ['/etc/passwd'] }
+        results.push(await call(args).then(value => ({ ok: value }), (error: unknown) => ({ error })))
+        return { result: null }
+      },
+    }
+    const { adapter, runtime, cleanup } = makeRuntime({ programEnabled: true, uploadDirs: ['/tmp/vetted'] }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const sent: string[][] = []
+    view.transport.handler = (method: string, params?: Record<string, unknown>) => {
+      if (method === 'DOM.setFileInputFiles') sent.push((params?.['files'] as string[]) ?? [])
+      return { result: { value: 1 } }
+    }
+    view.transport.emit('Page.fileChooserOpened', { backendNodeId: 9, mode: 'selectSingle' })
+    await runtime.runProgram('vetted')
+    view.transport.emit('Page.fileChooserOpened', { backendNodeId: 10, mode: 'selectSingle' })
+    await runtime.runProgram('outside')
+    // The vetted path reached CDP; the script's allowedDirs did NOT widen it.
+    expect(sent[0]).toEqual(['/tmp/vetted/a.txt'])
+    const outcomes = results as Array<{ ok?: { files?: string[] }, error?: { code?: string } }>
+    expect(outcomes[0]?.ok?.files).toEqual(['/tmp/vetted/a.txt'])
+    // /etc/passwd is refused with a policy error and never sent to the page.
+    expect(outcomes[1]?.error?.code).toBe('policy')
+    expect(sent.flat()).not.toContain('/etc/passwd')
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

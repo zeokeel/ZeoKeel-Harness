@@ -220,6 +220,28 @@ export function isTerminalRefreshReason(reason: RefreshFailureReason): boolean {
 const REAUTHORIZE_REQUIRED = 'ZEOKEEL_CONNECTOR_REAUTHORIZE_REQUIRED'
 
 /** OAuth error codes that mean "this grant is dead" (SDK `OAuthError.code` values). */
+/**
+ * "同一次请求周期里的第二条 401"的判定窗口（毫秒）。
+ *
+ * 随包 MCP SDK 的 streamable-http 传输有**两条互不相识的 401 重试路径**：
+ * `_send`（POST 消息，`dist/index.mjs:4848`）与 `_startOrAuthSse`（GET SSE 流，
+ * `dist/index.mjs:5103`），各自的 `isAuthRetry` 只管住自己。于是一次令牌失效在
+ * 一个会话里会产生两条 401：第一条触发我们的强制续期，等续期做完（几十毫秒），
+ * 第二条才到达 —— 那时单飞里已经没有在飞的调用，于是**再续期一次**。
+ *
+ * 实测（2026-10-23 CI）：`R8-B-2` 的 `grants` 断言偶发 `expected 2 to be 1`，
+ * 而 `revokedRefreshReuse` 仍是 0 —— 两次续期是**串行链式**的（第二次用的是第一次
+ * 旋转后的 refresh token），不是那枚单次令牌被出示两次。
+ *
+ * 后果不是"授权被吊销"，而是每次令牌失效都白白多旋转一次（IdP 侧多一条 refresh
+ * 事件、多一次令牌世代推进）。因此在续期后开一个窄窗口：窗口内的 401 视为**同一批
+ * 401 的另一条通道**，不再续期 —— 让 SDK 的重试直接带刚签发的那枚令牌。
+ *
+ * 为什么窗口取 5s：两条通道的 401 属于同一个请求周期，实测相差几十毫秒到数秒
+ * （慢 runner 上 SSE 的重连退避会拖长）；而"新令牌也立刻被拒"这种状态在同一个
+ * 周期里重试一次也不会成功，下一次用户动作早已超出窗口、会重新续期。
+ */
+const STALE_401_AFTER_REFRESH_MS = 5_000
 const DEAD_GRANT_CODES = new Set(['invalid_grant', 'invalid_client', 'unauthorized_client'])
 
 /**
@@ -413,9 +435,15 @@ export function createOAuthProvider(
    * read; it is therefore part of the stored credential now.
    */
   let issuer: string | undefined = credential.issuer
+  /**
+   * 最近一次**成功续期**的时刻。见 {@link STALE_401_AFTER_REFRESH_MS}：用来把
+   * "同一批 401 的第二条通道"与"真的该再续期"分开。
+   */
+  let lastRefreshAt: number | undefined
   const adoptTokens = (next: RefreshedTokens): void => {
     // A rotation MAY omit a new refresh token; keep the one we hold rather
     // than dropping the only material a later refresh needs.
+    lastRefreshAt = Date.now()
     const refreshToken = next.refreshToken ?? tokens?.refresh_token
     expiresAt = next.expiresAt
     tokens = {
@@ -502,6 +530,7 @@ export function createOAuthProvider(
   }
 
   const saveTokens = async (next: StoredOAuthTokens, _ctx?: OAuthClientInformationContext): Promise<void> => {
+    lastRefreshAt = Date.now()
     tokens = next
     // The SDK stamps `issuer` on every value it writes (SEP-2352). Keep it in
     // memory AND on disk: a credential that loses the stamp reads back as
@@ -576,6 +605,13 @@ export function createOAuthProvider(
       // 没接我们的刷新引擎：保持 SDK 原有的行为（它自己的发现受限 auth() 路径）。
       log?.('收到 401，但没有接入单飞刷新引擎：交给 SDK 自己的授权路径')
       await sdkAuthFallback(ctx)
+      return
+    }
+    const sinceRefresh = lastRefreshAt === undefined ? undefined : Date.now() - lastRefreshAt
+    if (sinceRefresh !== undefined && sinceRefresh <= STALE_401_AFTER_REFRESH_MS) {
+      // 同一批 401 的第二条通道（SDK 的 POST 与 GET SSE 各有一套重试路径）。
+      // 不续期：重试会直接带上刚签发的那枚令牌；再续期只会白白多旋转一次。
+      log?.(`收到 401，但本凭据 ${sinceRefresh}ms 前刚续期过（同一请求周期的另一条 401 通道）：不再续期，重试直接带新令牌`)
       return
     }
     let outcome: RefreshOutcome

@@ -225,4 +225,70 @@ describe('SDK 的 tokens() 与我们的刷新共用一个单飞（不允许二�
     expect(server.stats.revokedRefreshReuse).toBe(0)
     h.dispose()
   }, 30_000)
+
+  /**
+   * 同一批 401 的**第二条通道**不得再续期一次（2026-10-23）。
+   *
+   * 现场：`audit-r8b-credential-change` 的 R8-B-2 在 CI 上偶发
+   * `expected 2 to be 1`（grants），而 `revokedRefreshReuse` 仍是 0 —— 两次续期
+   * 是串行链式的。机制在随包 SDK 里：streamable-http 的 401 重试有两条互不相识的
+   * 路径（`_send` 的 POST 与 `_startOrAuthSse` 的 GET SSE，各自的 `isAuthRetry` 只管
+   * 住自己）。续期完成得比第二条 401 到达还快时，单飞里已经没有在飞的调用 ⇒ 第二次
+   * 续期不会再被合并。provider 现在在续期后开一个窄窗口把它认成同一批 401。
+   *
+   * 这条判据是**确定性**的：直接连调两次 `onUnauthorized`，不赢任何竞态。
+   */
+  it('续期后的第二条 401 不再续期（窗口外仍会续期）', async () => {
+    const server = await startRealMcpServer()
+    servers.push(server)
+    const dir = mkdtempSync(join(tmpdir(), 'single-owner-stale-401-'))
+    await authorizeOnce(dir, server)
+
+    const h = createHarness([def(server.origin)], dir, { refreshSweepIntervalMs: 0 })
+    await waitFor(() => h.configs.length === 1, 15_000)
+    const provider = (h.configs[0] as unknown as {
+      authProvider?: {
+        onUnauthorized: (ctx: {
+          response: Response
+          serverUrl: URL
+          fetchFn: (input: URL | RequestInfo, init?: RequestInit) => Promise<Response>
+        }) => Promise<void>
+        tokens: () => Promise<{ access_token?: string } | undefined>
+      }
+    }).authProvider
+    expect(provider, '注册时必须带上 SDK provider').toBeTruthy()
+
+    const before = refreshGrants(server)
+    server.expireAccessTokens()
+    const beforeToken = (await provider!.tokens())?.access_token
+    const ctx = {
+      response: new Response(null, { status: 401 }),
+      serverUrl: new URL(`${server.origin}/mcp`),
+      fetchFn: fetch,
+    }
+
+    // 第一条 401：正常续期。
+    await provider!.onUnauthorized(ctx)
+    expect(refreshGrants(server) - before, '第一条 401 必须真的续期').toBe(1)
+    const refreshed = (await provider!.tokens())?.access_token
+    expect(refreshed).not.toBe(beforeToken)
+
+    // 第二条（同一批的第二条通道，几十毫秒后到）：只带新令牌，不再续期。
+    await provider!.onUnauthorized(ctx)
+    expect(refreshGrants(server) - before, '同一批 401 的第二条通道不得再续期').toBe(1)
+    expect((await provider!.tokens())?.access_token).toBe(refreshed)
+
+    // 窗口外：真的又失效了就**必须**重新续期（判据不能把续期能力一起关掉）。
+    const realNow = Date.now
+    try {
+      Date.now = () => realNow() + 6_000
+      server.expireAccessTokens()
+      await provider!.onUnauthorized(ctx)
+      expect(refreshGrants(server) - before, '窗口外的 401 必须重新续期').toBe(2)
+    } finally {
+      Date.now = realNow
+    }
+    expect(server.stats.revokedRefreshReuse).toBe(0)
+    h.dispose()
+  }, 30_000)
 })

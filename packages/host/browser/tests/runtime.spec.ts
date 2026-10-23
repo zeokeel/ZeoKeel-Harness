@@ -53,6 +53,11 @@ class MockSession implements NativeSession {
   private readonly downloadListeners: Array<(event: unknown, item: NativeDownloadItem) => void> = []
   clearStorageData = vi.fn(async () => {})
   clearCache = vi.fn(async () => {})
+  cookies = {
+    get: vi.fn(async () => [] as Array<Record<string, unknown>>),
+    set: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
+  }
   setPermissionRequestHandler = vi.fn()
   setPermissionCheckHandler = vi.fn()
   on(event: 'will-download', listener: (event: unknown, item: NativeDownloadItem) => void): void {
@@ -1750,6 +1755,24 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     }
     const result = await runtime.pageFetch(1, { url: 'https://a.example/a.bin' })
     expect(result).toMatchObject({ bytes: 4096, body: null, bodyOmitted: true })
+    cleanup()
+  })
+
+  it('emulate: values are clamped, applied per tab and reset', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const calls: Array<{ method: string, params: Record<string, unknown> }> = []
+    view.transport.handler = (method: string, params: Record<string, unknown>) => { calls.push({ method, params }); return {} }
+    const applied = await runtime.emulate(1, { viewport: { width: 150, height: 5000, deviceScaleFactor: 9, mobile: true }, userAgent: 'UA-1' })
+    expect(applied.viewport).toMatchObject({ width: 200, height: 4096, deviceScaleFactor: 4, mobile: true })
+    expect(applied.userAgent).toBe('UA-1')
+    const metrics = calls.find(entry => entry.method === 'Emulation.setDeviceMetricsOverride')!
+    expect(metrics.params).toMatchObject({ width: 200, height: 4096 })
+    expect(calls.some(entry => entry.method === 'Emulation.setUserAgentOverride' && entry.params['userAgent'] === 'UA-1')).toBe(true)
+    calls.length = 0
+    await runtime.emulate(1, { reset: true })
+    expect(calls.map(entry => entry.method)).toEqual(['Emulation.clearDeviceMetricsOverride', 'Emulation.setUserAgentOverride'])
     cleanup()
   })
 

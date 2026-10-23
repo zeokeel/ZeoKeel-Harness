@@ -66,7 +66,7 @@
 
 ---
 
-## 4. C15：视口/UA 模拟与 cookie
+## 4. C15：视口/UA 模拟（cookie 部分被既有安全不变量否决）
 
 ### 4.1 `browser_emulate`
 
@@ -77,14 +77,9 @@
 - 边界：width/height ∈ [200, 4096]；只影响该 tab；op log 记录（模拟状态是模型可观察的）。
 - 切 tab / 导航不重置（与 Chrome DevTools 行为一致）；`browser_close_tab` 自然清理。
 
-### 4.2 `browser_cookies`
+### 4.2 `browser_cookies` — 不实现（安全不变量优先）
 
-`browser_cookies({action: 'list'|'set'|'remove', domain?, name?, value?, path?, secure?, httpOnly?, sameSite?, expires?})`
-
-- 走 Electron `session.cookies`（get/set/remove），按当前 tab 的 partition。
-- **list 的 value 一律打码**（`****`），只回 name/domain/path/expires/secure/httpOnly/sameSite；整体再过 `stripSensitiveText`，name/domain cap 256 字符、条数 cap 200；`browser_cookies` 永不回显 cookie 值。文档写清：这是**主进程能力**，不是页面 `document.cookie` 权限。
-- set 只允许写当前 tab 的站点（domain 必须是当前 origin 的域或子域），value ≤ 4 KiB；remove 按 name+domain。
-- HttpOnly cookie 不可被页面脚本读，但本工具是主进程能力——因此 set/remove 记 op log，list 打码。
+`tests/audit-0921-credential-isolation.spec.ts` ③ 明确要求 **插件源码里不存在任何 cookie 搬运通道**（五条 cookie API 在 `src/` 下出现即失败）。`browser_cookies` 本质就是一条主进程 cookie 通道（可导出登录态、可注入第三方会话），与该不变量直接冲突。按「保留安全与边界项」的目标，**C15 只交付视口/UA 模拟，cookie 管理留拒**；若日后确需，需先在设计层重新评估该不变量并单独走安全评审。
 
 ---
 

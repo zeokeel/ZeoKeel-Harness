@@ -795,7 +795,7 @@ describe('2026-09-15 P1：browser_release 不在模型工具面上', () => {
     const names = [...harness.tools.keys()]
     expect(names).not.toContain('browser_release')
     expect(names).toContain('browser_takeover')
-    expect(names).toHaveLength(39)
+    expect(names).toHaveLength(40)
   })
 
   it('control 分组的工具集合被钉死（移除后不能悄悄长回来）', () => {

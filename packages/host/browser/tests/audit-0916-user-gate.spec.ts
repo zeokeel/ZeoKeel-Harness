@@ -52,6 +52,7 @@ const EXPECTED_DEADLINES: Record<string, number> = {
   browser_hotkey: BROWSER_TOOL_TIMEOUT_MS,
   browser_clipboard: BROWSER_TOOL_TIMEOUT_MS,
   browser_fetch: BROWSER_TOOL_TIMEOUT_MS,
+  browser_emulate: BROWSER_TOOL_TIMEOUT_MS,
   browser_click: BROWSER_TOOL_TIMEOUT_MS,
   browser_type: BROWSER_TOOL_TIMEOUT_MS,
   browser_select: BROWSER_TOOL_TIMEOUT_MS,

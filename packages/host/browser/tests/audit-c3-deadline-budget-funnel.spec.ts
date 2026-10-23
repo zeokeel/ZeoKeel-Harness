@@ -371,6 +371,7 @@ const TOOL_WAIT_LEGS: Readonly<Record<string, readonly WaitLegKind[]>> = {
   browser_hotkey: [],
   browser_clipboard: [],
   browser_fetch: [],
+  browser_emulate: [],
   browser_click: [],
   browser_type: [],
   browser_select: [],

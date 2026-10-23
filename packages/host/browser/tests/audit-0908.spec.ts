@@ -339,7 +339,7 @@ describe('P2-29 tool registrations are fiber-scoped', () => {
     // 2026-09-15 审计 P1：`browser_release` 已从模型工具面移除（控制权只能由用户的
     // 「交给 AI」按钮交回，模型不能单方面撤销用户闸）。2026-10-23 C1 新增
     // browser_dialog，所以是 32。
-    expect(registered.length).toBe(39)
+    expect(registered.length).toBe(40)
     expect(registered).not.toContain('browser_release')
     all()
     expect(registered).toEqual([])

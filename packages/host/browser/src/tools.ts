@@ -1204,6 +1204,60 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
   }))
 
   register(defineTool({
+    name: 'browser_emulate',
+    description: '[control] Emulate a viewport and/or user agent for your tab (responsive pages, device UAs). Width/height are clamped to 200-4096, scale 0.1-4. Pass reset:true to drop both overrides. The state is per tab and visible in the activity log.',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      viewport: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          width: { type: 'integer' },
+          height: { type: 'integer' },
+          deviceScaleFactor: { type: 'number' },
+          mobile: { type: 'boolean' },
+        },
+        description: 'Viewport override (width/height 200-4096).',
+      },
+      userAgent: { type: 'string', description: 'User-Agent override string.' },
+      reset: { type: 'boolean', description: 'Clear both overrides (true).' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          viewport: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { width: { type: 'integer' }, height: { type: 'integer' }, deviceScaleFactor: { type: 'number' }, mobile: { type: 'boolean' } },
+          },
+          userAgent: { type: 'string' },
+        },
+      },
+      render: (_args, value) => {
+        const state = value as { viewport?: { width?: number, height?: number }, userAgent?: string }
+        return [{ type: 'text', text: state.viewport === undefined && state.userAgent === undefined ? 'Emulation reset.' : `Emulation: ${state.viewport === undefined ? 'viewport unchanged' : `${String(state.viewport.width)}x${String(state.viewport.height)}`}${state.userAgent === undefined ? '' : ', user-agent set'}` }]
+      },
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Emulate device'),
+    async execute(args, exec) {
+      const { tab, viewport, userAgent, reset } = args as { tab?: number, viewport?: { width: number, height: number, deviceScaleFactor?: number, mobile?: boolean }, userAgent?: string, reset?: boolean }
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      const result = await runtime.emulate(tabId, {
+        ...(viewport === undefined ? {} : { viewport }),
+        ...(userAgent === undefined ? {} : { userAgent }),
+        ...(reset === undefined ? {} : { reset }),
+      }, exec.signal)
+      exec.signal.throwIfAborted()
+      return result
+    },
+  }))
+
+  register(defineTool({
     name: 'browser_press',
     description: '[interact] Press a key in your tab (Enter, Tab, Escape, Backspace, Delete, Arrows, Home, End, PageUp, PageDown, space). Fails (not-found) when the page had no element able to receive the key, so a "pressed" result always means the key reached the document.',
     parameters: {

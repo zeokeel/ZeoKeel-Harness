@@ -664,7 +664,7 @@ export class BrowserRuntime {
   private readonly chooserReenable = new Set<number>()
   /** Active emulation overrides per tab (viewport/UA; populated by C15). Full-page
    * capture must clear them and restore them afterwards (audit R4). */
-  private readonly emulationOverrides = new Map<number, { viewport?: { width: number, height: number, deviceScaleFactor?: number, mobile?: boolean }, userAgent?: string }>()
+  private readonly emulationOverrides = new Map<number, { viewport?: { width: number, height: number, deviceScaleFactor: number, mobile: boolean }, userAgent?: string }>()
   /** Redacted display paths of downloads, keyed by download id (R-5). The store
    * keeps the real on-disk path for `downloads_open`; only the model-facing
    * projection swaps this in. Bounded by {@link DOWNLOAD_DISPLAY_PATH_LIMIT}. */
@@ -3461,6 +3461,42 @@ export class BrowserRuntime {
           }
         }
       }
+    }, signal)
+  }
+
+  /**
+   * Apply or clear viewport/UA emulation (C15). Values are clamped to the sane
+   * range, the state is kept per tab so a full-page screenshot can clear and
+   * restore it, and the change is visible in the op log.
+   * @param tabId - target tab.
+   * @param options - viewport / userAgent / reset.
+   * @param signal - caller cancellation.
+   */
+  async emulate(tabId: number, options: { viewport?: { width: number, height: number, deviceScaleFactor?: number, mobile?: boolean }, userAgent?: string, reset?: boolean }, signal?: AbortSignal): Promise<{ viewport?: { width: number, height: number, deviceScaleFactor: number, mobile: boolean }, userAgent?: string }> {
+    const resolved = this.resolveTab(tabId)
+    const clamp = (value: number): number => Math.max(200, Math.min(4096, Math.round(value)))
+    return await this.agentRun('browser_emulate', async () => {
+      const tab = this.tab(resolved)
+      if (options.reset === true) {
+        await tab.cdp.send('Emulation.clearDeviceMetricsOverride')
+        await tab.cdp.send('Emulation.setUserAgentOverride', { userAgent: '' })
+        this.emulationOverrides.delete(resolved)
+        this.record('browser_emulate', resolved, 'emulation reset', false, 'ai')
+        return {}
+      }
+      const state: { viewport?: { width: number, height: number, deviceScaleFactor: number, mobile: boolean }, userAgent?: string } = { ...(this.emulationOverrides.get(resolved) ?? {}) }
+      if (options.viewport !== undefined) {
+        const viewport = { width: clamp(options.viewport.width), height: clamp(options.viewport.height), deviceScaleFactor: Math.max(0.1, Math.min(4, options.viewport.deviceScaleFactor ?? 1)), mobile: options.viewport.mobile === true }
+        await tab.cdp.send('Emulation.setDeviceMetricsOverride', viewport)
+        state.viewport = viewport
+      }
+      if (options.userAgent !== undefined) {
+        await tab.cdp.send('Emulation.setUserAgentOverride', { userAgent: options.userAgent })
+        state.userAgent = options.userAgent
+      }
+      this.emulationOverrides.set(resolved, state)
+      this.record('browser_emulate', resolved, `emulation: ${JSON.stringify({ viewport: state.viewport ?? null, userAgent: state.userAgent ?? null }).slice(0, 200)}`, false, 'ai')
+      return { ...state }
     }, signal)
   }
 

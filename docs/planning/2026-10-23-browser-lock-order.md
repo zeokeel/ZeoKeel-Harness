@@ -1,6 +1,6 @@
 # 浏览器锁序表（D1 设计，rev2 —— 吸收 d1-preaudit B1/B2/B3/S1–S8）
 
-- 日期：2026-10-23（rev3 —— 吸收 d1-preaudit2 的 B4/B5）
+- 日期：2026-10-23（rev4 —— 吸收 d1-preaudit3 的 B6-1…B6-5）
 - 目标：每 tab 串行、跨 tab 并行；不削弱任何 choke point；无环、可超时、可测试。
 - rev1 被驳回的三点已按审计建议改写：L1 准入模型（B1）、per-op 上下文（B2）、close 形态（B3）。
 
@@ -18,17 +18,14 @@
 ## 2. 唯一方向（B1：L1 不再全程持有）
 
 ```
-A 类（per-tab）:   admitOperation(gate) → L3(tabId) → 复核 gate → 命令 → finally L3 → lease 交付
-B 类（全局独占）: admitOperation(gate) → L9 → [可选 L3] → 命令 → finally [L3] → L9 → lease
-C 类（只读全局）: admitOperation(gate) → 命令（无 L3/L9）→ lease 交付
+A 类（per-tab）    : admitOperation(gate) → L3(tabId) → 复核 gate → 命令 → finally L3 → lease
+B 类（全局独占）   : admitOperation(gate) → L9 → [可选 L3] → 命令 → finally [L3] → L9 → lease
+C 类（只读全局）   : admitOperation(gate) → 命令（无 L3/L9）→ lease
+D 类（driver）     : admitOperation(gate) → 脚本进程；每个 helper 自己按 A/C 取锁
+tab 生命周期创建段 : admitOperation → **L10（创建段锁）** → reserve/create/register → 释放 L10 → load（不持锁）
 ```
 
-  → withTabLock(tabId)（L3，按 op lease 的 abort signal）
-  → 复核 gate（TOCTOU）+ beforeCommand choke point
-  → CDP 命令
-  → finally: 释放 L3 → 交付 lease（busy--）
-```
-
+- **`busy/busyDepth` 由活动 lease 计数派生**（`controlState().busy` 语义不变；补两 tab 并发 busy 用例）。
 - **`busy/busyDepth` 由活动 lease 计数派生**（`controlState().busy` 语义不变；补两 tab 并发 busy 用例）。
 - "排队等前一个操作超时"的文案迁到 **per-tab 队列**（跨 tab 不再排队）。
 - gate 预算从**调用时刻**起算（进 admit 前取 deadline）。
@@ -38,9 +35,10 @@ C 类（只读全局）: admitOperation(gate) → 命令（无 L3/L9）→ lease
 
 | 类 | 锁路径 | 调用点 |
 | --- | --- | --- |
-| **A per-tab** | L1 → L3(tabId) | navigate/open(有 target)/click/type/select/press/hotkey/hover/drag/scroll/snapshot/get_text/eval/screenshot/fetch/emulate/clipboard/file_chooser(目标 tab)/download(归属 tab)/wait_for(事件类) |
-| **B global-exclusive** | L1 → L9（必要时再 L3） | **restore 物化**（`runtime.ts:1042`，P1-2 跨账号不得交错）、应用窗口操作（A16，无 tab id）、`browser_clear_data`、`downloads_remove`、bookmarks add/remove、`closeAll`/会话切换、dialog 全局段、`handleDialog` |
-| **C admission-only** | L1 only | `list_tabs` / `downloads_list` / `history_search` / `bookmarks_list` |
+| **A per-tab** | L1 → L3(tabId) | navigate/open(有 target)/click/type/select/press/hotkey/hover/drag/scroll/snapshot/get_text/eval/screenshot/fetch/emulate/**upload_file**/file_chooser(目标 tab)/download(归属 tab)/wait_for(事件类) |
+| **B global-exclusive** | L1 → L9（必要时再 L3） | **restore 物化**（创建段在 L10，load 在 L9 外）、**open（无 target）**（创建段 L10）、应用窗口操作（A16，无 tab id）、`browser_clear_data`、`downloads_remove`、bookmarks add/remove、`closeAll`/会话切换、`handleDialog` |
+| **C admission-only** | L1 only | `list_tabs` / `downloads_list` / `history_search` / `bookmarks_list` / `clipboard`（全局读写） |
+| **D driver** | L1 only（**不取 L3/L9**） | `browser_run`：脚本内每个 helper 按上面的 A/C 类各自取锁；op 上下文与 takeover epoch 覆盖整段脚本 |
 
 规则：B 类在需要操作具体 tab 时（如 dialog 目标 tab）**先 L9 再 L3**，绝不反向；A/C 类不取 L9。用例：restore 与 tab 命令并发不交错、clear_data 与在途导航、两应用窗口命令串行；变异：B 类改成只准入 → 红。
 
@@ -56,6 +54,13 @@ C 类（只读全局）: admitOperation(gate) → 命令（无 L3/L9）→ lease
 - 排队超时文案："waited N ms behind an in-flight command on this tab"；超时码 `timeout`。
 - `closing` 的错误码：**`not-found`**（tab 已不存在）；排队期间被 close 的同一 tab 用 `not-found`，不新增 `closing` 码（避免模型看到不可执行的中间态）。
 - 预算先后：`deadlineAt` 从**调用时刻**算（进 admit 前）→ L1 准入 → L3 排队与执行共用剩余预算；gate 等待与 L3 排队之和不得超过工具注册预算。
+
+## 3.6 L9 持有纪律与排队语义（B6-4/B6-5）
+
+- **L9 内禁止长 await**（loadURL / 截图 / 下载等待 / 脚本进程）；restore 的 load 在 L9 外（创建段用 L10），应用窗口命令本身短。
+- 等待 L9 的 B 类操作同样受 **tool signal / takeover epoch / 超时** 三种 abort 约束；超时文案 "waited N ms for an exclusive browser operation"，码 `timeout`。
+- 预算式：`gate + L9 排队 + (L3 排队) + 执行 ≤ 注册预算`（`deadlineAt` 从调用时刻算）。
+- 用例：restore 加载期间 dialog **~1s 响应**；clear_data 排在 restore 之后不得吃满 30s。
 
 ## 4. 接管（S1：新实现，不只 abort CDP）
 
@@ -83,9 +88,9 @@ closeTab(tabId):
 | 工具 | 原因 | 锁路径 |
 | --- | --- | --- |
 | `browser_close_tab` | 关闭目标 tab 会 abort 其 op，包进 caller tab 的 L3 会自锁 | B：L1 → L9（目标 tab 的 L3 由 close 的 acquire/idle 步骤独立处理） |
-| `browser_dialog` / `handleDialog` | 目标 tab 可能被 dialog 阻塞 | B：L1 → L9 →（必要时 L3） |
+| `browser_dialog` / `handleDialog` | 目标 tab 可能被 dialog 阻塞；**降级为目标 tab 的 L3（不取 L9，避免 restore 20s load 的 head-of-line）** | A：L1 → L3(目标 tab) |
 | `browser_takeover` / 交还 | 全局控制权切换 | B：L1 → L9 |
-| `browser_open`（无 target tab） | 新 tab 尚无 id | A：L1 → L3（新建后绑定） |
+| `browser_open`（无 target tab） | 新 tab 尚无 id，创建段必须与 restore 互斥 | B：L1 → L9，创建段取 L10，load 不持锁 |
 | `browser_list_tabs` / `downloads_list` / `history_search` / `bookmarks_list` | 只读、无副作用 | C：L1 only |
 | restore（会话恢复入口） | 跨账号物化，必须与 agent 命令互斥 | B：L1 → L9 |
 
@@ -111,6 +116,9 @@ closeTab(tabId):
 | 失败创建不 release | 槽位泄漏用例红 |
 | B 类操作改成只准入（不取 L9） | restore/clear_data/应用窗口并发用例红 |
 | close 的 abort 包含自身 opId | close 自锁/超时红 |
+| open/restore 创建段不取 L10 | restore+open 并发用例红（pending id 被占） |
+| L9 内做 load | restore 期间 dialog 响应超时红 |
+| browser_run 统一包 L3 或 L9 | 两 tab run 并发/自锁用例红 |
 
 ## 8. 实现顺序
 
@@ -119,4 +127,5 @@ closeTab(tabId):
 3. op 上下文 + per-op controller + 接管遍历；
 4. close 新形态 + `closing` fail-fast + emit 在 L2 外；
 5. 用例：同 tab 串行、跨 tab 并行、双 agent 归属、接管（CDP/导航/下载）、close-during-op、互关、失败创建、op log 顺序；
-6. 逐项跑 §7 变异。
+6. D 类（browser_run）+ A/C helper 取锁、L9 队列语义、L10 创建段；
+7. 逐项跑 §7 变异（含 B6 新增 4 条）。

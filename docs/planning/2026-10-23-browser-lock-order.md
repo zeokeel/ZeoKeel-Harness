@@ -58,6 +58,7 @@ tab 生命周期创建段 : admitOperation → **L10（创建段锁）** → res
 
 ## 3.6 L9 持有纪律与排队语义（B6-4/B6-5）
 
+- **L10 持有上限**：close 的 idle 等待最多 `CLOSE_IDLE_WAIT_MS`（2s），forced 分支同样经 L10，最后兜底才直接 destroy。
 - **L9 内禁止长 await**（loadURL / 截图 / 下载等待 / 脚本进程）；restore 的 load 在 L9 外（创建段用 L10），应用窗口命令本身短。
 - 等待 L9 的 B 类操作同样受 **tool signal / takeover epoch / 超时** 三种 abort 约束；超时文案 "waited N ms for an exclusive browser operation"，码 `timeout`。
 - 预算式：`gate + L9 排队 + (L3 排队) + 执行 ≤ 注册预算`（`deadlineAt` 从调用时刻算）。

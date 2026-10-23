@@ -719,7 +719,7 @@ export class BrowserRuntime {
   private shellOrigin: string | undefined
   private lastAgentId = ''
   /** D1/B2: per-operation agent attribution (no shared mutable field). */
-  private readonly agentContext = new AsyncLocalStorage<string>()
+  private readonly agentContext = new AsyncLocalStorage<{ agent: string, scope: number }>()
   /** In-flight `browser_eval` calls per tab id: page-initiated top-level navigation
    * is refused for THAT tab while its eval runs (2026-10-23 audit P0-1 —
    * `window.location` is unforgeable, so the only real enforcement is the
@@ -737,6 +737,8 @@ export class BrowserRuntime {
   private lifecycleLockHeld = false
   /** Tabs being closed: queued operations must fail fast (not-found). */
   private readonly closingTabs = new Set<number>()
+  /** Epoch captured when a tab-creation segment started (session-switch guard). */
+  private creationScope: number | undefined
   /** S1: aborts NON-CDP waits (download/event waits) on user takeover. Replaced
    * (not reused) on every takeover so a later release makes it usable again. */
   private takeoverController = new AbortController()
@@ -1304,6 +1306,16 @@ export class BrowserRuntime {
   }
 
   private async createTabReal(url: string | undefined, signal: AbortSignal | undefined, fixedId: number | undefined, actor: RecordActor, inheritSecretsFrom?: number, reservation?: TabReservation, deadlineAt?: number): Promise<BrowserTabState> {
+    const previousCreationScope = this.creationScope
+    this.creationScope = this.scopeEpoch
+    try {
+      return await this.createTabRealInner(url, signal, fixedId, actor, inheritSecretsFrom, reservation, deadlineAt, previousCreationScope)
+    } finally {
+      this.creationScope = previousCreationScope
+    }
+  }
+
+  private async createTabRealInner(url: string | undefined, signal: AbortSignal | undefined, fixedId: number | undefined, actor: RecordActor, inheritSecretsFrom?: number, reservation?: TabReservation, deadlineAt?: number, _previousCreationScope?: number): Promise<BrowserTabState> {
     const id = fixedId ?? this.nextTabId++
     // BR-1（2026-09-23）：建标签路径上的**所有** await 之后都要复检作用域（见
     // assertScopeUnchanged）。这里取世代快照；每一处 await 之后各复检一次。
@@ -1333,7 +1345,10 @@ export class BrowserRuntime {
         if (method === 'Page.handleJavaScriptDialog' || method === 'Page.enable' || method === 'Runtime.enable') return
         // S2 at the command boundary: an AGENT-issued command must stop when the
         // user took control. User-initiated work (no agent context) is exempt.
-        if (this.pool.isUserControlled() && this.agentContext.getStore() !== undefined && !this.closingTabs.has(id)) {
+        // A scope switch (account change / close-all) is reported by the body's
+        // own scope check as `interrupted`; do not mask it with the gate code.
+        const opContext = this.agentContext.getStore()
+        if (this.pool.isUserControlled() && opContext !== undefined && opContext.scope === this.scopeEpoch && !this.closingTabs.has(id)) {
           throw browserError('window-controlled', hostCopy(
             this.locale(),
             'browser: 用户已拿回浏览器控制权，这条命令被取消',
@@ -2011,7 +2026,7 @@ export class BrowserRuntime {
 
   /** The agent that issued the operation currently running (ALS), else last seen. */
   private currentAgentId(): string {
-    return this.agentContext.getStore() ?? this.lastAgentId
+    return this.agentContext.getStore()?.agent ?? this.lastAgentId
   }
 
   private tab(id: number): BrowserTab {
@@ -2763,6 +2778,10 @@ export class BrowserRuntime {
   /** S2: a user takeover that happened while queueing must stop the operation. */
   private assertGateStillOpen(): void {
     if (!this.pool.isUserControlled()) return
+    // A scope switch (account change / close-all) must surface as the body's own
+    // `interrupted`, not as a gate refusal: only refuse within the same scope.
+    const ctx = this.agentContext.getStore()
+    if (ctx !== undefined && ctx.scope !== this.scopeEpoch) return
     throw browserError('window-controlled', hostCopy(
       this.locale(),
       `browser: 用户在你排队期间拿回了浏览器控制权 —— ${gateRefusal('zh')}`,
@@ -2848,7 +2867,7 @@ export class BrowserRuntime {
           try {
             // B2: attribution travels with the async context, so two concurrent
             // operations cannot overwrite each other's agent.
-            return await this.agentContext.run(callerAgent, body)
+            return await this.agentContext.run({ agent: callerAgent, scope: this.scopeEpoch }, body)
           } finally {
             this.releaseOperationDeadline(owned)
           }
@@ -3024,6 +3043,9 @@ export class BrowserRuntime {
     // （否则退避定时器会把**旧 URL** 加载回来，把模型刚导航到的页面顶掉）。
     this.clearCrashState(id)
     tab.crashed = false
+    // A session switch that already happened must surface as `interrupted`, not
+    // as a gate refusal (close-all temporarily raises the gate flag).
+    this.assertScopeUnchanged(scope, 'browser_navigate', tab)
     if (actor !== 'user') this.assertAgentStillAllowed('browser_navigate')
     let loadError: unknown
     const outcome = await Promise.race([
@@ -3036,7 +3058,6 @@ export class BrowserRuntime {
     // 换号优先于加载结果（BR-1）：这次加载属于**上一个作用域**，它的 URL 不得
     // 落进新账号的 op log / history。放在接管检查之前——换号期间 `controlled`
     // 会被临时置真再置假，那一层判据看不见这件事。
-    this.assertScopeUnchanged(scope, 'browser_navigate', tab)
     // A user takeover while loadURL was pending wins over the load result:
     // the operation is reported as interrupted, not as a successful navigation
     // to whatever page happens to be left in the view. (The user's own
@@ -3342,6 +3363,9 @@ export class BrowserRuntime {
         // A wedged tab must still be removed (audit: the timeout branch must be
         // observable and must not leave the tab registered forever).
         this.record('browser_close_tab', tabId, `close tab ${tabId} forced after idle timeout`, true, user ? 'user' : 'ai')
+        // Forced removal also goes through L10 (a concurrent creation segment
+        // must not interleave with this destroy); L10 hold is bounded by
+        // CLOSE_IDLE_WAIT_MS and the fallback below is last-resort only.
         await this.withLifecycleLock('close-forced', undefined, Date.now() + CLOSE_IDLE_WAIT_MS, async () => {
           this.destroyTab(tabId)
         }).catch(() => { this.destroyTab(tabId) })
@@ -3368,6 +3392,9 @@ export class BrowserRuntime {
     this.tabEvents.delete(id)
     this.choosers.delete(id)
     // S7: a destroyed tab must not leak lock bookkeeping for a reused id.
+    // C6 defense-in-depth: the normal close path already waits for the tab lock
+    // to go idle, but closeAll/restore destroy without that wait — dropping the
+    // bookkeeping here is what keeps a reused id from inheriting a stale lock.
     this.tabLocks.delete(id)
     this.tabLocksHeld.delete(id)
     this.closingTabs.delete(id)
@@ -3408,6 +3435,12 @@ export class BrowserRuntime {
 
   /** Close everything (session switch / shell 清除). */
   async closeAll(user = false): Promise<void> {
+    // Bump the generations BEFORE waiting for L10: a creation segment that is
+    // still loading must see the switch and report `interrupted` instead of
+    // finishing into the new account (BR-1).
+    this.materializeEpoch++
+    this.scopeEpoch++
+    this.pendingLedgerTabs = []
     const body = async (): Promise<void> => {
       // D1/P2-1: removal is coordinated with L10 so a creation segment cannot
       // register a tab after this clear (close-all must leave the pool empty).
@@ -3451,8 +3484,13 @@ export class BrowserRuntime {
       const wasControlled = this.pool.controlled
       if (!wasControlled) this.pool.setUserControl(true)
       try {
-        return await body()
+        // Same L10 coordination on the USER path (close-all must serialize with
+        // an in-flight creation segment, whatever the caller).
+        return await this.withLifecycleLock('close-all', undefined, Date.now() + CLOSE_IDLE_WAIT_MS, body)
       } finally {
+        // close-all ends any user-held state (it must not stay locked after a
+        // session switch) but does not fake a takeover: an in-flight op must
+        // surface its own scope error, not a gate refusal.
         this.pool.setUserControl(false)
       }
     }
@@ -5938,6 +5976,15 @@ export class BrowserRuntime {
    * @param operation - tool name for the error text.
    */
   private assertAgentStillAllowed(operation: string): void {
+    // A session switch during creation wins over the gate: the creation belongs
+    // to the previous account and must be reported as interrupted.
+    if (this.pool.controlled && this.creationScope !== undefined && this.creationScope !== this.scopeEpoch) {
+      throw browserError('interrupted', hostCopy(
+        this.locale(),
+        `browser: 会话已切换，${operation} 的结果已丢弃（不写入新账号的历史与操作日志）`,
+        `browser: the session changed while ${operation} was in flight — its result was discarded (nothing was written to the new account)`,
+      ))
+    }
     if (!this.pool.controlled) return
     throw browserError('window-controlled', hostCopy(
       this.locale(),

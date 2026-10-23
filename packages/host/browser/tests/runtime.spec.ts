@@ -2157,6 +2157,68 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('D1: S2 stops a queued command that has no body-level gate (clickAt)', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: JSON.stringify({ x: 10, y: 10 }) } })
+    let releaseHold!: () => void
+    const hold = runtime.withTabLock(1, undefined, Date.now() + 60_000, () => new Promise<void>((resolve) => { releaseHold = resolve }))
+    await sleep(20)
+    // clickAt has no assertAgentStillAllowed in its body: only the S2 checks can
+    // stop it once the user takes over while it is queued.
+    const queued = runtime.clickAt(1, { x: 10, y: 10 }).then(() => 'ran', (error: unknown) => error as { code?: string })
+    await sleep(20)
+    runtime.setUserControl(true, 'user')
+    releaseHold()
+    await hold
+    const outcome = await queued
+    expect((outcome as { code?: string }).code).toBe('window-controlled')
+    runtime.setUserControl(false)
+    cleanup()
+  })
+
+  it('D1: closeAll without waiting for a held tab lock does not leak the lock to a reused id', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = () => ({ result: { value: 1 } })
+    // Hold L3 with an operation that never finishes: closeAll (user path) does
+    // NOT wait for the tab lock, so only destroyTab's cleanup can free it.
+    const hold = runtime.withTabLock(1, undefined, Date.now() + 60_000, () => new Promise<void>(() => {}))
+    hold.catch(() => undefined)
+    await sleep(20)
+    await runtime.closeAll(true)
+    const internal = runtime as unknown as { nextTabId: number }
+    internal.nextTabId = 1
+    const reopened = await runtime.open('https://b.example')
+    expect(reopened.id).toBe(1)
+    view.transport.handler = () => ({ result: { value: 2 } })
+    await expect(runtime.eval(1, '2')).resolves.toBeDefined()
+    cleanup()
+  })
+
+  it('D1: closeAll waits for an in-flight creation segment (reverse order)', async () => {
+    const { runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    // Hold L10 with a creation segment that never finishes, then prove closeAll
+    // does not clear the pool until that segment ends (it must not race a create).
+    let releaseLifecycle!: () => void
+    const internal = runtime as unknown as {
+      withLifecycleLock: <T>(q: string, signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>) => Promise<T>
+    }
+    const held = internal.withLifecycleLock('probe-lifecycle', undefined, Date.now() + 60_000, () => new Promise<void>((resolve) => { releaseLifecycle = resolve }))
+    held.catch(() => undefined)
+    await sleep(20)
+    let closed = false
+    const closing = runtime.closeAll(true).then(() => { closed = true })
+    await sleep(30)
+    expect(closed).toBe(false)
+    releaseLifecycle()
+    await closing
+    expect(runtime.listTabs()).toHaveLength(0)
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

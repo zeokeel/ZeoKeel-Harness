@@ -2727,13 +2727,18 @@ export class BrowserRuntime {
     }
   }
 
-  /** Rejects as soon as the user takes control (S1, non-CDP waits). */
-  private takeoverRejection(): Promise<never> {
+  /** Rejects as soon as the user takes control (S1, non-CDP waits).
+   * @returns the rejection promise plus a disposer that removes its listener so a
+   * completed wait does not keep the controller alive. */
+  private takeoverRejection(): { promise: Promise<never>, dispose: () => void } {
     const signal = this.takeoverController.signal
-    if (signal.aborted) return Promise.reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled'))
-    return new Promise<never>((_resolve, reject) => {
-      signal.addEventListener('abort', () => reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled')), { once: true })
+    if (signal.aborted) return { promise: Promise.reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled')), dispose: () => {} }
+    let onAbort!: () => void
+    const promise = new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled'))
+      signal.addEventListener('abort', onAbort, { once: true })
     })
+    return { promise, dispose: () => signal.removeEventListener('abort', onAbort) }
   }
 
 
@@ -3286,8 +3291,18 @@ export class BrowserRuntime {
 
   async closeTab(tabId: number, user = false, signal?: AbortSignal): Promise<void> {
     // Mark FIRST, before any await: a command queued at this moment must see the
-    // tab as closing, not slip in between admission and the body.
+    // tab as closing, not slip in between admission and the body. The finally
+    // covers the admission path too (an aborted/timed-out admission must not
+    // leave the id permanently "closing").
     this.closingTabs.add(tabId)
+    try {
+      return await this.closeTabInner(tabId, user, signal)
+    } finally {
+      this.closingTabs.delete(tabId)
+    }
+  }
+
+  private async closeTabInner(tabId: number, user: boolean, signal?: AbortSignal): Promise<void> {
     const body = async (): Promise<void> => {
       // D1/B3 three-phase close (closing was marked before admission):
       try {
@@ -3315,7 +3330,7 @@ export class BrowserRuntime {
         }).catch(() => { this.destroyTab(tabId) })
         void cause
       } finally {
-        this.closingTabs.delete(tabId)
+        // per-close bookkeeping only; closeTab's own finally clears closingTabs
       }
       // emits outside the locks (B3).
       this.relayout()
@@ -3338,6 +3353,7 @@ export class BrowserRuntime {
     // S7: a destroyed tab must not leak lock bookkeeping for a reused id.
     this.tabLocks.delete(id)
     this.tabLocksHeld.delete(id)
+    this.closingTabs.delete(id)
     this.chooserInterception.delete(id)
     this.chooserInterception.delete(id)
     this.chooserReenable.delete(id)
@@ -5775,13 +5791,15 @@ export class BrowserRuntime {
       const deadlineAt = options.deadlineAt ?? Date.now() + (options.timeoutMs ?? BROWSER_TOOL_TIMEOUT_MS)
       const remaining = Math.max(1, Math.min(options.timeoutMs ?? BROWSER_TOOL_TIMEOUT_MS, deadlineAt - Date.now()))
       const armed = bus.arm(options.condition, remaining)
+      const takeover = this.takeoverRejection()
       try {
-        await Promise.race([armed.promise, this.takeoverRejection()])
+        await Promise.race([armed.promise, takeover.promise])
         return { ok: true, reason: options.condition }
       } catch (cause) {
         if (cause instanceof BrowserError && cause.code === 'window-controlled') throw cause
         return { ok: false, reason: `wait_for ${options.condition} timed out` }
       } finally {
+        takeover.dispose()
         armed.cancel()
       }
     }

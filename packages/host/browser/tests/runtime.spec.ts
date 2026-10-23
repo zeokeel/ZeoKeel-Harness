@@ -2118,6 +2118,35 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('D1: close bookkeeping leaks nowhere (aborted close, destroyed tab, same-id reopen)', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = () => ({ result: { value: 1 } })
+    // 1) An aborted close must not leave the tab permanently "closing".
+    const controller = new AbortController()
+    runtime.setUserControl(true, 'user')
+    const closing = runtime.closeTab(1, false, controller.signal)
+    controller.abort()
+    await closing.catch(() => undefined)
+    runtime.setUserControl(false)
+    // The aborted close must not leave a stale "closing" marker (which would make
+    // every later command on this id fail with not-found forever).
+    const internal = runtime as unknown as { closingTabs: Set<number> }
+    expect(internal.closingTabs.has(1)).toBe(false)
+    if (runtime.listTabs().some(tab => tab.id === 1)) {
+      await expect(runtime.eval(1, '1')).resolves.toBeDefined()
+    }
+    // 2) A destroyed tab drops all lock/closing bookkeeping (closeTab path).
+    await runtime.closeTab(1, true)
+    expect(runtime.listTabs()).toHaveLength(0)
+    // 3) Reopening gets a fresh id and works (no stale locks/markers).
+    const reopened = await runtime.open('https://b.example')
+    view.transport.handler = () => ({ result: { value: 2 } })
+    await expect(runtime.eval(reopened.id, '2')).resolves.toBeDefined()
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

@@ -1731,7 +1731,8 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     await expect(runtime.pageFetch(1, { url: 'https://a.example/', headers: { authorization: 'x' } })).rejects.toMatchObject({ code: 'policy' })
     await expect(runtime.pageFetch(1, { url: 'https://a.example/', method: 'GET', body: 'x' })).rejects.toMatchObject({ code: 'policy' })
     await expect(runtime.pageFetch(1, { url: 'https://a.example/', method: 'TRACE' })).rejects.toMatchObject({ code: 'policy' })
-    await expect(runtime.pageFetch(1, { url: 'https://a.example/', body: 'x'.repeat(300 * 1024) })).rejects.toMatchObject({ code: 'policy' })
+    // POST so the GET-body guard does not mask the size guard (audit V5).
+    await expect(runtime.pageFetch(1, { url: 'https://a.example/', method: 'POST', body: 'x'.repeat(300 * 1024) })).rejects.toMatchObject({ code: 'policy' })
     expect(called).toBe(0)
     cleanup()
   })

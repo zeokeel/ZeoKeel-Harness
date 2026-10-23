@@ -6163,7 +6163,7 @@ export function frameClickExpression(selector: string): string {
  * is 'error': a redirect is refused instead of followed, which removes the
  * redirect-SSRF hole entirely (audit P4: manual mode cannot read Location).
  */
-const PAGE_FETCH_FUNCTION = `async function (payload) {
+export const PAGE_FETCH_FUNCTION = `async function (payload) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), payload.timeoutMs);
   try {
@@ -6176,20 +6176,51 @@ const PAGE_FETCH_FUNCTION = `async function (payload) {
       signal: controller.signal,
     });
     const contentType = response.headers.get('content-type') || '';
-    const buffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    const readable = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded))/i.test(contentType) || contentType === '';
+    const readable = /^(text\\/|application\\/(json|xml|javascript|x-www-form-urlencoded))/i.test(contentType) || contentType === '';
     if (!readable) {
-      return JSON.stringify({ status: response.status, ok: response.ok, url: response.url, contentType, bytes: bytes.length, body: null, truncated: false, bodyOmitted: true });
+      return JSON.stringify({ status: response.status, ok: response.ok, url: response.url, contentType, bytes: Number(response.headers.get('content-length') || 0), body: null, truncated: false, bodyOmitted: true });
     }
+    // Bounded read: never buffer a multi-GiB body. A declared content-length over
+    // the cap is refused up front; otherwise read chunk by chunk and stop at the
+    // cap (cancelling the stream).
+    const declared = Number(response.headers.get('content-length') || 0);
+    if (declared > payload.byteLimit) {
+      return JSON.stringify({ status: response.status, ok: response.ok, url: response.url, contentType, bytes: declared, body: null, truncated: false, bodyOmitted: true });
+    }
+    const chunks = [];
+    let total = 0;
+    let tooLarge = false;
+    const reader = response.body && typeof response.body.getReader === 'function' ? response.body.getReader() : null;
+    if (reader !== null) {
+      while (true) {
+        const step = await reader.read();
+        if (step.done) break;
+        const chunk = step.value;
+        total += chunk.byteLength;
+        if (total > payload.byteLimit) { tooLarge = true; try { await reader.cancel(); } catch (cause) { /* ignore */ } break; }
+        chunks.push(chunk);
+      }
+    } else {
+      const buffer = await response.arrayBuffer();
+      total = buffer.byteLength;
+      if (total > payload.byteLimit) tooLarge = true;
+      else chunks.push(new Uint8Array(buffer));
+    }
+    if (tooLarge) {
+      return JSON.stringify({ status: response.status, ok: response.ok, url: response.url, contentType, bytes: total, body: null, truncated: false, bodyOmitted: true });
+    }
+    const joined = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) { joined.set(chunk, offset); offset += chunk.byteLength; }
     let text = '';
-    try { text = new TextDecoder('utf-8', { fatal: false }).decode(bytes); } catch (cause) { text = ''; }
+    try { text = new TextDecoder('utf-8', { fatal: false }).decode(joined); } catch (cause) { text = ''; }
     const truncated = text.length > payload.textLimit;
-    return JSON.stringify({ status: response.status, ok: response.ok, url: response.url, contentType, bytes: bytes.length, body: text.slice(0, payload.textLimit), truncated, bodyOmitted: bytes.length > payload.byteLimit });
+    return JSON.stringify({ status: response.status, ok: response.ok, url: response.url, contentType, bytes: total, body: text.slice(0, payload.textLimit), truncated, bodyOmitted: false });
   } finally {
     clearTimeout(timer);
   }
 }`
+
 
 /** Request headers a page fetch must never set (auth/cookies are ambient and
  * must not be overridable; host/forwarding headers are transport concerns). */

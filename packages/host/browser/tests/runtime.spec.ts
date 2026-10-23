@@ -681,14 +681,19 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')
     const view = adapter.lastView()
-    view.transport.emit('Page.javascriptDialogOpening', { type: 'alert', message: 'stuck' })
-    // The user gate is held (as if a click triggered this dialog and is stuck):
-    // the agent-path close must still resolve instead of waiting for the gate.
-    runtime.setUserControl(true, 'user')
     const calls: string[] = []
     view.transport.handler = (method: string) => { calls.push(method); return {} }
-    await expect(runtime.closeTab(1)).resolves.toBeUndefined()
+    view.transport.emit('Page.javascriptDialogOpening', { type: 'alert', message: 'stuck' })
+    // The user gate is held (as if a click triggered this dialog and is stuck).
+    // D1: the takeover itself dismisses the pending dialog (audited behaviour),
+    // so the escape hatch is about closeTab resolving WITHOUT waiting for the
+    // gate and leaving no dialog state behind.
+    runtime.setUserControl(true, 'user')
+    await sleep(10)
     expect(calls).toContain('Page.handleJavaScriptDialog')
+    await expect(runtime.closeTab(1)).resolves.toBeUndefined()
+    expect(runtime.dialogState(1)).toBeUndefined()
+    expect(runtime.listTabs()).toHaveLength(0)
     runtime.setUserControl(false)
     cleanup()
   })
@@ -2020,6 +2025,53 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     expect(elapsed).toBeLessThan(1_000)
     controller.abort()
     await hanging
+    cleanup()
+  })
+
+  it('D1: closeAll is coordinated with L10 creation, and a queued op stops on takeover', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    // closeAll must leave the pool empty even when an open is creating a tab.
+    const opening = runtime.open('https://b.example').catch(() => undefined)
+    await Promise.all([opening, runtime.closeAll()])
+    expect(runtime.listTabs()).toHaveLength(0)
+
+    // A takeover while a command is QUEUED must stop it with window-controlled.
+    const tab = await runtime.open('https://c.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: 1 } })
+    let releaseHold!: () => void
+    const hold = runtime.withTabLock(tab.id, undefined, Date.now() + 60_000, () => new Promise<void>((resolve) => { releaseHold = resolve }))
+    await sleep(20)
+    const queued = runtime.eval(tab.id, '1').then(() => 'ran', (error: unknown) => error as { code?: string })
+    await sleep(20)
+    runtime.setUserControl(true, 'user')
+    releaseHold()
+    await hold
+    const outcome = await queued
+    expect((outcome as { code?: string }).code).toBe('window-controlled')
+    runtime.setUserControl(false)
+    cleanup()
+  })
+
+  it('D1: a dialog on its tab is not blocked by a global operation (A class, not L9)', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = () => ({})
+    view.transport.emit('Page.javascriptDialogOpening', { type: 'alert', message: 'hi' })
+    let releaseGlobal!: () => void
+    const global = runtime.runGated('probe-global', () => new Promise<void>((resolve) => { releaseGlobal = resolve }))
+    await sleep(20)
+    const started = Date.now()
+    // A dialog call targets ONE tab (A class): it must not sit behind the global
+    // exclusive operation (L9) — restore/clear_data style work.
+    const dialog = runtime.handleDialog(1, { accept: true })
+    await sleep(30)
+    const elapsed = Date.now() - started
+    releaseGlobal()
+    await global
+    await dialog
+    expect(elapsed).toBeLessThan(500)
     cleanup()
   })
 

@@ -24,7 +24,7 @@ A 类（per-tab）    : admitOperation(gate) → L3(tabId) → 复核 gate → �
 B 类（全局独占）   : admitOperation(gate) → L9 → [可选 L3] → 命令 → finally [L3] → L9 → lease
 C 类（只读全局）   : admitOperation(gate) → 命令（无 L3/L9）→ lease
 D 类（driver）     : admitOperation(gate) → 脚本进程；每个 helper 自己按 A/C 取锁
-tab 生命周期创建段 : admitOperation → **L10（创建段锁）** → reserve/create/register → 释放 L10 → load（不持锁）
+tab 生命周期创建段 : admitOperation → **L10（创建段锁）** → reserve/create/register → 释放 L10（当前 `createTabReal` 的 load 仍在 L10 内；已记为把 load 移出 L10 的缺口）
 ```
 
 - **`busy/busyDepth` 由活动 lease 计数派生**（`controlState().busy` 语义不变；补两 tab 并发 busy 用例）。
@@ -92,13 +92,13 @@ closeTab(tabId):
 | `browser_close_tab` | 关闭目标 tab 会 abort 其 op，包进 caller tab 的 L3 会自锁 | B：L1 → L9（目标 tab 的 L3 由 close 的 acquire/idle 步骤独立处理） |
 | `browser_dialog` / `handleDialog` | 目标 tab 可能被 dialog 阻塞；**降级为目标 tab 的 L3（不取 L9，避免 restore 20s load 的 head-of-line）** | A：L1 → L3(目标 tab) |
 | `browser_takeover` / 交还 | 全局控制权切换 | B：L1 → L9 |
-| `browser_open`（无 target tab） | 新 tab 尚无 id，创建段必须与 restore 互斥 | B：L1 → L9，创建段取 L10，load 不持锁 |
+| `browser_open`（无 target tab） | 新 tab 尚无 id，创建段必须与 restore 互斥 | L1 → L10（创建段；不取 L9；load 当前仍在 L10 内） |
 | `browser_list_tabs` / `downloads_list` / `history_search` / `bookmarks_list` | 只读、无副作用 | C：L1 only |
 | restore（会话恢复入口） | 跨账号物化，必须与 agent 命令互斥 | B：L1 → L9 |
 
 ## 6. 其余并入项
 
-- **S2**：gate 在取到 L3 后复核一次，`beforeCommand` 入口再核（同 tab 并发不能绕过）。
+- **S2**：gate 在取到 L3 后复核（`assertGateStillOpen`），并在每个 CDP 命令入口（`beforeCommand`）再核一次——仅对 agent 语境、dialog 应答/域名管理/正在关闭的 tab 豁免。
 - **S3**：无 tab 的全局操作只经 L1；`downloadOwnerTab`/activeTab 读取在 L2 内或显式传 tabId。
 - **S4**：A16 应用窗口（无 tab id）在 D1 起走 **L9（B 类）**；后续再给 surface 键。
 - **S5**：`evalInFlight` 的检查移入 L3 内。

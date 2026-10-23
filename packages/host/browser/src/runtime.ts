@@ -13,6 +13,8 @@ import {
   BROWSER_TOOL_TIMEOUT_MS,
   FRAME_CONTEXT_WAIT_MS,
   FRAME_INDEX_SETTLE_MS,
+  CLOSE_IDLE_WAIT_MS,
+  LIFECYCLE_CREATION_BUDGET_MS,
   NAVIGATE_LOAD_BOUND_MS,
   QUEUE_MIN_WORK_MS,
   TOOL_DEADLINE_MARGIN_MS,
@@ -733,6 +735,8 @@ export class BrowserRuntime {
   /** L10: creation-segment lock (open / ledger restore). */
   private lifecycleLock: Promise<void> = Promise.resolve()
   private lifecycleLockHeld = false
+  /** Tabs being closed: queued operations must fail fast (not-found). */
+  private readonly closingTabs = new Set<number>()
   /**
    * Deadline **ownership stack**: one entry per agent operation currently inside
    * the pool's critical section (epoch ms), innermost last — R4-B-15, C3-01.
@@ -1052,7 +1056,7 @@ export class BrowserRuntime {
             // (tryReserveTab = fail-fast, no queue). When the pool is full the
             // remaining tabs STAY PENDING and are retried on the next
             // materialization attempt — restore never exceeds maxTabs.
-            const created = await this.withLifecycleLock('browser_restore', undefined, Date.now() + this.toolBudgetMs(), async () => {
+            const created = await this.withLifecycleLock('browser_restore', undefined, Date.now() + LIFECYCLE_CREATION_BUDGET_MS, async () => {
               // 进 L10 后再校验一次代际（2026-09-15 审计 P1-2；D1 后互斥由 L10 承担）：
               // 等待期间可能已经发生过一次 restoreLedger/closeAll（会话切换），此时
               // item 属于**上一个账号**的账本 —— 继续建 tab 会把它的 URL/标题写进新账号的
@@ -1264,7 +1268,7 @@ export class BrowserRuntime {
       }
       try {
         // The USER path must not be refused by the gate it is acting under.
-        return await this.withLifecycleLock('open', signal, deadlineAt ?? Date.now() + this.toolBudgetMs(), async () => {
+        return await this.withLifecycleLock('open', signal, deadlineAt ?? Date.now() + LIFECYCLE_CREATION_BUDGET_MS, async () => {
           return await this.createTabReal(url, signal, undefined, 'user', inheritSecretsFrom, reservation, deadlineAt)
         })
       } catch (error) {
@@ -1283,7 +1287,7 @@ export class BrowserRuntime {
       try {
         // B6-3/P2-1: creation segments are mutually exclusive with ledger restore
         // (same L10); the epoch is re-checked INSIDE the lock below.
-        return await this.withLifecycleLock('open', signal, deadlineAt ?? Date.now() + this.toolBudgetMs(), async () => {
+        return await this.withLifecycleLock('open', signal, deadlineAt ?? Date.now() + LIFECYCLE_CREATION_BUDGET_MS, async () => {
           this.assertGateStillOpen()
           return await this.createTabReal(url, signal, undefined, 'ai', inheritSecretsFrom, reservation, deadlineAt)
         })
@@ -1322,6 +1326,15 @@ export class BrowserRuntime {
         // NOT exempt: DOM.setFileInputFiles and friends. A file chooser is not a
         // JS dialog, so M3's chooser work must not borrow this exemption.
         if (method === 'Page.handleJavaScriptDialog' || method === 'Page.enable' || method === 'Runtime.enable') return
+        // S2 at the command boundary: an AGENT-issued command must stop when the
+        // user took control. User-initiated work (no agent context) is exempt.
+        if (this.pool.isUserControlled() && this.agentContext.getStore() !== undefined && !this.closingTabs.has(id)) {
+          throw browserError('window-controlled', hostCopy(
+            this.locale(),
+            'browser: 用户已拿回浏览器控制权，这条命令被取消',
+            'browser: the user took back control of the browser, so this command was cancelled',
+          ))
+        }
         const dialog = this.dialogs.get(id)
         if (dialog === undefined) return
         throw browserError('policy', hostCopy(
@@ -2661,6 +2674,7 @@ export class BrowserRuntime {
    * concurrently; the same tab stays strictly ordered.
    */
   async withTabLock<T>(tabId: number, signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>): Promise<T> {
+    if (this.closingTabs.has(tabId)) throw browserError('not-found', `browser: tab ${String(tabId)} is being closed`)
     const prev = this.tabLocks.get(tabId) ?? Promise.resolve()
     let release!: () => void
     const mine = new Promise<void>((resolve) => { release = resolve })
@@ -2670,6 +2684,7 @@ export class BrowserRuntime {
       this.tabLocksHeld.add(tabId)
       // S2 (TOCTOU): the user may have taken control while we queued.
       this.assertGateStillOpen()
+      if (this.closingTabs.has(tabId)) throw browserError('not-found', `browser: tab ${String(tabId)} is being closed`)
       try {
         return await work()
       } finally {
@@ -3254,19 +3269,47 @@ export class BrowserRuntime {
 
   async closeTab(tabId: number, user = false, signal?: AbortSignal): Promise<void> {
     const body = async (): Promise<void> => {
-      // Never leave a key held down in a tab that is going away (audit R2).
-      await this.releaseHeldKeys(tabId)
-      // Answer a pending dialog BEFORE the tab (and its CDP session) goes away,
-      // so the renderer is not left blocked with no one to talk to.
-      await this.discardDialog(tabId)
-      this.destroyTab(tabId)
+      // D1/B3 three-phase close:
+      // 1) mark closing under L2 — queued operations on this tab fail fast with
+      //    `not-found` instead of running against a tab that is going away;
+      this.closingTabs.add(tabId)
+      try {
+        // 2) abort this tab's in-flight work WITHOUT holding L2, then wait (bound
+        //    by the close deadline) for the tab lock to go idle;
+        this.tabs.get(tabId)?.cdp.abortPending(browserError('not-found', `browser: tab ${String(tabId)} was closed while this command was in flight`))
+        await this.withLifecycleLock('close', signal, Date.now() + CLOSE_IDLE_WAIT_MS, async () => {
+          // Wait for the tab lock to go idle WITHOUT re-entering withTabLock (that
+          // would refuse a closing tab, which is exactly what we are closing).
+          await this.waitForTurn(this.tabLocks.get(tabId) ?? Promise.resolve(), `the running browser operation on tab ${String(tabId)}`, Date.now() + CLOSE_IDLE_WAIT_MS, undefined, !this.tabLocksHeld.has(tabId))
+          // 3) remove under L10 so a concurrent open cannot re-register the id.
+          // Never leave a key held down in a tab that is going away (audit R2).
+          await this.releaseHeldKeys(tabId)
+          // Answer a pending dialog BEFORE the tab (and its CDP session) goes away,
+          // so the renderer is not left blocked with no one to talk to.
+          await this.discardDialog(tabId)
+          this.destroyTab(tabId)
+        })
+      } catch (cause) {
+        // A wedged tab must still be removed (audit: the timeout branch must be
+        // observable and must not leave the tab registered forever).
+        this.record('browser_close_tab', tabId, `close tab ${tabId} forced after idle timeout`, true, user ? 'user' : 'ai')
+        await this.withLifecycleLock('close-forced', undefined, Date.now() + CLOSE_IDLE_WAIT_MS, async () => {
+          this.destroyTab(tabId)
+        }).catch(() => { this.destroyTab(tabId) })
+        void cause
+      } finally {
+        this.closingTabs.delete(tabId)
+      }
+      // emits outside the locks (B3).
       this.relayout()
       this.record('browser_close_tab', tabId, `close tab ${tabId}`, false, user ? 'user' : 'ai')
     }
     // Escape hatch: with a dialog pending the tab's renderer is blocked, so the
     // mutex may be held by the very click that triggered it. Closing must not
     // queue behind that and degrade into "wait one CDP timeout".
-    if (user || this.dialogs.has(tabId)) return await body()
+    // Escape hatches: a user path, a dialog-blocked tab, and a user-held gate must
+    // all be able to close (cleanup must never wait for the user to hand back).
+    if (user || this.dialogs.has(tabId) || this.pool.isUserControlled()) return await body()
     return await this.agentRun('browser_close_tab', body, signal)
   }
 
@@ -3316,6 +3359,12 @@ export class BrowserRuntime {
   /** Close everything (session switch / shell 清除). */
   async closeAll(user = false): Promise<void> {
     const body = async (): Promise<void> => {
+      // D1/P2-1: removal is coordinated with L10 so a creation segment cannot
+      // register a tab after this clear (close-all must leave the pool empty).
+      for (const id of this.tabs.keys()) {
+        this.closingTabs.add(id)
+        this.tabs.get(id)?.cdp.abortPending(browserError('not-found', 'browser: the browser was closed while this command was in flight'))
+      }
       // Cancel in-flight ledger materialization (a previous user's restore
       // must not resurrect tabs after the pool was cleared).
       this.materializeEpoch++
@@ -3333,6 +3382,7 @@ export class BrowserRuntime {
         // the next one.
         this.credentialOrigins.clear()
         this.pool.clear()
+        for (const id of [...this.closingTabs]) this.closingTabs.delete(id)
       } finally {
         // A window that is already destroyed must not abort the identity
         // switch before the pool is empty (cross-account browse leak); the
@@ -3356,7 +3406,7 @@ export class BrowserRuntime {
         this.pool.setUserControl(false)
       }
     }
-    return await this.agentRun('browser_close', body)
+    return await this.agentRun('browser_close', async () => await this.withLifecycleLock('close-all', undefined, Date.now() + CLOSE_IDLE_WAIT_MS, body))
   }
 
   // ----------------------------------------------------------- interactions
@@ -5916,6 +5966,13 @@ export class BrowserRuntime {
     this.pool.setUserControl(active)
     if (was === this.pool.controlled) return
     if (active) {
+      // S1: takeover aborts in-flight CDP work on EVERY tab (not only loads).
+      for (const id of this.tabs.keys()) {
+        // A tab with a pending dialog is left alone: the dialog discard/answer
+        // path is in flight and aborting it would leave the renderer blocked.
+        if (this.dialogs.has(id)) continue
+        this.tabs.get(id)?.cdp.abortPending(browserError('window-controlled', 'browser: the user took control, so this command was cancelled'))
+      }
       this.stopPendingLoads()
       // 活动面板是用户界面：控制权移交必须按**调用时**的语言出（`hostCopy` 每次
       // 求值，绝不在模块级冻结 —— 见 dsh-host-locale 的头注释与 2026-09-21 壳层

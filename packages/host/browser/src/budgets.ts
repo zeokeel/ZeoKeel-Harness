@@ -56,6 +56,13 @@ export const WAIT_FOR_MAX_MS = 40_000
 
 /** Extra margin used by the wait_for registration formula (single source). */
 export const WAIT_FOR_DEADLINE_MARGIN_MS = 5_000
+/** Bound for waiting on a tab to go idle while closing it (D1 three-phase close). */
+export const CLOSE_IDLE_WAIT_MS = 2_000
+
+/** Budget for one tab-creation segment (open/restore under L10; independent of
+ * the tool budget so restore of a large ledger is not clamped to 30s). */
+export const LIFECYCLE_CREATION_BUDGET_MS = 60_000
+
 /** Absolute ceiling for one wait_for condition (never above the tool budget). */
 export const WAIT_FOR_HARD_CAP_MS = 120_000
 

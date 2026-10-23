@@ -39,7 +39,7 @@
 | `scripts/check-workspaces.mjs` 阶段 2 | `min(4, CPU)` | `values.packageBuild`，并给子进程下发内存安全的 `VITEST_MAX_WORKERS`（4 核 8GB 算出来仍是 3，不拖慢桌面套件；16 核 4GB 容器压到 1） |
 | `prebuildWorkspaceDeps` | 串行 | 按依赖层并行（`values.prebuild`） |
 | `packages/host/desktop/vitest.config.ts` | Linux 不限（win 2） | `values.vitestWorkers`（win 仍封顶 2） |
-| `server/Makefile` `TEST_PARALLEL` / `GO_BUILD_P` | 写死 4 / 无 | `--print goTestParallel` / `--print goBuildParallel` |
+| `server/Makefile` `TEST_PARALLEL` / `GO_BUILD_P` | 写死 4 / 无 | `--print goTestParallel` / `--print goBuildParallel`（后者硬顶 = CPU 预算，不用 8 —— Go 缺省 `-p=GOMAXPROCS`，固定小硬顶会拖慢大机器的冷构建） |
 
 ### 3) 预构建并行（`prebuild-workspace-deps.ts`）
 
@@ -93,7 +93,7 @@
 | 2 核 / 2GB | 2 | 2 | 1 | 1 | 2 |
 | 4 核 / 8GB（本机） | 4 | 4 | 3 | 4 | 4 |
 | 8 核 / 16GB | 8 | 8 | 6 | 8 | 8 |
-| 16 核 / 64GB | 8（硬顶） | 8 | 8 | 8 | 8 |
+| 16 核 / 64GB | 8（硬顶） | 8 | 8 | 8 | **16** |
 | 16 核 / 4GB 容器 | 4 | 4 | 8 | 2 | 5 |
 
 ## 全量对比实测（2026-10-23 13:2x–13:5x，同机、串行、同一份树的两侧）

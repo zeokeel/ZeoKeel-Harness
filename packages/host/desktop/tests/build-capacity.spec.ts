@@ -117,6 +117,17 @@ describe('build-capacity: 并发折算', () => {
     expect(plan.envNotes.join('\n')).toContain('PREBUILD_CONCURRENCY')
   })
 
+  it('大机器上 go build 不被 8 硬顶压住（Go 缺省就是 -p=GOMAXPROCS）', () => {
+    const plan = planCapacity({
+      logicalCpus: 16,
+      memoryAvailableMb: 64 * 1024,
+      memoryTotalBytes: 64 * 1024 ** 3,
+    })
+    // 构建并发仍有 8 的硬顶（包依赖链本身窄 + 内存），但 `go build -p` 跟 CPU 预算走。
+    expect(plan.values.packageBuild).toBe(8)
+    expect(plan.values.goBuildParallel).toBe(16)
+  })
+
   it('内存单价表与折算用的是同一份常量（改一处不会漂移）', () => {
     const plan = planCapacity({ logicalCpus: 64, memoryAvailableMb: MEMORY_PER_TASK_MB.goTestPackage * 3 })
     expect(plan.values.goTestParallel).toBe(3)

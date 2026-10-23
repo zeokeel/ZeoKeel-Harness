@@ -295,6 +295,10 @@ export const EXECUTION_FACE_REGISTRY = [
   // 它和两个被它调用的判据都属执行面：改写它们 = 改写"发布产物真的能装能卸"这条结论。
   'packages/host/desktop/scripts/ci-verify-win-installer.mjs',
   'packages/host/desktop/scripts/clean.mjs',
+  // 2026-10-23：开发内循环入口（tsdown --watch + 应用重启）。它是**人跑的执行体**，且
+  // 会 spawn 应用与 watcher ⇒ 被 install 期改写不会让门禁变绿，但会让"重建 → 重启"这条
+  // 内循环的判定（日志里的 `[dev-watch]` 行）换结论，按执行体登记。
+  'packages/host/desktop/scripts/dev-watch.mjs',
   'packages/host/desktop/scripts/direct-invocation.mjs',
   'packages/host/desktop/scripts/e2e-client.mjs',
   'packages/host/desktop/scripts/e2e-fixture-gateway.mjs',
@@ -353,6 +357,10 @@ export const EXECUTION_FACE_REGISTRY = [
   'packages/vendor/memory-evolve/scripts/build.mjs',
   'packages/vendor/memory-evolve/scripts/run-tests.mjs',
   'packages/vendor/memory-evolve/scripts/sync-worker.mjs',
+  // 2026-10-23：机器自适应并发的**唯一口径**。所有并行点（门禁并发 / prebuild 层并发 /
+  // vitest worker / Makefile 的 TEST_PARALLEL·GO_BUILD_P）都从它取数 —— 改写它 = 改写
+  // "这台机器开几路并发"这一结论，且不会再有任何判据看得出偏差（除了本文件的工作树↔HEAD 对拍）。
+  'scripts/build-capacity.mjs',
   'scripts/check-doc-claims.mjs',
   // FIX-48⑤ 的两个新执行体（本地收尾清单 + 从 ci.yml 逐字抽出的 docs-only 分类器矩阵）：
   // 它们自己也是"判据执行体"—— 改写 `ci-parity-classifier.mjs` 就等于改写分类器的判定矩阵。

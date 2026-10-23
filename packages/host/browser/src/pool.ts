@@ -180,62 +180,7 @@ class PoolMutex {
     }
   }
 
-  async run(
-    work: () => Promise<void>,
-    gate: () => boolean,
-    signal?: AbortSignal,
-    /** 用户闸等待预算（ms，<=0 表示不设限）。 */
-    gateBudgetMs = 0,
-    /**
-     * "等前一个操作"的预算（ms，<=0 = 不设限）—— R4-B-15（2026-09-23 审计）。
-     *
-     * 排队曾经只可取消、没有时间上限：前一个操作合法占用全局锁 40s 时，排在后面
-     * 的工具会在排队中越过自己的 deadline，工具自己的诊断被上游换成笼统超时。
-     * 预算由调用方按**本次调用剩余的工具额度**算出（runtime），到点抛可读的
-     * `timed out waiting for the running browser operation`。
-     */
-    queueBudgetMs = 0,
-  ): Promise<void> {
-    const prev = this.tail
-    // The tool deadline is armed when the model issues the call, so queue time
-    // must count against the gate budget. Timing the budget from "after the
-    // mutex admitted us" let a long predecessor eat most of the tool deadline
-    // and the gate still waited its full budget afterwards — the deadline then
-    // replaced the explicit `window-controlled` refusal with the generic
-    // `tool call timed out after 30000ms` (2026-09-16 audit E2).
-    const budgetStartedAt = Date.now()
-    let release!: () => void
-    this.tail = new Promise<void>((resolve) => { release = resolve })
-    try {
-      // Waiting for the previous operation must be cancellable too: a wedged
-      // predecessor used to block every later call forever (2026-09-08 P0-4).
-      // R4-B-15: and it must be BOUNDED — see `queueBudgetMs`.
-      await raceAbort(withQueueBudget(prev, queueBudgetMs, this.locale), gate, signal, this.locale)
-      while (gate()) {
-        if (signal !== undefined && signal.aborted) {
-          throw browserError('window-controlled', gateRefusalWith(
-            this.locale(),
-            '（这次调用已被停止）',
-            ' (this call was stopped)',
-          ))
-        }
-        // 2026-09-15 审计 P0-1：用户接管后不能无限期挂住模型回合。
-        // 2026-09-16：预算必须短于工具预算，否则这段文案永远到不了模型面前。
-        if (gateBudgetMs > 0 && Date.now() - budgetStartedAt >= gateBudgetMs) {
-          const seconds = Math.round(gateBudgetMs / 1000)
-          throw browserError('window-controlled', hostCopy(
-            this.locale(),
-            `browser: 等待用户交还浏览器超时（${String(seconds)}s）—— ${gateRefusal('zh')}`,
-            `browser: timed out waiting for the user to hand back the browser (${String(seconds)}s) — ${gateRefusal('en')}`,
-          ))
-        }
-        await sleep(120)
-      }
-      return await work()
-    } finally {
-      release()
-    }
-  }
+
 }
 
 /** Await a promise, rejecting as soon as `signal` aborts. The rejection code
@@ -359,6 +304,11 @@ export class TabPool {
   // ------------------------------------------------------------- state
 
   get controlled(): boolean {
+    return this.windowControlled
+  }
+
+  /** Whether the user currently holds the browser (D1 S2 re-check). */
+  isUserControlled(): boolean {
     return this.windowControlled
   }
 

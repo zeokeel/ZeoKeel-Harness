@@ -15,7 +15,7 @@
 | L5 | dialog 状态 | dialog fail-fast | 命令入口（L3 内） | 处理/丢弃 |
 | L6–L8 | store / surfaces / downloads | 台账/注册/记录 | 极短同步段 | 返回即释放 |
 | L9 | **全局执行锁**（B4） | 全局独占操作：restore 物化（load 外）、应用窗口、clear_data、downloads_remove、bookmarks 写、closeAll/会话切换 | B 类准入后获取 | 操作结束（finally） |
-| L10 | **tab 生命周期创建段锁**（B6-3） | reserve/create/register/restore 创建段（防 restore pending id 被 open 占用、防 P1-2 交错） | 仅创建段；`L9 → L10` | create/register 完成即释放；**不把锁带进 load** |
+| L10 | **tab 生命周期创建段锁**（B6-3，已实现于 `runtime.withLifecycleLock`） | reserve/create/register/restore 创建段（防 restore pending id 被 open 占用、防 P1-2 交错） | 仅创建段；与 L9 独立（创建不走 L9） | 创建段结束即释放（当前包含 createTabReal 的 load，记为后续把 load 移出 L10 的缺口） |
 
 ## 2. 唯一方向（B1：L1 不再全程持有）
 
@@ -38,7 +38,7 @@ tab 生命周期创建段 : admitOperation → **L10（创建段锁）** → res
 | --- | --- | --- |
 | **A per-tab** | L1 → L3(tabId) | navigate/open(有 target)/click/type/select/press/hotkey/hover/drag/scroll/snapshot/get_text/eval/screenshot/fetch/emulate/**upload_file**/file_chooser(目标 tab)/download(归属 tab)/wait_for(事件类) |
 | **B global-exclusive** | L1 → L9（必要时再 L3） | **restore 物化**（创建段在 L10，load 在 L9 外）、**open（无 target）**（创建段 L10）、应用窗口操作（A16，无 tab id）、`browser_clear_data`、`downloads_remove`、bookmarks add/remove、`closeAll`/会话切换 |
-| **C admission-only** | L1 only | `list_tabs` / `downloads_list` / `history_search` / `bookmarks_list` / `clipboard`（全局读写） |
+| **C read-only** | **无准入**（同步读，0 等待；不进 L1） | `list_tabs` / `downloads_list` / `history_search` / `bookmarks_list` / `clipboard`（全局读写） |
 | **D driver** | L1 only（**不取 L3/L9**） | `browser_run`：脚本内每个 helper 按上面的 A/C 类各自取锁；op 上下文与 takeover epoch 覆盖整段脚本 |
 
 规则：B 类在需要操作具体 tab 时**先 L9 再 L3**，绝不反向；A/C 类不取 L9。**dialog/`handleDialog` 属 A 类（目标 tab 的 L3），不取 L9**——避免 restore 20s load 的 head-of-line（B6-4）。用例：restore 与 tab 命令并发不交错、clear_data 与在途导航、两应用窗口命令串行；变异：B 类改成只准入 → 红。

@@ -730,6 +730,9 @@ export class BrowserRuntime {
   /** True while the global lock (or a tab lock) is actually held. */
   private globalLockHeld = false
   private readonly tabLocksHeld = new Set<number>()
+  /** L10: creation-segment lock (open / ledger restore). */
+  private lifecycleLock: Promise<void> = Promise.resolve()
+  private lifecycleLockHeld = false
   /**
    * Deadline **ownership stack**: one entry per agent operation currently inside
    * the pool's critical section (epoch ms), innermost last — R4-B-15, C3-01.
@@ -1049,10 +1052,10 @@ export class BrowserRuntime {
             // (tryReserveTab = fail-fast, no queue). When the pool is full the
             // remaining tabs STAY PENDING and are retried on the next
             // materialization attempt — restore never exceeds maxTabs.
-            const created = await this.pool.withOperation('browser_restore', async () => {
-              // 进临界区后再校验一次代际（2026-09-15 审计 P1-2）：等待互斥锁/用户闸
-              // 期间可能已经发生过一次 restoreLedger/closeAll（会话切换），此时 item
-              // 属于**上一个账号**的账本 —— 继续建 tab 会把它的 URL/标题写进新账号的
+            const created = await this.withLifecycleLock('browser_restore', undefined, Date.now() + this.toolBudgetMs(), async () => {
+              // 进 L10 后再校验一次代际（2026-09-15 审计 P1-2；D1 后互斥由 L10 承担）：
+              // 等待期间可能已经发生过一次 restoreLedger/closeAll（会话切换），此时
+              // item 属于**上一个账号**的账本 —— 继续建 tab 会把它的 URL/标题写进新账号的
               // history/ledger，并在新账号的分区里真的把页面加载起来。
               if (epoch !== this.materializeEpoch) return false
               const reservation = this.pool.tryReserveTab()
@@ -1061,7 +1064,7 @@ export class BrowserRuntime {
                 const tab = await this.createTabReal(item.url, undefined, item.tabId, 'restore', undefined, reservation)
                 if (epoch !== this.materializeEpoch) {
                   // 建完才发现代际变了（加载期间用户切换）：销毁刚建出来的 tab。
-                  // 互斥锁保证新账号的恢复还没开始建 tab（不会误杀它的同 id tab）。
+                  // L10 保证新账号的恢复/创建不会与这段交错（不会误杀它的同 id tab）。
                   this.destroyTab(tab.id)
                   return false
                 }
@@ -1260,7 +1263,10 @@ export class BrowserRuntime {
         throw browserError('quota', 'browser: tab limit reached — close a tab first')
       }
       try {
-        return await this.createTabReal(url, signal, undefined, 'user', inheritSecretsFrom, reservation, deadlineAt)
+        // The USER path must not be refused by the gate it is acting under.
+        return await this.withLifecycleLock('open', signal, deadlineAt ?? Date.now() + this.toolBudgetMs(), async () => {
+          return await this.createTabReal(url, signal, undefined, 'user', inheritSecretsFrom, reservation, deadlineAt)
+        })
       } catch (error) {
         // 令牌幂等：导航失败时 createTabReal 已经 removeTab（槽位还回去了），
         // 这里再退一次不能把预留计数也抹掉（否则池子静默缩容，P0-2）。
@@ -1275,7 +1281,12 @@ export class BrowserRuntime {
       // 就会被上游 timeout-policy 换成笼统超时（审计实测 30.9s）。
       const reservation = await this.pool.reserveTab(signal, this.operationRemainingMs())
       try {
-        return await this.createTabReal(url, signal, undefined, 'ai', inheritSecretsFrom, reservation, deadlineAt)
+        // B6-3/P2-1: creation segments are mutually exclusive with ledger restore
+        // (same L10); the epoch is re-checked INSIDE the lock below.
+        return await this.withLifecycleLock('open', signal, deadlineAt ?? Date.now() + this.toolBudgetMs(), async () => {
+          this.assertGateStillOpen()
+          return await this.createTabReal(url, signal, undefined, 'ai', inheritSecretsFrom, reservation, deadlineAt)
+        })
       } catch (error) {
         this.pool.releaseReservation(reservation)
         throw error
@@ -2440,7 +2451,7 @@ export class BrowserRuntime {
       }
       if (action !== 'accept') throw browserError('policy', 'browser: promptText only applies when accepting')
     }
-    return await this.agentRun('browser_dialog', async () => {
+    return await this.runTab('browser_dialog', resolved, async () => {
       const tab = this.tab(resolved)
       this.assertScopeUnchanged(this.scopeGeneration(), 'browser_dialog', tab)
       await tab.cdp.send('Page.handleJavaScriptDialog', {
@@ -2510,7 +2521,7 @@ export class BrowserRuntime {
     if (pending === undefined) {
       throw browserError('not-found', 'browser: there is no pending file chooser on this tab (click a file input first, or pass expect:"file-chooser")')
     }
-    return await this.agentRun('browser_file_chooser', async () => {
+    return await this.runTab('browser_file_chooser', resolved, async () => {
       const tab = this.tab(resolved)
       if ('cancel' in action) {
         await tab.cdp.send('DOM.setFileInputFiles', { files: [], backendNodeId: pending.backendNodeId }, signal === undefined ? {} : { signal })
@@ -2657,6 +2668,8 @@ export class BrowserRuntime {
     try {
       await this.waitForTurn(prev, `the running browser operation on tab ${String(tabId)}`, deadlineAt, signal, !this.tabLocksHeld.has(tabId))
       this.tabLocksHeld.add(tabId)
+      // S2 (TOCTOU): the user may have taken control while we queued.
+      this.assertGateStillOpen()
       try {
         return await work()
       } finally {
@@ -2668,6 +2681,41 @@ export class BrowserRuntime {
     }
   }
 
+  /**
+   * Run `work` under the lifecycle lock L10 (D1/B6-3): tab creation segments
+   * (`open`, ledger restore) are mutually exclusive so a restored pending id can
+   * never be taken by a concurrent open. Loads stay inside this lock today; L9
+   * (global exclusive) does NOT wrap creation, so dialogs/close are unaffected.
+   */
+  private async withLifecycleLock<T>(q: string, signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>): Promise<T> {
+    const prev = this.lifecycleLock
+    let release!: () => void
+    const mine = new Promise<void>((resolve) => { release = resolve })
+    this.lifecycleLock = mine
+    try {
+      await this.waitForTurn(prev, `the running tab-creation operation (${q})`, deadlineAt, signal, !this.lifecycleLockHeld)
+      this.lifecycleLockHeld = true
+      try {
+        return await work()
+      } finally {
+        this.lifecycleLockHeld = false
+      }
+    } finally {
+      release()
+      if (this.lifecycleLock === mine) this.lifecycleLock = Promise.resolve()
+    }
+  }
+
+  /** S2: a user takeover that happened while queueing must stop the operation. */
+  private assertGateStillOpen(): void {
+    if (!this.pool.isUserControlled()) return
+    throw browserError('window-controlled', hostCopy(
+      this.locale(),
+      `browser: 用户在你排队期间拿回了浏览器控制权 —— ${gateRefusal('zh')}`,
+      `browser: the user took control while this call was queued — ${gateRefusal('en')}`,
+    ))
+  }
+
   /** Run `work` under the global-exclusive lock (D1 B/C 类: no tab target). */
   private async withGlobalLock<T>(signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>): Promise<T> {
     const prev = this.globalLock
@@ -2677,6 +2725,7 @@ export class BrowserRuntime {
     try {
       await this.waitForTurn(prev, 'the running browser operation', deadlineAt, signal, !this.globalLockHeld)
       this.globalLockHeld = true
+      this.assertGateStillOpen()
       try {
         return await work()
       } finally {
@@ -3226,6 +3275,9 @@ export class BrowserRuntime {
     this.tabEvents.get(id)?.dispose()
     this.tabEvents.delete(id)
     this.choosers.delete(id)
+    // S7: a destroyed tab must not leak lock bookkeeping for a reused id.
+    this.tabLocks.delete(id)
+    this.tabLocksHeld.delete(id)
     this.chooserInterception.delete(id)
     this.chooserInterception.delete(id)
     this.chooserReenable.delete(id)

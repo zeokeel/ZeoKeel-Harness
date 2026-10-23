@@ -50,6 +50,7 @@
  *    预算**、扫描面不空转），并且判据自身可被变异打坏（把任一调用点改回缺省即红）。
  */
 import { defineConfig } from 'vitest/config'
+import { detectCapacity } from '../../../scripts/build-capacity.mjs'
 
 export default defineConfig({
   test: {
@@ -60,6 +61,11 @@ export default defineConfig({
     testTimeout: 30_000,
     // Profile integration tests create a full package-junction closure; higher
     // Windows file concurrency makes their latency depend on NTFS/Defender load.
-    maxWorkers: process.platform === 'win32' ? 2 : undefined,
+    //
+    // 2026-10-23：worker 数改为**机器自适应**（`scripts/build-capacity.mjs` 的唯一口径）：
+    // 4 核机器给 3（与 vitest 缺省同档），16 核/大内存给到硬顶 8，**小内存机器**则由
+    // 内存预算压下来（旧行为是"Linux 上不设上限" ⇒ 8GB 机器跑桌面套件容易进 swap）。
+    // 覆盖姿势：`VITEST_MAX_WORKERS=2 yarn vitest run`（环境变量由 capacity 读）。
+    maxWorkers: process.platform === 'win32' ? 2 : detectCapacity().values.vitestWorkers,
   },
 })

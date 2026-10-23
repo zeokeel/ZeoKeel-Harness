@@ -20,9 +20,21 @@ VERSION ?= $(shell git describe --tags --always 2>/dev/null | sed 's/^v//')
 # `make check` 仍带 -count=1(发布门禁,永远真跑)。
 .PHONY: test test-server test-server-fast build-server webadmin webadmin-check-features webadmin-variant-tests docker-image check check-fast check-tags
 
-# 并行测试包的并发数(本地默认 4;CI 的 `go test -p 1` 见 .github/workflows/ci.yml,
+# 并行测试包的并发数(CI 的 `go test -p 1` 见 .github/workflows/ci.yml,
 # 那里串行是为了 service 容器的 max_connections,不是性能考虑)。
-TEST_PARALLEL ?= 4
+#
+# 2026-10-23：本地缺省值改为**机器自适应** —— 唯一口径是 `scripts/build-capacity.mjs`
+# （CPU 配额 + 可用内存 / 每包内存单价，4 核 8GB 机器给 4，16 核 4GB 容器给 2）。
+# 旧口径写死 4 ⇒ 16 核机器只开 4 个包（浪费 3/4 的核）、4GB 容器照开 4 路（可能 OOM）。
+# 覆盖：`make test-server TEST_PARALLEL=8` 或环境变量 `TEST_PARALLEL=8`。
+# ⚠️ `TEST_TIMEOUT_PARALLEL` 的取值依据是 **-p 4** 的实测膨胀（见下方长注释）；
+# 把 -p 调高时最慢单包的 wall 会继续上涨，超过 8 时请同时调大超时。
+TEST_PARALLEL ?= $(shell node ../scripts/build-capacity.mjs --print goTestParallel 2>/dev/null || echo 4)
+
+# `go build` 的包级并发（`go build -p`）；缺省同样是机器自适应。
+# 4 核机器上 `go build ./cmd/server` 冷缓存 41s、热缓存 1.4s（2026-10-23 实测），
+# 并发只对**冷缓存/多包改动**有意义，所以不设更高的硬顶。
+GO_BUILD_P ?= $(shell node ../scripts/build-capacity.mjs --print goBuildParallel 2>/dev/null || echo 4)
 
 # ---------------------------------------------------------------------------
 # Go 扫描面**唯一真源**(2026-09-23 第六轮审计 R6-C P2-1)
@@ -157,9 +169,9 @@ test-wasm-race:
 
 # webadmin 是编译进 Go 二进制的临时产物:build-server 自动先构建,不单独编译
 build-server: webadmin
-	go build $(GO_TAG_FLAG) -o $(BIN) ./cmd/server
+	go build -p $(GO_BUILD_P) $(GO_TAG_FLAG) -o $(BIN) ./cmd/server
 	@# WASM 应用平台的编译子进程：必须与 server 同目录（compile 按自身路径解析）。
-	go build $(GO_TAG_FLAG) -o $(dir $(BIN))zeokeel-app-compile ./cmd/zeokeel-app-compile
+	go build -p $(GO_BUILD_P) $(GO_TAG_FLAG) -o $(dir $(BIN))zeokeel-app-compile ./cmd/zeokeel-app-compile
 
 # 两段式构建(2026-09): 先构建前端 dist, 再 go build 嵌入真实产物。
 # vite build 会清空 dist 目录, build 后恢复 .gitkeep 占位(go:embed dist/*

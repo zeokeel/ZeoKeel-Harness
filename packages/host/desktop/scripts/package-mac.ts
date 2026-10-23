@@ -198,7 +198,7 @@ if (isDirectInvocation(import.meta)) {
       // 打包前预构建依赖包(见 prebuild-workspace-deps.ts)
       const { prebuildWorkspaceDeps } = await import('./prebuild-workspace-deps.ts')
       // 变体跳过读**本轮** features（清单由后一步 prepareChannelPackaging() 写）。
-      prebuildWorkspaceDeps(dirname(dirname(fileURLToPath(import.meta.url))), {
+      await prebuildWorkspaceDeps(dirname(dirname(fileURLToPath(import.meta.url))), {
         features: resolveChannelBuildContext().features,
       })
     }

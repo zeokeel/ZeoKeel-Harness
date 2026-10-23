@@ -46,7 +46,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1056,6 +1056,9 @@ export function buildGuardSpawnWiringProbe() {
   }
   writeFileSync(join(tree, 'scripts', 'check-root-guards.mjs'), patchProbeRunnerRegistry(runnerSource, names))
   writeFileSync(join(tree, 'scripts', 'check-workspaces.mjs'), patchProbeOrchestratorTables(orchestratorSource, names))
+  // 编排器的运行期依赖（2026-10-23 起 import `./build-capacity.mjs`）：探针树只拷编排器
+  // 源码 ⇒ ERR_MODULE_NOT_FOUND，会被误读成"守卫通道接线坏了"。新增依赖时同步这里。
+  copyFileSync(join(ROOT, 'scripts', 'build-capacity.mjs'), join(tree, 'scripts', 'build-capacity.mjs'))
   writeFileSync(join(tree, 'package.json'), `${JSON.stringify({
     name: 'r11-guard-wiring-probe',
     private: true,

@@ -74,7 +74,7 @@ export function packageDir(options = defaultOptions()) {
 if (isDirectInvocation(import.meta)) {
   const { prebuildWorkspaceDeps } = await import('./prebuild-workspace-deps.ts')
   // 变体跳过读**本轮** features（清单由后一步 prepareChannelPackaging() 写）。
-  prebuildWorkspaceDeps(packageRoot, { features: resolveChannelBuildContext().features })
+  await prebuildWorkspaceDeps(packageRoot, { features: resolveChannelBuildContext().features })
   // 渠道化准备（图标 + 随包 channel.json），见 channel-prepare.ts。
   await prepareChannelPackaging()
   packageDir()

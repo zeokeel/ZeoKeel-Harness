@@ -104,6 +104,8 @@
     "check": "node scripts/check-workspaces.mjs",
     "check:fast": "node scripts/check-workspaces.mjs --changed",
     "dev": "yarn workspace dsh-plugin-desktop dev",
+    "dev:fast": "yarn workspace dsh-plugin-desktop dev:fast",
+    "dev:watch": "yarn workspace dsh-plugin-desktop dev:watch",
     "start": "yarn workspace dsh-plugin-desktop start",
     "package:dir": "yarn workspace dsh-plugin-desktop package:dir",
     "dist:mac": "yarn workspace dsh-plugin-desktop dist:mac",

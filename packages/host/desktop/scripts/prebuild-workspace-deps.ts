@@ -55,11 +55,12 @@
  * 判断是 `if (!force && variantSkip.has(...))`。
  */
 
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDirectInvocation } from './direct-invocation.mjs'
+import { detectCapacity } from '../../../../scripts/build-capacity.mjs'
 import { closedFeatureSurfaces, type FeatureSwitches } from '../src/channel-features.ts'
 import { channelFeaturesVariant, normalizeChannelFeatures } from './channel-constants.ts'
 
@@ -182,7 +183,17 @@ export const WORKSPACE_PACKAGES: readonly WorkspacePackage[] = [
     // `packages/host/gateway-client`（本包保留同名 re-export）⇒ 多一条构建输入。
     deps: ['packages/host/host-locale', 'packages/host/gateway-client', 'packages/host/desktop', 'packages/client/panel-surface', 'packages/client/foot-menu'],
   },
-  { workspace: '@zeokeel/dsh-account-card', dir: 'packages/client/account-card', deps: ['packages/host/desktop'] },
+  // 2026-10-23（预构建并行化）：`src/` 真的 import 了 enterprise 的四个子路径
+  // （`session-service` / `server-connector/{auth,config}` / `session-identity`）与
+  // panel-surface 的 `./client`（`src/client/panel-esc.spec.tsx` 也在 `tsconfig.client.json`
+  // 的 include 面内 ⇒ 声明产物同样要它）。此前这两条边只靠**串行顺序**兜住：表里
+  // account-card 排在 enterprise 之后，并行后同层读到 enterprise 的 tsdown `clean` 窗口
+  // ⇒ `TS7016 Could not find a declaration file`。表是并行安全的唯一真源，必须齐。
+  {
+    workspace: '@zeokeel/dsh-account-card',
+    dir: 'packages/client/account-card',
+    deps: ['packages/host/desktop', 'packages/host/enterprise', 'packages/client/panel-surface'],
+  },
   { workspace: '@zeokeel/dsh-wasm-apps', dir: 'packages/client/wasm-apps', deps: ['packages/client/panel-surface', 'packages/client/foot-menu'] },
   { workspace: '@zeokeel/dsh-branding', dir: 'packages/client/branding', deps: ['packages/host/desktop'] },
   // cron 的 tsc 仍读 desktop 的 lib/types（`dsh-plugin-desktop/host-locale` 与
@@ -196,18 +207,76 @@ export const WORKSPACE_PACKAGES: readonly WorkspacePackage[] = [
   },
 ]
 
-/** 执行一个 yarn 命令,失败即抛错。 */
-function run(args: readonly string[], cwd: string, label: string): void {
+/** 执行一个 yarn 命令（异步）；失败即抛错。 */
+function run(args: readonly string[], cwd: string, label: string): Promise<void> {
   // corepack yarn:仓库约定(包管理器经 corepack);shell: true 让 Windows
-  // 也能解析 corepack 的可执行 shim(否则 spawnSync 找不到未入 PATH 的包装)。
-  const result = spawnSync('corepack', ['yarn', ...args], {
-    cwd,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
+  // 也能解析 corepack 的可执行 shim(否则 spawn 找不到未入 PATH 的包装)。
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn('corepack', ['yarn', ...args], {
+      cwd,
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+    })
+    child.on('error', error => reject(new Error(`prebuildWorkspaceDeps: ${label} 无法启动: ${String(error)}`)))
+    child.on('close', code => {
+      if (code !== 0) reject(new Error(`prebuildWorkspaceDeps: ${label} failed (status ${String(code)})`))
+      else resolvePromise()
+    })
   })
-  if (result.status !== 0) {
-    throw new Error(`prebuildWorkspaceDeps: ${label} failed (status ${String(result.status)})`)
+}
+
+/**
+ * 按构建依赖把包表切成**层**（同层内无依赖关系，可并行）。
+ *
+ * 为什么按表里的 `deps` 现算而不手写分组：表本身是"构建输入"的唯一真源，手写分组
+ * 在加包/换依赖时会漂移，而漂移的后果不是报错 —— 是并行读到半成品 `lib/`（
+ * 2026-09-10 那版并行就踩过 `enterprise` 的 tsdown `clean` 窗口）。
+ *
+ * @param packages - 包表。
+ * @returns 层数组（每层是包表条目）。
+ */
+function dependencyLayers(packages: readonly WorkspacePackage[]): WorkspacePackage[][] {
+  const byDir = new Map(packages.map(pkg => [pkg.dir, pkg]))
+  const pending = new Map<string, Set<string>>(
+    packages.map(pkg => [pkg.dir, new Set((pkg.deps ?? []).filter(dir => byDir.has(dir)))]),
+  )
+  const layers: WorkspacePackage[][] = []
+  while (pending.size > 0) {
+    const ready = [...pending.entries()].filter(([, deps]) => deps.size === 0).map(([dir]) => dir)
+    if (ready.length === 0) {
+      // 成环 = 表坏了（或新增了一条环边）：**fail-loud**，不要退化成"随便排个序"。
+      throw new Error(`prebuildWorkspaceDeps: 构建依赖成环，涉及 ${[...pending.keys()].join(', ')}`)
+    }
+    layers.push(ready.map(dir => byDir.get(dir)).filter((pkg): pkg is WorkspacePackage => pkg !== undefined))
+    for (const dir of ready) pending.delete(dir)
+    for (const deps of pending.values()) for (const dir of ready) deps.delete(dir)
   }
+  return layers
+}
+
+/**
+ * 受限并发跑一批异步任务；任一失败会被收集，全部跑完后再抛（拿到完整失败面）。
+ *
+ * @param items - 待跑项。
+ * @param limit - 并发上限（≥1）。
+ * @param worker - 单项执行体。
+ */
+async function runPool<T>(items: readonly T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+  const queue = [...items]
+  const failures: string[] = []
+  const runners = Array.from({ length: Math.min(Math.max(1, limit), Math.max(1, queue.length)) }, async () => {
+    for (;;) {
+      const item = queue.shift()
+      if (item === undefined) return
+      try {
+        await worker(item)
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error))
+      }
+    }
+  })
+  await Promise.all(runners)
+  if (failures.length > 0) throw new Error(failures.join('\n'))
 }
 
 /** 递归收集文件路径(不跟随符号链接,剪枝 node_modules/lib/build 等)。 */
@@ -614,14 +683,31 @@ export interface PrebuildOptions {
  * @param desktopRoot - dsh-plugin-desktop 包根。
  * @param options - 渠道 features（见 {@link PrebuildOptions}）。
  */
-export function prebuildWorkspaceDeps(desktopRoot: string, options: PrebuildOptions = {}): void {
+export async function prebuildWorkspaceDeps(desktopRoot: string, options: PrebuildOptions = {}): Promise<void> {
   const repoRoot = resolve(desktopRoot, '..', '..', '..')
   const force = process.env.DSH_PREBUILD === 'force' || process.argv.includes('--force')
   const variantSkip = variantPrunedDirs(options.features)
   const skipped: string[] = []
   const variantSkipped: string[] = []
-  for (const pkg of WORKSPACE_PACKAGES) {
-    const key = workspaceKey(pkg)
+  // 机器自适应并发（2026-10-23）：串行 15 个包在 4 核上实测 39s，其中大部分时间只有
+  // 一个核在干活。并发上限来自唯一口径 `scripts/build-capacity.mjs`（CPU 配额 + 内存
+  // 单价）；探测失败时退回 1（串行 = 旧行为，慢但不会把机器拖死）。
+  let concurrency = 1
+  try {
+    concurrency = Math.max(1, detectCapacity().values.prebuild)
+  } catch {
+    concurrency = 1
+  }
+  const layers = dependencyLayers(WORKSPACE_PACKAGES)
+  console.log(
+    `[prebuild] 并发 ${concurrency}；构建依赖 ${layers.length} 层（${layers.map(layer => layer.length).join('-')}）`
+    + '；PREBUILD_CONCURRENCY 可覆盖',
+  )
+
+  for (const layer of layers) {
+    const toBuild: { pkg: WorkspacePackage; key: string; reasonLabel: string }[] = []
+    for (const pkg of layer) {
+      const key = workspaceKey(pkg)
     // 功能模块变体（2026-10-13，P2）：被关闭的模块**不再随包**，三个 `dist:*` 默认
     // 先跑本函数 ⇒ 不跳过就会去构建一个不进产物的包（白付一次 tsdown）。
     // `variantPrunedDirs()` 只在**没有**保留包把它当构建输入时才把它列进来：
@@ -632,27 +718,32 @@ export function prebuildWorkspaceDeps(desktopRoot: string, options: PrebuildOpti
     // `DSH_PREBUILD=force` **压过**变体跳过（2026-10-14 R2 审计 S2）：force 的语义是
     // "无视一切跳过理由重建"，把它挡在变体分支之后等于这个开关在最需要它的场合
     // （上一轮清单/入参算错时的兜底）失效。
-    if (!force && variantSkip.has(pkg.dir)) {
-      variantSkipped.push(`${key} (变体 ${variantSkip.get(pkg.dir)} 关闭了该模块)`)
-      continue
-    }
-    const reason = stalenessReason(repoRoot, pkg)
-    if (!force && reason === null) {
-      skipped.push(key)
-      continue
-    }
+      if (!force && variantSkip.has(pkg.dir)) {
+        variantSkipped.push(`${key} (变体 ${variantSkip.get(pkg.dir)} 关闭了该模块)`)
+        continue
+      }
+      const reason = stalenessReason(repoRoot, pkg)
+      if (!force && reason === null) {
+        skipped.push(key)
+        continue
+      }
     // 带上判定原因:本缺陷的现场症状是"跳过重建"看着一切正常,日志必须能直接
     // 区分"因为缺产物重建"与"因为源文件更新重建"。
     // force 时**一律**印 `(forced)`(后面再附陈旧原因):`DSH_PREBUILD=force` 的语义是
     // "无视一切跳过理由重建",而"被变体跳过"这一条根本走不到陈旧判定 ⇒ 只看
     // `reason === null` 会让 force 覆盖变体跳过的现场印成陈旧原因、看不出是谁下令重建
     // (2026-10-14 R2 审计 S2 的验收判据就是这一行 `building (forced)`)。
-    const reasonLabel = force
-      ? ` (forced)${reason === null ? '' : `，另有陈旧: ${reason}`}`
-      : ` (${reason})`
-    console.log(`[prebuild] ${key}: building${reasonLabel}`)
-    const args = pkg.workspace === null ? ['run', 'build'] : ['workspace', pkg.workspace, 'build']
-    run(args, desktopRoot, `${key} build`)
+      const reasonLabel = force
+        ? ` (forced)${reason === null ? '' : `，另有陈旧: ${reason}`}`
+        : ` (${reason})`
+      console.log(`[prebuild] ${key}: building${reasonLabel}`)
+      toBuild.push({ pkg, key, reasonLabel })
+    }
+    // 同层并行：这一层里没有任何包依赖另一个的输出（层就是按 `deps` 算的）。
+    await runPool(toBuild, concurrency, async ({ pkg, key }) => {
+      const args = pkg.workspace === null ? ['run', 'build'] : ['workspace', pkg.workspace, 'build']
+      await run(args, desktopRoot, `${key} build`)
+    })
   }
   if (variantSkipped.length > 0) {
     console.log(
@@ -678,7 +769,7 @@ export function prebuildWorkspaceDeps(desktopRoot: string, options: PrebuildOpti
 if (isDirectInvocation(import.meta)) {
   const desktopRoot = dirname(dirname(fileURLToPath(import.meta.url)))
   try {
-    prebuildWorkspaceDeps(desktopRoot)
+    await prebuildWorkspaceDeps(desktopRoot)
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = 1

@@ -200,7 +200,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   ['check:inventories', { script: 'node scripts/verify-inventories.mjs', argvTail: [], digest: '39528c7984ee7baf0cad92faaa3b421f7f64e4d08b524d63417e896abb57267d' }],
   ['check:theme-tokens', { script: 'node scripts/check-theme-tokens.mjs', argvTail: [], digest: '1523cdf07984516d5696ee76aaa87cdb12cf5c94c69908b27ac4ec7e210bc5e4' }],
   ['check:glitchtip', { script: 'node scripts/verify-glitchtip-ops-check.mjs', argvTail: [], digest: 'f73f2ebcecbfeaaa57c069ca2e662dc1842b9d37d53eb413fc36bb85a987be3e' }],
-  ['check:check-workspaces', { script: 'node scripts/verify-check-workspaces.mjs', argvTail: [], digest: '6ff8b05157ad2b7f443d192b6c484616596dc080618d9133e6a1f11911d5356b' }],
+  ['check:check-workspaces', { script: 'node scripts/verify-check-workspaces.mjs', argvTail: [], digest: 'db0fbe482d056ec29188e2386481648b19d45f18deac1be0e7dfc403e45ab138' }],
   ['check:no-leftover-mutants', { script: 'node scripts/check-no-leftover-mutants.mjs', argvTail: [], digest: 'c1a84c22a47bea2c1368bfba32f33b20feca66deb30abcbbc0eb40318f807285' }],
   ['check:migration-range', { script: 'node scripts/check-migration-range.mjs', argvTail: [], digest: 'c9575a51a7f4dcb09a618d3130cc5a144da5f84af4c3daf8ff6620f8c28d0fc0' }],
   ['check:doc-claims', { script: 'node scripts/check-doc-claims.mjs', argvTail: [], digest: '33f55875602af4b7af9aa1252e29b8987c49099b70bfc67689792e1c13d88125' }],
@@ -228,7 +228,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // （同一份 `sha256sum` 口径）。
   // 2026-10-14（渠道缺省 + 渠道清单工具）：install-integrity 再补登
   // `scripts/channel-modules.mjs` ⇒ 本摘要同步。
-  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: 'e7c511ffe4641d4f77b62275cf66dc87cf819ed7046d3a794ddae6b31ba6985d' }],
+  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: 'bd3380e0694d3f2a1c2e034094e00c2f4f553ce7437f2b2de4a604d2ac6fbfcb' }],
 ])
 
 /**

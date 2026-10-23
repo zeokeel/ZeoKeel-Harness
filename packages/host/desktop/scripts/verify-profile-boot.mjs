@@ -18,7 +18,7 @@ import { inactiveRequiredRows, FIBER_ACTIVE, FIBER_FAILED } from '../lib/startup
 // 否则临时 profile 的 node_modules 里缺 lib/index.js —— CI yarn check 失败根因。
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const { prebuildWorkspaceDeps } = await import('./prebuild-workspace-deps.ts')
-prebuildWorkspaceDeps(packageRoot)
+await prebuildWorkspaceDeps(packageRoot)
 
 const BIN_NAME = 'dsh-plugin-desktop-profile-smoke'
 const HOST_SERVICE_PLUGIN_NAME = 'dsh-desktop-host-services-smoke-plugin'

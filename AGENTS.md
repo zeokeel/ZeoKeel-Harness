@@ -44,11 +44,89 @@ This repository owns the desktop product around an unmodified DeepSeek Harness c
 - Build the desktop package with `corepack yarn build`.
 - Run unit tests with `corepack yarn test`.
 - Run type checking with `corepack yarn typecheck`.
-- Run the complete headless gate with `corepack yarn check`（2026-09-10 重构为 `scripts/check-workspaces.mjs`：**受构建依赖约束的并行编排**，不再是 10 个包串行 `&&`——阶段 1 跑 `dsh-plugin-desktop check` + **17 条根守卫**（唯一真源 = `node scripts/check-workspaces.mjs --list` 的 `guards:` 行；验收判据行的 `planned=34` = **17 个包 + 17 条守卫**，两条独立口径互相对上。2026-09-29 第三十轮 FIX-45 校正：此处曾写"三个根守卫"，与真值差 14 条），阶段 2 按依赖图调度其余包：`enterprise`/`connectors`/`cron` 的 tsc 依赖 desktop 的 `lib/types`，`account-card` 依赖 `enterprise`（其 tsdown `clean:true` 会清 `lib/`，并发读取会踩空 → 必须串行），`browser` 依赖 `connectors`，`capability-center`（能力中心 host + client 双面，2026-10-13 从 enterprise 拆出、同日 P0-b 把 host 面也搬入）依赖 `panel-surface`/`foot-menu`/`host-locale`/`host-home`/`gateway-client`，`gateway-client`（网关客户端叶子包）依赖 `host-locale`；依赖失败的包直接跳过并说明原因，不产生级联噪音。并发默认 `min(4, CPU)`，`CHECK_CONCURRENCY` 可覆盖。`yarn check:fast` = 只跑本次改动影响的包（`git status`/`git diff` 映射到包，顶层文件改动自动升格为全量）。本地 `yarn check` 与 CI gate job 完全同义。`yarn prebuild` = `prebuildWorkspaceDeps` 一键构建全部 **15 个** workspace 包（唯一真源 = `packages/host/desktop/scripts/prebuild-workspace-deps.ts` 的 `WORKSPACE_PACKAGES.length`；2026-09-29 校正：此处曾写"8 个"），**已增量**：某包产物不早于其输入（`src/`、包配置、依赖包产物）即跳过重建，`DSH_PREBUILD=force` 强制全量。门禁提速实测与设计见 docs/decisions/2026-09-10-verification-speedup.md）。
+- Run the complete headless gate with `corepack yarn check`（2026-09-10 重构为 `scripts/check-workspaces.mjs`：**受构建依赖约束的并行编排**，不再是 10 个包串行 `&&`——阶段 1 跑 `dsh-plugin-desktop check` + **17 条根守卫**（唯一真源 = `node scripts/check-workspaces.mjs --list` 的 `guards:` 行；验收判据行的 `planned=34` = **17 个包 + 17 条守卫**，两条独立口径互相对上。2026-09-29 第三十轮 FIX-45 校正：此处曾写"三个根守卫"，与真值差 14 条），阶段 2 按依赖图调度其余包：`enterprise`/`connectors`/`cron` 的 tsc 依赖 desktop 的 `lib/types`，`account-card` 依赖 `enterprise`（其 tsdown `clean:true` 会清 `lib/`，并发读取会踩空 → 必须串行），`browser` 依赖 `connectors`，`capability-center`（能力中心 host + client 双面，2026-10-13 从 enterprise 拆出、同日 P0-b 把 host 面也搬入）依赖 `panel-surface`/`foot-menu`/`host-locale`/`host-home`/`gateway-client`，`gateway-client`（网关客户端叶子包）依赖 `host-locale`；依赖失败的包直接跳过并说明原因，不产生级联噪音。并发默认**机器自适应**（`scripts/build-capacity.mjs`：CPU 配额 + 可用内存 / 每任务内存单价；4 核 8GB 给 4，16 核 4GB 容器给 4，16 核 64GB 给 8），`CHECK_CONCURRENCY` 仍是覆盖口。`yarn check:fast` = 只跑本次改动影响的包（`git status`/`git diff` 映射到包，顶层文件改动自动升格为全量）。本地 `yarn check` 与 CI gate job 完全同义。`yarn prebuild` = `prebuildWorkspaceDeps` 一键构建全部 **15 个** workspace 包（唯一真源 = `packages/host/desktop/scripts/prebuild-workspace-deps.ts` 的 `WORKSPACE_PACKAGES` 表；2026-09-29 校正：此处曾写"8 个"），**已增量**（某包产物不早于其输入即跳过重建，`DSH_PREBUILD=force` 强制全量）+ **按依赖层并行**（2026-10-23：表是并行安全的唯一真源，按下表 `deps` 折层、同层并行，`PREBUILD_CONCURRENCY` 覆盖；判据在 `packages/host/desktop/tests/prebuild-dependency-table.spec.ts`）。门禁提速实测与设计见 docs/decisions/2026-09-10-verification-speedup.md）。
 - Run the client E2E automation with `corepack yarn workspace dsh-plugin-desktop e2e:client` (see GUI E2E below; works against a packaged build and Xvfb, produces `.e2e-report.md` + `.e2e-shots/`). Real-service verification uses `e2e:real` (`REAL_SERVER/REAL_USER/REAL_PASS` env; produces `.real-env-report.md` + `.real-env-shots/`). Two focused behavioural probes cover surfaces `e2e:client` only asserts structurally, both against a packaged build + Xvfb + the same mock gateway: `e2e:sidebar`（官方右侧栏：展开/面板渲染/分栏/标题栏保留带，`.e2e-sidebar/`）与 `e2e:terminal`（0.1.6 新增的终端：点「新建终端」→ xterm 表面 → 真敲 `echo` 断言回显，`.e2e-terminal/`）。两者都不在 `yarn check` 内（需要打包产物与显示器），改动右栏/终端后手动跑。
 - Run upstream operations through the root scripts, such as `corepack yarn upstream:build`.
 
-### CI (2026-09-06 重设计，见 docs/decisions/2026-09-06-ci-pipeline-redesign.md)
+## 编译与验证速度（性能口径，**AI 改代码前先读这一节**）
+
+> 目标：**内循环的等待压到亚秒级，全量门禁留给提交前与 CI**。所有并行点的数字都从
+> `scripts/build-capacity.mjs` 派生，**禁止再在任何地方写 `min(N, CPU)` 之类的字面量**
+> （那正是"换台机器就变慢/OOM"的成因）。设计记录：
+> `docs/decisions/2026-09-10-verification-speedup.md`（门禁）、
+> `docs/decisions/2026-10-23-typescript-7-native.md`（编译器）、
+> `docs/decisions/2026-10-23-build-speed-adaptive.md`（本轮：自适应并发 / 内循环 / 服务端）。
+
+### 1) 机器自适应并发：唯一口径 `scripts/build-capacity.mjs`
+
+- 探测：`availableParallelism()`（尊重亲和性）→ cgroup v2/v1 **CPU 配额**（容器里
+  `nproc` 是宿主核数，配额才是真的）→ 可用内存（`/proc/meminfo` 的 `MemAvailable`，
+  再被 cgroup `memory.max` 夹一次）。
+- 折算：`并发 = min(CPU 预算 × 任务系数, 可用内存 / 该任务内存单价, 硬顶)`，永不为 0。
+  内存单价表在模块里（`MEMORY_PER_TASK_MB`，带取值依据），**不要另抄一份**。
+- 消费点（改这些地方的并发，只准从模块取）：`scripts/check-workspaces.mjs`（阶段 2 包并发
+  + 按内存给子进程下发 `VITEST_MAX_WORKERS`）、
+  `packages/host/desktop/scripts/prebuild-workspace-deps.ts`（同层包并发）、
+  `packages/host/desktop/vitest.config.ts`（worker 数）、`server/Makefile`
+  （`TEST_PARALLEL` / `GO_BUILD_P`）。
+- 覆盖口（机器探测不准时的**唯一**逃生口）：
+  `CHECK_CONCURRENCY` / `PREBUILD_CONCURRENCY` / `VITEST_MAX_WORKERS` / `TEST_PARALLEL` /
+  `GO_BUILD_P` / `DSH_BUILD_CPUS` / `DSH_BUILD_MEMORY_MB` / `WEBADMIN_BUILD_CONCURRENCY`。
+- 诊断：`node scripts/build-capacity.mjs --explain`（每个预算被谁限制）、`--json`；
+  Makefile/shell 取单值：`node scripts/build-capacity.mjs --print goTestParallel`。
+- 判据：`packages/host/desktop/tests/build-capacity.spec.ts`（10 条，含容器配额 / 内存受限 /
+  env 覆盖 / 极小内存不为 0 的合成输入）。
+
+### 2) 编译器：TypeScript 7 原生（`tsc`）
+
+- 所有 workspace 包的 `typescript` = **7.0.2**（原生编译器）；`tsc -p …` 的**脚本写法不变**。
+- 三个包（`dsh-plugin-desktop` / `@zeokeel/dsh-connectors` / `@zeokeel/dsh-enterprise`）另挂
+  `typescript6: npm:typescript@6.0.3`：那 10 个守卫 spec 用 **TS6 编译器 API**
+  （`createSourceFile` / `createProgram`），TS7 的 JS 包只剩版本号、且 `unstable/ast` **没有**
+  从源码文本解析的入口 ⇒ 不要试图把它们"升级"到 TS7。
+- **yarn bin 规则（最容易坏的一条）**：同一个包里两个依赖都提供 `tsc` 时，**yarn 脚本跑的是
+  名为 `typescript` 的那个依赖**（别名只赢 `node_modules/.bin` 的链接）。所以形态必须是
+  "`typescript`=7 + 别名叫 `typescript6`"，反过来会让脚本静默跑 6（慢 6–15×）而门禁全绿。
+  判据：`packages/host/desktop/tests/typescript-compiler.spec.ts`（含 `yarn exec tsc --version`
+  实跑抽样）。
+- `server/webadmin`（独立 npm 工程）同样在 7：**TS7 移除了 `baseUrl`**，`paths` 改为相对
+  tsconfig 目录解析。新增 webadmin 配置时不要在 `tsconfig.json` 写 `baseUrl`。
+
+### 3) 内循环命令矩阵（**按改动面选命令，不要一律 `yarn check`**）
+
+| 场景 | 命令 | 4 核实测 |
+| --- | --- | --- |
+| 改一行客户端 JS/TS | `yarn dev:watch`（tsdown 增量 + 应用自动重启） | 重建 **~0.3s** |
+| 想快速起一个应用 | `yarn dev:fast`（brand-prepare + tsdown + 启动，不产 `lib/types`） | **~2s** |
+| 需要 d.ts 给别的包用 | `yarn dev:watch --types`（附带 `tsc --watch`） | 构建 ~1s |
+| 全量客户端构建（含 d.ts） | `yarn dev`（= 现在的 `build && node lib/bin.js`） | ~2.2s |
+| 只跑一个包的门禁 | `node scripts/check-workspaces.mjs --only <pkg>` | 包级 ~5–20s |
+| 只跑一组用例 | `yarn workspace <pkg> vitest run tests/x.spec.ts` | 秒级 |
+| 改了哪些包就只跑哪些 | `yarn check:fast`（git 改动映射到包） | 视改动 |
+| **提交前 / PR** | `yarn check`（全量 34 任务） | **~300s** |
+| 服务端快速门禁 | `make check-fast`（gofmt + vet + 缓存命中的 go test + webadmin 单测） | 分钟级 |
+| 服务端单包/单用例 | `cd server && go test ./internal/<pkg>/... -run <Name> -count=1` | 秒级 |
+| 服务端编译 | `cd server && go build ./cmd/server`（热缓存 1.4s / 冷缓存 41s） | 见左 |
+| **服务端全量门禁** | `make check`（含 webadmin 变体矩阵 ≈6min） | 分钟级 |
+| 打包 | `yarn dist:linux` / `package:dir` | **分钟级** |
+
+**纪律**：`yarn check` / `make check` / `dist:*` / `e2e:*` **不进内循环**（它们是分钟级，
+留给提交前、PR 与 CI）。`yarn check` 里编译只占 ~1/10，真正的大头是 vitest 与 8 个 verify 脚本。
+
+### 4) 服务端（`server/`）
+
+- `TEST_PARALLEL` / `GO_BUILD_P` 缺省由 `scripts/build-capacity.mjs` 算（旧值写死 4：
+  16 核机器浪费 3/4 的核、4GB 容器照开 4 路）。**调高 `TEST_PARALLEL` 时必须同时调大
+  `TEST_TIMEOUT_PARALLEL`**（它的取值依据是 `-p 4` 的实测膨胀，见 Makefile 长注释）。
+- Go 缓存是冷热两重天：冷 `GOCACHE` 41s、热 1.4s（`cmd/server`）。CI 与本地都别清缓存；
+  离线/受限环境用仓库已 gitignore 的 `server/temp/gocache`（`GOCACHE=...`）。
+- DB 用例走**模板库克隆**（每用例 ~0.1s，见 `internal/serverstore/dbtest.go`）：`PG_DSN_TEST`
+  保持同一套 env 才能命中 `go test` 结果缓存；`-count=1` 只在门禁用（`make test-server`），
+  内循环用 `make test-server-fast`。
+- `make check` 里的 webadmin 变体矩阵（4 × 单测）与产物判据（5 × vite build）是**分钟级**的
+  发布判据，不在 `check-fast` 内——不要为了让内循环"看起来绿"去动它们的覆盖面。
+
+## CI (2026-09-06 重设计，见 docs/decisions/2026-09-06-ci-pipeline-redesign.md)
 
 - 触发 = `pull_request` + `push`（全分支含 tag）。**非 docs-only 的提交都产出可下载产物**（Artifacts）：`desktop-Linux`（AppImage；`dist:linux` 会一并构建 `deb`，但归集面只收 AppImage —— 镜像与发布面都不要 deb）、`desktop-Windows-installer`（NSIS）、`desktop-macOS`（DMG）、`zeokeel-server-linux-amd64`（R28 审计 AB2-A-05 校正：只改 `docs/`、`site/`、`*.md` 的提交由 `changes` job 判成 docs-only，`gate`/`server`/三平台 job 全部跳过 ⇒ **零 artifact**，只有 `gate-guards` 照跑；**2026-10-10 起分支首推也走这条轻量路径** —— `before` 是全零时改用 `merge-base(origin/master, HEAD)` 作基点，覆盖整条分支相对主线的改动，取不到才 fail-safe 成"有代码改动"）；PR 由 `pr-summary` job 评论汇总入口（fork PR 跳过；评论正文按 `needs.*.result` 派生，未全绿时不列不存在的产物）。
 - **测试只在 PR / master push 上跑，tag 只编译 + 打包 + 发布（2026-10-10 拍板）**：tag 上的 `gate` 跳过 `yarn check` 与 WASM 探针、`server` 跳过 gofmt / `go vet` / `go test` / webadmin `npm test`（保留构建与 `make build-server`），五个发布正确性判据（release-policy / 发布说明 / 迁移锚点 / 拓扑 / 渠道 pin）照旧。依据：tag 永远打在已跑过全量 CI 的线上提交上，重跑一遍只是把发布再拉长 ~20 分钟。这条"允许跳过"的形态**登记**在 `scripts/check-workflows.mjs` 的 `PINNED_STEP_IF_POLICIES['docs-only-and-not-tag']`（未登记的任何收窄一律拒）。

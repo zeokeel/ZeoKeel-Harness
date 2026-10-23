@@ -25,6 +25,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, writeSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
+import { MEMORY_PER_TASK_MB, detectCapacity } from './build-capacity.mjs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 // **子进程环境清洗 + 守卫执行体入口 = 唯一实现**（2026-09-24 第十一轮审计 I1 泳道）。
@@ -53,6 +54,16 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
  * 定义放在**编排器**里（唯一真源），`check-root-guards.mjs` 的 `guardArgsProblem()` import 它 ——
  * 两个 runner 对"什么算削弱"必须是同一份表。
  */
+/**
+ * 包级 check 的子进程环境（`main()` 按机器容量算好后覆盖；`null` = 原样继承 + 两条固定键）。
+ *
+ * 放在模块级而不是 `main()` 里：真正 spawn 包级 check 的 `runTask()` 是模块级函数，
+ * 闭包里拿不到 `main()` 的局部变量（2026-10-23 的第一版就踩了：合成树里直接
+ * `ReferenceError: packageCheckEnv is not defined`，而真仓 `yarn check` 因为走的另一条
+ * spawn 分支看不出来 —— 这正是"探针树必须一起跑"的价值）。
+ */
+let packageCheckEnv = null
+
 export const SEMANTICS_CHANGING_FLAGS = [
   '--list',
   '--help',
@@ -2321,7 +2332,7 @@ function runTask(task) {
       // `YARN_IGNORE_PATH=1`：让「一行 `yarnPath` 换掉整个 yarn」在**这一层**失效（注意边界：
       // 它只对本编排器真的启动起来之后 spawn 的那些 yarn 生效；`corepack yarn check` 自己的
       // 那个 yarn 由 `.yarnrc.yml` 登记制 + `gate-guards` 的直接 spawn 拦住，见 N4 的订正）。
-      env: { ...process.env, FORCE_COLOR: '0', YARN_IGNORE_PATH: '1' },
+      env: packageCheckEnv ?? { ...process.env, FORCE_COLOR: '0', YARN_IGNORE_PATH: '1' },
     })
     let output = ''
     child.stdout.on('data', chunk => { output += chunk })
@@ -2545,10 +2556,34 @@ export async function main(argv = process.argv.slice(2)) {
     }
   }
 
+  // 机器自适应（2026-10-23）：并发不再写死 `min(4, CPU)`，而是从**唯一口径**
+  // `scripts/build-capacity.mjs` 取（cgroup 配额 + 可用内存 + 每任务内存单价）。
+  // 16 核机器上旧口径只开 4 路（浪费 3/4 的核），4GB 容器里旧口径仍开 4 路（可能 OOM）；
+  // 覆盖顺序仍是 **CLI `--concurrency` > `CHECK_CONCURRENCY`（由 capacity 处理）> 探测值**。
   const envConcurrency = Number(process.env.CHECK_CONCURRENCY ?? '')
-  const defaultConcurrency = Math.max(1, Math.min(4, availableParallelism()))
+  const capacity = detectCapacity()
+  const defaultConcurrency = capacity.values.packageBuild
   const concurrency = options.concurrency ??
     (Number.isFinite(envConcurrency) && envConcurrency > 0 ? envConcurrency : defaultConcurrency)
+
+  // vitest worker 的**内存安全上限**（2026-10-23）：`concurrency` 个包同时跑时，每个包的
+  // vitest 若各自按"整机核数"开 worker，内存小的大核机器会成倍超额（16 核 4GB 容器：
+  // 8 包 × 15 worker × ~500MB）。这里只按**内存**收口，不动 CPU 份额 —— 4 核 8GB 上算出来
+  // 仍是 capacity 的 3（与现状一致，不拖慢桌面套件）。
+  // 显式设置了 `VITEST_MAX_WORKERS` 时尊重用户（vitest 自身也认这个 env）。
+  const vitestWorkerCap = Math.max(
+    1,
+    Math.min(
+      capacity.values.vitestWorkers,
+      Math.floor(capacity.memoryAvailableMb / Math.max(1, concurrency) / MEMORY_PER_TASK_MB.vitestWorker),
+    ),
+  )
+  packageCheckEnv = {
+    ...process.env,
+    FORCE_COLOR: '0',
+    YARN_IGNORE_PATH: '1',
+    ...(process.env.VITEST_MAX_WORKERS === undefined ? { VITEST_MAX_WORKERS: String(vitestWorkerCap) } : {}),
+  }
 
   let selectedNames = null
   if (options.only !== null) {
@@ -2624,7 +2659,11 @@ export async function main(argv = process.argv.slice(2)) {
 
   const state = { results: [], failed: [], skipped: [], advisory: [], dropped: [], degraded: [] }
   const startedAt = Date.now()
-  console.log(`check — 并发 ${concurrency};按构建依赖分层(desktop 必须先产出 lib/types)`)
+  console.log(`check — 并发 ${concurrency};按构建依赖分层(desktop 必须先产出 lib/types)`
+    + `;机器口径:CPU 预算 ${capacity.cpuBudget}、可用内存 ${capacity.memoryAvailableMb}MB`
+    + `${capacity.cgroupCpuQuota === null ? '' : `（cgroup 配额 ${capacity.cgroupCpuQuota.toFixed(2)}）`}`
+    + `${concurrency === capacity.values.packageBuild ? '' : `（自然值 ${capacity.values.packageBuild}，当前被覆盖）`}`
+    + `；每包 vitest worker ≤ ${vitestWorkerCap}`)
 
   // 阶段 1:desktop check 与根守卫并行。desktop 内部的 verify:profile 会按需构建
   // 其余插件包的 lib/(增量 prebuild),此刻不跑那些包自己的 check,避免与它的

@@ -91,7 +91,7 @@ if (isDirectInvocation(import.meta)) {
     const { prebuildWorkspaceDeps } = await import('./prebuild-workspace-deps.ts')
     // 变体跳过必须读**本轮** features：变体清单由后一步 prepareChannelPackaging() 写，
     // 读磁盘清单会读到上一轮的残留（见 prebuild-workspace-deps.ts 的 variantPrunedDirs）。
-    prebuildWorkspaceDeps(packageRoot, { features: resolveChannelBuildContext().features })
+    await prebuildWorkspaceDeps(packageRoot, { features: resolveChannelBuildContext().features })
   }
   // 渠道化准备（按渠道派生图标素材 + 就位随包 channel.json）：**必须在
   // electron-builder 之前**。CI 打包一律 `--no-prebuild`（构建产物来自 gate job），

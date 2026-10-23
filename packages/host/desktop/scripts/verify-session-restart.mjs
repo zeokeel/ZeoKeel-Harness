@@ -43,7 +43,7 @@ import { prepareDesktopProfile } from '../lib/profile.js'
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const { prebuildWorkspaceDeps } = await import('./prebuild-workspace-deps.ts')
-prebuildWorkspaceDeps(packageRoot)
+await prebuildWorkspaceDeps(packageRoot)
 
 const BIN_NAME = 'dsh-plugin-desktop-session-smoke'
 const HOST_SERVICE_PLUGIN_NAME = 'dsh-desktop-host-services-smoke-plugin'

@@ -51,6 +51,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+
+/**
+ * 把编排器的**运行期依赖**复制进探针树（合成树/根守卫探针/advisory 探针都用它）。
+ *
+ * 2026-10-23：编排器开始 import `./build-capacity.mjs`（机器自适应并发的唯一口径）⇒
+ * 任何"只拷 check-workspaces.mjs"的探针树都会 ERR_MODULE_NOT_FOUND，而报错形态是
+ * "判据期望 exit 2 却拿到 1"，看不出是拷漏了文件。**新增编排器依赖时同步这个函数**
+ * （这里只列运行期 import；`.d.mts` 是类型声明，运行期不需要）。
+ * @param tree - 探针树根。
+ */
+function copyOrchestratorRuntime(tree) {
+  copyFileSync(join(root, 'scripts', 'build-capacity.mjs'), join(tree, 'scripts', 'build-capacity.mjs'))
+}
 const subject = join(root, 'scripts', 'check-workspaces.mjs')
 const failures = []
 const scratch = []
@@ -353,6 +366,7 @@ function buildTree(options = {}) {
   mkdirSync(join(tree, 'scripts'))
   const source = readFileSync(subject, 'utf8')
   writeFileSync(join(tree, 'scripts', 'check-workspaces.mjs'), mutate === null ? source : mutate(source))
+  copyOrchestratorRuntime(tree)
   writeFileSync(
     join(tree, 'package.json'),
     `${JSON.stringify({ name: 'synthetic-gate', private: true, workspaces: ['packages/*/*', 'community/*'] }, null, 2)}\n`,
@@ -1970,6 +1984,7 @@ function sha256File(path) {
       const probeTree = tempDir('advisory-probe-')
       mkdirSync(join(probeTree, 'scripts'))
       writeFileSync(join(probeTree, 'scripts', 'check-workspaces.mjs'), mutatedSource)
+      copyOrchestratorRuntime(probeTree)
       copyFileSync(rootGuardsPath, join(probeTree, 'scripts', 'check-root-guards.mjs'))
       writeFileSync(join(probeTree, 'package.json'),
         // 脚本体必须写**真实登记值**（第九轮审计 B 泳道 P1-5 之后 `check-root-guards.mjs`
@@ -2056,6 +2071,7 @@ function sha256File(path) {
         const probeTree = tempDir('advisory-expiry-probe-')
         mkdirSync(join(probeTree, 'scripts'))
         writeFileSync(join(probeTree, 'scripts', 'check-workspaces.mjs'), mutatedSource)
+        copyOrchestratorRuntime(probeTree)
         copyFileSync(rootGuardsPath, join(probeTree, 'scripts', 'check-root-guards.mjs'))
         writeFileSync(join(probeTree, 'package.json'),
           // 根守卫还会断言"表里的守卫都必须是**这棵树**的 package.json scripts" ⇒ 合成树要把
@@ -2557,6 +2573,7 @@ function buildRootGuardProbe(options = {}) {
   const names = [...(minimum ?? []), PROBE_GUARD_NAME]
   const orchestratorSource = readFileSync(subject, 'utf8')
   writeFileSync(join(tree, 'scripts', 'check-workspaces.mjs'), patchOrchestratorTables(orchestratorSource, names))
+  copyOrchestratorRuntime(tree)
   writeFileSync(join(tree, 'scripts', 'check-root-guards.mjs'), patchRunnerRegistry(runnerSource, names))
   writeFileSync(join(tree, 'package.json'), `${JSON.stringify({
     name: 'root-guard-probe',

@@ -346,8 +346,14 @@ func TestSQLStatementTimeoutOnSlowQuery(t *testing.T) {
 		}
 		mustExec(t, d, "INSERT INTO nums(v) VALUES "+placeholders, args...)
 	}
-	// 三路笛卡尔积 = 1e6 行，远超 250 ms。
-	slow := "SELECT count(*) FROM nums a, nums b, nums c"
+	// 四路笛卡尔积 = 300^4 ≈ 8.1e9 行，且 WHERE 逐行求值（防止将来某个优化器把
+	// count(*) 折成行数相乘）—— 必须**稳定慢于**注入的 250 ms 预算。
+	//
+	// 2026-10-23 CI 实测：原三路（300^3 ≈ 2.7e7 行）在更快的 GitHub runner 上
+	// 于 250 ms 内跑完 ⇒ err=nil ⇒ 本用例红（本地慢机反而过）。这不是产品缺陷，
+	// 是"用机器速度当计时器"的脆弱判据；行数放大到 8.1e9 后，250 ms 内跑完需要
+	// 32G 行/秒，任何机器都做不到。
+	slow := "SELECT count(*) FROM nums a, nums b, nums c, nums d WHERE a.v + b.v + c.v + d.v >= 0"
 	start := time.Now()
 	_, err := d.Query(context.Background(), abi.SQLParams{SQL: slow})
 	elapsed := time.Since(start)

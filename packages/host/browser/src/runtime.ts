@@ -22,6 +22,7 @@ import { BROWSER_PARTITION, BROWSER_SHELL_TOOLBAR_HEIGHT, type ElectronAdapter, 
 import { BrowserGuard, ensureSessionGuard, isLocalHostname, looksLikeAbsoluteUrl } from './guard.ts'
 import { extractSnapshotWithMeta, extractTextWithMeta, type SnapshotExtractionMeta, SNAPSHOT_DEFAULT_LIMIT, TEXT_DEFAULT_LIMIT } from './snapshot.ts'
 import { locatorProbe, parseTargetSpec } from './locator.ts'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { TabEventBus } from './events.ts'
 import { createProgramBridge, redactProgramConsole, truncateProgramResult, type ProgramRuntime } from './program.ts'
 import { captureScreenshot, captureScreenshotViaCdp, SCREENSHOT_MAX_BYTES, type ScreenshotOptions } from './shots.ts'
@@ -715,11 +716,20 @@ export class BrowserRuntime {
   private readonly listeners = new Set<(event: BrowserStreamEvent) => void>()
   private shellOrigin: string | undefined
   private lastAgentId = ''
+  /** D1/B2: per-operation agent attribution (no shared mutable field). */
+  private readonly agentContext = new AsyncLocalStorage<string>()
   /** In-flight `browser_eval` calls per tab id: page-initiated top-level navigation
    * is refused for THAT tab while its eval runs (2026-10-23 audit P0-1 —
    * `window.location` is unforgeable, so the only real enforcement is the
    * navigation gate). Keyed per tab so an eval on tab A never freezes tab B. */
   private readonly evalInFlight = new Map<number, number>()
+  /** D1 per-tab FIFO locks: same tab serial, different tabs concurrent. */
+  private readonly tabLocks = new Map<number, Promise<void>>()
+  /** D1 global-exclusive lock for operations with no tab target (old behavior). */
+  private globalLock: Promise<void> = Promise.resolve()
+  /** True while the global lock (or a tab lock) is actually held. */
+  private globalLockHeld = false
+  private readonly tabLocksHeld = new Set<number>()
   /**
    * Deadline **ownership stack**: one entry per agent operation currently inside
    * the pool's critical section (epoch ms), innermost last — R4-B-15, C3-01.
@@ -1316,7 +1326,7 @@ export class BrowserRuntime {
       try { view.destroy() } catch { /* teardown never throws */ }
       throw cause
     }
-    const tab: BrowserTab = { id, view, cdp, ownerSession: this.lastAgentId, url: '', title: '', favicon: '', loading: false, canGoBack: false, canGoForward: false, disposers: [], filledSecrets: [], credentialWindow: false, oopifFrames: new Map(), frameTrackingReady: false, crashed: false }
+    const tab: BrowserTab = { id, view, cdp, ownerSession: this.currentAgentId(), url: '', title: '', favicon: '', loading: false, canGoBack: false, canGoForward: false, disposers: [], filledSecrets: [], credentialWindow: false, oopifFrames: new Map(), frameTrackingReady: false, crashed: false }
     // R-5 (F7): inherit the opener's redaction value set (never its window).
     if (inheritSecretsFrom !== undefined) {
       const opener = this.tabs.get(inheritSecretsFrom)
@@ -1970,6 +1980,11 @@ export class BrowserRuntime {
     this.emitAll('ops')
   }
 
+  /** The agent that issued the operation currently running (ALS), else last seen. */
+  private currentAgentId(): string {
+    return this.agentContext.getStore() ?? this.lastAgentId
+  }
+
   private tab(id: number): BrowserTab {
     const tab = this.tabs.get(id)
     if (tab === undefined) {
@@ -2582,8 +2597,95 @@ export class BrowserRuntime {
     body: () => Promise<T>,
     signal?: AbortSignal,
     budget: { deadlineAt?: number | undefined } = {},
+    tabId?: number,
   ): Promise<T> {
-    return await this.withAgentAttribution(tool, body, signal, budget)
+    return await this.withAgentAttribution(tool, body, signal, budget, tabId)
+  }
+
+  /** Run a tab-scoped operation under that tab's FIFO lock (D1 A 类). */
+  private async runTab<T>(
+    tool: string,
+    tabId: number,
+    body: () => Promise<T>,
+    signal?: AbortSignal,
+    budget: { deadlineAt?: number | undefined } = {},
+  ): Promise<T> {
+    return await this.agentRun(tool, body, signal, budget, tabId)
+  }
+
+  /**
+   * FIFO wait bounded by the operation deadline. Used for BOTH the per-tab lock
+   * and the global-exclusive lock (D1): a queued command must report its own
+   * readable `timeout` instead of being replaced by the upstream tool timeout.
+   */
+  private async waitForTurn(prev: Promise<void>, label: string, deadlineAt: number, signal?: AbortSignal, free = false): Promise<void> {
+    const budgetMs = Math.max(0, deadlineAt - Date.now() - QUEUE_MIN_WORK_MS)
+    await new Promise<void>((resolve, reject) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const finish = (fn: () => void): void => {
+        if (settled) return
+        settled = true
+        if (timer !== undefined) clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
+        fn()
+      }
+      const onAbort = (): void => finish(() => reject(browserError('interrupted', `browser: cancelled while waiting for ${label}`)))
+      if (signal?.aborted === true) { onAbort(); return }
+      signal?.addEventListener('abort', onAbort, { once: true })
+      // A free lock must be taken immediately even when no budget is left: the
+      // "no time left" refusal only applies when something is actually running.
+      if (free) return finish(resolve)
+      prev.then(() => finish(resolve), () => finish(resolve))
+      if (budgetMs <= 0) {
+        finish(() => reject(browserError('timeout', `browser: no time left to wait for ${label} — retry the tool when the browser is idle`)))
+        return
+      }
+      timer = setTimeout(() => finish(() => reject(browserError('timeout', `browser: timed out waiting for ${label} (${String(budgetMs)}ms) — retry the tool when the browser is idle`))), budgetMs)
+    })
+  }
+
+  /**
+   * Run `work` under ONE tab's FIFO lock (D1 A 类). Different tabs proceed
+   * concurrently; the same tab stays strictly ordered.
+   */
+  async withTabLock<T>(tabId: number, signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>): Promise<T> {
+    const prev = this.tabLocks.get(tabId) ?? Promise.resolve()
+    let release!: () => void
+    const mine = new Promise<void>((resolve) => { release = resolve })
+    this.tabLocks.set(tabId, mine)
+    try {
+      await this.waitForTurn(prev, `the running browser operation on tab ${String(tabId)}`, deadlineAt, signal, !this.tabLocksHeld.has(tabId))
+      this.tabLocksHeld.add(tabId)
+      try {
+        return await work()
+      } finally {
+        this.tabLocksHeld.delete(tabId)
+      }
+    } finally {
+      release()
+      if (this.tabLocks.get(tabId) === mine) this.tabLocks.delete(tabId)
+    }
+  }
+
+  /** Run `work` under the global-exclusive lock (D1 B/C 类: no tab target). */
+  private async withGlobalLock<T>(signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>): Promise<T> {
+    const prev = this.globalLock
+    let release!: () => void
+    const mine = new Promise<void>((resolve) => { release = resolve })
+    this.globalLock = mine
+    try {
+      await this.waitForTurn(prev, 'the running browser operation', deadlineAt, signal, !this.globalLockHeld)
+      this.globalLockHeld = true
+      try {
+        return await work()
+      } finally {
+        this.globalLockHeld = false
+      }
+    } finally {
+      release()
+      if (this.globalLock === mine) this.globalLock = Promise.resolve()
+    }
   }
 
   /**
@@ -2624,6 +2726,7 @@ export class BrowserRuntime {
     body: () => Promise<T>,
     signal?: AbortSignal,
     budget: { deadlineAt?: number | undefined } = {},
+    tabId?: number,
   ): Promise<T> {
     const callerAgent = this.lastAgentId
     const deadlineAt = budget.deadlineAt ?? Date.now() + this.toolBudgetMs() - TOOL_DEADLINE_MARGIN_MS
@@ -2633,15 +2736,23 @@ export class BrowserRuntime {
     const queueBudgetMs = Math.max(0, deadlineAt - Date.now() - QUEUE_MIN_WORK_MS)
     try {
       return await this.pool.withOperation(tool, async () => {
-        const previous = this.lastAgentId
-        this.lastAgentId = callerAgent
-        const owned = this.claimOperationDeadline(deadlineAt)
-        try {
-          return await body()
-        } finally {
-          this.releaseOperationDeadline(owned)
-          this.lastAgentId = previous
+        // D1: after the gate (L1) the work takes either the tab lock (A) or the
+        // global-exclusive lock (B/C); never both, and never L3 → global. The
+        // deadline slot is claimed INSIDE the lock so a queued operation cannot
+        // overwrite the slot of the operation that is actually running (C3-01).
+        const run = async (): Promise<T> => {
+          const owned = this.claimOperationDeadline(deadlineAt)
+          try {
+            // B2: attribution travels with the async context, so two concurrent
+            // operations cannot overwrite each other's agent.
+            return await this.agentContext.run(callerAgent, body)
+          } finally {
+            this.releaseOperationDeadline(owned)
+          }
         }
+        return tabId === undefined
+          ? await this.withGlobalLock(signal, deadlineAt, run)
+          : await this.withTabLock(tabId, signal, deadlineAt, run)
       }, signal, queueBudgetMs)
     } catch (cause) {
       // "用户拿着控制权"是一个**状态**，不是一次普通失败：记下来让 shell / 客户端
@@ -2697,7 +2808,7 @@ export class BrowserRuntime {
       await this.navigateInternal(tabId, url, waitUntil, user ? 'user' : 'ai', deadlineAt)
     }
     if (user) return await body()
-    return await this.agentRun('browser_navigate', body, signal, { deadlineAt })
+    return await this.runTab('browser_navigate', tabId, body, signal, { deadlineAt })
   }
 
   /** User path: navigate the pool's active tab (open one first if none). */
@@ -3039,7 +3150,7 @@ export class BrowserRuntime {
       this.record('browser_reload', tabId, `reload tab ${tabId}`, false, user ? 'user' : 'ai')
     }
     if (user) return await body()
-    return await this.agentRun('browser_reload', body, signal, { deadlineAt })
+    return await this.runTab('browser_reload', tabId, body, signal, { deadlineAt })
   }
 
   async goBack(tabId: number, signal?: AbortSignal, user = false, deadlineAt?: number): Promise<void> {
@@ -3057,7 +3168,7 @@ export class BrowserRuntime {
       this.record('browser_go_back', tabId, `back to ${tab.url}`, false, user ? 'user' : 'ai')
     }
     if (user) return await body()
-    return await this.agentRun('browser_go_back', body, signal, { deadlineAt })
+    return await this.runTab('browser_go_back', tabId, body, signal, { deadlineAt })
   }
 
   async goForward(tabId: number, signal?: AbortSignal, user = false, deadlineAt?: number): Promise<void> {
@@ -3075,7 +3186,7 @@ export class BrowserRuntime {
       this.record('browser_go_forward', tabId, `forward to ${tab.url}`, false, user ? 'user' : 'ai')
     }
     if (user) return await body()
-    return await this.agentRun('browser_go_forward', body, signal, { deadlineAt })
+    return await this.runTab('browser_go_forward', tabId, body, signal, { deadlineAt })
   }
 
   /** Switch the pool's active tab. */
@@ -3216,7 +3327,7 @@ export class BrowserRuntime {
    * 任何值规则都认不出的明文残片。 */
   async snapshotWithMeta(tabId: number, signal?: AbortSignal, extras: SnapshotExtrasOptions = {}): Promise<{ elements: BrowserSnapshotElement[]; meta: SnapshotExtractionMeta }> {
     const resolved = this.resolveTab(tabId)
-    const out = await this.agentRun('browser_get_snapshot', async () => {
+    const out = await this.runTab('browser_get_snapshot', resolved, async () => {
       const tab = this.tab(resolved)
       const snapshot = await extractSnapshotWithMeta(
         (m, p) => tab.cdp.send(m, p),
@@ -3372,7 +3483,7 @@ export class BrowserRuntime {
    * 完全失真。长度只有这里（投影之后、截断之前）知道，所以判定也必须在这里。 */
   async textWithMeta(tabId: number, selector: string | undefined, signal?: AbortSignal): Promise<{ text: string; truncated: boolean }> {
     const resolved = this.resolveTab(tabId)
-    const out = await this.agentRun('browser_get_text', async () => {
+    const out = await this.runTab('browser_get_text', resolved, async () => {
       const tab = this.tab(resolved)
       // R-1 (2026-09-13): page text is a model-facing exit too. innerText of a
       // password input is empty, but a page that *echoes* what was typed
@@ -3412,7 +3523,7 @@ export class BrowserRuntime {
       return Math.floor(payload.length * 3 / 4)
     }
     const quality = Math.max(1, Math.min(100, options.quality ?? this.options.screenshotQuality))
-    return await this.agentRun('browser_screenshot', async () => {
+    return await this.runTab('browser_screenshot', resolved, async () => {
       const tab = this.tab(resolved)
       if (this.tabInCredentialWindow(tab)) {
         this.record('browser_screenshot', resolved, 'refused: credential window open', true)
@@ -3504,7 +3615,7 @@ export class BrowserRuntime {
       }
       if (mobile !== undefined && typeof mobile !== 'boolean') throw browserError('policy', 'browser_emulate: mobile must be a boolean')
     }
-    return await this.agentRun('browser_emulate', async () => {
+    return await this.runTab('browser_emulate', resolved, async () => {
       const tab = this.tab(resolved)
       if (options.reset === true) {
         await tab.cdp.send('Emulation.clearDeviceMetricsOverride')
@@ -3748,7 +3859,7 @@ export class BrowserRuntime {
       textLimit: FETCH_RESPONSE_MAX_CHARS,
       byteLimit: FETCH_RESPONSE_MAX_BYTES,
     })
-    return await this.agentRun('browser_fetch', async () => {
+    return await this.runTab('browser_fetch', resolved, async () => {
       const tab = this.tab(resolved)
       let raw: unknown
       try {
@@ -3806,7 +3917,7 @@ export class BrowserRuntime {
     }
     let data: string
     try {
-      data = await this.agentRun('browser_screenshot', async () => {
+      data = await this.runTab('browser_screenshot', resolved, async () => {
         const tab = this.tab(resolved)
         // R7 (2026-09-13): the window must be judged in the SAME critical
         // section as the capture, exactly like `eval` does. `agentRun` queues on
@@ -4028,7 +4139,7 @@ export class BrowserRuntime {
     }
     validateEvalExpression(expression)
     const resolved = this.resolveTab(tabId)
-    const result = await this.agentRun('browser_eval', async () => {
+    const result = await this.runTab('browser_eval', resolved, async () => {
       const tab = this.tab(resolved)
       // R-4 credential-activity window: while the injected credentials are still
       // in this page, `browser_eval` is refused outright — the read-back itself
@@ -4359,7 +4470,7 @@ export class BrowserRuntime {
 
   async locateElement(tabId: number, selector: string, signal?: AbortSignal): Promise<{ x: number; y: number }> {
     const resolved = this.resolveTab(tabId)
-    return await this.agentRun('browser_locate', async () => {
+    return await this.runTab('browser_locate', resolved, async () => {
       const tab = this.tab(resolved)
       // Shadow-piercing ('>>>') is used ONLY when the selector asks for it: the
       // default path stays byte-identical to the pre-2026-10-23 expression.
@@ -4433,7 +4544,7 @@ export class BrowserRuntime {
       return { selector: element.selector }
     }
     if (spec.kind === 'css') return { selector: spec.selector }
-    return await this.agentRun('browser_locate', async () => {
+    return await this.runTab('browser_locate', resolved, async () => {
       const tab = this.tab(resolved)
       this.assertAgentStillAllowed('browser_locate')
       const result = await tab.cdp.send<{ result?: { value?: unknown } }>('Runtime.evaluate', {
@@ -4488,7 +4599,7 @@ export class BrowserRuntime {
     const clickCount = doubleClick ? 2 : Math.max(1, Math.floor(options.clickCount ?? 1))
     const buttons = button === 'right' ? 2 : button === 'middle' ? 4 : 1
     const custom = button !== 'left' || modifiers !== 0 || doubleClick || clickCount > 1
-    await this.agentRun('browser_click', async () => {
+    await this.runTab('browser_click', resolved, async () => {
       const tab = this.tab(resolved)
       // 2026-09-12: synthesized OS-level input (CDP `Input.dispatchMouseEvent`)
       // needs an input-visible RenderWidgetHost. The browser window is created
@@ -4564,7 +4675,7 @@ export class BrowserRuntime {
    */
   async hoverAt(tabId: number, point: { x: number; y: number }, signal?: AbortSignal): Promise<void> {
     const resolved = this.resolveTab(tabId)
-    await this.agentRun('browser_hover', async () => {
+    await this.runTab('browser_hover', resolved, async () => {
       const tab = this.tab(resolved)
       if (this.windowCanReceiveInput()) {
         await tab.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', buttons: 0 })
@@ -4599,7 +4710,7 @@ export class BrowserRuntime {
    */
   async dragAt(tabId: number, from: { x: number; y: number }, to: { x: number; y: number }, signal?: AbortSignal): Promise<void> {
     const resolved = this.resolveTab(tabId)
-    await this.agentRun('browser_drag', async () => {
+    await this.runTab('browser_drag', resolved, async () => {
       const tab = this.tab(resolved)
       if (!this.windowCanReceiveInput()) {
         throw browserError('policy', 'browser: drag needs a window that can receive real input (the browser window is currently hidden)')
@@ -4704,7 +4815,7 @@ export class BrowserRuntime {
    */
   async clickInFrame(tabId: number, frame: number, selector: string, signal?: AbortSignal): Promise<void> {
     const resolved = this.resolveTab(tabId)
-    await this.agentRun('browser_click', async () => {
+    await this.runTab('browser_click', resolved, async () => {
       const tab = this.tab(resolved)
       const outcome = await this.evaluateInFrame(tab, frame, frameClickExpression(selector), signal)
       if (outcome === 'disabled') throw browserError('policy', `browser: cannot click ${selector} in frame ${String(frame)} — the element is disabled`)
@@ -4722,7 +4833,7 @@ export class BrowserRuntime {
    */
   async textInFrame(tabId: number, frame: number, selector: string | undefined, signal?: AbortSignal): Promise<{ text: string, truncated: boolean }> {
     const resolved = this.resolveTab(tabId)
-    return await this.agentRun('browser_get_text', async () => {
+    return await this.runTab('browser_get_text', resolved, async () => {
       const tab = this.tab(resolved)
       const expression = selector === undefined
         ? `(document.body ? document.body.innerText : '').slice(0, 65538)`
@@ -4791,7 +4902,7 @@ export class BrowserRuntime {
   async typeInto(tabId: number, selector: string, text: string, clear = true, signal?: AbortSignal, hit?: BrowserInteractionHit, delayMs = 0): Promise<{ appliedDelayMs: number }> {
     const resolved = this.resolveTab(tabId)
     const suffix = hitSuffix(hit)
-    return await this.agentRun('browser_type', async () => {
+    return await this.runTab('browser_type', resolved, async () => {
       const tab = this.tab(resolved)
       const before = await this.textFieldState(tab, selector)
       if (before === null) throw this.interactionError(tab, 'not-found', `browser: cannot locate element ${selector}`)
@@ -4964,7 +5075,7 @@ export class BrowserRuntime {
    */
   async pressKey(tabId: number, key: string, signal?: AbortSignal, options: { modifiers?: number; action?: 'press' | 'down' | 'up'; times?: number } = {}): Promise<void> {
     const resolved = this.resolveTab(tabId)
-    await this.agentRun('browser_press', async () => {
+    await this.runTab('browser_press', resolved, async () => {
       const tab = this.tab(resolved)
       const code = KEY_CODES[key] ?? key
       const vk = KEY_VK[key] ?? 0
@@ -5057,7 +5168,7 @@ export class BrowserRuntime {
    */
   async hotkey(tabId: number, keys: string[], signal?: AbortSignal): Promise<void> {
     const resolved = this.resolveTab(tabId)
-    await this.agentRun('browser_hotkey', async () => {
+    await this.runTab('browser_hotkey', resolved, async () => {
       const tab = this.tab(resolved)
       if (keys.length < 1 || keys.length > 4) throw browserError('policy', 'browser: a chord needs 1–4 keys')
       // Validate every key BEFORE any event: an unknown name would be passed
@@ -5187,7 +5298,7 @@ export class BrowserRuntime {
     const resolved = this.resolveTab(tabId)
     const suffix = hitSuffix(hit)
     let outcome: { selected: string[], count: number } = { selected: [], count: 0 }
-    await this.agentRun('browser_select', async () => {
+    await this.runTab('browser_select', resolved, async () => {
       const tab = this.tab(resolved)
       const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
         expression: selectPageScript(selector, choice),
@@ -5221,7 +5332,7 @@ export class BrowserRuntime {
   async scroll(tabId: number, deltaY: number, selector: string | undefined, signal?: AbortSignal, options: { deltaX?: number; position?: { x: number; y: number }; untilBottom?: boolean; settle?: boolean } = {}): Promise<{ reachedBottom?: boolean; bottomReason?: 'reached' | 'no-progress' | 'step-limit'; scrollX?: number; scrollY?: number }> {
     const resolved = this.resolveTab(tabId)
     let outcome: { reachedBottom?: boolean; bottomReason?: 'reached' | 'no-progress' | 'step-limit'; scrollX?: number; scrollY?: number } = {}
-    await this.agentRun('browser_scroll', async () => {
+    await this.runTab('browser_scroll', resolved, async () => {
       const tab = this.tab(resolved)
       const read = async (): Promise<{ scrollX: number; scrollY: number; scrollHeight: number; innerHeight: number }> => {
         const state = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
@@ -5308,7 +5419,7 @@ export class BrowserRuntime {
       throw browserError('not-found', `browser: no stored credentials for connector ${JSON.stringify(connectorId)}`)
     }
     const resolved = this.resolveTab(tabId)
-    const outcome = await this.agentRun('browser_fill_credentials', async () => {
+    const outcome = await this.runTab('browser_fill_credentials', resolved, async () => {
       const tab = this.tab(resolved)
       // TOCTOU 收口（2026-09-15 复核）：工具层的站点绑定检查发生在排队之前，注入
       // 发生在拿到全局互斥之后 —— 中间标签页可以导航走。写入 DOM 之前用**同一个**
@@ -5494,7 +5605,7 @@ export class BrowserRuntime {
     }
     const vetted = paths.map((p) => this.assertAllowedUploadPath(p, allowedDirs))
     const resolved = this.resolveTab(tabId)
-    const outcome = await this.agentRun('browser_upload_file', async () => {
+    const outcome = await this.runTab('browser_upload_file', resolved, async () => {
       const tab = this.tab(resolved)
       const doc = await tab.cdp.send<{ root?: { nodeId?: number } }>('DOM.getDocument')
       const rootId = doc.root?.nodeId
@@ -5560,7 +5671,7 @@ export class BrowserRuntime {
     // `options.deadlineAt` is the tool's own (longer) registered deadline: pass it
     // through so the queue budget and the CDP budget are derived from THAT
     // deadline instead of the generic 30 s tool budget (R4-B-15).
-    return await this.agentRun('browser_wait_for', async () => {
+    return await this.runTab('browser_wait_for', resolved, async () => {
       // Compute the condition deadline INSIDE the critical section: whatever
       // time the mutex/gate took is already spent budget.
       const configured = options.timeoutMs ?? Math.min(this.options.timeoutMs, BROWSER_TOOL_TIMEOUT_MS)

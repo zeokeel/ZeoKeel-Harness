@@ -1990,6 +1990,39 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('D1: same-tab commands stay serial, different tabs run concurrently', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    await runtime.open('https://b.example')
+    const views = adapter.views
+    let inFlight = 0
+    let maxInFlight = 0
+    views[0]!.transport.handler = async () => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise(resolve => setTimeout(resolve, 40))
+      inFlight -= 1
+      return { result: { value: 1 } }
+    }
+    // Same tab: two commands must not overlap.
+    await Promise.all([runtime.eval(1, '1'), runtime.eval(1, '2')])
+    expect(maxInFlight).toBe(1)
+    // Cross tab: a hung command on tab 1 must not block tab 2.
+    views[0]!.transport.handler = () => new Promise(() => {})
+    views[1]!.transport.handler = () => ({ result: { value: 'b' } })
+    const controller = new AbortController()
+    const hanging = runtime.eval(1, '1', undefined, controller.signal).catch(() => 'aborted')
+    await new Promise(resolve => setTimeout(resolve, 30))
+    const started = Date.now()
+    const other = await runtime.eval(2, '2')
+    const elapsed = Date.now() - started
+    expect(other).toBeDefined()
+    expect(elapsed).toBeLessThan(1_000)
+    controller.abort()
+    await hanging
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

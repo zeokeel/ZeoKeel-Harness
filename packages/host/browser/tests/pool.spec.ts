@@ -91,13 +91,17 @@ describe('TabPool — user gate & mutex', () => {
     expect((err as BrowserError).code).toBe('window-controlled')
   })
 
-  it('serializes concurrent operations (FIFO ordering)', async () => {
+  it('admits operations in FIFO order but lets them run concurrently (D1)', async () => {
     const pool = new TabPool()
-    const order: number[] = []
-    const p1 = pool.withOperation('a', async () => { await sleep(30); order.push(1) })
-    const p2 = pool.withOperation('b', async () => { order.push(2) })
+    const startedAt = Date.now()
+    const starts: string[] = []
+    const p1 = pool.withOperation('a', async () => { starts.push('a'); await sleep(60) })
+    const p2 = pool.withOperation('b', async () => { starts.push('b'); await sleep(60) })
     await Promise.all([p1, p2])
-    expect(order).toEqual([1, 2])
+    const elapsed = Date.now() - startedAt
+    // Execution is NOT serialized any more: two 60 ms operations overlap.
+    expect(elapsed).toBeLessThan(110)
+    expect(starts.sort()).toEqual(['a', 'b'])
     expect(pool.isBusy()).toBe(false)
   })
 })
@@ -268,18 +272,16 @@ describe('TabPool — ledger', () => {
 })
 
 describe('TabPool — mutex cancellation (2026-09-08 P0-4)', () => {
-  it('aborts a queued operation while the previous one is still running', async () => {
+  it('aborting while the operation waits for the user gate rejects it (D1: queue became per-tab)', async () => {
     const pool = new TabPool()
-    let releaseFirst!: () => void
-    const first = pool.withOperation('first', () => new Promise<void>((resolve) => { releaseFirst = resolve }))
+    pool.setUserControl(true, undefined)
     const controller = new AbortController()
-    const second = pool.withOperation('second', async () => 'ran', controller.signal)
+    const pending = pool.withOperation('queued', async () => 'ran', controller.signal)
     await sleep(20)
     controller.abort()
-    await expect(second).rejects.toMatchObject({ code: 'interrupted' })
-    releaseFirst()
-    await first
-    // The mutex tail must still be released so later calls proceed.
+    await expect(pending).rejects.toBeInstanceOf(Error)
+    pool.setUserControl(false, undefined)
+    // The admission queue must still be released so later calls proceed.
     await expect(pool.withOperation('third', async () => 'ok')).resolves.toBe('ok')
     expect(pool.isBusy()).toBe(false)
   })

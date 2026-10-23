@@ -136,6 +136,50 @@ class PoolMutex {
    */
   constructor(private readonly locale: () => HostLocale) {}
 
+  /**
+   * Admit ONE operation without holding the mutex for its whole execution
+   * (D1/B1). Admission (gate wait) stays ordered; the returned release ends the
+   * admission turn and the operation runs outside it. Same-tab serialization is
+   * the runtime's per-tab lock job; whole-operation exclusion is reserved for
+   * global operations (the runtime's global lock).
+   */
+  async admit(
+    gate: () => boolean,
+    signal?: AbortSignal,
+    gateBudgetMs = 0,
+    queueBudgetMs = 0,
+  ): Promise<() => void> {
+    const prev = this.tail
+    const budgetStartedAt = Date.now()
+    let release!: () => void
+    this.tail = new Promise<void>((resolve) => { release = resolve })
+    try {
+      await raceAbort(withQueueBudget(prev, queueBudgetMs, this.locale), gate, signal, this.locale)
+      while (gate()) {
+        if (signal !== undefined && signal.aborted) {
+          throw browserError('window-controlled', gateRefusalWith(
+            this.locale(),
+            '（这次调用已被停止）',
+            ' (this call was stopped)',
+          ))
+        }
+        if (gateBudgetMs > 0 && Date.now() - budgetStartedAt >= gateBudgetMs) {
+          const seconds = Math.round(gateBudgetMs / 1000)
+          throw browserError('window-controlled', hostCopy(
+            this.locale(),
+            `browser: 等待用户交还浏览器超时（${String(seconds)}s）—— ${gateRefusal('zh')}`,
+            `browser: timed out waiting for the user to hand back the browser (${String(seconds)}s) — ${gateRefusal('en')}`,
+          ))
+        }
+        await sleep(120)
+      }
+      return release
+    } catch (error) {
+      release()
+      throw error
+    }
+  }
+
   async run(
     work: () => Promise<void>,
     gate: () => boolean,
@@ -363,15 +407,17 @@ export class TabPool {
     this.busyDepth++
     this.emit('busy')
     try {
-      let result!: T
-      await this.mutex.run(
-        async () => { result = await work() },
+      // D1/B1: admission is serialized, execution is not. The admission turn is
+      // released before the work runs; per-tab / global exclusion lives in the
+      // runtime locks (and their queue budgets moved there).
+      const release = await this.mutex.admit(
         () => this.windowControlled,
         signal,
         this.options.userGateTimeoutMs,
         queueBudgetMs,
       )
-      return result
+      release()
+      return await work()
     } finally {
       this.busyDepth--
       if (this.busyDepth === 0) this.busyTool = ''

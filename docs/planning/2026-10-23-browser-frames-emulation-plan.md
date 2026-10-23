@@ -24,7 +24,7 @@
 - **并入后的盲区语义（P1 复审 P2-1）**：开启 extras 后，被覆盖的 frames/shadowRoots 从 note 的 "NOT included" 计数中移除；仍存在的盲区只有跨域帧（`crossOriginFrames`），单独列出。
 - **frame 条目的 visible**：以**帧内**元素的 rect 为准（iframe 自身被隐藏时条目仍可能是 visible:true）；`frame:N` 使用深度优先全帧编号（同域递归、跨域帧占号）。
 - **帧编号单一来源（P2 审计 P1-1）**：extras 的 `frame:N` 与 `resolveFrame` 使用同一**深度优先文档序**（同源帧递归、跨域帧消耗编号但只记 `crossOriginFrames`）；两边共用帧树顺序。
-- **frame 动作 v1 边界**：仅 `browser_click` / `browser_get_text` 支持 `frame`；frame 点击为 DOM 派发（`isTrusted:false`，左键单击、无修饰键；disabled → policy）；frame 读取只接受 CSS / `>>>` 选择器；**frame 级 stale 尚未实现**（iframe 重载后旧编号不失效），实现前文档不声称。
+- **frame 动作 v1 边界**：仅 `browser_click` / `browser_get_text` 支持 `frame`；frame 点击为 DOM 派发（`isTrusted:false`，左键单击、无修饰键；disabled → policy）；frame 读取只接受 CSS / `>>>` 选择器；**frame 级 stale 已实现**：快照锚点记录 `frame:N → {frameId,url}`，动作前与实时 `frameIndex` 比对（frameId 或 url 变化 → `stale-snapshot`）；诚实边界：同文档导航检测不到。`browser_get_text{frame}` 同样做 stale 检查；显式 `frame` 与快照条目所属帧冲突 → 参数错误。
 - 跨域 iframe：**不含** DOM（协议不允许跨世界读取），只报 `crossOrigin: true` 与 frame 序号。**不承诺** `browser_eval(frame:N)` 能进跨域帧的 world，除非实现前确认（审计 R2；确认前文档只写"看 crossOrigin，动作会被拒绝"）。crossOrigin 判定用帧 document 的实际 origin（srcdoc/blob/data/about:blank 继承、sandbox 无 allow-same-origin → 跨源），**异常一律 fail-closed 视为跨源**。
 - 条目形状新增可选字段：`frame?: number`、`shadow?: boolean`；不改变既有字段名。
 - 上限：条目总数沿用 `snapshotLimit`（400 默认）；帧内条目计入同一上限；shadow 深度上限 8。

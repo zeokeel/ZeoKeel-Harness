@@ -884,6 +884,9 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
         if (pointClick && interactArgs.target !== undefined) throw new Error('target and x/y are mutually exclusive — pass one addressing form')
         if (!pointClick && interactArgs.target === undefined) throw new Error('target is required (or pass x and y for a coordinate click)')
         const target = pointClick ? undefined : await resolveTarget(runtime, tabId, interactArgs.target as number | string, exec.signal)
+        if (typeof interactArgs.frame === 'number' && interactArgs.frame > 0 && target?.frame !== undefined && interactArgs.frame !== target.frame) {
+          throw new Error(`frame ${String(interactArgs.frame)} conflicts with the frame of snapshot element ${String(target.hit.index)} (frame ${String(target.frame)})`)
+        }
         const frameIndex = typeof interactArgs.frame === 'number' && interactArgs.frame > 0
           ? interactArgs.frame
           : (target?.frame ?? 0)
@@ -1445,6 +1448,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       const tabId = await tabOf(tab)
       if (typeof frame === 'number' && frame < 0) throw new Error('frame must be >= 0')
       if (typeof frame === 'number' && frame > 0) {
+        await runtime.assertFrameFresh(tabId, frame)
         if (selector !== undefined && parseTargetSpec(selector).kind !== 'css') {
           throw new Error('frame reads accept a CSS or >>> selector only (text=/role=/xpath= resolve in the main frame)')
         }

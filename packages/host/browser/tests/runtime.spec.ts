@@ -1531,6 +1531,29 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('frame-level stale: a same-frameId navigation (url change) is caught too', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const sendFrame = (url: string) => { void url }
+    const view = adapter.lastView()
+    sendFrame('https://a.example/frame')
+    view.transport.handler = (method: string) => (method === 'Runtime.evaluate'
+      ? { result: { value: { elements: [], total: 0, truncated: false, frames: 1, shadowRoots: 0, shadowScanCapped: false, countCapped: false } } }
+      : {})
+    const internal = runtime as unknown as { frameIndex: (tab: unknown) => Promise<unknown> }
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1', url: 'https://a.example/frame', depth: 1, contextId: 3 },
+    ]
+    await runtime.modelSnapshot(1)
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1', url: 'https://a.example/other', depth: 1, contextId: 4 },
+    ]
+    await expect(runtime.assertFrameFresh(1, 1)).rejects.toMatchObject({ code: 'stale-snapshot' })
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

@@ -532,6 +532,57 @@ describe('frame action parameter validation（2026-10-23 C16 frame）', () => {
   })
 })
 
+describe('snapshot frames at the tool layer（2026-10-23 C16）', () => {
+  interface Frames { frames: Array<{ frameId: string, url: string, depth: number, contextId?: number }> }
+  const installSnapshotWithFrame = (harness: ReturnType<typeof makeHarness>): { internal: Frames & { frameIndex: (tab: unknown) => Promise<unknown> } } => {
+    const view = harness.adapter.lastView()
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        return { result: { value: JSON.stringify({ entries: [{ selector: '#in', kind: 'button', text: 'Go', frame: 1, visible: true, disabled: false }], crossOrigin: [] }) } }
+      }
+      if (expression.includes('document.querySelectorAll')) {
+        return { result: { value: { elements: [], total: 0, truncated: false, frames: 1, shadowRoots: 0, shadowScanCapped: false, countCapped: false } } }
+      }
+      return { result: { value: 'clicked' } }
+    }
+    const internal = harness.runtime as unknown as Frames & { frameIndex: (tab: unknown) => Promise<unknown> }
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1', url: 'https://a.example/frame', depth: 1, contextId: 5 },
+    ]
+    return { internal }
+  }
+
+  it('a snapshot element inside a frame carries its frame into the action', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const { internal } = installSnapshotWithFrame(harness)
+    await harness.call('browser_get_snapshot', { includeFrames: true })
+    const before = harness.adapter.lastView().transport.commands.length
+    await harness.call('browser_click', { target: 1 })
+    const sent = harness.adapter.lastView().transport.commands.slice(before).filter(entry => entry.method === 'Runtime.evaluate')
+    const framed = sent.at(-1)!
+    // The frame of the snapshot entry was used automatically (contextId 5) and the
+    // selector stayed frame-local.
+    expect(framed.params?.['contextId']).toBe(5)
+    expect(String(framed.params?.['expression'] ?? '')).toContain('#in')
+  })
+
+  it('the tool-level stale check refuses old numbers after the frame changed', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const { internal } = installSnapshotWithFrame(harness)
+    await harness.call('browser_get_snapshot', { includeFrames: true })
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1-NEW', url: 'https://a.example/frame', depth: 1, contextId: 6 },
+    ]
+    await expect(harness.call('browser_click', { target: 1 })).rejects.toMatchObject({ code: 'stale-snapshot' })
+  })
+})
+
 describe('click addressing errors（2026-10-23 C16 P2）', () => {
   it('target and x/y are mutually exclusive, and a lone coordinate is rejected', async () => {
     const harness = track(makeHarness())

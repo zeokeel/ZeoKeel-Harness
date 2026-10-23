@@ -4292,18 +4292,7 @@ export class BrowserRuntime {
     const resolved = this.resolveTab(tabId)
     await this.agentRun('browser_click', async () => {
       const tab = this.tab(resolved)
-      const outcome = await this.evaluateInFrame(tab, frame, `(() => {
-        ${querySnippet(selector)}
-        if (!el) return 'not-found';
-        if (el.disabled === true) return 'disabled';
-        el.scrollIntoView({ block: 'center', inline: 'center' });
-        const rect = el.getBoundingClientRect();
-        const base = { bubbles: true, cancelable: true, composed: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0, buttons: 0, detail: 1 };
-        const Mouse = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
-        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) el.dispatchEvent(new Mouse(type, { ...base, buttons: type.includes('down') ? 1 : 0 }));
-        if (typeof el.click === 'function') el.click(); else el.dispatchEvent(new MouseEvent('click', base));
-        return 'clicked';
-      })()`, signal)
+      const outcome = await this.evaluateInFrame(tab, frame, frameClickExpression(selector), signal)
       if (outcome === 'disabled') throw browserError('policy', `browser: cannot click ${selector} in frame ${String(frame)} — the element is disabled`)
       if (outcome !== 'clicked') throw browserError('not-found', `browser: cannot click ${selector} in frame ${String(frame)}`)
       this.record('browser_click', resolved, `click ${selector} in frame ${String(frame)} (dom-dispatch)`, false, 'ai', CLICK_SUMMARY_LIMIT)
@@ -5978,6 +5967,28 @@ const SHADOW_QUERY_SOURCE = `
     return el;
   };
 `
+
+/**
+ * Page script for a frame click (2026-10-23 C16). Exported so jsdom can run the
+ * EXACT script: the `disabled` guard and the click chain must be measured, not
+ * stubbed through a CDP mock.
+ * @param selector - selector resolved inside the frame document.
+ * @returns the expression to evaluate in the frame's world.
+ */
+export function frameClickExpression(selector: string): string {
+  return `(() => {
+        ${querySnippet(selector)}
+        if (!el) return 'not-found';
+        if (el.disabled === true) return 'disabled';
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const rect = el.getBoundingClientRect();
+        const base = { bubbles: true, cancelable: true, composed: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0, buttons: 0, detail: 1 };
+        const Mouse = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) el.dispatchEvent(new Mouse(type, { ...base, buttons: type.includes('down') ? 1 : 0 }));
+        if (typeof el.click === 'function') el.click(); else el.dispatchEvent(new MouseEvent('click', base));
+        return 'clicked';
+      })()`
+}
 
 /** Build the page-side element lookup snippet for one selector: the shadow
  * helper is only injected when the selector actually uses `>>>`, so the default

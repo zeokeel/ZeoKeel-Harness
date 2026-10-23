@@ -2356,6 +2356,40 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('D1: global-exclusive operations stay serial (L9) and creation waits for L10', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: 1 } })
+    // L9: two tab-less operations must never overlap.
+    let inFlight = 0
+    let maxInFlight = 0
+    const body = async (): Promise<void> => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await sleep(40)
+      inFlight -= 1
+    }
+    await Promise.all([runtime.runGated('probe-a', body), runtime.runGated('probe-b', body)])
+    expect(maxInFlight).toBe(1)
+    // L10: an open must not create a view while the creation lock is held.
+    const internal = runtime as unknown as {
+      withLifecycleLock: <T>(q: string, signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>) => Promise<T>
+    }
+    let releaseLifecycle!: () => void
+    const held = internal.withLifecycleLock('probe-lifecycle', undefined, Date.now() + 60_000, () => new Promise<void>((resolve) => { releaseLifecycle = resolve }))
+    held.catch(() => undefined)
+    await sleep(20)
+    const viewsBefore = adapter.views.length
+    const opening = runtime.open('https://b.example')
+    await sleep(60)
+    expect(adapter.views.length).toBe(viewsBefore)
+    releaseLifecycle()
+    await held
+    const opened = await opening
+    expect(opened.id).toBeGreaterThan(1)
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

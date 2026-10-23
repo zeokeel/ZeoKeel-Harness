@@ -21,7 +21,7 @@ import { httpOriginOf } from './credential-site.ts'
 import { snapshotNote } from './snapshot.ts'
 import { parseTargetSpec } from './locator.ts'
 import { BROWSER_TOOL_TIMEOUT_MS, BROWSER_WAIT_FOR_DEADLINE_MS, TOOL_DEADLINE_MARGIN_MS, WAIT_FOR_MAX_MS } from './budgets.ts'
-import { MODIFIER_BITS } from './runtime.ts'
+import { MODIFIER_BITS, PROGRAM_MAX_HELPER_CALLS, PROGRAM_SCRIPT_BUDGET_MS } from './runtime.ts'
 import type { BrowserInteractionHit, BrowserWaitUntil } from './types.ts'
 
 /** Valid waitUntil values for navigation tools. */
@@ -30,6 +30,8 @@ const WAIT_UNTILS: readonly BrowserWaitUntil[] = ['domcontentloaded', 'load', 'n
 /** Download receipts need more than the 30 s tool budget: the wait itself is 60 s
  * and the registered budget must stay above it (internal wait < registration). */
 export const BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS = 90_000
+/** Programming-mode tool budget: above the 120 s script budget (audit R1/R5). */
+export const BROWSER_PROGRAM_TOOL_TIMEOUT_MS = 150_000
 /** How long a download receipt waits for a terminal status. */
 const DOWNLOAD_COMPLETION_TIMEOUT_MS = 60_000
 
@@ -1256,6 +1258,45 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       return result
     },
   }))
+
+  // Programming mode (2026-10-23): registered ONLY when the host injected a ptc
+  // runtime. There is no fallback to eval or to a tool sequence (audit R5/R9).
+  if (runtime.programRuntimeAvailable && runtime.options.programEnabled === true) {
+    register(defineTool({
+      name: 'browser_run',
+      description: `[control] Run a TypeScript program that drives the browser through the frozen \`browser\` helpers (same capabilities as the individual tools; no filesystem, network, process, CDP or cookie access — helpers are the only capability). Useful for multi-step work: read, branch, loop, aggregate. Script eval/Function is a language feature and NOT a browser channel: page work still goes through browser.eval (which keeps the eval policy). Returns the program result (JSON, ≤256 KiB), console output and the helper-call count. Program budget ${String(Math.round(PROGRAM_SCRIPT_BUDGET_MS / 1000))}s, at most ${String(PROGRAM_MAX_HELPER_CALLS)} helper calls.`,
+      parameters: {
+        program: { type: 'string', required: true, description: 'TypeScript/JS program; may await browser.* helpers; return a JSON value.' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            result: { type: 'json' },
+            console: { type: 'string' },
+            truncated: { type: 'boolean' },
+            helperCalls: { type: 'integer' },
+          },
+        },
+        render: (_args, value) => {
+          const out = value as { truncated?: boolean, helperCalls?: number }
+          return [{ type: 'text', text: `Browser program finished (${String(out.helperCalls ?? 0)} helper calls${out.truncated === true ? ', result truncated' : ''}).` }]
+        },
+      },
+      timeoutMs: BROWSER_PROGRAM_TOOL_TIMEOUT_MS,
+      isConcurrencySafe: () => false,
+      presentCall: present('Run browser program'),
+      async execute(args, exec) {
+        const { program } = args as { program?: unknown }
+        if (typeof program !== 'string' || program.trim() === '') throw new Error('program is required')
+        noteAgent(runtime, exec.agent)
+        const outcome = await runtime.runProgram(program, exec.signal)
+        exec.signal.throwIfAborted()
+        return outcome
+      },
+    }))
+  }
 
   register(defineTool({
     name: 'browser_press',

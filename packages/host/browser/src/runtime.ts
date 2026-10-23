@@ -23,6 +23,7 @@ import { BrowserGuard, ensureSessionGuard, isLocalHostname, looksLikeAbsoluteUrl
 import { extractSnapshotWithMeta, extractTextWithMeta, type SnapshotExtractionMeta, SNAPSHOT_DEFAULT_LIMIT, TEXT_DEFAULT_LIMIT } from './snapshot.ts'
 import { locatorProbe, parseTargetSpec } from './locator.ts'
 import { TabEventBus } from './events.ts'
+import { createProgramBridge, programErrorText, truncateProgramResult, type ProgramRuntime } from './program.ts'
 import { captureScreenshot, captureScreenshotViaCdp, SCREENSHOT_MAX_BYTES, type ScreenshotOptions } from './shots.ts'
 import { snapshotExtrasProbe, type SnapshotExtrasOptions } from './snapshot.ts'
 import { appSurfaceAllowsUrl, asSurfaceWebContents, surfaceLabel, type BrowserSurface, type SurfaceControlOwner, type SurfaceRegistry, type SurfaceWebContents } from './surface.ts'
@@ -488,6 +489,9 @@ export type OverlayMode = 'capsule' | 'panel' | 'menu' | 'viewer'
 export interface RuntimeDeps {
   pool?: TabPool
   store?: BrowserStore
+  /** Programming-mode runtime injected by the host (absent ⇒ browser_run is not
+   * registered at all; there is no fallback path — audit R5/R9). */
+  programRuntime?: ProgramRuntime
   currentUsername?: () => string | null
   /**
    * Locale provider for the copy the runtime produces (window title, activity
@@ -614,6 +618,7 @@ export class BrowserRuntime {
   private readonly tabs = new Map<number, BrowserTab>()
   private nextTabId = 1
   /** Locale provider for runtime-produced copy (see {@link RuntimeDeps.locale}). */
+  private readonly deps: RuntimeDeps = {}
   private readonly locale: () => HostLocale
   /**
    * Surface 注册表（§16.1）。工具面靠它区分"浏览器标签"与"应用窗口"：
@@ -764,8 +769,10 @@ export class BrowserRuntime {
     partition?: string,
     deps: RuntimeDeps = {},
   ) {
+    this.deps = deps
     this.options = {
       maxTabs: options.maxTabs ?? 16,
+      programEnabled: options.programEnabled ?? false,
       timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       loadTimeoutMs: options.loadTimeoutMs ?? DEFAULT_LOAD_TIMEOUT_MS,
       // 缺省 = **开**（R21 F-02 定案：装配面无生产者，见 `index.ts` 的 `evalEnabled`
@@ -3516,6 +3523,79 @@ export class BrowserRuntime {
     }, signal)
   }
 
+  /** Whether programming mode can be offered (host injected a ptc runtime). */
+  get programRuntimeAvailable(): boolean {
+    return this.deps.programRuntime !== undefined
+  }
+
+  /**
+   * Run one programming-mode script (2026-10-23 `browser_run`).
+   *
+   * ATTENTION (audit R1): this method deliberately does NOT wrap the run in
+   * `agentRun` — every helper call takes the global browser mutex itself. An
+   * outer lock would deadlock the first helper.
+   * @param program - the script text.
+   * @param signal - tool abort.
+   */
+  async runProgram(program: string, signal?: AbortSignal): Promise<{ result: never, console: string, truncated: boolean, helperCalls: number }> {
+    const programRuntime = this.deps.programRuntime
+    if (programRuntime === undefined) throw browserError('policy', 'browser_run: programming mode is not available in this deployment')
+    if (signal?.aborted === true) throw browserError('interrupted', 'browser_run: cancelled')
+    const controller = new AbortController()
+    const onAbort = (): void => controller.abort()
+    signal?.addEventListener('abort', onAbort, { once: true })
+    // R3: a user takeover must interrupt a script even when no helper is running
+    // (e.g. it is sleeping), so the control state is polled for the whole run.
+    const poll = setInterval(() => {
+      if (this.controlState().controlled) controller.abort()
+    }, 100)
+    const deadlineAt = Date.now() + PROGRAM_SCRIPT_BUDGET_MS
+    const bridge = createProgramBridge(async (tool, args) => this.programInvoke(tool, args, controller.signal), {
+      deadlineAt,
+      maxCalls: PROGRAM_MAX_HELPER_CALLS,
+      signal: controller.signal,
+    })
+    try {
+      const executed = await programRuntime.execute(String(program), bridge.browser as unknown as Readonly<Record<string, unknown>>)
+      const projected = truncateProgramResult(executed.result)
+      const consoleText = typeof executed.console === 'string' ? executed.console : ''
+      return {
+        result: projected.value as never,
+        console: programErrorText({ message: consoleText }, text => this.redactProgramText(text)).slice(0, 64 * 1024),
+        truncated: projected.truncated,
+        helperCalls: bridge.calls,
+      }
+    } finally {
+      // R2: let in-flight helpers settle so the global browser mutex is released
+      // before the tool reports back.
+      await Promise.allSettled([...bridge.pending])
+      clearInterval(poll)
+      signal?.removeEventListener('abort', onAbort)
+    }
+  }
+
+  /** Route one helper call to the SAME runtime path its tool uses. */
+  private async programInvoke(tool: string, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
+    switch (tool) {
+      case 'browser_open': return await this.open(String(args['url'] ?? ''), signal)
+      case 'browser_navigate': return await this.navigate(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['url'] ?? ''), 'domcontentloaded', signal)
+      case 'browser_get_snapshot': return await this.modelSnapshot(Number(args['tab'] ?? this.pool.activeTab ?? 1), signal)
+      case 'browser_get_text': return await this.textWithMeta(Number(args['tab'] ?? this.pool.activeTab ?? 1), args['selector'] as string | undefined, signal)
+      case 'browser_click': {
+        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
+        const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
+        return await this.clickAt(tabId, await this.locateElement(tabId, target.selector, signal), signal)
+      }
+      case 'browser_eval': return { value: await this.eval(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['expression'] ?? ''), typeof args['frame'] === 'number' ? args['frame'] : undefined, signal) }
+      default: throw browserError('policy', `browser_run: helper ${tool} is not wired in this build`)
+    }
+  }
+
+  /** Redact program console/errors with the same funnels as every text exit. */
+  private redactProgramText(text: string): string {
+    return redactSecretsText(this.liveSecrets(), stripSensitiveText(text), { verbatim: true })
+  }
+
   /**
    * Run a fetch INSIDE the page (C10): same origin cookies, no navigation.
    * Redirects are refused (`redirect:'error'`) so a 302 cannot smuggle the
@@ -6136,6 +6216,11 @@ const MOD_ALIAS: Readonly<Record<string, 'alt' | 'ctrl' | 'meta' | 'shift'>> = {
 /** CDP modifier bitmask (Alt=1, Ctrl=2, Meta=4, Shift=8). */
 /** Cap on the TOTAL delay of a slow `type` (C6): delayMs × chars ≤ this. */
 export const TYPE_TOTAL_DELAY_LIMIT = 5_000
+
+/** Program script budget (tool registration must stay above it). */
+export const PROGRAM_SCRIPT_BUDGET_MS = 120_000
+/** Helper-call cap per program (failures count). */
+export const PROGRAM_MAX_HELPER_CALLS = 200
 
 /** Clipboard read cap (C7/R4): the model never receives an unbounded paste. */
 export const CLIPBOARD_READ_LIMIT = 64 * 1024

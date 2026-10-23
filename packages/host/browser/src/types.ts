@@ -114,6 +114,8 @@ export interface BrowserInteractionHit {
 
 /** Runtime config surfaced to the model about the embedded browser. */
 export interface BrowserToolOptions {
+  /** Offer the programming-mode tool `browser_run` (default false: opt-in, audit R5). */
+  programEnabled?: boolean
   /** Maximum tabs (default 8). */
   maxTabs?: number
   /** Cooperative tool-call timeout budget ms (default 30000). */

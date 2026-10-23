@@ -438,23 +438,30 @@ func TestCompileChildAppliesResourceLimits(t *testing.T) {
 	t.Logf("子进程资源上限：RLIMIT_AS=%s RLIMIT_CPU=%ds", describeInt(got.RLimitAS), got.RLimitCPU)
 }
 
-// TestIsolationFromEnv 验证部署面选档开关（P0：让 fail-closed 档不再是死代码）。
-func TestIsolationFromEnv(t *testing.T) {
+// TestParseIsolation 验证部署面选档开关的**唯一解析口径**（P0：让 fail-closed 档
+// 不再是死代码）。档位来源已改为 deployconfig（环境变量 > 控制台 > 默认），
+// 本包只负责把原始字符串翻译成模式，因此判据落在 ParseIsolation 上。
+func TestParseIsolation(t *testing.T) {
 	for _, tc := range []struct {
-		val  string
-		want IsolationMode
+		val     string
+		want    IsolationMode
+		wantErr bool
 	}{
-		{"", IsolationAuto},
-		{"auto", IsolationAuto},
-		{"REQUIRE", IsolationRequire},
-		{" strict ", IsolationRequire},
-		{"off", IsolationOff},
-		{"none", IsolationOff},
-		{"garbage", IsolationAuto}, // 未知值回落而非报错（加固开关写错不该让服务起不来）
+		{"", IsolationAuto, false},
+		{"auto", IsolationAuto, false},
+		{"REQUIRE", IsolationRequire, false},
+		{" strict ", IsolationRequire, false}, // 历史别名（存量 .env 里可能写着）
+		{"off", IsolationOff, false},
+		{"none", IsolationOff, false}, // 历史别名
+		{"garbage", IsolationAuto, true},
 	} {
-		t.Setenv(IsolationEnvVar, tc.val)
-		if got := IsolationFromEnv(); got != tc.want {
-			t.Errorf("%s=%q ⇒ %v，期望 %v", IsolationEnvVar, tc.val, got, tc.want)
+		got, err := ParseIsolation(tc.val)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("ParseIsolation(%q) err=%v，期望 err 存在=%v", tc.val, err, tc.wantErr)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("ParseIsolation(%q) = %v，期望 %v", tc.val, got, tc.want)
 		}
 	}
 }

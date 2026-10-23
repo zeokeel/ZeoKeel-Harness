@@ -44,31 +44,33 @@ func (m IsolationMode) String() string {
 	}
 }
 
-// IsolationEnvVar 是选择隔离档位的环境变量名。
+// ParseIsolation 把**原始字符串**解析成 IsolationMode(大小写不敏感,前后空白忽略)。
 //
-// 部署形态需要它：默认档 `IsolationAuto` 在隔离不可用时**只警告并继续**，
-// 而"生产要不要接受无隔离编译"是运维决策，不该由代码替他决定。设成
-// `require` 即 fail-closed（隔离不可用则启动失败）。
-const IsolationEnvVar = "ZEOKEEL_COMPILE_ISOLATION"
-
-// IsolationFromEnv 读取 IsolationEnvVar 并解析成 IsolationMode。
+// 取值:
 //
-// 取值（大小写不敏感）：
+//	"require" / "strict"  → IsolationRequire(生产强化的 fail-closed 档)
+//	"off" / "none"        → IsolationOff(**仅测试**;每次启动都会在日志里声明)
+//	"auto" / ""           → IsolationAuto(默认)
+//	其它                  → 错误(由调用方决定回落还是拒绝启动)
 //
-//	"require" / "strict"  → IsolationRequire（生产强化的 fail-closed 档）
-//	"off" / "none"        → IsolationOff（**仅测试**；每次启动都会在日志里声明）
-//	"auto" / "" / 其它    → IsolationAuto（默认）
+// 为什么把"解析"与"从环境变量读取"拆开:档位现在来自部署配置(deployconfig 注册表:
+// 显式环境变量 > 控制台「系统配置」> 默认),本包不该知道配置存在哪 —— 它只负责
+// 把字符串翻译成模式。`strict`/`none` 是历史别名,保留在这里是为了"存量 .env
+// 写着别名"时不因注册表的规范候选集而把 require 静默降成 auto。
 //
-// 未识别的值回落 auto 而不是报错：这个开关是"加固"用的，把它写错不该让服务起不来；
-// 但未知值会让 auto 打出那条"未隔离"的警告日志，问题不会被静默吞掉。
-func IsolationFromEnv() IsolationMode {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(IsolationEnvVar))) {
+// 谁决定"未知值怎么办":调用方。历史上(IsolationFromEnv)未知值静默回落 auto,
+// 因为"加固开关写错不该让服务起不来";现在的回落由 deployconfig 在解析注册项时
+// 完成(告警 + 回落),本函数只对调用方明确传入的原始值负责。
+func ParseIsolation(raw string) (IsolationMode, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "require", "strict":
-		return IsolationRequire
+		return IsolationRequire, nil
 	case "off", "none":
-		return IsolationOff
+		return IsolationOff, nil
+	case "auto", "":
+		return IsolationAuto, nil
 	default:
-		return IsolationAuto
+		return IsolationAuto, fmt.Errorf("未知的编译隔离档 %q(可用：require / auto / off)", raw)
 	}
 }
 

@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 	"github.com/zeokeel/zeokeel-harness/server/internal/updatecheck"
 	"github.com/zeokeel/zeokeel-harness/server/internal/util"
@@ -56,14 +56,14 @@ func secureCookieFor(c *gin.Context, db *sql.DB) bool {
 	return clientrelease.ForwardedProtoIsHTTPS(c.GetHeader("X-Forwarded-Proto"))
 }
 
-// adminLoginLimiter bounds admin login attempts (ip+username) so the
-// password is not brute-forceable without rate limiting.
-// 延迟到首次登录调用时创建(惰性单例):newLoginLimiter 在包 init 时读
-// ZEOKEEL_LOGIN_MAX_ATTEMPTS,若包级立即初始化,测试 t.Setenv 来不及生效,
-func adminLoginLimiter() *loginLimiter {
-	// F17(复核修正):与客户端面共享同一个限流器 —— 此前两个入口各持一份
-	// 失败预算,同一账号实际可尝试 2 倍次数(且可交替入口规避 429)。
-	return sharedLoginLimiter()
+// adminLoginLimiter 返回管理面登录失败预算桶(按 DB 实例分桶)。
+//
+// F17(复核修正):与客户端面共享**同一个库**的限流器 —— 此前两个入口各持一份
+// 失败预算,同一账号实际可尝试 2 倍次数(且可交替入口规避 429)。阈值来自该库的
+// 部署配置(auth.login_max_attempts),因此这里必须把 db 传下去:单实例会让
+// "拿哪个库的阈值"取决于谁先构造(测试里每个临时库也会互相串)。
+func adminLoginLimiter(db *sql.DB) *loginLimiter {
+	return sharedLoginLimiter(db)
 }
 
 // UpdateChecker 接口是版本检查的最小依赖(生产用 updatecheck.CachedChecker,
@@ -73,6 +73,7 @@ type UpdateChecker interface {
 }
 
 // ipLimiter 返回登录单 IP 失败预算桶(共享单例;与客户端面同源)。
+// 阈值是编译期常量,桶键已带 dbLimiterScope ⇒ 不需要按库分实例。
 func (a *AdminAPI) ipLimiter() *loginLimiter { return sharedLoginIPLimiter() }
 
 // AdminAPI holds the admin web handlers.
@@ -160,13 +161,20 @@ func issuerHostBlocked(host string) bool {
 	return false
 }
 
+// ldapAllowPlaintextKey 是 deployconfig 注册表里的键(唯一真源)。
+var ldapAllowPlaintextKey = deployconfig.MustKey("auth.ldap_allow_plaintext")
+
 // validateLDAPServerURL 校验 LDAP 目录地址(审计 2026-09-13 P2-7)。
 //
 // 出站 IP 复检在 ldap.go 的连接层强制(所有入口生效);这里额外在**保存时**
 // 拒绝明文 ldap:// 的非回环地址 —— bind 密码会以明文过网。为兼容存量内网
-// 未启 TLS 的目录,显式设置 ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1 可放行(仅影响
-// 新保存/修改的配置,存量配置不因升级而失效)。
-func validateLDAPServerURL(raw string) error {
+// 未启 TLS 的目录,部署配置 `auth.ldap_allow_plaintext`(deployconfig:
+// ZEOKEEL_LDAP_ALLOW_PLAINTEXT > 控制台「系统配置」> 默认 false)可放行
+// (仅影响新保存/修改的配置,存量配置不因升级而失效)。
+//
+// 错误文案指向**控制台**而不是教人设环境变量:旋钮已入库,新部署不再写 .env;
+// 只提环境变量会让运维走回"改 .env + 重建容器"的旧路(且改完不生效时没有线索)。
+func validateLDAPServerURL(db *sql.DB, raw string) error {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
@@ -182,11 +190,11 @@ func validateLDAPServerURL(raw string) error {
 		if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1" {
 			return nil
 		}
-		if v := strings.TrimSpace(os.Getenv("ZEOKEEL_LDAP_ALLOW_PLAINTEXT")); v == "1" || strings.EqualFold(v, "true") {
-			log.Printf("auth config: 允许明文 ldap://(ZEOKEEL_LDAP_ALLOW_PLAINTEXT 已开启)host=%s —— bind 密码将明文过网", u.Hostname())
+		if deployconfig.Bool(db, ldapAllowPlaintextKey) {
+			log.Printf("auth config: 允许明文 ldap://(部署配置 auth.ldap_allow_plaintext 已开启)host=%s —— bind 密码将明文过网", u.Hostname())
 			return nil
 		}
-		return errors.New("明文 ldap:// 会以明文传输 bind 密码;请改用 ldaps://,或显式设置 ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1 后重试")
+		return errors.New("明文 ldap:// 会以明文传输 bind 密码;请改用 ldaps://,或先在控制台「系统配置」里开启「允许明文 LDAP」后重试")
 	default:
 		return errors.New("仅支持 ldap:// 或 ldaps://")
 	}
@@ -393,7 +401,7 @@ func (a *AdminAPI) handleLogin(c *gin.Context) {
 	// 双桶限流(审计 2026-08-25 F-02):ip|username 防单 IP 爆破;
 	// username 桶防反代坍缩/分布式下的账号级 DoS。
 	// 2026-09-08 P1-3:只有失败尝试计数(allow 不再记账),成功即清空。
-	lim := adminLoginLimiter()
+	lim := adminLoginLimiter(a.DB)
 	// P3-2(审计 2026-09-13):键必须与客户端面**同一命名空间**(db scope 前缀),
 	// 否则"共享同一失败预算"只是共享了实例 —— 同一账号仍可在两个入口各消耗
 	// 一份 10 次预算(实测:客户端 3 次失败后第 4 次 429,管理面仍可继续尝试)。
@@ -461,7 +469,7 @@ func (a *AdminAPI) handleLoginMFA(c *gin.Context) {
 	// ip:<ip>|mfa(防单机并发爆破)+ u:<user>|mfa(跨 IP 防账号级爆破)。
 	// 2026-09-19:IP 维度同 srcIPKey —— 用真实客户端 IP;用 RemoteAddr 时反代下
 	// 全组织共用一个 10 次预算,10 个错误动态码即可让所有管理员的第二步 429。
-	lim := adminLoginLimiter()
+	lim := adminLoginLimiter(a.DB)
 	mfaIPKey := "mfa-ip:" + c.ClientIP()
 	if !lim.allow(mfaIPKey) {
 		_ = serverstore.AuditLog(a.DB, "mfa", "login_fail", "rate_limited ip="+c.ClientIP())
@@ -1513,7 +1521,7 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 			return
 		}
 	}
-	if err := validateLDAPServerURL(req.LDAP.ServerURL); err != nil {
+	if err := validateLDAPServerURL(a.DB, req.LDAP.ServerURL); err != nil {
 		writeError(c, http.StatusBadRequest, "VALIDATION", "ldap.server_url "+err.Error())
 		return
 	}

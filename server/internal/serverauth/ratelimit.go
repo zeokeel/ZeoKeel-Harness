@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
@@ -34,10 +33,11 @@ type loginLimiter struct {
 	attempts    map[string][]time.Time
 	maxEntries  int
 	maxAttempts int
-	// maxAttemptsFn 实时计算阈值(F17 复核):共享单例不能在创建时固话
-	// ZEOKEEL_LOGIN_MAX_ATTEMPTS —— 否则第一个测试设置的临时值会永久影响
-	// 后续用例(阈值过大 → 限流测试永不触发;过小 → 正常登录被误伤)。
-	// 生产环境变量进程内不变,实时读取只是多一次 getenv。
+	// maxAttemptsFn 实时计算阈值(F17 复核,2026-10-23 起来自 deployconfig):
+	// 共享实例不能在创建时固话阈值 —— 否则第一个测试设置的临时值/第一个库的
+	// 控制台配置会永久影响后续用例与后续库(阈值过大 → 限流测试永不触发;
+	// 过小 → 正常登录被误伤)。生产上阈值是部署配置,实时读取只是一次
+	// settings 缓存查找(30s TTL + 写失效),换来"控制台保存即生效"。
 	maxAttemptsFn func() int
 	window        time.Duration
 	lastSweep     time.Time
@@ -84,22 +84,43 @@ const oidcFlowStartMaxAttempts = 60
 // 失败 60 次已远超任何真实场景,而 NAT 出口的整间办公室仍有余量)。
 const loginIPMaxAttempts = 60
 
-// sharedLoginLimiter 是**全服务端共享**的登录失败限流器(F17,审计
-// 2026-09-11):此前客户端面与管理面各持一个实例,同一账号可从两个入口
-// 各消耗一份失败预算(实际阈值翻倍)。ZEOKEEL_LOGIN_MAX_ATTEMPTS 仍在首次
-// 创建时读取(惰性单例,测试可先 t.Setenv)。
-var sharedLoginLimiterOnce sync.Once
-var sharedLoginLimiterVal *loginLimiter
+// sharedLoginLimiters 是**按 *sql.DB 分桶**的登录失败限流器表(2026-10-23)。
+//
+// 修 F17 时它是"全服务端一个实例"——客户端面与管理面共享同一份失败预算,避免
+// 同一账号从两个入口各消耗一份(阈值实际翻倍)。产品语义不变,**同一个库**上
+// 客户端面与管理面仍然共享同一个实例。
+//
+// 为什么要按库分桶:阈值现在来自部署配置 `auth.login_max_attempts`
+// (deployconfig:显式环境变量 > 控制台 settings > 内置默认 10),而 settings
+// 读的是**某一个数据库**。单实例会让"用哪个库的阈值"取决于谁先构造,
+// 测试里每个临时库也会互相串(某用例放宽的阈值泄漏到别的库)。按库分桶后
+// 每个库各有自己的实例,阈值与桶内容都不再跨库。
+//
+// 注意:map 的键持有 *sql.DB 引用 ⇒ 该对象不会被回收,指针地址不会被复用 ——
+// 这正是需要的语义(桶键里的 dbLimiterScope 依赖指针身份,地址复用会让两个库
+// 的桶键相同)。
+var (
+	sharedLoginLimitersMu sync.Mutex
+	sharedLoginLimiters   = map[*sql.DB]*loginLimiter{}
+)
 
-func sharedLoginLimiter() *loginLimiter {
-	sharedLoginLimiterOnce.Do(func() {
-		sharedLoginLimiterVal = newLoginLimiter()
-	})
-	return sharedLoginLimiterVal
+// sharedLoginLimiter 返回该 DB 实例共享的登录失败限流器(懒创建)。
+func sharedLoginLimiter(db *sql.DB) *loginLimiter {
+	sharedLoginLimitersMu.Lock()
+	defer sharedLoginLimitersMu.Unlock()
+	if l, ok := sharedLoginLimiters[db]; ok {
+		return l
+	}
+	l := newLoginLimiter(db)
+	sharedLoginLimiters[db] = l
+	return l
 }
 
 // sharedLoginIPLimiter 是单 IP 失败预算的共享单例(客户端面/管理面/登录方式
 // 探测共用同一张表;键带命名空间前缀区分用途)。
+//
+// 它与账号桶不同:阈值是编译期常量(loginIPMaxAttempts),不读部署配置,
+// 且桶键已带 dbLimiterScope ⇒ 跨库隔离由键保证,不需要按库分实例。
 var sharedLoginIPLimiterOnce sync.Once
 var sharedLoginIPLimiterVal *loginLimiter
 
@@ -110,20 +131,18 @@ func sharedLoginIPLimiter() *loginLimiter {
 	return sharedLoginIPLimiterVal
 }
 
-func newLoginLimiter() *loginLimiter {
-	// ZEOKEEL_LOGIN_MAX_ATTEMPTS overrides the default 10/5min for test
-	// environments (dev-env/E2E login repeatedly as the same user).
-	// 阈值在**每次判定时**读取(见 maxAttemptsFn),保证共享单例下测试
-	// 临时 env 不泄漏到其他用例。
+// loginMaxAttemptsKey 是 deployconfig 注册表里的键(唯一真源)。
+var loginMaxAttemptsKey = deployconfig.MustKey("auth.login_max_attempts")
+
+func newLoginLimiter(db *sql.DB) *loginLimiter {
+	// 阈值(历史上默认 10/5min,测试/压测环境用环境变量放宽)现由 deployconfig
+	// 解析:`ZEOKEEL_LOGIN_MAX_ATTEMPTS` > 控制台「系统配置」> 默认 10。
+	// 在**每次判定时**解析(见 maxAttemptsFn),因此:
+	//   - 控制台保存后无需重启即生效(AppliesHot;settings 有 30s TTL 缓存,
+	//     热路径成本只是一次缓存查找);
+	//   - 测试临时设置的环境变量不会因为"实例早已创建"而失效。
 	l := newRateLimiter(10)
-	l.maxAttemptsFn = func() int {
-		if v := os.Getenv("ZEOKEEL_LOGIN_MAX_ATTEMPTS"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				return n
-			}
-		}
-		return 10
-	}
+	l.maxAttemptsFn = func() int { return deployconfig.Int(db, loginMaxAttemptsKey) }
 	return l
 }
 

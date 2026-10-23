@@ -45,8 +45,8 @@ func TestParse(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Parse(%q) 应报错（未知档位不得静默回落默认）", tc.in)
 			}
-			if !strings.Contains(err.Error(), memprofile.EnvMemoryProfile) {
-				t.Fatalf("Parse(%q) 的错误应点名环境变量：%v", tc.in, err)
+			if !strings.Contains(err.Error(), "内存档位") {
+				t.Fatalf("Parse(%q) 的错误应点名档位：%v", tc.in, err)
 			}
 			continue
 		}
@@ -56,29 +56,6 @@ func TestParse(t *testing.T) {
 		if got.Name != tc.want {
 			t.Fatalf("Parse(%q) = %q，期望 %q", tc.in, got.Name, tc.want)
 		}
-	}
-}
-
-// TestFromEnv：环境变量取值（含未设置 = 默认档）。
-func TestFromEnv(t *testing.T) {
-	p, err := memprofile.FromEnv(func(string) string { return "" })
-	if err != nil || p.Name != "default" {
-		t.Fatalf("未设置环境变量应为默认档：%v %q", err, p.Name)
-	}
-	p, err = memprofile.FromEnv(func(k string) string {
-		if k == memprofile.EnvMemoryProfile {
-			return "small"
-		}
-		return ""
-	})
-	if err != nil || p.Name != "small" {
-		t.Fatalf("应解析出 small：%v %q", err, p.Name)
-	}
-	if _, err := memprofile.FromEnv(func(string) string { return "huge" }); err == nil {
-		t.Fatal("未知档位必须报错")
-	}
-	if _, err := memprofile.FromEnv(nil); err != nil {
-		t.Fatalf("nil getenv 不应报错：%v", err)
 	}
 }
 

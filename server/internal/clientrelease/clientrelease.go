@@ -396,7 +396,10 @@ const PublicBaseURLEnv = "ZEOKEEL_PUBLIC_BASE_URL"
 
 // originUnavailableReason 是"给不出安全下载地址"时的兜底原因说明
 // (下发给客户端/体现在服务端日志里,供运维定位)。
-const originUnavailableReason = "server origin is not https; set " + PublicBaseURLEnv
+// 2026-10-23：主入口改成控制台「运维 → 网关」页的「对外访问地址」（settings
+// server.base_url，保存即生效）；env 仍是覆盖口。提示串按这个顺序写 —— 先指
+// 控制台（新部署的常规路径），再点名 env（存量/逃生口），避免把所有人引向 .env。
+const originUnavailableReason = "server origin is not https; set the public base URL in the admin console (Operations → Gateway) or via " + PublicBaseURLEnv
 
 // Origin 是客户端可达的绝对来源解析结果。
 type Origin struct {

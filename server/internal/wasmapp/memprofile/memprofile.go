@@ -32,7 +32,17 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 )
 
-// EnvMemoryProfile 是选择档位的环境变量名（空 = 默认档）。
+// 本包**不读环境变量**（2026-10-23 起）：档位是部署配置项
+// `wasm.memory_profile`（server/internal/deployconfig 注册表），由装配方
+// （cmd/server）解析后把解析结果传进来。历史环境变量
+// `ZEOKEEL_WASM_MEMORY_PROFILE` 仍然生效，但只作为 deployconfig 的**覆盖口**，
+// 不在本包直接读取 —— 否则同一个旋钮会有两条读取路径、两套回落口径。
+
+// EnvMemoryProfile 是历史环境变量的**名字常量**（2026-10-23 起本包不读它）。
+//
+// 保留理由：它是 deployconfig 注册表里 `wasm.memory_profile` 的覆盖口名，
+// 测试与诊断文案需要引用同一个字面量（不在这里再抄一份），而"读环境变量"这件事
+// 已收口到 server/internal/deployconfig —— 本包只接收解析后的档位值。
 const EnvMemoryProfile = "ZEOKEEL_WASM_MEMORY_PROFILE"
 
 // Profile 是一个内存档位的全部数值（**运行期强制的唯一输入**）。
@@ -133,14 +143,6 @@ func Parse(name string) (Profile, error) {
 	case "large":
 		return Large(), nil
 	default:
-		return Profile{}, fmt.Errorf("未知的 %s=%q（可用：%s）", EnvMemoryProfile, name, Names())
+		return Profile{}, fmt.Errorf("未知的内存档位 %q（可用：%s）", name, Names())
 	}
-}
-
-// FromEnv 从环境变量解析档位（getenv 便于测试注入）。
-func FromEnv(getenv func(string) string) (Profile, error) {
-	if getenv == nil {
-		return Default(), nil
-	}
-	return Parse(getenv(EnvMemoryProfile))
 }

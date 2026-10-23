@@ -51,7 +51,7 @@ func TestLimitsSaveRejectsOverBudgetAppDBCache(t *testing.T) {
 		t.Skipf("本机可用内存 %d GiB 大于被测组合的账（测试前提不成立）", avail.Bytes>>30)
 	}
 
-	h := newWasmLimitsHolder(nil, memprofile.Default())
+	h := newWasmLimitsHolder(nil, memprofile.Default(), false)
 	huge := applimits.Defaults()
 	huge.MaxInstances = applimits.MaxInstances
 	huge.AppDBCacheKiB = applimits.MaxAppDBCacheKiB
@@ -94,7 +94,7 @@ func TestLimitsSaveRejectsOverBudgetAppDBCache(t *testing.T) {
 // TestLimitsPlanCarriesEffectivePageCache：启动自检用的 Plan 必须带上**当前生效**的
 // 页缓存单价（否则保存判据算 272 GiB、启动自检却只算四笔 —— 两条口径分叉）。
 func TestLimitsPlanCarriesEffectivePageCache(t *testing.T) {
-	h := newWasmLimitsHolder(nil, memprofile.Default())
+	h := newWasmLimitsHolder(nil, memprofile.Default(), false)
 	l := h.Get()
 	plan := h.Plan()
 	if want := l.AppDBPageCachePerHandleBytes(); plan.AppDBPageCachePerHandleBytes != want {
@@ -271,7 +271,7 @@ func TestLimitsClearReallyRestoresProfileSource(t *testing.T) {
 	db := env.db
 
 	// ---- 判据 1：设置钉住生效值（换档位也读设置） ----
-	hPinned := newWasmLimitsHolder(db, other)
+	hPinned := newWasmLimitsHolder(db, other, true)
 	if hPinned.Source() != "setting" || hPinned.Get() != saved {
 		t.Fatalf("前置：设置必须赢过档位（source=%q value=%s want %s）",
 			hPinned.Source(), hPinned.Get().Encode(), saved.Encode())
@@ -335,7 +335,7 @@ func TestLimitsClearReallyRestoresProfileSource(t *testing.T) {
 	}
 
 	// ---- 判据 7：重启 + 换档位 ⇒ 新档位真的生效（回落通道可操作） ----
-	hOther := newWasmLimitsHolder(db, other)
+	hOther := newWasmLimitsHolder(db, other, true)
 	if hOther.Source() != "profile" {
 		t.Fatalf("清空后重启的来源 = %q, want profile", hOther.Source())
 	}
@@ -351,12 +351,12 @@ func TestLimitsClearReallyRestoresProfileSource(t *testing.T) {
 //
 // 变异验证：把 `profileSource()` 改成恒返回 "profile" ⇒ 本用例红。
 func TestLimitsClearWithoutExplicitProfileReportsDefault(t *testing.T) {
-	// 显式把档位**清空**：memprofile.FromEnv("") ⇒ default 档，profileExplicit=false。
-	prof, perr := memprofile.FromEnv(func(string) string { return "" })
+	// 档位未显式配置：deployconfig 解析来源 = default ⇒ profileExplicit=false。
+	prof, perr := memprofile.Parse("")
 	if perr != nil {
 		t.Fatalf("解析默认档位失败: %v", perr)
 	}
-	h := newWasmLimitsHolder(nil, prof)
+	h := newWasmLimitsHolder(nil, prof, false)
 	if h.Source() != "default" {
 		t.Fatalf("未显式配置档位时 source = %q, want default（不得谎称档位生效）", h.Source())
 	}

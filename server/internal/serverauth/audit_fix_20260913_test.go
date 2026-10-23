@@ -273,17 +273,17 @@ func TestAuditFixIssuerValidationRejectsMetadataAndBadSchemes(t *testing.T) {
 
 // P2-7:明文 ldap:// 默认拒绝(可用环境变量显式放行),ldaps 放行。
 func TestAuditFixPlaintextLDAPRejectedByDefault(t *testing.T) {
-	if err := validateLDAPServerURL("ldap://dir.corp:389"); err == nil {
+	if err := validateLDAPServerURL(nil, "ldap://dir.corp:389"); err == nil {
 		t.Fatal("明文 ldap:// 非回环地址未被拒绝(bind 密码会明文过网)")
 	}
-	if err := validateLDAPServerURL("ldap://localhost:389"); err != nil {
+	if err := validateLDAPServerURL(nil, "ldap://localhost:389"); err != nil {
 		t.Fatalf("回环 ldap:// 应放行: %v", err)
 	}
-	if err := validateLDAPServerURL("ldaps://dir.corp:636"); err != nil {
+	if err := validateLDAPServerURL(nil, "ldaps://dir.corp:636"); err != nil {
 		t.Fatalf("ldaps:// 应放行: %v", err)
 	}
 	t.Setenv("ZEOKEEL_LDAP_ALLOW_PLAINTEXT", "1")
-	if err := validateLDAPServerURL("ldap://dir.corp:389"); err != nil {
+	if err := validateLDAPServerURL(nil, "ldap://dir.corp:389"); err != nil {
 		t.Fatalf("显式逃生阀下明文 ldap:// 应放行: %v", err)
 	}
 }

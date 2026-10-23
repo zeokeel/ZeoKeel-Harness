@@ -7,13 +7,13 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
@@ -24,21 +24,14 @@ const maxNameLen = 128
 
 // P2-20 限流:任意登录用户此前可无限刷 skill-call → calls 刷榜。
 // 双桶(每分钟):perUser 防单账号刷量,perSkill 防单技能被集中刷票。
-// 可用环境变量下调(测试/压测);0 = 不限。
+// 阈值(0 = 不限)由 deployconfig 注册表解析:环境变量(测试/压测)> 控制台
+// 「系统配置」> 内置默认。**每次请求时解析**,因此控制台保存后无需重启;
+// settings 有 30s TTL 缓存 + 写失效,热路径不会每请求打一次库。
 var (
-	perUserLimitPerMin  = envInt("ZEOKEEL_TELEMETRY_MAX_PER_MIN", 60)
-	perSkillLimitPerMin = envInt("ZEOKEEL_TELEMETRY_MAX_PER_SKILL_PER_MIN", 10)
-	skillCallLimiter    = newCallLimiter(time.Minute)
+	telemetryMaxPerMinKey         = deployconfig.MustKey("telemetry.max_per_min")
+	telemetryMaxPerSkillPerMinKey = deployconfig.MustKey("telemetry.max_per_skill_per_min")
+	skillCallLimiter              = newCallLimiter(time.Minute)
 )
-
-func envInt(name string, def int) int {
-	if v := strings.TrimSpace(os.Getenv(name)); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			return n
-		}
-	}
-	return def
-}
 
 // RegisterRoutes mounts /api/client/v2/telemetry/* behind BearerAuth
 // (测试/自建路由辅助; 生产路由由 internal/router 包集中声明)。
@@ -83,8 +76,8 @@ func reportSkillCall(db *sql.DB) gin.HandlerFunc {
 		// P2-20: 双桶限流——perUser(账号刷量) + perUser+skill(单技能刷票)。
 		// 放在参数校验之后:非法请求不消耗上报预算。
 		if u := serverauth.CurrentUser(c); u != nil {
-			if !skillCallLimiter.allow("u:"+strconv.FormatInt(u.ID, 10), perUserLimitPerMin) ||
-				!skillCallLimiter.allow("s:"+strconv.FormatInt(u.ID, 10)+"|"+name, perSkillLimitPerMin) {
+			if !skillCallLimiter.allow("u:"+strconv.FormatInt(u.ID, 10), deployconfig.Int(db, telemetryMaxPerMinKey)) ||
+				!skillCallLimiter.allow("s:"+strconv.FormatInt(u.ID, 10)+"|"+name, deployconfig.Int(db, telemetryMaxPerSkillPerMinKey)) {
 				serverauth.WriteError(c, http.StatusTooManyRequests, "RATE_LIMITED", "上报过于频繁,请稍后再试")
 				return
 			}

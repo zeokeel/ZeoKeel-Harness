@@ -220,10 +220,11 @@ func TestWasmPlatformWiringPresent(t *testing.T) {
 	}{
 		{"checkStartupMemory(readMemoryAvailability(), plan, log.Printf)", "内存四笔账自检必须按部署档位算账，且用 cgroup 感知的读取结果（R1-rt-1）；W4 起不再有\"未启用\"档位（应用平台始终在服务）"},
 		{"MemAvailable: readMemoryAvailability", "可用内存的来源与数值必须暴露在 /readyz 上（R1-rt-1）"},
-		{"memprofile.FromEnv(os.Getenv)", "内存档位必须来自部署配置（未知档位 fail-loud）"},
+		{"resolveWasmMemoryProfile(db)", "内存档位必须来自部署配置（deployconfig:env > 控制台 > 默认；未知档位 fail-loud）"},
 		{"MemoryProfile: prof,", "档位必须真的喂给 appserver（声明与执行同一份数）"},
+		{"deployconfig.CSV(db, wasmAppsExtraReservedKey)", "应用保留名必须来自部署配置（wasm.apps_extra_reserved；env 覆盖仍生效）"},
 		{"mustRefuseStartupForIsolation(mode, usable)", "require 档必须真的拒绝启动（P2-1）"},
-		{"compile.IsolationFromEnv()", "隔离档必须来自部署配置"},
+		{"resolveCompileIsolation(db)", "隔离档必须来自部署配置（deployconfig；保留 strict/none 历史别名）"},
 		{"events.NewCleanupScheduler(", "7 天保留必须有人来删（P1-2）"},
 		{"eventCleanup.Start(ctx)", "清理调度必须启动（P1-2）"},
 		{"p.EventCleanup.Close()", "清理调度必须随平台关停（P1-2）"},

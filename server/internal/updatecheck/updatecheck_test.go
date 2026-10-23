@@ -226,6 +226,43 @@ func TestDefaultEndpointFor(t *testing.T) {
 	}
 }
 
+// 解析钩子:main 注入的"读数据库版本"必须与 env 默认实现同语义 ——
+// 空 = 未设置、显式关闭值 = 关闭、其它 = 端点;注入后 ResolveEndpoint 立即按它生效。
+//
+// 这是"控制台改更新清单地址、无需重建容器"的接线判据:钩子若不生效,部署里
+// 表现为"控制台保存成功但更新检查仍走旧的 .env/默认目录",而不会有任何红灯。
+func TestEndpointOverrideResolverHook(t *testing.T) {
+	t.Setenv(EndpointEnv, "")
+	t.Cleanup(func() { SetEndpointOverrideResolver(nil) })
+
+	cases := []struct {
+		name     string
+		endpoint string
+		disabled bool
+		want     string
+	}{
+		{"库中未配置=走渠道默认目录", "", false, DefaultEndpointFor("example-brand")},
+		{"库中显式关闭", "", true, ""},
+		{"库中显式端点", "https://console.example.com/example-brand/latest.json", false,
+			"https://console.example.com/example-brand/latest.json"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			SetEndpointOverrideResolver(func() (string, bool) { return tc.endpoint, tc.disabled })
+			if got := ResolveEndpoint("example-brand"); got != tc.want {
+				t.Fatalf("注入钩子后 ResolveEndpoint = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	// nil 恢复 env 默认实现(生产里钩子由 main 注入;测试/单机工具走这条)。
+	SetEndpointOverrideResolver(nil)
+	t.Setenv(EndpointEnv, "https://env.example.com/latest.json")
+	if got := ResolveEndpoint("example-brand"); got != "https://env.example.com/latest.json" {
+		t.Fatalf("恢复默认实现后 ResolveEndpoint = %q, want env 覆盖值", got)
+	}
+}
+
 // 未配置端点(显式关闭)时返回 ErrNoEndpoint,交由调用方静默降级。
 func TestCheckNoEndpoint(t *testing.T) {
 	t.Setenv(EndpointEnv, "off")

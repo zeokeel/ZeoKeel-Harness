@@ -3,13 +3,12 @@ package llmgateway
 import (
 	"database/sql"
 	"net/http"
-	"os"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 	"github.com/zeokeel/zeokeel-harness/server/internal/util"
@@ -159,16 +158,55 @@ func newUpstreamTransport() *http.Transport {
 // 在正常高峰误伤全员,产品形态上不可取)。
 //
 // 上限取 32:远高于任何正常桌面客户端的并发(客户端同一时刻通常 1-3 条流),
-// 又足以把"单员工打满全站"变成不可能。ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER
-// 可覆盖(压测/特殊集成场景)。
+// 又足以把"单员工打满全站"变成不可能。该值现由 deployconfig 注册表统一解析
+// (`gateway.max_inflight_per_user`:环境变量 > 控制台设置 > 内置默认 32),
+// 压测/特殊集成场景仍可用历史环境变量 ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER 覆盖。
 
 const defaultMaxInflightPerUser = 32
 
+// maxInflightPerUserKey 是 deployconfig 注册表里的键(唯一真源)。
+var maxInflightPerUserKey = deployconfig.MustKey("gateway.max_inflight_per_user")
+
+// maxInflightResolver 是**当前生效上限**的解析钩子。
+//
+// 默认实现只看进程环境变量(deployconfig 的 nil-db 档位),因此单测与
+// llmgateway 内部测试路由树行为与历史一致;main 在 DB 打开后通过
+// SetMaxInflightResolver 换成读库版本,控制台「系统配置」里的改动随保存生效
+// (settings 有 30s TTL 缓存 + 写失效,热路径可接受)。
+//
+// 为什么是钩子而不是把 *sql.DB 塞进中间件:InFlightGuard() 的构造点在
+// internal/router(路由唯一真源)——中间件是**包级**单例(网关在飞计数本来就
+// 是进程级),不持有任何请求期依赖;让装配方注入"怎么解析上限"比让路由层
+// 传 db 更小、也不会把配置读取分散到两个包。
+var maxInflightResolver = func() int {
+	return deployconfig.Int(nil, maxInflightPerUserKey)
+}
+var maxInflightResolverMu sync.RWMutex
+
+// SetMaxInflightResolver 注入上限解析钩子;nil = 恢复 env/默认实现。
+func SetMaxInflightResolver(fn func() int) {
+	maxInflightResolverMu.Lock()
+	defer maxInflightResolverMu.Unlock()
+	if fn == nil {
+		maxInflightResolver = func() int { return deployconfig.Int(nil, maxInflightPerUserKey) }
+		return
+	}
+	maxInflightResolver = fn
+}
+
+// maxInflightPerUser 返回当前生效的单用户并发上限(<=0 时兜底默认值)。
+//
+// deployconfig 的注册表已把下限钉成 1,这里的 <=0 兜底只为防御"注入的钩子
+// 返回了非正值"——0 会让 acquire 对**所有**请求返回 429(整站网关不可用)。
 func maxInflightPerUser() int {
-	if v := os.Getenv("ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
+	maxInflightResolverMu.RLock()
+	fn := maxInflightResolver
+	maxInflightResolverMu.RUnlock()
+	if fn == nil {
+		return defaultMaxInflightPerUser
+	}
+	if v := fn(); v > 0 {
+		return v
 	}
 	return defaultMaxInflightPerUser
 }

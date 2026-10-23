@@ -267,7 +267,7 @@ func TestLoginBurstCannotPierceFailureBudget(t *testing.T) {
 	scope := dbLimiterScope(db)
 	t.Logf("并发 20 次错密:401=%d 429=%d 其他=%d;桶残留 u:burstuser=%d ip:192.0.2.1=%d",
 		n401, n429, other,
-		bucketLen(sharedLoginLimiter(), scope+"u:burstuser"),
+		bucketLen(sharedLoginLimiter(db), scope+"u:burstuser"),
 		bucketLen(sharedLoginIPLimiter(), scope+"ip:192.0.2.1"))
 	if other != 0 {
 		t.Fatalf("意外状态码 %d 个(期望只有 401 / 429)", other)
@@ -288,7 +288,7 @@ func TestLoginBurst200CannotPierceFailureBudget(t *testing.T) {
 	scope := dbLimiterScope(db)
 	t.Logf("并发 200 次错密:401=%d 429=%d 其他=%d;桶残留 u:ampuser=%d ip:192.0.2.1=%d",
 		n401, n429, other,
-		bucketLen(sharedLoginLimiter(), scope+"u:ampuser"),
+		bucketLen(sharedLoginLimiter(db), scope+"u:ampuser"),
 		bucketLen(sharedLoginIPLimiter(), scope+"ip:192.0.2.1"))
 	if other != 0 {
 		t.Fatalf("意外状态码 %d 个(期望只有 401 / 429)", other)

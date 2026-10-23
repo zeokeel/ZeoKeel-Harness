@@ -91,6 +91,29 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
 }
 
+// DeleteSettingTx 在**调用方已钉住 search_path 的事务**里删除一个 settings 键
+// （不主动失效缓存;提交后调用方须调用 InvalidateSettings）。
+//
+// 为什么要有这个 tx 变体（2026-10-23，与 SetSettingTx 对称）：管理端「系统配置」的
+// 批量保存要在**同一个事务**里读旧值 → 写/删 → 审计（审计写不进去整体回滚）。删除
+// 若在调用方手写 `DELETE FROM settings`，settings 这张**族内关系**表就多出一条包外
+// 未登记的 SQL 路径 —— R13-GH3 的守卫正是为此而设（`internal/serverauth.put` 曾被它
+// 点名）。把语句收在这里 = 唯一实现，调用方只表达"删哪个键"。
+//
+// 返回值 "是否真的删掉了一行"；行数拿不到时按 true 处理（删除本身已成功，调用方只
+// 关心"删掉了吗"，与 DeleteSetting 同口径）。
+func DeleteSettingTx(tx *sql.Tx, key string) (bool, error) {
+	res, err := tx.Exec(`DELETE FROM settings WHERE key = ?`, key)
+	if err != nil {
+		return false, err
+	}
+	n, rerr := res.RowsAffected()
+	if rerr != nil {
+		return true, nil
+	}
+	return n > 0, nil
+}
+
 // DeleteSetting 删除一个 settings 键并返回"是否真的删掉了一行"（键不存在不算错）。
 //
 // 为什么必须**失效缓存**（与 SetSetting 对称，缺了它回落会静默失效）：GetSetting 会把

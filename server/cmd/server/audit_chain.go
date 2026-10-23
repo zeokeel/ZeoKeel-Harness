@@ -25,35 +25,35 @@ import (
 	"context"
 	"database/sql"
 	"log"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/auditchain"
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 )
 
-// auditChainIntervalEnv 是周期校验间隔的运维覆盖（Go duration 字面量，如 "15m"）。
+// auditChainIntervalKey 是周期校验间隔的配置项（deployconfig 注册表唯一真源：
+// 历史环境变量 ZEOKEEL_AUDIT_CHAIN_INTERVAL > 控制台「系统配置」> 内置默认 1h）。
 //
 // 为什么给它一个旋钮：间隔 = "篡改可见性的窗口"，而每一轮是**一次 audit_logs 全表
 // 只读扫描** —— 两者的取舍随表大小与合规要求变化（默认 1 小时：窗口够短，代价是每
-// 小时一次全表读）。非法值**响亮**回落默认值（打 WARNING），不静默 ——
-// "未知 env 静默回落"本身是本仓登记过的审计缺陷类。
-const auditChainIntervalEnv = "ZEOKEEL_AUDIT_CHAIN_INTERVAL"
+// 小时一次全表读）。非法值由 deployconfig **响亮**回落并告警，不静默 ——
+// "未知配置静默回落"本身是本仓登记过的审计缺陷类。
+var auditChainIntervalKey = deployconfig.MustKey("audit.chain_interval")
 
-// resolveAuditChainTick 解析生效间隔：缺省/非法都用传入的常量（非法时告警）。
-func resolveAuditChainTick(def time.Duration) time.Duration {
-	raw := strings.TrimSpace(os.Getenv(auditChainIntervalEnv))
-	if raw == "" {
-		return def
+// resolveAuditChainTick 解析生效间隔：显式环境变量 > 控制台设置 > 内置默认。
+// 该键是 AppliesRestart（调度器 tick 在装配期一次性确定），保存后需重启/重建容器。
+func resolveAuditChainTick(db *sql.DB, fallback time.Duration) time.Duration {
+	v := deployconfig.Resolve(db, auditChainIntervalKey)
+	if v.Raw == "" {
+		// 注册表默认值自证可解析（keys_test.go 的 SelfCheck）；走到这里说明注册表
+		// 被改坏，用装配常量兜底而不是让调度器拿 0 tick 空转。
+		return fallback
 	}
-	d, err := time.ParseDuration(raw)
-	if err != nil || d <= 0 {
-		log.Printf("WARNING audit chain: ignoring invalid %s=%q (want a positive Go duration such as 15m or 1h); using default %s",
-			auditChainIntervalEnv, raw, def)
-		return def
+	if v.Source != deployconfig.SourceDefault {
+		// 点名来源：让"控制台改完没重启"与"到底用了哪个值"在启动日志里可检索。
+		log.Printf("audit chain: interval = %s (source=%s；该键需重启/重建容器生效)", v.Raw, v.Source)
 	}
-	log.Printf("audit chain: interval overridden by %s=%s (default %s)", auditChainIntervalEnv, d, def)
-	return d
+	return v.AsDuration()
 }
 
 // schedulerAuditChain 是状态表里的登记名（日志与断言共用同一份字面量）。
@@ -74,7 +74,7 @@ func startAuditChainScheduler(ctx context.Context, db *sql.DB, tick time.Duratio
 	if db == nil {
 		return
 	}
-	tick = resolveAuditChainTick(tick)
+	tick = resolveAuditChainTick(db, tick)
 	s := newAuditChainScheduler(db, tick)
 	registerSchedulerStatus(schedulerAuditChain, tick, s)
 	s.Start(ctx)

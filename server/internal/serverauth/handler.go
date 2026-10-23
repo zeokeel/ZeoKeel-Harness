@@ -109,8 +109,10 @@ func SessionKey(rawToken string) string {
 // New creates the auth API.
 func New(db *sql.DB) *API {
 	return &API{
-		DB:               db,
-		limiter:          sharedLoginLimiter(),
+		DB: db,
+		// 登录失败预算按 DB 实例分桶(阈值来自该库的部署配置;客户端面与管理面
+		// 在同一库上仍共享同一份预算,见 sharedLoginLimiter 的注释)。
+		limiter:          sharedLoginLimiter(db),
 		loginIPLimiter:   sharedLoginIPLimiter(),
 		callbackLimiter:  newCallbackLimiter(),
 		oidcFlowLimiter:  newRateLimiter(oidcFlowStartMaxAttempts),

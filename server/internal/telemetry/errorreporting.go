@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
@@ -57,12 +58,13 @@ var errorReportingLevels = map[string]bool{
 	"": true, "debug": true, "info": true, "warning": true, "error": true,
 }
 
-// 限流:每用户 10 次/分钟。状态变化是低频事件(正常一次登录 1-2 次),10 次
-// 留出重连/重试余量;与 skill-call 的双桶分开,互不挤占预算。
-// 可用环境变量下调(测试/压测);0 = 不限。
+// 限流:每用户 10 次/分钟(内置默认)。状态变化是低频事件(正常一次登录 1-2 次),
+// 10 次留出重连/重试余量;与 skill-call 的双桶分开,互不挤占预算。
+// 阈值由 deployconfig 解析(环境变量 > 控制台「系统配置」> 默认;0 = 不限),
+// 每次请求时读取 ⇒ 控制台保存即生效。
 var (
-	errorReportingPerUserPerMin = envInt("ZEOKEEL_TELEMETRY_ERROR_REPORTING_MAX_PER_MIN", 10)
-	errorReportingLimiter       = newCallLimiter(time.Minute)
+	errorReportingMaxPerMinKey = deployconfig.MustKey("telemetry.error_reporting_max_per_min")
+	errorReportingLimiter      = newCallLimiter(time.Minute)
 )
 
 // reportErrorReporting 记录客户端错误上报链路的当前状态(按用户 upsert,0068)。
@@ -114,7 +116,7 @@ func reportErrorReporting(db *sql.DB) gin.HandlerFunc {
 
 		// 限流放在校验之后:非法/未知请求不消耗上报预算(与 skill-call 一致)。
 		if u := serverauth.CurrentUser(c); u != nil {
-			if !errorReportingLimiter.allow("u:"+strconv.FormatInt(u.ID, 10), errorReportingPerUserPerMin) {
+			if !errorReportingLimiter.allow("u:"+strconv.FormatInt(u.ID, 10), deployconfig.Int(db, errorReportingMaxPerMinKey)) {
 				serverauth.WriteError(c, http.StatusTooManyRequests, "RATE_LIMITED", "上报过于频繁,请稍后再试")
 				return
 			}

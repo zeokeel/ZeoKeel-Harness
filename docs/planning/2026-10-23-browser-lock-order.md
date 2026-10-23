@@ -1,6 +1,6 @@
 # 浏览器锁序表（D1 设计，rev2 —— 吸收 d1-preaudit B1/B2/B3/S1–S8）
 
-- 日期：2026-10-23（rev4 —— 吸收 d1-preaudit3 的 B6-1…B6-5）
+- 日期：2026-10-23（rev4 —— 吸收 d1-preaudit3 的 B6-1…B6-5；文档一致性清理后放行实现）
 - 目标：每 tab 串行、跨 tab 并行；不削弱任何 choke point；无环、可超时、可测试。
 - rev1 被驳回的三点已按审计建议改写：L1 准入模型（B1）、per-op 上下文（B2）、close 形态（B3）。
 
@@ -25,7 +25,6 @@ D 类（driver）     : admitOperation(gate) → 脚本进程；每个 helper �
 tab 生命周期创建段 : admitOperation → **L10（创建段锁）** → reserve/create/register → 释放 L10 → load（不持锁）
 ```
 
-- **`busy/busyDepth` 由活动 lease 计数派生**（`controlState().busy` 语义不变；补两 tab 并发 busy 用例）。
 - **`busy/busyDepth` 由活动 lease 计数派生**（`controlState().busy` 语义不变；补两 tab 并发 busy 用例）。
 - "排队等前一个操作超时"的文案迁到 **per-tab 队列**（跨 tab 不再排队）。
 - gate 预算从**调用时刻**起算（进 admit 前取 deadline）。
@@ -61,6 +60,7 @@ tab 生命周期创建段 : admitOperation → **L10（创建段锁）** → res
 - 等待 L9 的 B 类操作同样受 **tool signal / takeover epoch / 超时** 三种 abort 约束；超时文案 "waited N ms for an exclusive browser operation"，码 `timeout`。
 - 预算式：`gate + L9 排队 + (L3 排队) + 执行 ≤ 注册预算`（`deadlineAt` 从调用时刻算）。
 - 用例：restore 加载期间 dialog **~1s 响应**；clear_data 排在 restore 之后不得吃满 30s。
+- **P1-2 在 L9 之外仍成立**：load 不持 L9 后，restore/open 必须在 load 前后保留 **epoch 复核**，代际变化时 `destroyTab`（现有 `runtime.ts:1042` 逻辑）；`browser_open` 的 load 也挂 op controller（接管/切换可 abort）。
 
 ## 4. 接管（S1：新实现，不只 abort CDP）
 
@@ -73,7 +73,7 @@ tab 生命周期创建段 : admitOperation → **L10（创建段锁）** → res
 ```
 closeTab(tabId):
   L2 内: 标记 closing（立即释放 L2；排队命令见 closing → fail-fast not-found）
-  → 不持任何边锁: abort 该 tab 的 op controller（**排除 close 自身 opId**，避免 abort 自己）
+  → 不持 L2: abort 该 tab 的 op controller（可持 L9；L9 不带进 CDP/长 await）（**排除 close 自身 opId**，避免 abort 自己）
   → 固定 primitive: 不持锁 acquire 该 tab 的 L3（短超时）确认 idle 后立即 release
     （禁止轮询、禁止无超时、禁止持 L2 等 L3；超时则强制移除并写 op log）
   → L2 内 remove（清 L3 map+waiters, evalInFlight, dialogs）
@@ -98,7 +98,7 @@ closeTab(tabId):
 
 - **S2**：gate 在取到 L3 后复核一次，`beforeCommand` 入口再核（同 tab 并发不能绕过）。
 - **S3**：无 tab 的全局操作只经 L1；`downloadOwnerTab`/activeTab 读取在 L2 内或显式传 tabId。
-- **S4**：A16 应用窗口（无 tab id）在 D1 后**仍走 L1 全局串行**；后续再给 surface 键。
+- **S4**：A16 应用窗口（无 tab id）在 D1 起走 **L9（B 类）**；后续再给 surface 键。
 - **S5**：`evalInFlight` 的检查移入 L3 内。
 - **S6**：op log 跨 tab 交错可接受，**每 tab 内顺序保留**；补归属/顺序用例。
 - **S7**：destroy/remove 清 L3 map、waiter、计数；重开同 id 用新锁。

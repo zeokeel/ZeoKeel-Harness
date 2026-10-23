@@ -10,6 +10,7 @@
  * @module @zeokeel/dsh-browser
  */
 
+import { StringDecoder } from 'node:string_decoder'
 import type { ProgramRuntime } from './program.ts'
 
 /** Minimal child-process surface the adapter needs (mockable). */
@@ -31,6 +32,13 @@ type ChildMessage =
   | { type: 'result'; result: unknown }
   | { type: 'error'; message: string }
 
+/** Maximum bytes of one bridge line (a hostile/large result must not hang the parser). */
+export const PTC_MAX_LINE_BYTES = 1024 * 1024
+/** Console bytes accepted from the child (the tool re-caps for the model). */
+export const PTC_MAX_CONSOLE_BYTES = 64 * 1024
+/** Bridge result size cap (screenshot base64 must NOT cross this as a helper result). */
+export const PTC_MAX_RESULT_BYTES = 4 * 1024 * 1024
+
 export interface PtcRuntimeOptions {
   /** Start one isolated process (host wired; one per run, never shared). */
   spawn: (program: string) => ProgramChild
@@ -46,6 +54,9 @@ export interface PtcRuntimeOptions {
 export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRuntime {
   return {
     async execute(program, bridge, execOptions) {
+      // An already-aborted signal must not spawn a process that would run to the
+      // deadline (addEventListener never fires for an already-aborted signal).
+      if (execOptions?.signal?.aborted === true) throw Object.assign(new Error('browser_run: cancelled'), { code: 'interrupted' })
       const child = options.spawn(program)
       const timeoutMs = Math.max(1, options.timeoutMs ?? 120_000)
       let killed = false
@@ -62,14 +73,26 @@ export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRunt
       try {
         const outcome = await new Promise<{ result: unknown, console: string }>((resolve, reject) => {
           let consoleText = ''
+          let consoleBytes = 0
           let buffer = ''
+          const decoder = new StringDecoder('utf8')
           let settled = false
           const settle = (fn: () => void): void => { if (settled) return; settled = true; fn() }
-          const fail = (error: unknown): void => { void kill().finally(() => settle(() => reject(error))) }
+          const fail = (error: unknown): void => {
+            if (settled) return
+            settled = true
+            void kill().finally(() => reject(error))
+          }
           timer = setTimeout(() => { fail(Object.assign(new Error('browser_run: the program deadline passed'), { code: 'timeout' })) }, timeoutMs)
           execOptions?.signal?.addEventListener('abort', () => fail(Object.assign(new Error('browser_run: cancelled'), { code: 'interrupted' })), { once: true })
           child.stdout?.on('data', (chunk) => {
-            buffer += String(chunk)
+            // Decode across chunk boundaries: a multi-byte UTF-8 character split
+            // between two chunks must not corrupt (or silently drop) a message.
+            buffer += decoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+            if (Buffer.byteLength(buffer, 'utf8') > PTC_MAX_LINE_BYTES) {
+              fail(new Error('browser_run: a bridge message exceeded the 1 MiB limit'))
+              return
+            }
             let index = buffer.indexOf('\n')
             while (index >= 0) {
               const line = buffer.slice(0, index)
@@ -78,7 +101,12 @@ export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRunt
               if (line.trim() === '') continue
               let message: ChildMessage
               try { message = JSON.parse(line) as ChildMessage } catch { continue }
-              if (message.type === 'console') { consoleText += `${message.text}\n`; continue }
+              if (message.type === 'console') {
+                consoleBytes += Buffer.byteLength(message.text, 'utf8') + 1
+                if (consoleBytes > PTC_MAX_CONSOLE_BYTES) { consoleText += '\n… (console output truncated)\n'; continue }
+                consoleText += `${message.text}\n`
+                continue
+              }
               if (message.type === 'result') { settle(() => resolve({ result: message.result, console: consoleText })); return }
               if (message.type === 'error') { fail(new Error(message.message)); return }
               if (message.type === 'call') {
@@ -88,13 +116,22 @@ export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRunt
                   continue
                 }
                 void (helper as (args: unknown) => Promise<unknown>)(message.args).then(
-                  result => child.stdin?.write(`${JSON.stringify({ id: message.id, result })}\n`),
+                  result => {
+                    const line = JSON.stringify({ id: message.id, result })
+                    if (Buffer.byteLength(line, 'utf8') > PTC_MAX_RESULT_BYTES) {
+                      child.stdin?.write(`${JSON.stringify({ id: message.id, error: 'browser_run: helper result exceeds the 4 MiB bridge limit (return an attachment reference instead of raw bytes)' })}\n`)
+                      return
+                    }
+                    child.stdin?.write(`${line}\n`)
+                  },
                   error => child.stdin?.write(`${JSON.stringify({ id: message.id, error: error instanceof Error ? error.message : String(error), code: (error as { code?: string }).code })}\n`),
                 )
               }
             }
           })
-          child.exit.then(code => { if (code !== 0 && !killed) fail(new Error(`browser_run: the program process exited with code ${String(code)}`)) }).catch(error => fail(error))
+          // Exit WITHOUT a result is a protocol failure regardless of the code:
+          // a crashed adapter must not hang the run until the deadline.
+          child.exit.then(code => { if (!settled) fail(new Error(`browser_run: the program process exited (code ${String(code)}) before returning a result`)) }).catch(error => fail(error))
         })
         return outcome
       } finally {

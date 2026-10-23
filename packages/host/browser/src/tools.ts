@@ -1140,6 +1140,70 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
   }))
 
   register(defineTool({
+    name: 'browser_fetch',
+    description: '[write] Run an HTTP request from INSIDE the page (same-origin cookies are sent automatically) without navigating. Redirects are NOT followed (`redirect:error`): a 3xx response fails instead of silently hitting another host. Auth headers are ambient and cannot be overridden; the body is capped and the response is bounded (non-text responses return metadata only).',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      url: { type: 'string', required: true, description: 'Absolute http(s) URL.' },
+      method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'], description: 'HTTP method (default GET; GET/HEAD take no body).' },
+      headers: { type: 'array', items: { type: 'string' }, description: 'Extra request headers as "Name: value" lines. Authorization/Cookie/Host/Origin/Referer/Content-Length/X-Forwarded-…/Proxy-… are refused; content-type must be a text type or json/xml/urlencoded.' },
+      body: { type: 'string', description: 'Request body (max 256 KiB UTF-8; not allowed for GET/HEAD).' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          status: { type: 'integer' },
+          ok: { type: 'boolean' },
+          url: { type: 'string' },
+          contentType: { type: 'string' },
+          bytes: { type: 'integer' },
+          body: { type: 'string' },
+          truncated: { type: 'boolean' },
+          bodyOmitted: { type: 'boolean' },
+        },
+      },
+      render: (_args, value) => {
+        const result = value as { status?: number, bytes?: number, bodyOmitted?: boolean }
+        return [{ type: 'text', text: `Fetch: HTTP ${String(result.status ?? 0)}, ${String(result.bytes ?? 0)} bytes${result.bodyOmitted === true ? ' (body omitted: non-text)' : ''}` }]
+      },
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Fetch in page'),
+    async execute(args, exec) {
+      const { tab, url, method, headers, body } = args as { tab?: number, url: string, method?: string, headers?: string[], body?: string }
+      if (typeof url !== 'string' || url.trim() === '') throw new Error('url is required')
+      const headerMap: Record<string, string> = {}
+      for (const line of headers ?? []) {
+        const index = line.indexOf(':')
+        if (index <= 0) throw new Error(`header line must look like "Name: value": ${line}`)
+        headerMap[line.slice(0, index).trim()] = line.slice(index + 1).trim()
+      }
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      const result = await runtime.pageFetch(tabId, {
+        url: url.trim(),
+        ...(method === undefined ? {} : { method }),
+        ...(Object.keys(headerMap).length === 0 ? {} : { headers: headerMap }),
+        ...(body === undefined ? {} : { body }),
+      }, exec.signal)
+      exec.signal.throwIfAborted()
+      return {
+        status: result.status,
+        ok: result.ok,
+        url: result.url,
+        contentType: result.contentType,
+        bytes: result.bytes,
+        ...(result.body === null ? {} : { body: result.body }),
+        truncated: result.truncated,
+        bodyOmitted: result.bodyOmitted,
+      }
+    },
+  }))
+
+  register(defineTool({
     name: 'browser_press',
     description: '[interact] Press a key in your tab (Enter, Tab, Escape, Backspace, Delete, Arrows, Home, End, PageUp, PageDown, space). Fails (not-found) when the page had no element able to receive the key, so a "pressed" result always means the key reached the document.',
     parameters: {
@@ -2224,7 +2288,7 @@ const GROUP_OF: Record<string, 'navigate' | 'interact' | 'read' | 'write' | 'mem
   browser_open: 'navigate', browser_navigate: 'navigate', browser_reload: 'navigate',
   browser_go_back: 'navigate', browser_go_forward: 'navigate', browser_list_tabs: 'navigate',
   browser_switch_tab: 'navigate', browser_close_tab: 'navigate',
-  browser_dialog: 'interact', browser_file_chooser: 'interact', browser_hover: 'interact', browser_dblclick: 'interact', browser_drag: 'interact', browser_hotkey: 'interact', browser_clipboard: 'control', browser_click: 'interact', browser_type: 'interact', browser_press: 'interact',
+  browser_dialog: 'interact', browser_file_chooser: 'interact', browser_fetch: 'write', browser_hover: 'interact', browser_dblclick: 'interact', browser_drag: 'interact', browser_hotkey: 'interact', browser_clipboard: 'control', browser_click: 'interact', browser_type: 'interact', browser_press: 'interact',
   browser_select: 'interact', browser_scroll: 'interact', browser_fill_form: 'interact',
   browser_upload_file: 'interact',
   browser_get_snapshot: 'read', browser_get_text: 'read', browser_screenshot: 'read',

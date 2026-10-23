@@ -1694,6 +1694,64 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('fetch: request data travels as the callFunctionOn argument and redirects are refused', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const calls: Array<{ method: string, params: Record<string, unknown> }> = []
+    let response = JSON.stringify({ status: 200, ok: true, url: 'https://a.example/api', contentType: 'application/json', bytes: 2, body: '{}', truncated: false, bodyOmitted: false })
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      calls.push({ method, params })
+      if (method === 'Runtime.callFunctionOn') return { result: { value: response } }
+      if (method === 'Runtime.evaluate') return { result: { objectId: 'g' } }
+      return {}
+    }
+    const url = "https://a.example/api?q='\") ; drop"
+    const result = await runtime.pageFetch(1, { url, method: 'POST', body: '{"x":1}', headers: { 'content-type': 'application/json' } })
+    expect(result).toMatchObject({ status: 200, ok: true, body: '{}' })
+    const call = calls.find(entry => entry.method === 'Runtime.callFunctionOn')!
+    const payload = (call.params['arguments'] as Array<{ value: Record<string, unknown> }>)[0]!.value
+    // Injected characters stay DATA: the argument carries the exact string.
+    expect(payload['url']).toBe(url)
+    expect(payload['method']).toBe('POST')
+    expect(payload['timeoutMs']).toBeLessThanOrEqual(10_000)
+    // A redirect/CORS error is refused (redirect:'error' semantics).
+    view.transport.handler = () => { throw new Error('Failed to fetch') }
+    await expect(runtime.pageFetch(1, { url: 'https://a.example/r' })).rejects.toMatchObject({ code: 'policy' })
+    cleanup()
+  })
+
+  it('fetch: method/body/header/url guards are enforced before any page call', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    let called = 0
+    view.transport.handler = (method: string) => { called += 1; return method === 'Runtime.evaluate' ? { result: { objectId: 'g' } } : { result: { value: '{}' } } }
+    await expect(runtime.pageFetch(1, { url: 'file:///etc/passwd' })).rejects.toMatchObject({ code: 'policy' })
+    await expect(runtime.pageFetch(1, { url: 'https://a.example/', headers: { authorization: 'x' } })).rejects.toMatchObject({ code: 'policy' })
+    await expect(runtime.pageFetch(1, { url: 'https://a.example/', method: 'GET', body: 'x' })).rejects.toMatchObject({ code: 'policy' })
+    await expect(runtime.pageFetch(1, { url: 'https://a.example/', method: 'TRACE' })).rejects.toMatchObject({ code: 'policy' })
+    await expect(runtime.pageFetch(1, { url: 'https://a.example/', body: 'x'.repeat(300 * 1024) })).rejects.toMatchObject({ code: 'policy' })
+    expect(called).toBe(0)
+    cleanup()
+  })
+
+  it('fetch: a non-text response returns metadata only (no base64 body)', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = (method: string) => {
+      if (method === 'Runtime.callFunctionOn') {
+        return { result: { value: JSON.stringify({ status: 200, ok: true, url: 'https://a.example/a.bin', contentType: 'application/octet-stream', bytes: 4096, body: null, truncated: false, bodyOmitted: true }) } }
+      }
+      if (method === 'Runtime.evaluate') return { result: { objectId: 'g' } }
+      return {}
+    }
+    const result = await runtime.pageFetch(1, { url: 'https://a.example/a.bin' })
+    expect(result).toMatchObject({ bytes: 4096, body: null, bodyOmitted: true })
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

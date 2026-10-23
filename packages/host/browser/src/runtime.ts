@@ -3464,6 +3464,84 @@ export class BrowserRuntime {
     }, signal)
   }
 
+  /**
+   * Run a fetch INSIDE the page (C10): same origin cookies, no navigation.
+   * Redirects are refused (`redirect:'error'`) so a 302 cannot smuggle the
+   * request to a local/sensitive address (no Location read is possible from the
+   * page, hence no "re-check" claim).
+   * @param tabId - target tab.
+   * @param request - url/method/headers/body.
+   * @param signal - caller cancellation.
+   */
+  async pageFetch(tabId: number, request: { url: string, method?: string, headers?: Record<string, string>, body?: string }, signal?: AbortSignal): Promise<{
+    status: number, ok: boolean, url: string, contentType: string, bytes: number, body: string | null, truncated: boolean, bodyOmitted: boolean
+  }> {
+    const resolved = this.resolveTab(tabId)
+    const method = (request.method ?? 'GET').toUpperCase()
+    if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].includes(method)) throw browserError('policy', `browser_fetch: method ${method} is not allowed`)
+    const url = request.url
+    if (!/^https?:/i.test(url)) throw browserError('policy', 'browser_fetch: only http(s) URLs are supported')
+    if (!this.navigationAllowed(url)) throw browserError('policy', `browser_fetch: URL is not allowed — ${stripSensitiveUrl(url).slice(0, 200)}`)
+    if ((method === 'GET' || method === 'HEAD') && request.body !== undefined) throw browserError('policy', `browser_fetch: ${method} does not take a body`)
+    if (request.body !== undefined && Buffer.byteLength(request.body, 'utf8') > FETCH_BODY_MAX_BYTES) {
+      throw browserError('policy', `browser_fetch: request body exceeds ${String(FETCH_BODY_MAX_BYTES)} bytes`)
+    }
+    const headers: Record<string, string> = {}
+    for (const [name, value] of Object.entries(request.headers ?? {})) {
+      if (FETCH_FORBIDDEN_HEADERS.has(name.toLowerCase())) throw browserError('policy', `browser_fetch: header ${name} is not allowed (auth/cookies are ambient; transport headers are owned by the browser)`)
+      if (name.toLowerCase() === 'content-type' && !/^(text\/|application\/(json|xml|x-www-form-urlencoded))/i.test(value)) {
+        throw browserError('policy', 'browser_fetch: content-type must be text/* or application/json|xml|x-www-form-urlencoded')
+      }
+      headers[name] = value
+    }
+    const payload = JSON.stringify({
+      url, method, headers,
+      body: request.body ?? null,
+      timeoutMs: Math.min(FETCH_TIMEOUT_MS, this.cdpCallBudgetMs()),
+      textLimit: FETCH_RESPONSE_MAX_CHARS,
+      byteLimit: FETCH_RESPONSE_MAX_BYTES,
+    })
+    return await this.agentRun('browser_fetch', async () => {
+      const tab = this.tab(resolved)
+      let raw: unknown
+      try {
+        const result = await tab.cdp.send<{ result?: { value?: unknown } }>('Runtime.callFunctionOn', {
+          functionDeclaration: PAGE_FETCH_FUNCTION,
+          objectId: await pageGlobalObjectId(tab),
+          arguments: [{ value: JSON.parse(payload) }],
+          returnByValue: true,
+          awaitPromise: true,
+        }, { ...(signal === undefined ? {} : { signal }), timeoutMs: this.cdpCallBudgetMs() })
+        raw = result.result?.value
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause)
+        throw browserError('policy', `browser_fetch: request failed — ${message} (a redirect, CORS or network error; redirects are NOT followed)`)
+      }
+      let parsed: {
+        status?: number, ok?: boolean, url?: string, contentType?: string, bytes?: number,
+        body?: string | null, truncated?: boolean, bodyOmitted?: boolean, error?: string
+      }
+      try {
+        parsed = JSON.parse(String(raw)) as typeof parsed
+      } catch {
+        throw browserError('policy', 'browser_fetch: the page returned an unreadable response')
+      }
+      if (parsed.error !== undefined) throw browserError('policy', `browser_fetch: ${parsed.error}`)
+      // op log: method/url/status ONLY — never a request or response body.
+      this.record('browser_fetch', resolved, `${method} ${stripSensitiveUrl(url)} → ${String(typeof parsed.status === 'number' ? parsed.status : 0)}`, false, 'ai')
+      return {
+        status: typeof parsed.status === 'number' ? parsed.status : 0,
+        ok: parsed.ok === true,
+        url: redactFilledSecretsText(this.tab(resolved), String(parsed.url ?? '')),
+        contentType: String(parsed.contentType ?? ''),
+        bytes: typeof parsed.bytes === 'number' ? parsed.bytes : 0,
+        body: typeof parsed.body === 'string' ? redactFilledSecretsText(this.tab(resolved), parsed.body) : null,
+        truncated: parsed.truncated === true,
+        bodyOmitted: parsed.bodyOmitted === true,
+      }
+    }, signal)
+  }
+
   async screenshot(tabId: number, signal?: AbortSignal): Promise<string> {
     const resolved = this.resolveTab(tabId)
     // Screenshot captures through Electron's `capturePage` (not CDP), so the
@@ -6078,6 +6156,51 @@ export function frameClickExpression(selector: string): string {
         return 'clicked';
       })()`
 }
+
+/**
+ * Page-side fetch (C10). Inputs travel ONLY as the `callFunctionOn` argument
+ * object, so a URL/body containing quotes or newlines stays data. `redirect`
+ * is 'error': a redirect is refused instead of followed, which removes the
+ * redirect-SSRF hole entirely (audit P4: manual mode cannot read Location).
+ */
+const PAGE_FETCH_FUNCTION = `async function (payload) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), payload.timeoutMs);
+  try {
+    const response = await fetch(payload.url, {
+      method: payload.method,
+      headers: payload.headers,
+      body: payload.body === null ? undefined : payload.body,
+      credentials: 'include',
+      redirect: 'error',
+      signal: controller.signal,
+    });
+    const contentType = response.headers.get('content-type') || '';
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const readable = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded))/i.test(contentType) || contentType === '';
+    if (!readable) {
+      return JSON.stringify({ status: response.status, ok: response.ok, url: response.url, contentType, bytes: bytes.length, body: null, truncated: false, bodyOmitted: true });
+    }
+    let text = '';
+    try { text = new TextDecoder('utf-8', { fatal: false }).decode(bytes); } catch (cause) { text = ''; }
+    const truncated = text.length > payload.textLimit;
+    return JSON.stringify({ status: response.status, ok: response.ok, url: response.url, contentType, bytes: bytes.length, body: text.slice(0, payload.textLimit), truncated, bodyOmitted: bytes.length > payload.byteLimit });
+  } finally {
+    clearTimeout(timer);
+  }
+}`
+
+/** Request headers a page fetch must never set (auth/cookies are ambient and
+ * must not be overridable; host/forwarding headers are transport concerns). */
+const FETCH_FORBIDDEN_HEADERS = new Set(['authorization', 'cookie', 'host', 'origin', 'referer', 'content-length', 'proxy-authorization', 'x-forwarded-for', 'x-forwarded-host', 'x-real-ip'])
+/** 256 KiB of UTF-8 text is the request-body cap (C10). */
+const FETCH_BODY_MAX_BYTES = 256 * 1024
+/** Response body caps (bytes and decoded characters). */
+const FETCH_RESPONSE_MAX_BYTES = 1024 * 1024
+const FETCH_RESPONSE_MAX_CHARS = 256 * 1024
+/** Page-side fetch timeout: must stay well inside the 30s tool budget. */
+const FETCH_TIMEOUT_MS = 10_000
 
 /** Build the page-side element lookup snippet for one selector: the shadow
  * helper is only injected when the selector actually uses `>>>`, so the default

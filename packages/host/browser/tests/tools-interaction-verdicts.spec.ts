@@ -620,6 +620,16 @@ describe('snapshot frames at the tool layer（2026-10-23 C16）', () => {
   })
 })
 
+describe('screenshot parameter validation（2026-10-23 C12/B5）', () => {
+  it('rejects fullPage with clip, a non-positive clip and png with quality', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    await expect(harness.call('browser_screenshot', { fullPage: true, clip: { x: 0, y: 0, width: 10, height: 10 } })).rejects.toThrow(/mutually exclusive/u)
+    await expect(harness.call('browser_screenshot', { clip: { x: 0, y: 0, width: 0, height: 10 } })).rejects.toThrow(/must be positive/u)
+    await expect(harness.call('browser_screenshot', { format: 'png', quality: 50 })).rejects.toThrow(/jpeg only/u)
+  })
+})
+
 describe('click addressing errors（2026-10-23 C16 P2）', () => {
   it('target and x/y are mutually exclusive, and a lone coordinate is rejected', async () => {
     const harness = track(makeHarness())

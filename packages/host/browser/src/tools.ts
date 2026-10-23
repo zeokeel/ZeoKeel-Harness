@@ -1476,7 +1476,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_screenshot',
-    description: '[read] Capture the visible page of your tab as a JPEG image. Use sparingly — snapshots and text are cheaper. REFUSED on a tab inside the credential window (after browser_fill_credentials and before that tab navigates): a page can render an injected credential as text or a barcode, and no image redaction can undo that; the window ends on the next navigation of that tab.',
+    description: '[read] Capture your tab as an image (JPEG by default; fullPage/clip/format/quality supported). Use sparingly — snapshots and text are cheaper. REFUSED on a tab inside the credential window (after browser_fill_credentials and before that tab navigates): a page can render an injected credential as text or a barcode, and no image redaction can undo that; the window ends on the next navigation of that tab.',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
       fullPage: { type: 'boolean', description: 'Capture the whole scrollable page (clear → captureBeyondViewport → restore emulation overrides). Falls back to the viewport with fullPage:false when it cannot.' },
@@ -1540,6 +1540,10 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       if (captureArgs.fullPage === true && captureArgs.clip !== undefined) throw new Error('fullPage and clip are mutually exclusive')
       const tabId = await tabOf(captureArgs.tab)
       const hasOptions = captureArgs.fullPage === true || captureArgs.clip !== undefined || captureArgs.format !== undefined || captureArgs.quality !== undefined
+      if (captureArgs.clip !== undefined && (captureArgs.clip.width <= 0 || captureArgs.clip.height <= 0)) {
+        throw new Error('clip width and height must be positive')
+      }
+      if (captureArgs.format === 'png' && captureArgs.quality !== undefined) throw new Error('quality applies to jpeg only')
       const capture = hasOptions
         ? await runtime.screenshotWithOptions(tabId, {
           ...(captureArgs.fullPage === undefined ? {} : { fullPage: captureArgs.fullPage }),
@@ -1547,9 +1551,9 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
           ...(captureArgs.format === undefined ? {} : { format: captureArgs.format }),
           ...(captureArgs.quality === undefined ? {} : { quality: captureArgs.quality }),
         }, exec.signal)
-        : { data: await runtime.screenshot(tabId, exec.signal), fullPage: false }
+        : { data: await runtime.screenshot(tabId, exec.signal), fullPage: false, format: 'jpeg' as const }
       exec.signal.throwIfAborted()
-      const format = captureArgs.format === 'png' ? 'png' : 'jpeg'
+      const format = capture.format
       const dataUrl = capture.data
       const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
       const data = Buffer.from(base64, 'base64')

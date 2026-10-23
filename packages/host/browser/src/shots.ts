@@ -116,6 +116,11 @@ export async function captureScreenshotViaCdp(
   const targetHeight = options.clip?.height ?? (options.fullPage === true
     ? (typeof content?.height === 'number' && content.height > 0 ? content.height : height)
     : height)
+  if (options.fullPage === true && (typeof content?.width !== 'number' || typeof content?.height !== 'number' || content.width <= 0 || content.height <= 0)) {
+    // Without a content box a "full page" request can only produce the viewport;
+    // fail so the caller can report fullPage:false instead of lying.
+    throw new Error('browser: full-page capture needs the page content size, which this renderer did not report')
+  }
   if (options.clip !== undefined) {
     // Clamp the clip into the content box (a page can report nonsense sizes).
     const contentWidth = typeof content?.width === 'number' && content.width > 0 ? content.width : targetWidth

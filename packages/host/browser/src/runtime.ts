@@ -3387,7 +3387,7 @@ export class BrowserRuntime {
    * @param signal - caller cancellation.
    * @returns the data URL and whether the FULL page was captured.
    */
-  async screenshotWithOptions(tabId: number, options: ScreenshotOptions, signal?: AbortSignal): Promise<{ data: string, fullPage: boolean }> {
+  async screenshotWithOptions(tabId: number, options: ScreenshotOptions, signal?: AbortSignal): Promise<{ data: string, fullPage: boolean, format: 'jpeg' | 'png' }> {
     const resolved = this.resolveTab(tabId)
     this.assertNoDialog(resolved)
     const decodedBytes = (data: string): number => {
@@ -3416,18 +3416,27 @@ export class BrowserRuntime {
         await tab.cdp.send('Emulation.setUserAgentOverride', { userAgent: '' }).catch(() => {})
       }
       try {
+        const format = options.format === 'png' ? 'png' as const : 'jpeg' as const
         let data: string
+        let fullPageCaptured = fullPage
         try {
           data = await captureScreenshotViaCdp((method, params) => tab.cdp.send(method, params), this.options.screenshotMaxWidth, quality, cdpOptions)
         } catch (cause) {
           if (!fullPage) throw cause
-          // Honest fallback: viewport capture, explicitly NOT full page.
-          data = await captureScreenshot(tab.view.webContents, this.options.screenshotMaxWidth, quality)
+          // Honest fallback INSIDE the same CDP path: it keeps the requested
+          // format and works on a hidden window (capturePage does not — that is
+          // why the renderer-side path exists at all). The result says it is not
+          // a full-page capture.
+          fullPageCaptured = false
+          data = await captureScreenshotViaCdp((method, params) => tab.cdp.send(method, params), this.options.screenshotMaxWidth, quality, {
+            ...cdpOptions,
+            fullPage: false,
+          })
           this.record('browser_screenshot', resolved, 'full-page capture failed — returned the viewport instead', true)
-          return { data, fullPage: false }
+          // The fallback is still bounded below.
         }
-        if (decodedBytes(data) <= SCREENSHOT_MAX_BYTES) return { data, fullPage }
-        if ((options.format ?? 'jpeg') === 'png') {
+        if (decodedBytes(data) <= SCREENSHOT_MAX_BYTES) return { data, fullPage: fullPageCaptured, format }
+        if (format === 'png') {
           throw browserError('policy', `browser: screenshot exceeds the ${String(Math.floor(SCREENSHOT_MAX_BYTES / 1024 / 1024))} MiB cap and PNG cannot be recompressed — request a smaller clip`)
         }
         // Degrade EXACTLY once.
@@ -3436,7 +3445,7 @@ export class BrowserRuntime {
         if (decodedBytes(retried) > SCREENSHOT_MAX_BYTES) {
           throw browserError('policy', `browser: screenshot still exceeds the ${String(Math.floor(SCREENSHOT_MAX_BYTES / 1024 / 1024))} MiB cap after reducing quality — request a smaller clip`)
         }
-        return { data: retried, fullPage }
+        return { data: retried, fullPage: fullPageCaptured, format }
       } finally {
         if (fullPage && emulated !== undefined) {
           if (emulated.viewport !== undefined) {

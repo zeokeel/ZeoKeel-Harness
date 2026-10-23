@@ -1554,44 +1554,88 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
-  it('screenshots: fullPage capture, honest fallback and the size cap', async () => {
+  it('screenshots: fullPage capture, honest CDP fallback and the size cap', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')
     const view = adapter.lastView()
     const calls: Array<{ method: string, params: Record<string, unknown> }> = []
     const tiny = 'A'.repeat(64)
+    let failFirst = false
     view.transport.handler = (method: string, params: Record<string, unknown>) => {
       calls.push({ method, params })
       if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
-      if (method === 'Page.captureScreenshot') return { data: tiny }
+      if (method === 'Page.captureScreenshot') {
+        if (failFirst) { failFirst = false; throw new Error('full page failed') }
+        return { data: tiny }
+      }
       return {}
     }
     const full = await runtime.screenshotWithOptions(1, { fullPage: true })
-    expect(full.fullPage).toBe(true)
+    expect(full).toMatchObject({ fullPage: true, format: 'jpeg' })
     const capture = calls.find(entry => entry.method === 'Page.captureScreenshot')!
     expect(capture.params['captureBeyondViewport']).toBe(true)
-    // A failing full-page capture returns the viewport honestly (fullPage:false).
+    // A failing full-page capture falls back INSIDE the CDP path (works on a
+    // hidden window) and keeps the requested format.
     calls.length = 0
-    view.transport.handler = (method: string) => {
-      calls.push({ method, params: {} })
-      if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
-      if (method === 'Page.captureScreenshot') return {}
-      return {}
-    }
-    // The viewport fallback succeeds through Electron's capturePage, but it must
-    // NOT pretend to be a full-page capture.
-    if (adapter.lastView().transport.handler !== undefined) {
-      const fallback = await runtime.screenshotWithOptions(1, { fullPage: true }).catch(() => undefined)
-      if (fallback !== undefined) expect(fallback.fullPage).toBe(false)
-    }
-    // PNG over the 8 MiB cap cannot be recompressed: policy, no data URL.
+    failFirst = true
+    const fallback = await runtime.screenshotWithOptions(1, { fullPage: true, format: 'png' })
+    expect(fallback.fullPage).toBe(false)
+    expect(fallback.format).toBe('png')
+    expect(fallback.data.startsWith('data:image/png;base64,')).toBe(true)
+    // PNG over the cap: policy, and NO second capture attempt.
+    calls.length = 0
     const huge = 'A'.repeat(Math.ceil(9 * 1024 * 1024 * 4 / 3))
-    view.transport.handler = (method: string) => {
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      calls.push({ method, params })
       if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
       if (method === 'Page.captureScreenshot') return { data: huge }
       return {}
     }
     await expect(runtime.screenshotWithOptions(1, { fullPage: true, format: 'png' })).rejects.toMatchObject({ code: 'policy' })
+    expect(calls.filter(entry => entry.method === 'Page.captureScreenshot')).toHaveLength(1)
+    // JPEG over the cap: exactly ONE retry with a lower quality.
+    const qualities: unknown[] = []
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
+      if (method === 'Page.captureScreenshot') {
+        qualities.push(params['quality'])
+        return { data: qualities.length === 1 ? huge : tiny }
+      }
+      return {}
+    }
+    const degraded = await runtime.screenshotWithOptions(1, { fullPage: true, quality: 80 })
+    expect(degraded.format).toBe('jpeg')
+    expect(qualities).toEqual([80, 40])
+    cleanup()
+  })
+
+  it('screenshots: a clip is clamped and a failed capture still restores overrides', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const calls: Array<{ method: string, params: Record<string, unknown> }> = []
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      calls.push({ method, params })
+      if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 1000, height: 2000 } }
+      if (method === 'Page.captureScreenshot') return { data: 'A'.repeat(64) }
+      return {}
+    }
+    await runtime.screenshotWithOptions(1, { clip: { x: 900, y: 1900, width: 500, height: 500 } })
+    const capture = calls.find(entry => entry.method === 'Page.captureScreenshot')!
+    const clip = capture.params['clip'] as { x: number, y: number, width: number, height: number }
+    expect(clip.x + clip.width).toBeLessThanOrEqual(1000)
+    expect(clip.y + clip.height).toBeLessThanOrEqual(2000)
+    expect(clip.width).toBeGreaterThan(0)
+    // Exception path: overrides are still restored.
+    ;(runtime as unknown as { emulationOverrides: Map<number, unknown> }).emulationOverrides.set(1, { viewport: { width: 400, height: 800 } })
+    view.transport.handler = (method: string) => {
+      calls.push({ method, params: {} })
+      if (method === 'Page.getLayoutMetrics') return {}
+      if (method === 'Page.captureScreenshot') throw new Error('capture failed')
+      return {}
+    }
+    await expect(runtime.screenshotWithOptions(1, { fullPage: true })).rejects.toBeTruthy()
+    expect(calls.some(entry => entry.method === 'Emulation.setDeviceMetricsOverride')).toBe(true)
     cleanup()
   })
 

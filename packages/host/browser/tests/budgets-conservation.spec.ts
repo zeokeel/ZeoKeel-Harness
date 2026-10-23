@@ -17,6 +17,7 @@ import {
   TAB_SLOT_WAIT_TIMEOUT_MS,
   TOOL_DEADLINE_MARGIN_MS,
   USER_GATE_TIMEOUT_MS,
+  WAIT_FOR_DEADLINE_MARGIN_MS,
   WAIT_FOR_MAX_MS,
 } from '../src/budgets.ts'
 
@@ -28,7 +29,7 @@ describe('budget conservation', () => {
   })
 
   it('the wait_for deadline is derived, never a literal', () => {
-    expect(BROWSER_WAIT_FOR_DEADLINE_MS).toBe(USER_GATE_TIMEOUT_MS + WAIT_FOR_MAX_MS + 5_000)
+    expect(BROWSER_WAIT_FOR_DEADLINE_MS).toBe(USER_GATE_TIMEOUT_MS + WAIT_FOR_MAX_MS + WAIT_FOR_DEADLINE_MARGIN_MS)
   })
 
   it('long-run tools keep their internal wait below the registered budget', () => {

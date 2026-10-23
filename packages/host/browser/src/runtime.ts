@@ -30,7 +30,7 @@ import { appSurfaceAllowsUrl, asSurfaceWebContents, surfaceLabel, type BrowserSu
 import { TabPool, gateRefusal, type TabReservation } from './pool.ts'
 import { BrowserStore, stripSensitiveText, stripSensitiveUrl, type DownloadEntry, type HistoryEntry, type RecordActor } from './store.ts'
 import { maskContentText, validateEvalExpression, wrapEvalExpression, serializeEvalResult } from './eval-policy.ts'
-import { PROGRAM_MAX_HELPER_CALLS, PROGRAM_SCRIPT_BUDGET_MS } from './budgets.ts'
+import { DOWNLOAD_COMPLETION_TIMEOUT_MS, PROGRAM_MAX_HELPER_CALLS, PROGRAM_SCRIPT_BUDGET_MS, WAIT_FOR_HARD_CAP_MS } from './budgets.ts'
 import { SENSITIVE_KEY_PATTERN, isExactProseSensitiveKey } from './sensitive.ts'
 import { browserError, BrowserError, type BrowserErrorCode } from './errors.ts'
 import { httpOriginOf } from './credential-site.ts'
@@ -3666,7 +3666,7 @@ export class BrowserRuntime {
         const before = this.highestDownloadId()
         await this.downloadUrl(String(args['url'] ?? ''), signal)
         const owner = this.downloadOwnerTab()
-        const entry = await this.waitForNewDownload(before, 60_000, owner, signal)
+        const entry = await this.waitForNewDownload(before, DOWNLOAD_COMPLETION_TIMEOUT_MS, owner, signal)
         return entry === null ? { started: true, timedOut: true } : { started: true, download: entry }
       }
       case 'browser_downloads_list': return { downloads: this.downloads({ ...(typeof args['status'] === 'string' ? { status: args['status'] as never } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
@@ -5561,7 +5561,7 @@ export class BrowserRuntime {
       // time the mutex/gate took is already spent budget.
       const configured = options.timeoutMs ?? Math.min(this.options.timeoutMs, 30_000)
       const remaining = options.deadlineAt === undefined ? Number.POSITIVE_INFINITY : options.deadlineAt - Date.now()
-      const timeout = Math.min(configured, 120_000, Math.max(0, remaining))
+      const timeout = Math.min(configured, WAIT_FOR_HARD_CAP_MS, Math.max(0, remaining))
       const deadline = Date.now() + timeout
       const tab = this.tab(resolved)
       const startUrl = tab.url

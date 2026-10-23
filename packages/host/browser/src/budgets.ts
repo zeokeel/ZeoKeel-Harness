@@ -54,8 +54,13 @@ export const USER_GATE_TIMEOUT_MS = BROWSER_TOOL_TIMEOUT_MS - USER_GATE_RESERVE_
  */
 export const WAIT_FOR_MAX_MS = 40_000
 
-/** Registered deadline of `browser_wait_for`: gate + max wait + 5s margin. */
-export const BROWSER_WAIT_FOR_DEADLINE_MS = USER_GATE_TIMEOUT_MS + WAIT_FOR_MAX_MS + 5_000
+/** Extra margin used by the wait_for registration formula (single source). */
+export const WAIT_FOR_DEADLINE_MARGIN_MS = 5_000
+/** Absolute ceiling for one wait_for condition (never above the tool budget). */
+export const WAIT_FOR_HARD_CAP_MS = 120_000
+
+/** Registered deadline of `browser_wait_for`: gate + max wait + margin. */
+export const BROWSER_WAIT_FOR_DEADLINE_MS = USER_GATE_TIMEOUT_MS + WAIT_FOR_MAX_MS + WAIT_FOR_DEADLINE_MARGIN_MS
 
 /**
  * How long an agent `browser_open` waits for a free tab slot when the pool is

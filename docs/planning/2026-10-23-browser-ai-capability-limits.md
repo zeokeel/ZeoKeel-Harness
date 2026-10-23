@@ -19,7 +19,7 @@
 | B4（进行中） | C1 对话框（M1 完成）：事件接线 + `browser_dialog` + 双层 fail-fast（CDP choke point + 导航家族）+ 三出口 dismiss + url/defaultPrompt 脱敏 | ✅ M1（63 files / 1135 tests；严格 20 入口矩阵 + CDP hook 单测 + 在途命令中止）|
 | B5（进行中） | C2 回执（popup/download/dialog/file-chooser 事件总线 + `expect`）、C3 文件选择器、C4 下载生命周期 | ✅ M2–M4（65 files / 1176 tests，33 工具；`check` EXIT=0） |
 | B6（进行中） | C5–C8：指针（hover/dblclick/drag/modifiers）、键盘（heldKeys/hotkey/delay）、剪贴板、滚动运动学 | ✅ 38 工具；65 files / 1191 tests，EXIT=0；真机探针待跑 |
-| 待办 | A11/A14/A16、B4/B5/B6/B7、C1–C8、C10/C12–C16、D1–D3、browser_run | 排队 |
+| 待办 | A11/A14/A16、B4/B5/B7、C10/C12/C15/C16、D1–D3、browser_run | 排队（C1–C9/C13/C14 已完成并提交 e9d8ceb；下一批 C16/B4/B5/C10/C12/C15 按审计 R1–R4 口径推进） |
 
 > 每批完成后由 `red-team-auditor` 做反证审计（改回旧行为必须变红 / 对抗绕过 / 误杀检查），报告在 `temp/audit/`。
 

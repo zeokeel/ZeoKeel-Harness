@@ -2390,6 +2390,14 @@ const PINNED_JOB_PERMISSIONS_REGISTRY = [
       + '与 GITHUB_TOKEN 的权限面无关。',
   },
   {
+    job: 'webadmin-variants',
+    // 2026-10-23 从 server job 拆出：只 checkout + `npm ci`（走 setup-node 的 npm cache）
+    // + 跑两条 make 目标 —— 全部只读仓，产物留在 runner 上，不写仓库、不碰令牌交换。
+    permissions: { contents: 'read' },
+    why: 'webadmin 变体矩阵（4×单测 + 5×vite 产物判据）：只读仓 + 本地 npm cache，'
+      + '不需要任何写面；给它 actions/id-token 之类的权限没有任何用途（SK-21 的扩权面）。',
+  },
+  {
     job: 'pr-summary',
     permissions: { contents: 'read', 'pull-requests': 'write' },
     why: 'PR 评论汇总：`pull-requests: write` 只用于在自己的 PR 上发一条评论；不需要仓库写面。',
@@ -3540,9 +3548,11 @@ const PINNED_STEP_POLICIES = [
   {
     id: 'ci-webadmin-variant-tests',
     label: '`make webadmin-variant-tests`（webadmin 变体单测矩阵调度步）',
-    // 识别口径 = **server job 里命令位真的执行那个 make 目标**（与 `REQUIRED_CI_STEPS` 的
-    // `job: 'server'` 同源）。
-    match: (script, item) => item?.jobId === 'server'
+    // 识别口径 = 命令位真的执行那个 make 目标。2026-10-23 起这两步从 server job 拆到
+    // `webadmin-variants`（与 go test 并行）⇒ 两个 job 都认（与 `REQUIRED_CI_STEPS`
+    // 的 `job: 'webadmin-variants'` 同源；保留 'server' 是给"临时搬回"的形态留识别面，
+    // 搬回时存在性判据仍会红，但至少不会静默变成"没识别到"）。
+    match: (script, item) => (item?.jobId === 'server' || item?.jobId === 'webadmin-variants')
       && executedCommands(script).some(entry => entry.command === 'make'
         && (entry.argv[0] ?? '') === 'webadmin-variant-tests'),
     ifPolicy: 'never',
@@ -3551,7 +3561,7 @@ const PINNED_STEP_POLICIES = [
   {
     id: 'ci-webadmin-check-features',
     label: '`make webadmin-check-features`（webadmin 产物级变体判据调度步）',
-    match: (script, item) => item?.jobId === 'server'
+    match: (script, item) => (item?.jobId === 'server' || item?.jobId === 'webadmin-variants')
       && executedCommands(script).some(entry => entry.command === 'make'
         && (entry.argv[0] ?? '') === 'webadmin-check-features'),
     ifPolicy: 'never',
@@ -3749,7 +3759,8 @@ const REQUIRED_CI_STEPS = [
   },
   {
     file: 'ci.yml',
-    job: 'server',
+    // 2026-10-23：这两条变体判据从 server job 拆到 `webadmin-variants`（与 go test 并行）。
+    job: 'webadmin-variants',
     argv: ['make', 'webadmin-variant-tests'],
     // 与上面 `npm test` 同款：存在性（本表方向①）**不等于**可执行性（`[SK-14]`）。
     pinnedId: 'ci-webadmin-variant-tests',
@@ -3761,7 +3772,8 @@ const REQUIRED_CI_STEPS = [
   },
   {
     file: 'ci.yml',
-    job: 'server',
+    // 同上（2026-10-23 拆 job）。
+    job: 'webadmin-variants',
     argv: ['make', 'webadmin-check-features'],
     pinnedId: 'ci-webadmin-check-features',
     label: '`make webadmin-check-features`（webadmin 产物级双侧变体判据，真跑 5 次 vite build）',
@@ -3989,6 +4001,14 @@ const PINNED_JOB_CONTAINER_REGISTRY = []
  */
 const PINNED_JOB_WORKING_DIRECTORY_REGISTRY = [
   {
+    job: 'webadmin-variants',
+    workingDirectory: 'server',
+    why: '`webadmin-variants` job（2026-10-23 从 server job 拆出）：两条被钉步骤是'
+      + ' `make webadmin-variant-tests` / `make webadmin-check-features`，必须在 `server/`'
+      + ' 下解析（Makefile 在那里、目标定义在 server/webadmin）；`npm ci` 用步骤级'
+      + ' `working-directory: server/webadmin`。与 server job 同一口径。',
+  },
+  {
     job: 'server',
     workingDirectory: 'server',
     why: '`server` job 的 `defaults.run.working-directory: server`：job 内所有步骤都在 `server/`'
@@ -4160,6 +4180,13 @@ const PINNED_JOB_RUNS_ON_REGISTRY = [
     runsOn: 'ubuntu-24.04',
     why: 'Go/服务端 job:含被钉的 `wasm-case-gate` 判据步(PG 容器 + `go test -json`),'
       + '托管 Ubuntu 24.04 是它的既有形态(PG 18 镜像与 go 版本都在这一步的判据面内)。',
+  },
+  {
+    job: 'webadmin-variants',
+    runsOn: 'ubuntu-24.04',
+    why: 'webadmin 变体矩阵（2026-10-23 从 server job 拆出）：两条被钉步骤是 `make webadmin-*`，'
+      + '它们依赖 node 24 + npm cache 的托管镜像形态；与 server/gate 同一镜像口径，'
+      + '换标签必须进 diff。',
   },
   {
     job: 'desktop-macos',
@@ -5390,6 +5417,15 @@ const REGISTERED_JOBS = [
     ifPolicy: 'exact',
     ifValue: "needs.changes.result != 'success' || needs.changes.outputs.code == 'true'",
     why: 'docs-only 的 **fail-safe** 形态:分类器失败/输出为空时走完整路径(docs-only 只是一种加速)',
+  },
+  {
+    file: 'ci.yml',
+    job: 'webadmin-variants',
+    ifPolicy: 'exact',
+    ifValue: "needs.changes.result != 'success' || needs.changes.outputs.code == 'true'",
+    why: 'webadmin 变体矩阵（2026-10-23 从 server job 拆出，与 go test 并行）：'
+      + '它是判据 job 而不是交付物 job，但同样必须走 docs-only 的 fail-safe 形态'
+      + '（分类器失败时照跑，不能用"可能跳过"的形态）',
   },
   {
     file: 'ci.yml',

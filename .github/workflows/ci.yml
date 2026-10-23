@@ -963,8 +963,10 @@ jobs:
     #     在容器调高连接数之后就已经过期。
     #   · **超时为什么跟本地同值 25m**:-p 4 下最慢单包的 wall 会膨胀(实测 250s→625s,
     #     见 server/Makefile 的 F3-5 段落);15m 只剩 1.44× 余量,25m 才是与本地同源的取值。
-    # 变体判据是分钟级的,本可以拆成独立 job 并行;没有拆是因为它需要 `server/webadmin`
-    # 的 node_modules(server job 已 `npm ci`),拆出去要再装一遍依赖,收益被吃掉。
+    # 变体判据**已在 2026-10-23 拆到独立 job `webadmin-variants`**（与本 job 的 `go test`
+    # 并行）:当初没拆是因为"拆出去要再装一遍 webadmin 依赖,收益被吃掉";实测 npm cache
+    # 命中时重装只要 ≈20–40s,而这两条判据在本 job 里是**串行 6.4 min** ⇒ 拆走后本 job 的
+    # happy path 从 ≈30 min 降到 ≈24 min。判据命令/工作目录/可见性判据都不变。
     # 代价(认账):真挂的 job 从 60 min 起到 75 min 才被取消 —— 但那时单个包的 `-timeout 25m`
     # 早已先到点并打出 dump,这条正是 R2-SK-7 要的形态。
     timeout-minutes: 75
@@ -1137,13 +1139,14 @@ jobs:
       # 2026-10-14 独立审计 P1:上面那步是**缺省（全开）变体**的 webadmin 单测,而
       # `nav.test.ts` / `routes.test.ts` 是按变体给期望的 —— 关闭变体的回归（实测:删掉
       # `nav.ts` 的开关过滤后,关闭变体会发布指向不存在路由的侧栏条目,点进去 404）
-      # 在 CI 上无人拦。下面两步把"变体矩阵"变成**调度点**,本地 `make check` 与这里跑同一条命令:
-      #   ① webadmin-variant-tests:4 个非缺省变体各跑一遍完整单测;
-      #   ② webadmin-check-features:产物级双侧判据（真跑 5 次构建;含源码图"模块页只能经
-      #      守卫 import() 进入"与逐模块哨兵）。
-      # 两步的存在性由 `scripts/verify-ci-scripts.mjs` 的「变体调度点」一节判（删任一步即红）。
-      - run: make webadmin-variant-tests
-      - run: make webadmin-check-features
+      # 在 CI 上无人拦。那时把下面两条"变体调度点"放在本 job 里,理由是"拆出去要再装一遍
+      # webadmin 依赖,收益被吃掉"。
+      #
+      # 2026-10-23 拆到独立 job `webadmin-variants`（与 `go test` 并行,见该 job 的注释）:
+      # npm 依赖有 `setup-node` 的 npm cache,重装 ≈20–40s,而这两条判据在本 job 里是
+      # **串行 6.4 min**;拆走后 server job 的 happy path 从 ≈30 min 降到 ≈24 min。
+      # 判据本身（命令、工作目录、`if:` 形态）仍是同一条,登记在
+      # `check-workflows.mjs` 的 `REQUIRED_CI_STEPS` / `PINNED_STEP_POLICIES` 里。
       - run: make build-server
       - name: Deployment asset syntax checks
         # 部署脚本(deploy.sh / install-server.sh)已于 2026-09-10 移除,此处只校验
@@ -1202,6 +1205,36 @@ jobs:
           name: zeokeel-server-linux-amd64
           path: server/bin/zeokeel-server
           if-no-files-found: error
+
+  webadmin-variants:
+    name: Webadmin feature variants
+    needs: changes
+    if: needs.changes.result != 'success' || needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    # 显式最小权限面（登记在 `check-workflows.mjs` 的 PINNED_JOB_PERMISSIONS_REGISTRY）：
+    # 只有 checkout + npm cache + 两次 make，全部只读仓。
+    permissions:
+      contents: read
+    # 30 min 的依据（2026-10-23 拆出时实测）：4 个非缺省变体各跑一遍完整单测 ≈5.5 min
+    # （本机 4 vCPU 空载 4m36s / 带负载 5m17s）+ 产物级双侧判据真跑 5 次 vite build ≈1 min
+    # + `npm ci`（cache 命中 ≈20–40s）⇒ happy path ≈7–8 min；30 min 给了 ~3.7× 余量。
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/webadmin/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: server/webadmin
+      # 与 server job 里的 `npm test`（缺省全开变体）互补：这里只跑**非缺省**变体，
+      # 以及产物级双侧判据。两条判据的覆盖面见 server job 里那段注释。
+      - run: make webadmin-variant-tests
+      - run: make webadmin-check-features
 
   desktop-linux:
     name: Desktop (Linux)

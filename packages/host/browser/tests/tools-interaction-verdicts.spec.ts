@@ -570,6 +570,43 @@ describe('snapshot frames at the tool layer（2026-10-23 C16）', () => {
     expect(String(framed.params?.['expression'] ?? '')).toContain('#in')
   })
 
+  it('browser_get_text on a frame also refuses the old numbering', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const { internal } = installSnapshotWithFrame(harness)
+    await harness.call('browser_get_snapshot', { includeFrames: true })
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1-NEW', url: 'https://a.example/frame', depth: 1, contextId: 6 },
+    ]
+    await expect(harness.call('browser_get_text', { frame: 1 })).rejects.toMatchObject({ code: 'stale-snapshot' })
+  })
+
+  it('an explicit frame conflicting with the snapshot entry frame is a parameter error', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        return { result: { value: JSON.stringify({ entries: [{ selector: '#in', kind: 'button', text: 'Go', frame: 2, visible: true, disabled: false }], crossOrigin: [] }) } }
+      }
+      if (expression.includes('document.querySelectorAll')) {
+        return { result: { value: { elements: [], total: 0, truncated: false, frames: 2, shadowRoots: 0, shadowScanCapped: false, countCapped: false } } }
+      }
+      return { result: { value: 'clicked' } }
+    }
+    const internal = harness.runtime as unknown as { frameIndex: (tab: unknown) => Promise<unknown> }
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1', url: 'https://a.example/a', depth: 1, contextId: 5 },
+      { frameId: 'F2', url: 'https://a.example/b', depth: 1, contextId: 6 },
+    ]
+    await harness.call('browser_get_snapshot', { includeFrames: true })
+    await expect(harness.call('browser_click', { target: 1, frame: 3 })).rejects.toThrow(/conflicts with the frame of snapshot element/u)
+  })
+
   it('the tool-level stale check refuses old numbers after the frame changed', async () => {
     const harness = track(makeHarness())
     await harness.runtime.open('https://a.example')

@@ -2,7 +2,7 @@
  * Programming-mode bridge tests (2026-10-23 browser_run).
  */
 import { describe, expect, it, vi } from 'vitest'
-import { createProgramBridge, PROGRAM_FORBIDDEN_HELPERS, PROGRAM_HELPERS, programErrorText, truncateProgramResult } from '../src/program.ts'
+import { createProgramBridge, PROGRAM_FORBIDDEN_HELPERS, PROGRAM_HELPERS, truncateProgramResult } from '../src/program.ts'
 
 describe('program helpers', () => {
   it('is an explicit whitelist that maps to existing tools and excludes dangerous names', () => {
@@ -28,16 +28,15 @@ describe('program helpers', () => {
 })
 
 describe('program result/error shaping', () => {
-  it('keeps results JSON-valid and truncates at the cap', () => {
+  it('keeps results JSON-valid and truncates at the BYTE cap', () => {
     expect(truncateProgramResult({ a: 1 })).toEqual({ value: { a: 1 }, truncated: false })
-    const big = truncateProgramResult('x'.repeat(300 * 1024))
+    // Non-ASCII: character count != byte count, so a char-based cap would let
+    // ~2x the intended bytes through.
+    const big = truncateProgramResult('é'.repeat(300 * 1024))
     expect(big.truncated).toBe(true)
     expect(typeof big.value).toBe('string')
+    expect(Buffer.byteLength(String(big.value), 'utf8')).toBeLessThanOrEqual(256 * 1024)
     expect(() => truncateProgramResult(BigInt(1))).toThrow(/serializable/u)
   })
 
-  it('keeps only the first line of an error (no source lines in stacks)', () => {
-    const text = programErrorText(new Error('boom\n  at secret=abc123'), value => value.replace('abc123', '****'))
-    expect(text).toBe('boom')
-  })
 })

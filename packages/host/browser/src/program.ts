@@ -145,15 +145,3 @@ export function redactProgramConsole(consoleText: string, redact: (text: string)
   }
   return lines.join('\n')
 }
-
-/**
- * Redact an error message and keep only its FIRST line (audit R6: stacks carry
- * source lines that can contain a pasted secret).
- * @param cause - thrown value.
- * @param redact - text redactor (keyword list + tab values).
- */
-export function programErrorText(cause: unknown, redact: (text: string) => string): string {
-  const raw = cause instanceof Error ? cause.message : String(cause)
-  const firstLine = raw.split('\n')[0] ?? ''
-  return redact(firstLine).slice(0, 500)
-}

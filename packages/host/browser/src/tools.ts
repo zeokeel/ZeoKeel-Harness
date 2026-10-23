@@ -1264,7 +1264,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
   if (runtime.programRuntimeAvailable && runtime.options.programEnabled === true) {
     register(defineTool({
       name: 'browser_run',
-      description: `[control] Run a TypeScript program that drives the browser through the frozen \`browser\` helpers (same capabilities as the individual tools; no filesystem, network, process, CDP or cookie access — helpers are the only capability). Useful for multi-step work: read, branch, loop, aggregate. Script eval/Function is a language feature and NOT a browser channel: page work still goes through browser.eval (which keeps the eval policy). Returns the program result (JSON, ≤256 KiB), console output and the helper-call count. Program budget ${String(Math.round(PROGRAM_SCRIPT_BUDGET_MS / 1000))}s, at most ${String(PROGRAM_MAX_HELPER_CALLS)} helper calls.`,
+      description: `[script] Run a TypeScript program that drives the browser through the frozen \`browser\` helpers (same capabilities as the individual tools; no filesystem, network, process, CDP or cookie access — helpers are the only capability). Useful for multi-step work: read, branch, loop, aggregate. Script eval/Function is a language feature and NOT a browser channel: page work still goes through browser.eval (which keeps the eval policy). Returns the program result (JSON, ≤256 KiB), console output and the helper-call count. Program budget ${String(Math.round(PROGRAM_SCRIPT_BUDGET_MS / 1000))}s, at most ${String(PROGRAM_MAX_HELPER_CALLS)} helper calls.`,
       parameters: {
         program: { type: 'string', required: true, description: 'TypeScript/JS program; may await browser.* helpers; return a JSON value.' },
       },
@@ -2380,6 +2380,7 @@ function formatCredentials(value: unknown): string {
  * R21 F-02：先把"企业策略可禁用"这条承诺撤回，等渠道包真的接上生产者再恢复）。
  */
 const GROUP_OF: Record<string, 'navigate' | 'interact' | 'read' | 'write' | 'memory' | 'artifacts' | 'control' | 'script'> = {
+  browser_run: 'script',
   browser_open: 'navigate', browser_navigate: 'navigate', browser_reload: 'navigate',
   browser_go_back: 'navigate', browser_go_forward: 'navigate', browser_list_tabs: 'navigate',
   browser_switch_tab: 'navigate', browser_close_tab: 'navigate',

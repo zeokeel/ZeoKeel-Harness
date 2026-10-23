@@ -1836,6 +1836,25 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('program: console over 64 KiB is truncated with a marker, and the op log keeps only the call count', async () => {
+    const fakeProgram = {
+      execute: async (): Promise<{ result: unknown, console?: string }> => ({
+        result: { ok: true },
+        console: `${'line '.repeat(40)}\n`.repeat(400),
+      }),
+    }
+    const { runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    const outcome = await runtime.runProgram('const secret = "do-not-log-this"')
+    expect(Buffer.byteLength(outcome.console, 'utf8')).toBeLessThanOrEqual(64 * 1024 + 64)
+    expect(outcome.console).toContain('console output truncated')
+    const entry = runtime.opLog.find(item => item.tool === 'browser_run')
+    expect(entry).toBeDefined()
+    expect(entry?.summary).toContain('helper calls')
+    // The op log must never contain the program text.
+    expect(JSON.stringify(runtime.opLog)).not.toContain('do-not-log-this')
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

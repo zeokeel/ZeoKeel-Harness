@@ -860,10 +860,14 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
           expectTimeoutMs?: number
           frame?: number
         }
+        if (typeof interactArgs.frame === 'number' && interactArgs.frame < 0) throw new Error('frame must be >= 0')
         if (typeof interactArgs.frame === 'number' && interactArgs.frame > 0) {
           if (spec.name !== 'browser_click') throw new Error(`frame is not supported for ${spec.name} yet — use browser_click or browser_get_text`)
           if (typeof interactArgs.x === 'number' || typeof interactArgs.y === 'number') throw new Error('frame and x/y are mutually exclusive')
           if (interactArgs.target === undefined) throw new Error('target is required when frame is set')
+          if (interactArgs.button !== undefined && interactArgs.button !== 'left') throw new Error('frame clicks are left-button only')
+          if ((interactArgs.clickCount ?? 1) > 1) throw new Error('frame clicks are single-click only')
+          if ((interactArgs.modifiers ?? []).length > 0) throw new Error('frame clicks do not take modifiers yet')
         }
         const modifierBits = (interactArgs.modifiers ?? []).reduce((sum, name) => {
           const bit = MODIFIER_BITS[name as 'ctrl' | 'alt' | 'meta' | 'shift']
@@ -1435,10 +1439,14 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       const { tab, selector, frame } = args as { tab?: number; selector?: string; frame?: number }
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
+      if (typeof frame === 'number' && frame < 0) throw new Error('frame must be >= 0')
       if (typeof frame === 'number' && frame > 0) {
-        const text = await runtime.textInFrame(tabId, frame, selector, exec.signal)
+        if (selector !== undefined && parseTargetSpec(selector).kind !== 'css') {
+          throw new Error('frame reads accept a CSS or >>> selector only (text=/role=/xpath= resolve in the main frame)')
+        }
+        const frameRead = await runtime.textInFrame(tabId, frame, selector, exec.signal)
         exec.signal.throwIfAborted()
-        return { text, truncated: text.length >= 65_536 }
+        return frameRead
       }
       // 2026-10-23（C13 + B6）：selector 现在也接受定位器语法（text=/role=/xpath=/loc=），
       // 纯 CSS（含 `css=` 前缀）保持原语义直接透传。

@@ -366,7 +366,7 @@ export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boole
   const crossOrigin = [];
   let truncated = false;
   let framesSeen = 0;
-  let nestedFrames = 0;
+  const nestedFrames = 0;
   const kindOf = (el) => {
     const tag = el.tagName.toLowerCase();
     if (tag === 'a' && el.href) return 'link';
@@ -447,25 +447,37 @@ export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boole
     }
   }
   if (WANT_FRAMES) {
-    const frames = document.querySelectorAll('iframe,frame');
-    for (let index = 0; index < frames.length && out.length < MAX; index += 1) {
-      framesSeen += 1;
-      const frameEl = frames[index];
+    // Frames are numbered DEPTH-FIRST in document order — the SAME numbering as
+    // resolveFrame / browser_eval(frame:N). A cross-origin frame still consumes
+    // its number (it is reported, just not readable), so the two sides never
+    // disagree about which frame means "frame: N" (audit P1-1).
+    let frameNumber = 0;
+    const walkFrame = (frameEl) => {
+      if (out.length >= MAX) return;
+      frameNumber += 1;
+      const number = frameNumber;
       let doc = null;
       try { doc = frameEl.contentDocument; } catch (cause) { doc = null; }
-      if (doc === null) { crossOrigin.push(index + 1); continue; }
-      // Frame entries use a selector LOCAL to the frame document: frame:N says
-      // where to resolve it, and '>>>' stays reserved for shadow boundaries.
+      if (doc === null) { crossOrigin.push(number); return; }
       for (const el of doc.querySelectorAll(SEL)) {
-        push(el, pathOf(el, doc.documentElement), false, index + 1);
+        push(el, pathOf(el, doc.documentElement), false, number);
         if (out.length >= MAX) break;
       }
-      // NESTED frames are not walked in v1; count them so the host can report the
-      // blind spot instead of silently dropping them (audit P3).
-      try {
-        nestedFrames += doc.querySelectorAll('iframe,frame').length;
-      } catch (cause) { /* unreadable: already cross-origin handled above */ }
+      for (const child of doc.querySelectorAll('iframe,frame')) {
+        if (out.length >= MAX) break;
+        // Same-origin descendants recurse; the helper handles the cross-origin
+        // case by consuming the number.
+        const before = frameNumber;
+        walkFrame(child);
+        // A child that could not be read still counted: nothing else to do.
+        if (frameNumber === before) frameNumber += 1;
+      }
+    };
+    for (const frameEl of document.querySelectorAll('iframe,frame')) {
+      if (out.length >= MAX) break;
+      walkFrame(frameEl);
     }
+    framesSeen = frameNumber;
   }
   // Hitting the budget is reported as truncated: the caller cannot tell whether
   // more elements exist, so it must not present the list as complete.

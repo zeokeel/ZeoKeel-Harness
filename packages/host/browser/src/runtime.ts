@@ -4256,6 +4256,7 @@ export class BrowserRuntime {
       const outcome = await this.evaluateInFrame(tab, frame, `(() => {
         ${querySnippet(selector)}
         if (!el) return 'not-found';
+        if (el.disabled === true) return 'disabled';
         el.scrollIntoView({ block: 'center', inline: 'center' });
         const rect = el.getBoundingClientRect();
         const base = { bubbles: true, cancelable: true, composed: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0, buttons: 0, detail: 1 };
@@ -4264,8 +4265,9 @@ export class BrowserRuntime {
         if (typeof el.click === 'function') el.click(); else el.dispatchEvent(new MouseEvent('click', base));
         return 'clicked';
       })()`, signal)
+      if (outcome === 'disabled') throw browserError('policy', `browser: cannot click ${selector} in frame ${String(frame)} — the element is disabled`)
       if (outcome !== 'clicked') throw browserError('not-found', `browser: cannot click ${selector} in frame ${String(frame)}`)
-      this.record('browser_click', resolved, `click ${selector} in frame ${String(frame)}`, false, 'ai', CLICK_SUMMARY_LIMIT)
+      this.record('browser_click', resolved, `click ${selector} in frame ${String(frame)} (dom-dispatch)`, false, 'ai', CLICK_SUMMARY_LIMIT)
     }, signal)
   }
 
@@ -4276,16 +4278,20 @@ export class BrowserRuntime {
    * @param selector - optional selector resolved inside that frame.
    * @param signal - caller cancellation.
    */
-  async textInFrame(tabId: number, frame: number, selector: string | undefined, signal?: AbortSignal): Promise<string> {
+  async textInFrame(tabId: number, frame: number, selector: string | undefined, signal?: AbortSignal): Promise<{ text: string, truncated: boolean }> {
     const resolved = this.resolveTab(tabId)
     return await this.agentRun('browser_get_text', async () => {
       const tab = this.tab(resolved)
       const expression = selector === undefined
-        ? `(document.body ? document.body.innerText : '').slice(0, 65536)`
-        : `(() => { ${querySnippet(selector)} return el ? (el.innerText || el.textContent || '').slice(0, 65536) : null; })()`
+        ? `(document.body ? document.body.innerText : '').slice(0, 65538)`
+        : `(() => { ${querySnippet(selector)} return el ? (el.innerText || el.textContent || '').slice(0, 65538) : null; })()`
       const value = await this.evaluateInFrame(tab, frame, expression, signal)
       if (value === null) throw browserError('not-found', `browser: element not found in frame ${String(frame)}: ${String(selector)}`)
-      return redactFilledSecretsText(tab, String(value ?? ''))
+      const raw = String(value ?? '')
+      // Same effective limit as the main-frame path (min(textLimit, 64 KiB)).
+      const limit = Math.max(1, Math.min(this.options.textLimit, 64 * 1024))
+      const text = redactFilledSecretsText(tab, raw.slice(0, limit))
+      return { text, truncated: raw.length > limit }
     }, signal)
   }
 

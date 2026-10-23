@@ -241,7 +241,10 @@ export function planCapacity(input) {
   const prebuild = pick('prebuild', 1, MEMORY_PER_TASK_MB.packageBuild, MAX_PACKAGE_CONCURRENCY, 'PREBUILD_CONCURRENCY')
   const vitest = pick('vitestWorkers', 0.75, MEMORY_PER_TASK_MB.vitestWorker, MAX_VITEST_WORKERS, 'VITEST_MAX_WORKERS')
   const goTest = pick('goTestParallel', 1, MEMORY_PER_TASK_MB.goTestPackage, MAX_GO_TEST_PARALLEL, 'TEST_PARALLEL')
-  const goBuild = pick('goBuildParallel', 1, MEMORY_PER_TASK_MB.goBuildPackage, MAX_PACKAGE_CONCURRENCY, 'GO_BUILD_P')
+  // `go build -p` 的硬顶 = **CPU 预算本身**（不是 8）：Go 自己的缺省就是 `-p=GOMAXPROCS`，
+  // 用一个更小的固定硬顶会在 16 核机器上把冷构建**拖慢**（2026-10-23 复盘发现）。
+  // 内存仍由 memPart 收口（单 compile 进程 ~700MB）。
+  const goBuild = pick('goBuildParallel', 1, MEMORY_PER_TASK_MB.goBuildPackage, cpuBudget, 'GO_BUILD_P')
   const webadmin = pick('webadminBuild', 1, MEMORY_PER_TASK_MB.webadminBuild, MAX_PACKAGE_CONCURRENCY, 'WEBADMIN_BUILD_CONCURRENCY')
 
   return {

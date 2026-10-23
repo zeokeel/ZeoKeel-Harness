@@ -190,6 +190,37 @@ func registerMarketAdminRoutes(authed *gin.RouterGroup, d Deps) {
 	serverauth.AdminRoute(authed, "PUT", "/skills/:name/grant", serverauth.PermMarketWrite, d.Market.SetSkillGrant)
 	serverauth.AdminRoute(authed, "DELETE", "/skills/:name/grant", serverauth.PermMarketWrite, d.Market.RemoveSkillGrant)
 
+	// 待审版本审核面（2026-10-23）。
+	//
+	// 背景：市场渠道此前只有「管理端直发」（发布即 approved），员工归属人经能力中心
+	// 提交的新版本落在 app_releases.status=pending 之后**没有任何审核入口** ——
+	// 审批队列只读组织库（sharedskills / agentshare），市场待审版本永远卡住、
+	// apps 投影永远停在旧版本。这一片补的就是那个缺口，路径形状与组织侧逐条镜像：
+	//
+	//	/skills/:name/:version/{approve,reject,preview,archive,file}
+	//	/agents/:name/:version/{approve,reject,preview,archive,file}
+	//
+	// 权限点用 capability:read|write（与组织侧审核面同一族）：审核是"平台内容裁决"，
+	// 不是市场运营的日常写操作（后者仍是 market:read|write）。
+	//
+	// 渠道口径：所有端点先过 `marketplace.requireMarketAdminApp`（org 行与不存在
+	// 逐字节同形 404）；/agents 那 5 条同时登记在 `marketplace.marketAgentRoutePolicy`，
+	// 由 `TestProductionAgentRoutesMatchMarketplacePolicy` 对拍生产树（本文件）。
+	//
+	// ⚠️ `:version` 段与既有的 name 级静态段（…/:name/preview、…/:name/archive 等）
+	// 同层共存：gin 的静态段优先于参数段，两者互不遮蔽（`/skills/x/preview` 命中 3 段
+	// 那条，`/skills/x/1.0.0/preview` 命中 4 段那条）。
+	serverauth.AdminRoute(authed, "POST", "/skills/:name/:version/approve", serverauth.PermCapabilityWrite, d.Market.ApproveSkillVersionAdmin)
+	serverauth.AdminRoute(authed, "POST", "/skills/:name/:version/reject", serverauth.PermCapabilityWrite, d.Market.RejectSkillVersionAdmin)
+	serverauth.AdminRoute(authed, "GET", "/skills/:name/:version/preview", serverauth.PermCapabilityRead, d.Market.PreviewSkillVersionAdmin)
+	serverauth.AdminRoute(authed, "GET", "/skills/:name/:version/archive", serverauth.PermCapabilityRead, d.Market.DownloadSkillVersionArchiveAdmin)
+	serverauth.AdminRoute(authed, "GET", "/skills/:name/:version/file", serverauth.PermCapabilityRead, d.Market.FileContentSkillVersionAdmin)
+	serverauth.AdminRoute(authed, "POST", "/agents/:name/:version/approve", serverauth.PermCapabilityWrite, d.Market.ApproveAgentVersionAdmin)
+	serverauth.AdminRoute(authed, "POST", "/agents/:name/:version/reject", serverauth.PermCapabilityWrite, d.Market.RejectAgentVersionAdmin)
+	serverauth.AdminRoute(authed, "GET", "/agents/:name/:version/preview", serverauth.PermCapabilityRead, d.Market.PreviewAgentVersionAdmin)
+	serverauth.AdminRoute(authed, "GET", "/agents/:name/:version/archive", serverauth.PermCapabilityRead, d.Market.DownloadAgentVersionArchiveAdmin)
+	serverauth.AdminRoute(authed, "GET", "/agents/:name/:version/file", serverauth.PermCapabilityRead, d.Market.FileContentAgentVersionAdmin)
+
 }
 
 // registerSharedSkillsAdminRoutes 注册组织共享技能与能力锁定的管理面。
@@ -199,6 +230,10 @@ func registerSharedSkillsAdminRoutes(authed *gin.RouterGroup, d Deps) {
 	}
 	// 共享技能管理
 	serverauth.AdminRoute(authed, "GET", "/shared-skills", serverauth.PermCapabilityRead, d.Shared.ListAll)
+	// 管理员给组织共享库发新版本（2026-10-23）：与市场侧
+	// `POST /skills/:name/archive` 同形同语义、同权限点，但只写 `channel='org'` 行
+	// （`sharedskills.UploadAdmin` 内部 AdminPublish=true ⇒ 发布即 approved）。
+	serverauth.AdminRoute(authed, "POST", "/shared-skills/:name/archive", serverauth.PermCapabilityWrite, d.Shared.UploadAdmin)
 	serverauth.AdminRoute(authed, "GET", "/shared-skills/:name/:version/archive", serverauth.PermCapabilityRead, d.Shared.DownloadAdmin)
 	serverauth.AdminRoute(authed, "GET", "/shared-skills/:name/:version/preview", serverauth.PermCapabilityRead, d.Shared.Preview)
 	serverauth.AdminRoute(authed, "POST", "/shared-skills/:name/:version/approve", serverauth.PermCapabilityWrite, d.Shared.Decide)
@@ -228,6 +263,9 @@ func registerAgentPresetsAdminRoutes(authed *gin.RouterGroup, d Deps) {
 	}
 	// 共享 Agent 管理
 	serverauth.AdminRoute(authed, "GET", "/agent-presets", serverauth.PermCapabilityRead, d.Agentshare.ListAll)
+	// 管理员给组织共享库发新版本（2026-10-23）：与共享技能侧
+	// `POST /shared-skills/:name/archive` 同形同权，只写 `channel='org'` 的预设行。
+	serverauth.AdminRoute(authed, "POST", "/agent-presets/:name/archive", serverauth.PermCapabilityWrite, d.Agentshare.UploadAdmin)
 	serverauth.AdminRoute(authed, "GET", "/agent-presets/:name/archive", serverauth.PermCapabilityRead, d.Agentshare.DownloadAdmin)
 	serverauth.AdminRoute(authed, "GET", "/agent-presets/:name/preview", serverauth.PermCapabilityRead, d.Agentshare.Preview)
 	serverauth.AdminRoute(authed, "POST", "/agent-presets/:name/approve", serverauth.PermCapabilityWrite, d.Agentshare.Decide)

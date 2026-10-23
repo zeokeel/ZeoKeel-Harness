@@ -43,6 +43,13 @@ type SharedSkill struct {
 	// Quality 是组织库质量标记(0037):''|'official'|'featured' 互斥,
 	// 仅对 approved 行有展示语义;与市场「免费/专业」分级词表隔离。
 	Quality string
+	// Channel 是行渠道（apps.channel 的投影：market / org）。
+	//
+	// 2026-10-23 起作者面（ListOwnedSharedSkills）取**任意渠道**的归属行，
+	// 消费方（能力中心「我的」分区）必须能按行区分来源，否则作者自己的市场
+	// 内容会被渲染成组织内容（source/author 两面分叉）。组织分发面
+	// （ListVisibleSharedSkills / ListSharedSkills）恒为 org。
+	Channel string
 	// Archive is the uploaded archive bytes (0040: 归档直存 DB,不再落磁盘).
 	Archive []byte
 	// Downloads counts successful archive downloads.
@@ -60,7 +67,10 @@ type SharedSkill struct {
 // ---------------------------------------------------------------------------
 
 // releaseToShared 把统一模型的 Release 投影成旧 DTO。
-func releaseToShared(r Release) SharedSkill {
+//
+// channel 来自 apps 行（release 没有渠道列），调用方负责从 AppChannelMap /
+// AppChannelOf 取——不要留空：DTO 的 Channel 是作者面「来源」判据的唯一输入。
+func releaseToShared(r Release, channel string) SharedSkill {
 	return SharedSkill{
 		ID: r.ID, Name: r.AppID, DisplayName: r.Title, Version: r.Version,
 		// 旧 DTO 的 Author 语义是**上传者**(全部归属/可见性判断都依赖它),
@@ -68,27 +78,37 @@ func releaseToShared(r Release) SharedSkill {
 		Description: r.Description, Author: r.Publisher, Checksum: r.Checksum,
 		Status: SharedSkillStatus(r.Status), Reason: r.Reason, Quality: r.Quality,
 		Archive: r.Archive, Downloads: r.Downloads, Calls: r.Calls,
+		Channel:   channel,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
 
-// orgSkillReleases 取组织渠道技能的全部版本(排除软删)。
-func orgSkillReleases(db *sql.DB, status string) ([]Release, error) {
+// skillReleasesByChannel 取 kind=skill 的**全部渠道**版本（排除软删），
+// 并返回 appID→channel 映射。
+//
+// 这是技能侧取数的唯一实现：orgSkillReleases（组织面）与作者面（全渠道）
+// 都从它过滤，避免「作者面按渠道过滤、分发面忘了过滤」这类分叉。
+func skillReleasesByChannel(db *sql.DB, status string) ([]Release, map[string]string, error) {
 	all, err := ListReleasesByStatus(db, AppKindSkill, status)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	apps, err := ListApps(db, AppKindSkill, AppChannelOrg)
+	channels, err := AppChannelMap(db, AppKindSkill)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ReleaseRowsByChannel(all, channels), channels, nil
+}
+
+// orgSkillReleases 取组织渠道技能的全部版本(排除软删)。
+func orgSkillReleases(db *sql.DB, status string) ([]Release, error) {
+	all, channels, err := skillReleasesByChannel(db, status)
 	if err != nil {
 		return nil, err
-	}
-	org := map[string]bool{}
-	for _, a := range apps {
-		org[a.AppID] = true
 	}
 	out := []Release{}
 	for _, r := range all {
-		if org[r.AppID] {
+		if channels[r.AppID] == AppChannelOrg {
 			out = append(out, r)
 		}
 	}
@@ -104,11 +124,11 @@ func GetSharedSkill(db *sql.DB, name, version string) (*SharedSkill, error) {
 	if r.DeletedAt != nil {
 		return nil, ErrNotFound
 	}
-	out := releaseToShared(*r)
+	out := releaseToShared(*r, AppChannelOf(db, AppKindSkill, r.AppID))
 	return &out, nil
 }
 
-// ListSharedSkills 管理端清单(status 为空 = 全部)。
+// ListSharedSkills 管理端清单(status 为空 = 全部;仅组织渠道)。
 func ListSharedSkills(db *sql.DB, status string) ([]SharedSkill, error) {
 	list, err := orgSkillReleases(db, status)
 	if err != nil {
@@ -116,7 +136,7 @@ func ListSharedSkills(db *sql.DB, status string) ([]SharedSkill, error) {
 	}
 	out := make([]SharedSkill, 0, len(list))
 	for _, r := range list {
-		out = append(out, releaseToShared(r))
+		out = append(out, releaseToShared(r, AppChannelOrg))
 	}
 	return out, nil
 }
@@ -150,9 +170,15 @@ func ListOwnedSharedSkills(db *sql.DB, viewer string) ([]SharedSkill, error) {
 }
 
 // listSharedSkillsByFace 是上面两个面的共同实现：ownOnly=false 取分发面
-// （下架行一律不列），ownOnly=true 取作者面（归属人的行，忽略下架）。
+// （**仅组织渠道**、下架行一律不列），ownOnly=true 取作者面（归属人的行，
+// **任意渠道**、忽略下架，2026-10-23 C4）。
+//
+// 两个面共用同一份取数（skillReleasesByChannel）与同一个归属判据
+// （Distribution.OwnedBy）；它们的差别只有两条：渠道边界与上下架。把渠道
+// 边界写在这里一处，是为了让「分发面要不要跟着作者面变宽」这个问题只有
+// 一个答案落点（不是每个调用方各自过滤一遍）。
 func listSharedSkillsByFace(db *sql.DB, viewer string, granted []string, ownOnly bool) ([]SharedSkill, error) {
-	list, err := orgSkillReleases(db, "")
+	list, channels, err := skillReleasesByChannel(db, "")
 	if err != nil {
 		return nil, err
 	}
@@ -166,10 +192,16 @@ func listSharedSkillsByFace(db *sql.DB, viewer string, granted []string, ownOnly
 	}
 	out := []SharedSkill{}
 	for _, r := range list {
+		channel := channels[r.AppID]
+		if !ownOnly && channel != AppChannelOrg {
+			// 分发面只服务组织共享库；市场行归 marketplace 端点（否则组织库
+			// 的审批/删除按钮会作用于市场内容，R7 agentshare-2 的缺陷形态）。
+			continue
+		}
 		d := dists.Of(r.AppID)
 		if ownOnly {
 			if d.OwnedBy(viewer) {
-				out = append(out, releaseToShared(r))
+				out = append(out, releaseToShared(r, channel))
 			}
 			continue
 		}
@@ -177,7 +209,7 @@ func listSharedSkillsByFace(db *sql.DB, viewer string, granted []string, ownOnly
 			continue
 		}
 		if d.OwnedBy(viewer) || (r.Status == ReleaseStatusApproved && ok[r.AppID]) {
-			out = append(out, releaseToShared(r))
+			out = append(out, releaseToShared(r, channel))
 		}
 	}
 	return out, nil

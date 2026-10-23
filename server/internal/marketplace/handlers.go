@@ -40,14 +40,28 @@ type Handlers struct {
 	// （webadmin 预览弹层「文件过大 → 下载归档」，2026-09-23）。
 	DownloadSkillArchiveAdmin gin.HandlerFunc // GET /skills/:name/archive
 	DownloadAgentArchiveAdmin gin.HandlerFunc // GET /agents/:name/archive
-	NormalizeSkillAdmin       gin.HandlerFunc
-	UpdateSkillAdmin          gin.HandlerFunc
-	DeleteSkillAdmin          gin.HandlerFunc
-	EnableSkillAdmin          gin.HandlerFunc
-	ListSkillGrants           gin.HandlerFunc
-	ReplaceSkillGrants        gin.HandlerFunc
-	SetSkillGrant             gin.HandlerFunc
-	RemoveSkillGrant          gin.HandlerFunc
+	// ---- 待审版本审核面（2026-10-23）----
+	// 与组织共享库同形：`/shared-skills/:name/:version/{approve,reject,preview,archive,file}`
+	// 与 `/agent-presets/:name/:version/…`。市场此前没有审核入口 ⇒ 员工归属人提交的
+	// pending 版本永远卡住、投影永远停在旧版本（见 review.go 文件头）。
+	ApproveSkillVersionAdmin         gin.HandlerFunc // POST /skills/:name/:version/approve
+	RejectSkillVersionAdmin          gin.HandlerFunc // POST /skills/:name/:version/reject
+	PreviewSkillVersionAdmin         gin.HandlerFunc // GET  /skills/:name/:version/preview
+	DownloadSkillVersionArchiveAdmin gin.HandlerFunc // GET  /skills/:name/:version/archive
+	FileContentSkillVersionAdmin     gin.HandlerFunc // GET  /skills/:name/:version/file
+	ApproveAgentVersionAdmin         gin.HandlerFunc // POST /agents/:name/:version/approve
+	RejectAgentVersionAdmin          gin.HandlerFunc // POST /agents/:name/:version/reject
+	PreviewAgentVersionAdmin         gin.HandlerFunc // GET  /agents/:name/:version/preview
+	DownloadAgentVersionArchiveAdmin gin.HandlerFunc // GET  /agents/:name/:version/archive
+	FileContentAgentVersionAdmin     gin.HandlerFunc // GET  /agents/:name/:version/file
+	NormalizeSkillAdmin              gin.HandlerFunc
+	UpdateSkillAdmin                 gin.HandlerFunc
+	DeleteSkillAdmin                 gin.HandlerFunc
+	EnableSkillAdmin                 gin.HandlerFunc
+	ListSkillGrants                  gin.HandlerFunc
+	ReplaceSkillGrants               gin.HandlerFunc
+	SetSkillGrant                    gin.HandlerFunc
+	RemoveSkillGrant                 gin.HandlerFunc
 }
 
 // NewHandlers 返回技能商城 handler 集合(db + cacheDir 注入)。
@@ -76,13 +90,24 @@ func NewHandlers(db *sql.DB, cacheDir string) *Handlers {
 		FileContentSkillAdmin:     func(c *gin.Context) { fileContentSkillAdmin(c, db, cacheDir) },
 		DownloadSkillArchiveAdmin: func(c *gin.Context) { downloadSkillArchiveAdmin(c, db) },
 		DownloadAgentArchiveAdmin: func(c *gin.Context) { downloadAgentArchiveAdmin(c, db) },
-		NormalizeSkillAdmin:       func(c *gin.Context) { normalizeSkillAdmin(c, db, cacheDir) },
-		UpdateSkillAdmin:          func(c *gin.Context) { updateSkillAdmin(c, db, cacheDir) },
-		DeleteSkillAdmin:          func(c *gin.Context) { deleteSkillAdmin(c, db) },
-		EnableSkillAdmin:          func(c *gin.Context) { enableSkillAdmin(c, db) },
-		ListSkillGrants:           func(c *gin.Context) { listSkillGrants(c, db) },
-		ReplaceSkillGrants:        func(c *gin.Context) { replaceSkillGrants(c, db) },
-		SetSkillGrant:             func(c *gin.Context) { setSkillGrant(c, db, true) },
-		RemoveSkillGrant:          func(c *gin.Context) { setSkillGrant(c, db, false) },
+		// 待审版本审核面（2026-10-23）
+		ApproveSkillVersionAdmin:         func(c *gin.Context) { approveSkillVersionAdmin(c, db) },
+		RejectSkillVersionAdmin:          func(c *gin.Context) { rejectSkillVersionAdmin(c, db) },
+		PreviewSkillVersionAdmin:         func(c *gin.Context) { previewSkillVersionAdmin(c, db) },
+		DownloadSkillVersionArchiveAdmin: func(c *gin.Context) { downloadSkillVersionArchiveAdmin(c, db) },
+		FileContentSkillVersionAdmin:     func(c *gin.Context) { fileContentSkillVersionAdmin(c, db) },
+		ApproveAgentVersionAdmin:         func(c *gin.Context) { approveAgentVersionAdmin(c, db) },
+		RejectAgentVersionAdmin:          func(c *gin.Context) { rejectAgentVersionAdmin(c, db) },
+		PreviewAgentVersionAdmin:         func(c *gin.Context) { previewAgentVersionAdmin(c, db) },
+		DownloadAgentVersionArchiveAdmin: func(c *gin.Context) { downloadAgentVersionArchiveAdmin(c, db) },
+		FileContentAgentVersionAdmin:     func(c *gin.Context) { fileContentAgentVersionAdmin(c, db) },
+		NormalizeSkillAdmin:              func(c *gin.Context) { normalizeSkillAdmin(c, db, cacheDir) },
+		UpdateSkillAdmin:                 func(c *gin.Context) { updateSkillAdmin(c, db, cacheDir) },
+		DeleteSkillAdmin:                 func(c *gin.Context) { deleteSkillAdmin(c, db) },
+		EnableSkillAdmin:                 func(c *gin.Context) { enableSkillAdmin(c, db) },
+		ListSkillGrants:                  func(c *gin.Context) { listSkillGrants(c, db) },
+		ReplaceSkillGrants:               func(c *gin.Context) { replaceSkillGrants(c, db) },
+		SetSkillGrant:                    func(c *gin.Context) { setSkillGrant(c, db, true) },
+		RemoveSkillGrant:                 func(c *gin.Context) { setSkillGrant(c, db, false) },
 	}
 }

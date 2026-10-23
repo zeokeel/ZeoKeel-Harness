@@ -145,29 +145,6 @@ func parseTypeFilter(c *gin.Context) typeFilter {
 	}
 }
 
-// marketOwnedBy 回答"这个调用者是否拥有该 kind 的**任意**一个应用行"（任意渠道）。
-//
-// 它的唯一用途是给「我的」分区的**市场渠道**取数做前置闸门（2026-09-23 R6-D P2-2）：
-// 市场清单（`ListSkills(enabledOnly=false)` / `ListApps(kind, market)`）是 O(市场应用数)
-// 次查询，而绝大多数调用者一个应用都不拥有 —— 那种请求不该为一条空结果付这份代价。
-// 判据用 distribution 的具名方法（`OwnedBy`），不在这里判 `Owner == username`：
-// 归属语义的唯一实现是 serverstore/distribution.go 的 AppOwnedByOwner
-// （空 owner 不属于任何人）。
-//
-// 它**不是**第二个可见性判据：真正的行级过滤仍逐行用 `dist.OwnedBy` —— 这个函数只
-// 决定"要不要去查"，查错了（比如渠道判错）也只会让结果为空，不会漏掉或放大任何一行。
-func marketOwnedBy(dists serverstore.DistributionMap, viewer string) bool {
-	if viewer == "" {
-		return false
-	}
-	for _, d := range dists {
-		if d.OwnedBy(viewer) {
-			return true
-		}
-	}
-	return false
-}
-
 // appendSkill merges one marketplace skill into the catalog (authorized/enabled only).
 // isOwner 由调用方按 apps.owner 计算(市场适配层 Skill.Author == apps.owner)。
 //
@@ -232,6 +209,21 @@ func appendMarketAgent(out *[]CapabilityItem, a serverstore.App, versions map[st
 	})
 }
 
+// sourceOf 把 apps.channel 投影成能力中心的来源徽章（2026-10-23）。
+//
+// 为什么需要它：作者面（「我的」分区）自本轮起**渠道无关** —— 归属人自己的
+// org 行与 market 行由同一个取数口（ListOwnedSharedSkills / ListOwnedAgentPresets）
+// 一起返回。此前 appendSharedSkill / appendSharedAgent 把 Source 写死成
+// SourceOrg，市场渠道的待审行因此会被客户端显示成「组织」行（来源徽章、文案与
+// 审核预期全是错的）。空的/未知渠道按 org 收口：组织共享库是历史默认，market
+// 是唯一另一条渠道（apps.channel 只有这两个值）。
+func sourceOf(channel string) CapabilitySource {
+	if channel == serverstore.AppChannelMarket {
+		return SourceMarket
+	}
+	return SourceOrg
+}
+
 // appendSharedSkill merges one shared-skill row (already visibility-filtered
 // by the caller) with its quality tag and status.
 //
@@ -252,7 +244,7 @@ func appendSharedSkill(out *[]CapabilityItem, s serverstore.SharedSkill, version
 	versions[s.Name] = append(versions[s.Name], s.Version)
 	item := CapabilityItem{
 		Kind:        KindSkill,
-		Source:      SourceOrg,
+		Source:      sourceOf(s.Channel),
 		Name:        s.Name,
 		DisplayName: s.DisplayName,
 		Version:     s.Version,
@@ -275,7 +267,7 @@ func appendSharedAgent(out *[]CapabilityItem, p serverstore.AgentPreset, version
 	versions[p.Name] = append(versions[p.Name], p.Version)
 	*out = append(*out, CapabilityItem{
 		Kind:        KindAgent,
-		Source:      SourceOrg,
+		Source:      sourceOf(p.Channel),
 		Name:        p.Name,
 		DisplayName: p.DisplayName,
 		Version:     p.Version,
@@ -568,42 +560,16 @@ func listCapabilities(db *sql.DB, cacheDir string) gin.HandlerFunc {
 				}
 				appendSharedSkill(&items, s, versions, true, skillOfficials[s.Name], dist.Delisted())
 			}
-			// 市场渠道的归属行（2026-09-23 R6-D P2-2）：R5-B-1 的「下架 = 作者面仍
-			// 可见（带 delisted=true）」此前**只覆盖 org 渠道** —— 上面的
-			// ListOwnedSharedSkills 的 SQL 只认 channel='org'，而市场行在分发面
-			// 走 enabledOnly 过滤（read 侧 ListSkills(true)），下架后归属人的员工面
-			// market/org/own 三个视图同时为空：管控动作在作者面**没有任何反馈**，
-			// 而归属转移端点（PUT /apps/:kind/:app_id/owner）不限渠道、可把市场行
-			// 转给普通员工 ⇒ 归属人对市场行没有任何作者面。
+			// 市场渠道的归属行（R6-D P2-2，2026-10-23 收敛）：作者面此前靠这里单独查一次
+			// 市场清单（ListSkills(enabledOnly=false)）才看得到市场行，因为 ListOwnedSharedSkills
+			// 的取数只认 channel='org'。2026-10-23「已上架技能无法更新」修复把作者面统一定义为
+			// **channel 无关**：ListOwnedSharedSkills 现在返回 apps.owner == viewer 的任意渠道行
+			// （含 market 的 pending/rejected 与下架行），本分支因此不再需要市场专用取数块 ——
+			// 单一取数口 + 单一归属判据（Distribution.OwnedBy），不会再出现「两条取数路径对
+			// 同一行给出不同 source/author」的裂缝。可见面不扩大：只有归属人自己的名字进来。
 			//
-			// 判据与 org 分支**同构**：归属=apps.owner 的具名判据 OwnedBy（不在这里
-			// 写第二份表达式），作者面不看 Delivered()（下架只挡分发面），行里带
-			// delisted 标记。可见面不扩大：只有归属人自己的名字会进来，其他人的行
-			// 一行都不多（非归属人的分发面口径完全不变 —— 市场分支仍按 Delivered()）。
-			//
-			// 为什么用 ListSkills(enabledOnly=false)：它是市场技能的**唯一**清单入口
-			// （与分发面同一个 DAO/同一个投影，不在这里另写一份 appToSkill），
-			// enabledOnly=false 才拿得到下架行。代价是 O(市场应用数) 次查询，所以只在
-			// "调用者确实拥有该 kind 的某个应用行"时才跑（绝大多数请求因此零成本）。
-			if marketOwnedBy(skillDists, u.Username) {
-				marketSkills, merr := serverstore.ListSkills(db, false)
-				if merr != nil {
-					serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
-					return
-				}
-				for _, s := range marketSkills {
-					dist := skillDists.Of(s.Name)
-					if !dist.OwnedBy(u.Username) || !dist.AuthorVisible() {
-						continue
-					}
-					// 没有生效版本的行（占名但从未发布成功）不进目录 —— 与分发面
-					// 的"有生效版本"条件同口径（s.Version 由展示版本填，空 = 无）。
-					if s.Version == "" {
-						continue
-					}
-					appendSkill(&items, s, versions, true, skillOfficials[s.Name], dist.Delisted())
-				}
-			}
+			// appendSharedSkill 的 Source 按行渠道下发（market/org），否则市场待审行会被客户端
+			// 显示成「组织」行。
 		}
 
 		// 3) 组织·共享 Agent(审核+授权)。
@@ -658,33 +624,9 @@ func listCapabilities(db *sql.DB, cacheDir string) gin.HandlerFunc {
 				}
 				appendSharedAgent(&items, p, versions, true, agentOfficials[p.Name], dist.Delisted())
 			}
-			if marketOwnedBy(agentDists, u.Username) {
-				marketAgents, merr := serverstore.ListApps(db, serverstore.AppKindAgent, serverstore.AppChannelMarket)
-				if merr != nil {
-					serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
-					return
-				}
-				releases := map[string]serverstore.Release{}
-				for _, a := range marketAgents {
-					dist := agentDists.Of(a.AppID)
-					if !dist.OwnedBy(u.Username) || !dist.AuthorVisible() {
-						continue
-					}
-					// 与市场分发分支**同一处**取数（CurrentMarketReleaseFor 只认
-					// approved 且未软删的最高版本），只是这里的闸门是归属而不是
-					// Delivered —— 下架行正是要靠这一步才捞得回来。
-					r, rerr := serverstore.CurrentMarketReleaseFor(db, serverstore.AppKindAgent, a.AppID, false)
-					if rerr != nil {
-						serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
-						return
-					}
-					if r == nil {
-						continue
-					}
-					releases[a.AppID] = *r
-					appendMarketAgent(&items, a, versions, releases, true, dist.Delisted())
-				}
-			}
+			// 市场渠道的归属行同上（2026-10-23 收敛）：ListOwnedAgentPresets 现在同样返回任意
+			// 渠道的归属行，所以 3b 也不再有市场专用取数块。判据仍是 apps.owner + AuthorVisible，
+			// 下架只是不挡作者自查，不扩大任何人的可见面。
 		}
 
 		merged := mergeVersions(items, versions)
@@ -781,12 +723,19 @@ func sortVersions(vs []string) []string {
 
 // ApprovalRow is one pending/reviewable row in the unified admin queue.
 type ApprovalRow struct {
-	Kind        CapabilityKind `json:"kind"`
-	Name        string         `json:"name"`
-	Version     string         `json:"version"`
-	DisplayName string         `json:"display_name"`
-	Description string         `json:"description"`
-	Author      string         `json:"author"`
+	Kind CapabilityKind `json:"kind"`
+	// Channel 是这一行所属的 apps.channel（2026-10-23「已上架技能无法更新」修复）。
+	// 审批队列此前只有组织共享库的行（channel=org）；市场渠道的**待审版本**现在
+	// 也并进来（归属人在能力中心给已上架市场技能发新版本），管理端必须按行区分
+	// 来源：org 行的动作在 /shared-skills|/agent-presets，market 行在
+	// /skills|/agents，两者的破坏性动作集也不同（市场命名空间没有版本级删除/
+	// 质量/上下架端点）。缺省（旧服务端）读成 org，与历史行为一致。
+	Channel     string `json:"channel"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	DisplayName string `json:"display_name"`
+	Description string `json:"description"`
+	Author      string `json:"author"`
 	// Owner 是该 (kind, name) 的归属人(apps.owner,2026-09-02 归属权):
 	// 与 Author(本行上传者)可不同——管理员代发/归属转移后即分叉。
 	Owner     string `json:"owner"`
@@ -860,6 +809,7 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 				conflict := false
 				out = append(out, ApprovalRow{
 					Kind:        KindSkill,
+					Channel:     serverstore.AppChannelOrg,
 					Name:        s.Name,
 					Version:     s.Version,
 					DisplayName: s.DisplayName,
@@ -879,6 +829,57 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 					PreviewPath: "/api/server/admin/shared-skills/" + pathEscape(s.Name) + "/" + pathEscape(s.Version) + "/preview",
 					Conflict:    conflict,
 				})
+			}
+			// market 渠道的待审版本（2026-10-23「已上架技能无法更新」修复）：
+			// 市场语义从「管理端直发、员工不可动」变成「管理端直发 + 归属人可提交
+			// 待审」—— 归属人在能力中心给已上架的市场技能发新版本时，服务端会落一条
+			// pending 的 app_releases 行。这些行不属于组织共享库（sharedskills 的渠道
+			// 守卫对 market 行一律 404，agentshare 同理），所以审批队列必须自己把它们
+			// 并进来，并逐行下发**市场命名空间**的 base_path —— 管理端的通过/拒绝/
+			// 预览/归档/单文件全部按这个前缀拼 URL。
+			//
+			// 只并 pending：approved/rejected 的市场行属于市场页的口径（市场清单 +
+			// 质量/上下架），全量并进「已通过」页只会把整张市场表灌满。
+			if marketPendingIncluded(status) {
+				rows, err := serverstore.ListReleasesByStatus(db, serverstore.AppKindSkill, serverstore.ReleaseStatusPending)
+				if err != nil {
+					serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+					return
+				}
+				// 渠道的事实源是 apps 行（app_releases 没有渠道列）；查询失败必须
+				// 500 —— 吞掉后 map 为空，market 待审行会**从队列里静默消失**
+				// （与「真的没有待审」不可区分），管理端再也看不到员工的提交。
+				channels, err := serverstore.AppChannelMap(db, serverstore.AppKindSkill)
+				if err != nil {
+					serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+					return
+				}
+				for _, r := range rows {
+					if channels[r.AppID] != serverstore.AppChannelMarket {
+						continue
+					}
+					out = append(out, ApprovalRow{
+						Kind:        KindSkill,
+						Channel:     serverstore.AppChannelMarket,
+						Name:        r.AppID,
+						Version:     r.Version,
+						DisplayName: r.Title,
+						Description: r.Description,
+						Author:      r.Publisher,
+						Owner:       skillOwners[r.AppID],
+						Status:      string(r.Status),
+						Reason:      r.Reason,
+						Quality:     r.Quality,
+						CreatedAt:   r.CreatedAt.Format("2006-01-02 15:04:05"),
+						Downloads:   r.Downloads,
+						Calls:       r.Calls,
+						Official:    skillOfficials[r.AppID],
+						Enabled:     skillDists.Of(r.AppID).Enabled,
+						BasePath:    "/api/server/admin/skills/" + pathEscape(r.AppID) + "/" + pathEscape(r.Version),
+						GrantsBase:  "/api/server/admin/skills/" + pathEscape(r.AppID),
+						PreviewPath: "/api/server/admin/skills/" + pathEscape(r.AppID) + "/" + pathEscape(r.Version) + "/preview",
+					})
+				}
 			}
 		}
 		if ft.agents {
@@ -907,6 +908,7 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 			for _, p := range rows {
 				out = append(out, ApprovalRow{
 					Kind:        KindAgent,
+					Channel:     serverstore.AppChannelOrg,
 					Name:        p.Name,
 					Version:     p.Version,
 					DisplayName: p.DisplayName,
@@ -925,9 +927,55 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 					PreviewPath: "/api/server/admin/agent-presets/" + pathEscape(p.Name) + "/" + pathEscape(p.Version) + "/preview",
 				})
 			}
+			// market 渠道的待审智能体版本（与技能分支逐条同源，见上面的长注释）。
+			if marketPendingIncluded(status) {
+				rows, err := serverstore.ListReleasesByStatus(db, serverstore.AppKindAgent, serverstore.ReleaseStatusPending)
+				if err != nil {
+					serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+					return
+				}
+				channels, err := serverstore.AppChannelMap(db, serverstore.AppKindAgent)
+				if err != nil {
+					serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+					return
+				}
+				for _, r := range rows {
+					if channels[r.AppID] != serverstore.AppChannelMarket {
+						continue
+					}
+					out = append(out, ApprovalRow{
+						Kind:        KindAgent,
+						Channel:     serverstore.AppChannelMarket,
+						Name:        r.AppID,
+						Version:     r.Version,
+						DisplayName: r.Title,
+						Description: r.Description,
+						Author:      r.Publisher,
+						Owner:       agentOwners[r.AppID],
+						Status:      string(r.Status),
+						Reason:      r.Reason,
+						Quality:     r.Quality,
+						CreatedAt:   r.CreatedAt.Format("2006-01-02 15:04:05"),
+						Downloads:   r.Downloads,
+						Official:    agentOfficials[r.AppID],
+						Enabled:     agentDists.Of(r.AppID).Enabled,
+						BasePath:    "/api/server/admin/agents/" + pathEscape(r.AppID) + "/" + pathEscape(r.Version),
+						GrantsBase:  "/api/server/admin/agents/" + pathEscape(r.AppID),
+						PreviewPath: "/api/server/admin/agents/" + pathEscape(r.AppID) + "/" + pathEscape(r.Version) + "/preview",
+					})
+				}
+			}
 		}
 		c.JSON(http.StatusOK, gin.H{"approvals": out})
 	}
+}
+
+// marketPendingIncluded 回答「这张审批表要不要并入 market 渠道的待审行」
+// （2026-10-23）。只看 tab 语义：缺省/`pending` 与 `all` 并，`approved`/`rejected`
+// 不并 —— 市场渠道只有「归属人提交待审」这一种行需要管理端处理，它的已通过/
+// 已拒绝历史归市场页。
+func marketPendingIncluded(status string) bool {
+	return status == "pending" || status == "all"
 }
 
 // mungeStatus maps the queue's ?status= 语法到 serverstore 的过滤语义:

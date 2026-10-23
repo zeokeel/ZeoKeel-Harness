@@ -63,6 +63,29 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	serverauth.AdminRoute(g, "PUT", "/agents/:name/grants", serverauth.PermMarketWrite, func(c *gin.Context) { replaceAgentGrants(c, db) })
 	serverauth.AdminRoute(g, "PUT", "/agents/:name/grant", serverauth.PermMarketWrite, func(c *gin.Context) { applyAgentGrant(c, db, true) })
 	serverauth.AdminRoute(g, "DELETE", "/agents/:name/grant", serverauth.PermMarketWrite, func(c *gin.Context) { applyAgentGrant(c, db, false) })
+
+	// ---- 待审版本审核面（2026-10-23）----
+	//
+	// 与组织共享库同形：`/shared-skills/:name/:version/{approve,reject,preview,archive,file}`
+	// 与 `/agent-presets/:name/:version/…` —— 技能/智能体两个 kind 在这里是对偶的，
+	// 方法、路径形状、权限点逐条镜像（webadmin 的审核弹层复用同一个组件）。
+	//
+	// 权限点用 `capability:*`（与组织侧审核面同一族）：审核是对"平台内容"的裁决，
+	// 不是市场运营的日常写操作；`market:*` 仍覆盖市场行的上架/授权/元数据。
+	//
+	// 渠道守卫与版本存在性由 `requireMarketReleaseForReview`（review.go）统一负责：
+	// org 行与"该名字不存在"逐字节同形 404，绝不服务组织行。
+	serverauth.AdminRoute(g, "POST", "/skills/:name/:version/approve", serverauth.PermCapabilityWrite, func(c *gin.Context) { approveSkillVersionAdmin(c, db) })
+	serverauth.AdminRoute(g, "POST", "/skills/:name/:version/reject", serverauth.PermCapabilityWrite, func(c *gin.Context) { rejectSkillVersionAdmin(c, db) })
+	serverauth.AdminRoute(g, "GET", "/skills/:name/:version/preview", serverauth.PermCapabilityRead, func(c *gin.Context) { previewSkillVersionAdmin(c, db) })
+	serverauth.AdminRoute(g, "GET", "/skills/:name/:version/archive", serverauth.PermCapabilityRead, func(c *gin.Context) { downloadSkillVersionArchiveAdmin(c, db) })
+	serverauth.AdminRoute(g, "GET", "/skills/:name/:version/file", serverauth.PermCapabilityRead, func(c *gin.Context) { fileContentSkillVersionAdmin(c, db) })
+	serverauth.AdminRoute(g, "POST", "/agents/:name/:version/approve", serverauth.PermCapabilityWrite, func(c *gin.Context) { approveAgentVersionAdmin(c, db) })
+	serverauth.AdminRoute(g, "POST", "/agents/:name/:version/reject", serverauth.PermCapabilityWrite, func(c *gin.Context) { rejectAgentVersionAdmin(c, db) })
+	serverauth.AdminRoute(g, "GET", "/agents/:name/:version/preview", serverauth.PermCapabilityRead, func(c *gin.Context) { previewAgentVersionAdmin(c, db) })
+	serverauth.AdminRoute(g, "GET", "/agents/:name/:version/archive", serverauth.PermCapabilityRead, func(c *gin.Context) { downloadAgentVersionArchiveAdmin(c, db) })
+	serverauth.AdminRoute(g, "GET", "/agents/:name/:version/file", serverauth.PermCapabilityRead, func(c *gin.Context) { fileContentAgentVersionAdmin(c, db) })
+
 }
 
 // grantReq carries a subject: {username} or {group} (webadmin sends @group).
@@ -533,15 +556,8 @@ func previewSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", msg)
 		return
 	}
-	files, content, lerr := sharedskills.ListArchiveContents(raw)
-	if lerr != nil {
-		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "归档解析失败")
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"files": files, "skill_md": content,
-		"name": s.Name, "version": s.Version, "checksum": s.Checksum,
-	})
+	// 响应体构造与版本级审核预览**共用一份**（review.go 的 writeSkillArchivePreview）。
+	writeSkillArchivePreview(c, s.Name, s.Version, s.Checksum, raw)
 }
 
 // downloadSkillArchiveAdmin 管理面下载市场技能的归档（2026-09-23）。
@@ -586,14 +602,9 @@ func fileContentSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "技能名不合法")
 		return
 	}
-	target := c.Query("path")
-	if target == "" {
-		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "缺少文件路径")
-		return
-	}
-	norm, nerr := archiveutil.NormalizePath(target)
-	if nerr != nil || norm == "" {
-		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "文件路径不合法")
+	// ?path 的规范化与版本级端点共用（review.go 的 archiveFilePathParam）。
+	norm, ok := archiveFilePathParam(c)
+	if !ok {
 		return
 	}
 	s, err := serverstore.GetSkill(db, name)
@@ -610,18 +621,8 @@ func fileContentSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", msg)
 		return
 	}
-	content, size, found, binary, tooLarge, xerr := archiveutil.ExtractFileContent(raw, norm, maxFilePreviewBytes)
-	if xerr != nil {
-		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "归档解析失败")
-		return
-	}
-	if !found {
-		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "归档中不存在该文件")
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"path": norm, "size": size, "binary": binary, "too_large": tooLarge, "content": content,
-	})
+	// 逐文件响应与版本级端点共用（review.go 的 writeSkillArchiveFileContent）。
+	writeSkillArchiveFileContent(c, raw, norm)
 }
 
 // normalizeSkillAdmin 一键规范化:把一个不合规的存量技能包改写成符合发布

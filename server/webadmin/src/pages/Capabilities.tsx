@@ -44,6 +44,26 @@ interface ApprovalRow {
   conflict?: boolean
   /** 上下架状态（App 级，2026-09-15；智能体行 2026-09-17 起同样下发）。 */
   enabled?: boolean
+  /**
+   * 来源渠道（2026-10-23，服务端 `GET /capabilities/approvals` 新增下发）。
+   *
+   *   - `market`：市场直上架内容的新版本 —— 归属人员在客户端上传后**恒为 pending**，
+   *     此前该队列只读 org 渠道 ⇒ 市场待审版本没有任何审核面，已上架内容永远停在
+   *     首版（「已上架技能无法更新」的第三处根因）。
+   *   - `org`：组织共享库（员工上传、审批通过）的行，行为完全保持原样。
+   *
+   * **缺省按 org 处理**（见 {@link channelOf}）：旧服务端不下发该字段时队列里本来
+   * 只有 org 行，"缺省 org" 等价于按既有行为渲染；反过来缺省成 market 会把整张表
+   * 裁掉删除/上下架/授权入口（管理员突然失去一半动作面）。
+   */
+  channel?: 'market' | 'org'
+}
+
+type ApprovalChannel = NonNullable<ApprovalRow['channel']>
+
+/** 行的来源渠道（缺省 = org，理由见 {@link ApprovalRow.channel}）。 */
+function channelOf(row: { channel?: ApprovalChannel }): ApprovalChannel {
+  return row.channel === 'market' ? 'market' : 'org'
 }
 
 interface Dept {
@@ -84,6 +104,26 @@ function fmtTime(iso: string): string {
  */
 export const DELISTED_PENDING_HINT =
   '该应用已下架：下架期间「通过」会被服务端拒绝（409 APP_DELISTED）。请先到「已通过」页对该应用「上架」。'
+
+/**
+ * market 行「已下架 + 待审」的同一条事前说明（2026-10-23）。
+ *
+ * 服务端的下架冻结在**发布内核**里（`serverstore.ReviewPending` 的 `ErrAppDelisted`），
+ * 与渠道无关 ⇒ market 待审版本的「通过」同样必然 409。差别只在**处置路径**：
+ * 市场行没有本页的上下架入口（上下架在市场页），所以指向「市场」页重新上架。
+ */
+export const DELISTED_PENDING_MARKET_HINT =
+  '该市场应用已下架：下架期间「通过」会被服务端拒绝（409 APP_DELISTED）。请先到「市场」页对该应用「重新上架」。'
+
+/**
+ * market 待审行的**影响面说明**（2026-10-23）。
+ *
+ * 组织行通过 = 该版本对该技能的授权用户可见；市场行通过 = **替换分发版本**，
+ * 同样立即对全部授权用户生效（不是只有上传者）。管理员点「通过」之前必须知道
+ * 这一下影响的是谁 —— 这是本页对 market 行唯一新加的一行文案。
+ */
+export const MARKET_PENDING_HINT = (kind: ApprovalRow['kind']): string =>
+  `市场${KIND_META[kind].label}待审版本：通过后对该${KIND_META[kind].label}的全部授权用户生效`
 
 /**
  * 锁定管理(决策 2026-09-01 D4):被锁定的技能/智能体只能由管理员发布,
@@ -267,7 +307,7 @@ export default function Capabilities() {
     <div className="space-y-4">
       <PageHeader
         title="审批"
-        desc="员工上传的技能/智能体统一审批队列:通过→授权可见;官方归属与锁定管理在对应市场页"
+        desc="技能/智能体的新版本统一审批队列(组织共享 + 市场):通过→授权可见;官方归属与锁定管理在对应市场页"
       />
       {/* 状态 tab + 类型筛选 */}
       <div className="flex items-center justify-between gap-2">
@@ -310,6 +350,7 @@ export default function Capabilities() {
             <TableHeader>
               <TableRow>
                 <TableHead>类型</TableHead>
+                <TableHead>来源</TableHead>
                 <TableHead>名称 / 标题</TableHead>
                 <TableHead>版本</TableHead>
                 <TableHead>作者</TableHead>
@@ -326,6 +367,12 @@ export default function Capabilities() {
                 const meta = STATUS_META[row.status]
                 const kindMeta = KIND_META[row.kind]
                 const KindIcon = kindMeta.icon
+                // 来源渠道:market 行**恒为 pending**(市场直上架内容的新版本),
+                // 且市场命名空间没有 删除/质量/版本级上下架/授权 端点 ⇒ 这些入口
+                // 不渲染(渲染出来点下去必然 404);通过/拒绝/预览/下载归档/转移归属
+                // 走服务端下发的 base_path,两渠道同形。
+                const channel = channelOf(row)
+                const isMarket = channel === 'market'
                 // 行内**任一**操作在途都要置灰并拦住重复点击。此前漏了 'enabled'
                 // （上下架的键，见 setEnabled）⇒ 管理员在"下架"在途时点"重新上架"会被
                 // `if (busy) return` 静默吞掉、按钮也不置灰，零反馈（2026-09-17 独立审计）。
@@ -340,6 +387,9 @@ export default function Capabilities() {
                       <Badge variant="outline"><KindIcon className="mr-1 h-3 w-3" />{kindMeta.label}</Badge>
                     </TableCell>
                     <TableCell>
+                      <Badge variant="secondary">{isMarket ? '市场' : '组织'}</Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="whitespace-nowrap font-medium">
                         {row.display_name || row.name}
                         {row.conflict && (
@@ -349,6 +399,14 @@ export default function Capabilities() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">{row.name}</div>
+                      {/* market 待审行的影响面说明(仅 market):组织行通过 = 该版本对
+                          授权用户可见,市场行通过 = **替换分发版本**,同样对全部授权
+                          用户生效。 */}
+                      {isMarket && row.status === 'pending' && (
+                        <div className="mt-1 max-w-[16rem] whitespace-normal text-[11px] leading-relaxed text-muted-foreground" data-role="market-pending-hint">
+                          {MARKET_PENDING_HINT(row.kind)}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">{row.version}</TableCell>
                     <TableCell>{row.author}</TableCell>
@@ -365,7 +423,9 @@ export default function Capabilities() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {row.status === 'approved' ? (
+                      {/* 质量标记只有组织命名空间有版本级端点(`PUT …/:version/quality`)⇒
+                          market 行不渲染 Select(市场行的精选/官方在市场页的 App 级入口)。 */}
+                      {row.status === 'approved' && !isMarket ? (
                         <Select
                           value={row.quality || 'none'}
                           onValueChange={(v) => { void setQuality(row, v === 'none' ? '' : 'featured') }}
@@ -402,12 +462,16 @@ export default function Capabilities() {
                           title="转移归属(负责人)" aria-label="转移归属(负责人)">
                           <UserCog className="h-4 w-4" />
                         </Button>
-                        {row.status === 'approved' && (
+                        {/* 以下四个动作**只有组织命名空间有端点**(授权 / 上下架 /
+                            质量 / 删除),market 行一律不渲染 —— 渲染出来点下去必然 404。
+                            市场行的上下架/删除在市场页(`/skills|agents/:name[/version]`),
+                            本页只承担"审"。 */}
+                        {!isMarket && row.status === 'approved' && (
                           <Button size="sm" variant="outline" disabled={isBusy} onClick={() => { setGrantName(row.name); setGrantBase(row.grants_base) }} title="授权" aria-label="授权">
                             <ShieldCheck className="h-4 w-4" />
                           </Button>
                         )}
-                        {row.status === 'approved' && (
+                        {!isMarket && row.status === 'approved' && (
                           row.enabled === false ? (
                             <Button size="sm" variant="outline" disabled={isBusy}
                               onClick={() => { void setEnabled(row, true) }}
@@ -425,8 +489,11 @@ export default function Capabilities() {
                         {row.status !== 'approved' && (
                           // 已下架的待审行：「通过」置灰（点下去必然 409 APP_DELISTED），
                           // 说明挂在**外层 span** 上 —— 禁用按钮不派发鼠标事件，浏览器
-                          // 不会显示它自己的 title（R6-B P2）。
-                          <span title={row.enabled === false ? DELISTED_PENDING_HINT : undefined}>
+                          // 不会显示它自己的 title（R6-B P2）。市场行的修复入口在
+                          // 「市场」页（本页不渲染上下架），故文案按渠道分支。
+                          <span title={row.enabled === false
+                            ? (isMarket ? DELISTED_PENDING_MARKET_HINT : DELISTED_PENDING_HINT)
+                            : undefined}>
                             <Button size="sm" disabled={isBusy || row.enabled === false}
                               onClick={() => { setConfirm(row); setConfirmKind('approve') }}>通过</Button>
                           </span>
@@ -435,11 +502,14 @@ export default function Capabilities() {
                             「释放归档字节」是同一条 UPDATE,对**已通过且在服务中**
                             的版本执行它会不可恢复地销毁归档(该版本对全员 404、版本号
                             烧毁)。要停服务用「下架」(可逆)。服务端在 DAO 层同样拒绝
-                            并回 409 APPROVED_NOT_REJECTABLE,这里只是不让入口出现。 */}
+                            并回 409 APPROVED_NOT_REJECTABLE,这里只是不让入口出现。
+                            市场待审版本**也**必须能拒绝,否则坏版本只能靠通过来清场。 */}
                         {row.status === 'pending' && (
                           <Button size="sm" variant="outline" disabled={isBusy} onClick={() => { setReason(''); setConfirm(row); setConfirmKind('reject') }}>拒绝</Button>
                         )}
-                        <Button size="sm" variant="destructive" disabled={isBusy} onClick={() => { setConfirm(row); setConfirmKind('delete') }}>删除</Button>
+                        {!isMarket && (
+                          <Button size="sm" variant="destructive" disabled={isBusy} onClick={() => { setConfirm(row); setConfirmKind('delete') }}>删除</Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -472,7 +542,11 @@ export default function Capabilities() {
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {confirmKind === 'approve' && '通过后该版本将按授权可见可安装。'}
+            {confirmKind === 'approve' && (confirm && channelOf(confirm) === 'market'
+              // market 行的通过 = **替换分发版本**(不是新增一个可见版本),影响面是
+              // 该应用的全部授权用户;本页不渲染市场行的上下架/删除(那些在市场页)。
+              ? '通过后该版本立即替换市场分发版本，对该应用的全部授权用户生效。'
+              : '通过后该版本将按授权可见可安装。')}
             {confirmKind === 'reject' && '拒绝后仅上传者可见；该版本的归档字节会被释放且不可恢复。如需停止服务请改用「下架」（可恢复）。请填写理由，上传者可见。'}
             {confirmKind === 'delete' && '删除后记录与归档将被移除,不可恢复。'}
           </p>

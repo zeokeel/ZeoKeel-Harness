@@ -259,6 +259,29 @@ var marketAgentRoutePolicy = map[string]agentRouteChannelRule{
 		Policy: policyMarketOnlyByGuard,
 		Why:    "applyAgentGrant(grant=false)：A-8 补守卫（**写**面：此前可撤销 org 行的授权）",
 	},
+	// 待审版本审核面（2026-10-23）：4 个逐版本端点 + 1 个逐版本下载，落地即带守卫。
+	// 与技能侧的 `/skills/:name/:version/*` 是同一条边界（那一侧靠
+	// `requireMarketAdminApp` 显式守卫；技能 API 没有清单，故不在本表）。
+	"POST /api/server/admin/agents/:name/:version/approve": {
+		Policy: policyMarketOnlyByGuard,
+		Why:    "approveAgentVersionAdmin：审批准入必须只裁决市场行（org 行由 agentshare 审核）",
+	},
+	"POST /api/server/admin/agents/:name/:version/reject": {
+		Policy: policyMarketOnlyByGuard,
+		Why:    "rejectAgentVersionAdmin：拒绝会释放归档字节，绝不能对 org 行生效",
+	},
+	"GET /api/server/admin/agents/:name/:version/preview": {
+		Policy: policyMarketOnlyByGuard,
+		Why:    "previewAgentVersionAdmin：逐版本预览（内容读取面，不得跨渠道）",
+	},
+	"GET /api/server/admin/agents/:name/:version/archive": {
+		Policy: policyMarketOnlyByGuard,
+		Why:    "downloadAgentVersionArchiveAdmin：逐版本归档下载（二进制面，不得跨渠道）",
+	},
+	"GET /api/server/admin/agents/:name/:version/file": {
+		Policy: policyMarketOnlyByGuard,
+		Why:    "fileContentAgentVersionAdmin：逐版本逐文件读取（不得跨渠道）",
+	},
 }
 
 // ruleViolations 是单条清单条目的自洽判据（依据非空、口径与路由形状相符）。

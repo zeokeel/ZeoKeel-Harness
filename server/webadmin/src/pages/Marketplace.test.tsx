@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import Marketplace from './Marketplace'
+import Marketplace, { DELISTED_UPLOAD_HINT } from './Marketplace'
 import { request } from '../api'
 
 const mockRequest = vi.mocked(request)
@@ -378,21 +378,62 @@ describe('Marketplace 商城页 · org 行按 channel 走共享命名空间', ()
     expect(mockRequest).not.toHaveBeenCalledWith('/api/server/admin/skills/retired-org/enable', expect.objectContaining({ method: 'POST' }))
   })
 
-  it('服务端没有的端点(编辑/上传新版/规范化)对 org 行禁用并给文案,市场行仍可点', async () => {
+  it('服务端没有的端点(编辑/规范化)对 org 行禁用并给文案;上传新版已放开(2026-10-23)', async () => {
     render(<Marketplace />)
     await screen.findByText('codeql')
     const org = within(orgCard('codeql'))
-    for (const name of ['编辑', '上传新版', '规范化']) {
+    for (const name of ['编辑', '规范化']) {
       const btn = org.getByRole('button', { name })
       expect(btn, `org 行的「${name}」必须禁用(服务端无该端点)`).toBeDisabled()
       expect(btn.getAttribute('title')).toBeTruthy()
     }
+    // 组织行「上传新版」：服务端新增 POST /shared-skills/:name/archive（管理员代传
+    // 组织共享技能的新版本，AdminPublish ⇒ 发布即已审核）。修订前这里被禁用，
+    // 是「已上架技能无法更新」的根因之一。
+    expect(org.getByRole('button', { name: '上传新版' })).toBeEnabled()
     expect(orgCard('codeql').textContent).toContain('组织共享技能')
     // 市场行不受影响。
     const market = within(orgCard('data-extract'))
     expect(market.getByRole('button', { name: '编辑' })).toBeEnabled()
     expect(market.getByRole('button', { name: '上传新版' })).toBeEnabled()
     expect(market.getByRole('button', { name: '规范化' })).toBeEnabled()
+  })
+
+  it('org 行上传新版打 /shared-skills/:name/archive，body 只有 archive（版本以包内为准）', async () => {
+    render(<Marketplace />)
+    await screen.findByText('codeql')
+    fireEvent.click(within(orgCard('codeql')).getByRole('button', { name: '上传新版' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    // 服务端组织上传端点用 strictBindJSON 收口（拒未知字段）且版本以包内 SKILL.md
+    // 为准 ⇒ 不渲染版本输入、body 不带 version 键。
+    expect(dialog.queryByLabelText('版本')).toBeNull()
+    expect(dialog.getByText(/版本以包内 SKILL\.md 的 version 为准/)).toBeInTheDocument()
+    const file = new File(['x'], 'skill.zip', { type: 'application/zip' })
+    const input = document.querySelector('input[type="file"]')!
+    Object.defineProperty(input, 'files', { value: [file], configurable: true })
+    fireEvent.change(input)
+    fireEvent.click(dialog.getByRole('button', { name: '上传' }))
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        `${ORG_ROOT}/codeql/archive`,
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ archive: 'eA==' }) }),
+      )
+    })
+    // 绝不回落市场命名空间（org 行打 /skills/:name/archive 必 404）。
+    expect(mockRequest).not.toHaveBeenCalledWith(
+      '/api/server/admin/skills/codeql/archive',
+      expect.anything(),
+    )
+  })
+
+  it('下架的 org 行同样禁用上传新版（发布内核的下架冻结没有渠道例外）', async () => {
+    render(<Marketplace />)
+    await screen.findByText('retired-org')
+    // `appstore.Publish` 的下架冻结对所有渠道生效（含 AdminPublish）⇒ 组织行下架时
+    // 代传新版本一样 409 APP_DELISTED；同一句"先重新上架"就是它旁边的按钮。
+    const btn = within(orgCard('retired-org')).getByRole('button', { name: '上传新版' })
+    expect(btn).toBeDisabled()
+    expect(btn.getAttribute('title')).toBe(DELISTED_UPLOAD_HINT)
   })
 
   it('归属显示与转移预填用 apps.owner(不是本行上传者 author)', async () => {
@@ -409,4 +450,29 @@ describe('Marketplace 商城页 · org 行按 channel 走共享命名空间', ()
     const marker = await screen.findByText('当前归属')
     expect(marker.closest('[role="option"]')?.textContent).toContain('alice')
   })
+})
+
+// ---------------------------------------------------------------------------
+// 下架态的市场行:上传新版必被服务端 409 拒(2026-10-23)
+//
+// 修订前页面把入口留着,管理员点「上传」→ 选包 → 点提交之后才拿到 409,文案还写着
+// 「请先联系管理员重新上架」——管理员看自己这句话毫无可操作性。现在事前禁用,
+// 并把动作顺序(先重新上架、再传新版)写在按钮/外层 span 的 title 上。
+// ---------------------------------------------------------------------------
+describe('Marketplace 商城页 · 下架行不提供必然失败的上传入口', () => {
+  it('market 行 enabled=false ⇒「上传新版」禁用且 title 说明原因', async () => {
+    render(<Marketplace />)
+    await screen.findByText('legacy')
+    const legacyBtn = within(orgCard('legacy')).getByRole('button', { name: '上传新版' })
+    expect(legacyBtn).toBeDisabled()
+    expect(legacyBtn.getAttribute('title')).toBe(DELISTED_UPLOAD_HINT)
+    expect(DELISTED_UPLOAD_HINT).toContain('已下架')
+    expect(DELISTED_UPLOAD_HINT).toContain('重新上架')
+    // 说明也挂在禁用按钮的外层 span 上（浏览器不为禁用控件显示自身 title）⇒
+    // 按钮与其外层 span 都带这条 title，两处都必须存在（getAllByTitle 撞两个即证明）。
+    expect(within(orgCard('legacy')).getAllByTitle(DELISTED_UPLOAD_HINT)).toHaveLength(2)
+    // 同页里已上架的市场行照旧可点。
+    expect(within(orgCard('data-extract')).getByRole('button', { name: '上传新版' })).toBeEnabled()
+  })
+
 })

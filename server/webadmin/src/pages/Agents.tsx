@@ -51,17 +51,27 @@ function initOf(req: { method: string; body?: string }): RequestInit {
 }
 
 /**
- * 组织共享行(员工上传、审批通过)在本页的**能力边界**:管理端只有
- * 预览/授权/上下架/归属;新版本只能由员工重新上传。服务端在组织命名空间下
- * 确实没有 元数据编辑 / 上传新版 端点(上传入口在员工面
- * `POST /api/client/v2/agent-presets`),这两个入口对 org 行禁用并说明原因
- * —— 不留必然 404 的入口,也不回落到市场命名空间。
+ * 组织共享行(员工上传、审批通过)在本页的**能力边界**。
+ *
+ * 2026-10-23 起组织行**也能「上传新版」**:服务端新增
+ * `POST /agent-presets/:name/archive`(管理员代传组织共享智能体的新版本,
+ * `AdminPublish` ⇒ 发布即已审核)。修订前这里写「新版本由员工重新上传」
+ * 并禁用了入口 —— 与市场技能页同源的那处「已上架内容无法更新」。
+ * 仍只有市场命名空间的:元数据编辑(组织内容的描述随员工上传的归档)。
  */
 const ORG_LIMITS = {
-  hint: '组织共享智能体:内容由员工上传,管理端只能预览/授权/上下架/归属;新版本由员工重新上传后走审批。',
+  hint: '组织共享智能体:内容由员工上传,管理端可预览/授权/上下架/归属,也可代传新版本(发布即已通过审核)。',
   edit: '组织共享智能体的描述随员工上传的归档,管理端不提供元数据编辑',
-  upload: '组织共享智能体的新版本由员工重新上传(审批通过后生效)',
 } as const
+
+/**
+ * 已下架的行「上传新版」不给入口(发布内核在下架态拒收新归档,409 `APP_DELISTED`,
+ * **没有角色/渠道例外**)。与 `Marketplace.tsx` 同一条口径(同一类"点完才吃 409" 的假入口)。
+ */
+export const DELISTED_UPLOAD_HINT = '已下架:请先重新上架再上传新版本'
+
+/** 端点表给不出上传入口时的兜底文案。 */
+const UPLOAD_UNAVAILABLE = '该来源暂不支持在管理端上传新版本'
 
 /** 该行是否来自组织共享库(渠道决定命名空间)。 */
 function isOrg(row: { channel?: 'market' | 'org' }): boolean {
@@ -189,14 +199,18 @@ export default function Agents() {
     if (!uploadAgent || uploadBusy) return
     setUploadErr('')
     if (!uploadFile) { setUploadErr('请选择归档包(.zip 或 .tar.gz,含 agent.cordis.yml + preset.yml)'); return }
-    // 组织共享行没有管理端续传端点(新版本由员工重新上传)⇒ 入口已禁用,这里兜底。
+    // 上传新版**两个渠道都有**(2026-10-23):市场 `/agents/:name/archive`、
+    // 组织 `/agent-presets/:name/archive`。已下架时发布内核一律拒收(409)⇒ 事前拦住。
     const req = agentRequest('uploadVersion', uploadAgent)
-    if (req === null) { setUploadErr(ORG_LIMITS.upload); return }
+    if (req === null) { setUploadErr(UPLOAD_UNAVAILABLE); return }
+    if (uploadAgent.enabled === false) { setUploadErr(DELISTED_UPLOAD_HINT); return }
     setUploadBusy(true)
     try {
       const archive = await toBase64(uploadFile)
+      // 组织行的版本以包内 preset.yml 为准(服务端不接受外部 version 字段);
+      // 市场行保留"填了就带上"的既有兼容形态。
       const body: Record<string, string> = { archive }
-      if (uploadVersion.trim() !== '') body.version = uploadVersion.trim()
+      if (!isOrg(uploadAgent) && uploadVersion.trim() !== '') body.version = uploadVersion.trim()
       await request(req.url, { method: req.method, body: JSON.stringify(body) })
       setUploadAgent(null)
       setUploadVersion('')
@@ -326,8 +340,9 @@ export default function Agents() {
                     {a.quality && a.quality !== '' && <Badge variant="secondary" className="px-1 py-0 text-[10px]">{a.quality}</Badge>}
                     <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />下载 {a.downloads ?? 0}</span>
                   </div>
-                  {/* 组织共享行没有 元数据编辑 / 上传新版 端点(服务端确实不存在)⇒
-                      这两个入口对该行禁用并说明原因,绝不回落市场命名空间(必然 404)。 */}
+                  {/* 组织共享行仍没有 元数据编辑 端点(服务端确实不存在)⇒ 该入口对
+                      org 行禁用并说明原因,绝不回落市场命名空间(必然 404)。
+                      「上传新版」2026-10-23 起两渠道都有(org 走 /agent-presets/:name/archive)。 */}
                   {isOrg(a) && (
                     <p className="mt-3 text-[11px] leading-relaxed text-slate-500">{ORG_LIMITS.hint}</p>
                   )}
@@ -336,6 +351,9 @@ export default function Agents() {
                       const previewReq = agentRequest('preview', a)
                       const editReq = agentRequest('updateMeta', a)
                       const uploadReq = agentRequest('uploadVersion', a)
+                      // 已下架 ⇒ 上传新版必被发布内核拒(无渠道例外);reason 挂外层 span
+                      // (禁用按钮不派发鼠标事件,浏览器不显示它自己的 title)。
+                      const uploadBlocked = a.enabled === false
                       return (
                         <>
                           <Button
@@ -344,12 +362,14 @@ export default function Agents() {
                             title={previewReq === null ? ORG_LIMITS.hint : undefined}
                             onClick={() => void openPreview(a)}
                           >预览</Button>
-                          <Button
-                            variant="outline"
-                            disabled={busy !== null || uploadReq === null}
-                            title={uploadReq === null ? ORG_LIMITS.upload : undefined}
-                            onClick={() => { setUploadAgent(a); setUploadVersion(''); setUploadFile(null); setUploadErr('') }}
-                          >上传新版</Button>
+                          <span title={uploadBlocked ? DELISTED_UPLOAD_HINT : undefined}>
+                            <Button
+                              variant="outline"
+                              disabled={busy !== null || uploadReq === null || uploadBlocked}
+                              title={uploadBlocked ? DELISTED_UPLOAD_HINT : uploadReq === null ? UPLOAD_UNAVAILABLE : undefined}
+                              onClick={() => { setUploadAgent(a); setUploadVersion(''); setUploadFile(null); setUploadErr('') }}
+                            >上传新版</Button>
+                          </span>
                           <Button
                             variant="outline"
                             disabled={editReq === null}
@@ -404,7 +424,11 @@ export default function Agents() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>上传新版 · {uploadAgent?.name}</DialogTitle>
-            <DialogDescription>归档包要求顶层 agent.cordis.yml + preset.yml(版本必须高于当前最高版本;版本号以包内 preset.yml 为准,此处可留空)</DialogDescription>
+            <DialogDescription>
+              {uploadAgent?.channel === 'org'
+                ? '组织共享智能体:归档包要求顶层 agent.cordis.yml + preset.yml;版本以包内 preset.yml 为准,管理员代传即发布(已通过审核)'
+                : '归档包要求顶层 agent.cordis.yml + preset.yml(版本必须高于当前最高版本;版本号以包内 preset.yml 为准,此处可留空)'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
@@ -412,10 +436,16 @@ export default function Agents() {
               <input type="file" accept=".zip,.tar.gz,.gz" className="block w-full text-sm"
                 onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="agent-upload-version">版本(可选,与 preset.yml 一致时填写)</Label>
-              <Input id="agent-upload-version" value={uploadVersion} onChange={(e) => setUploadVersion(e.target.value)} placeholder="如 1.1.0" />
-            </div>
+            {/* 组织行的版本来自包内 preset.yml(服务端不接受外部 version 字段)⇒
+                不渲染版本输入,免得出现"填了但不生效"的假入口。 */}
+            {uploadAgent?.channel === 'org' ? (
+              <p className="text-xs text-muted-foreground">版本以包内 preset.yml 为准,此处无需填写;上传即对该智能体的授权用户生效。</p>
+            ) : (
+              <div className="space-y-1">
+                <Label htmlFor="agent-upload-version">版本(可选,与 preset.yml 一致时填写)</Label>
+                <Input id="agent-upload-version" value={uploadVersion} onChange={(e) => setUploadVersion(e.target.value)} placeholder="如 1.1.0" />
+              </div>
+            )}
             {uploadErr && <div className="text-sm text-destructive">{uploadErr}</div>}
             <Button className="w-full" disabled={uploadBusy} onClick={() => { void upload() }}>{uploadBusy ? '发布中…' : '发布'}</Button>
           </div>

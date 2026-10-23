@@ -56,8 +56,20 @@ export async function captureScreenshot(
   return `data:image/jpeg;base64,${buffer.toString('base64')}`
 }
 
+/** Output cap for one screenshot (2026-10-23 C12/B5). */
+export const SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024
+
+/** Optional capture shape (full page / clip / format). */
+export interface ScreenshotOptions {
+  fullPage?: boolean
+  clip?: { x: number; y: number, width: number, height: number }
+  format?: 'jpeg' | 'png'
+  quality?: number
+}
+
 /** `Page.getLayoutMetrics` subset this module reads. */
-interface LayoutMetrics {
+export interface LayoutMetrics {
+  contentSize?: { x?: number, y?: number, width?: number, height?: number }
   cssLayoutViewport?: { clientWidth?: number; clientHeight?: number }
 }
 
@@ -86,24 +98,43 @@ export async function captureScreenshotViaCdp(
   send: CdpSend,
   maxWidth = SCREENSHOT_MAX_WIDTH,
   quality = SCREENSHOT_QUALITY,
+  options: ScreenshotOptions = {},
 ): Promise<string> {
   const metrics = await send<LayoutMetrics>('Page.getLayoutMetrics')
   const viewport = metrics?.cssLayoutViewport
+  const content = metrics?.contentSize
   const width = typeof viewport?.clientWidth === 'number' ? viewport.clientWidth : 0
   const height = typeof viewport?.clientHeight === 'number' ? viewport.clientHeight : 0
   const boundedWidth = Math.max(1, maxWidth)
-  const params: Record<string, unknown> = {
-    format: 'jpeg',
-    quality: clampQuality(quality),
-    fromSurface: false,
-  }
-  if (width > boundedWidth && height > 0) {
-    params.clip = { x: 0, y: 0, width, height, scale: Math.max(SCREENSHOT_MIN_SCALE, boundedWidth / width) }
+  const format = options.format === 'png' ? 'png' : 'jpeg'
+  const qualityValue = clampQuality(options.quality ?? quality)
+  const params: Record<string, unknown> = { format, fromSurface: false }
+  if (format === 'jpeg') params['quality'] = qualityValue
+  const targetWidth = options.clip?.width ?? (options.fullPage === true
+    ? (typeof content?.width === 'number' && content.width > 0 ? content.width : width)
+    : width)
+  const targetHeight = options.clip?.height ?? (options.fullPage === true
+    ? (typeof content?.height === 'number' && content.height > 0 ? content.height : height)
+    : height)
+  if (options.clip !== undefined) {
+    // Clamp the clip into the content box (a page can report nonsense sizes).
+    const contentWidth = typeof content?.width === 'number' && content.width > 0 ? content.width : targetWidth
+    const contentHeight = typeof content?.height === 'number' && content.height > 0 ? content.height : targetHeight
+    const x = Math.max(0, Math.min(options.clip.x, contentWidth - 1))
+    const y = Math.max(0, Math.min(options.clip.y, contentHeight - 1))
+    const clipWidth = Math.max(1, Math.min(options.clip.width, contentWidth - x))
+    const clipHeight = Math.max(1, Math.min(options.clip.height, contentHeight - y))
+    params['clip'] = { x, y, width: clipWidth, height: clipHeight, scale: Math.max(SCREENSHOT_MIN_SCALE, Math.min(1, boundedWidth / Math.max(1, clipWidth))) }
+  } else if (options.fullPage === true) {
+    params['captureBeyondViewport'] = true
+    params['clip'] = { x: 0, y: 0, width: Math.max(1, targetWidth), height: Math.max(1, targetHeight), scale: Math.max(SCREENSHOT_MIN_SCALE, Math.min(1, boundedWidth / Math.max(1, targetWidth))) }
+  } else if (width > boundedWidth && height > 0) {
+    params['clip'] = { x: 0, y: 0, width, height, scale: Math.max(SCREENSHOT_MIN_SCALE, boundedWidth / width) }
   }
   const result = await send<{ data?: string }>('Page.captureScreenshot', params)
   const data = result?.data
   if (typeof data !== 'string' || data.length === 0) {
     throw new Error('browser: screenshot failed — the renderer returned no image')
   }
-  return `data:image/jpeg;base64,${data}`
+  return `data:image/${format};base64,${data}`
 }

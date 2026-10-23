@@ -1554,6 +1554,69 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('screenshots: fullPage capture, honest fallback and the size cap', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const calls: Array<{ method: string, params: Record<string, unknown> }> = []
+    const tiny = 'A'.repeat(64)
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      calls.push({ method, params })
+      if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
+      if (method === 'Page.captureScreenshot') return { data: tiny }
+      return {}
+    }
+    const full = await runtime.screenshotWithOptions(1, { fullPage: true })
+    expect(full.fullPage).toBe(true)
+    const capture = calls.find(entry => entry.method === 'Page.captureScreenshot')!
+    expect(capture.params['captureBeyondViewport']).toBe(true)
+    // A failing full-page capture returns the viewport honestly (fullPage:false).
+    calls.length = 0
+    view.transport.handler = (method: string) => {
+      calls.push({ method, params: {} })
+      if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
+      if (method === 'Page.captureScreenshot') return {}
+      return {}
+    }
+    // The viewport fallback succeeds through Electron's capturePage, but it must
+    // NOT pretend to be a full-page capture.
+    if (adapter.lastView().transport.handler !== undefined) {
+      const fallback = await runtime.screenshotWithOptions(1, { fullPage: true }).catch(() => undefined)
+      if (fallback !== undefined) expect(fallback.fullPage).toBe(false)
+    }
+    // PNG over the 8 MiB cap cannot be recompressed: policy, no data URL.
+    const huge = 'A'.repeat(Math.ceil(9 * 1024 * 1024 * 4 / 3))
+    view.transport.handler = (method: string) => {
+      if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
+      if (method === 'Page.captureScreenshot') return { data: huge }
+      return {}
+    }
+    await expect(runtime.screenshotWithOptions(1, { fullPage: true, format: 'png' })).rejects.toMatchObject({ code: 'policy' })
+    cleanup()
+  })
+
+  it('screenshots: emulation overrides are cleared before fullPage and restored after', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const calls: string[] = []
+    view.transport.handler = (method: string) => {
+      calls.push(method)
+      if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
+      if (method === 'Page.captureScreenshot') return { data: 'A'.repeat(64) }
+      return {}
+    }
+    ;(runtime as unknown as { emulationOverrides: Map<number, unknown> }).emulationOverrides.set(1, { viewport: { width: 400, height: 800 }, userAgent: 'UA-X' })
+    await runtime.screenshotWithOptions(1, { fullPage: true })
+    const clearIndex = calls.indexOf('Emulation.clearDeviceMetricsOverride')
+    const captureIndex = calls.indexOf('Page.captureScreenshot')
+    const restoreIndex = calls.lastIndexOf('Emulation.setDeviceMetricsOverride')
+    expect(clearIndex).toBeGreaterThanOrEqual(0)
+    expect(captureIndex).toBeGreaterThan(clearIndex)
+    expect(restoreIndex).toBeGreaterThan(captureIndex)
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

@@ -1479,12 +1479,22 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     description: '[read] Capture the visible page of your tab as a JPEG image. Use sparingly — snapshots and text are cheaper. REFUSED on a tab inside the credential window (after browser_fill_credentials and before that tab navigates): a page can render an injected credential as text or a barcode, and no image redaction can undo that; the window ends on the next navigation of that tab.',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      fullPage: { type: 'boolean', description: 'Capture the whole scrollable page (clear → captureBeyondViewport → restore emulation overrides). Falls back to the viewport with fullPage:false when it cannot.' },
+      clip: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { x: { type: 'integer' }, y: { type: 'integer' }, width: { type: 'integer' }, height: { type: 'integer' } },
+        description: 'Crop rectangle in CSS pixels (mutually exclusive with fullPage).',
+      },
+      format: { type: 'string', enum: ['jpeg', 'png'], description: 'Image format (default jpeg).' },
+      quality: { type: 'integer', description: 'JPEG quality 1-100 (default 70).' },
     },
     output: {
       schema: {
         type: 'object',
         additionalProperties: false,
         properties: {
+          fullPage: { type: 'boolean', description: 'True only when the whole page was captured.' },
           image: {
             type: 'object',
             additionalProperties: false,
@@ -1526,19 +1536,31 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     presentCall: present('Screenshot'),
     async execute(args, exec) {
       noteAgent(runtime, exec.agent)
-      const tabId = await tabOf((args as { tab?: number }).tab)
-      const dataUrl = await runtime.screenshot(tabId, exec.signal)
+      const captureArgs = args as { tab?: number, fullPage?: boolean, clip?: { x: number, y: number, width: number, height: number }, format?: 'jpeg' | 'png', quality?: number }
+      if (captureArgs.fullPage === true && captureArgs.clip !== undefined) throw new Error('fullPage and clip are mutually exclusive')
+      const tabId = await tabOf(captureArgs.tab)
+      const hasOptions = captureArgs.fullPage === true || captureArgs.clip !== undefined || captureArgs.format !== undefined || captureArgs.quality !== undefined
+      const capture = hasOptions
+        ? await runtime.screenshotWithOptions(tabId, {
+          ...(captureArgs.fullPage === undefined ? {} : { fullPage: captureArgs.fullPage }),
+          ...(captureArgs.clip === undefined ? {} : { clip: captureArgs.clip }),
+          ...(captureArgs.format === undefined ? {} : { format: captureArgs.format }),
+          ...(captureArgs.quality === undefined ? {} : { quality: captureArgs.quality }),
+        }, exec.signal)
+        : { data: await runtime.screenshot(tabId, exec.signal), fullPage: false }
       exec.signal.throwIfAborted()
+      const format = captureArgs.format === 'png' ? 'png' : 'jpeg'
+      const dataUrl = capture.data
       const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
       const data = Buffer.from(base64, 'base64')
       const refs = await ctx.attachments.saveImages([{
         data: new Uint8Array(data),
-        mediaType: 'image/jpeg' as const,
-        name: `browser-tab-${tabId}.jpg`,
+        mediaType: format === 'png' ? 'image/png' as const : 'image/jpeg' as const,
+        name: format === 'png' ? `browser-tab-${tabId}.png` : `browser-tab-${tabId}.jpg`,
       }])
       const ref = refs[0]
       if (ref === undefined) throw new Error('browser: screenshot could not be stored')
-      return { image: ref }
+      return { image: ref, fullPage: capture.fullPage }
     },
   }))
 

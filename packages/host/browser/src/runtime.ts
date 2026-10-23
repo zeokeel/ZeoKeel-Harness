@@ -23,7 +23,7 @@ import { BrowserGuard, ensureSessionGuard, isLocalHostname, looksLikeAbsoluteUrl
 import { extractSnapshotWithMeta, extractTextWithMeta, type SnapshotExtractionMeta, SNAPSHOT_DEFAULT_LIMIT, TEXT_DEFAULT_LIMIT } from './snapshot.ts'
 import { locatorProbe, parseTargetSpec } from './locator.ts'
 import { TabEventBus } from './events.ts'
-import { captureScreenshot, captureScreenshotViaCdp } from './shots.ts'
+import { captureScreenshot, captureScreenshotViaCdp, SCREENSHOT_MAX_BYTES, type ScreenshotOptions } from './shots.ts'
 import { snapshotExtrasProbe, type SnapshotExtrasOptions } from './snapshot.ts'
 import { appSurfaceAllowsUrl, asSurfaceWebContents, surfaceLabel, type BrowserSurface, type SurfaceControlOwner, type SurfaceRegistry, type SurfaceWebContents } from './surface.ts'
 import { TabPool, gateRefusal, type TabReservation } from './pool.ts'
@@ -662,6 +662,9 @@ export class BrowserRuntime {
   /** Tabs whose interception still needs re-enabling: a dialog blocked the CDP
    * call at release time, so it is retried when the dialog goes away. */
   private readonly chooserReenable = new Set<number>()
+  /** Active emulation overrides per tab (viewport/UA; populated by C15). Full-page
+   * capture must clear them and restore them afterwards (audit R4). */
+  private readonly emulationOverrides = new Map<number, { viewport?: { width: number, height: number, deviceScaleFactor?: number, mobile?: boolean }, userAgent?: string }>()
   /** Redacted display paths of downloads, keyed by download id (R-5). The store
    * keeps the real on-disk path for `downloads_open`; only the model-facing
    * projection swaps this in. Bounded by {@link DOWNLOAD_DISPLAY_PATH_LIMIT}. */
@@ -3373,6 +3376,83 @@ export class BrowserRuntime {
     }, signal)
     this.record('browser_get_text', resolved, selector === undefined ? `page text: ${out.text.length} chars` : `element text: ${out.text.length} chars`)
     return { text: out.text, truncated: out.truncated }
+  }
+
+  /**
+   * Capture with the C12/B5 options (full page / clip / format / quality).
+   * Full-page capture clears emulation overrides first and restores them in a
+   * `finally`, so an exception path cannot leave the tab emulated (audit R4).
+   * @param tabId - target tab.
+   * @param options - capture shape.
+   * @param signal - caller cancellation.
+   * @returns the data URL and whether the FULL page was captured.
+   */
+  async screenshotWithOptions(tabId: number, options: ScreenshotOptions, signal?: AbortSignal): Promise<{ data: string, fullPage: boolean }> {
+    const resolved = this.resolveTab(tabId)
+    this.assertNoDialog(resolved)
+    const decodedBytes = (data: string): number => {
+      const comma = data.indexOf(',')
+      const payload = comma >= 0 ? data.slice(comma + 1) : data
+      return Math.floor(payload.length * 3 / 4)
+    }
+    const quality = Math.max(1, Math.min(100, options.quality ?? this.options.screenshotQuality))
+    return await this.agentRun('browser_screenshot', async () => {
+      const tab = this.tab(resolved)
+      if (this.tabInCredentialWindow(tab)) {
+        this.record('browser_screenshot', resolved, 'refused: credential window open', true)
+        throw browserError('policy', CREDENTIAL_WINDOW_SCREENSHOT_REFUSAL)
+      }
+      this.assertAgentStillAllowed('browser_screenshot')
+      const fullPage = options.fullPage === true && options.clip === undefined
+      const emulated = this.emulationOverrides.get(resolved)
+      const cdpOptions: ScreenshotOptions = {
+        ...options,
+        ...(options.format === undefined ? {} : { format: options.format }),
+        quality,
+      }
+      if (fullPage && emulated !== undefined) {
+        // Clear, capture, restore — always in this order, restore in finally.
+        await tab.cdp.send('Emulation.clearDeviceMetricsOverride').catch(() => {})
+        await tab.cdp.send('Emulation.setUserAgentOverride', { userAgent: '' }).catch(() => {})
+      }
+      try {
+        let data: string
+        try {
+          data = await captureScreenshotViaCdp((method, params) => tab.cdp.send(method, params), this.options.screenshotMaxWidth, quality, cdpOptions)
+        } catch (cause) {
+          if (!fullPage) throw cause
+          // Honest fallback: viewport capture, explicitly NOT full page.
+          data = await captureScreenshot(tab.view.webContents, this.options.screenshotMaxWidth, quality)
+          this.record('browser_screenshot', resolved, 'full-page capture failed — returned the viewport instead', true)
+          return { data, fullPage: false }
+        }
+        if (decodedBytes(data) <= SCREENSHOT_MAX_BYTES) return { data, fullPage }
+        if ((options.format ?? 'jpeg') === 'png') {
+          throw browserError('policy', `browser: screenshot exceeds the ${String(Math.floor(SCREENSHOT_MAX_BYTES / 1024 / 1024))} MiB cap and PNG cannot be recompressed — request a smaller clip`)
+        }
+        // Degrade EXACTLY once.
+        const lower = Math.max(1, Math.floor(quality / 2))
+        const retried = await captureScreenshotViaCdp((method, params) => tab.cdp.send(method, params), this.options.screenshotMaxWidth, lower, { ...cdpOptions, quality: lower })
+        if (decodedBytes(retried) > SCREENSHOT_MAX_BYTES) {
+          throw browserError('policy', `browser: screenshot still exceeds the ${String(Math.floor(SCREENSHOT_MAX_BYTES / 1024 / 1024))} MiB cap after reducing quality — request a smaller clip`)
+        }
+        return { data: retried, fullPage }
+      } finally {
+        if (fullPage && emulated !== undefined) {
+          if (emulated.viewport !== undefined) {
+            await tab.cdp.send('Emulation.setDeviceMetricsOverride', {
+              width: emulated.viewport.width,
+              height: emulated.viewport.height,
+              deviceScaleFactor: emulated.viewport.deviceScaleFactor ?? 1,
+              mobile: emulated.viewport.mobile === true,
+            }).catch(() => {})
+          }
+          if (emulated.userAgent !== undefined) {
+            await tab.cdp.send('Emulation.setUserAgentOverride', { userAgent: emulated.userAgent }).catch(() => {})
+          }
+        }
+      }
+    }, signal)
   }
 
   async screenshot(tabId: number, signal?: AbortSignal): Promise<string> {

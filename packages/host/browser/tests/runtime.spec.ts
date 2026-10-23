@@ -1626,6 +1626,11 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     expect(clip.x + clip.width).toBeLessThanOrEqual(1000)
     expect(clip.y + clip.height).toBeLessThanOrEqual(2000)
     expect(clip.width).toBeGreaterThan(0)
+    // A far-out origin is clamped to the last pixel, and the size to what is left.
+    calls.length = 0
+    await runtime.screenshotWithOptions(1, { clip: { x: 9_999, y: 9_999, width: 50, height: 50 } })
+    const farClip = (calls.find(entry => entry.method === 'Page.captureScreenshot')!.params['clip']) as { x: number, y: number, width: number, height: number }
+    expect(farClip).toMatchObject({ x: 999, y: 1999, width: 1, height: 1 })
     // Exception path: overrides are still restored.
     ;(runtime as unknown as { emulationOverrides: Map<number, unknown> }).emulationOverrides.set(1, { viewport: { width: 400, height: 800 } })
     view.transport.handler = (method: string) => {
@@ -1658,6 +1663,34 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     expect(clearIndex).toBeGreaterThanOrEqual(0)
     expect(captureIndex).toBeGreaterThan(clearIndex)
     expect(restoreIndex).toBeGreaterThan(captureIndex)
+    cleanup()
+  })
+
+  it('screenshots: the viewport fallback is still bounded by the 8 MiB cap', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const huge = 'A'.repeat(Math.ceil(9 * 1024 * 1024 * 4 / 3))
+    const captures: Array<Record<string, unknown>> = []
+    let call = 0
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 }, contentSize: { width: 800, height: 5000 } }
+      if (method === 'Page.captureScreenshot') {
+        call += 1
+        captures.push(params)
+        if (call === 1) throw new Error('full page failed')
+        return { data: huge }
+      }
+      return {}
+    }
+    // JPEG: one quality retry, then policy — never an over-cap data URL.
+    await expect(runtime.screenshotWithOptions(1, { fullPage: true })).rejects.toMatchObject({ code: 'policy' })
+    expect(captures).toHaveLength(3)
+    // PNG: the fallback cannot be recompressed -> policy after the fallback capture.
+    captures.length = 0
+    call = 0
+    await expect(runtime.screenshotWithOptions(1, { fullPage: true, format: 'png' })).rejects.toMatchObject({ code: 'policy' })
+    expect(captures).toHaveLength(2)
     cleanup()
   })
 

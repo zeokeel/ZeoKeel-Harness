@@ -96,6 +96,46 @@
 | 16 核 / 64GB | 8（硬顶） | 8 | 8 | 8 | 8 |
 | 16 核 / 4GB 容器 | 4 | 4 | 8 | 2 | 5 |
 
+## 全量对比实测（2026-10-23 13:2x–13:5x，同机、串行、同一份树的两侧）
+
+对照口径：**before = 三个提交之前的父提交（`e71518717a`，TS 6.0.3 + 串行 prebuild + 固定并发）**，
+**after = 本文件所在 HEAD**。两侧各自 `yarn check` 全量跑一次（34 任务），机器上不跑别的活。
+
+| 指标 | before | after | 变化 |
+| --- | --- | --- | --- |
+| `yarn check` 全量（编译 + 测试 + 17 条守卫） | 388.2s | **312.6s** | **−75.6s（−19.5%）** |
+| 其中 desktop 阶段（build + typecheck:tests + vitest + 8 verifies） | 138.5s | **91.6s** | −46.9s（−33.9%） |
+| `@zeokeel/dsh-wasm-apps` check | 33.7s | 23.5s | −10.2s |
+| `@zeokeel/dsh-connectors` check | 54.1s | 46.5s | −7.6s |
+| `@zeokeel/dsh-capability-center` check | 15.7s | 8.2s | −7.5s |
+| `@zeokeel/dsh-account-card` check | 13.8s | 8.2s | −5.6s |
+| `@zeokeel/dsh-cron` check | 21.7s | 16.3s | −5.4s |
+| `@zeokeel/dsh-branding` check | 12.4s | 7.5s | −4.9s |
+| `@zeokeel/dsh-panel-surface` check | 14.0s | 9.2s | −4.8s |
+| `@zeokeel/dsh-enterprise` check | 43.5s | 39.3s | −4.2s |
+| 与编译无关的守卫（`dsh-memory-evolve` / `check:ci-scripts` 等） | 44.1 / 67.0 | 44.1 / 68.9 | 持平（噪声） |
+
+**读法**：剩下的时间已经**不是编译**了 —— 编译相关段（各包的 `build` + `typecheck:tests`）
+只占 after 的 ~5%；门禁大头是 vitest 与 8 个 `verify:*` 脚本（它们与编译器无关）。所以
+"再换编译器也压不下去"，要再快只能动测试面或把全量门禁移出内循环（见 AGENTS.md 命令矩阵）。
+
+### 服务端对照
+
+| 指标 | before | after | 变化 |
+| --- | --- | --- | --- |
+| webadmin `npm run build`（`tsc -b` + vite） | 23s | **13s** | −10s（−43%） |
+| webadmin `npm test`（972 tests） | 97s | 98s | 持平（与编译器无关） |
+| `go build ./cmd/server`（冷 `GOCACHE`） | 42s | 42s | 持平（Go 源码未动；本机 `GO_BUILD_P`=4 = Go 默认） |
+| `make test-server` 全量 | 未纳入对比 | 未纳入对比 | 见下 |
+
+`go test` 全量在本机一次 **993s**（`llmgateway` 单包 747s，PG 负载重），两次对比的噪声远大于
+任何预期收益，因此没纳入；**测试代码与 `-p` 取值在本机都没变**（capacity 算出 4，与旧硬编码相同），
+服务端自适应的收益在 **>4 核机器**上才体现（16 核 → `-p 8`、webadmin 的 tsc 已经全区受益）。
+
+> 附带发现（与性能无关）：在主仓里嵌套 git worktree（`.agents/worktrees/…`）会让
+> `internal/skillseed` 的"内置技能源树只允许一份副本"判据把嵌套副本当成重复文件 ⇒ 主仓侧全量
+> `go test` 红。这是布局问题，跑主仓服务端全量测试时先把 worktree 移出主仓目录。
+
 ## 验证
 
 - `yarn check`：**34/34 PASS**（新判据 spec 随 desktop 阶段跑；`check:check-workspaces` 的

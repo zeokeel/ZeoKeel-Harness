@@ -1,4 +1,4 @@
-import ts from 'typescript'
+import ts from 'typescript6'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

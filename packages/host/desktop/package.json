@@ -353,7 +353,8 @@
     "electron-builder": "26.15.3",
     "sharp": "0.35.5",
     "tsdown": "0.22.2",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
+    "typescript6": "npm:typescript@6.0.3",
     "vitest": "4.1.8",
     "ws": "^8.21.3"
   },

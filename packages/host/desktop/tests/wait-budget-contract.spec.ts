@@ -128,7 +128,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
+import ts from 'typescript6'
 import { describe, expect, it } from 'vitest'
 import { configDefaults, defaultExclude, defaultInclude } from 'vitest/config'
 import {

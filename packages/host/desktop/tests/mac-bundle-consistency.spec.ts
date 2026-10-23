@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createPackageWithOptions, getRawHeader } from '@electron/asar'
-import ts from 'typescript'
+import ts from 'typescript6'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   asarLayoutLogLine,

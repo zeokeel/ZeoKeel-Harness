@@ -21,7 +21,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript6'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ALLOW_SYSTEM_PROXY_ENV,

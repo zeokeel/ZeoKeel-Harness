@@ -1319,9 +1319,11 @@ jobs:
             --list channels.list --stage-dir client-assets \
             --patterns '*.AppImage' \
             --verify-app-dir dist/linux-unpacked \
-            -- yarn workspace dsh-plugin-desktop dist:linux --no-prebuild
-      # 注:Linux 只归集 AppImage(镜像与发布面都不要 deb)。dist:linux 仍会产出 deb,
-      # 它作为本次运行的中间产物留在 runner 上,不进入任何交付面。
+            -- yarn workspace dsh-plugin-desktop dist:linux --no-prebuild --no-deb
+      # 注:Linux 只归集 AppImage(镜像与发布面都不要 deb)⇒ CI 直接传 `--no-deb`:
+      # deb 不进任何交付面,却在 electron-builder 里占 ≈284s/次(2026-10-23 实测:
+      # AppImage ≈108s、deb ≈284s) —— 这是本 job 7.7min 打包段里最贵的一段。
+      # 本地 `yarn dist:linux` 不传该开关 ⇒ 仍然产 AppImage+deb。
       # 品牌渠道的产物**不进公开 artifact**(artifact 对任何登录账号可取,而渠道
       # 目录名/文件名/包内品牌都是客户身份):改经 R2 临时前缀中转,release job 取回。
       # 官方/beta 不在中转范围内(它们的品牌本来就公开)。
@@ -1344,7 +1346,7 @@ jobs:
         if: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           set -euo pipefail
-          yarn workspace dsh-plugin-desktop dist:linux --no-prebuild
+          yarn workspace dsh-plugin-desktop dist:linux --no-prebuild --no-deb
           mkdir -p client-assets/official
           cp packages/host/desktop/dist/*.AppImage client-assets/official/
       # 客户端 E2E(2026-09-06 接入,G3 缺口):在打包产物上跑 13 项断言

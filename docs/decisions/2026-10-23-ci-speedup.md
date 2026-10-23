@@ -104,3 +104,35 @@ webadmin 构建（−10s）叠加；server job 的 go test 段从 ≈26 min 落�
 **新的瓶颈已经不是服务端**：`desktop-linux`（打包 + 平台验证 + `e2e:client`）≈10 min，
 串在 gate（5 min）之后 ⇒ 整条 CI 的墙钟现在由它决定。下一步若要继续压 CI，应从这里下手
 （打包缓存 / e2e 与打包解耦），而不是继续动 Go。
+
+## 第二轮压缩：Linux 打包只产 AppImage（2026-10-23 晚）
+
+首跑之后新的关键路径是 `gate`（6 min）→ `desktop-linux`（10 min）。把 `desktop-linux` 的
+job log 按步骤拆开，**7.7 min 全在一步打包**，而 CI 的 channel 列表只有 **1 个渠道**：
+
+| 步骤 | 耗时 |
+| --- | --- |
+| `Package client installers for every selected channel` | **462s** |
+| 其中 AppImage 构建 | ≈108s |
+| 其中 **deb 构建** | **≈284s** |
+| 其中白标门禁（app.asar 断言） | ≈60s |
+| Client E2E（Xvfb + CDP） | 110s |
+| `yarn install` / 上传等 | ≈40s |
+
+`deb` **不进入任何交付面**（Linux 只归集 `*.AppImage`；镜像与 release 都不用它，`ci.yml`
+的注释自己写着"deb 留在 runner 上，不进入任何交付面"），却占了打包段 **61%** 的时间。
+
+改动：
+
+- `packages/host/desktop/scripts/package-linux.mjs` 新增 `formats` 注入缝 + CLI `--no-deb`
+  （只产 AppImage）；**缺省仍是 AppImage+deb** ⇒ 本地 `yarn dist:linux` 与 release 入口行为不变；
+- CI 的 Linux job 两处调用（正常 / fork PR 回落）改传 `--no-prebuild --no-deb`；
+- 判据：`tests/pack-app-root.spec.ts` 新增一条（缺省 argv 含 `AppImage deb`；`formats:['AppImage']`
+  时 argv 只有 `--linux AppImage` 且不含 `deb`）。
+
+预期：打包段 462s → ≈180s，`desktop-linux` 10 min → **≈5.5 min**；整条 CI 的关键路径从
+"gate 6 + desktop-linux 10" 变成"gate 6 + desktop-linux 5.5"，与 `Go server`（11 min）持平
+⇒ 墙钟预计 **19 min → ≈12–13 min**。
+
+> 为什么不动 `compression: maximum`：AppImage 是**交付物**（PR artifact 与 release 都用它），
+> 为省 ~50s 让 PR 产物与 release 产物压缩级别不同，属于"交付面不一致"，不做。

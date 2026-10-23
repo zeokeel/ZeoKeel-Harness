@@ -1894,10 +1894,11 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_history_search',
-    description: '[memory] Search the shared visit history (your session + the user\'s), newest first.',
+    description: '[memory] Search the shared visit history (your session + the user\'s), newest first. Filter by session/group key to see one conversation\'s visits.',
     parameters: {
       q: { type: 'string', description: 'Search text in url/title.' },
       limit: { type: 'integer', description: 'Max entries (default 100).' },
+      group: { type: 'string', description: 'Only entries recorded under this session/group key.' },
     },
     output: {
       schema: {
@@ -1927,8 +1928,8 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     presentCall: present('Search history'),
     async execute(args, exec) {
       noteAgent(runtime, exec.agent)
-      const { q, limit } = args as { q?: string; limit?: number }
-      return { entries: runtime.history({ q, limit }).map((h) => ({ time: h.time, url: h.url, title: h.title, actor: h.actor, group: h.group })) }
+      const { q, limit, group } = args as { q?: string; limit?: number; group?: string }
+      return { entries: runtime.history({ q, limit, ...(group === undefined ? {} : { group }) }).map((h) => ({ time: h.time, url: h.url, title: h.title, actor: h.actor, group: h.group })) }
     },
   }))
 

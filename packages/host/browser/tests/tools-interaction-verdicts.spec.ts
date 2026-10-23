@@ -639,6 +639,20 @@ describe('browser_run registration surface（2026-10-23）', () => {
   })
 })
 
+describe('history filters（2026-10-23 B7）', () => {
+  it('passes the group filter through to the store query', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const seen: Array<Record<string, unknown>> = []
+    ;(harness.runtime as unknown as { history: (filter: Record<string, unknown>) => unknown[] }).history = (filter) => {
+      seen.push(filter)
+      return []
+    }
+    await harness.call('browser_history_search', { q: 'docs', limit: 5, group: 'session-1' })
+    expect(seen[0]).toMatchObject({ q: 'docs', limit: 5, group: 'session-1' })
+  })
+})
+
 describe('screenshot parameter validation（2026-10-23 C12/B5）', () => {
   it('rejects fullPage with clip, a non-positive clip and png with quality', async () => {
     const harness = track(makeHarness())

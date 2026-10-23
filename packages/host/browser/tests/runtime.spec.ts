@@ -1376,7 +1376,6 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
               crossOrigin: [],
               truncated: true,
               frames: 1,
-              nestedFrames: 1,
             }),
           },
         }
@@ -1394,12 +1393,10 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     expect(snapshotNote(plain.meta)).toContain('NOT included')
     const withExtras = await runtime.modelSnapshot(1, undefined, { includeShadow: true, includeFrames: true })
     const note = snapshotNote(withExtras.meta)
-    // Covered blind spots are no longer claimed as missing...
+    // Covered blind spots are no longer claimed as missing; truncation still is.
     expect(note ?? '').not.toContain('NOT included')
-    // ...but nested frames and the extras truncation are still reported.
-    expect(note ?? '').toContain('nested frame')
+    expect(note ?? '').toContain('cut at the limit')
     expect(withExtras.meta.truncated).toBe(true)
-    expect(withExtras.meta.nestedFrames).toBe(1)
     cleanup()
   })
 

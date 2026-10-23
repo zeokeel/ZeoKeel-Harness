@@ -3219,7 +3219,6 @@ export class BrowserRuntime {
           crossOrigin?: unknown
           truncated?: unknown
           frames?: unknown
-          nestedFrames?: unknown
         }
         const appended: BrowserSnapshotElement[] = []
         for (const entry of parsed.entries ?? []) {
@@ -3246,7 +3245,6 @@ export class BrowserRuntime {
         // included" (audit P2-1). Only nested frames remain a blind spot.
         if (extras.includeFrames === true) meta.frames = 0
         if (extras.includeShadow === true) meta.shadowRoots = 0
-        if (typeof parsed.nestedFrames === 'number' && parsed.nestedFrames > 0) meta.nestedFrames = parsed.nestedFrames
         elements.push(...appended)
       } catch {
         meta.crossOriginFrames = []

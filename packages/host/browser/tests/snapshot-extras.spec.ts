@@ -15,7 +15,6 @@ interface ExtrasResult {
   crossOrigin: number[]
   truncated: boolean
   frames: number
-  nestedFrames: number
 }
 
 function page(html: string): { dom: JSDOM, window: JSDOM['window'], run: (shadow: boolean, frames: boolean, remaining: number) => ExtrasResult } {

@@ -304,10 +304,6 @@ export interface SnapshotExtractionMeta {
    * only populated when the caller asked for `includeFrames`; audit R2 — their
    * DOM is not readable from the main world). */
   crossOriginFrames?: number[]
-  /** Nested frames that could NOT be walked (unreadable). Readable nested frames
-   * are traversed by the extras probe, so this stays 0 unless a child document
-   * turns out unreadable; kept for the model-facing blind-spot note. */
-  nestedFrames?: number
 }
 
 /** Result of {@link extractSnapshotWithMeta}. */
@@ -367,7 +363,6 @@ export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boole
   const crossOrigin = [];
   let truncated = false;
   let framesSeen = 0;
-  const nestedFrames = 0;
   const kindOf = (el) => {
     const tag = el.tagName.toLowerCase();
     if (tag === 'a' && el.href) return 'link';
@@ -483,7 +478,7 @@ export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boole
   // Hitting the budget is reported as truncated: the caller cannot tell whether
   // more elements exist, so it must not present the list as complete.
   if (out.length >= MAX) truncated = true;
-  return JSON.stringify({ entries: out, crossOrigin, truncated, frames: framesSeen, nestedFrames });
+  return JSON.stringify({ entries: out, crossOrigin, truncated, frames: framesSeen });
 })()
 `
 }
@@ -503,9 +498,6 @@ export function snapshotNote(meta: SnapshotExtractionMeta): string | undefined {
   if (meta.shadowRoots > 0) blind.push(`${meta.shadowRoots}${meta.shadowScanCapped ? '+' : ''} shadow root${meta.shadowRoots === 1 && !meta.shadowScanCapped ? '' : 's'}`)
   if (blind.length > 0) {
     parts.push(`${blind.join(' and ')} are NOT included — use browser_eval(frame:N) or browser_get_text(selector) if the element you need is inside one`)
-  }
-  if ((meta.nestedFrames ?? 0) > 0) {
-    parts.push(`${meta.nestedFrames} nested frame${meta.nestedFrames === 1 ? '' : 's'} inside a frame could not be read and ${meta.nestedFrames === 1 ? 'is' : 'are'} not listed`)
   }
   return parts.length === 0 ? undefined : `snapshot: ${parts.join('; ')}.`
 }

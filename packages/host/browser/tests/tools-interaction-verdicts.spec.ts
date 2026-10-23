@@ -504,7 +504,7 @@ describe('snapshot extras at the tool layer（2026-10-23 P1）', () => {
       if (method !== 'Runtime.evaluate') return {}
       const expression = String(params['expression'] ?? '')
       if (expression.includes('crossOrigin')) {
-        return { result: { value: JSON.stringify({ entries: [], crossOrigin: [], truncated: false, frames: 1, nestedFrames: 1 }) } }
+        return { result: { value: JSON.stringify({ entries: [], crossOrigin: [2], truncated: false, frames: 2 }) } }
       }
       return {
         result: {
@@ -514,10 +514,10 @@ describe('snapshot extras at the tool layer（2026-10-23 P1）', () => {
         },
       }
     }
-    const value = await harness.call('browser_get_snapshot', { includeFrames: true }) as { nestedFrames?: number, elements: unknown[] }
+    const value = await harness.call('browser_get_snapshot', { includeFrames: true }) as { crossOriginFrames?: number[], elements: unknown[] }
     expect(value.elements).toEqual([])
     // The blind spot must be observable by the MODEL, not only in runtime meta.
-    expect(value.nestedFrames).toBe(1)
+    expect(value.crossOriginFrames).toEqual([2])
   })
 })
 

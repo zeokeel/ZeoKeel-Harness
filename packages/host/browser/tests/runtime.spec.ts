@@ -1855,6 +1855,27 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('program: no outer agentRun (audit R1) and helpers route to runtime methods', async () => {
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+        await (bridge['navigate'] as unknown as (args: unknown) => Promise<unknown>)({ url: 'https://b.example' })
+        return { result: 'done' }
+      },
+    }
+    const { adapter, runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({})
+    const internal = runtime as unknown as { agentRun: (...args: unknown[]) => Promise<unknown> }
+    const original = internal.agentRun.bind(runtime)
+    const calls: string[] = []
+    internal.agentRun = async (...args: unknown[]) => { calls.push(String(args[0])); return await original(...args) }
+    await runtime.runProgram('await browser.navigate({ url: "https://b.example" })')
+    // Exactly the helper's own lock — an outer agentRun would add a second call
+    // and deadlock the helper (audit R1).
+    expect(calls).toEqual(['browser_navigate'])
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

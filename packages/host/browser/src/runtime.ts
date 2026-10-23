@@ -3595,6 +3595,53 @@ export class BrowserRuntime {
         return await this.clickAt(tabId, await this.locateElement(tabId, target.selector, signal), signal)
       }
       case 'browser_eval': return { value: await this.eval(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['expression'] ?? ''), typeof args['frame'] === 'number' ? args['frame'] : undefined, signal) }
+      case 'browser_list_tabs': return { tabs: this.listTabs() }
+      case 'browser_switch_tab': return await this.switchTab(Number(args['tab'] ?? 1))
+      case 'browser_close_tab': return await this.closeTab(Number(args['tab'] ?? this.pool.activeTab ?? 1), false, signal)
+      case 'browser_go_back': return await this.goBack(Number(args['tab'] ?? this.pool.activeTab ?? 1), signal)
+      case 'browser_go_forward': return await this.goForward(Number(args['tab'] ?? this.pool.activeTab ?? 1), signal)
+      case 'browser_reload': return await this.reload(Number(args['tab'] ?? this.pool.activeTab ?? 1), signal)
+      case 'browser_type': {
+        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
+        const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
+        return await this.typeInto(tabId, target.selector, String(args['text'] ?? ''), args['clear'] !== false, signal)
+      }
+      case 'browser_select': {
+        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
+        const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
+        return await this.selectOptionChoice(tabId, target.selector, args as never, signal)
+      }
+      case 'browser_press': return await this.pressKey(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['key'] ?? ''), signal, { ...(typeof args['modifiers'] === 'number' ? { modifiers: args['modifiers'] } : {}), ...(typeof args['times'] === 'number' ? { times: args['times'] } : {}) })
+      case 'browser_hotkey': return await this.hotkey(Number(args['tab'] ?? this.pool.activeTab ?? 1), (args['keys'] as string[]) ?? [], signal)
+      case 'browser_hover': {
+        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
+        const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
+        return await this.hoverAt(tabId, await this.locateElement(tabId, target.selector, signal), signal)
+      }
+      case 'browser_dblclick': {
+        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
+        const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
+        return await this.clickAt(tabId, await this.locateElement(tabId, target.selector, signal), signal, undefined, { doubleClick: true })
+      }
+      case 'browser_drag': {
+        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
+        const from = await this.resolveTargetSelector(tabId, String(args['from'] ?? ''), signal)
+        const to = await this.resolveTargetSelector(tabId, String(args['to'] ?? ''), signal)
+        return await this.dragAt(tabId, await this.locateElement(tabId, from.selector, signal), await this.locateElement(tabId, to.selector, signal), signal)
+      }
+      case 'browser_scroll': return await this.scroll(Number(args['tab'] ?? this.pool.activeTab ?? 1), Number(args['deltaY'] ?? 0), typeof args['target'] === 'string' ? args['target'] : undefined, signal, { ...(typeof args['deltaX'] === 'number' ? { deltaX: args['deltaX'] } : {}) })
+      case 'browser_wait_for': return await this.waitFor(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, signal)
+      case 'browser_file_chooser': return await this.chooseFiles(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, (args['allowedDirs'] as string[]) ?? [], signal)
+      case 'browser_download': return await this.downloadUrl(String(args['url'] ?? ''), signal)
+      case 'browser_downloads_list': return { downloads: this.downloads({ ...(typeof args['status'] === 'string' ? { status: args['status'] as never } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
+      case 'browser_fetch': return await this.pageFetch(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, signal)
+      case 'browser_emulate': return await this.emulate(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, signal)
+      case 'browser_clipboard': return args['action'] === 'write' ? await this.clipboardWrite(String(args['text'] ?? ''), signal) : await this.clipboardRead(signal)
+      case 'browser_history_search': return { entries: this.history({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
+      case 'browser_bookmarks_list': return { bookmarks: this.listBookmarks({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}) }) }
+      // Large binary results must cross the bridge as attachment refs, which this
+      // runtime layer cannot mint: refuse instead of shipping an 8 MiB base64 line.
+      case 'browser_screenshot': throw browserError('policy', 'browser_run: the screenshot helper is not wired yet (it will return an attachment reference in the next layer)')
       default: throw browserError('policy', `browser_run: helper ${tool} is not wired in this build`)
     }
   }

@@ -115,7 +115,11 @@ describe('createPtcProgramRuntime', () => {
     const pending = runtime.execute('x', {})
     for (let index = 0; index < 2_000; index += 1) fake.emit({ type: 'console', text: 'x'.repeat(100) })
     fake.emit({ type: 'result', result: null })
-    await expect(pending).resolves.toMatchObject({ result: null, console: expect.stringContaining('console output truncated') })
+    const settled = await pending
+    // Marker appears EXACTLY once and the console stays within its cap (the old
+    // per-message marker grew it by ~40 KiB more).
+    expect(settled.console.match(/console output truncated/gu)).toHaveLength(1)
+    expect(Buffer.byteLength(settled.console, 'utf8')).toBeLessThanOrEqual(64 * 1024 + 64)
     const fake2 = fakeChild()
     const runtime2 = createPtcProgramRuntime({ spawn: () => fake2.child })
     const pending2 = runtime2.execute('x', {})

@@ -8417,19 +8417,27 @@ exit 0
     check(recipe !== null && recipe.includes(`$(MAKE) ${FEATURES_TARGET}`),
       `\`make ${target}\`（发布门禁）必须调度 ${FEATURES_TARGET}（产物级变体判据）`)
   }
-  // CI 侧：server job 必须真的起这两条（命令位，不是注释里提一句）。
+  // CI 侧：这两条必须真的被**某个 job** 调度（命令位，不是注释里提一句）。
+  //
+  // 2026-10-23：它们从 `server` job 拆到独立 job `webadmin-variants`（与 `go test` 并行，
+  // server job 的 happy path 因此少 ≈6.4 min）。判据口径改为"server ∪ webadmin-variants"，
+  // 而不是写死某一个 job —— 否则"拆 job"与"删步骤"在这条判据上同形（都红，但原因分不出来）。
   const workflowText = readFileSync(join(root, '.github', 'workflows', 'ci.yml'), 'utf8')
-  const jobText = (() => {
-    const lines = workflowText.split('\n')
-    const start = lines.findIndex(line => /^  server:\s*$/u.test(line))
-    if (start === -1) return null
-    let end = lines.length
-    for (let index = start + 1; index < lines.length; index += 1) {
-      if (/^  [A-Za-z0-9_-]+:\s*$/u.test(lines[index])) { end = index; break }
+  const jobTextOf = (name) => {
+    const jobLines = workflowText.split('\n')
+    const head = jobLines.findIndex(line => new RegExp(`^  ${name}:\\s*$`, 'u').test(line))
+    if (head === -1) return null
+    let tail = jobLines.length
+    for (let index = head + 1; index < jobLines.length; index += 1) {
+      if (/^  [A-Za-z0-9_-]+:\s*$/u.test(jobLines[index])) { tail = index; break }
     }
-    return lines.slice(start, end).join('\n')
-  })()
-  check(jobText !== null, 'ci.yml 里找不到 `server` job（变体调度点的 CI 侧落点）')
+    return jobLines.slice(head + 1, tail).join('\n')
+  }
+  const jobText = [jobTextOf('server'), jobTextOf('webadmin-variants')]
+    .filter(text => text !== null)
+    .join('\n')
+  check(jobText.trim().length > 0,
+    'ci.yml 里既没有 `server` 也没有 `webadmin-variants` job（变体调度点的 CI 侧落点没了）')
   /**
    * job 文本里是否有"命令位"调用某个 make 目标（跳过注释行与 `#` 之后的说明）。
    * @param text - job 文本。
@@ -8442,10 +8450,10 @@ exit 0
     return new RegExp(`(^|\\s)make\\s+${target}(\\s|$)`, 'u').test(trimmed)
   })
   check(schedulesTarget(jobText, VARIANT_TARGET),
-    `ci.yml 的 server job 必须调度 ${VARIANT_TARGET} —— 缺了它，变体回归只在本地手动跑时存在`
+    `ci.yml 的 server/webadmin-variants job 必须调度 ${VARIANT_TARGET} —— 缺了它，变体回归只在本地手动跑时存在`
       + '（CI 的 `npm test` 是缺省全开变体）')
   check(schedulesTarget(jobText, FEATURES_TARGET),
-    `ci.yml 的 server job 必须调度 ${FEATURES_TARGET} —— 产物级变体判据此前只进本地 make check，`
+    `ci.yml 的 server/webadmin-variants job 必须调度 ${FEATURES_TARGET} —— 产物级变体判据此前只进本地 make check，`
       + '判据存在但 CI 从不启动它')
 }
 

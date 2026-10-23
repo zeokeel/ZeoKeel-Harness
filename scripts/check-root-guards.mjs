@@ -192,8 +192,8 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // 预算登记表** `CI_JOB_BUDGET_MINUTES = { server: 60 }` —— 预算被静默削低（60→45，
   // 此前 exit 0）现在当场判红，合成负例 `b14-timeout-budget-below-registered` 是这条
   // 判据的钉子。⇒ 该守卫脚本内容变了，摘要按本表上方的纪律在同一批里复算更新。
-  ['check:workflows', { script: 'node scripts/check-workflows.mjs', argvTail: [], digest: '377b8b5b0af4557236a0b5d9407b8dade6bf65b1487960aabbcc0388cbcc3dc9' }],
-  ['check:ci-scripts', { script: 'node scripts/verify-ci-scripts.mjs', argvTail: [], digest: '29282f2389fa4f1f9aa9723c234fdd2479aaf04e9799e0c3d57480f0d7c3d039' }],
+  ['check:workflows', { script: 'node scripts/check-workflows.mjs', argvTail: [], digest: 'e3f5b7c90c95856bb0b8be4fe180f9d27f18432e6784ad45fff7f4436a779961' }],
+  ['check:ci-scripts', { script: 'node scripts/verify-ci-scripts.mjs', argvTail: [], digest: 'dfa20efbe3038619cc821b4b245b40616d05dc40447ad9eb186729eeae74c618' }],
   ['check:patch-resolutions', { script: 'node scripts/verify-patch-resolutions.mjs', argvTail: [], digest: '6dcde2281311235a57722608d91e6a1fa59734411ad65cda76ea2bdc43145c83' }],
   ['check:patch-pin', { script: 'node scripts/check-patch-pin.mjs', argvTail: [], digest: 'a8fe5b45df5dfadd7a87332b31f9e14c4a6722a41f21cf0f0d9afa6450a3ba84' }],
   ['check:patches', { script: 'node scripts/verify-patches.mjs', argvTail: [], digest: '22131d86472ff930f22687192b07216c5cf74ab594d0091a6766e661a2c24683' }],

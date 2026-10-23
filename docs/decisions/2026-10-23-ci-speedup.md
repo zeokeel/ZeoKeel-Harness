@@ -170,6 +170,20 @@ job log 按步骤拆开，**7.7 min 全在一步打包**，而 CI 的 channel �
 - 同一用例的同步回收断言原来与 10ms 周期循环共享实例 ⇒ 偶发 `removed=0`（循环先删掉了）；
   删除行为改用独立 root + 未启动循环的实例判，接线判据仍留在原实例上。
 
-**已知未解 flake**：`connectors/tests/audit-r8b-credential-change.spec.ts` 的 R8-B-2
-（`grants 期望 1 实得 2`）在同一批 4 路并发门禁下偶发；本轮通过 rerun 放行，
-需要单独查明（两次刷新是并发竞态还是断言口径过窄）。
+### 那条 R8-B-2 的 flake：已定位并修掉（2026-10-23 晚）
+
+现象：`connectors/tests/audit-r8b-credential-change.spec.ts` 的 R8-B-2 偶发
+`expected 2 to be 1`（`refresh_token` grants），而 `revokedRefreshReuse` 仍是 0。
+
+根因（不是断言过窄，也不是两次出示同一个单次令牌）：随包 MCP SDK 的 streamable-http
+传输有**两条互不相识的 401 重试路径** —— `_send`（POST）与 `_startOrAuthSse`（GET SSE），
+各自的 `isAuthRetry` 只管住自己。一次令牌失效产生两条 401：第一条触发我们的强制续期，
+续期几十毫秒就做完，第二条 401 到达时单飞里已经没有在飞的调用 ⇒ **再续期一次**（第二次
+用的是第一次旋转后的 refresh token，所以 reuse 是 0）。慢 runner / 高并发时窗口拉开，
+这就不再合并成一次，于是 grants=2。
+
+修法（产品侧，而不是把断言放宽）：provider 在**成功续期后**记下时刻，5s 窗口内的 401
+直接视为"同一批 401 的另一条通道" —— 不再续期，让 SDK 的重试带上刚签发的那枚令牌；
+窗口外的 401 照旧强制续期（"新令牌也立刻被拒"这种状态不会被这条窗口掩盖）。
+判据：`token-refresh-single-owner.spec.ts` 新增一条确定性用例（连调两次
+`onUnauthorized` ⇒ 只续期一次；把时间推过窗口 ⇒ 必须再续期一次）。

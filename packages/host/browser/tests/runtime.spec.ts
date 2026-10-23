@@ -1298,8 +1298,8 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
           result: {
             value: JSON.stringify({
               entries: [
-                { selector: '#host >>> button:nth-child(1)', kind: 'button', text: 'Inner', shadow: true },
-                { selector: '#frame >>> a:nth-child(1)', kind: 'link', text: 'Link', frame: 2 },
+                { selector: '#host >>> button:nth-child(1)', kind: 'button', text: 'Inner', shadow: true, visible: true, disabled: false },
+                { selector: '#in-frame', kind: 'link', text: 'Link', frame: 2, visible: false, disabled: true },
               ],
               crossOrigin: [3],
             }),
@@ -1318,8 +1318,45 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     // Append-only: the existing entry keeps index 1, new ones come after.
     expect(withExtras.elements[0]).toMatchObject({ index: 1, selector: '#save' })
     expect(withExtras.elements[1]).toMatchObject({ index: 2, shadow: true })
-    expect(withExtras.elements[2]).toMatchObject({ index: 3, frame: 2 })
+    expect(withExtras.elements[2]).toMatchObject({ index: 3, frame: 2, selector: '#in-frame', visible: false, disabled: true })
     expect(withExtras.meta.crossOriginFrames).toEqual([3])
+    cleanup()
+  })
+
+  it('snapshot extras: text is redacted BEFORE the 200-char slice (no secret fragment)', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        return {
+          result: {
+            value: JSON.stringify({
+              entries: [{ selector: '#host >>> button', kind: 'button', text: 'A'.repeat(150) + 'password=supersecret12345', shadow: true, visible: true, disabled: false }],
+              crossOrigin: [],
+            }),
+          },
+        }
+      }
+      return {
+        result: {
+          value: {
+            elements: [{ kind: 'button', text: 'Save', selector: '#save', visible: true, disabled: false }],
+            total: 1, truncated: false, frames: 0, shadowRoots: 1, shadowScanCapped: false, countCapped: false,
+          },
+        },
+      }
+    }
+    const snapshot = await runtime.modelSnapshot(1, undefined, { includeShadow: true })
+    const extras = snapshot.elements[1]!
+    expect(extras.text.length).toBeLessThanOrEqual(200)
+    // The VALUE must be gone (a truncated value fragment is the R7 leak); the
+    // keyword itself (`password=`) may legitimately stay.
+    expect(extras.text).not.toContain('supersecret')
+    expect(extras.text).not.toContain('supersecr')
+    expect(extras.text).toContain('****')
     cleanup()
   })
 

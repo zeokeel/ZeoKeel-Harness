@@ -3215,25 +3215,34 @@ export class BrowserRuntime {
           returnByValue: true,
         })
         const parsed = JSON.parse(String(result.result?.value ?? '{}')) as {
-          entries?: Array<{ selector?: unknown, kind?: unknown, text?: unknown, frame?: unknown, shadow?: unknown }>
+          entries?: Array<{ selector?: unknown, kind?: unknown, text?: unknown, frame?: unknown, shadow?: unknown, visible?: unknown, disabled?: unknown }>
           crossOrigin?: unknown
+          truncated?: unknown
+          frames?: unknown
+          nestedFrames?: unknown
         }
         const appended: BrowserSnapshotElement[] = []
         for (const entry of parsed.entries ?? []) {
           if (typeof entry.selector !== 'string' || entry.selector === '') continue
           const kind = entry.kind === 'link' || entry.kind === 'button' || entry.kind === 'select' || entry.kind === 'textarea' ? entry.kind : entry.kind === 'input' ? 'input' : 'other'
+          // R7: redact the WHOLE page text first, then apply the 200-char model
+          // slice — slicing in the page left credential tails (audit P1-3).
+          const redacted = redactFilledSecretsText(tab, String(entry.text ?? ''))
           appended.push({
             index: elements.length + appended.length + 1,
             kind,
-            text: redactFilledSecretsText(tab, String(entry.text ?? '').slice(0, 200)),
-            selector: entry.selector,
-            visible: true,
-            disabled: false,
+            text: redacted.slice(0, 200),
+            selector: redactFilledSecretsText(tab, entry.selector, { verbatim: true }),
+            visible: entry.visible === true,
+            disabled: entry.disabled === true,
             ...(typeof entry.frame === 'number' ? { frame: entry.frame } : {}),
             ...(entry.shadow === true ? { shadow: true } : {}),
           })
         }
         meta.crossOriginFrames = Array.isArray(parsed.crossOrigin) ? parsed.crossOrigin.filter((value): value is number => typeof value === 'number') : []
+        if (parsed.truncated === true) meta.truncated = true
+        if (typeof parsed.frames === 'number') meta.frames = Math.max(meta.frames, parsed.frames)
+        if (typeof parsed.nestedFrames === 'number' && parsed.nestedFrames > 0) meta.nestedFrames = parsed.nestedFrames
         elements.push(...appended)
       } catch {
         meta.crossOriginFrames = []

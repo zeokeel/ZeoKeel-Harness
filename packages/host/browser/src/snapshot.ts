@@ -284,6 +284,9 @@ export interface SnapshotExtractionMeta {
    * only populated when the caller asked for `includeFrames`; audit R2 — their
    * DOM is not readable from the main world). */
   crossOriginFrames?: number[]
+  /** Same-origin frames found INSIDE a frame that was scanned (not walked in v1,
+   * only counted; audit P3). */
+  nestedFrames?: number
 }
 
 /** Result of {@link extractSnapshotWithMeta}. */
@@ -314,8 +317,17 @@ export interface SnapshotExtrasOptions {
  * Extra probe for open shadow roots and same-origin iframes (C16/B4).
  *
  * APPEND-ONLY by design: the main probe is untouched, so the default snapshot is
- * byte-identical to the pre-2026-10-23 one (audit R1). This probe never runs
- * unless the caller explicitly asks for the extras.
+ * byte-identical to the pre-2026-10-23 one (audit R1).
+ *
+ * Semantics pinned by jsdom tests (audit P1):
+ * - shadow: every element with an OPEN shadowRoot is walked, whether or not it
+ *   matches the interactable selector; nested hosts keep their full path
+ *   (`#outer >>> #inner >>> a`). `>>>` means SHADOW boundary only.
+ * - frames: entries carry `frame: N` and a selector **local to that frame**
+ *   (never `#iframe >>> …`, which would be a shadow token).
+ * - text is cut only loosely here (2048) so the HOST can redact before the
+ *   model-facing 200-char slice (R7: redact first, cut second).
+ * - `visible` / `disabled` are computed, never hard-coded.
  * @param includeShadow - walk open shadow roots.
  * @param includeFrames - walk same-origin iframes.
  * @param remaining - how many entries may still be appended.
@@ -328,9 +340,13 @@ export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boole
   const MAX = ${Math.max(0, Math.floor(remaining))};
   const WANT_SHADOW = ${includeShadow ? 'true' : 'false'};
   const WANT_FRAMES = ${includeFrames ? 'true' : 'false'};
-  const TEXT_CAP = 200;
+  const TEXT_CAP = 2048;
+  const DEPTH_LIMIT = ${SHADOW_DEPTH_LIMIT};
   const out = [];
   const crossOrigin = [];
+  let truncated = false;
+  let framesSeen = 0;
+  let nestedFrames = 0;
   const kindOf = (el) => {
     const tag = el.tagName.toLowerCase();
     if (tag === 'a' && el.href) return 'link';
@@ -349,6 +365,15 @@ export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boole
     const t = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
     return t.slice(0, TEXT_CAP);
   };
+  const visibleOf = (el) => {
+    try {
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return false;
+      const style = getComputedStyle(el);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    } catch (cause) { return false; }
+  };
+  const disabledOf = (el) => el.disabled === true || (el.getAttribute && el.getAttribute('aria-disabled') === 'true');
   const pathOf = (el, root) => {
     if (el.id) return '#' + CSS.escape(el.id);
     const parts = [];
@@ -364,49 +389,68 @@ export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boole
     return parts.join(' > ');
   };
   const push = (el, selector, shadow, frame) => {
-    if (out.length >= MAX) return;
-    out.push({ selector, kind: kindOf(el), text: textOf(el), ...(shadow ? { shadow: true } : {}), ...(frame === undefined ? {} : { frame }) });
+    if (out.length >= MAX) { truncated = true; return; }
+    out.push({
+      selector,
+      kind: kindOf(el),
+      text: textOf(el),
+      visible: visibleOf(el),
+      disabled: disabledOf(el),
+      ...(shadow ? { shadow: true } : {}),
+      ...(frame === undefined ? {} : { frame }),
+    });
   };
   if (WANT_SHADOW) {
     const all = document.querySelectorAll('*');
     const scanCap = Math.min(all.length, 20000);
-    for (let i = 0; i < scanCap && out.length < MAX; i += 1) {
+    // Breadth-first over shadow scopes, carrying each host's full selector path.
+    const queue = [];
+    for (let i = 0; i < scanCap; i += 1) {
       const el = all[i];
-      const root = el.shadowRoot;
-      if (!root || root.mode !== 'open') continue;
-      const hostPath = pathOf(el, document.documentElement);
-      let depth = 0;
-      let walk = [root];
-      while (walk.length > 0 && depth < ${SHADOW_DEPTH_LIMIT} && out.length < MAX) {
-        const next = [];
-        for (const scope of walk) {
-          for (const inner of scope.querySelectorAll(SEL)) {
-            push(inner, hostPath + ' >>> ' + pathOf(inner, scope), true, undefined);
-            if (inner.shadowRoot && inner.shadowRoot.mode === 'open') next.push(inner.shadowRoot);
-            if (out.length >= MAX) break;
-          }
-          if (out.length >= MAX) break;
+      if (el.shadowRoot && el.shadowRoot.mode === 'open') {
+        queue.push({ root: el.shadowRoot, base: pathOf(el, document.documentElement), depth: 0 });
+      }
+    }
+    while (queue.length > 0 && out.length < MAX) {
+      const scope = queue.shift();
+      if (scope.depth >= DEPTH_LIMIT) continue;
+      for (const inner of scope.root.querySelectorAll(SEL)) {
+        push(inner, scope.base + ' >>> ' + pathOf(inner, scope.root), true, undefined);
+        if (out.length >= MAX) break;
+      }
+      if (out.length >= MAX) break;
+      for (const inner of scope.root.querySelectorAll('*')) {
+        if (inner.shadowRoot && inner.shadowRoot.mode === 'open') {
+          queue.push({ root: inner.shadowRoot, base: scope.base + ' >>> ' + pathOf(inner, scope.root), depth: scope.depth + 1 });
         }
-        walk = next;
-        depth += 1;
       }
     }
   }
   if (WANT_FRAMES) {
     const frames = document.querySelectorAll('iframe,frame');
     for (let index = 0; index < frames.length && out.length < MAX; index += 1) {
-      const frame = frames[index];
+      framesSeen += 1;
+      const frameEl = frames[index];
       let doc = null;
-      try { doc = frame.contentDocument; } catch (cause) { doc = null; }
+      try { doc = frameEl.contentDocument; } catch (cause) { doc = null; }
       if (doc === null) { crossOrigin.push(index + 1); continue; }
-      const path = pathOf(frame, document.documentElement);
+      // Frame entries use a selector LOCAL to the frame document: frame:N says
+      // where to resolve it, and '>>>' stays reserved for shadow boundaries.
       for (const el of doc.querySelectorAll(SEL)) {
-        push(el, path + ' >>> ' + pathOf(el, doc.documentElement), false, index + 1);
+        push(el, pathOf(el, doc.documentElement), false, index + 1);
         if (out.length >= MAX) break;
       }
+      // NESTED frames are not walked in v1; count them so the host can report the
+      // blind spot instead of silently dropping them (audit P3).
+      try {
+        nestedFrames += doc.querySelectorAll('iframe,frame').length;
+      } catch (cause) { /* unreadable: already cross-origin handled above */ }
     }
   }
-  return JSON.stringify({ entries: out, crossOrigin });
+  // Hitting the budget is reported as truncated: the caller cannot tell whether
+  // more elements exist, so it must not present the list as complete.
+  if (out.length >= MAX) truncated = true;
+  return JSON.stringify({ entries: out, crossOrigin, truncated, frames: framesSeen, nestedFrames });
 })()
 `
 }

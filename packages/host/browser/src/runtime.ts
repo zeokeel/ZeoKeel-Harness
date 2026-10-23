@@ -737,6 +737,9 @@ export class BrowserRuntime {
   private lifecycleLockHeld = false
   /** Tabs being closed: queued operations must fail fast (not-found). */
   private readonly closingTabs = new Set<number>()
+  /** S1: aborts NON-CDP waits (download/event waits) on user takeover. Replaced
+   * (not reused) on every takeover so a later release makes it usable again. */
+  private takeoverController = new AbortController()
   /**
    * Deadline **ownership stack**: one entry per agent operation currently inside
    * the pool's critical section (epoch ms), innermost last — R4-B-15, C3-01.
@@ -2674,7 +2677,10 @@ export class BrowserRuntime {
    * concurrently; the same tab stays strictly ordered.
    */
   async withTabLock<T>(tabId: number, signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>): Promise<T> {
-    if (this.closingTabs.has(tabId)) throw browserError('not-found', `browser: tab ${String(tabId)} is being closed`)
+    if (this.closingTabs.has(tabId)) throw browserError('not-found', `browser: tab ${String(tabId)} is closing`)
+    // Only a tab that EXISTED at entry can disappear while queued; an unknown id
+    // must reach the operation body so it reports its own (e.g. navigation) error.
+    const existed = this.tabs.has(tabId)
     const prev = this.tabLocks.get(tabId) ?? Promise.resolve()
     let release!: () => void
     const mine = new Promise<void>((resolve) => { release = resolve })
@@ -2684,7 +2690,7 @@ export class BrowserRuntime {
       this.tabLocksHeld.add(tabId)
       // S2 (TOCTOU): the user may have taken control while we queued.
       this.assertGateStillOpen()
-      if (this.closingTabs.has(tabId)) throw browserError('not-found', `browser: tab ${String(tabId)} is being closed`)
+      if (this.closingTabs.has(tabId) || (existed && !this.tabs.has(tabId))) throw browserError('not-found', `browser: tab ${String(tabId)} is closing or gone`)
       try {
         return await work()
       } finally {
@@ -2720,6 +2726,17 @@ export class BrowserRuntime {
       if (this.lifecycleLock === mine) this.lifecycleLock = Promise.resolve()
     }
   }
+
+  /** Rejects as soon as the user takes control (S1, non-CDP waits). */
+  private takeoverRejection(): Promise<never> {
+    const signal = this.takeoverController.signal
+    if (signal.aborted) return Promise.reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled'))
+    return new Promise<never>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled')), { once: true })
+    })
+  }
+
+
 
   /** S2: a user takeover that happened while queueing must stop the operation. */
   private assertGateStillOpen(): void {
@@ -3268,11 +3285,11 @@ export class BrowserRuntime {
   }
 
   async closeTab(tabId: number, user = false, signal?: AbortSignal): Promise<void> {
+    // Mark FIRST, before any await: a command queued at this moment must see the
+    // tab as closing, not slip in between admission and the body.
+    this.closingTabs.add(tabId)
     const body = async (): Promise<void> => {
-      // D1/B3 three-phase close:
-      // 1) mark closing under L2 — queued operations on this tab fail fast with
-      //    `not-found` instead of running against a tab that is going away;
-      this.closingTabs.add(tabId)
+      // D1/B3 three-phase close (closing was marked before admission):
       try {
         // 2) abort this tab's in-flight work WITHOUT holding L2, then wait (bound
         //    by the close deadline) for the tab lock to go idle;
@@ -5759,9 +5776,10 @@ export class BrowserRuntime {
       const remaining = Math.max(1, Math.min(options.timeoutMs ?? BROWSER_TOOL_TIMEOUT_MS, deadlineAt - Date.now()))
       const armed = bus.arm(options.condition, remaining)
       try {
-        await armed.promise
+        await Promise.race([armed.promise, this.takeoverRejection()])
         return { ok: true, reason: options.condition }
-      } catch {
+      } catch (cause) {
+        if (cause instanceof BrowserError && cause.code === 'window-controlled') throw cause
         return { ok: false, reason: `wait_for ${options.condition} timed out` }
       } finally {
         armed.cancel()
@@ -5966,6 +5984,10 @@ export class BrowserRuntime {
     this.pool.setUserControl(active)
     if (was === this.pool.controlled) return
     if (active) {
+      // S1: rotate the takeover epoch so non-CDP waits (download/event waits)
+      // abort as well; a later release starts from a fresh controller.
+      this.takeoverController.abort()
+      this.takeoverController = new AbortController()
       // S1: takeover aborts in-flight CDP work on EVERY tab (not only loads).
       for (const id of this.tabs.keys()) {
         // A tab with a pending dialog is left alone: the dialog discard/answer
@@ -6049,11 +6071,14 @@ export class BrowserRuntime {
    */
   async waitForDownload(id: number, timeoutMs: number, signal?: AbortSignal): Promise<DownloadEntry | null> {
     const deadline = Date.now() + Math.max(1, timeoutMs)
+    const takeover = this.takeoverController
+    const waitSignal = signal === undefined ? takeover.signal : AbortSignal.any([signal, takeover.signal])
     while (Date.now() < deadline) {
-      abortErrorIfAborted(signal)
+      if (takeover.signal.aborted) throw browserError('window-controlled', 'browser: the user took control, so the download wait was cancelled')
+      abortErrorIfAborted(waitSignal)
       const entry = this.downloads({ limit: 200 }).find(candidate => candidate.id === id)
       if (entry !== undefined && entry.status !== 'in-progress') return entry
-      await sleepAbortable(Math.min(200, Math.max(1, deadline - Date.now())), signal)
+      await sleepAbortable(Math.min(200, Math.max(1, deadline - Date.now())), waitSignal)
     }
     return null
   }
@@ -6068,8 +6093,15 @@ export class BrowserRuntime {
    */
   async waitForNewDownload(afterId: number, timeoutMs: number, tabId?: number, signal?: AbortSignal): Promise<DownloadEntry | null> {
     const deadline = Date.now() + Math.max(1, timeoutMs)
+    // Capture the takeover epoch NOW: the controller is rotated on every takeover,
+    // so reading `this.takeoverController` after the abort would see the NEW one.
+    const takeover = this.takeoverController
+    const waitSignal = signal === undefined ? takeover.signal : AbortSignal.any([signal, takeover.signal])
     while (Date.now() < deadline) {
-      abortErrorIfAborted(signal)
+      if (takeover.signal.aborted) {
+        throw browserError('window-controlled', 'browser: the user took control, so the download wait was cancelled')
+      }
+      abortErrorIfAborted(waitSignal)
       const newer = this.downloads({ limit: 200 }).filter(entry => entry.id > afterId)
       // STRICT when a tab is given: never fall back to another tab's download
       // (audit M4 P2-1). Every new download gets a `downloadTabs` record in
@@ -6079,7 +6111,14 @@ export class BrowserRuntime {
         : newer.filter(entry => this.downloadTabs.get(entry.id) === tabId)
       const terminal = candidates.find(entry => entry.status !== 'in-progress')
       if (terminal !== undefined) return terminal
-      await sleepAbortable(Math.min(200, Math.max(1, deadline - Date.now())), signal)
+      try {
+        await sleepAbortable(Math.min(200, Math.max(1, deadline - Date.now())), waitSignal)
+      } catch (cause) {
+        if (takeover.signal.aborted) {
+          throw browserError('window-controlled', 'browser: the user took control, so the download wait was cancelled')
+        }
+        throw cause
+      }
     }
     return null
   }

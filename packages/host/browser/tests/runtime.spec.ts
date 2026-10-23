@@ -2066,12 +2066,55 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     // A dialog call targets ONE tab (A class): it must not sit behind the global
     // exclusive operation (L9) — restore/clear_data style work.
     const dialog = runtime.handleDialog(1, { accept: true })
-    await sleep(30)
+    const winner = await Promise.race([dialog.then(() => 'dialog'), sleep(400).then(() => 'timeout')])
     const elapsed = Date.now() - started
     releaseGlobal()
     await global
-    await dialog
+    await dialog.catch(() => undefined)
+    expect(winner).toBe('dialog')
     expect(elapsed).toBeLessThan(500)
+    cleanup()
+  })
+
+  it('D1: takeover aborts non-CDP waits (download / event) within a second', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({})
+    const started = Date.now()
+    const download = runtime.waitForNewDownload(0, 5_000, 1).then(() => 'done', (error: unknown) => error as { code?: string })
+    await sleep(30)
+    runtime.setUserControl(true, 'user')
+    const outcome = await download
+    expect((outcome as { code?: string }).code).toBe('window-controlled')
+    expect(Date.now() - started).toBeLessThan(1_000)
+    runtime.setUserControl(false)
+
+    const waitStarted = Date.now()
+    const waiting = runtime.waitFor(1, { condition: 'popup', timeoutMs: 5_000 }).then(() => 'done', (error: unknown) => error as { code?: string })
+    await sleep(30)
+    runtime.setUserControl(true, 'user')
+    const waited = await waiting
+    expect((waited as { code?: string }).code).toBe('window-controlled')
+    expect(Date.now() - waitStarted).toBeLessThan(1_000)
+    runtime.setUserControl(false)
+    cleanup()
+  })
+
+  it('D1: a command queued while the tab is closing fails fast with not-found', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: 1 } })
+    let releaseHold!: () => void
+    const hold = runtime.withTabLock(1, undefined, Date.now() + 60_000, () => new Promise<void>((resolve) => { releaseHold = resolve }))
+    await sleep(20)
+    const queued = runtime.eval(1, '1').then(() => 'ran', (error: unknown) => error as { code?: string })
+    await sleep(10)
+    const closing = runtime.closeTab(1)
+    releaseHold()
+    await hold.catch(() => undefined)
+    const outcome = await queued
+    expect((outcome as { code?: string }).code).toBe('not-found')
+    await closing
     cleanup()
   })
 

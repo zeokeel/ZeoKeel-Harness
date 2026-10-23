@@ -3103,7 +3103,10 @@ export class BrowserRuntime {
     this.tabEvents.delete(id)
     this.choosers.delete(id)
     this.chooserInterception.delete(id)
+    this.chooserInterception.delete(id)
     this.chooserReenable.delete(id)
+    // A reused tab id must not inherit a previous tab's emulation (P2-1).
+    this.emulationOverrides.delete(id)
     // BR-2：标签没了，崩溃计数与退避定时器一起丢（定时器不然会加载进已销毁视图）。
     this.clearCrashState(id)
     // R15B-01：标签没了，它的模型面快照锚点一起丢 —— tab id 会被复用，
@@ -3475,6 +3478,19 @@ export class BrowserRuntime {
   async emulate(tabId: number, options: { viewport?: { width: number, height: number, deviceScaleFactor?: number, mobile?: boolean }, userAgent?: string, reset?: boolean }, signal?: AbortSignal): Promise<{ viewport?: { width: number, height: number, deviceScaleFactor: number, mobile: boolean }, userAgent?: string }> {
     const resolved = this.resolveTab(tabId)
     const clamp = (value: number): number => Math.max(200, Math.min(4096, Math.round(value)))
+    if (options.reset === true && (options.viewport !== undefined || options.userAgent !== undefined)) {
+      throw browserError('policy', 'browser_emulate: reset is mutually exclusive with viewport/userAgent')
+    }
+    if (options.viewport !== undefined) {
+      const { width, height, deviceScaleFactor, mobile } = options.viewport as { width?: unknown, height?: unknown, deviceScaleFactor?: unknown, mobile?: unknown }
+      if (typeof width !== 'number' || !Number.isFinite(width) || typeof height !== 'number' || !Number.isFinite(height)) {
+        throw browserError('policy', 'browser_emulate: viewport width and height must be finite numbers')
+      }
+      if (deviceScaleFactor !== undefined && (typeof deviceScaleFactor !== 'number' || !Number.isFinite(deviceScaleFactor))) {
+        throw browserError('policy', 'browser_emulate: deviceScaleFactor must be a finite number')
+      }
+      if (mobile !== undefined && typeof mobile !== 'boolean') throw browserError('policy', 'browser_emulate: mobile must be a boolean')
+    }
     return await this.agentRun('browser_emulate', async () => {
       const tab = this.tab(resolved)
       if (options.reset === true) {

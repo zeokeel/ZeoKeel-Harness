@@ -1776,6 +1776,24 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('emulate: tab close forgets the override, invalid inputs are rejected', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = () => ({})
+    // Invalid shapes are refused before any CDP call (while the tab exists).
+    await expect(runtime.emulate(1, { viewport: {} as never })).rejects.toMatchObject({ code: 'policy' })
+    await expect(runtime.emulate(1, { viewport: { width: Number.NaN, height: 800 } })).rejects.toMatchObject({ code: 'policy' })
+    await expect(runtime.emulate(1, { viewport: { width: 400, height: 800, deviceScaleFactor: Number.NaN } })).rejects.toMatchObject({ code: 'policy' })
+    await expect(runtime.emulate(1, { reset: true, userAgent: 'x' })).rejects.toMatchObject({ code: 'policy' })
+    await runtime.emulate(1, { viewport: { width: 400, height: 800 }, userAgent: 'UA-OLD' })
+    const internal = runtime as unknown as { emulationOverrides: Map<number, unknown> }
+    expect(internal.emulationOverrides.size).toBe(1)
+    await runtime.closeTab(1, true)
+    expect(internal.emulationOverrides.size).toBe(0)
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

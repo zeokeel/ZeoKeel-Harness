@@ -796,6 +796,9 @@ describe('2026-09-15 P1：browser_release 不在模型工具面上', () => {
     expect(names).not.toContain('browser_release')
     expect(names).toContain('browser_takeover')
     expect(names).toHaveLength(40)
+    // C15 cookie management stays refused: a main-process cookie channel would
+    // defeat the credential-isolation invariant (audit-0921 tripwire).
+    expect(names).not.toContain('browser_cookies')
   })
 
   it('control 分组的工具集合被钉死（移除后不能悄悄长回来）', () => {

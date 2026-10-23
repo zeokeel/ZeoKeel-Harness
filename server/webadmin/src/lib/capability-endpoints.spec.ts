@@ -24,11 +24,22 @@
  * 判据：**每个动作在每一渠道下的 URL + 动词都必须命中生产路由表**；组织渠道拿不到
  * 端点的动作必须返回 `null`（调用方不得渲染入口），**绝不允许回落市场前缀**。
  *
+ * 2026-10-23 增补（「已上架技能无法更新」根治片的契约面）：
+ *   - 组织渠道**也有**上传新版（`POST /shared-skills|agent-presets/:name/archive`，
+ *     name 级、版本以包内为准），因此 `uploadVersion` 的 **org 分支**不再是 `null`；
+ *   - 审批队列的 **market 行**走版本级审校面（approve/reject/preview/archive/file），
+ *     `base_path = /api/server/admin/skills|agents/<name>/<version>` —— 由
+ *     「市场待审行的版本级审校端点」一组逐条对拍；同时钉住市场前缀下**确实没有**
+ *     删除/质量/版本级上下架（审批页据此裁剪入口，不能误裁）。
+ *
  * ## 变异验证（实跑，见交付报告）
  *
  * 摘掉 channel 判断（动作表所有 builder 无条件用市场前缀）⇒ 第 2/5 条必红
  * （组织行的 URL 前缀与所属 channel 不符，且 `/skills/<org 名>` 这类 URL 的动词/
- * 路径组合与组织端点对不上）。把 `org: () => null` 改成回落到市场端点 ⇒ 第 5 条必红。
+ * 路径组合与组织端点对不上）。把 `uploadVersion` 的 org 分支改回 `() => null` ⇒
+ * 「两个渠道都能上传新版」必红；反过来改成回落市场前缀 ⇒「前缀与 channel 的命名空间
+ * 逐条一致」必红（org 行打到 `/skills`）。删掉服务端任一版本级审校路由 ⇒
+ * 「市场待审行的版本级审校端点」的对应锚点必红。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -335,6 +346,9 @@ describe('跨端对拍 · 路由真源可达', () => {
       'GET /api/server/admin/shared-skills/:name/:version/preview',
       'GET /api/server/admin/shared-skills/:name/:version/file',
       'GET /api/server/admin/shared-skills/:name/:version/archive',
+      // 2026-10-23:管理员代传组织共享内容新版本(name 级,版本以包内为准)。
+      'POST /api/server/admin/shared-skills/:name/archive',
+      'POST /api/server/admin/agent-presets/:name/archive',
       'PUT /api/server/admin/agent-presets/:name/enabled',
       'GET /api/server/admin/agent-presets/:name/:version/preview',
       'POST /api/server/admin/skills/:name/normalize',
@@ -346,6 +360,24 @@ describe('跨端对拍 · 路由真源可达', () => {
         PROD_ROUTES.some((r) => `${r.method} ${r.path}` === anchor),
         `生产路由表缺少锚点 ${anchor}（解析器或真源有问题）`,
       ).toBe(true)
+    }
+    // 市场待审版本的**版本级**审校面(2026-10-23):审批队列 market 行的
+    // base_path 就是 `${root}/<name>/<version>`,审批页在它后面追加
+    // /approve、/reject、/preview、/archive 与 /file?path=。
+    for (const kind of ['skill', 'agent'] as const) {
+      const root = CAPABILITY_ROOTS[kind].market
+      for (const anchor of [
+        `POST ${root}/:name/:version/approve`,
+        `POST ${root}/:name/:version/reject`,
+        `GET ${root}/:name/:version/preview`,
+        `GET ${root}/:name/:version/archive`,
+        `GET ${root}/:name/:version/file`,
+      ]) {
+        expect(
+          PROD_ROUTES.some((r) => `${r.method} ${r.path}` === anchor),
+          `生产路由表缺少市场${kind === 'skill' ? '技能' : '智能体'}的版本级端点 ${anchor}`,
+        ).toBe(true)
+      }
     }
     expect(PROD_ROUTES.length).toBeGreaterThan(50)
   })
@@ -408,10 +440,33 @@ describe('跨端对拍 · 每个动作按行 channel 选命名空间', () => {
     // 规范化只存在于市场技能。
     expect(skillRequest('normalize', orgSkill)).toBeNull()
     expect(skillRequest('normalize', SAMPLE.skill.market)).not.toBeNull()
-    // 组织库没有元数据编辑与上传新版（新版本只能由员工重新上传）。
-    for (const action of ['updateMeta', 'uploadVersion'] as const) {
-      expect(skillRequest(action, orgSkill), `组织技能不应有 ${action} 端点`).toBeNull()
-      expect(agentRequest(action, orgAgent), `组织智能体不应有 ${action} 端点`).toBeNull()
+    // 元数据编辑仍只有市场命名空间：组织共享内容的名字/描述/署名随员工上传的
+    // 归档，管理端改元数据会让行与包内容失配 ⇒ 两渠道的 org 侧恒 null。
+    expect(skillRequest('updateMeta', orgSkill), '组织技能不应有 updateMeta 端点').toBeNull()
+    expect(agentRequest('updateMeta', orgAgent), '组织智能体不应有 updateMeta 端点').toBeNull()
+  })
+
+  it('两个渠道都能上传新版（2026-10-23）：org 走 name 级 /:name/archive 且命中生产路由', () => {
+    // 修复前的形态是 `org: () => null`（入口被禁用 + 服务端也没端点）⇒ 员工上传
+    // 新版本后管理员既看不到也批不了，已上架内容永远停在首版。现在两个渠道对称：
+    //   市场 POST /skills|agents/:name/archive（body 必填 version）
+    //   组织 POST /shared-skills|agent-presets/:name/archive（版本以包内为准）
+    for (const [kind, ref] of [
+      ['skill', SAMPLE.skill['org']],
+      ['agent', SAMPLE.agent['org']],
+    ] as const) {
+      const built = kind === 'skill' ? skillRequest('uploadVersion', ref) : agentRequest('uploadVersion', ref)
+      expect(built, `组织${kind === 'skill' ? '技能' : '智能体'}必须有上传新版端点`).not.toBeNull()
+      expect(built!.method).toBe('POST')
+      expect(built!.url).toBe(`${CAPABILITY_ROOTS[kind].org}/${ref.name}/archive`)
+      requireMatch(PROD_ROUTES, 'POST', built!.url, `组织 ${kind} 上传新版`)
+      // 市场命名空间的上传新版必须原样保留（同一动词、另一个前缀）。
+      const market = kind === 'skill'
+        ? skillRequest('uploadVersion', SAMPLE[kind].market)
+        : agentRequest('uploadVersion', SAMPLE[kind].market)
+      expect(market!.method).toBe('POST')
+      expect(market!.url).toBe(`${CAPABILITY_ROOTS[kind].market}/${SAMPLE[kind].market.name}/archive`)
+      requireMatch(PROD_ROUTES, 'POST', market!.url, `市场 ${kind} 上传新版`)
     }
   })
 
@@ -445,8 +500,79 @@ describe('跨端对拍 · 每个动作按行 channel 选命名空间', () => {
     expect(skillRequest('file', noVersion)).toBeNull()
     expect(skillRequest('archive', noVersion)).toBeNull()
     expect(previewFileBase('skill', noVersion)).toBeNull()
+    // 上传新版是 **name 级**资源(版本以包内为准)⇒ 缺版本仍然有 URL,且不带版本段。
+    expect(skillRequest('uploadVersion', noVersion)?.url).toBe(`${ADMIN_API}/shared-skills/codeql/archive`)
+    expect(agentRequest('uploadVersion', noVersion)?.url).toBe(`${ADMIN_API}/agent-presets/codeql/archive`)
     // 授权是 name-only（同名多版本共享）⇒ 有版本与否都必须可用。
     expect(grantsBase('skill', noVersion)).toBe(`${ADMIN_API}/shared-skills/codeql`)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// B2. 审批队列的 **market 行**:base_path 指向版本级资源(2026-10-23)
+//
+// `GET /capabilities/approvals` 的 market 行由服务端下发:
+//   base_path    = /api/server/admin/skills|agents/<name>/<version>
+//   grants_base  = /api/server/admin/skills|agents/<name>
+//   preview_path = base_path + /preview
+// 审批页 `src/pages/Capabilities.tsx` 在 base_path 后追加 /approve、/reject、
+// /archive,预览弹窗追加 /file?path=。这些**后缀**必须逐条命中生产路由 ——
+// 否则市场待审行的「通过/拒绝/预览/下载归档」就是四个死链(本片修的正是
+// "market 待审没人能审")。
+// ---------------------------------------------------------------------------
+
+describe('跨端对拍 · 市场待审行的版本级审校端点', () => {
+  /** 审批页从行上拿到的 base_path 形状(服务端下发,不可前端自拼)。 */
+  const marketBase = (kind: CapabilityKind, name: string, version: string): string =>
+    `${CAPABILITY_ROOTS[kind].market}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`
+
+  it('approve/reject/preview/archive 全部命中生产路由（策略:capability:write/read）', () => {
+    for (const kind of ['skill', 'agent'] as const) {
+      const ref = SAMPLE[kind].market
+      const base = marketBase(kind, ref.name, ref.version!)
+      expect(base).toBe(`${ADMIN_API}/${kind === 'skill' ? 'skills' : 'agents'}/${ref.name}/${ref.version}`)
+      for (const [method, suffix, what] of [
+        ['POST', '/approve', '通过'],
+        ['POST', '/reject', '拒绝'],
+        ['GET', '/preview', '内容预览'],
+        ['GET', '/archive', '下载归档'],
+        ['GET', '/file', '单文件'],
+      ] as const) {
+        requireMatch(PROD_ROUTES, method, `${base}${suffix}`, `市场 ${kind} ${what}`)
+      }
+    }
+  })
+
+  it('grants_base 是 name 级，/grants 与 /grant 四动词全部命中', () => {
+    for (const kind of ['skill', 'agent'] as const) {
+      const ref = SAMPLE[kind].market
+      const base = marketBase(kind, ref.name, ref.version!)
+      // grants_base = base 去掉版本段(与共享渠道同形)。审批页的授权弹窗用它,
+      // 市场行**不渲染**授权入口(该端点只服务组织记录),但基路径形状仍须可达:
+      // 同一份 grants 端点也服务审批页之外的市场页。
+      const grantsBasePath = base.slice(0, -(('/' + ref.version).length))
+      expect(grantsBasePath).toBe(`${CAPABILITY_ROOTS[kind].market}/${ref.name}`)
+      requireMatch(PROD_ROUTES, 'GET', `${grantsBasePath}${GRANT_SUFFIXES.list}`, `市场 ${kind} 授权读取`)
+      requireMatch(PROD_ROUTES, 'PUT', `${grantsBasePath}${GRANT_SUFFIXES.list}`, `市场 ${kind} 授权整组替换`)
+      requireMatch(PROD_ROUTES, 'PUT', `${grantsBasePath}${GRANT_SUFFIXES.single}`, `市场 ${kind} 单条授权`)
+      requireMatch(PROD_ROUTES, 'DELETE', `${grantsBasePath}${GRANT_SUFFIXES.single}`, `市场 ${kind} 撤销授权`)
+    }
+  })
+
+  it('市场行**没有**的端点:审批页不得渲染(裁剪清单必须与会话契约一致)', () => {
+    // 审批页对 market 行隐藏 删除/质量/上下架/授权。下面钉住"组织命名空间的
+    // 这三个动作在**市场**前缀下确实不存在"——否则隐藏就是误裁(把可用能力藏起来),
+    // 反过来若未来服务端补齐,本用例会红并提醒把入口加回去。
+    for (const kind of ['skill', 'agent'] as const) {
+      const ref = SAMPLE[kind].market
+      const base = marketBase(kind, ref.name, ref.version!)
+      // 版本级删除(组织是 DELETE /shared-skills|agent-presets/:name/:version)。
+      expect(hit(PROD_ROUTES, 'DELETE', base), `市场 ${kind} 不应有版本级删除端点`).toBe(false)
+      // 版本级质量标记(组织是 PUT …/:version/quality)。
+      expect(hit(PROD_ROUTES, 'PUT', `${base}/quality`), `市场 ${kind} 不应有版本级质量端点`).toBe(false)
+      // 版本级上下架(组织是 PUT …/:name/enabled,market 用 POST …/:name/enable)。
+      expect(hit(PROD_ROUTES, 'PUT', `${base}/enabled`), `市场 ${kind} 不应有版本级 enabled 端点`).toBe(false)
+    }
   })
 })
 

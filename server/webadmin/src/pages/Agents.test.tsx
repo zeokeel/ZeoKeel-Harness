@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
-import Agents from './Agents'
+import Agents, { DELISTED_UPLOAD_HINT } from './Agents'
 import { request } from '../api'
 
 const mockRequest = vi.mocked(request)
@@ -189,19 +189,60 @@ describe('Agents 智能体市场页 · org 行按 channel 走共享命名空间'
     expect(mockRequest).not.toHaveBeenCalledWith('/api/server/admin/agents/retired-org/enable', expect.objectContaining({ method: 'POST' }))
   })
 
-  it('服务端没有的端点(编辑/上传新版)对 org 行禁用并给文案,市场行仍可点', async () => {
+  it('服务端没有的端点(编辑)对 org 行禁用并给文案;上传新版已放开(2026-10-23)', async () => {
     render(<Agents />)
     await screen.findByText('代码评审')
     const org = within(card('代码评审'))
-    for (const name of ['编辑', '上传新版']) {
-      const btn = org.getByRole('button', { name })
-      expect(btn, `org 行的「${name}」必须禁用(服务端无该端点)`).toBeDisabled()
-      expect(btn.getAttribute('title')).toBeTruthy()
-    }
+    const edit = org.getByRole('button', { name: '编辑' })
+    expect(edit, 'org 行的「编辑」必须禁用(服务端无该端点)').toBeDisabled()
+    expect(edit.getAttribute('title')).toBeTruthy()
+    // 组织行「上传新版」:服务端新增 POST /agent-presets/:name/archive
+    // (AdminPublish ⇒ 发布即已审核)。修订前这里被禁用,是「已上架内容无法更新」
+    // 在智能体侧的同一处根因。
+    expect(org.getByRole('button', { name: '上传新版' })).toBeEnabled()
     expect(card('代码评审').textContent).toContain('组织共享智能体')
     const market = within(card('PPT 生成'))
     expect(market.getByRole('button', { name: '编辑' })).toBeEnabled()
     expect(market.getByRole('button', { name: '上传新版' })).toBeEnabled()
+  })
+
+  it('org 行上传新版打 /agent-presets/:name/archive，body 只有 archive（版本以包内为准）', async () => {
+    render(<Agents />)
+    await screen.findByText('代码评审')
+    fireEvent.click(within(card('代码评审')).getByRole('button', { name: '上传新版' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    // 组织行的版本来自包内 preset.yml ⇒ 不渲染版本输入,body 不带 version 键。
+    expect(dialog.queryByLabelText(/版本/)).toBeNull()
+    expect(dialog.getAllByText(/版本以包内 preset\.yml 为准/).length).toBeGreaterThan(0)
+    const file = new File(['x'], 'agent.zip', { type: 'application/zip' })
+    const input = document.querySelector('input[type="file"]')!
+    Object.defineProperty(input, 'files', { value: [file], configurable: true })
+    fireEvent.change(input)
+    fireEvent.click(dialog.getByRole('button', { name: '发布' }))
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        `${ORG_ROOT}/code-reviewer/archive`,
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ archive: 'eA==' }) }),
+      )
+    })
+    expect(mockRequest).not.toHaveBeenCalledWith('/api/server/admin/agents/code-reviewer/archive', expect.anything())
+  })
+
+  it('已下架的市场行「上传新版」禁用并说明原因（不再点完才吃 409）', async () => {
+    render(<Agents />)
+    await screen.findByText('已下架市场智能体')
+    const btn = within(card('已下架市场智能体')).getByRole('button', { name: '上传新版' })
+    expect(btn).toBeDisabled()
+    expect(btn.getAttribute('title')).toBe(DELISTED_UPLOAD_HINT)
+    // 禁用控件不派发鼠标事件 ⇒ 原因同时挂在它的外层 span 上。
+    expect(within(card('已下架市场智能体')).getAllByTitle(DELISTED_UPLOAD_HINT)).toHaveLength(2)
+    // 已上架的市场行与组织行都不受影响。
+    expect(within(card('PPT 生成')).getByRole('button', { name: '上传新版' })).toBeEnabled()
+    expect(within(card('代码评审')).getByRole('button', { name: '上传新版' })).toBeEnabled()
+    // 下架的**组织**行同样禁用:发布内核的下架冻结没有渠道例外(409 APP_DELISTED)。
+    const orgOff = within(card('退役组织智能体')).getByRole('button', { name: '上传新版' })
+    expect(orgOff).toBeDisabled()
+    expect(orgOff.getAttribute('title')).toBe(DELISTED_UPLOAD_HINT)
   })
 
   it('归属显示与转移预填用 apps.owner(不是本行上传者 author)', async () => {

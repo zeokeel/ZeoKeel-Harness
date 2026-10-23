@@ -144,6 +144,11 @@ var largeBodyRoutes = map[string]struct{}{
 	"POST " + NamespaceServer + "/admin/agents/:name/archive": {}, // agentshare 24MB
 	"POST " + NamespaceClientV2 + "/shared-skills":            {}, // sharedskills 24MB
 	"POST " + NamespaceClientV2 + "/agent-presets":            {}, // agentshare 24MB
+	// 管理员给组织库发新版本（2026-10-23，T1 server-publish 的两个端点）：
+	// 归档以 base64 JSON 上传（~33% 膨胀 ⇒ 24MB body），handler 内自套
+	// MaxBytesReader + 先查 Content-Length；外层 1MB 中间件必须豁免，否则内层上限失效。
+	"POST " + NamespaceServer + "/admin/shared-skills/:name/archive": {}, // sharedskills 24MB
+	"POST " + NamespaceServer + "/admin/agent-presets/:name/archive": {}, // agentshare 24MB
 	// WASM 应用上传：.wasm ≤ 32 MiB、base64 后请求体 ≤ 48 MiB（§4.2/R21）。
 	// handler 内必须自己再套 http.MaxBytesReader(48<<20) 并先查 Content-Length。
 	"POST " + NamespaceClientV2 + "/apps/wasm/validate":         {},

@@ -10,6 +10,7 @@ import {
   installEndpoint,
   installNeedsConfirm,
   installRequestUrl,
+  isDelistedItem,
   itemsForTab,
   latestApprovedVersionByName,
   localRemoveEndpoint,
@@ -19,8 +20,10 @@ import {
   overwriteConfirmReason,
   planCardAction,
   planSectionCards,
+  showsMarketReviewHint,
   uninstallEndpoint,
   uninstallRequestUrl,
+  uploadActionLabelKey,
   versionInstallSupported,
   withOverwrite,
   confirmStripAction,
@@ -29,7 +32,7 @@ import {
   type SectionCard,
 } from '../../capability-center/src/client/CapabilityCenterPanel.tsx'
 import { builtinCardsForTab, builtinSkillsInstallOutcome, planBuiltinCards } from '../../capability-center/src/client/BuiltinSkillsStrip.tsx'
-import { setActiveLocale } from '../../capability-center/src/client/locales.ts'
+import { en, setActiveLocale, t, zh } from '../../capability-center/src/client/locales.ts'
 
 afterEach(() => { setActiveLocale('zh') })
 
@@ -719,5 +722,259 @@ describe('C-03：详情弹层的动作按钮必须与 install() 的站级闸同�
     // 文案必须走字典（locales-hygiene 会同时钉 zh/en 与引用点）。
     const locales = readFileSync(fileURLToPath(new URL('../../capability-center/src/client/locales.ts', import.meta.url)), 'utf8')
     expect(locales).toContain("'capability.busyHint'")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// task-4：商店行 + 归属人 + 已安装 ⇒ 页脚出「上传新版」（上架后仍能发新版）
+// ---------------------------------------------------------------------------
+//
+// 【契约来源】服务端本轮定案：非管理员对**任意渠道**（market / org）的、自己归属的
+// App 发新版本 ⇒ 服务端收下为 pending（市场渠道同样需要管理员审核后生效）；非归属人
+// ⇒ 409 NAME_TAKEN；官方行 / 已下架 / 已转交 ⇒ 各自的拒绝码。作者面（`?source=own`）
+// 本轮起也下发 market 渠道的 own 行（含 pending/rejected 与下架行），行上 `source`
+// 按渠道（market/org）下发并带 `is_owner` / `delisted`。
+//
+// 【根因（本次要钉住的退化路径）】`mergeItems` 的权威序是 market > org > 本机：
+// 技能一上架，卡片就从本机行变成商店行，而修前的 `planCardAction` 只在
+// `source === 'local'` 给「上传」⇒ 作者上架后再也没有上传入口，`upload()` 里的
+// `isOwner` 预检成了死代码。
+//
+// 【边界（不得为了变绿放宽）】下架 / 官方 / 非归属人三档**不出**上传；`mergeItems`
+// 的权威序本次不动（本组最后一条用例钉住它）。
+describe('task-4 商店行 + 归属人 + 已安装 ⇒ 「上传新版」', () => {
+  /**
+   * `?source=own` 下发的目录行（作者自己那一行）：`installed` / `installedVersion`
+   * 由宿主按磁盘状态补齐（与本文件 A6/N1 那组同形）。
+   */
+  const ownerRow = (
+    source: 'market' | 'org',
+    name: string,
+    extra: Partial<CapabilityItem> = {},
+    kind: 'skill' | 'agent' = 'skill',
+  ): CapabilityItem => ({
+    kind,
+    source,
+    name,
+    displayName: name,
+    version: '1.0.0',
+    description: '目录说明',
+    author: 'me',
+    status: 'approved',
+    versions: ['1.0.0'],
+    installed: true,
+    installedVersion: '1.0.0',
+    installedOrigin: 'store',
+    official: false,
+    isOwner: true,
+    ...extra,
+  })
+
+  /** 本机行（扫盘）：`?source=local` 的载荷里也会带同一批目录行（A6/N1 的现场）。 */
+  const diskRow = (source: 'market' | 'org', name: string, kind: 'skill' | 'agent' = 'skill'): CapabilityItem => ({
+    kind,
+    source: 'local',
+    name,
+    displayName: name,
+    ...kind === 'skill' ? { runtimeName: name } : {},
+    version: '1.0.0',
+    description: '本机说明',
+    author: '',
+    versions: [],
+    isLocal: true,
+    installedOrigin: 'store',
+    originChannel: source,
+    originAppId: name,
+    dirty: false,
+  })
+
+  /**
+   * **两种到达顺序**（与 A6/N1 同一条归约链
+   * `applySectionRows → itemsForTab → mergeItems`）：
+   *  - market 行先到：目录那一发先入列表，本机那一发随后补齐磁盘字段；
+   *  - 本机行先到：`?source=local` 的载荷先到，目录那一发随后到达。
+   * 两次结果必须逐字相同，且都能判出同一个页脚动作。
+   */
+  const bothOrders = (catalog: CapabilityItem[], disk: CapabilityItem[]): CapabilityItem[] => {
+    const marketFirst = mergeItems(itemsForTab(applySectionRows(applySectionRows([], 'market', catalog), 'mine', disk), 'mine'))
+    const mineFirst = mergeItems(itemsForTab(applySectionRows(applySectionRows([], 'mine', disk), 'market', catalog), 'mine'))
+    expect(mineFirst, '两种到达顺序的卡片数据必须逐字相同').toEqual(marketFirst)
+    return marketFirst
+  }
+
+  it('market 商店行 + isOwner:true + 已装 ⇒ 两种到达顺序都给「上传」（根因回归）', () => {
+    const rows = bothOrders(
+      [ownerRow('market', 'owned-skill')],
+      [ownerRow('market', 'owned-skill'), diskRow('market', 'owned-skill')],
+    )
+    expect(rows).toHaveLength(1)
+    const item = rows[0]!
+    expect(item.source, '归并后的展示来源仍是市场（权威序不动）').toBe('market')
+    expect(item.isOwner).toBe(true)
+    expect(item.installed).toBe(true)
+    // 修前：这里退化成一整档「卸载」⇒ 作者上架后再也发不了新版。
+    expect(planCardAction(item)).toEqual({ kind: 'upload' })
+    // 页脚文案由唯一判定函数分档：商店行是「上传新版」，不是本机行的「上传共享」。
+    expect(uploadActionLabelKey(item)).toBe('capability.uploadNew')
+  })
+
+  it('本机那一发只带磁盘行（不带目录副本）⇒ 两种到达顺序仍都给「上传」', () => {
+    // `?source=local` 的载荷是否捎带目录行是实现细节；`installed` 由归并层按
+    // "存在本机行" 补上（mergeItems），归属与 source 由目录那一发给 —— 两者都要齐。
+    const rows = bothOrders([ownerRow('market', 'owned-skill')], [diskRow('market', 'owned-skill')])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.source).toBe('market')
+    expect(rows[0]!.installed).toBe(true)
+    expect(rows[0]!.isOwner).toBe(true)
+    expect(planCardAction(rows[0]!)).toEqual({ kind: 'upload' })
+  })
+
+  it('作者面的待审行（status:pending）⇒ 徽章照旧说「审核中」，页脚仍给「上传新版」', () => {
+    // 服务端本轮起在作者面下发 market 渠道的 own 行（含 pending）—— 作者必须能看到
+    // 待审状态（徽章来自归并后的 status），同时仍能继续发新版本（契约没有"待审中
+    // 不许再传"这一档；真被服务端拒时由既有失败文案兜底）。
+    const pending = ownerRow('market', 'owned-skill', { status: 'pending' })
+    const merged = mergeItems([pending])
+    expect(merged[0]!.status).toBe('pending')
+    expect(planCardAction(merged[0]!)).toEqual({ kind: 'upload' })
+  })
+
+  it('org 渠道商店行 + 归属人 + 已装 ⇒ 同样给「上传」', () => {
+    const rows = bothOrders(
+      [ownerRow('org', 'org-owned')],
+      [ownerRow('org', 'org-owned'), diskRow('org', 'org-owned')],
+    )
+    expect(rows[0]!.source).toBe('org')
+    expect(planCardAction(rows[0]!)).toEqual({ kind: 'upload' })
+  })
+
+  it('智能体（kind:agent）同构：商店行 + 归属人 + 已装 ⇒ 同样给「上传」', () => {
+    // 服务端契约对"任意渠道 / 两种 kind"一视同仁；客户端判据不得只认 skill。
+    expect(planCardAction(ownerRow('org', 'my-agent', {}, 'agent'))).toEqual({ kind: 'upload' })
+    expect(planCardAction(ownerRow('market', 'my-agent', {}, 'agent'))).toEqual({ kind: 'upload' })
+  })
+
+  it('非归属人（is_owner:false）⇒ 不出上传：卸载 / 安装 / 更新到 vX 三档照旧', () => {
+    // 契约：非归属人发新版 ⇒ 409 NAME_TAKEN ⇒ 这里给「上传」就是假入口。
+    const installedNotOwner = ownerRow('market', 'theirs', { isOwner: false })
+    expect(planCardAction(installedNotOwner)).toEqual({
+      kind: 'uninstall',
+      endpoint: '/api/zeokeel/skills/theirs/uninstall',
+      localContent: false,
+    })
+    // 未安装 ⇒ 仍是「安装」。
+    expect(planCardAction({ ...installedNotOwner, installed: false, installedVersion: undefined })).toEqual({ kind: 'install' })
+    // 有新版且非归属人 ⇒ 仍是「更新到 vX」（回归）。
+    const hasNewer = ownerRow('market', 'theirs', {
+      isOwner: false, version: '2.0.0', versions: ['2.0.0'], installedVersion: '1.0.0',
+    })
+    expect(planCardAction(hasNewer)).toEqual({ kind: 'update', version: '2.0.0' })
+    // 未下发 `is_owner`（旧服务端）≠ 归属人：宁可不出入口，也不能给假的。
+    expect(planCardAction({ ...installedNotOwner, isOwner: undefined }).kind).toBe('uninstall')
+  })
+
+  it('下架行（delisted:true）⇒ 不出上传（本机有一份 ⇒ 卸载；没有 ⇒ 只报状态）', () => {
+    const delisted = ownerRow('market', 'gone', { delisted: true })
+    expect(isDelistedItem(delisted)).toBe(true)
+    expect(planCardAction(delisted)).toEqual({
+      kind: 'uninstall',
+      endpoint: '/api/zeokeel/skills/gone/uninstall',
+      localContent: false,
+    })
+    expect(planCardAction(delisted).kind).not.toBe('upload')
+    // 未安装的下架行：只报状态，不给任何假按钮（既有 R5-B-1 口径）。
+    expect(planCardAction({ ...delisted, installed: false, installedVersion: undefined })).toEqual({ kind: 'delisted' })
+  })
+
+  it('官方行（official:true）⇒ 不出上传（客户端证明不了管理员，与「更新」置灰同口径）', () => {
+    const official = ownerRow('market', 'official-skill', { official: true })
+    const plan = planCardAction(official)
+    expect(plan.kind).not.toBe('upload')
+    expect(plan).toEqual({
+      kind: 'uninstall',
+      endpoint: '/api/zeokeel/skills/official-skill/uninstall',
+      localContent: false,
+    })
+    // 官方行有新版时照旧是「更新到 vX」（渲染层对 official 置灰）—— 既有口径不因本改动放宽。
+    const officialUpdate = ownerRow('market', 'official-skill', {
+      official: true, version: '2.0.0', versions: ['2.0.0'], installedVersion: '1.0.0',
+    })
+    expect(planCardAction(officialUpdate)).toEqual({ kind: 'update', version: '2.0.0' })
+  })
+
+  it('未安装的商店行（即使是归属人）⇒ 仍是「安装」（回归）', () => {
+    const row = ownerRow('market', 'owned-skill', { installed: false, installedVersion: undefined })
+    expect(planCardAction(row)).toEqual({ kind: 'install' })
+    expect(uploadActionLabelKey(row)).toBe('capability.uploadNew')
+  })
+
+  it('归属人 + 已装 + 目录里有更高版本 ⇒ 仍给「上传」（取舍：发新版优先于装新版）', () => {
+    // 取舍依据：契约里「更新到 vX」这一档只对**非归属人**成立；归属人的卡片承载的是
+    // "发新版本"。若先给「更新」，作者在目录已有他的更高版本时又会失去上传入口 ——
+    // 正是本改动的根因形态。装新版仍可从详情弹层的版本列表走（A11 的既有入口）。
+    const row = ownerRow('market', 'owned-skill', {
+      version: '2.0.0', versions: ['2.0.0'], installedVersion: '1.0.0',
+    })
+    expect(hasUpdateFor(row)).toBe(true)
+    expect(planCardAction(row)).toEqual({ kind: 'upload' })
+  })
+
+  it('未改动权威序：同一名字在 market/org/本机都有行时，归并结果仍是市场行（两种顺序）', () => {
+    const rows = bothOrders(
+      [ownerRow('org', 'same-name'), ownerRow('market', 'same-name')],
+      [diskRow('market', 'same-name')],
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.source).toBe('market')
+    expect(rows[0]!.isOwner).toBe(true)
+    expect(planCardAction(rows[0]!)).toEqual({ kind: 'upload' })
+  })
+
+  it('上传按钮文案分档：本机行「上传共享」/ 商店行「上传新版」', () => {
+    expect(uploadActionLabelKey({ source: 'local' })).toBe('capability.upload')
+    expect(uploadActionLabelKey({ source: 'market' })).toBe('capability.uploadNew')
+    expect(uploadActionLabelKey({ source: 'org' })).toBe('capability.uploadNew')
+    setActiveLocale('zh')
+    expect(t(uploadActionLabelKey({ source: 'market' }))).toBe('上传新版')
+    // local 行文案逐字不变（既有产品动作「上传共享」）。
+    expect(t(uploadActionLabelKey({ source: 'local' }))).toBe('上传共享')
+    setActiveLocale('en')
+    const enLabel = t(uploadActionLabelKey({ source: 'market' }))
+    expect(enLabel).not.toMatch(/[\u4e00-\u9fff]/u)
+    expect(enLabel).not.toBe(t(uploadActionLabelKey({ source: 'local' })))
+  })
+
+  it('审核提示只出现在「market 商店行 + 归属人」的卡片上', () => {
+    const marketOwner = ownerRow('market', 'owned-skill')
+    expect(showsMarketReviewHint(marketOwner)).toBe(true)
+    // 组织渠道由本组织管理员审（不是市场审核）⇒ 不提示。
+    expect(showsMarketReviewHint(ownerRow('org', 'org-owned'))).toBe(false)
+    // 非归属人 / 官方 / 下架 / 未装 ⇒ 根本没有「上传新版」入口 ⇒ 不提示
+    //（否则会出现"卡片说要审核、页脚却没有上传按钮"的自相矛盾，与 R5-B-1/B-2 同形）。
+    expect(showsMarketReviewHint({ ...marketOwner, isOwner: false })).toBe(false)
+    expect(showsMarketReviewHint({ ...marketOwner, official: true })).toBe(false)
+    expect(showsMarketReviewHint({ ...marketOwner, delisted: true })).toBe(false)
+    expect(showsMarketReviewHint({ ...marketOwner, installed: false })).toBe(false)
+    // 本机行不是商店行。
+    expect(showsMarketReviewHint({ ...marketOwner, source: 'local' })).toBe(false)
+    // 文案走字典，两种语言都说得清"审核"这件事。
+    setActiveLocale('zh')
+    expect(t('capability.marketReviewHint')).toContain('审核')
+    setActiveLocale('en')
+    expect(t('capability.marketReviewHint')).toContain('review')
+  })
+
+  it('渲染层真的接上了（文案分档 + 审核提示，源码级；本包没有 jsdom）', () => {
+    const panel = readFileSync(fileURLToPath(new URL('../../capability-center/src/client/CapabilityCenterPanel.tsx', import.meta.url)), 'utf8')
+    // 上传按钮文案由唯一判定函数决定（不在 JSX 里另写一遍三元）。
+    expect(panel).toContain('{t(uploadActionLabelKey(item))}')
+    // 审核提示：带 data-role（探针/断言都能定位），文案走字典。
+    expect(panel).toContain('data-role="card-market-review-hint"')
+    expect(panel).toContain("{t('capability.marketReviewHint')}")
+    // 字典两份都在（locales-hygiene 另钉键集一致 / 无死键 / en 无 CJK）。
+    expect(zh['capability.uploadNew']).toBe('上传新版')
+    expect(zh['capability.marketReviewHint']).toContain('管理员审核')
+    expect(en['capability.uploadNew'].trim()).not.toBe('')
+    expect(en['capability.marketReviewHint']).toContain('review')
   })
 })

@@ -64,9 +64,13 @@ func newErr(status int, code, format string, args ...any) *Error {
 // PublishRequest 描述一次发布。元数据一律由服务端从包内解析(「包内即真相」),
 // 调用方只提供身份、渠道与归档字节。
 type PublishRequest struct {
-	Kind    string // skill | agent
-	AppID   string
-	Channel string // market | org
+	Kind  string // skill | agent
+	AppID string
+	// Channel 是分发渠道（market | org）。**空串 = 自动解析**（2026-10-23）：
+	// App 已存在 ⇒ 沿用 apps.channel；不存在 ⇒ 组织渠道 org。员工上传路径
+	// 用空串（作者更新自己的内容，渠道不是他该声明的事实）；管理端上架必须
+	// 显式声明渠道，显式值与现有 App 不一致仍是 409 NAME_TAKEN。
+	Channel string
 	Archive []byte
 	// Publisher 是发布账号(登录态),不可由请求体伪造。
 	Publisher string
@@ -199,9 +203,37 @@ func Publish(db *sql.DB, req PublishRequest) (*Result, error) {
 	if appErr != nil && !errors.Is(appErr, serverstore.ErrNotFound) {
 		return nil, newErr(http.StatusInternalServerError, "INTERNAL", "查询失败")
 	}
-	if appErr == nil && existingApp.Channel != req.Channel {
+	// 渠道解析（2026-10-23「已上架技能无法更新」修复，C1）。
+	//
+	// 缺陷现场：员工/作者对**已存在**的 App 发新版本时，请求渠道此前由各
+	// handler 硬编码成 org，而内核用 `existingApp.Channel != req.Channel`
+	// 判跨渠道同名 —— 于是对已上架的市场技能（apps.channel='market'）永远
+	// 回 409 NAME_TAKEN，作者**无法更新自己的内容**（唯一出口是管理员在
+	// 市场命名空间重发，而作者面根本没有这条路径）。
+	//
+	// 现在的语义（只在读 existingApp 之后、写 Apps 之前解析，其余校验不动）：
+	//   · App 已存在 + 请求渠道为空  ⇒ 渠道 = existingApp.Channel（忽略请求，
+	//     「作者更新的是他自己那条内容」，渠道不是他该重新声明的事实）；
+	//   · App 已存在 + 请求渠道非空且不一致 ⇒ **保留原判据** 409 NAME_TAKEN。
+	//     这不是本次修复要放开的东西：市场命名空间不得写 org 行（反之亦然），
+	//     显式渠道是调用方对命名空间的声明，跨命名空间改写既有 App 的渠道会
+	//     让内容在另一面凭空出现/消失（现有跨渠道回归用例钉住这条）；
+	//   · App 不存在 + 请求渠道为空 ⇒ 组织渠道 org（员工上传的默认落点；
+	//     也是唯一能通过 0053 的 `channel IN ('market','org')` 的合法默认值）
+	//   · App 不存在 + 请求渠道非空 ⇒ 用请求渠道。
+	//
+	// 解析结果只用于落库（UpsertAppAndCreateReleaseOn），不改变后续任何判据：
+	// official 锁、能力锁、归属校验、待审配额、版本语义与下架冻结全部照旧
+	// 按「已存在的 App / 历史版本」判定，与请求渠道无关。
+	resolvedChannel := req.Channel
+	switch {
+	case appErr == nil && req.Channel == "":
+		resolvedChannel = existingApp.Channel
+	case appErr == nil && existingApp.Channel != req.Channel:
 		return nil, newErr(http.StatusConflict, CodeNameTaken,
 			"名称已被%s占用,请换个名字或联系管理员", channelLabel(existingApp.Channel))
+	case appErr != nil && req.Channel == "":
+		resolvedChannel = serverstore.AppChannelOrg
 	}
 	// 下架冻结(第五轮审计 R5-B-1,2026-09-23):下架(apps.enabled=0)期间的
 	// 内容**冻结** —— 不再接收新版本,直到管理员显式重新上架。
@@ -330,7 +362,7 @@ func Publish(db *sql.DB, req PublishRequest) (*Result, error) {
 	// 「占名无版本」的悬挂 App(名称被永久占用却无任何版本)。
 	if _, err := serverstore.UpsertAppAndCreateReleaseOn(tx, &serverstore.App{
 		Kind: req.Kind, AppID: req.AppID, Title: projTitle,
-		Description: projDescription, Owner: owner, Channel: req.Channel, Enabled: enabled,
+		Description: projDescription, Owner: owner, Channel: resolvedChannel, Enabled: enabled,
 	}, &serverstore.Release{
 		Kind: req.Kind, AppID: req.AppID, Version: req.Manifest.Version,
 		Title: req.Manifest.Title, Description: req.Manifest.Description,

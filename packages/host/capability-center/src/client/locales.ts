@@ -72,6 +72,12 @@ export const zh = {
   'capability.confirmUninstall': '确认卸载',
   'capability.cancel': '取消',
   'capability.upload': '上传共享',
+  // 商店行（已上架的条目）发新版本（task-4）：与本机行的「上传共享」是**同一个**
+  // `upload()`，区别只在语义 —— 前者首次共享，后者给已上架条目发新版。
+  'capability.uploadNew': '上传新版',
+  // 市场渠道的新版本需管理员审核后生效（task-4）：只在「市场商店行 + 归属人 + 已装」
+  // 那一格出现，避免用户以为上传完就立刻上线。
+  'capability.marketReviewHint': '市场技能的新版本需管理员审核后生效。',
   'capability.reupload': '重新上传',
   'capability.awaitingReview': '等待审核',
   'capability.rejectReason': '未通过原因：{reason}',
@@ -164,6 +170,10 @@ export const en: Record<keyof typeof zh, string> = {
   'capability.confirmUninstall': 'Confirm uninstall',
   'capability.cancel': 'Cancel',
   'capability.upload': 'Upload',
+  // Store rows publish a new version through the same `upload()`; only the wording differs.
+  'capability.uploadNew': 'Upload new version',
+  // Marketplace versions take effect only after an administrator reviews them.
+  'capability.marketReviewHint': 'New versions of marketplace skills take effect only after an administrator reviews them.',
   'capability.reupload': 'Re-upload',
   'capability.awaitingReview': 'Awaiting review',
   'capability.rejectReason': 'Rejection reason: {reason}',

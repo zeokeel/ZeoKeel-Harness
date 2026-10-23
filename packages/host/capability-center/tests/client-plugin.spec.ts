@@ -26,6 +26,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import { zh } from '../src/client/locales.ts'
 
 /** 一条 foot menu 条目（stub 登记表保存的形状）。 */
 interface RegisteredFootEntry {
@@ -225,8 +226,18 @@ describe('能力中心：客户端插件接线', () => {
     expect(css).toContain('outline: 2px solid var(--dsw-alias-brand-primary);')
   })
 
-  it('字典注册在 capability 命名空间下，键数与搬出前一致', async () => {
+  it('字典注册在 capability 命名空间下，且注册的是**完整**字典（搬出后只增不减）', async () => {
     const { h } = await run()
-    expect(h.dictionaries).toEqual([{ namespace: 'capability', keys: 75 }])
+    // 2026-10-23（task-4）：这里原来冻结成 `keys: 75`（= 搬出前企业包那份字典的键数）。
+    // 功能新增键是**合法增量**（本轮加了 `capability.uploadNew` /
+    // `capability.marketReviewHint`），冻结常数只会逼后来者改数字，把它变成"改测试
+    // 就变绿"的假守卫。真正要钉的两条属性保留下来、而且更严：
+    //  ① 插件注册的是**整份**字典（不是子集 —— 键数与 `zh` 逐一对上）；
+    //  ② 搬出时那 75 个键一个都没掉（只允许增加，不允许静默丢弃）。
+    // 键集完整性 / 无死键 / en↔zh 成对由 locales-hygiene.spec.ts 另钉一遍。
+    expect(h.dictionaries).toHaveLength(1)
+    expect(h.dictionaries[0]!.namespace).toBe('capability')
+    expect(h.dictionaries[0]!.keys).toBe(Object.keys(zh).length)
+    expect(h.dictionaries[0]!.keys).toBeGreaterThanOrEqual(75)
   })
 })

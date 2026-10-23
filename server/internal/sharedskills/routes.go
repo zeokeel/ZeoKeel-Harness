@@ -83,6 +83,9 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	serverauth.AdminRoute(g, "GET", "", serverauth.PermCapabilityRead, listAll(db))
 	serverauth.AdminRoute(g, "GET", "/:name/:version/archive", serverauth.PermCapabilityRead, download(db, cacheDir, true))
 	serverauth.AdminRoute(g, "GET", "/:name/:version/preview", serverauth.PermCapabilityRead, preview(db, cacheDir))
+	// 管理端发新版本(2026-10-23):与市场端点 POST /skills/:name/archive 同形同语义,
+	// 只服务组织渠道(AdminPublish=true ⇒ approved)。请求体 {archive}。
+	serverauth.AdminRoute(g, "POST", "/:name/archive", serverauth.PermCapabilityWrite, uploadAdmin(db))
 	serverauth.AdminRoute(g, "POST", "/:name/:version/approve", serverauth.PermCapabilityWrite, decide(db, serverstore.SharedSkillApproved, "shared_skill_approve"))
 	serverauth.AdminRoute(g, "POST", "/:name/:version/reject", serverauth.PermCapabilityWrite, decide(db, serverstore.SharedSkillRejected, "shared_skill_reject"))
 	serverauth.AdminRoute(g, "DELETE", "/:name/:version", serverauth.PermCapabilityWrite, remove(db, cacheDir))
@@ -258,6 +261,72 @@ func listVisible(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// parsedSkillUpload 是一次技能归档解析的产物（员工上传与管理端发新版共用）。
+type parsedSkillUpload struct {
+	raw      []byte
+	checksum string
+	title    string
+	manifest appstore.Manifest
+}
+
+// parseSkillUpload 是技能归档**校验 + 严格清单解析**的唯一实现。
+//
+// 员工上传（/api/client/v2/shared-skills）与管理端发新版
+// （/api/server/admin/shared-skills/:name/archive）共用它：两条路径的判据
+// （归档安全校验 / 严格清单 / 包内即真相）只要分叉，就会重新出现「管理端
+// 能上架、员工装不上」或「两面的错误码/文案不一致」这类双份真源缺陷
+// （agentshare 的 parsePresetUpload 是同形而孪生的实现）。
+//
+// 失败时**已写好错误响应**并返回 ok=false，调用方必须直接 return。
+func parseSkillUpload(c *gin.Context, name, archiveB64 string) (parsedSkillUpload, bool) {
+	var out parsedSkillUpload
+	if len(archiveB64) == 0 {
+		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "缺少归档内容")
+		return out, false
+	}
+	raw, err := base64.StdEncoding.DecodeString(archiveB64)
+	if err != nil {
+		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "归档编码错误")
+		return out, false
+	}
+	checksum, err := ValidateSkillArchive(raw)
+	if err != nil {
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", archiveErrorMessage(err))
+		return out, false
+	}
+	// 严格清单校验:上游以 frontmatter 的 name 作运行时身份且强制
+	// kebab-case,不合规的包装到磁盘后会被**静默忽略**。发布期不拦,
+	// 用户就会拿到「上传成功但技能不存在」。
+	entries, skillMD, listErr := ListArchiveContents(raw)
+	if listErr != nil {
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", archiveErrorMessage(listErr))
+		return out, false
+	}
+	man, manErr := skillmanifest.Parse(entries, skillMD, name)
+	if manErr != nil {
+		var me *skillmanifest.Error
+		if errors.As(manErr, &me) {
+			serverauth.WriteError(c, skillmanifest.StatusFor(me.Code), me.Code, me.Message)
+			return out, false
+		}
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "SKILL.md 校验失败")
+		return out, false
+	}
+	out.raw, out.checksum, out.title = raw, checksum, man.Title
+	out.manifest = appstore.FromSkillManifest(man)
+	return out, true
+}
+
+// errPublish 把发布内核的结构化错误映射成统一 JSON 信封。
+func errPublish(c *gin.Context, perr error) {
+	var ae *appstore.Error
+	if errors.As(perr, &ae) {
+		serverauth.WriteError(c, ae.Status, ae.Code, ae.Message)
+		return
+	}
+	serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "发布失败")
+}
+
 func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.ContentLength > MaxBodyBytes {
@@ -284,36 +353,8 @@ func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		// 版本不再取自请求:决策 2026-09-01「包内即真相」——版本/标题/描述
 		// 一律以包内 SKILL.md frontmatter 为准。旧客户端硬编码发
 		// version=1.0.0,此处忽略该字段(P1 客户端改为读本地 frontmatter)。
-		if len(req.Archive) == 0 {
-			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "缺少归档内容")
-			return
-		}
-		raw, err := base64.StdEncoding.DecodeString(req.Archive)
-		if err != nil {
-			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "归档编码错误")
-			return
-		}
-		checksum, err := ValidateSkillArchive(raw)
-		if err != nil {
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", archiveErrorMessage(err))
-			return
-		}
-		// 严格清单校验:上游以 frontmatter 的 name 作运行时身份且强制
-		// kebab-case,不合规的包装到磁盘后会被**静默忽略**。发布期不拦,
-		// 用户就会拿到「上传成功但技能不存在」。
-		entries, skillMD, listErr := ListArchiveContents(raw)
-		if listErr != nil {
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", archiveErrorMessage(listErr))
-			return
-		}
-		man, manErr := skillmanifest.Parse(entries, skillMD, req.Name)
-		if manErr != nil {
-			var me *skillmanifest.Error
-			if errors.As(manErr, &me) {
-				serverauth.WriteError(c, skillmanifest.StatusFor(me.Code), me.Code, me.Message)
-				return
-			}
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "SKILL.md 校验失败")
+		parsed, ok := parseSkillUpload(c, req.Name, req.Archive)
+		if !ok {
 			return
 		}
 
@@ -325,28 +366,92 @@ func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		// P2:锁定检查、版本语义(不可复用/必须递增/内容未变更)、跨渠道同名
 		// 互斥、归属保护与待审配额全部收敛到统一发布内核——三条上传路径
 		// (管理后台/能力中心/智能体预设)共用同一份实现,不再各写一遍。
+		//
+		// Channel 留空 = **自动解析**（2026-10-23「已上架技能无法更新」修复）：
+		// 已存在的 App 沿用 apps.channel（作者更新的是他自己那条内容，渠道不是
+		// 他该重新声明的事实），不存在的 App 落到组织渠道 org。此前这里写死
+		// AppChannelOrg，内核按 `existingApp.Channel != req.Channel` 判跨渠道
+		// 同名 ⇒ 员工对已上架的市场技能永远 409 NAME_TAKEN，永远发不出新版本。
+		// 非管理员发布恒为 pending（内核默认，不由本 handler 决定）。
 		res, perr := appstore.Publish(db, appstore.PublishRequest{
 			Kind:       serverstore.AppKindSkill,
 			AppID:      req.Name,
-			Channel:    serverstore.AppChannelOrg,
-			Archive:    raw,
+			Channel:    "",
+			Archive:    parsed.raw,
 			Publisher:  u.Username,
 			PendingCap: pendingCap,
-			Manifest:   appstore.FromSkillManifest(man),
-			Checksum:   checksum,
+			Manifest:   parsed.manifest,
+			Checksum:   parsed.checksum,
 		})
 		if perr != nil {
-			var ae *appstore.Error
-			if errors.As(perr, &ae) {
-				serverauth.WriteError(c, ae.Status, ae.Code, ae.Message)
-				return
-			}
-			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "发布失败")
+			errPublish(c, perr)
 			return
 		}
 		_ = serverstore.AuditLog(db, u.Username, "shared_skill_upload",
-			UploadAuditDetail(req.Name, res.Version, man.Title, checksum))
+			UploadAuditDetail(req.Name, res.Version, parsed.title, parsed.checksum))
 		c.JSON(http.StatusCreated, gin.H{"skill": gin.H{"name": req.Name, "version": res.Version, "status": res.Status}})
+	}
+}
+
+// uploadAdmin 是**管理端**「给组织共享库发新版本」的端点
+// （POST /api/server/admin/shared-skills/:name/archive）。
+//
+// 为什么需要它：员工上传路径把非管理员发布**恒定**为 pending，而组织共享库
+// 的管理面此前只有审批（approve/reject）与元数据操作，没有「管理员直接发版」
+// 的入口 —— 组织技能的更新只能等作者上传后审批，管理员无法用自己的账号给
+// 已上架的组织技能发版本。市场侧已有等价端点（POST …/skills/:name/archive），
+// 本端点与管理端市场端点同语义：
+//   - AdminPublish=true：跳过能力锁定与待审配额，且发布即 approved；
+//   - 渠道显式 org（管理端声明的是命名空间，不是「沿用作者的渠道」）；
+//   - 版本/标题/描述以**包内**为准（忽略请求里的 version 字段，与员工上传
+//     同一套 parseSkillUpload），请求体因此只有 {archive}。
+//
+// RBAC（能进这个命名空间 = 有 capability:write）由 internal/router 的路由声明
+// 负责，本 handler 不重复判权限。
+func uploadAdmin(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.ContentLength > MaxBodyBytes {
+			serverauth.WriteError(c, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "归档过大")
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxBodyBytes)
+		var req struct {
+			Archive string `json:"archive"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "请求体格式错误")
+			return
+		}
+		// 名字面闸门**不在这里重复**：路径名会先过归档清单的身份校验
+		// （skillmanifest.Parse 的包内 name 必须等于它），再由发布内核
+		// （appstore.Publish 首段 skillmanifest.IsAppID）兜底 —— 那是本仓
+		// 「写入口必须过名字面闸门」的登记点（serverstore/upsert_app_write_gate_test.go）。
+		// 本包刻意不再新增第二个 IsAppID 调用点：skillmanifest 的调用点登记表
+		// （app_id_reserved_device_name_test.go 的 appIDCallSites）要求每个新点
+		// 显式声明写/读角色，重复预检只会让那条判据表面临无意义的登记。
+		name := c.Param("name")
+		parsed, ok := parseSkillUpload(c, name, req.Archive)
+		if !ok {
+			return
+		}
+		admin := adminUsername(c)
+		res, perr := appstore.Publish(db, appstore.PublishRequest{
+			Kind:         serverstore.AppKindSkill,
+			AppID:        name,
+			Channel:      serverstore.AppChannelOrg,
+			Archive:      parsed.raw,
+			Publisher:    admin,
+			AdminPublish: true,
+			Manifest:     parsed.manifest,
+			Checksum:     parsed.checksum,
+		})
+		if perr != nil {
+			errPublish(c, perr)
+			return
+		}
+		_ = serverstore.AuditLog(db, admin, "shared_skill_upload",
+			UploadAuditDetail(name, res.Version, parsed.title, parsed.checksum))
+		c.JSON(http.StatusCreated, gin.H{"skill": gin.H{"name": name, "version": res.Version, "status": res.Status}})
 	}
 }
 

@@ -314,12 +314,8 @@ func previewAgentAdmin(c *gin.Context, db *sql.DB) {
 		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "智能体尚未发布版本")
 		return
 	}
-	files, composition, listErr := agentshare.ListArchiveContents(r.Archive)
-	if listErr != nil {
-		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "归档解析失败")
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"files": files, "composition": composition, "version": r.Version})
+	// 响应体构造与版本级审核预览**共用一份**（review.go 的 writeAgentArchivePreview）。
+	writeAgentArchivePreview(c, r)
 }
 
 // archEntryText 提取归档内某顶层文件文本(预览/校验用)。
@@ -371,6 +367,23 @@ func downloadAgentArchiveAdmin(c *gin.Context, db *sql.DB) {
 		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "智能体尚未发布版本")
 		return
 	}
+	serveAgentReleaseArchive(c, db, name, r)
+}
+
+// serveAgentReleaseArchive 是市场智能体归档的**唯一字节出口**（name 级"当前展示
+// 版本"与版本级"指定版本"两条管理面路由共用；员工安装通路也从同一条解析取版本）。
+//
+// 响应契约与组织侧 `agentshare.serveArchive` 同形（X-Preset-* 头按归档实际格式
+// 给 zip / tar.gz），客户端安装器靠它做对照：
+//   - 归档缺失 ⇒ JSON 信封 404（不是空 body、不是 405）；
+//   - `checksum` 为空时**现算**归档字节的 sha256（与组织面共用
+//     `sharedskills.ArchiveChecksum`，空头会让客户端 fail-closed ⇒ 存量行永久装不上）。
+func serveAgentReleaseArchive(c *gin.Context, db *sql.DB, name string, r *serverstore.Release) {
+	if r == nil || len(r.Archive) == 0 {
+		// 尚未发布版本 / 归档缺失：与预览面同措辞的 JSON 404。
+		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "智能体尚未发布版本")
+		return
+	}
 	// 按归档实际格式回响应（zip 推荐 / tar.gz 兼容），头名与组织侧
 	// agentshare.serveArchive 一致（X-Preset-*），客户端安装器靠它做对照。
 	dispName := name + "-" + r.Version + ".tar.gz"
@@ -398,7 +411,6 @@ func fileContentAgentAdmin(c *gin.Context, db *sql.DB) {
 	if !requireMarketAgent(c, db, name) {
 		return
 	}
-	filePath := c.Query("path")
 	r, err := serverstore.CurrentMarketReleaseFor(db, serverstore.AppKindAgent, name, true)
 	if err != nil {
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
@@ -408,29 +420,9 @@ func fileContentAgentAdmin(c *gin.Context, db *sql.DB) {
 		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "智能体尚未发布版本")
 		return
 	}
-	content, size, found, binary, tooLarge, err := agentshare.ExtractFileContent(r.Archive, filePath)
-	if err != nil {
-		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "读取失败")
-		return
-	}
-	if !found {
-		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "文件不存在")
-		return
-	}
-	if binary {
-		c.JSON(http.StatusOK, gin.H{"size": size, "binary": true})
-		return
-	}
-	if tooLarge {
-		// 键名是**跨端契约**：webadmin 的 FileContentData.too_large 读它，组织侧的
-		// `/agent-presets/:name/:version/file`（agentshare）与技能侧
-		// （fileContentSkillAdmin）产出的也是 `too_large`。这里曾写成驼峰 `tooLarge`
-		// ⇒ 市场智能体的超大文件**永不显示**「文件过大 → 下载归档」入口（三段里只有
-		// 这一段静默失效，两端各自"自证"都测不出来）。别改回驼峰。
-		c.JSON(http.StatusOK, gin.H{"size": size, "too_large": true})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"content": content, "size": size})
+	// 逐文件响应与版本级端点共用（review.go 的 writeAgentArchiveFileContent；
+	// `too_large` 是跨端契约，那一段的注释在共用实现上）。
+	writeAgentArchiveFileContent(c, r)
 }
 
 // ---- 授权(与市场技能同语义:app_grants kind=agent) ----

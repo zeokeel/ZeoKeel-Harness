@@ -316,6 +316,50 @@ func ListApps(db *sql.DB, kind, channel string) ([]App, error) {
 	return out, rows.Err()
 }
 
+// AppChannelMap 返回某 kind 的 appID → apps.channel 映射。
+//
+// 渠道的**唯一事实源是 apps 行**（app_releases 没有渠道列，0053）：任何需要
+// 「按行渠道」做投影或过滤的读面都必须经这里建映射，不要另写一份
+// `SELECT channel FROM apps`（2026-10-23 作者面全渠道化 C4 的唯一取数口）。
+func AppChannelMap(db *sql.DB, kind string) (map[string]string, error) {
+	apps, err := ListApps(db, kind, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(apps))
+	for _, a := range apps {
+		out[a.AppID] = a.Channel
+	}
+	return out, nil
+}
+
+// AppChannelOf 返回单个 App 的渠道（行不存在 ⇒ ""）。
+// 单行读取路径用它，避免为了一个渠道去扫全表（AppChannelMap 的批量版）。
+func AppChannelOf(db *sql.DB, kind, appID string) string {
+	a, err := GetApp(db, kind, appID)
+	if err != nil {
+		return ""
+	}
+	return a.Channel
+}
+
+// ReleaseRowsByChannel 过滤掉「没有 apps 行」的 release 悬挂行。
+//
+// 理论上有 (kind, app_id) → apps 的外键（0053）保证不会出现，但 0054 回填
+// 期间与手工数据修复都可能留下孤儿；取数一旦把孤儿算进「我的」，归属判据
+// 就失去事实源（DistributionMap 里不存在该 App ⇒ OwnedBy 恒 false，行会
+// 无声消失）。这里显式剔除，与 orgSkillReleases 一直以来的「org 集合过滤」
+// 同形。
+func ReleaseRowsByChannel(all []Release, channels map[string]string) []Release {
+	out := make([]Release, 0, len(all))
+	for _, r := range all {
+		if _, ok := channels[r.AppID]; ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // SetAppOfficial 设置 App 官方属性与归属(转官方=official=1+owner=”;
 // 转用户=official=0+owner=<username>)。官方属性是 App 级唯一事实源,
 // 不经 UpsertApp 泄露(发布/元数据更新不触碰本列)。

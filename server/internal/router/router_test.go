@@ -166,6 +166,26 @@ func TestNamespaces(t *testing.T) {
 				// 智能体只能走软删(名字与版本号永久占位)。
 				"PUT " + nsServer + "/admin/shared-skills/:name/enabled",
 				"PUT " + nsServer + "/admin/agent-presets/:name/enabled",
+				// ---- 市场待审版本审核面（2026-10-23）----
+				// 员工归属人提交的市场新版本此前没有任何审核入口（审批队列只读 org），
+				// 这 10 条补齐 approve/reject 与"按指定版本"的 preview/archive/file。
+				// 路径形状与组织侧 /shared-skills|/agent-presets 的 :name/:version/*
+				// 逐条镜像；路径字符串同时被 webadmin 的 capability-endpoints.spec.ts
+				// 读服务端源码对拍，改写即两端同时红。
+				"POST " + nsServer + "/admin/skills/:name/:version/approve",
+				"POST " + nsServer + "/admin/skills/:name/:version/reject",
+				"GET " + nsServer + "/admin/skills/:name/:version/preview",
+				"GET " + nsServer + "/admin/skills/:name/:version/archive",
+				"GET " + nsServer + "/admin/skills/:name/:version/file",
+				"POST " + nsServer + "/admin/agents/:name/:version/approve",
+				"POST " + nsServer + "/admin/agents/:name/:version/reject",
+				"GET " + nsServer + "/admin/agents/:name/:version/preview",
+				"GET " + nsServer + "/admin/agents/:name/:version/archive",
+				"GET " + nsServer + "/admin/agents/:name/:version/file",
+				// 管理员给组织共享库发新版本（2026-10-23，T1）：与市场侧
+				// POST /skills/:name/archive 同形同权，只写 channel='org' 行。
+				"POST " + nsServer + "/admin/shared-skills/:name/archive",
+				"POST " + nsServer + "/admin/agent-presets/:name/archive",
 			},
 		},
 		{
@@ -342,6 +362,8 @@ func TestLargeBodyRoutesExemptions(t *testing.T) {
 	for _, key := range []string{
 		"POST " + NamespaceServer + "/admin/skills/:name/archive",
 		"POST " + NamespaceServer + "/admin/agents/:name/archive",
+		"POST " + NamespaceServer + "/admin/shared-skills/:name/archive",
+		"POST " + NamespaceServer + "/admin/agent-presets/:name/archive",
 		"POST " + NamespaceClientV2 + "/shared-skills",
 		"POST " + NamespaceClientV2 + "/agent-presets",
 	} {

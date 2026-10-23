@@ -21,7 +21,9 @@ package capabilities
 //     （本文件最后一条用例把"不扩大可见面"钉死）。
 //
 // 变异验证（任一改动都必须让本文件红）：
-//   · 删掉 2b/3b 分支里的市场取数块 ⇒ ①②③ 全红（这就是 R6-D 的原形态）；
+//   · 把 ListOwnedSharedSkills / ListOwnedAgentPresets（2026-10-23 起 = 任意渠道的
+//     归属行）改回只认 channel='org'，即作者面漏掉市场行 ⇒ ①②③ 全红（这就是
+//     R6-D 的原形态）；
 //   · 把 `dist.OwnedBy(u.Username)` 换成 `u.IsAdmin || ...` ⇒ ④ 红（非归属人看得到）；
 //   · 把作者面的 `dist.Delisted()` 传成常量 false ⇒ ①③ 红（下架成不了状态）。
 

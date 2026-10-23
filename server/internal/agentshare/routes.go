@@ -204,6 +204,9 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	// 旧「最新版本」语义与 hardcoded 1.0.0 文件名的断链。
 	serverauth.AdminRoute(g, "GET", "/:name/:version/archive", serverauth.PermCapabilityRead, downloadVersioned(db, cacheDir, true))
 	serverauth.AdminRoute(g, "GET", "/:name/:version/preview", serverauth.PermCapabilityRead, preview(db, cacheDir))
+	// 管理端发新版本(2026-10-23):与市场端点 POST /agents/:name/archive 同形同语义,
+	// 只服务组织渠道(AdminPublish=true ⇒ approved)。请求体 {archive}。
+	serverauth.AdminRoute(g, "POST", "/:name/archive", serverauth.PermCapabilityWrite, uploadAdmin(db))
 	serverauth.AdminRoute(g, "POST", "/:name/:version/approve", serverauth.PermCapabilityWrite, decideVersioned(db, serverstore.AgentPresetApproved, "agent_preset_approve"))
 	serverauth.AdminRoute(g, "POST", "/:name/:version/reject", serverauth.PermCapabilityWrite, decideVersioned(db, serverstore.AgentPresetRejected, "agent_preset_reject"))
 	serverauth.AdminRoute(g, "DELETE", "/:name/:version", serverauth.PermCapabilityWrite, removeVersioned(db, cacheDir))
@@ -307,10 +310,111 @@ func listVisible(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// parsedPresetUpload 是一次预设归档解析的产物（员工上传与管理端发新版共用）。
+type parsedPresetUpload struct {
+	raw      []byte
+	checksum string
+	title    string
+	manifest appstore.Manifest
+}
+
+// parsePresetUpload 是预设归档**安全校验 + 编排检查 + 包内元数据解析**的唯一实现。
+//
+// 员工上传（/api/client/v2/agent-presets）与管理端发新版
+// （/api/server/admin/agent-presets/:name/archive）共用它：两条路径只要各写
+// 一份解析，就会重新出现「管理端能上架、员工装不上」或「错误码两面不一致」
+// 这类双份真源缺陷（sharedskills 的 parseSkillUpload 是同形而孪生的实现）。
+//
+// 判据链（顺序也是契约：先安全校验，再编排可读，最后元数据）：
+//  1. ValidatePresetArchive：路径逃逸/符号链接/体积/条目数，并算 sha256；
+//  2. ListArchiveContents + ValidateAgentComposition：编排必须可读且可解析
+//     （archupd-1②：此前 composition 被丢弃，审核页只能看到空串）；
+//  3. preset.yml 必须存在且 ParseAgent 通过（「包内即真相」）。
+//
+// 失败时**已写好错误响应**并返回 ok=false，调用方必须直接 return。
+func parsePresetUpload(c *gin.Context, name, archiveB64 string) (parsedPresetUpload, bool) {
+	var out parsedPresetUpload
+	if len(archiveB64) == 0 {
+		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "缺少归档内容")
+		return out, false
+	}
+	raw, err := base64.StdEncoding.DecodeString(archiveB64)
+	if err != nil {
+		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "归档编码错误")
+		return out, false
+	}
+	checksum, err := ValidatePresetArchive(raw)
+	if err != nil {
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", archiveErrorMessage(err))
+		return out, false
+	}
+	// 2026-09-01:智能体对齐技能标准——展示元数据一律来自包内 preset.yml
+	// (「包内即真相」),此前靠请求体手填,导致卡片只能显示目录名、版本
+	// 永远是兜底的 1.0.0。
+	entries, composition, listErr := ListArchiveContents(raw)
+	if listErr != nil {
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", archiveErrorMessage(listErr))
+		return out, false
+	}
+	// archupd-1②:编排必须可读(非空且在上限内)且可解析才能进入审核队列。
+	// 此前 composition 被 `_` 丢弃,任何真实超过预览上限的编排都能发布成功,
+	// 而管理员审核页只能看到空串——审核这一门形同虚设。
+	if cerr := ValidateAgentComposition(composition); cerr != nil {
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", cerr.Error())
+		return out, false
+	}
+	presetYML, _, found, _, _, xerr := archiveutil.ExtractFileContent(raw, skillmanifest.PresetMetaFile, maxFilePreviewBytes)
+	if xerr != nil {
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "归档解析失败")
+		return out, false
+	}
+	if !found {
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, skillmanifest.CodeMissingField,
+			"归档缺少 "+skillmanifest.PresetMetaFile+":展示名/版本/描述/作者/分类必须写在包内")
+		return out, false
+	}
+	man, manErr := skillmanifest.ParseAgent(entries, presetYML, name)
+	if manErr != nil {
+		var me *skillmanifest.Error
+		if errors.As(manErr, &me) {
+			serverauth.WriteError(c, skillmanifest.StatusFor(me.Code), me.Code, me.Message)
+			return out, false
+		}
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "预设元数据校验失败")
+		return out, false
+	}
+	out.raw, out.checksum, out.title = raw, checksum, man.Title
+	out.manifest = appstore.FromSkillManifest(man)
+	return out, true
+}
+
+// uploadPresetName 校验上传目标名；失败已写响应。
+func uploadPresetName(c *gin.Context, name string) bool {
+	if !presetIDRe.MatchString(name) {
+		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "预设名不合法(小写字母/数字/中划线)")
+		return false
+	}
+	return true
+}
+
+// errPublish 把发布内核的结构化错误映射成统一 JSON 信封（与技能侧同形）。
+func errPublish(c *gin.Context, perr error) {
+	var ae *appstore.Error
+	if errors.As(perr, &ae) {
+		serverauth.WriteError(c, ae.Status, ae.Code, ae.Message)
+		return
+	}
+	serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "发布失败")
+}
+
 // upload accepts one preset archive (base64 in JSON), validates it, stores
 // it, and creates (or reuses on resubmit of a rejected name) a pending row.
-// Semantics: a name already pending/approved is refused (409) — a rejected
-// name may be resubmitted, which resets the row to pending with the new bytes.
+//
+// 渠道语义：PublishRequest.Channel 留空 = **自动解析**（2026-10-23「已上架技能
+// 无法更新」修复）：已存在的 App 沿用 apps.channel（作者更新的是他自己那条
+// 内容，渠道不是他该重新声明的事实），不存在的 App 落到组织渠道 org。此前
+// 这里写死 org，内核按 `existingApp.Channel != req.Channel` 判跨渠道同名 ⇒
+// 员工对已上架的市场预设永远 409 NAME_TAKEN。非管理员发布恒为 pending。
 func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.ContentLength > MaxBodyBytes {
@@ -329,10 +433,11 @@ func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "请求体格式错误")
 			return
 		}
-		if !presetIDRe.MatchString(req.Name) {
-			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "预设名不合法(小写字母/数字/中划线)")
+		if !uploadPresetName(c, req.Name) {
 			return
 		}
+		// 请求里的 version 只做形状校验（旧客户端会硬编码 1.0.0）；
+		// 真正的版本以包内 preset.yml 为准（「包内即真相」）。
 		if req.Version == "" {
 			req.Version = "1.0.0"
 		}
@@ -341,18 +446,8 @@ func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 				"版本号不合法:必须是 x.y.z(可带 -rc.1 预发布后缀)")
 			return
 		}
-		if len(req.Archive) == 0 {
-			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "缺少归档内容")
-			return
-		}
-		raw, err := base64.StdEncoding.DecodeString(req.Archive)
-		if err != nil {
-			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "归档编码错误")
-			return
-		}
-		checksum, err := ValidatePresetArchive(raw)
-		if err != nil {
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", archiveErrorMessage(err))
+		parsed, ok := parsePresetUpload(c, req.Name, req.Archive)
+		if !ok {
 			return
 		}
 
@@ -361,66 +456,84 @@ func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 			serverauth.WriteError(c, http.StatusUnauthorized, "AUTH_REQUIRED", "未认证")
 			return
 		}
-		// 2026-09-01:智能体对齐技能标准——展示元数据一律来自包内 preset.yml
-		// (「包内即真相」),此前靠请求体手填,导致卡片只能显示目录名、版本
-		// 永远是兜底的 1.0.0。
-		entries, composition, listErr := ListArchiveContents(raw)
-		if listErr != nil {
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", archiveErrorMessage(listErr))
-			return
-		}
-		// archupd-1②:编排必须可读(非空且在上限内)且可解析才能进入审核队列。
-		// 此前 composition 被 `_` 丢弃,任何真实超过预览上限的编排都能发布成功,
-		// 而管理员审核页只能看到空串——审核这一门形同虚设。
-		if cerr := ValidateAgentComposition(composition); cerr != nil {
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", cerr.Error())
-			return
-		}
-		presetYML, _, found, _, _, xerr := archiveutil.ExtractFileContent(raw, skillmanifest.PresetMetaFile, maxFilePreviewBytes)
-		if xerr != nil {
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "归档解析失败")
-			return
-		}
-		if !found {
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, skillmanifest.CodeMissingField,
-				"归档缺少 "+skillmanifest.PresetMetaFile+":展示名/版本/描述/作者/分类必须写在包内")
-			return
-		}
-		man, manErr := skillmanifest.ParseAgent(entries, presetYML, req.Name)
-		if manErr != nil {
-			var me *skillmanifest.Error
-			if errors.As(manErr, &me) {
-				serverauth.WriteError(c, skillmanifest.StatusFor(me.Code), me.Code, me.Message)
-				return
-			}
-			serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "预设元数据校验失败")
-			return
-		}
 		// 锁定、版本语义(不可复用/必须递增/内容未变更)、归属保护与待审配额
 		// 与技能共用同一个发布内核——此前智能体这条路径全都没有,管理员锁定
 		// 对它不生效。
 		res, perr := appstore.Publish(db, appstore.PublishRequest{
 			Kind:       serverstore.AppKindAgent,
 			AppID:      req.Name,
-			Channel:    serverstore.AppChannelOrg,
-			Archive:    raw,
+			Channel:    "",
+			Archive:    parsed.raw,
 			Publisher:  u.Username,
 			PendingCap: pendingCap,
-			Manifest:   appstore.FromSkillManifest(man),
-			Checksum:   checksum,
+			Manifest:   parsed.manifest,
+			Checksum:   parsed.checksum,
 		})
 		if perr != nil {
-			var ae *appstore.Error
-			if errors.As(perr, &ae) {
-				serverauth.WriteError(c, ae.Status, ae.Code, ae.Message)
-				return
-			}
-			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "发布失败")
+			errPublish(c, perr)
 			return
 		}
 		_ = serverstore.AuditLog(db, u.Username, "agent_preset_upload",
-			sharedskills.UploadAuditDetail(req.Name, res.Version, man.Title, checksum))
+			sharedskills.UploadAuditDetail(req.Name, res.Version, parsed.title, parsed.checksum))
 		c.JSON(http.StatusCreated, gin.H{"preset": gin.H{"name": req.Name, "version": res.Version, "status": res.Status}})
+	}
+}
+
+// uploadAdmin 是**管理端**「给组织共享智能体库发新版本」的端点
+// （POST /api/server/admin/agent-presets/:name/archive）。
+//
+// 与技能侧 uploadAdmin 逐条同形（sharedskills/routes.go 的孪生实现）：
+//   - 复用员工上传的同一套归档解析（parsePresetUpload），请求体只有 {archive}，
+//     版本/展示名以**包内** preset.yml 为准（忽略请求里的 version 字段）；
+//   - AdminPublish=true：跳过能力锁定与待审配额，发布即 approved；
+//   - 渠道显式 org（管理端声明的是命名空间，不是「沿用作者的渠道」）。
+//
+// 为什么需要它：员工上传路径把非管理员发布恒定成 pending，而组织预设的
+// 管理面此前只有审批与元数据操作，没有「管理员直接发版」的入口；市场侧
+// 已有等价端点（POST /api/server/admin/agents/:name/archive）。
+//
+// RBAC（capability:write）由 internal/router 的路由声明负责，本 handler 不
+// 重复判权限。
+func uploadAdmin(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.ContentLength > MaxBodyBytes {
+			serverauth.WriteError(c, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "归档过大")
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxBodyBytes)
+		var req struct {
+			Archive string `json:"archive"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "请求体格式错误")
+			return
+		}
+		name := c.Param("name")
+		if !uploadPresetName(c, name) {
+			return
+		}
+		parsed, ok := parsePresetUpload(c, name, req.Archive)
+		if !ok {
+			return
+		}
+		admin := adminUsername(c)
+		res, perr := appstore.Publish(db, appstore.PublishRequest{
+			Kind:         serverstore.AppKindAgent,
+			AppID:        name,
+			Channel:      serverstore.AppChannelOrg,
+			Archive:      parsed.raw,
+			Publisher:    admin,
+			AdminPublish: true,
+			Manifest:     parsed.manifest,
+			Checksum:     parsed.checksum,
+		})
+		if perr != nil {
+			errPublish(c, perr)
+			return
+		}
+		_ = serverstore.AuditLog(db, admin, "agent_preset_upload",
+			sharedskills.UploadAuditDetail(name, res.Version, parsed.title, parsed.checksum))
+		c.JSON(http.StatusCreated, gin.H{"preset": gin.H{"name": name, "version": res.Version, "status": res.Status}})
 	}
 }
 

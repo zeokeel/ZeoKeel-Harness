@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { request } from '../api'
-import Capabilities, { DELISTED_PENDING_HINT } from './Capabilities'
+import Capabilities, {
+  DELISTED_PENDING_HINT,
+  DELISTED_PENDING_MARKET_HINT,
+  MARKET_PENDING_HINT,
+} from './Capabilities'
 
 // 2026-09 恢复统一审批:能力中心承载共享技能+共享 Agent 审核(技能/智能体
 // 类型可筛选;approve/reject/delete 走服务端下发的 base_path = /api/server/admin/*)。
@@ -379,5 +383,147 @@ describe('R6-B P2：待审 + 应用已下架', () => {
     await screen.findByText('财务月报')
     expect(screen.queryByText('已下架')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '通过' })).toBeEnabled()
+  })
+})
+
+/**
+ * 市场待审版本(2026-10-23):队列从「只读 org」扩到「org + market」。
+ *
+ * 背景:市场渠道内容由管理端直发，但**员工归属人**上传的新版本需要管理员审核才生效；
+ * 此前审批队列只读 org 渠道 ⇒ market 待审版本没有任何审核面，已上架内容永远停在
+ * 首版(「已上架技能无法更新」的第三处根因)。服务端现在按行下发 `channel`，
+ * market 行的 base_path 是**版本级** `/api/server/admin/skills|agents/<name>/<version>`。
+ *
+ * 本组钉住四件事:
+ *  ① 来源列可读(市场/组织)；
+ *  ② market 行**不渲染**没有端点的动作(删除/质量/上下架/授权)，但保留
+ *    通过/拒绝/内容预览/下载归档/转移归属；
+ *  ③ 通过/拒绝打到**服务端下发的 base_path**(不是前端自拼的市场 name 级前缀)；
+ *  ④ market 待审行有影响面说明；已下架的 market 待审行「通过」置灰且给原因。
+ */
+describe('市场待审版本(queued market rows)', () => {
+  /** 市场行:服务端下发的 channel/版本级基路径;市场行**恒为 pending**。 */
+  const MARKET_ROW = {
+    ...SKILL_ROWS[0]!, name: 'data-extract', version: '2.0.0', display_name: '数据提取 v2',
+    description: '数据提取(员工提交的新版本)', status: 'pending' as const, enabled: true,
+    channel: 'market' as const,
+    base_path: '/api/server/admin/skills/data-extract/2.0.0',
+    grants_base: '/api/server/admin/skills/data-extract',
+    preview_path: '/api/server/admin/skills/data-extract/2.0.0/preview',
+  }
+
+  /** 只有一行时用它铺 mock(避开 beforeEach 里两份夹具的干扰)。 */
+  function mockOnly(rows: unknown[]): void {
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/capabilities/approvals?status=pending') return { approvals: rows }
+      if (path === '/api/server/admin/capabilities/approvals?status=all') return { approvals: rows }
+      if (path === '/api/server/admin/departments') return { departments: [] }
+      return {}
+    })
+  }
+
+  it('来源列:market 行显示「市场」,未下发 channel 的行按组织显示', async () => {
+    mockOnly([MARKET_ROW, SKILL_ROWS[0]])
+    render(<Capabilities />)
+    await screen.findByText('数据提取 v2')
+    expect(screen.getByRole('columnheader', { name: '来源' })).toBeInTheDocument()
+    // 两行:market 行 → 市场;旧服务端/org 行(无 channel) → 组织。
+    expect(screen.getByText('市场')).toBeInTheDocument()
+    expect(screen.getByText('组织')).toBeInTheDocument()
+  })
+
+  it('market 行不渲染没有端点的动作(删除/质量/上下架/授权),保留审校与核查动作', async () => {
+    mockOnly([MARKET_ROW])
+    render(<Capabilities />)
+    await screen.findByText('数据提取 v2')
+    // 通过/拒绝/预览/下载归档/转移归属 —— 服务端有端点(两渠道同形)。
+    expect(screen.getByRole('button', { name: '通过' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '拒绝' })).toBeInTheDocument()
+    expect(screen.getByTitle('查看内容预览')).toBeInTheDocument()
+    expect(screen.getByTitle('下载归档核查')).toBeInTheDocument()
+    expect(screen.getByTitle('转移归属(负责人)')).toBeInTheDocument()
+    // 市场命名空间没有 删除 / 质量 / 版本级上下架 / 授权 端点 ⇒ 这些入口不渲染
+    // (渲染出来点下去必然 404)。这与「org 行行为完全不变」不冲突:org 行仍全有。
+    expect(screen.queryByRole('button', { name: '删除' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '下架' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '重新上架' })).toBeNull()
+    expect(screen.queryByTitle('授权')).toBeNull()
+    // 质量 Select(已通过行才有)对 market 行不渲染。
+    expect(screen.queryByRole('combobox')).toBeNull()
+  })
+
+  it('market 行「通过」打到服务端下发的版本级 base_path', async () => {
+    mockOnly([MARKET_ROW])
+    render(<Capabilities />)
+    await screen.findByText('数据提取 v2')
+    fireEvent.click(screen.getByRole('button', { name: '通过' }))
+    fireEvent.click(await screen.findByRole('button', { name: '确认' }))
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/server/admin/skills/data-extract/2.0.0/approve',
+        { method: 'POST' },
+      )
+    })
+    // 绝不落到市场 name 级前缀(那是「上传新版/元数据」的端点,不是审校入口)。
+    expect(mockRequest).not.toHaveBeenCalledWith('/api/server/admin/skills/data-extract/approve', expect.anything())
+  })
+
+  it('market 行「拒绝」带上理由打到 base_path/reject,并释放归档(服务端语义)', async () => {
+    mockOnly([MARKET_ROW])
+    render(<Capabilities />)
+    await screen.findByText('数据提取 v2')
+    fireEvent.click(screen.getByRole('button', { name: '拒绝' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('拒绝理由'), { target: { value: '包内 SKILL.md 与版本不符' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认' }))
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/server/admin/skills/data-extract/2.0.0/reject',
+        { method: 'POST', body: JSON.stringify({ reason: '包内 SKILL.md 与版本不符' }) },
+      )
+    })
+  })
+
+  it('market 待审行带影响面说明(通过=对全部授权用户生效)', async () => {
+    mockOnly([MARKET_ROW])
+    render(<Capabilities />)
+    await screen.findByText('数据提取 v2')
+    expect(screen.getByText(MARKET_PENDING_HINT('skill'))).toBeInTheDocument()
+    expect(MARKET_PENDING_HINT('skill')).toContain('授权用户')
+    // 市场行的说明必须点明"市场"这一来源,否则与 org 行的语义混淆。
+    expect(MARKET_PENDING_HINT('skill')).toContain('市场')
+  })
+
+  it('已下架的 market 待审行:「通过」置灰,原因指向市场页重新上架(不是"联系管理员")', async () => {
+    mockOnly([{ ...MARKET_ROW, enabled: false }])
+    render(<Capabilities />)
+    await screen.findByText('数据提取 v2')
+    expect(screen.getByText('已下架')).toBeInTheDocument()
+    const approve = screen.getByRole('button', { name: '通过' })
+    expect(approve).toBeDisabled()
+    expect(screen.getByTitle(DELISTED_PENDING_MARKET_HINT)).toBeInTheDocument()
+    // 409 的成因写在文案里(APP_DELISTED),不得再出现「联系管理员」这类无操作性的指引。
+    expect(DELISTED_PENDING_MARKET_HINT).toContain('APP_DELISTED')
+    expect(DELISTED_PENDING_MARKET_HINT).toContain('市场')
+    expect(DELISTED_PENDING_MARKET_HINT).not.toContain('联系管理员')
+    // 拒绝仍可用(拒绝不是注定失败的动作)。
+    expect(screen.getByRole('button', { name: '拒绝' })).toBeEnabled()
+  })
+
+  it('对照:org 行(无 channel)行为完全不变 — 删除/上下架/授权照旧', async () => {
+    const approved = { ...SKILL_ROWS[0]!, status: 'approved' as const, quality: 'featured' as const, enabled: true }
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/capabilities/approvals?status=approved') return { approvals: [approved] }
+      if (path === '/api/server/admin/capabilities/approvals?status=all') return { approvals: [approved] }
+      if (path === '/api/server/admin/departments') return { departments: [] }
+      return {}
+    })
+    render(<Capabilities />)
+    const u = userEvent.setup()
+    await u.click(screen.getByRole('tab', { name: '已通过（0）' }))
+    await screen.findByText('CodeQL 审计')
+    expect(screen.getByRole('button', { name: '删除' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '下架' })).toBeInTheDocument()
+    expect(screen.getByTitle('授权')).toBeInTheDocument()
   })
 })

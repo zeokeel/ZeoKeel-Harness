@@ -616,7 +616,12 @@ export function isTransferredItem(item: Pick<CapabilityItem, 'isOwner' | 'upload
  *    （R5-B-1/B-3，**且能证明属于当前账号**，R6-B-1）两态各自出状态/卸载，
  *    **绝不出「上传」**；其余按上传状态出上传/等审/重传；
  *  - 商店行：未装出「安装」，有新版出「更新到 vX」（**不传 force**，A15），
- *    否则出「卸载」。
+ *    **归属人且已装**（且非官方/非下架）出「上传新版」（task-4），否则出「卸载」。
+ *
+ * task-4 的商店行上传档为什么必须存在：`mergeItems` 的权威序是 市场 > 组织 > 本机，
+ * 技能一上架卡片就变成商店行，修前的「上传」只在 `source === 'local'` 命中 ⇒ 作者
+ * 上架后再也发不了新版。服务端本轮起作者面会下发 market 渠道的 own 行（含待审），
+ * 所以这一档在市场上也看得见待审状态。
  *
  * 删除类动作的**准入条件**（R6-B-1）：本机那一份必须能证明属于当前账号
  * （{@link CapabilityItem.localOwnership} = `'mine'`，或服务端下发了权威的
@@ -671,6 +676,26 @@ export function planCardAction(item: CapabilityItem): CardActionPlan {
       : { kind: 'delisted' }
   }
   if (!item.installed) return { kind: 'install' }
+  // task-4：**商店行 + 归属人 + 已安装 ⇒ 上传新版**。
+  //
+  // 这是"上架后作者再也发不了新版"的修法：`mergeItems` 的权威序是 市场 > 组织 >
+  // 本机，技能一上架，卡片就从本机行变成商店行，而修前的「上传」只在
+  // `source === 'local'` 命中 ⇒ 作者上架后上传入口消失（`upload()` 里的 `isOwner`
+  // 预检成了死代码）。服务端契约（本轮）：非管理员对**任意渠道**的自己归属的 App
+  // 发新版本 ⇒ 收下为 pending（market 渠道同样要管理员审核后生效）；非归属人 ⇒
+  // 409 NAME_TAKEN。
+  //
+  // 守卫与顺序（三档**绝不**出上传，不得为了变绿放宽）：
+  //  - `isDelistedItem` 在前（上一档）：下架/撤权期间上传注定被服务端拒（409
+  //    APP_DELISTED），给按钮只是让作者反复提交；
+  //  - `!installed` 在前：没有本机内容时上传没有可打包的东西 ⇒ 仍是「安装」；
+  //  - `official === true` 排除：官方内容只有管理员能发版，客户端证明不了这件事，
+  //    与「更新」按钮对 official 的置灰口径一致；
+  //  - 位置在 `hasUpdateFor` **之前**（见 {@link CardActionPlan} 那一档的取舍）：
+  //    「更新到 vX」是**非归属人**的档，归属人的卡片承载"发新版"。
+  //  - `isTransferredItem` 只对 local 行生效，这一段不改它（商店行的 `is_owner:false`
+  //    本来就被 `isOwner === true` 这一条排除）。
+  if (item.isOwner === true && item.official !== true) return { kind: 'upload' }
   if (hasUpdateFor(item)) {
     return { kind: 'update', version: item.versions[item.versions.length - 1] ?? item.version }
   }
@@ -679,6 +704,32 @@ export function planCardAction(item: CapabilityItem): CardActionPlan {
     endpoint: uninstallEndpoint(item, item.version),
     localContent: needsOverwriteConfirm(item),
   }
+}
+
+/**
+ * 「上传」按钮的文案键（task-4）——**唯一实现**：本机行 = 「上传共享」（既有产品动作，
+ * 文案逐字不变）；商店行 = 「上传新版」（同一个 `upload()`，区别只在语义：
+ * 前者是首次共享，后者是给已上架的条目发新版本）。
+ * @param item - 能力中心的一行（归并后的行）。
+ * @returns 文案的字典键。
+ */
+export function uploadActionLabelKey(item: Pick<CapabilityItem, 'source'>): 'capability.upload' | 'capability.uploadNew' {
+  return item.source === 'local' ? 'capability.upload' : 'capability.uploadNew'
+}
+
+/**
+ * 卡片里那条「市场技能的新版本需管理员审核后生效」是否出现（task-4）。
+ *
+ * 只对**真的给出「上传新版」的那一格**出现，且只限 market 渠道 + 归属人：
+ *  - 组织渠道的新版本由本组织管理员审，不是市场审核 ⇒ 不提示；
+ *  - 非归属人 / 官方 / 下架 / 未安装 ⇒ 页脚根本没有上传动作 ⇒ 不提示（否则会出现
+ *    "卡片说要审核、页脚却没有上传按钮"的自相矛盾 —— 与 R5-B-1/B-2 同形的假入口）。
+ * @param item - 能力中心的一行（归并后的行）。
+ * @returns 出现 ⇒ `true`。
+ */
+export function showsMarketReviewHint(item: CapabilityItem): boolean {
+  if (item.source !== 'market' || item.isOwner !== true) return false
+  return planCardAction(item).kind === 'upload'
 }
 
 /** 「来源」徽章可能用到的字典键（**六选一**，见 {@link capabilitySourceBadgeKey}）。 */
@@ -1768,6 +1819,17 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
             {transferred ? t('capability.transferredHint') : t('capability.delistedHint')}
           </p>
         )}
+        {/* task-4：市场渠道的**新版本要管理员审核后生效** —— 归属人点「上传新版」之前
+            必须知道这一发不会立刻上线（否则会以为上传失败/已生效）。只在这一格真的给出
+            上传动作时出现（判定见 showsMarketReviewHint，与页脚动作同源）。 */}
+        {showsMarketReviewHint(item) && (
+          <p
+            style={{ ...META, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}
+            data-role="card-market-review-hint"
+          >
+            {t('capability.marketReviewHint')}
+          </p>
+        )}
         {uninstallConfirmKey === key && needsOverwriteConfirm(item) && (
           <p style={{ ...META, color: 'var(--dsw-alias-state-error-primary)', whiteSpace: 'pre-wrap' }} data-role="local-remove-warning">
             {/* 两档成因走两句话（R4-B-3）：本机自制 vs 商店装来但被你改过 ——
@@ -1803,7 +1865,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
                       : plan.kind === 'linked'
                         ? <span style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><Chip tone="neutral" plain>{t('capability.originSymlink')}</Chip></span>
                       : plan.kind === 'upload'
-                      ? <PanelButton variant="primary" size="md" block disabled={blocked} onClick={() => { void upload(item) }}>{t('capability.upload')}</PanelButton>
+                      ? <PanelButton variant="primary" size="md" block disabled={blocked} onClick={() => { void upload(item) }}>{t(uploadActionLabelKey(item))}</PanelButton>
                       : <PanelButton variant="primary" size="md" block disabled={blocked} onClick={() => { void install(item) }}>{t('capability.install')}</PanelButton>}
         </div>
         {/* 历史版本、描述全文都收在详情弹层里（就地展开会把整行栅格撑高）。 */}

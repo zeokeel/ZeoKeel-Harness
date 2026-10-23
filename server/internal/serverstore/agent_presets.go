@@ -36,6 +36,9 @@ type AgentPreset struct {
 	// Quality 是组织库质量标记(0037, 0059 起仅 ''|featured——官方语义移交 apps.official):
 	// 仅对 approved 行有展示语义;与市场「免费/专业」分级词表隔离。
 	Quality string
+	// Channel 是行渠道(apps.channel 的投影:market / org)。与技能侧同义:
+	// 作者面(全渠道)的消费方必须能按行区分来源(2026-10-23 C4)。
+	Channel string
 	// Archive 是上传的归档字节(0041: 归档直存 DB,不再落磁盘)。
 	Archive []byte
 	// Downloads 统计归档下载次数(0041)。
@@ -52,12 +55,13 @@ type AgentPreset struct {
 
 // releaseToPreset 把统一模型的 Release 投影成旧 DTO。
 // 注意 Author 语义:旧 DTO 的 Author 是**上传者**(归属判断依赖它),对应 Publisher。
-func releaseToPreset(r Release) AgentPreset {
+// channel 来自 apps 行(release 没有渠道列),调用方从 AppChannelMap/AppChannelOf 取。
+func releaseToPreset(r Release, channel string) AgentPreset {
 	return AgentPreset{
 		ID: r.ID, Name: r.AppID, DisplayName: r.Title, Description: r.Description,
 		Version: r.Version, Author: r.Publisher, Checksum: r.Checksum,
 		Status: AgentPresetStatus(r.Status), Reason: r.Reason, Quality: r.Quality,
-		Archive: r.Archive, Downloads: r.Downloads,
+		Archive: r.Archive, Downloads: r.Downloads, Channel: channel,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
@@ -130,7 +134,7 @@ func GetAgentPreset(db *sql.DB, name string) (*AgentPreset, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := releaseToPreset(*r)
+	out := releaseToPreset(*r, AppChannelOf(db, AppKindAgent, r.AppID))
 	return &out, nil
 }
 
@@ -158,7 +162,7 @@ func GetAgentPresetForReview(db *sql.DB, name string) (*AgentPreset, error) {
 	if best == nil {
 		return GetAgentPreset(db, name)
 	}
-	out := releaseToPreset(*best)
+	out := releaseToPreset(*best, AppChannelOf(db, AppKindAgent, best.AppID))
 	return &out, nil
 }
 
@@ -171,8 +175,22 @@ func GetAgentPresetByVersion(db *sql.DB, name, version string) (*AgentPreset, er
 	if r.DeletedAt != nil {
 		return nil, ErrNotFound
 	}
-	out := releaseToPreset(*r)
+	out := releaseToPreset(*r, AppChannelOf(db, AppKindAgent, r.AppID))
 	return &out, nil
+}
+
+// agentReleasesByChannel 取 kind=agent 的**全部渠道**版本（排除软删），并返回
+// appID→channel 映射。技能侧 skillReleasesByChannel 的孪生（唯一取数实现）。
+func agentReleasesByChannel(db *sql.DB, status string) ([]Release, map[string]string, error) {
+	all, err := ListReleasesByStatus(db, AppKindAgent, status)
+	if err != nil {
+		return nil, nil, err
+	}
+	channels, err := AppChannelMap(db, AppKindAgent)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ReleaseRowsByChannel(all, channels), channels, nil
 }
 
 // orgAgentReleases 取组织渠道智能体的全部版本(排除软删)。
@@ -183,21 +201,13 @@ func GetAgentPresetByVersion(db *sql.DB, name, version string) (*AgentPreset, er
 // 加闸门,capabilities 这条同根因落点没人负责,市场下架(enabled=0)后仍以
 // source=org 出现在员工清单里。
 func orgAgentReleases(db *sql.DB, status string) ([]Release, error) {
-	all, err := ListReleasesByStatus(db, AppKindAgent, status)
+	all, channels, err := agentReleasesByChannel(db, status)
 	if err != nil {
 		return nil, err
-	}
-	apps, err := ListApps(db, AppKindAgent, AppChannelOrg)
-	if err != nil {
-		return nil, err
-	}
-	org := map[string]bool{}
-	for _, a := range apps {
-		org[a.AppID] = true
 	}
 	out := []Release{}
 	for _, r := range all {
-		if org[r.AppID] {
+		if channels[r.AppID] == AppChannelOrg {
 			out = append(out, r)
 		}
 	}
@@ -212,7 +222,7 @@ func ListAgentPresets(db *sql.DB, status string) ([]AgentPreset, error) {
 	}
 	out := make([]AgentPreset, 0, len(list))
 	for _, r := range list {
-		out = append(out, releaseToPreset(r))
+		out = append(out, releaseToPreset(r, AppChannelOrg))
 	}
 	return out, nil
 }
@@ -239,8 +249,11 @@ func ListOwnedAgentPresets(db *sql.DB, viewer string) ([]AgentPreset, error) {
 	return listAgentPresetsByFace(db, viewer, nil, true)
 }
 
+// listAgentPresetsByFace 与技能侧 listSharedSkillsByFace 逐条同形：
+// ownOnly=false = 分发面（**仅组织渠道**、下架不列）；ownOnly=true = 作者面
+// （**任意渠道**的归属行、忽略下架，2026-10-23 C4）。渠道边界只写在这处。
 func listAgentPresetsByFace(db *sql.DB, viewer string, granted []string, ownOnly bool) ([]AgentPreset, error) {
-	list, err := orgAgentReleases(db, "")
+	list, channels, err := agentReleasesByChannel(db, "")
 	if err != nil {
 		return nil, err
 	}
@@ -254,10 +267,15 @@ func listAgentPresetsByFace(db *sql.DB, viewer string, granted []string, ownOnly
 	}
 	out := []AgentPreset{}
 	for _, r := range list {
+		channel := channels[r.AppID]
+		if !ownOnly && channel != AppChannelOrg {
+			// 分发面只服务组织预设；市场行归 marketplace 端点(R7 agentshare-2)。
+			continue
+		}
 		d := dists.Of(r.AppID)
 		if ownOnly {
 			if d.OwnedBy(viewer) {
-				out = append(out, releaseToPreset(r))
+				out = append(out, releaseToPreset(r, channel))
 			}
 			continue
 		}
@@ -265,7 +283,7 @@ func listAgentPresetsByFace(db *sql.DB, viewer string, granted []string, ownOnly
 			continue
 		}
 		if d.OwnedBy(viewer) || (r.Status == ReleaseStatusApproved && ok[r.AppID]) {
-			out = append(out, releaseToPreset(r))
+			out = append(out, releaseToPreset(r, channel))
 		}
 	}
 	return out, nil

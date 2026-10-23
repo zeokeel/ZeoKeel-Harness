@@ -87,17 +87,35 @@ function initOf(req: { method: string; body?: string }): RequestInit {
 }
 
 /**
- * 组织共享行(员工上传、审批通过)在本页的**能力边界**:管理端只有
- * 预览/授权/上下架/归属;新版本只能由员工重新上传,规范化只针对市场技能。
- * 服务端在组织命名空间下确实没有 编辑/上传新版/规范化 端点,因此这三个入口
- * 对 org 行禁用并说明原因(不留必然 404 的入口)。
+ * 组织共享行(员工上传、审批通过)在本页的**能力边界**。
+ *
+ * 2026-10-23 起组织行**也能「上传新版」**:服务端新增
+ * `POST /shared-skills/:name/archive`(管理员代传组织共享技能的新版本,
+ * `AdminPublish` ⇒ 发布即已审核)。修订前这里写的是「新版本由员工重新上传」
+ * 并禁用了入口 —— 那正是「已上架技能无法更新」的三处根因之一:员工在客户端
+ * 传了新版本,管理员既看不到(审批队列只读 org 渠道)也改不动。这两处本轮一起修。
+ * 仍只存在于市场命名空间的:元数据编辑(组织内容的元数据随归档,管理端改会失配)、
+ * 规范化(市场技能的存量修复动作)。
  */
 const ORG_LIMITS = {
-  hint: '组织共享技能:内容由员工上传,管理端只能预览/授权/上下架/归属;新版本由员工重新上传后走审批。',
+  hint: '组织共享技能:内容由员工上传,管理端可预览/授权/上下架/归属,也可代传新版本(发布即已通过审核)。',
   normalize: '规范化只适用于市场技能(组织共享技能的内容由员工上传)',
   edit: '组织共享技能的名称/描述/署名随员工上传的归档,管理端不提供元数据编辑',
-  upload: '组织共享技能的新版本由员工重新上传(审批通过后生效)',
 } as const
+
+/**
+ * **已下架**的行「上传新版」不给入口(2026-10-23)。
+ *
+ * 服务端的下架冻结在**发布内核**里(`appstore.Publish` 的 `Distribution.Writable()`,
+ * 409 `APP_DELISTED`),并且**明确没有角色/渠道例外** —— 管理员直发与组织代传一样被拒,
+ * 否则会产出「已批准但任何人都看不见」的版本。修订前页面只在**点完之后**才把错误抛给
+ * 管理员,文案还指向「请先联系管理员重新上架」(管理员看自己这句话毫无可操作性)。
+ * 事前禁用 + 说清动作顺序(先上架、再传新版),才是运营真正需要的。
+ */
+export const DELISTED_UPLOAD_HINT = '已下架:请先重新上架再上传新版本'
+
+/** 端点表给不出上传入口时的兜底文案(只有 org/market 都变回 null 才用得到)。 */
+const UPLOAD_UNAVAILABLE = '该来源暂不支持在管理端上传新版本'
 
 export default function Marketplace() {
   const [skills, setSkills] = useState<Skill[]>([])
@@ -234,7 +252,7 @@ export default function Marketplace() {
           const file = skillForm.archiveFile!
           const body = await readAsBase64(file)
           const uploadReq = skillRequest('uploadVersion', { channel: 'market', name })
-          if (uploadReq === null) { setDialogError(ORG_LIMITS.upload); return }
+          if (uploadReq === null) { setDialogError(UPLOAD_UNAVAILABLE); return }
           await request(uploadReq.url, {
             method: uploadReq.method,
             body: JSON.stringify({ version: skillForm.version.trim(), archive: body }),
@@ -326,7 +344,7 @@ export default function Marketplace() {
     } finally { setBusy(null) }
   }
 
-  // ---- 上传新版压缩包(0040:归档存 DB) ----
+  // ---- 上传新版压缩包(0040:归档存 DB;2026-10-23 起两渠道都能传) ----
   function openReplace(s: Skill) {
     setReplaceDialog(s)
     setReplaceFile(null)
@@ -334,20 +352,31 @@ export default function Marketplace() {
     setDialogError('')
   }
 
+  /**
+   * 上传新版:两个渠道的 body 都是 `{archive: base64}`,但**版本来源不同**——
+   *   · 市场 `POST /skills/:name/archive`:服务端**必填** `version`(与包内一致),保留兼容;
+   *   · 组织 `POST /shared-skills/:name/archive`:版本以包内 SKILL.md 为准,
+   *     服务端用 strictBindJSON 收口(strict 解析拒未知字段)⇒ **不能带 version 键**。
+   * 所以下面按行渠道决定 body 形状,而不是两处各写一份。
+   */
   async function doReplace() {
     if (!replaceDialog || replaceBusy) return
     if (!replaceFile) { setDialogError('请选择压缩包(.zip)'); return }
-    if (!replaceVersion.trim()) { setDialogError('版本必填'); return }
+    const isOrgRow = replaceDialog.channel === 'org'
+    // 已下架 ⇒ 发布内核一律拒收新归档(409 APP_DELISTED,无角色/渠道例外)。
+    // 按钮已禁用,这里兜住"绕过按钮"的路径。
+    if (replaceDialog.enabled === false) { setDialogError(DELISTED_UPLOAD_HINT); return }
+    if (!isOrgRow && !replaceVersion.trim()) { setDialogError('版本必填'); return }
     const req = skillRequest('uploadVersion', replaceDialog)
-    if (req === null) { setDialogError(ORG_LIMITS.upload); return }
+    if (req === null) { setDialogError(UPLOAD_UNAVAILABLE); return }
     setReplaceBusy(true)
     setDialogError('')
     try {
-      const body = await readAsBase64(replaceFile)
-      await request(req.url, {
-        method: req.method,
-        body: JSON.stringify({ version: replaceVersion.trim(), archive: body }),
-      })
+      const archive = await readAsBase64(replaceFile)
+      const body = isOrgRow
+        ? { archive }
+        : { version: replaceVersion.trim(), archive }
+      await request(req.url, { method: req.method, body: JSON.stringify(body) })
       setReplaceDialog(null)
       loadSkills()
     } catch (err: any) {
@@ -418,8 +447,9 @@ export default function Marketplace() {
                     <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />下载 {s.downloads ?? 0}</span>
                     <span className="inline-flex items-center gap-1"><Activity className="h-3 w-3" />调用 {s.calls ?? 0}</span>
                   </div>
-                  {/* 组织共享行没有 编辑/上传新版/规范化 端点(服务端确实不存在)⇒
-                      这三个入口对该行禁用并说明原因,绝不回落市场命名空间(必然 404)。 */}
+                  {/* 组织共享行仍没有 编辑/规范化 端点(服务端确实不存在)⇒ 这两个入口
+                      对该行禁用并说明原因,绝不回落市场命名空间(必然 404)。
+                      「上传新版」2026-10-23 起两渠道都有(org 走 /shared-skills/:name/archive)。 */}
                   {isOrg(s) && (
                     <p className="mt-3 text-[11px] leading-relaxed text-slate-500">{ORG_LIMITS.hint}</p>
                   )}
@@ -429,6 +459,9 @@ export default function Marketplace() {
                       const editReq = skillRequest('updateMeta', s)
                       const uploadReq = skillRequest('uploadVersion', s)
                       const normalizeReq = skillRequest('normalize', s)
+                      // 已下架 ⇒ 上传新版必被发布内核 409 拒(无渠道例外);事前禁用并把
+                      // 原因写在**外层 span** 上(禁用按钮不派发鼠标事件,浏览器不显示它自己的 title)。
+                      const uploadBlocked = s.enabled === false
                       return (
                         <>
                           <Button
@@ -451,12 +484,14 @@ export default function Marketplace() {
                             title={editReq === null ? ORG_LIMITS.edit : undefined}
                             onClick={() => openEditSkill(s)}
                           >编辑</Button>
-                          <Button
-                            variant="outline"
-                            disabled={uploadReq === null}
-                            title={uploadReq === null ? ORG_LIMITS.upload : undefined}
-                            onClick={() => openReplace(s)}
-                          >上传新版</Button>
+                          <span title={uploadBlocked ? DELISTED_UPLOAD_HINT : undefined}>
+                            <Button
+                              variant="outline"
+                              disabled={uploadReq === null || uploadBlocked}
+                              title={uploadBlocked ? DELISTED_UPLOAD_HINT : uploadReq === null ? UPLOAD_UNAVAILABLE : undefined}
+                              onClick={() => openReplace(s)}
+                            >上传新版</Button>
+                          </span>
                           <Button variant="outline" onClick={() => setTransferSkill(s)} title="转移归属(负责人)">归属</Button>
                           <Button variant="outline" onClick={() => setGrantDialog(s)}>授权</Button>
                           {s.enabled
@@ -564,18 +599,30 @@ export default function Marketplace() {
         onSaved={() => { setTransferSkill(null); void loadSkills() }}
       />
 
-      {/* 上传新版压缩包弹窗(0040) */}
+      {/* 上传新版压缩包弹窗(0040;2026-10-23 起组织行同样可代传) */}
       <Dialog open={replaceDialog !== null} onOpenChange={(v) => { if (!v) { setReplaceDialog(null); setDialogError('') } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>上传新版「{replaceDialog?.name}」</DialogTitle>
-            <DialogDescription>压缩包直存数据库;版本号与包内 SKILL.md 元数据需对应</DialogDescription>
+            <DialogDescription>
+              {replaceDialog?.channel === 'org'
+                ? '组织共享技能:压缩包直存数据库;版本以包内 SKILL.md 为准,管理员代传即发布(已通过审核)'
+                : '压缩包直存数据库;版本号与包内 SKILL.md 元数据需对应'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="replace-version">版本</Label>
-              <Input id="replace-version" value={replaceVersion} placeholder="如 2.0.0" onChange={(e) => setReplaceVersion(e.target.value)} />
-            </div>
+            {/* 组织行的版本来自包内 SKILL.md(服务端不接受外部 version 字段)⇒
+                不渲染版本输入,避免管理员填了却不生效的"看起来能改"的入口。 */}
+            {replaceDialog?.channel === 'org' ? (
+              <p className="text-xs text-muted-foreground">
+                版本以包内 SKILL.md 的 version 为准,此处无需填写;上传后新版本直接对该技能的授权用户生效。
+              </p>
+            ) : (
+              <div className="space-y-1">
+                <Label htmlFor="replace-version">版本</Label>
+                <Input id="replace-version" value={replaceVersion} placeholder="如 2.0.0" onChange={(e) => setReplaceVersion(e.target.value)} />
+              </div>
+            )}
             <div className="space-y-1">
               <Label>压缩包(.zip)</Label>
               <input

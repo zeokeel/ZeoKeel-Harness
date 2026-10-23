@@ -22,8 +22,29 @@
  *    - 组织技能:`/shared-skills/:name/:version`(预览/单文件/归档**按 name@version
  *      寻址**),上下架是 `PUT /shared-skills/:name/enabled`(请求体 `{enabled}`)。
  *    市场智能体同理:`/agents/:name` ↔ 组织 `/agent-presets/:name/:version`。
- * 3. `null` = 该渠道**没有**这个端点(如组织库没有 规范化 / 元数据编辑 / 上传新版)。
+ * 3. `null` = 该渠道**没有**这个端点(如组织库没有 规范化 / 元数据编辑)。
  *    调用方必须**不渲染或禁用**该入口并给出明确文案,不得留必然 404 的入口。
+ *
+ * ## 2026-10-23 修订:两渠道都能「上传新版」,市场待审也有版本级审校端点
+ *
+ * 修订前这里写的是「组织库没有上传新版端点,新版本只能由员工重新上传」——
+ * 那是**服务端能力缺口**,不是设计意图:员工在客户端上传新版后,管理员在管理端
+ * 既看不到、也批不了,已上架内容永远停在首版(现场「已上架技能无法更新」)。
+ * 服务端已补齐两个渠道的上传新版端点,形状**一致**:
+ *   - 组织技能:`POST /api/server/admin/shared-skills/:name/archive`
+ *   - 组织智能体:`POST /api/server/admin/agent-presets/:name/archive`
+ *     (name 级、无版本段 —— 版本以包内 SKILL.md / preset.yml 为准,
+ *     服务端不接受外部 `version` 字段,见 `src/pages/Marketplace.tsx` 的 body 形状)
+ *   - 市场技能/智能体仍是 `POST /skills|agents/:name/archive`(该端点**要求** `version`)
+ *
+ * 同时市场渠道的**版本级**审校端点已落地(`POST …/:name/:version/approve|reject`、
+ * `GET …/:name/:version/preview|archive|file`),审批队列里 market 行的
+ * `base_path` 就指向 `${root}/<name>/<version>` —— 与组织行同形,审批页因此
+ * 不需要按渠道分支拼 URL,只需按渠道裁剪**没有端点**的动作(删除/质量/上下架/授权,
+ * 那些仍只存在于组织命名空间)。这条形状由 `capability-endpoints.spec.ts` 对拍钉住。
+ *
+ * `updateMeta` / `normalize` 仍为 `null`:组织共享内容的元数据随员工上传的归档,
+ * 管理端不提供元数据编辑;规范化是市场技能独有的存量修复动作(两条都没有组织端点)。
  *
  * 路径与动词的**唯一真源**是 `server/internal/router/` 的路由声明 —— `router.go`
  * 的基础面 **加上**含 `AdminRoute(` 声明的分片（skills / apps / connectors 三个可选模块
@@ -189,15 +210,17 @@ export const SKILL_ENDPOINTS: Record<SkillAction, ChannelBuilders> = {
     market: (ref) => req('DELETE', `${skillMarket}/${seg(ref.name)}`),
     org: skillEnabled(false),
   },
-  // 组织库没有这三个端点:新版本只能由**员工**重新上传(employee Bearer 面
-  // POST /api/client/v2/shared-skills),管理端不代传;规范化只针对市场技能。
+  // 元数据编辑/规范化仍**只有市场命名空间**:组织共享内容的名字/描述/署名随员工
+  // 上传的归档(管理端改元数据会让行与包内容失配),规范化是市场技能独有的存量修复。
   updateMeta: {
     market: (ref) => req('PUT', `${skillMarket}/${seg(ref.name)}`),
     org: () => null,
   },
+  // 上传新版 **两个渠道都有**(2026-10-23):市场是 name 级 + 必填 `version`,
+  // 组织同为 name 级但**版本以包内 SKILL.md 为准**(管理端代传员工内容的更新)。
   uploadVersion: {
     market: (ref) => req('POST', `${skillMarket}/${seg(ref.name)}/archive`),
-    org: () => null,
+    org: (ref) => req('POST', `${skillOrg}/${seg(ref.name)}/archive`),
   },
   normalize: {
     market: (ref) => req('POST', `${skillMarket}/${seg(ref.name)}/normalize`),
@@ -248,9 +271,12 @@ export const AGENT_ENDPOINTS: Record<AgentAction, ChannelBuilders> = {
     market: (ref) => req('PUT', `${agentMarket}/${seg(ref.name)}`),
     org: () => null,
   },
+  // 上传新版:两渠道都有(2026-10-23),形状与技能侧对称 ——
+  // 市场 `POST /agents/:name/archive`(必填 `version`),组织
+  // `POST /agent-presets/:name/archive`(版本以包内 preset.yml 为准)。
   uploadVersion: {
     market: (ref) => req('POST', `${agentMarket}/${seg(ref.name)}/archive`),
-    org: () => null,
+    org: (ref) => req('POST', `${agentOrg}/${seg(ref.name)}/archive`),
   },
 }
 

@@ -23,6 +23,7 @@ type Handlers struct {
 	DownloadVersioned gin.HandlerFunc // GET /:name/:version/archive
 	// 服务端面 /api/server/admin
 	ListAll                gin.HandlerFunc // GET ""
+	UploadAdmin            gin.HandlerFunc // POST /:name/archive（管理员给组织渠道发新版本）
 	DownloadAdmin          gin.HandlerFunc // GET /:name/archive
 	Preview                gin.HandlerFunc // GET /:name/preview
 	Decide                 gin.HandlerFunc // 批准(POST /:name/approve)
@@ -50,6 +51,7 @@ func NewHandlers(db *sql.DB, cacheDir string) *Handlers {
 		Download:               download(db, cacheDir, false),
 		DownloadVersioned:      downloadVersioned(db, cacheDir, false),
 		ListAll:                listAll(db),
+		UploadAdmin:            uploadAdmin(db),
 		DownloadAdmin:          download(db, cacheDir, true),
 		Preview:                preview(db, cacheDir),
 		Decide:                 decide(db, serverstore.AgentPresetApproved, "agent_preset_approve"),

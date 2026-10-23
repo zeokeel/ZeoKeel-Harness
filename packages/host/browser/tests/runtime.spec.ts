@@ -2123,27 +2123,37 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     await runtime.open('https://a.example')
     const view = adapter.lastView()
     view.transport.handler = () => ({ result: { value: 1 } })
-    // 1) An aborted close must not leave the tab permanently "closing".
-    const controller = new AbortController()
-    runtime.setUserControl(true, 'user')
-    const closing = runtime.closeTab(1, false, controller.signal)
-    controller.abort()
-    await closing.catch(() => undefined)
-    runtime.setUserControl(false)
-    // The aborted close must not leave a stale "closing" marker (which would make
-    // every later command on this id fail with not-found forever).
-    const internal = runtime as unknown as { closingTabs: Set<number> }
+    // 1) ADMISSION failure path: the signal is already aborted, so the body never
+    // runs — the closing marker must still be cleared (closeTab's outer finally).
+    const aborted = new AbortController()
+    aborted.abort()
+    await runtime.closeTab(1, false, aborted.signal).catch(() => undefined)
+    const internal = runtime as unknown as { closingTabs: Set<number>, tabLocks: Map<number, unknown>, nextTabId: number }
     expect(internal.closingTabs.has(1)).toBe(false)
-    if (runtime.listTabs().some(tab => tab.id === 1)) {
-      await expect(runtime.eval(1, '1')).resolves.toBeDefined()
-    }
+    expect(runtime.listTabs()).toHaveLength(1)
+    await expect(runtime.eval(1, '1')).resolves.toBeDefined()
     // 2) A destroyed tab drops all lock/closing bookkeeping (closeTab path).
     await runtime.closeTab(1, true)
     expect(runtime.listTabs()).toHaveLength(0)
-    // 3) Reopening gets a fresh id and works (no stale locks/markers).
+    expect(internal.tabLocks.size).toBe(0)
+    expect(internal.closingTabs.size).toBe(0)
+    // 3) SAME-ID reopen: force id reuse and prove a fresh lock/marker set is used.
+    internal.nextTabId = 1
     const reopened = await runtime.open('https://b.example')
+    expect(reopened.id).toBe(1)
     view.transport.handler = () => ({ result: { value: 2 } })
-    await expect(runtime.eval(reopened.id, '2')).resolves.toBeDefined()
+    await expect(runtime.eval(1, '2')).resolves.toBeDefined()
+    cleanup()
+  })
+
+  it('D1: completed waits leave no takeover abort listeners behind', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({})
+    const internal = runtime as unknown as { takeoverListeners: () => number }
+    const outcome = await runtime.waitFor(1, { condition: 'popup', timeoutMs: 50 })
+    expect(outcome.ok).toBe(false)
+    expect(internal.takeoverListeners()).toBe(0)
     cleanup()
   })
 

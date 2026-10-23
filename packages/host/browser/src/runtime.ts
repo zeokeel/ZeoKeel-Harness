@@ -740,6 +740,8 @@ export class BrowserRuntime {
   /** S1: aborts NON-CDP waits (download/event waits) on user takeover. Replaced
    * (not reused) on every takeover so a later release makes it usable again. */
   private takeoverController = new AbortController()
+  /** Number of live abort listeners registered by `takeoverRejection` (probe). */
+  private takeoverListenerCount = 0
   /**
    * Deadline **ownership stack**: one entry per agent operation currently inside
    * the pool's critical section (epoch ms), innermost last — R4-B-15, C3-01.
@@ -2734,14 +2736,29 @@ export class BrowserRuntime {
     const signal = this.takeoverController.signal
     if (signal.aborted) return { promise: Promise.reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled')), dispose: () => {} }
     let onAbort!: () => void
+    this.takeoverListenerCount += 1
+    let disposed = false
     const promise = new Promise<never>((_resolve, reject) => {
-      onAbort = () => reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled'))
+      onAbort = () => { reject(browserError('window-controlled', 'browser: the user took control, so this wait was cancelled')) }
       signal.addEventListener('abort', onAbort, { once: true })
     })
-    return { promise, dispose: () => signal.removeEventListener('abort', onAbort) }
+    return {
+      promise,
+      dispose: () => {
+        if (disposed) return
+        disposed = true
+        this.takeoverListenerCount = Math.max(0, this.takeoverListenerCount - 1)
+        signal.removeEventListener('abort', onAbort)
+      },
+    }
   }
 
 
+
+  /** Probe: live takeover abort listeners (regression support, no product use). */
+  takeoverListeners(): number {
+    return this.takeoverListenerCount
+  }
 
   /** S2: a user takeover that happened while queueing must stop the operation. */
   private assertGateStillOpen(): void {

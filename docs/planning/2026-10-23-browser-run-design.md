@@ -77,3 +77,13 @@
 - ⏳ `attachments` / `sessionCwd` 尚未在 desktop 装配注入 → 生产形态 screenshot helper 仍 policy 拒（登记待办）。
 - ⏳ 真实 ptc `spawn` 注入与 `Config → apply → programRuntime` 装配 fixture。
 - ⏳ A11/Config 注入行端到端 fixture、真机进程级 R2。
+
+### 第 3 项（真实 ptc）接入契约（待实现）
+
+- 宿主侧已有 `@deepseek-ai/dsh-ptc-runtime` 的 **`PtcRuntime` 服务**（`ptcRuntime` 注入点，`language/isolation/timeout/run/release`）；浏览器包**不自行构造**子进程，而是把该服务适配成 `ProgramRuntime`：
+  - `execute(program, bridge, { signal })` → `ptcRuntime.run({ program, bindings: [{ global: 'browser', functions: <桥接函数> }], timeoutMs, signal })`；
+  - 返回值 `value` → `result`；`console` → 受控消息通道文本；错误按 code 透传；
+  - `release(owner)` 在 run 结束/取消时调用，配合审计要求"真 kill + await exit"（由 ptc 服务自身保证，浏览器包只负责释放与预算）。
+- `attachments` 适配：`ctx.attachments.saveImages([{ data, mediaType, name }])` → `store(dataUrl, meta) => ref`，ref 不得含 base64/本地路径，失败要给可读错误。
+- `sessionCwd`：`apply(ctx)` 时注入 **执行时快照**（会话 cwd 由宿主在 apply 时提供，或每 run 前读取一次并快照），禁止在运行期读全局可变值。
+- 装配 fixture（P3-1）：用 `apply(ctx)` 捕获 runtime，断言 `runtime.options` 等于 `runtimeOptionsForConfig(...)`，并把装配行变异（换回 `{...config}`）变红。

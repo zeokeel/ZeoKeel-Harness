@@ -23,7 +23,7 @@
 | A14 | 本机地址灰名单：**维持「一律拒」**（审计建议：灰名单不可预测、每个放行点都是 SSRF/凭据外泄面；若产品确需本地自动化，须显式部署级 host:port allowlist + DNS rebinding 防护，不能做后缀匹配）。用户拍板前保持现状 | ✅ 维持现状（零代码改动，已记录裁决） |
 | A11 | 上传目录部署级可配：`Config.uploadDirs`（schemastery `.default([])`）→ runtime 选项 → `uploadAllowDirs`（downloadDir ∪ uploadDirs ∪ session cwd，去重、去尾斜杠、拒绝 `/` 与相对路径）；**权限面**：这些目录下任意文件都可被上传（递归信任），模型/脚本不得提供目录 | ✅ 完成（config→runtime 路径有用例） |
 | D2 | 标签配额：`capacity.ts` 从可用内存派生（192MiB/tab、0.5 份额、[4,32]、cgroup memory.max 夹取），`TabPool` 与 surface 共用上限；**配额（maxTabs）与槽位等待速率（tabSlotWaitTimeoutMs）可分别配置** | ✅ 完成（含 N/N+1、close 释放、回滚不占槽、cgroup 合成用例） |
-| 待办 | A11/A14/A16、B4/B5/B7、C10/C12/C15/C16、D1–D3、browser_run | 排队（C1–C9/C13/C14 已完成并提交 e9d8ceb；下一批 C16/B4/B5/C10/C12/C15 按审计 R1–R4 口径推进） |
+| 待办 | A11/A14/A16（A16 已完成寻址）、B4/B5/B7、C10/C12/C15/C16、D1–D3、browser_run | 排队（C1–C9/C13/C14 已完成并提交 e9d8ceb；下一批 C16/B4/B5/C10/C12/C15 按审计 R1–R4 口径推进） |
 
 > 每批完成后由 `red-team-auditor` 做反证审计（改回旧行为必须变红 / 对抗绕过 / 误杀检查），报告在 `temp/audit/`。
 
@@ -83,7 +83,8 @@
 | A13 | 导航 scheme 白名单（只 http/https/about） | `javascript:`/`data:`/`file:` 拒 | 能打开本地 HTML、能跑 data URL | 中 | S | **留**（`file://` 可读本机文件，见 §7） |
 | A14 | 本机地址一刀切禁导航 | 127/8、`localhost`、`::1` 全拒 | 能调试本地 dev server | 高（本地开发时） | M | **放宽**为灰名单（只放行非应用端口；见 §7 风险） |
 | A15 | 导航 URL >8192 拒绝 | 超长 URL 拒 | 几乎无感 | 低 | S | **留**（数据外带通道） |
-| A16 | 应用窗口只能被 `browser_navigate` 寻址 | 其它工具对 `app_id` 一律拒 | 能在应用窗口里点/输入 | 中 | M | **放宽**（本地信任；需先补 app 窗口的动作语义） |
+| A16 | 应用窗口只能显式寻址：`navigateAppSurface` 只收 `kind:'app'`、per-surface 用户闸、自身 origin + 本机目标拒绝；其余工具收到 `app_id` fail-loud；**已完成（仅 navigate 寻址；点击/输入等动作语义仍留拒）** | ✅ 完成（`audit-0921-app-surface-target` 21 tests / 63 assertions） |
+| A16（原条目） | 应用窗口只能被 `browser_navigate` 寻址 | 其它工具对 `app_id` 一律拒 | 能在应用窗口里点/输入 | 中 | M | **已完成寻址部分**；点击/输入等动作语义仍留拒（原因：应用窗内容由 wasm-apps-host 持有，动作语义需另批设计） |
 | A17 | 模型不能自我解除用户闸（`browser_release` 已删） | AI 交权后只能等用户点「交给 AI」 | AI 可在用户离开后继续 | 中 | S | **随蒙版保留**（你要求保留蒙版；这条是它的直接后果） |
 
 ---

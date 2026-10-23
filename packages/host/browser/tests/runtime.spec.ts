@@ -2238,6 +2238,9 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     // 2) A HUNG segment trips the forced clear: closeAll still resolves and the
     // pool is empty (a session switch must never proceed with old tabs alive).
     await runtime.open('https://b.example')
+    // Seed the origin bookkeeping so the assertion below is not vacuous.
+    const seeded = runtime as unknown as { credentialOrigins: Map<string, unknown> }
+    seeded.credentialOrigins.set('https://prev-account.example', { windowUntil: Date.now() + 60_000, holder: 1, values: ['secret-value'] })
     const hung = internal.withLifecycleLock('probe-hung', undefined, Date.now() + 60_000, () => new Promise<void>(() => {}))
     hung.catch(() => undefined)
     await sleep(20)
@@ -2279,6 +2282,38 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     // tabs is not part of the contract; per-tab order is).
     const evals = runtime.opLog.filter(entry => entry.tool === 'browser_eval')
     expect(evals.map(entry => entry.tab).sort()).toEqual([1, 2])
+    cleanup()
+  })
+
+  it('D1: op log keeps the order of two operations on the SAME tab', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: 1 } })
+    await runtime.eval(1, '1 + 1')
+    await runtime.eval(1, '2 + 2')
+    const evals = runtime.opLog.filter(entry => entry.tool === 'browser_eval' && entry.tab === 1).sort((a, b) => a.seq - b.seq)
+    expect(evals).toHaveLength(2)
+    // Same tab: by seq (the log itself is stored newest-first) the first entry is
+    // the first invocation.
+    expect(evals[0]!.summary).toContain('1 + 1')
+    expect(evals[1]!.summary).toContain('2 + 2')
+    cleanup()
+  })
+
+  it('D1: a tab command is not blocked by a global exclusive operation (S4 direction)', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: 1 } })
+    let releaseGlobal!: () => void
+    const global = runtime.runGated('probe-global', () => new Promise<void>((resolve) => { releaseGlobal = resolve }))
+    await sleep(20)
+    const started = Date.now()
+    const result = await Promise.race([runtime.eval(1, '1').then(() => 'done'), sleep(400).then(() => 'timeout')])
+    const elapsed = Date.now() - started
+    releaseGlobal()
+    await global
+    expect(result).toBe('done')
+    expect(elapsed).toBeLessThan(400)
     cleanup()
   })
 

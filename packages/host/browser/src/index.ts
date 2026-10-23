@@ -363,6 +363,22 @@ export function uploadDirsForRuntime(config: Config): string[] {
   return (config.uploadDirs ?? []).map(dir => dir.trim()).filter(dir => dir !== '' && dir !== '/' && dir.startsWith('/'))
 }
 
+/**
+ * Build the runtime options from the parsed plugin config (A11/Config wiring
+ * single source). Extracted so an end-to-end fixture can assert that operator
+ * configuration really reaches `runtime.options`.
+ * @param config - parsed plugin config.
+ * @param userDataDir - host data dir (downloads fallback).
+ * @returns options for {@link BrowserRuntime}.
+ */
+export function runtimeOptionsForConfig(config: Config, userDataDir?: string): Record<string, unknown> {
+  return {
+    ...config,
+    uploadDirs: uploadDirsForRuntime(config),
+    downloadDir: config.downloadDir ?? (userDataDir !== undefined ? join(userDataDir, 'downloads') : join(dshHomePath(), 'downloads')),
+  }
+}
+
 export const Config: z<Config> = z.object({
   maxTabs: z.number(),
   timeoutMs: z.number(),
@@ -630,11 +646,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   const runtime = new BrowserRuntime(
     createRealElectronAdapter(undefined, () => hostLocale()),
-    {
-      ...config,
-      uploadDirs: uploadDirsForRuntime(config),
-      downloadDir: config.downloadDir ?? (userDataDir !== undefined ? join(userDataDir, 'downloads') : join(fallbackDataRoot(), 'downloads')),
-    },
+    runtimeOptionsForConfig(config, userDataDir),
     credentialResolver,
     browserPartitionFor(currentUser(), currentServerHash()),
     { pool, store, currentUsername: currentUser, locale: () => hostLocale(), surfaces, ...(appOriginScheme === undefined ? {} : { appOriginScheme }) },

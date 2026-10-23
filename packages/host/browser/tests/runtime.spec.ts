@@ -2432,7 +2432,9 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     const fakeProgram = {
       execute: async (program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>): Promise<{ result: unknown }> => {
         const call = bridge['fileChooser'] as unknown as (args: unknown) => Promise<unknown>
-        const args = program === 'vetted' ? { paths: ['/tmp/vetted/a.txt'], allowedDirs: ['/etc'] } : { paths: ['/etc/passwd'] }
+        const args = program === 'vetted'
+          ? { paths: ['/tmp/vetted/a.txt'], allowedDirs: ['/etc'] }
+          : program === 'outside' ? { paths: ['/etc/passwd'] } : program === 'empty' ? { paths: [] } : {}
         results.push(await call(args).then(value => ({ ok: value }), (error: unknown) => ({ error })))
         return { result: null }
       },
@@ -2449,6 +2451,11 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     await runtime.runProgram('vetted')
     view.transport.emit('Page.fileChooserOpened', { backendNodeId: 10, mode: 'selectSingle' })
     await runtime.runProgram('outside')
+    // An empty selection is a policy error, never a CDP call with [].
+    view.transport.emit('Page.fileChooserOpened', { backendNodeId: 11, mode: 'selectSingle' })
+    await runtime.runProgram('empty')
+    view.transport.emit('Page.fileChooserOpened', { backendNodeId: 12, mode: 'selectSingle' })
+    await runtime.runProgram('missing')
     // The vetted path reached CDP; the script's allowedDirs did NOT widen it.
     expect(sent[0]).toEqual(['/tmp/vetted/a.txt'])
     const outcomes = results as Array<{ ok?: { files?: string[] }, error?: { code?: string } }>
@@ -2456,6 +2463,10 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     // /etc/passwd is refused with a policy error and never sent to the page.
     expect(outcomes[1]?.error?.code).toBe('policy')
     expect(sent.flat()).not.toContain('/etc/passwd')
+    // Empty / missing selections are policy errors too (no empty CDP call).
+    expect(outcomes[2]?.error?.code).toBe('policy')
+    expect(outcomes[3]?.error?.code).toBe('policy')
+    expect(sent).toHaveLength(1)
     cleanup()
   })
 

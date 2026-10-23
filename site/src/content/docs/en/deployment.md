@@ -255,6 +255,14 @@ A first deployment counts as successful only when every row passes:
 | 5 | The manifest has `client.assets` with **absolute https** URLs | `curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/updates/manifest"` |
 | 6 | The stack's channel matches the image | `docker exec zeokeel-server cat /opt/zeokeel/CHANNEL` equals `channel_id` from `GET /api/client/v2/channel` |
 
+> **One mandatory step on a first deployment (the premise for row 5)**: sign in to the console →
+> **Operations → Gateway** → fill in the public base URL as this deployment's public https address
+> (setting `server.base_url`, effective on save). If it is empty or not https, the update manifest
+> refuses to emit the `client` section by design (`client_unavailable`) and employees see "the update
+> check always says it is already up to date". `.env`'s `ZEOKEEL_PUBLIC_BASE_URL` is the override port
+> for that item (a non-empty value wins; writing it requires `docker compose up -d server`) — it is not
+> the main entry.
+
 **How it fails**: row 2 still not 200 after 120 seconds, row 3 the wrong version, row 5 showing
 `client_unavailable`, row 6 two different channels. If any of these holds, do **not** report
 "deployment complete"; diagnose with [Boundaries and failure behaviour](#boundaries-and-failure-behaviour),
@@ -267,10 +275,10 @@ and during an upgrade go straight to [rollback](/en/deployment/upgrade/).
 | The server is up but employees cannot connect | In `internal` mode the client reports an untrusted certificate | Expected: distribute Caddy's local CA to employee machines, or switch to `manual` with a corporate certificate |
 | `auto` mode never obtains a certificate | Caddy logs show ACME validation failures | The domain must point **directly** at this host with 80/443 open; behind a CDN or with an IP only ⇒ use `manual` / `internal` |
 | The caddy container fails to create: `not a directory` | `docker compose ps` shows no caddy | `TLS_MODE` is misspelled (only `internal` / `auto` / `manual` exist) |
-| Containers keep restarting | `docker compose logs --tail=100 server` | Two common causes: the PostgreSQL password does not match `pg-data`; or available memory is below 4 GiB while the profile is still `default` (the log says the WASM platform self-check refused to start) ⇒ write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env` |
+| Containers keep restarting | `docker compose logs --tail=100 server` | Two common causes: the PostgreSQL password does not match `pg-data`; or available memory is below 4 GiB while the profile is still `default` (the log says the WASM platform self-check refused to start) ⇒ this is the **one case kept on env** (escape hatch): when the container will not come up there is no console to reach either, so write `ZEOKEEL_WASM_MEMORY_PROFILE=small` in `.env` to bring the service up, then save the profile as `small` on the console's **Operations → System config** page and delete that line |
 | healthz stays non-200 | `docker compose ps` to see whether postgres is healthy | The first start runs every migration and takes 1–2 minutes; if it still fails, read the server log |
 | `docker compose up` reports a port or subnet conflict | `ss -tlnp`, `docker network inspect` | Changing ports means editing the Caddyfile too; subnet conflicts need `NETWORK_SUBNET` plus the three fixed IPs; if `zeokeel-net` already exists with a different subnet, **stop and confirm** instead of `docker network rm` |
-| Employees see "always up to date" | The manifest contains `client_unavailable` | The server cannot produce an absolute https download URL: set `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` and run `docker compose up -d server` |
+| Employees see "always up to date" | The manifest contains `client_unavailable` | The server cannot produce an absolute https download URL: fill in the public base URL on the console's **Operations → Gateway** page (setting `server.base_url`, effective on save). `ZEOKEEL_PUBLIC_BASE_URL=https://<domain>` in `.env` is its override — write it and run `docker compose up -d server`, and it wins over everything |
 | Apps will not open / report unavailable | The client version is older than the server | Apps open only in the desktop client and require matching versions: upgrade the client; an old client being unable to open apps is expected behaviour, not a fault |
 | Ports 80/443 are taken by another service on the host | `ss -tlnp \| grep -E ':(80\|443)\b'` | Do not fight for the port: start only `server + postgres` behind the existing reverse proxy, see [Operations & troubleshooting](/en/deployment/operations/) |
 

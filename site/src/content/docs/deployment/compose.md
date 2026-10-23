@@ -74,12 +74,12 @@ TLS 只有一份配置，服务端也不需要自己处理 80/443 与证书。�
 | `TLS_MODE` | 证书模式：`internal` / `auto` / `manual` | 内网 IP → `internal` |
 | `ZEOKEEL_ADMIN_PASSWORD` | 初始超管密码（≥10 位） | 现场生成强密码 |
 
-外加两个强烈建议一起确认的：
+外加两个强烈建议一起确认的（**2026-10-23 起这两项都在控制台里配，不写进 `.env`**）：
 
-| 变量 | 为什么建议配 |
-|---|---|
-| `ZEOKEEL_PUBLIC_BASE_URL` | 本服务端对外的绝对 https 地址。客户端更新清单里的下载地址必须是绝对 https，服务端推不出安全地址时会**按设计拒发** `client` 段（`client_unavailable`），用户看到的是"检查更新永远说已是最新"。反代场景必配 |
-| `ZEOKEEL_WASM_MEMORY_PROFILE` | 应用平台内存档位。可用内存 < 4GiB 的机器必须写 `small`，否则启动自检拒绝启动（容器反复重启） |
+| 项 | 在哪配 | 为什么建议配 |
+|---|---|---|
+| 对外访问地址 | 控制台「**运维 → 网关**」页（settings `server.base_url`） | 本服务端对外的绝对 https 地址。客户端更新清单里的下载地址必须是绝对 https，服务端推不出安全地址时会**按设计拒发** `client` 段（`client_unavailable`），用户看到的是"检查更新永远说已是最新"。反代场景必配。`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` 是它的覆盖口（非空则优先） |
+| 应用平台内存档位 | 控制台「**运维 → 系统配置**」页（`wasm.memory_profile`，**保存后需 `docker compose up -d server`**） | 可用内存 < 4GiB 的机器必须选 `small`，否则启动自检拒绝启动（容器反复重启）。`.env` 的 `ZEOKEEL_WASM_MEMORY_PROFILE` 仍是覆盖口，也是**容器起不来时的唯一逃生口**（见下文） |
 
 ## 操作步骤
 
@@ -182,28 +182,34 @@ ADMIN_USER=admin
 ZEOKEEL_ADMIN_PASSWORD=<刚生成的超管密码>
 PG_PASSWORD=<刚生成的数据库密码>
 TZ=Asia/Shanghai
-# 对外绝对地址：反代场景必配，否则客户端更新清单拒发下载链接
-ZEOKEEL_PUBLIC_BASE_URL=https://<确认过的域名>
-# 可用内存 < 4GiB 的机器必须写 small
+# 对外绝对地址：首选部署完成后登录控制台「运维 → 网关」页填「对外访问地址」；
+# 反代场景也可以在这里显式设置（env 覆盖口，优先级最高，存量部署的既有写法）
+# ZEOKEEL_PUBLIC_BASE_URL=https://<确认过的域名>
+# 可用内存 < 4GiB 且容器起不来（控制台进不去）时的逃生口：先把它拉起来，
+# 再进控制台「运维 → 系统配置」把档位存成 small，然后删掉这一行
 # ZEOKEEL_WASM_MEMORY_PROFILE=small
 EOF
 chmod 600 .env
 ```
 
 必填的只有 `DOMAIN`、`TLS_MODE`、`ZEOKEEL_ADMIN_PASSWORD` 与 `PG_PASSWORD`，其余键都有默认值。
-常用可选项：
+
+**2026-10-23 起，运行期旋钮的主入口是控制台「运维 → 系统配置」页**（保存即生效；标注需重启的键在
+`docker compose up -d server` 后生效），日常运维不必把它们写进 `.env`。`.env` 里的同名环境变量仍是
+**覆盖口**：写了依然有效，而且**优先级最高**（会压过控制台保存的值，启动日志会点名被覆盖的键）。
+下表是 `.env` 里还能写的东西 —— 标注"控制台"的几行，新部署请直接在控制台里配。
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `SERVER_IMAGE` | `zeokeel-harness-server:latest` | **必须显式写版本 tag**；`latest` 不可复现，也无法做回滚锚点 |
-| `ZEOKEEL_PUBLIC_BASE_URL` | 按请求推导 | 配了就是**唯一权威**；客户端下载地址必须绝对 https |
+| `ZEOKEEL_PUBLIC_BASE_URL` | 按请求推导 | 覆盖口：主入口是控制台「**运维 → 网关**」页的「对外访问地址」（settings `server.base_url`）；客户端下载地址必须绝对 https，env 写了就是**唯一权威** |
 | `ZEOKEEL_TRUSTED_PROXIES` | 从 `CADDY_IP` 派生 | 可信反代地址，登录/MFA/OIDC 限流据此解析真实客户端 IP；换反代时才显式写 |
 | `ZEOKEEL_CHANNEL` | 空（用镜像自带渠道） | **留空即可**；填了必须与镜像内渠道一致，否则拒绝启动 |
-| `ZEOKEEL_UPDATE_ENDPOINT` | 空 = 本渠道默认目录 | **留空不等于关闭**；要关闭更新检查写 `off` |
-| `ZEOKEEL_LOGIN_MAX_ATTEMPTS` | 服务端默认 | 仅测试环境建议调大，免得反复登录锁死管理员账号 |
+| `ZEOKEEL_UPDATE_ENDPOINT` | 空 = 本渠道默认目录 | 控制台：**运维 → 系统配置**的 `deploy.update_endpoint`（保存即生效）；**留空不等于关闭**，要关闭更新检查写 `off`。env 写了仍然有效且优先 |
+| `ZEOKEEL_LOGIN_MAX_ATTEMPTS` | 服务端默认 | 控制台：**运维 → 系统配置**的 `auth.login_max_attempts`；仅测试环境建议调大，免得反复登录锁死管理员账号（env 为覆盖口） |
 | `NETWORK_SUBNET` / `CADDY_IP` / `SERVER_IP` / `PG_IP` | `172.28.0.0/24` 与 `.2/.3/.4` | 网段冲突时整体改 |
 | `CADDY_HTTP_PORT` / `CADDY_HTTPS_PORT` | `80` / `443` | 改端口需同步改 Caddyfile |
-| `ZEOKEEL_COMPILE_ISOLATION` | `auto` | 应用编译子进程的 OS 级隔离档；生产建议 `require`（隔离不可用就拒绝启动） |
+| `ZEOKEEL_COMPILE_ISOLATION` | `auto` | 控制台：**运维 → 系统配置**的 `wasm.compile_isolation`（**保存后需重建 server**）；应用编译子进程的 OS 级隔离档，生产建议 `require`（隔离不可用就拒绝启动）。env 为覆盖口 |
 
 > `ZEOKEEL_ADMIN_PASSWORD` 只在**首次启动**用于创建超管（已有 admin 时幂等跳过）；
 > 首次登录成功后可以把该行置空，避免明文长期留在文件里。
@@ -253,6 +259,12 @@ done
 
 ### 5. 部署自检
 
+**首次部署必做的一步**：登录控制台（`https://$DOMAIN/admin/`）→「**运维 → 网关**」→ 把「对外访问地址」
+填成本部署对外的 https 地址（如 `https://<域名>`；settings `server.base_url`，**保存即生效**）。
+不填或填成非 https 地址时，更新清单会按设计拒发 `client` 段（`client_unavailable`），员工端表现为
+"检查更新永远说已是最新"。`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` 是这一项的**覆盖口**（非空则优先，
+写了要 `docker compose up -d server`），不是主入口。
+
 ```bash
 cd /opt/zeokeel
 docker compose ps                                   # 三容器 Up
@@ -264,7 +276,8 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/channe
 ```
 
 最后两条要能看到 `client.assets` 且 `url` 是**绝对 https**；出现 `client_unavailable`
-说明 `ZEOKEEL_PUBLIC_BASE_URL` 没配。`/api/client/v2/channel` 的 `channel_id` 必须与
+说明「对外访问地址」没配（控制台「运维 → 网关」页；或 `.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` ——
+env 是这个设置的覆盖口）。`/api/client/v2/channel` 的 `channel_id` 必须与
 `/opt/zeokeel/CHANNEL` 一致。
 
 ### 6. 交付给员工
@@ -296,9 +309,9 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/channe
 | 报网段冲突 | `docker network ls` 里已有同子网网络 | 改 `NETWORK_SUBNET` 与三个固定 IP；已有 `zeokeel-net` 且子网不一致时先确认再动 |
 | caddy 容器创建失败：`not a directory` | `docker compose ps` 里 caddy 不存在 | `TLS_MODE` 拼写错误（挂载源 `Caddyfile.<mode>` 不存在） |
 | postgres 启动即退出 | 日志提 `OLD_DATABASES` / `unused mount` | PG16 时代的旧数据布局：先按 PostgreSQL 官方 dump/restore 迁移，再部署 |
-| 服务端反复重启 | 日志提"WASM 应用平台启动自检失败…拒绝启动" | 可用内存 < 4GiB：在 `.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` 后 `docker compose up -d server` |
+| 服务端反复重启 | 日志提"WASM 应用平台启动自检失败…拒绝启动" | 可用内存 < 4GiB：此时控制台进不去，只能在 `.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` 后 `docker compose up -d server` 把服务拉起来，再进控制台「运维 → 系统配置」把档位存成 `small` 并删掉这一行 |
 | healthz 超过 2 分钟非 200 | `docker compose ps` postgres 不是 healthy | 先看 `docker compose logs --tail=100 postgres`（密码与 `pg-data` 不一致最常见），再 `docker compose logs server` |
-| 清单里 `client_unavailable` | 该字段存在 | 配 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 后 `docker compose up -d server` |
+| 清单里 `client_unavailable` | 该字段存在 | 在控制台「运维 → 网关」页填「对外访问地址」（保存即生效）；`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL=https://<域名>` 是覆盖口，写了要 `docker compose up -d server` |
 | 客户端首次连接报证书不受信任 | 仅 `internal` 模式 | 把 Caddy 本地 CA 分发给员工机器导入信任库，或改用 `manual` |
 | 渠道不一致 | `/opt/zeokeel/CHANNEL` ≠ `/api/client/v2/channel` 的 `channel_id` | 容器启动期会拒绝；检查 `.env` 是否残留 `ZEOKEEL_CHANNEL=official`（定制渠道部署要删掉这一行） |
 

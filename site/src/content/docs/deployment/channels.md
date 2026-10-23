@@ -170,7 +170,7 @@ description: ZeoKeel Harness 的渠道机制：渠道内容为什么随镜像构
 | 值 | 由谁决定 | 说明 |
 |---|---|---|
 | 本部署的渠道 | **镜像自带**（`/opt/zeokeel/CHANNEL`） | `.env` 的 `ZEOKEEL_CHANNEL` **留空即可**；填了必须与镜像一致 |
-| 更新清单地址 | `ZEOKEEL_UPDATE_ENDPOINT`，留空 = 本渠道默认目录 | **留空不等于关闭**；关闭请显式写 `off` |
+| 更新清单地址 | 控制台「运维 → 系统配置」的 `deploy.update_endpoint`（env 覆盖口 `ZEOKEEL_UPDATE_ENDPOINT`），留空 = 本渠道默认目录 | **留空不等于关闭**；关闭请显式写 `off` |
 | 清单里的 `channel_id` | 更新服务器上对应目录的 `latest.json` | 必须与本部署渠道相同 |
 | 镜像 tag（多栈宿主机） | 每个归档里的 `<渠道 id>-<版本>` | 让每栈的 `SERVER_IMAGE` 指向自己的渠道 tag |
 

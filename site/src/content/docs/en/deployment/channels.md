@@ -206,7 +206,7 @@ behaviour. Criterion: whether that channel's `latest.json` on the update server 
 | Value | Decided by | Notes |
 |---|---|---|
 | This deployment's channel | **The image** (`/opt/zeokeel/CHANNEL`) | `.env`'s `ZEOKEEL_CHANNEL` **may be left empty**; if set it must match the image |
-| Update manifest address | `ZEOKEEL_UPDATE_ENDPOINT`, empty = this channel's default directory | **Empty does not mean off**; write `off` to disable |
+| Update manifest address | `deploy.update_endpoint` on the console's **Operations → System config** page (env override port `ZEOKEEL_UPDATE_ENDPOINT`), empty = this channel's default directory | **Empty does not mean off**; write `off` to disable |
 | The manifest's `channel_id` | The `latest.json` in that channel's directory | Must equal this deployment's channel |
 | The image tag (multi-stack hosts) | The `<channel id>-<version>` tag in each archive | Each stack's `SERVER_IMAGE` must point at its own channel tag |
 

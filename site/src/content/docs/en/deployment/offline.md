@@ -39,7 +39,9 @@ is one zip plus one `SHA256SUMS`, hosted over HTTPS in per-channel directories. 
 isolated** machine room needs **one out-of-band transfer** (USB stick / jump host) per deployment or
 upgrade, instead of opening a registry port on that machine or configuring an image proxy.
 
-**Why "empty ≠ off" for the update check.** An empty `ZEOKEEL_UPDATE_ENDPOINT` means "use this channel's
+**Why "empty ≠ off" for the update check.** The update manifest address is `deploy.update_endpoint` on
+the console's **Operations → System config** page (effective on save; `.env`'s
+`ZEOKEEL_UPDATE_ENDPOINT` is its override port and wins when set): empty means "use this channel's
 default directory"; only an explicit `off` / `none` / `-` / `disabled` disables it. Reading "empty" as
 "off" would silently remove upgrade notifications from **every** default deployment; reading "off" as
 "empty" would make a pure intranet machine send outbound requests. Both misreadings have real costs, so
@@ -110,14 +112,18 @@ prints `<version>`. Do not judge the version from `docker images`.
 ### 3. Disable or rework the update check
 
 ```bash
-# Disable update checks (for a pure intranet that must not make outbound requests)
-ZEOKEEL_UPDATE_ENDPOINT=off
+# Disable update checks (for a pure intranet that must not make outbound requests):
+# sign in to the console → Operations → System config → set deploy.update_endpoint to off
+# (effective on save). The equivalent env override port — the pre-existing form for long-lived
+# deployments, needs `docker compose up -d server` afterwards:
+# ZEOKEEL_UPDATE_ENDPOINT=off
 ```
 
 - **Empty does not mean off**: empty = this channel's default directory; disabling requires an explicit
   `off` / `none` / `-` / `disabled`;
 - If the intranet runs its own static file service, the image archives and `latest.json` can be mirrored
-  inside and `ZEOKEEL_UPDATE_ENDPOINT` pointed at the internal address — that `latest.json`'s
+  inside and `deploy.update_endpoint` (or the `ZEOKEEL_UPDATE_ENDPOINT` override port) pointed at the
+  internal address — that `latest.json`'s
   `channel_id` must match this deployment's channel, otherwise the check is reported as unavailable
   (deliberate: rather say "unavailable" than silently upgrade across channels);
 - Once disabled, the admin console's server info page no longer shows new-version hints, and operations
@@ -162,10 +168,11 @@ curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/client/v2/update
 ```
 
 The second must show `client.assets` with absolute https URLs — a reverse proxy or certificate setup
-without `ZEOKEEL_PUBLIC_BASE_URL` is the most common miss here, and its symptom is employees seeing
-"always up to date". Note that this is a different thing from the update check: **clients fetch packages
-from this server** (this criterion) while **the server checks the update server for new versions**
-(step 3).
+without the public base URL (console **Operations → Gateway** page, setting `server.base_url`; the
+override port is `.env`'s `ZEOKEEL_PUBLIC_BASE_URL`) is the most common miss here, and its symptom is
+employees seeing "always up to date". Note that this is a different thing from the update check:
+**clients fetch packages from this server** (this criterion) while **the server checks the update server
+for new versions** (step 3).
 
 ## Criteria
 
@@ -185,7 +192,7 @@ from this server** (this criterion) while **the server checks the update server 
 | The target version is past the retention window (404) | the download returns 404 | Each channel **keeps only the 2 most recent versions** (latest + previous): take it from GitHub Releases (public channels only), or roll back to an old image tag kept on this host |
 | Re-publishing the same version still serves the old bytes | the downloaded sha256 does not match the new `SHA256SUMS` | The zip and `SHA256SUMS` under `<channel>/releases/<version>/` are **immutable long-cache** objects: after overwriting the same version, the edge may still serve the old bytes. Either publish under a new version number, or add a cache-busting parameter and verify again |
 | The internal mirror's manifest is reported as "update check unavailable" | the log shows `manifest channel "…" != this server's channel "…"` | The internal `latest.json`'s `channel_id` must match this deployment's channel — this check exists to prevent cross-channel upgrades; do not bypass it |
-| A pure intranet machine still makes outbound requests | packet capture / firewall logs | `ZEOKEEL_UPDATE_ENDPOINT` was left empty instead of `off`: empty means the default public directory |
+| A pure intranet machine still makes outbound requests | packet capture / firewall logs | The update manifest address (console **Operations → System config**'s `deploy.update_endpoint`, env override port `ZEOKEEL_UPDATE_ENDPOINT`) was left empty instead of `off`: empty means the default public directory |
 | The first client connection reports an untrusted certificate | `internal` mode only | Expected: distribute Caddy's local CA to employee machines, or switch to `manual` with a corporate certificate |
 | The container exits right after importing the image | the log says "channel mismatch" or "invalid channel configuration" | Wrong channel package: fetch this channel's package instead (see [Channels & white-label](/en/deployment/channels/)) |
 | A rollback is needed but no old image can be found | `docker image ls` shows no old version tag | Retention only covers the update server: isolated deployments must **keep old image tags on the host**, or carry the old package in beforehand |

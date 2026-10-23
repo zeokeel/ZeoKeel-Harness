@@ -67,7 +67,8 @@ ls -lh "$OUT" | tail -5
 `zeokeel-data/` 的恢复只在应用数据被破坏时才做（会丢升级后写入的数据，需明确同意）。
 
 **迁移到新机器**：整个部署目录可以直接拷走（保持文件权限，尤其是 `zeokeel-data/` 与 `certs/`），
-再改 `.env` 的 `DOMAIN` / `ZEOKEEL_PUBLIC_BASE_URL` 与证书模式。
+再改 `.env` 的 `DOMAIN` 与证书模式；「对外访问地址」在新机器的控制台「运维 → 网关」页重新确认一遍
+（`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` 是它的覆盖口）。
 
 ## 证书与反向代理
 
@@ -86,7 +87,8 @@ cat > docker-compose.override.yml <<'EOF'
 services:
   server:
     environment:
-      # 反代场景必配：给不出 https 地址时客户端清单会拒发下载链接
+      # 「对外访问地址」首选在控制台「运维 → 网关」页填（保存即生效）；
+      # 这里是从 compose 层给的 env 覆盖口（非空则优先，反代场景常这样固化）
       ZEOKEEL_PUBLIC_BASE_URL: ${ZEOKEEL_PUBLIC_BASE_URL:-https://harness.example.com}
     ports:
       # 与现有 vhost 的 upstream 一致（例：共享 Caddy 里写的是 172.20.0.1:8082）
@@ -153,15 +155,20 @@ harness.example.com {
 | 数据库迁移 | `docker compose logs server \| grep -i 'migrate:'` | 每条迁移前后各一行；出现 `migrate: SLOW migration` 说明这次升级锁表时间偏长 |
 | 磁盘 | `df -h /opt` | 余量足够放下一个镜像包 + 一份备份 |
 
-几个可调的运维旋钮（都在 `.env`，写完要 `docker compose up -d server`）：
+几个可调的运维旋钮。**2026-10-23 起主入口是控制台「运维 → 系统配置」页**（保存即生效；标注需重启的
+键在 `docker compose up -d server` 后生效）；下表里的 env 名仍是**覆盖口** —— 写了依然有效，而且
+**优先级最高**（会压过控制台保存的值，启动日志会点名）：
 
 | 变量 | 作用 | 什么时候动它 |
 |---|---|---|
-| `ZEOKEEL_WASM_MEMORY_PROFILE` | 应用平台内存档位（`default` / `small` / `large`） | 可用内存 < 4GiB 的机器必须写 `small`，否则启动自检拒绝启动 |
-| `ZEOKEEL_COMPILE_ISOLATION` | 应用编译子进程的 OS 级隔离档（`require` / `auto` / `off`） | 生产建议 `require`：隔离不可用就拒绝启动，而不是静默降级 |
+| `ZEOKEEL_WASM_MEMORY_PROFILE` | 应用平台内存档位（`default` / `small` / `large`）→ 控制台 `wasm.memory_profile`（**需重启**） | 可用内存 < 4GiB 的机器必须用 `small`，否则启动自检拒绝启动。**容器起不来时控制台进不去**，这时才在 `.env` 写它（逃生口），起来后到控制台存成 `small` 并删掉这一行 |
+| `ZEOKEEL_COMPILE_ISOLATION` | 应用编译子进程的 OS 级隔离档（`require` / `auto` / `off`）→ 控制台 `wasm.compile_isolation`（**需重启**） | 生产建议 `require`：隔离不可用就拒绝启动，而不是静默降级 |
 | `ZEOKEEL_MIGRATION_LOCK_TIMEOUT_MS` / `ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS` / `ZEOKEEL_MIGRATION_SLOW_MS` | 迁移的有界等锁预算与"慢迁移"告警阈值（毫秒） | 启动日志出现等锁超时且确认是运维侧长事务（`pg_dump` / 长查询 / idle in transaction）时临时放宽 |
-| `ZEOKEEL_AUDIT_CHAIN_INTERVAL` | 审计哈希链周期校验间隔（Go duration，缺省 `1h`） | 它同时是"篡改可见性窗口"与"每轮一次全表只读扫描"的取舍 |
+| `ZEOKEEL_AUDIT_CHAIN_INTERVAL` | 审计哈希链周期校验间隔（Go duration，缺省 `1h`）→ 控制台 `audit.chain_interval`（**需重启**） | 它同时是"篡改可见性窗口"与"每轮一次全表只读扫描"的取舍 |
 | `ZEOKEEL_DB_MAX_OPEN_CONNS` | 数据库连接池上限 | 多实例部署 / 托管 PG 配额有限时下调 |
+
+> 迁移预算三项与 `ZEOKEEL_DB_MAX_OPEN_CONNS` **有意不入库**（它们必须在数据库可用之前就生效），
+> 仍只在 `.env` 里配；其余三项的日常调整请在控制台「运维 → 系统配置」页做。
 
 管理后台里的两组热调项（改完即时生效，不需要重启）：
 
@@ -202,7 +209,7 @@ harness.example.com {
 
 | 现象 | 判据（怎么确认） | 恢复动作 |
 |---|---|---|
-| 容器反复重启 | `docker compose ps` 里 restart 计数上涨；`docker compose logs --tail=100 server` | 两类最常见：PG 密码与 `pg-data` 不一致；可用内存 < 4GiB 而档位是 `default`（日志"启动自检失败…拒绝启动"）⇒ 写 `small` 后重建 |
+| 容器反复重启 | `docker compose ps` 里 restart 计数上涨；`docker compose logs --tail=100 server` | 两类最常见：PG 密码与 `pg-data` 不一致；可用内存 < 4GiB 而档位是 `default`（日志"启动自检失败…拒绝启动"）⇒ 容器起不来时控制台也进不去，用逃生口：`.env` 写 `ZEOKEEL_WASM_MEMORY_PROFILE=small` 后重建，起来后到控制台「运维 → 系统配置」把档位存成 `small` 并删掉这一行 |
 | healthz 一直非 200 | `docker compose ps` 看 postgres 是否 healthy | 首次启动迁移需 1–2 分钟；仍不通看 `logs postgres` 与 `logs server` |
 | 容器起来就退出，日志提 `SchemaMismatchError` | 日志点名迁移版本号 | **跨代回滚**：停服 → 恢复升级前 `pg_dump` → 回退镜像 → 客户端回退，不能只换镜像 |
 | caddy 容器创建失败，报 `not a directory` | `docker compose ps` 里没有 caddy | `TLS_MODE` 拼写错误（挂载源 `Caddyfile.<mode>` 不存在） |
@@ -210,7 +217,7 @@ harness.example.com {
 | 报网段冲突 | 已有网络使用同一子网 | 改 `NETWORK_SUBNET` 与三个固定 IP；已有 `zeokeel-net` 且子网不一致时先确认再动 |
 | postgres 启动即退出，日志提 `OLD_DATABASES` / `unused mount` | 日志关键字 | PG16 时代的旧数据布局：按 PostgreSQL 官方 dump/restore 迁移，不要改挂载点硬试 |
 | 证书告警 / 客户端连不上 | 仅 `internal` / `auto` 模式 | `internal` 需把 Caddy 本地 CA 分发给员工机器；`auto` 必须域名直连本机且 80/443 对公网开放（经 CDN 会失败） |
-| 员工端"检查更新永远说已是最新" | 清单里有 `client_unavailable` | 配 `ZEOKEEL_PUBLIC_BASE_URL` 后重建 server（见[客户端分发与升级](/deployment/client-delivery/)） |
+| 员工端"检查更新永远说已是最新" | 清单里有 `client_unavailable` | 在控制台「运维 → 网关」页填「对外访问地址」（保存即生效；`.env` 的 `ZEOKEEL_PUBLIC_BASE_URL` 是覆盖口，写了要重建 server），见[客户端分发与升级](/deployment/client-delivery/) |
 | 管理后台"发现新版本"不出现 | 启动日志 `channel resolved: …` 与 `manifest channel "…" != …` | 渠道三值不自洽或端点被设成 `off`；服务端有 6 小时缓存，刚发版属正常延迟 |
 | 应用能打开但发布新版本被拒 | `/readyz` 的发布阻塞项与 `actions` | 常见是应用平台编译缓存触顶：清理 `<部署目录>/zeokeel-data/_compile-cache/` 下的派生缓存（不需要重启），再重试发布 |
 | 忘记超管**密码** | 是否还有**其他超管** | 有：让其在管理后台「用户管理 → 重置密码」重置（重置即吊销该账号全部会话，并强制下次登录改密）。没有：`--reset-mfa <user>` **不重置密码**（它只清 MFA 并吊销会话），唯一超管且密码也丢了时只能在库上改写该账号的 `users.password_hash`（Argon2id 编码串，格式见 `server/internal/util/password.go`）并把 `password_must_change` 置 1，改完立即登录改密；**动手前先做备份** |

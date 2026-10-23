@@ -77,13 +77,17 @@ Administrators may opt into **MFA (TOTP)**; after a password reset the account e
 | Source IP | 60 attempts / 5 minutes | Login, the OIDC callback and OIDC flow start each have their own bucket |
 | Counting rule | **failures only** | "Decide and record" happens in one critical section (success clears the key; a refusal is never recorded twice) |
 
+> The account budget above is `auth.login_max_attempts` on the console's **Operations → System config**
+> page (default 10, **effective on save**). Since 2026-10-23 maintain it there; `.env`'s
+> `ZEOKEEL_LOGIN_MAX_ATTEMPTS` is its override port, and it **wins**.
+
 Three details that are easy to get wrong:
 
 - **The IP must be the real client IP resolved at the trust boundary.** Behind a reverse proxy, using the TCP peer address collapses every bucket onto the proxy's own IP — 60 failed logins from one unauthenticated party then lock **the whole organisation** out for the rest of the 5-minute window. `X-Forwarded-For` is honoured only when the TCP peer is loopback or an explicitly configured trusted proxy;
 - **The decision key, the recording key and the clearing key must come from one construction point**: miss one of the three and the bucket never fills, so rate limiting fails **silently**;
 - "Count failures only" must be atomic rather than "decide first, record after the failure" — the latter lets a concurrent burst straight through.
 
-A newly saved **LDAP** configuration using a non-loopback plaintext `ldap://` URL is **refused by default** (the bind password would cross the network in clear); allowing it requires an explicit `ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1`, and every such save writes a log line.
+A newly saved **LDAP** configuration using a non-loopback plaintext `ldap://` URL is **refused by default** (the bind password would cross the network in clear); allowing it requires switching `auth.ldap_allow_plaintext` on the console's **Operations → System config** page (**effective on save**; `.env`'s `ZEOKEEL_LDAP_ALLOW_PLAINTEXT=1` is its override port and wins), and every such save writes a log line.
 
 ## Sandbox and permissions
 

@@ -4215,6 +4215,80 @@ export class BrowserRuntime {
     }, signal)
   }
 
+  /**
+   * Evaluate one page script inside frame `frame` (2026-10-23 C16 frame actions).
+   * Uses the SAME DOM-ordered index as snapshots (`frame:N`) and `browser_eval`
+   * (single source: `resolveFrame`), and addresses same-process frames by
+   * `contextId` / out-of-process frames by their flat session id.
+   * @param tab - target tab.
+   * @param frame - frame index (1-based, 0 = main frame).
+   * @param expression - page script.
+   * @param signal - caller cancellation.
+   * @returns the script's by-value result.
+   */
+  private async evaluateInFrame(tab: BrowserTab, frame: number, expression: string, signal?: AbortSignal): Promise<unknown> {
+    if (frame <= 0) throw browserError('policy', 'browser: frame must be >= 1 here')
+    const target = await this.resolveFrame(tab, frame)
+    const result = await tab.cdp.send<{ result?: { value?: unknown } }>('Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      ...(target.contextId === undefined ? {} : { contextId: target.contextId }),
+    }, {
+      ...(target.sessionId === undefined ? {} : { sessionId: target.sessionId }),
+      ...(signal === undefined ? {} : { signal }),
+    })
+    return result.result?.value
+  }
+
+  /**
+   * Click an element inside a frame by DOM dispatch (C16). Real input events are
+   * addressed in the MAIN frame's coordinates, so a frame click is expressed as a
+   * full bubbling mouse/pointer/click chain on the element instead.
+   * @param tabId - target tab.
+   * @param frame - 1-based frame index.
+   * @param selector - selector resolved inside that frame's document.
+   * @param signal - caller cancellation.
+   */
+  async clickInFrame(tabId: number, frame: number, selector: string, signal?: AbortSignal): Promise<void> {
+    const resolved = this.resolveTab(tabId)
+    await this.agentRun('browser_click', async () => {
+      const tab = this.tab(resolved)
+      const outcome = await this.evaluateInFrame(tab, frame, `(() => {
+        ${querySnippet(selector)}
+        if (!el) return 'not-found';
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const rect = el.getBoundingClientRect();
+        const base = { bubbles: true, cancelable: true, composed: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0, buttons: 0, detail: 1 };
+        const Mouse = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) el.dispatchEvent(new Mouse(type, { ...base, buttons: type.includes('down') ? 1 : 0 }));
+        if (typeof el.click === 'function') el.click(); else el.dispatchEvent(new MouseEvent('click', base));
+        return 'clicked';
+      })()`, signal)
+      if (outcome !== 'clicked') throw browserError('not-found', `browser: cannot click ${selector} in frame ${String(frame)}`)
+      this.record('browser_click', resolved, `click ${selector} in frame ${String(frame)}`, false, 'ai', CLICK_SUMMARY_LIMIT)
+    }, signal)
+  }
+
+  /**
+   * Element text inside a frame (C16).
+   * @param tabId - target tab.
+   * @param frame - 1-based frame index.
+   * @param selector - optional selector resolved inside that frame.
+   * @param signal - caller cancellation.
+   */
+  async textInFrame(tabId: number, frame: number, selector: string | undefined, signal?: AbortSignal): Promise<string> {
+    const resolved = this.resolveTab(tabId)
+    return await this.agentRun('browser_get_text', async () => {
+      const tab = this.tab(resolved)
+      const expression = selector === undefined
+        ? `(document.body ? document.body.innerText : '').slice(0, 65536)`
+        : `(() => { ${querySnippet(selector)} return el ? (el.innerText || el.textContent || '').slice(0, 65536) : null; })()`
+      const value = await this.evaluateInFrame(tab, frame, expression, signal)
+      if (value === null) throw browserError('not-found', `browser: element not found in frame ${String(frame)}: ${String(selector)}`)
+      return redactFilledSecretsText(tab, String(value ?? ''))
+    }, signal)
+  }
+
   /** Whether the browser window currently has a surface that receives input. */
   private windowCanReceiveInput(): boolean {
     if (this.window === null || this.window.isDestroyed()) return false

@@ -797,6 +797,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       parameters: {
         tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
         target: { oneOf: [{ type: 'integer' }, { type: 'string' }], description: 'Snapshot element number (as listed by browser_get_snapshot on this tab) or a target string: a CSS selector, or a locator — text=Sign in / text="Sign in" (exact), role=button, role=button[name="Sign in"], loc=role:button[name*=Sign], loc=href:/checkout, xpath=//button[1], @12 / ref=12. Required unless x+y are given (browser_click only).' },
+        frame: { type: 'integer', description: 'Act inside this frame (1-based DOM index; 0 = main frame). Frame clicks are DOM-dispatched on the element.' },
         x: { type: 'integer', description: 'Viewport X for a coordinate click (browser_click only; requires y).' },
         y: { type: 'integer', description: 'Viewport Y for a coordinate click (browser_click only; requires x).' },
         button: { type: 'string', enum: ['left', 'right', 'middle'], description: 'Mouse button (default left).' },
@@ -857,6 +858,12 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
           modifiers?: string[]
           expect?: 'popup' | 'download' | 'dialog' | 'file-chooser'
           expectTimeoutMs?: number
+          frame?: number
+        }
+        if (typeof interactArgs.frame === 'number' && interactArgs.frame > 0) {
+          if (spec.name !== 'browser_click') throw new Error(`frame is not supported for ${spec.name} yet — use browser_click or browser_get_text`)
+          if (typeof interactArgs.x === 'number' || typeof interactArgs.y === 'number') throw new Error('frame and x/y are mutually exclusive')
+          if (interactArgs.target === undefined) throw new Error('target is required when frame is set')
         }
         const modifierBits = (interactArgs.modifiers ?? []).reduce((sum, name) => {
           const bit = MODIFIER_BITS[name as 'ctrl' | 'alt' | 'meta' | 'shift']
@@ -870,7 +877,12 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
         if (pointClick && interactArgs.target !== undefined) throw new Error('target and x/y are mutually exclusive — pass one addressing form')
         if (!pointClick && interactArgs.target === undefined) throw new Error('target is required (or pass x and y for a coordinate click)')
         const target = pointClick ? undefined : await resolveTarget(runtime, tabId, interactArgs.target as number | string, exec.signal)
+        const frameIndex = typeof interactArgs.frame === 'number' && interactArgs.frame > 0 ? interactArgs.frame : 0
         const outcome = await runWithExpectedEvent(runtime, tabId, interactArgs, exec.signal, async () => {
+          if (frameIndex > 0) {
+            await runtime.clickInFrame(tabId, frameIndex, (target as { selector: string }).selector, exec.signal)
+            return { ok: true }
+          }
           if (target === undefined) {
             await runtime.clickAt(tabId, { x: interactArgs.x as number, y: interactArgs.y as number }, exec.signal, undefined, {
               ...(interactArgs.button === undefined ? {} : { button: interactArgs.button }),
@@ -1409,6 +1421,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
       selector: { type: 'string', description: 'Optional CSS selector or locator (text=… / role=… / xpath=… / loc=…); without it the whole page text is returned.' },
+      frame: { type: 'integer', description: 'Read from this frame instead (1-based DOM index, same numbering as snapshot frame:N; 0 = main frame).' },
     },
     output: {
       schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string' }, truncated: { type: 'boolean' } } },
@@ -1419,9 +1432,14 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     isConcurrencySafe: () => false,
     presentCall: present('Page text'),
     async execute(args, exec) {
-      const { tab, selector } = args as { tab?: number; selector?: string }
+      const { tab, selector, frame } = args as { tab?: number; selector?: string; frame?: number }
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
+      if (typeof frame === 'number' && frame > 0) {
+        const text = await runtime.textInFrame(tabId, frame, selector, exec.signal)
+        exec.signal.throwIfAborted()
+        return { text, truncated: text.length >= 65_536 }
+      }
       // 2026-10-23（C13 + B6）：selector 现在也接受定位器语法（text=/role=/xpath=/loc=），
       // 纯 CSS（含 `css=` 前缀）保持原语义直接透传。
       let effectiveSelector = selector

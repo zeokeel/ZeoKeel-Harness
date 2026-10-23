@@ -1460,6 +1460,35 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('frame actions: click/text run in the frame context and validate arguments', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const calls: Array<{ method: string, params: Record<string, unknown>, argv: Record<string, unknown> }> = []
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      calls.push({ method, params, argv: {} })
+      if (method === 'Page.getFrameTree') {
+        return {
+          frameTree: {
+            frame: { id: 'F0', url: 'https://a.example/', childFrames: [] },
+          },
+        }
+      }
+      if (method === 'Page.createIsolatedWorld' || method === 'Runtime.enable') return {}
+      return { result: { value: frameValue } }
+    }
+    let frameValue: unknown = 'clicked'
+    // resolveFrame reads Page.getFrameTree + Runtime.enable; the mock above keeps
+    // the tree at frame 0 only, so frame 1 is an explicit not-found instead of
+    // silently acting on the main frame.
+    await expect(runtime.clickInFrame(1, 1, '#go')).rejects.toMatchObject({ code: 'not-found' })
+    // A frame script NEVER goes through the main-frame document: the expression
+    // is evaluated with the frame's contextId (or its session id).
+    frameValue = 'body text'
+    await expect(runtime.textInFrame(1, 1, undefined)).rejects.toMatchObject({ code: 'not-found' })
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

@@ -773,6 +773,7 @@ export class BrowserRuntime {
     this.options = {
       maxTabs: options.maxTabs ?? 16,
       programEnabled: options.programEnabled ?? false,
+      uploadDirs: options.uploadDirs ?? [],
       timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       loadTimeoutMs: options.loadTimeoutMs ?? DEFAULT_LOAD_TIMEOUT_MS,
       // 缺省 = **开**（R21 F-02 定案：装配面无生产者，见 `index.ts` 的 `evalEnabled`

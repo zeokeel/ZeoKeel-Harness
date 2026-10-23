@@ -318,10 +318,13 @@ interface AgentProjectInfo {
 
 /** Upload whitelist: downloads dir (always) + the calling session's cwd. */
 function uploadAllowDirs(runtime: BrowserRuntime, session: AgentProjectInfo['session']): string[] {
-  const dirs = [runtime.options.downloadDir]
+  // Single source: the deployment's configured upload dirs (never a tool or
+  // script argument) plus the downloads dir and the session cwd. Duplicates are
+  // collapsed so a misconfiguration cannot widen the list accidentally.
+  const dirs = new Set<string>([runtime.options.downloadDir, ...runtime.options.uploadDirs])
   const cwd = session?.header?.cwd ?? session?.meta?.cwd ?? session?.cwd
-  if (typeof cwd === 'string' && cwd.trim() !== '') dirs.push(cwd.trim())
-  return dirs
+  if (typeof cwd === 'string' && cwd.trim() !== '') dirs.add(cwd.trim())
+  return [...dirs].filter(dir => dir !== '')
 }
 
 /**
@@ -1470,10 +1473,10 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_upload_file',
-    description: '[interact] Upload local files through the page file input (default first input[type=file]; no dialogs). Only paths inside the downloads dir or the current workspace are allowed.',
+    description: '[interact] Upload local files through the page file input (default first input[type=file]; no dialogs). Only paths inside the deployment-configured upload dirs, the downloads dir or the current workspace are allowed (this list is configuration, never a tool argument).',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
-      paths: { type: 'array', required: true, items: { type: 'string' }, description: 'Absolute paths to upload (allowed: downloads dir + current workspace).' },
+      paths: { type: 'array', required: true, items: { type: 'string' }, description: 'Absolute paths to upload (allowed: deployment upload dirs + downloads dir + current workspace).' },
     },
     output: {
       schema: { type: 'object', additionalProperties: false, properties: { uploaded: { type: 'integer' } } },

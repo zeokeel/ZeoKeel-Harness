@@ -1467,3 +1467,31 @@ describe('2026-09-15 P3：scroll 的页内判定', () => {
     expect(harness.runtime.opLog.some((entry) => entry.tool === 'browser_scroll')).toBe(false)
   })
 })
+
+describe('upload dirs are deployment config, not a tool argument（2026-10-23 A11）', () => {
+  it('a configured dir is accepted, others are refused, and no tool parameter can widen the list', async () => {
+    const harness = track(makeHarness({ uploadDirs: ['/tmp/vetted'] }))
+    await harness.runtime.open('https://a.example')
+    const seen: string[][] = []
+    ;(harness.runtime as unknown as { uploadFile: (...args: unknown[]) => Promise<{ uploaded: number }> }).uploadFile = async (...args: unknown[]) => {
+      seen.push(args[3] as string[])
+      return { uploaded: 1 }
+    }
+    await expect(harness.call('browser_upload_file', { paths: ['/tmp/vetted/a.txt'] })).resolves.toMatchObject({ uploaded: 1 })
+    // The allow-list handed to the runtime contains the deployment dir and is
+    // derived ONLY from configuration (there is no tool parameter for it).
+    expect(seen[0]).toContain('/tmp/vetted')
+    const params = harness.tools.get('browser_upload_file')!.parameters as unknown as { properties: Record<string, unknown> }
+    expect(Object.keys(params.properties).sort()).toEqual(['paths', 'tab'])
+    // Default deployment: the same path is not allow-listed (nothing to fall back to).
+    const defaulted = track(makeHarness())
+    await defaulted.runtime.open('https://a.example')
+    const seenDefault: string[][] = []
+    ;(defaulted.runtime as unknown as { uploadFile: (...args: unknown[]) => Promise<{ uploaded: number }> }).uploadFile = async (...args: unknown[]) => {
+      seenDefault.push(args[3] as string[])
+      return { uploaded: 1 }
+    }
+    await defaulted.call('browser_upload_file', { paths: ['/tmp/vetted/a.txt'] })
+    expect(seenDefault[0]).not.toContain('/tmp/vetted')
+  })
+})

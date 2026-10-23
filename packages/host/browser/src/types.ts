@@ -114,6 +114,10 @@ export interface BrowserInteractionHit {
 
 /** Runtime config surfaced to the model about the embedded browser. */
 export interface BrowserToolOptions {
+  /** Extra directories `browser_upload_file` may read from (deployment config,
+   * never a tool/script argument; joined with the downloads dir + session cwd). */
+  uploadDirs?: string[]
+
   /** Offer the programming-mode tool `browser_run` (default false: opt-in, audit R5). */
   programEnabled?: boolean
   /** Maximum tabs (default 8). */

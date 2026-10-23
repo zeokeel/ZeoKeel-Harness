@@ -3241,7 +3241,11 @@ export class BrowserRuntime {
         }
         meta.crossOriginFrames = Array.isArray(parsed.crossOrigin) ? parsed.crossOrigin.filter((value): value is number => typeof value === 'number') : []
         if (parsed.truncated === true) meta.truncated = true
-        if (typeof parsed.frames === 'number') meta.frames = Math.max(meta.frames, parsed.frames)
+        // The blind-spot counters now describe what is STILL missing: frames and
+        // shadow roots covered by the extras must stop being reported as "NOT
+        // included" (audit P2-1). Only nested frames remain a blind spot.
+        if (extras.includeFrames === true) meta.frames = 0
+        if (extras.includeShadow === true) meta.shadowRoots = 0
         if (typeof parsed.nestedFrames === 'number' && parsed.nestedFrames > 0) meta.nestedFrames = parsed.nestedFrames
         elements.push(...appended)
       } catch {

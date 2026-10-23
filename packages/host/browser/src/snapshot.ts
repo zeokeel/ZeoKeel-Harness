@@ -471,6 +471,9 @@ export function snapshotNote(meta: SnapshotExtractionMeta): string | undefined {
   if (blind.length > 0) {
     parts.push(`${blind.join(' and ')} are NOT included — use browser_eval(frame:N) or browser_get_text(selector) if the element you need is inside one`)
   }
+  if ((meta.nestedFrames ?? 0) > 0) {
+    parts.push(`${meta.nestedFrames} nested frame${meta.nestedFrames === 1 ? '' : 's'} inside a frame ${meta.nestedFrames === 1 ? 'is' : 'are'} not walked (only top-level frames are listed)`)
+  }
   return parts.length === 0 ? undefined : `snapshot: ${parts.join('; ')}.`
 }
 

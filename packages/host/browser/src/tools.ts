@@ -1320,6 +1320,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
         additionalProperties: false,
         properties: {
           crossOriginFrames: { type: 'array', items: { type: 'integer' }, description: 'Frames skipped because they are cross-origin (only with includeFrames).' },
+          nestedFrames: { type: 'integer', description: 'Same-origin frames found INSIDE a listed frame (not walked; only with includeFrames).' },
           elements: {
             type: 'array',
             items: {
@@ -1387,6 +1388,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
           ...(typeof element.frame === 'number' ? { frame: element.frame } : {}),
         })),
         ...(meta.crossOriginFrames === undefined || meta.crossOriginFrames.length === 0 ? {} : { crossOriginFrames: meta.crossOriginFrames }),
+        ...(meta.nestedFrames === undefined || meta.nestedFrames === 0 ? {} : { nestedFrames: meta.nestedFrames }),
         url: state.url,
         title: state.title,
         snapshot: generation,

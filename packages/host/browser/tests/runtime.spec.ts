@@ -11,6 +11,7 @@ import type {
 } from '../src/electron-adapter.ts'
 import type { CdpTransport } from '../src/cdp.ts'
 import { BrowserRuntime } from '../src/runtime.ts'
+import { snapshotNote } from '../src/snapshot.ts'
 import { TabPool } from '../src/pool.ts'
 import { BrowserStore } from '../src/store.ts'
 import { mkdirSync, rmSync } from 'node:fs'
@@ -1357,6 +1358,48 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     expect(extras.text).not.toContain('supersecret')
     expect(extras.text).not.toContain('supersecr')
     expect(extras.text).toContain('****')
+    cleanup()
+  })
+
+  it('snapshot extras: covered blind spots leave the note, nested frames and truncation stay visible', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        return {
+          result: {
+            value: JSON.stringify({
+              entries: [{ selector: '#in-frame', kind: 'button', text: 'Go', frame: 1, visible: true, disabled: false }],
+              crossOrigin: [],
+              truncated: true,
+              frames: 1,
+              nestedFrames: 1,
+            }),
+          },
+        }
+      }
+      return {
+        result: {
+          value: {
+            elements: [{ kind: 'button', text: 'Save', selector: '#save', visible: true, disabled: false }],
+            total: 1, truncated: false, frames: 1, shadowRoots: 1, shadowScanCapped: false, countCapped: false,
+          },
+        },
+      }
+    }
+    const plain = await runtime.modelSnapshot(1)
+    expect(snapshotNote(plain.meta)).toContain('NOT included')
+    const withExtras = await runtime.modelSnapshot(1, undefined, { includeShadow: true, includeFrames: true })
+    const note = snapshotNote(withExtras.meta)
+    // Covered blind spots are no longer claimed as missing...
+    expect(note ?? '').not.toContain('NOT included')
+    // ...but nested frames and the extras truncation are still reported.
+    expect(note ?? '').toContain('nested frame')
+    expect(withExtras.meta.truncated).toBe(true)
+    expect(withExtras.meta.nestedFrames).toBe(1)
     cleanup()
   })
 

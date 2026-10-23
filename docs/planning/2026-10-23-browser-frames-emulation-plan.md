@@ -21,6 +21,8 @@
 
 - **默认值（审计 R1）**：`includeFrames` / `includeShadow` 默认 **false**（显式开启）——默认参数下快照输出与 2026-10-23 之前**逐字节一致**，编号/stale/400 上限的既有语义不变；开启后新增条目追加在既有条目之后（主帧优先、shadow 紧随宿主、同源子帧最后），因此旧编号不会重排。
 - 截断优先级：主帧文档序 → shadow（宿主处）→ 同源子帧（1..）；达到上限时先截断列表尾部并报 `truncated`。
+- **并入后的盲区语义（P1 复审 P2-1）**：开启 extras 后，被覆盖的 frames/shadowRoots 从 note 的 "NOT included" 计数中移除；仍存在的盲区（`nestedFrames` 只数顶层帧、跨域帧 `crossOriginFrames`）单独列出。
+- **frame 条目的 visible**：以**帧内**元素的 rect 为准（iframe 自身被隐藏时条目仍可能是 visible:true）；`frame:N` 只数顶层帧。
 - 跨域 iframe：**不含** DOM（协议不允许跨世界读取），只报 `crossOrigin: true` 与 frame 序号。**不承诺** `browser_eval(frame:N)` 能进跨域帧的 world，除非实现前确认（审计 R2；确认前文档只写"看 crossOrigin，动作会被拒绝"）。crossOrigin 判定用帧 document 的实际 origin（srcdoc/blob/data/about:blank 继承、sandbox 无 allow-same-origin → 跨源），**异常一律 fail-closed 视为跨源**。
 - 条目形状新增可选字段：`frame?: number`、`shadow?: boolean`；不改变既有字段名。
 - 上限：条目总数沿用 `snapshotLimit`（400 默认）；帧内条目计入同一上限；shadow 深度上限 8。

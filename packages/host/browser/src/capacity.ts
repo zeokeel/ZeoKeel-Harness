@@ -31,7 +31,38 @@ export function tabQuotaForMemory(totalBytes: number): number {
   return Math.max(MIN_TAB_QUOTA, Math.min(MAX_TAB_QUOTA, quota))
 }
 
-/** Quota for the current process. */
+/**
+ * Clamp a total-memory figure by a cgroup limit (v2 `memory.max` / v1
+ * `memory.limit_in_bytes` report `max` or a huge sentinel when unlimited).
+ * @param totalBytes - `os.totalmem()`.
+ * @param cgroupMax - parsed cgroup limit, when present.
+ * @returns the effective memory the browser may plan for.
+ */
+export function effectiveMemoryBytes(totalBytes: number, cgroupMax?: number): number {
+  if (cgroupMax === undefined || !Number.isFinite(cgroupMax) || cgroupMax <= 0) return totalBytes
+  return Math.min(totalBytes, cgroupMax)
+}
+
+/** Read the cgroup memory limit when the host exposes one (best effort). */
+export function cgroupMemoryLimit(): number | undefined {
+  try {
+    const fs = require('node:fs') as typeof import('node:fs')
+    for (const file of ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes']) {
+      try {
+        const raw = fs.readFileSync(file, 'utf8').trim()
+        if (raw === 'max') return undefined
+        const value = Number(raw)
+        // v1 reports a page-rounded huge number when unlimited.
+        if (Number.isFinite(value) && value > 0 && value < totalmem()) return value
+      } catch { /* next candidate */ }
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Quota for the current process (cgroup-aware where the runtime exposes it). */
 export function defaultTabQuota(): number {
-  return tabQuotaForMemory(totalmem())
+  return tabQuotaForMemory(effectiveMemoryBytes(totalmem(), cgroupMemoryLimit()))
 }

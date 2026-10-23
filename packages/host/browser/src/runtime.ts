@@ -30,6 +30,7 @@ import { appSurfaceAllowsUrl, asSurfaceWebContents, surfaceLabel, type BrowserSu
 import { TabPool, gateRefusal, type TabReservation } from './pool.ts'
 import { BrowserStore, stripSensitiveText, stripSensitiveUrl, type DownloadEntry, type HistoryEntry, type RecordActor } from './store.ts'
 import { maskContentText, validateEvalExpression, wrapEvalExpression, serializeEvalResult } from './eval-policy.ts'
+import { defaultTabQuota } from './capacity.ts'
 import { DOWNLOAD_COMPLETION_TIMEOUT_MS, PROGRAM_MAX_HELPER_CALLS, PROGRAM_SCRIPT_BUDGET_MS, WAIT_FOR_HARD_CAP_MS } from './budgets.ts'
 import { SENSITIVE_KEY_PATTERN, isExactProseSensitiveKey } from './sensitive.ts'
 import { browserError, BrowserError, type BrowserErrorCode } from './errors.ts'
@@ -773,7 +774,7 @@ export class BrowserRuntime {
   ) {
     this.deps = deps
     this.options = {
-      maxTabs: options.maxTabs ?? 16,
+      maxTabs: options.maxTabs ?? defaultTabQuota(),
       programEnabled: options.programEnabled ?? false,
       uploadDirs: options.uploadDirs ?? [],
       timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,

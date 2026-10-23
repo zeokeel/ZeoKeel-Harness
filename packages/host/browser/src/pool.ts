@@ -11,7 +11,7 @@
 
 import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 import { browserError } from './errors.ts'
-import { defaultTabQuota } from './capacity.ts'
+import { MAX_TAB_QUOTA, defaultTabQuota } from './capacity.ts'
 import type { BrowserError } from './errors.ts'
 import { TAB_SLOT_WAIT_TIMEOUT_MS, USER_GATE_TIMEOUT_MS } from './budgets.ts'
 
@@ -77,7 +77,7 @@ export interface TabReservation {
 }
 
 const POOL_DEFAULTS = {
-  maxTabs: defaultTabQuota(),
+  maxTabs: Math.min(MAX_TAB_QUOTA, defaultTabQuota()),
   userGateTimeoutMs: USER_GATE_TIMEOUT_MS,
   // 必须短于工具预算（budgets.ts 的 TAB_SLOT_WAIT_TIMEOUT_MS 说明理由）：
   // 超时后抛出的 quota 错误要能真的送达模型，而不是被 timeout-policy 换掉。
@@ -289,7 +289,15 @@ export class TabPool {
   disposed = false
 
   constructor(options: PoolOptions = {}) {
-    this.options = { ...POOL_DEFAULTS, ...options }
+    // One ceiling: an explicit quota is clamped to the same MAX_TAB_QUOTA the
+    // surface registry uses, so the pool reports its own quota error first.
+    this.options = {
+      ...POOL_DEFAULTS,
+      ...options,
+      // Upper bound is shared with the surface registry; a small explicit quota is
+      // honoured (tests/deployments may shrink it deliberately), but never 0.
+      maxTabs: Math.min(MAX_TAB_QUOTA, Math.max(1, options.maxTabs ?? POOL_DEFAULTS.maxTabs)),
+    }
     this.mutex = new PoolMutex(this.options.locale)
   }
 

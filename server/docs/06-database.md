@@ -270,7 +270,8 @@ SELECT s.name AS app_id, 'skill' AS kind, count(*) AS org_rows
 | `ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS` | 迁移互斥锁(`pg_advisory_lock`)的等待预算 —— 滚动升级时另一个实例可能正在迁移 | 同上;超时说明"另一个实例卡住了",继续等通常不如 fail-loud |
 | `ZEOKEEL_MIGRATION_SLOW_MS` | "慢迁移"告警阈值:超过它单独打一条可检索的 `migrate: SLOW migration` WARN(含被 `ACCESS EXCLUSIVE` 锁住的表与时长) | 想让"这次升级锁了多久"更早暴露 ⇒ 调小 |
 
-- **单位是毫秒**(与 `ZEOKEEL_AUDIT_CHAIN_INTERVAL` 那种 Go duration 不是同一种写法)。
+- **单位是毫秒**(与 `ZEOKEEL_AUDIT_CHAIN_INTERVAL` 那种 Go duration 不是同一种写法;
+  后者属于控制台「系统配置」的 `audit.chain_interval`,已不在这里的 env 清单内)。
 - **非法/非正值一律回落缺省并告警** —— 不许用一条 env(写 `0` 或写错)把预算变成"无预算",
   那正是这条修复要消灭的形态。
 - **预算打满 = fail-loud**,不是无限等待:迁移受得了失败、受不了挂住。
@@ -278,6 +279,10 @@ SELECT s.name AS app_id, 'skill' AS kind, count(*) AS org_rows
   `server.environment` 与 `server/.env.example`;接线漏一个会被
   `server/cmd/server/compose_env_test.go` 的 `TestEveryServerZEOKEELEnvNameIsWiredOrExempt`
   当场打红(服务端源码里出现的每个 `ZEOKEEL_*` 名字都必须"已接线"或"在豁免清单里且写明理由")。
+- **这三个键有意留在环境变量、不进数据库**(2026-10-23):它们是**启动期迁移执行器**的预算,
+  迁移跑在"库还没被打开成可用状态"之前,把预算放进库会形成先有鸡还是先有蛋的依赖;
+  理由与完整的"不可入库清单"见
+  [`docs/decisions/2026-10-23-db-backed-deployment-config.md`](../../docs/decisions/2026-10-23-db-backed-deployment-config.md)。
 
 #### 未来触发条件
 

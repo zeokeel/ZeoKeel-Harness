@@ -129,10 +129,29 @@ compose 按 `./Caddyfile.${TLS_MODE:-manual}` 挂载模板，三种模式命名�
 - 容器 IP 由 compose `ipam` + `ipv4_address` 声明式锁定：caddy `172.28.0.2`、
   server `172.28.0.3`、postgres `172.28.0.4`，`docker compose up -d` 重建后不变；
 - server 经 compose DNS（服务名 `server`）被 Caddy 反代，**无需写死 IP**；
-- `ZEOKEEL_TRUSTED_PROXIES` 默认 `172.28.0.2`，使登录限流键解析真实客户端 IP；
+- `ZEOKEEL_TRUSTED_PROXIES` 留空时**从 `CADDY_IP` 派生**（默认即 `172.28.0.2`），使登录限流键解析真实客户端 IP；
 - 与宿主机其他网段/容器冲突时改 `.env` 的 `NETWORK_SUBNET` 与三个固定 IP。
 
-## 4. 常见问题
+## 4. 运行期配置：控制台「系统配置」，不是 `.env`（2026-10-23 起）
+
+`.env` 只负责**引导与拓扑**（四个必填键 + 镜像/网段/端口/时区/"有意不入库"的部署旋钮，
+见 `server/.env.example`）。**运行期可调项在管理端「系统配置」页**：
+
+- 页面对应 `GET/PUT /api/server/admin/config`（权限 `config:read` / `config:write`），
+  键的唯一真源是 `server/internal/deployconfig` 的注册表（12 项：登录失败上限、明文 LDAP、
+  更新清单地址、OIDC 回跳信任主机、单用户并发上限、三项遥测限流、审计链间隔、
+  应用保留名、内存档位、编译隔离）；
+- 优先级：**显式环境变量（非空） > 控制台保存值 > 内置默认**。存量部署 `.env` 里的同名键
+  仍然生效且**优先**，启动日志会点名被覆盖的键 —— 想交还控制台就删掉 `.env` 里那一行；
+- 生效时机：多数键**保存即生效**；`restart` 类（审计链间隔 / 应用保留名 / 内存档位 /
+  编译隔离）需 `docker compose up -d server` 重建容器（值在启动期一次性装配）。
+
+为什么不再把这类键放 `.env`：容器里的环境变量是**启动期快照**，改一条限流也要重建容器，
+而且控制台完全看不见它们。完整取舍、"不可入库清单"与升级路径见
+[`docs/decisions/2026-10-23-db-backed-deployment-config.md`](../../docs/decisions/2026-10-23-db-backed-deployment-config.md)；
+部署操作口径见 [`docs/deploy/AI-DEPLOY.md`](../../docs/deploy/AI-DEPLOY.md) §2.6。
+
+## 5. 常见问题
 
 | 现象 | 原因与处理 |
 |---|---|

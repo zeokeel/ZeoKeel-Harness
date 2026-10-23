@@ -6,10 +6,19 @@
 #
 #   cp .env.example .env && docker compose up -d
 #
-# .env 必填(其余均有默认值,见下方变量说明):
-#   ZEOKEEL_ADMIN_PASSWORD  首启超管密码(已有 admin 后幂等跳过,可置空清除明文)
-#   PG_PASSWORD            内置 postgres 容器密码
+# .env 必填只有 4 个键(2026-10-23 口径;其余运行期配置在控制台「系统配置」页):
 #   DOMAIN                 对外域名或 IP(默认示例值,生产必改)
+#   TLS_MODE               证书模式(manual / auto / internal,见下)
+#   ZEOKEEL_ADMIN_PASSWORD 首启超管密码(已有 admin 后幂等跳过,可置空清除明文)
+#   PG_PASSWORD            内置 postgres 容器密码
+# 服务端镜像标签 SERVER_IMAGE 可选(仅升级时需要)。
+#
+# server.environment 里的其它 ZEOKEEL_* 分两类,那段注释里逐组标了:
+#   · 历史覆盖口 —— 已迁移到控制台「系统配置」页,**保留仅为兼容存量 .env**;
+#     删任何一行都会让存量 .env 静默失效,所以它们不许被"顺手清理掉"。
+#   · 有意不入库的部署旋钮(网络拓扑 / 连接池 / 迁移预算 / 镜像内路径)。
+# 新部署**不需要**设置它们,默认值合理;控制台保存即生效(标注 restart 的键在
+# `docker compose up -d server` 后生效)。
 #
 # 证书模式(由 .env 的 TLS_MODE 决定挂载哪个 Caddyfile 模板):
 #   manual   → Caddyfile.manual   (自签占位/企业 CA;支持 IP)
@@ -73,8 +82,22 @@ services:
     expose:
       - "8080"
     environment:
+      # ==========================================================
+      # 分组口径（2026-10-23，与 server/.env.example 同源）：
+      #   ① 启动必需/引导       —— 没有它起不来，或只在首次启动时用到
+      #   ② 网络拓扑（compose 层）—— 网段 / 固定 IP / 可信代理 / 对外地址
+      #   ③ 历史覆盖口           —— 已迁移到控制台「系统配置」页；**保留仅为兼容存量
+      #                            .env，新部署无需设置**（删掉任何一行 = 存量 .env
+      #                            静默失效；判据见 cmd/server/compose_env_test.go
+      #                            的 TestDeployconfigRegistryEnvsStayWired）
+      #   ④ 仍留在 env 的部署旋钮 —— 有意不入库（连接池 / 迁移预算 / 镜像内路径），
+      #                            理由见 docs/decisions/2026-10-23-db-backed-deployment-config.md
+      # 所有取值保持 `${KEY:-}` 透传形态：写死默认值等于换一种方式无视 `.env`。
+      # ==========================================================
+
+      # ---- ① 启动必需/引导 ----
       # 初始管理员密码(已有 admin 时 EnsureBootstrapAdmin 幂等跳过,可置空以清除明文凭据)
-      # ⚠ 首次启动必填,部署前改为强密码;可用部署脚本随机生成
+      # ⚠ 首次启动必填,部署前改为强密码
       ZEOKEEL_ADMIN_PASSWORD: ${ZEOKEEL_ADMIN_PASSWORD:-}
       # 主密钥:留空则由服务端首次启动自动生成于 data/master.key(请备份)
       ZEOKEEL_MASTER_KEY: ${ZEOKEEL_MASTER_KEY:-}
@@ -87,93 +110,76 @@ services:
       # 只有确实要覆盖镜像声明时才在 .env 里显式设置,且服务端会校验它与
       # 镜像内的渠道内容一致,不一致直接拒绝启动。
       ZEOKEEL_CHANNEL: ${ZEOKEEL_CHANNEL:-}
-      # 更新清单地址。**留空 = 用本渠道的默认目录**
-      # (release.zeokeel.com/<channel>/latest.json),不是"关闭检查"。
-      # 要关闭更新检查请显式写 off / none / - / disabled。
-      ZEOKEEL_UPDATE_ENDPOINT: ${ZEOKEEL_UPDATE_ENDPOINT:-}
-      # 可信反向代理(审计 2026-08-25 F-02;R15C-03,审计 2026-09-25):使登录/MFA/
-      # OIDC 的限流键从 X-Forwarded-For 解析真实客户端 IP,防账号级 DoS。
-      # **留空 = 从 CADDY_IP 派生**(见下一条) —— 网段与信任列表因此不可能漂移。
-      # 宿主机已有别的反代(共享 Caddy/nginx)时才显式写:改成它连过来的地址
-      # (通常是 docker 网桥网关,如 172.20.0.1);写了却与 CADDY_IP 不一致时
-      # 启动日志会打一行 WARNING(改网段只改一个 = XFF 静默失效)。
+
+      # ---- ② 网络拓扑（compose 层；改网段/固定 IP 只改 .env，不要在编排里写死）----
+      # 可信反向代理(审计 2026-08-25 F-02;R15C-03):使登录/MFA/OIDC 的限流键
+      # 从 X-Forwarded-For 解析真实客户端 IP,防账号级 DoS。
+      # **留空 = 从 CADDY_IP 派生** —— 网段与信任列表因此不可能漂移。
+      # 宿主机已有别的反代(共享 Caddy/nginx)时才显式写它连过来的地址。
       ZEOKEEL_TRUSTED_PROXIES: ${ZEOKEEL_TRUSTED_PROXIES:-}
       # 前端 Caddy 在本私有网段里的固定 IP:与 services.caddy 的 ipv4_address
       # **同一个变量、同一份缺省**。服务端用它派生可信代理(上一条留空时),
       # 所以改网段只需改 CADDY_IP 一处(NETWORK_SUBNET 冲突时的既有做法)。
       CADDY_IP: ${CADDY_IP:-172.28.0.2}
-      # 本服务端对外可达地址(如 https://ai.example.com)。**配了就是唯一权威**;
-      # 留空则按请求推导(X-Forwarded-Proto: https → TLS → 回环 http)。
+      # 本服务端对外可达地址(如 https://harness.example.com)。
+      # **首选在控制台「网关」页填写「对外访问地址」**;这里配了 env 优先(兼容存量部署,
+      # 也是反代不设 X-Forwarded-Proto 时的确定性兜底)。留空则按请求推导
+      # (X-Forwarded-Proto: https → TLS → 回环 http)。
       # 为什么要配:客户端更新清单里的下载地址必须是**绝对 https**,而客户端会
-      # 丢弃非 https 的整份清单。若前面挂的是不设 X-Forwarded-Proto 的反代,
-      # 或服务端在反代后面判断不出协议,清单会按设计拒发 client 段
+      # 丢弃非 https 的整份清单。判断不出协议时清单按设计拒发 client 段
       # (`client_unavailable`),表现为"检查更新永远说已是最新"。
       ZEOKEEL_PUBLIC_BASE_URL: ${ZEOKEEL_PUBLIC_BASE_URL:-}
-      # ---- WASM 应用平台（员工自建应用）----
-      # 应用访问模型（2026-09-19 起）：应用只在桌面客户端内打开 —— 客户端**应用窗口**
-      # 加载自定义协议地址 <渠道 app 源 scheme>://<app_id>/（scheme 随渠道配置），由客户端转发到服务端唯一入口
-      # POST /api/client/v2/apps/wasm/:app_id/request 执行。
-      # 因此本栈**不需要**为应用准备任何公网入口：无额外域名解析、无额外证书、
-      # 无需在 Caddy 里加站点块。升级必须服务端与客户端同版本（旧客户端打不开应用）。
-      # 部署期注入的保留名（逗号分隔）：应用 id 不得占用这些名字。
-      ZEOKEEL_APPS_EXTRA_RESERVED: ${ZEOKEEL_APPS_EXTRA_RESERVED:-}
-      # 编译子进程隔离档：require（生产推荐）| auto（默认）| off（仅测试）。
-      ZEOKEEL_COMPILE_ISOLATION: ${ZEOKEEL_COMPILE_ISOLATION:-auto}
-      # WASM 应用平台**内存档位**：default（32 实例 / 128 MiB 模块缓存，理论峰值 ≈2.7 GiB）
-      # | small（3 实例 / 64 MiB，≈630 MiB）| large（64 实例 / 256 MiB）。
+
+      # ---- ③ 历史覆盖口（已迁移到控制台「系统配置」页;保留仅为兼容存量 .env,新部署无需设置）----
+      # 这些键的**主入口是控制台**: 非空 env 仍然生效,但会压过控制台保存值,并在启动日志
+      # 里被点名(deployconfig.LogStartupEnvOverrides)。每行注释里的 settings 键即控制台项。
       #
-      # ⚠️ **可用内存小于约 4 GiB 的机器必须显式选 small**：启动自检会拿"档位折算的理论
-      # 峰值"与本机 MemAvailable 的 70% 比，超了就**拒绝启动**（fail-closed，日志
-      # `WASM 应用平台启动自检失败：…超过可用内存的安全水位，拒绝启动`）—— 2026-09-20
-      # 生产环境（3.9 GiB）与客户测试环境各撞过一次，表现为容器反复重启。
-      # 档位同时决定并发实例数、单实例内存上限与模块缓存上限；运行期还可在管理端
-      # 「运维 → 应用平台」微调（那组设置不改变档位本身）。
-      ZEOKEEL_WASM_MEMORY_PROFILE: ${ZEOKEEL_WASM_MEMORY_PROFILE:-}
-      # 内置技能资产目录（随镜像发布，服务端由 GET /api/client/v2/skills/builtin
-      # 下发，客户端在能力中心按需安装）。**默认就是镜像里的位置，一般不用改**；
-      # 要换成宿主机目录（现场排查/加技能）时同时解开下面的 bind mount：
-      #   volumes: - ./skills:/opt/zeokeel/skills:ro
-      ZEOKEEL_SKILL_SEED_DIR: ${ZEOKEEL_SKILL_SEED_DIR:-/opt/zeokeel/skills}
-      # 单账号登录失败上限(留空 = 服务端默认)。**仅测试环境**建议调大,
-      # 免得反复登录把管理员账号锁死。
+      # 更新清单地址(deploy.update_endpoint)。留空 = 本渠道默认目录;要**关闭**更新检查
+      # 请在控制台填 off / none / - / disabled(留空不等于关闭)。
+      ZEOKEEL_UPDATE_ENDPOINT: ${ZEOKEEL_UPDATE_ENDPOINT:-}
+      # OIDC 登录回跳时额外信任的服务端主机名,逗号分隔(deploy.trusted_hosts)。
+      ZEOKEEL_TRUSTED_HOSTS: ${ZEOKEEL_TRUSTED_HOSTS:-}
+      # 单账号登录失败上限(auth.login_max_attempts,缺省 10)。仅测试环境才需要调大。
       ZEOKEEL_LOGIN_MAX_ATTEMPTS: ${ZEOKEEL_LOGIN_MAX_ATTEMPTS:-}
-      # 每用户 in-flight(并发)请求上限,缺省 32。**注意它不是"请求速率"限制**:
-      # 速率上限是 settings 的 gateway.rate_limit(缺省 0 = 不限速)。
-      # R16C-06(审计 2026-09-25,P2):这个旋钮此前**只有文档**(AI-DEPLOY §网关 /
-      # server/docs/04-auth.md 都写"可调"),却不在本文件的 environment 映射里,
-      # 也没有 env_file ⇒ 写进 .env 后静默不生效、零回显。现在按既有风格接线。
-      ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER: ${ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER:-}
-      # 数据库连接池上限(留空 = 服务端按实例数推导的默认;见 serverstore/db.go)。
-      # 多实例部署/托管 PG 配额有限时下调。
-      ZEOKEEL_DB_MAX_OPEN_CONNS: ${ZEOKEEL_DB_MAX_OPEN_CONNS:-}
-      # 允许保存**非回环明文** ldap:// 认证配置(逃生阀,默认关闭=拒绝)。
-      # 只有在目录服务确实不支持 LDAPS/StartTLS 时才置 1 —— bind 密码会明文过网。
-      # (审计 2026-09-13 的安全加固默认值;文档:docs/AUDIT-2026-09-13-SERVER-SECURITY.md)
+      # 放行**非回环明文** ldap://(auth.ldap_allow_plaintext,缺省拒绝)。
+      # 目录服务不支持 LDAPS 时才开 —— bind 密码会明文过网,保存时日志大声告警。
       ZEOKEEL_LDAP_ALLOW_PLAINTEXT: ${ZEOKEEL_LDAP_ALLOW_PLAINTEXT:-}
-      # 遥测采集的每用户/每技能限流(留空 = 服务端默认 60/10/10)。
-      # 客户端错误上报另有独立预算(第三项)。
+      # 每用户 in-flight(并发)请求上限(gateway.max_inflight_per_user,缺省 32)。
+      # **注意它不是"请求速率"限制**:速率上限是控制台「网关」页的 gateway.rate_limit。
+      ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER: ${ZEOKEEL_GATEWAY_MAX_INFLIGHT_PER_USER:-}
+      # 遥测上报限流(telemetry.*,缺省 60 / 10 / 10;0 = 不限,仅测试/压测)。
       ZEOKEEL_TELEMETRY_MAX_PER_MIN: ${ZEOKEEL_TELEMETRY_MAX_PER_MIN:-}
       ZEOKEEL_TELEMETRY_MAX_PER_SKILL_PER_MIN: ${ZEOKEEL_TELEMETRY_MAX_PER_SKILL_PER_MIN:-}
       ZEOKEEL_TELEMETRY_ERROR_REPORTING_MAX_PER_MIN: ${ZEOKEEL_TELEMETRY_ERROR_REPORTING_MAX_PER_MIN:-}
-      # OIDC 登录回跳时额外信任的服务端主机名(逗号分隔)。反代/多域名部署时补,
-      # 留空 = 只用请求自身的主机名与已保存 issuer(见 serverauth/oidc.go)。
-      ZEOKEEL_TRUSTED_HOSTS: ${ZEOKEEL_TRUSTED_HOSTS:-}
-      # 审计哈希链周期校验的间隔(Go duration,如 15m;留空 = 1h)。
-      # 它同时是"篡改可见性窗口"与"每轮一次 audit_logs 全表只读扫描"的取舍旋钮。
-      # 非法值会打 WARNING 并回落默认,不静默。
+      # 审计哈希链周期校验间隔(audit.chain_interval,Go duration,缺省 1h;需重启)。
       ZEOKEEL_AUDIT_CHAIN_INTERVAL: ${ZEOKEEL_AUDIT_CHAIN_INTERVAL:-}
-      # ---- 启动期迁移执行器（R27-FIX39；R28 审计 AB2-B-01 补接线）----
-      # 两条**有界等锁预算**与一条慢迁移告警阈值（毫秒；缺省 5min / 5min / 5s）。
-      # 语义：预算打满即 fail-loud（点名迁移号与 SQLSTATE）—— 容器退出、旧实例继续
-      # 服务（"受得了失败、受不了挂住"：挂住 = 容器永远停在 starting，运维拿不到线索）。
-      # 非法/非正的值一律回落缺省并告警 —— 不许用一条 env 把预算变成"无预算"。
-      # 运维口径（谁该调、怎么读慢迁移告警、checksum 列怎么回填）见 docs/06-database.md。
-      # ⚠️ 这三个键此前**只**写在 server/AGENTS.md 与 migrate.go 里，部署模板没接线
-      # ⇒ 运维写进 .env 后重启，静默不生效、零回显（判据：cmd/server/compose_env_test.go
-      # 的 TestEveryServerZEOKEELEnvNameIsWiredOrExempt；漏接一个新旋钮即红）。
+      # WASM 应用平台(员工自建应用;**应用只在桌面客户端内打开**,本栈不需要任何
+      # 应用专用公网入口/域名/证书 —— 客户端协议 handler 转发到
+      # POST /api/client/v2/apps/wasm/:app_id/request;升级需服务端与客户端同版本)。
+      # 应用 id 的额外保留名(wasm.apps_extra_reserved,逗号分隔)。
+      ZEOKEEL_APPS_EXTRA_RESERVED: ${ZEOKEEL_APPS_EXTRA_RESERVED:-}
+      # 编译子进程隔离档(wasm.compile_isolation):require(生产推荐)/ auto(默认)/ off(仅测试)。
+      ZEOKEEL_COMPILE_ISOLATION: ${ZEOKEEL_COMPILE_ISOLATION:-auto}
+      # 应用平台内存档位(wasm.memory_profile):default(≈2.7 GiB)/ small(≈630 MiB)/
+      # large(≈4.7 GiB)。**可用内存 < 约 4 GiB 的机器必须小档位**,否则启动自检
+      # fail-closed、容器反复重启。首选在控制台改;这一行是"控制台进不去时"的逃生口
+      # (启动闸门类配置写错就起不来,只有容器外的开关能救)。
+      ZEOKEEL_WASM_MEMORY_PROFILE: ${ZEOKEEL_WASM_MEMORY_PROFILE:-}
+
+      # ---- ④ 仍留在环境变量的部署旋钮（有意不入库，理由见决策文档）----
+      # 数据库连接池上限(留空 = 服务端按实例数推导的默认;见 serverstore/db.go)。
+      ZEOKEEL_DB_MAX_OPEN_CONNS: ${ZEOKEEL_DB_MAX_OPEN_CONNS:-}
+      # 启动期迁移执行器的两条有界等锁预算与一条慢迁移告警阈值(毫秒;
+      # 缺省 5min / 5min / 5s)。语义:预算打满即 fail-loud(点名迁移号 + SQLSTATE)
+      # ⇒ 容器退出、旧实例继续服务("受得了失败、受不了挂住")。运维口径见
+      # docs/06-database.md;写进 .env 真的会进容器(判据 compose_env_test.go)。
       ZEOKEEL_MIGRATION_LOCK_TIMEOUT_MS: ${ZEOKEEL_MIGRATION_LOCK_TIMEOUT_MS:-}
       ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS: ${ZEOKEEL_MIGRATION_ADVISORY_TIMEOUT_MS:-}
       ZEOKEEL_MIGRATION_SLOW_MS: ${ZEOKEEL_MIGRATION_SLOW_MS:-}
+      # 内置技能资产目录(随镜像发布,缺省就是镜像内位置;换成宿主机目录时
+      # 同时解开下面注释掉的 ./skills 挂载)。
+      ZEOKEEL_SKILL_SEED_DIR: ${ZEOKEEL_SKILL_SEED_DIR:-/opt/zeokeel/skills}
+      # 时区(日志与"按本地日"的账本口径)
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - ./zeokeel-data:/data

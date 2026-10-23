@@ -29,9 +29,13 @@ docker run --rm -v /opt/zeokeel:/out -e ZEOKEEL_UNPACK_STACK=/out \
 
 - 数据库：**固定内置 PostgreSQL 18 容器**（单 compose 文件 caddy+server+postgres），PG-only，SQLite 已下线。
 - 部署目录约定 `/opt/zeokeel`（`zeokeel-data/` 存 master.key，`pg-data/` 存数据库）。
-- 升级：服务端通过 `ZEOKEEL_UPDATE_ENDPOINT`（默认官方渠道
-  `https://release.zeokeel.com/official/latest.json`）检查新版本，webadmin「服务器信息」页会提示；
-  管理员按说明执行升级，**升级前必须备份**。
+- `.env` **只需要 4 个键**（`DOMAIN` / `TLS_MODE` / `ZEOKEEL_ADMIN_PASSWORD` / `PG_PASSWORD`）：
+  其余运行期配置（登录失败上限、遥测限流、审计链间隔、应用平台档位、更新清单地址等）
+  在控制台「系统配置」页改（保存即生效；`restart` 类需 `docker compose up -d server`），
+  见 [`docs/deploy/AI-DEPLOY.md`](../docs/deploy/AI-DEPLOY.md) §2.6。
+- 升级：服务端通过**控制台「系统配置」→「更新清单地址」**（默认官方渠道
+  `https://release.zeokeel.com/official/latest.json`；兼容覆盖口 env `ZEOKEEL_UPDATE_ENDPOINT`）
+  检查新版本，webadmin「服务器信息」页会提示；管理员按说明执行升级，**升级前必须备份**。
 
 ### 1. 服务端（Go 1.26+）
 

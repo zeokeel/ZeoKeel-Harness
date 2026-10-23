@@ -132,11 +132,19 @@ func TestWasmCacheFallbackReclaimIsMutuallyExclusiveWithCompiler(t *testing.T) {
 	waitForCacheLog(t, cap, "执行侧/启动", 10*time.Second)
 
 	// 同步回收钩子也要接到执行侧（否则"超限"这条理由在缺席形态下永远无解）。
-	hook := compileReclaimHook(nil, ops)
-	if hook == nil {
+	if compileReclaimHook(nil, ops) == nil {
 		t.Fatal("编译器缺席时同步回收钩子必须接到执行侧组件")
 	}
-	seedOverLimit(t, root, 1000)
+	// 钩子的**删除**行为用一个没有启动周期循环的实例判：上面那个实例的 10ms 循环会先一步
+	// 把超限文件删掉，于是 `hook()` 读到 removed=0 —— 断言就变成"谁的调度先到"。
+	// （2026-10-23 CI 实跑：同一用例在 `go test -p 4` 下偶发 removed=0。）
+	hookRoot := t.TempDir()
+	hookOps, _ := newTightCacheOps(t, hookRoot, 1000, 100)
+	seedOverLimit(t, hookRoot, 1000)
+	hook := compileReclaimHook(nil, hookOps)
+	if hook == nil {
+		t.Fatal("编译器缺席时同步回收钩子必须接到执行侧组件（独立实例）")
+	}
 	if removed, _, herr := hook(); herr != nil || removed == 0 {
 		t.Fatalf("缺席形态下的同步回收必须真的删东西：removed=%d err=%v", removed, herr)
 	}

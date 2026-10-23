@@ -37,6 +37,7 @@ import (
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/auditchain"
 	"github.com/zeokeel/zeokeel-harness/server/internal/auditretention"
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
 	"github.com/zeokeel/zeokeel-harness/server/internal/tokenretention"
 	"github.com/zeokeel/zeokeel-harness/server/internal/usageretention"
@@ -157,7 +158,7 @@ var schedulerSeams = []schedulerSeamCase{
 			})
 			// 该接缝的间隔可被 env 覆盖 —— 判据不依赖运行环境（t.Setenv 会被
 			// t.Cleanup 还原，顺序晚于 swapVar 也无妨：只影响解析结果）。
-			t.Setenv(auditChainIntervalEnv, "")
+			t.Setenv(deployconfig.MustKey("audit.chain_interval").Env, "")
 		},
 	},
 }

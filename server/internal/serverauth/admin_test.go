@@ -1345,12 +1345,18 @@ func TestBrowserLoginDynamicResolution(t *testing.T) {
 // F17 回归(复核):客户端面与管理面必须共享同一个登录失败限流器,
 // 否则同一账号可从两个入口各消耗一份失败预算(实际阈值翻倍)。
 func TestLoginLimiterSharedAcrossSurfaces(t *testing.T) {
-	api := New(mustDB(t))
-	if api.limiter != adminLoginLimiter() {
+	db := mustDB(t)
+	api := New(db)
+	if api.limiter != adminLoginLimiter(db) {
 		t.Fatal("client and admin login surfaces must share one limiter")
 	}
-	if api.limiter != sharedLoginLimiter() {
-		t.Fatal("client limiter must be the shared singleton")
+	if api.limiter != sharedLoginLimiter(db) {
+		t.Fatal("client limiter must be the per-DB shared instance")
+	}
+	// 不同库不得共享实例:阈值来自各自的部署配置(settings),共享会让
+	// 一个库的 auth.login_max_attempts 泄漏到另一个库。
+	if api.limiter == sharedLoginLimiter(nil) {
+		t.Fatal("nil-db limiter and a real DB limiter must be different instances")
 	}
 }
 

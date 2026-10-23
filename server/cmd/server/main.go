@@ -24,6 +24,7 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
 	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
 	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
 	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
@@ -113,6 +114,15 @@ func main() {
 		log.Printf("reset-mfa: MFA cleared for %q; all its sessions revoked", *resetMFA)
 		return
 	}
+
+	// ---- 部署配置入库(2026-10-23) ----
+	// 1) 启动日志点名"哪些键被环境变量压过控制台配置" —— 否则"我在控制台改了怎么没生效"
+	//    会成为没有线索的谜(容器重建后 .env 还是旧的,而运维可能已经在控制台改过同一键);
+	// 2) 把"读库版"解析注入到公开契约的解析钩子(更新清单地址 / 单用户并发上限)。
+	// 顺序硬要求:必须在任何请求路径(router.Register / 探针)开始之前注入 —— 晚注入会让
+	// 最早的几个请求读到 env/默认值,表现为"刚启动那会儿配置不对"。
+	deployconfig.LogStartupEnvOverrides(db)
+	wireDeployConfigResolvers(db)
 
 	// 启动账本自愈:补算最近 N 个月(保留窗口)的日账/月账(幂等)。
 	//

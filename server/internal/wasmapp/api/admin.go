@@ -1082,9 +1082,9 @@ func limitsSourceLabel(source, profile string) string {
 		return "控制台保存（" + SettingWasmLimits + "）"
 	case "profile":
 		if profile != "" {
-			return "部署档位 " + profile + "（" + memprofile.EnvMemoryProfile + "）"
+			return "部署档位 " + profile + "（系统配置 wasm.memory_profile）"
 		}
-		return "部署档位（" + memprofile.EnvMemoryProfile + "）"
+		return "部署档位（系统配置 wasm.memory_profile）"
 	default:
 		if profile != "" {
 			return "编译期默认（档位 " + profile + "）"

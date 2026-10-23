@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/auditchain"
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
+	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
 
 type auditChainCtxKey struct{}
@@ -105,20 +107,38 @@ func TestStartupCallsAuditChainScheduler(t *testing.T) {
 	}
 }
 
-// TestResolveAuditChainTickHonoursEnv 钉间隔覆盖：合法值生效、非法/非正/空白回落默认
-// （非法值必须**响亮**回落 —— 打 WARNING，不静默）。
-func TestResolveAuditChainTickHonoursEnv(t *testing.T) {
-	if got := resolveAuditChainTick(auditchain.DefaultTick); got != auditchain.DefaultTick {
-		t.Fatalf("未设置 env 时 tick = %v, want %v", got, auditchain.DefaultTick)
+// TestResolveAuditChainTickFromDeployConfig 钉间隔解析的三个来源与优先级:
+// 显式环境变量 > 控制台设置 > 内置默认;非法/非正/空白回落默认(非法值必须**响亮**
+// 回落 —— deployconfig 会打告警,不静默)。
+func TestResolveAuditChainTickFromDeployConfig(t *testing.T) {
+	key := deployconfig.MustKey("audit.chain_interval")
+	t.Setenv(key.Env, "")
+	if got := resolveAuditChainTick(nil, auditchain.DefaultTick); got != auditchain.DefaultTick {
+		t.Fatalf("未配置时 tick = %v, want %v", got, auditchain.DefaultTick)
 	}
-	t.Setenv(auditChainIntervalEnv, "15m")
-	if got := resolveAuditChainTick(auditchain.DefaultTick); got != 15*time.Minute {
-		t.Fatalf("合法覆盖 tick = %v, want 15m", got)
+	t.Setenv(key.Env, "15m")
+	if got := resolveAuditChainTick(nil, auditchain.DefaultTick); got != 15*time.Minute {
+		t.Fatalf("环境变量覆盖 tick = %v, want 15m", got)
 	}
 	for _, bad := range []string{"bogus", "0", "-5m", "  "} {
-		t.Setenv(auditChainIntervalEnv, bad)
-		if got := resolveAuditChainTick(auditchain.DefaultTick); got != auditchain.DefaultTick {
+		t.Setenv(key.Env, bad)
+		if got := resolveAuditChainTick(nil, auditchain.DefaultTick); got != auditchain.DefaultTick {
 			t.Fatalf("非法值 %q 的 tick = %v, want 默认 %v（非法必须回落默认）", bad, got, auditchain.DefaultTick)
 		}
+	}
+
+	// 控制台保存的设置生效(该键 AppliesRestart:装配期一次性读),env 仍压过它。
+	t.Setenv(key.Env, "")
+	db, cleanup := serverstore.NewTestDB(t)
+	defer cleanup()
+	if err := serverstore.SetSetting(db, key.Setting, "30m"); err != nil {
+		t.Fatalf("写设置: %v", err)
+	}
+	if got := resolveAuditChainTick(db, auditchain.DefaultTick); got != 30*time.Minute {
+		t.Fatalf("控制台设置 tick = %v, want 30m(配置入库后必须生效)", got)
+	}
+	t.Setenv(key.Env, "2h")
+	if got := resolveAuditChainTick(db, auditchain.DefaultTick); got != 2*time.Hour {
+		t.Fatalf("环境变量压过控制台 tick = %v, want 2h", got)
 	}
 }

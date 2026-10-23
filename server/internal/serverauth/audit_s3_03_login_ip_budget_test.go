@@ -132,7 +132,7 @@ func TestRejectedLoginsDoNotClearLoginIPBudget(t *testing.T) {
 			}
 			// 同族：按账号的两个桶同样不得在这条被拒路径上被清（它们是"密码对了"的证明，
 			// 而这次登录被拒 ≠ 这个账号可以登录）。
-			if got := bucketLen(sharedLoginLimiter(), dbLimiterScope(db)+"u:"+tc.username); got != 1 {
+			if got := bucketLen(sharedLoginLimiter(db), dbLimiterScope(db)+"u:"+tc.username); got != 1 {
 				t.Fatalf("被拒的登录清空了账号桶 u:%s = %d, want 1（拒绝分支不得清任何桶）", tc.username, got)
 			}
 		})

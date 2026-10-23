@@ -431,6 +431,7 @@ var r13geSearchPathInventory = map[string]r13gePinMode{
 	"GetGatewayProviderTx":              r13geViaCaller, // gateway.go
 	"GetModelTx":                        r13geViaCaller, // gateway.go
 	"SetSettingTx":                      r13geViaCaller, // settings.go
+	"DeleteSettingTx":                   r13geViaCaller, // settings.go —— 2026-10-23：与 SetSettingTx 对称的删除变体（调用方事务已钉）
 	"setUsageAppIDTx":                   r13geViaCaller, // wasm_app_opens.go —— SetUsageAppID / SetUsageAppIDVerified（均已钉）
 	"SyncProviderModelsTx":              r13geViaCaller, // gateway.go
 	"UpdateGatewayProviderTx":           r13geViaCaller, // gateway.go
@@ -480,6 +481,7 @@ var r13geViaCallerOwners = map[string]string{
 	"GetGatewayProviderTx":        "GetGatewayProvider（已钉只读事务）",
 	"GetModelTx":                  "GetModel（已钉只读事务）",
 	"SetSettingTx":                "调用方事务（llmgateway/admin.go 等，均在事务首句业务语句前钉）",
+	"DeleteSettingTx":             "调用方事务（serverauth/config_admin.go 的 put：UsageWriteTx 已钉；与 SetSettingTx 同事务）",
 	"setUsageAppIDTx":             "SetUsageAppID（withUsageSearchPath）/ SetUsageAppIDVerified（同一已钉事务内先查 apps 再写）",
 	"DeleteModelTx":               "DeleteModel（usageWriteTx）/ llmgateway admin 的显式事务",
 	"UpdateModelTx":               "UpdateModel（usageWriteTx）/ llmgateway admin 的改价事务（R16C-01：审计同事务）",

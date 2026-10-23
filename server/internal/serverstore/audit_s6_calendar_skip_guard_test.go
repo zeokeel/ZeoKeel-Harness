@@ -1179,6 +1179,7 @@ var calendarSkipScanDirRegistry = []string{
 	"../channel",
 	"../clientrelease",
 	"../connectors",
+	"../deployconfig",
 	"../features",
 	"../llmgateway",
 	"../llmgateway/channels",

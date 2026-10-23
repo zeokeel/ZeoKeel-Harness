@@ -189,7 +189,7 @@ func TestUnifiedResetCoversEverySharedLimiterSingleton(t *testing.T) {
 	}
 	body := string(src)
 	for _, name := range sortedLimiterNames(resetRegisteredLimiters) {
-		if !strings.Contains(body, name+"()") {
+		if !strings.Contains(body, name+"(") {
 			t.Fatalf("resetSharedLimitersForTest 没有覆盖 %s（%s）—— 该单例的跨用例累积"+
 				"会污染判据（把 %s 加进统一复位入口）", name, resetRegisteredLimiters[name], name)
 		}
@@ -237,7 +237,7 @@ func limiterForResetTest(t *testing.T, name string) *loginLimiter {
 	t.Helper()
 	switch name {
 	case "sharedLoginLimiter":
-		return sharedLoginLimiter()
+		return sharedLoginLimiter(nil)
 	case "sharedLoginIPLimiter":
 		return sharedLoginIPLimiter()
 	case "sharedTokenIssueQuotaLimiter":

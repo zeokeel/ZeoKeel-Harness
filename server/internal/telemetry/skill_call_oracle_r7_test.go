@@ -26,7 +26,7 @@ import (
 // 同时钉住"不误伤":授权之后同一请求必须照旧 200 且计数。
 func TestReportSkillCallDoesNotRevealInvisibleTargetExistence(t *testing.T) {
 	r, db, token := newTestEnv(t)
-	withLimits(t, 100, 100) // 限流不是本用例的考点:给足预算,避免同名桶干扰
+	withLimits(t, db, 100, 100) // 限流不是本用例的考点:给足预算,避免同名桶干扰
 
 	// 存在但 alice 无任何授权(市场技能:严格默认拒绝)。
 	if _, err := serverstore.AddSkill(db, &serverstore.Skill{

@@ -46,7 +46,14 @@ import (
 // 正常登录用例假红(新增"包级单例 + 进程级累积状态"必须挂进本统一入口是本仓纪律,
 // 先例见 telemetry.resetErrorReportingLimiter)。
 func resetSharedLimitersForTest() {
-	for _, l := range []*loginLimiter{sharedLoginLimiter(), sharedLoginIPLimiter(), sharedTokenIssueQuotaLimiter()} {
+	// 登录失败桶是**按库分桶**的 map(阈值来自各库的部署配置):逐库清空。
+	sharedLoginLimitersMu.Lock()
+	perDB := make([]*loginLimiter, 0, len(sharedLoginLimiters))
+	for _, l := range sharedLoginLimiters {
+		perDB = append(perDB, l)
+	}
+	sharedLoginLimitersMu.Unlock()
+	for _, l := range append(perDB, sharedLoginLimiter(nil), sharedLoginIPLimiter(), sharedTokenIssueQuotaLimiter()) {
 		if l == nil {
 			continue
 		}

@@ -221,6 +221,10 @@ var searchPathGuardPackages = map[string]searchPathPkgClass{
 	"internal/connectors":    searchPathPkgNoFamilySQL,
 	// P1 第一片（2026-10-14）：可选模块的编译期开关包（`-tags` 面）。它**只有常量与
 	// 纯函数**（模块名 / Enabled / Has），不碰数据库，因此 no-family-sql。
+	// 2026-10-23：部署配置注册表（「系统配置」页的键/校验/优先级唯一真源）。它只经
+	// serverstore 的池上入口读 settings（GetSetting），**包内没有族内关系 SQL**，
+	// 因此按 no-family-sql 登记。
+	"internal/deployconfig":        searchPathPkgNoFamilySQL,
 	"internal/features":            searchPathPkgNoFamilySQL,
 	"internal/llmgateway/channels": searchPathPkgNoFamilySQL,
 	"internal/marketplace":         searchPathPkgNoFamilySQL,

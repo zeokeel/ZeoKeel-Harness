@@ -11,12 +11,12 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 	wasmapi "github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/api"
@@ -26,7 +26,6 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/appserver"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/compile"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/events"
-	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/memprofile"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/opens"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/queue"
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/readyz"
@@ -35,11 +34,20 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/wasmapp/upload"
 )
 
-// 环境变量（部署面）。
-const (
-	// EnvAppsExtraReserved 是部署期注入的**企业既有主机名 / 标识**（逗号分隔，§4.1）：
+// 部署配置（deployconfig 注册表；历史环境变量名仍在注册表里，因此组合层不出现
+// 裸的 ZEOKEEL_* 常量 —— 唯一真源是 internal/deployconfig 的 keys.go）。
+//
+// 这三个键都是**启动闸门类**（AppliesRestart）：值在装配期一次性喂给平台组件
+// （内存档位折算并发/内存上限、隔离档决定 fail-closed、保留名进入发布校验），
+// 保存后必须重启/重建容器才生效。控制台页面会按 AppliesRestart 提示这一点。
+var (
+	// wasmAppsExtraReservedKey 是**企业既有主机名 / 标识**（逗号分隔，§4.1）：
 	// 应用标识曾等于域名标签，因此这些名字（如 intranet、oa）不得被应用占用。
-	EnvAppsExtraReserved = "ZEOKEEL_APPS_EXTRA_RESERVED"
+	wasmAppsExtraReservedKey = deployconfig.MustKey("wasm.apps_extra_reserved")
+	// wasmMemoryProfileKey 是平台内存档位（default/small/large，见 memprofile）。
+	wasmMemoryProfileKey = deployconfig.MustKey("wasm.memory_profile")
+	// wasmCompileIsolationKey 是编译子进程隔离档（require/auto/off）。
+	wasmCompileIsolationKey = deployconfig.MustKey("wasm.compile_isolation")
 )
 
 // wasmPlatform 汇聚 WASM 应用平台的全部运行期组件。
@@ -175,7 +183,8 @@ func newWasmAppEvictor(srv wasmAppEvictor) func(string) {
 // **失败策略：装配期一律 log.Fatalf，绝不静默降级。** 设计里明确的 fail-closed
 // 都在这里做：
 //   - §4.3 内存四笔账自检（理论峰值 > 可用内存 70% ⇒ 拒绝启动）；
-//   - `ZEOKEEL_COMPILE_ISOLATION=require` 且隔离不可用 ⇒ 拒绝启动（R31 的严格档）；
+//   - 部署配置 `wasm.compile_isolation=require`（历史环境变量 ZEOKEEL_COMPILE_ISOLATION）
+//     且隔离不可用 ⇒ 拒绝启动（R31 的严格档）；
 //   - §15.1 第 9 条 / R20 单实例自检（advisory lock）；
 //   - 渠道 `app_origin_scheme` 缺失/非法 ⇒ 拒绝启动（§8.3/§10，由调用方校验）。
 //
@@ -232,17 +241,20 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 	}
 	log.Printf("app-proof: 签名密钥就绪 kid=%s（%s，0600；每部署一份，不随镜像分发）",
 		proofSvc.KID(), filepath.Join(dataDir, appproof.KeyFileName))
-	extraReserved := splitCSV(os.Getenv(EnvAppsExtraReserved))
+	extraReserved := deployconfig.CSV(db, wasmAppsExtraReservedKey)
 
 	// ---- 内存档位（2026-09-18）：数值同时驱动下面的启动自检与运行期强制 ----
-	// 未知档位名**拒绝启动**（静默回落默认会让小机器在"以为已降档"的状态下 OOM）。
-	prof, perr := memprofile.FromEnv(os.Getenv)
+	// 来源 = 部署配置 `wasm.memory_profile`（历史环境变量 > 控制台「系统配置」 >
+	// 默认 default）。未知档位名**拒绝启动**（静默回落默认会让小机器在"以为已降档"
+	// 的状态下 OOM）；deployconfig 已按统一口径告警并回落，这里把"有人写了非法值"
+	// 这一事实升级成启动失败 —— 这是内存档位的原有 fail-loud 语义。
+	prof, profileExplicit, perr := resolveWasmMemoryProfile(db)
 	if perr != nil {
 		log.Fatalf("WASM 应用平台内存档位配置错误：%v", perr)
 	}
 	// 平台限制项（并发/内存）：控制台设置 > 部署档位 > 编译期默认。
 	// 自检与运行期强制都用**这一份**（见 wasmLimitsHolder 的注释）。
-	limitsHolder := newWasmLimitsHolder(db, prof)
+	limitsHolder := newWasmLimitsHolder(db, prof, profileExplicit)
 	plan := limitsHolder.Plan()
 	log.Printf("wasm: 内存档位 %s；平台限制项来源=%s %s", prof.Report(), limitsHolder.Source(), limitsHolder.Get().Encode())
 
@@ -297,11 +309,11 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 	// ⚠️ 部署面必须构建该二进制并与 server 放在同一目录（见 Dockerfile/Makefile）：
 	// 不修交付链 = 发布功能静默不可用（会在日志里"大声"记录 + /readyz 上可见）。
 	//
-	// 例外：**显式要求隔离的档位**（ZEOKEEL_COMPILE_ISOLATION=require）必须 fail-closed ——
+	// 例外：**显式要求隔离的档位**（wasm.compile_isolation=require，可由控制台或历史环境变量设置）必须 fail-closed ——
 	// 该档位的唯一语义就是"隔离不可用就拒绝启动"（compile.IsolationRequire 的注释、
 	// docker-compose.yml、.env.example 三处一致）。从前这里只打一行日志就继续跑，
 	// 等于把运维的加固开关变成装饰（审计 P2-1）。
-	isoMode := compile.IsolationFromEnv()
+	isoMode := resolveCompileIsolation(db)
 	var compiler *compile.Compiler
 	compiler, cerr := compile.New(compile.Options{
 		DataRoot:  dataDir,
@@ -317,7 +329,7 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 			// require 档的语义是"编译链路必须 fail-closed"：连编译器都构造不出来时
 			// 隔离更无从谈起 ⇒ 直接拒绝启动（含"编译子进程缺失"这类非隔离原因，
 			// 因为把"发布被静默禁用"当成 hardened 部署的结果同样是误导）。
-			log.Fatalf("wasm: ZEOKEEL_COMPILE_ISOLATION=require 要求编译链路 fail-closed，"+
+			log.Fatalf("wasm: 部署配置 wasm.compile_isolation=require 要求编译链路 fail-closed，"+
 				"但编译子系统不可用（隔离无从谈起），拒绝启动：%v", cerr)
 		}
 		log.Printf("wasm: ⚠️ 编译子系统不可用，发布链路将被禁用（其余功能正常）：%v", cerr)
@@ -329,7 +341,7 @@ func setupWasmPlatform(ctx context.Context, db *sql.DB, dataDir string) *wasmPla
 		//（未来若新增"计划可用但实际降级"的后端，这里仍然守住 fail-closed）。
 		mode, usable, detail := compiler.IsolationStatus()
 		if mustRefuseStartupForIsolation(mode, usable) {
-			log.Fatalf("wasm: ZEOKEEL_COMPILE_ISOLATION=require 但隔离未生效，拒绝启动：%s", detail)
+			log.Fatalf("wasm: 部署配置 wasm.compile_isolation=require 但隔离未生效，拒绝启动：%s", detail)
 		}
 		log.Printf("wasm: compile isolation = %s", compiler.IsolationPlan())
 	}
@@ -879,17 +891,4 @@ func compileReclaimHook(compiler *compile.Compiler, ops *runtime.CacheOps) func(
 // （见 checkStartupMemory 与 /readyz 的 mem_source 字段），保留可部署性但不许静默。
 func readMemoryAvailability() readyz.MemoryAvailability {
 	return readyz.ReadMemoryAvailability()
-}
-
-func splitCSV(s string) []string {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
-	var out []string
-	for _, p := range strings.Split(s, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
 }

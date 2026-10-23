@@ -9,7 +9,6 @@ package main
 import (
 	"database/sql"
 	"log"
-	"os"
 	"strings"
 	"sync/atomic"
 
@@ -26,7 +25,8 @@ import (
 //
 // 解析优先级（与 baseDomainHolder 同一套纪律）：
 //
-//		控制台保存的设置（wasm.limits）> 部署档位（ZEOKEEL_WASM_MEMORY_PROFILE）> 编译期默认
+//		控制台保存的设置（wasm.limits）> 部署档位（wasm.memory_profile；历史环境变量
+//		ZEOKEEL_WASM_MEMORY_PROFILE 仍是最高优先级的覆盖口）> 编译期默认
 //
 //	  - 读路径：Get 走原子指针（每请求/每次渲染都要读，必须无锁）；
 //	  - 写路径：只有控制台（Apply），落库 + 下发运行中组件；
@@ -39,7 +39,8 @@ const SettingWasmLimits = "wasm.limits"
 type wasmLimitsHolder struct {
 	db      *sql.DB
 	profile memprofile.Profile
-	// applied 记录部署档位是否来自显式环境变量（决定"清空设置"回到哪里）。
+	// profileExplicit 记录部署档位是否被**显式配置**（环境变量或控制台设置），
+	// 决定"清空设置"回到哪里、以及来源标签该说"部署档位"还是"编译期默认"。
 	profileExplicit bool
 
 	// apply 是下发钩子（appserver 构造后注入）；nil ⇒ 只改设置不碰运行态。
@@ -52,11 +53,15 @@ type wasmLimitsHolder struct {
 
 // newWasmLimitsHolder 解析初始值：设置 > 档位 > 默认。读设置失败不算致命
 // （回落档位 + 大声记日志）—— 限制项读不出来不该让整个服务端起不来。
-func newWasmLimitsHolder(db *sql.DB, profile memprofile.Profile) *wasmLimitsHolder {
+//
+// profileExplicit 由装配方传入（来自 deployconfig 的解析来源），而**不再**在本函数
+// 里读环境变量：档位现在也可能来自控制台设置，自己读 env 会把"控制台显式配了
+// default 档"误报成"未配置 ⇒ 来源标签说成编译期默认（AUD-2 的同类误导）。
+func newWasmLimitsHolder(db *sql.DB, profile memprofile.Profile, profileExplicit bool) *wasmLimitsHolder {
 	h := &wasmLimitsHolder{
 		db:              db,
 		profile:         profile,
-		profileExplicit: strings.TrimSpace(os.Getenv(memprofile.EnvMemoryProfile)) != "",
+		profileExplicit: profileExplicit,
 	}
 	value, source := h.profileLimits(), h.profileSource()
 	if db != nil {

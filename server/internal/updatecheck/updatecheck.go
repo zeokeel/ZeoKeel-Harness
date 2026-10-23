@@ -119,19 +119,27 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// resolveEndpointOverride 读取 ZEOKEEL_UPDATE_ENDPOINT 的**显式**取值。
+// resolveEndpointOverrideFromEnv 是钩子的默认实现:只读进程环境变量。
 //
 // 语义(2026-09-10 修正):**空串 = 未设置**,不是"关闭"。
 // 仓库自带的 docker-compose.yml 用 `${ZEOKEEL_UPDATE_ENDPOINT:-}` 传值,
 // 未配置时容器里就是空串;旧语义把空串当"关闭更新检查",于是默认部署永远
 // 不检查更新(fail-silent)。要关闭请显式写 off / none / - / disabled。
 // @returns 显式端点(可能为空)与是否被显式关闭。
-func resolveEndpointOverride() (endpoint string, disabled bool) {
+func resolveEndpointOverrideFromEnv() (endpoint string, disabled bool) {
 	v, ok := os.LookupEnv(EndpointEnv)
 	if !ok {
 		return "", false
 	}
-	trimmed := strings.TrimSpace(v)
+	return InterpretEndpointOverride(strings.TrimSpace(v))
+}
+
+// InterpretEndpointOverride 把"显式覆盖的原始值"翻译成 (端点, 是否关闭)。
+//
+// 两个解析入口(env 默认实现 / main 注入的 deployconfig 版本)共用这一份判断 ——
+// 否则"off/-/none/disabled 算不算关闭"会在两个来源上各判一次,正是本仓反复
+// 收口的双真源缺陷。导出是为了让 cmd/server 的 db 版解析复用同一份语义。
+func InterpretEndpointOverride(trimmed string) (endpoint string, disabled bool) {
 	switch strings.ToLower(trimmed) {
 	case "":
 		return "", false
@@ -140,6 +148,50 @@ func resolveEndpointOverride() (endpoint string, disabled bool) {
 	default:
 		return trimmed, false
 	}
+}
+
+// endpointOverrideResolver 是**显式端点覆盖**的解析钩子(部署键
+// `deploy.update_endpoint`,见 internal/deployconfig 注册表)。
+//
+// 默认实现 = 只读环境变量(上面那个函数);main 在 DB 打开后通过
+// SetEndpointOverrideResolver 换成"环境变量 > 控制台保存的设置 > 未配置"
+// 的版本,于是运维可以在控制台「系统配置」里改更新清单地址、不必重建容器。
+// 优先级(env 压过控制台)由 deployconfig 统一保证,本包不重复判断。
+//
+// 为什么是钩子而不是给 ResolveEndpoint 加 *sql.DB 参数:
+//  1. ResolveEndpoint 是 main、/server-info、Checker.Check 共同调用的公开契约,
+//     调用方拿不到/不该拿 db(updatecheck 只负责"取一个 URL",不负责知道配置存哪);
+//  2. 反向依赖部署配置包会让本包变成"版本检查知道 settings 表长什么样",
+//     而本包的历史立场是不依赖存储层(渠道推导只读镜像文件与环境变量)。
+//
+// 注入只发生在启动装配期;读写都过 RWMutex,测试并发替换时也不会数据竞争。
+var endpointOverrideResolver = resolveEndpointOverrideFromEnv
+var endpointOverrideResolverMu sync.RWMutex
+
+// SetEndpointOverrideResolver 注入显式端点覆盖的解析钩子;nil = 恢复 env 默认实现。
+//
+// 钩子的返回值语义必须与默认实现一致:空端点 + disabled=false 表示"未设置";
+// disabled=true 表示显式关闭更新检查(端点被忽略)。
+func SetEndpointOverrideResolver(fn func() (string, bool)) {
+	endpointOverrideResolverMu.Lock()
+	defer endpointOverrideResolverMu.Unlock()
+	if fn == nil {
+		endpointOverrideResolver = resolveEndpointOverrideFromEnv
+		return
+	}
+	endpointOverrideResolver = fn
+}
+
+// resolveEndpointOverride 调用当前生效的解析钩子。
+func resolveEndpointOverride() (endpoint string, disabled bool) {
+	endpointOverrideResolverMu.RLock()
+	fn := endpointOverrideResolver
+	endpointOverrideResolverMu.RUnlock()
+	if fn == nil {
+		// 防御:钩子被显式置 nil 时按"未配置"处理,不 panic(配置解析不该成为故障点)。
+		return "", false
+	}
+	return fn()
 }
 
 // DefaultEndpointFor 返回某渠道在更新服务器上的清单地址。
@@ -192,6 +244,10 @@ var ChannelFile = func() string {
 //  3. 从 `ZEOKEEL_UPDATE_ENDPOINT` 的路径首段推导 —— 只服务本地开发;
 //  4. 都没有 → 官方渠道(本地开发)。
 //
+// 第 3 条**刻意只读环境变量**,不走 endpointOverrideResolver(控制台可改的那条路):
+// 渠道身份属"部署形态",不能由一条可在线修改的配置行倒推出来 —— 否则"把端点改成
+// 哪个目录,就把自己变成哪个渠道"的自我实现链条会多出一个写入口。
+//
 // **第二返回值为 false 表示"显式配置了渠道但无法确定"**,调用方必须 fail-loud
 // (报检查不可用 / 拒绝启动),绝不能回落 official —— 那正是"渠道部署接受官方
 // 清单、品牌被洗掉"这条最严重错误的入口。第 3 条被刻意排在镜像标记之后:
@@ -211,7 +267,8 @@ func ResolveChannel() (string, bool) {
 			return trimmed, IsChannelID(trimmed)
 		}
 	}
-	if endpoint, disabled := resolveEndpointOverride(); !disabled && endpoint != "" {
+	// 只读 env 版(理由见上面的优先级注释):渠道推导不接受"控制台里那条端点"作为来源。
+	if endpoint, disabled := resolveEndpointOverrideFromEnv(); !disabled && endpoint != "" {
 		if u, err := url.Parse(endpoint); err == nil {
 			// 路径形如 /<channel>/latest.json
 			segments := strings.Split(strings.Trim(u.Path, "/"), "/")

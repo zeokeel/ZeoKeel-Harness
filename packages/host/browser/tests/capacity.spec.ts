@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_TAB_QUOTA, MIN_TAB_QUOTA, TAB_MEMORY_PER_TAB_BYTES, cgroupMemoryLimit, defaultTabQuota, effectiveMemoryBytes, tabQuotaForMemory } from '../src/capacity.ts'
 import { TabPool } from '../src/pool.ts'
+import { BrowserRuntime } from '../src/runtime.ts'
 
 describe('tabQuotaForMemory', () => {
   it('never drops below the floor, even on a tiny container', () => {
@@ -70,5 +71,11 @@ describe('capacity literals and cgroup clamping', () => {
     })
     expect(limit).toBe(1024 * 1024 * 1024)
     expect(files.some(path => path.includes('memory.limit_in_bytes'))).toBe(true)
+  })
+
+  it('runtime options carry the derived quota (single derivation)', () => {
+    const runtime = new BrowserRuntime({} as never, {} as never, undefined, 'persist:test-quota', {})
+    expect(runtime.options.maxTabs).toBe(defaultTabQuota())
+    runtime.dispose()
   })
 })

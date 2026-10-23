@@ -774,6 +774,8 @@ export class BrowserRuntime {
   ) {
     this.deps = deps
     this.options = {
+      // Absent maxTabs stays undefined here: TabPool derives its default from
+      // the machine's memory (capacity.ts), so there is exactly one derivation.
       maxTabs: options.maxTabs ?? defaultTabQuota(),
       programEnabled: options.programEnabled ?? false,
       uploadDirs: options.uploadDirs ?? [],

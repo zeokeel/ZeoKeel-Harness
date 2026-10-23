@@ -22,6 +22,7 @@
 | C15 | `browser_emulate`（viewport/UA clamp、reset、per-tab、op log）✅；**cookie 管理留拒**（`audit-0921` ③ 禁止 src 出现 cookie 搬运通道，属安全不变量，已按方案 A 裁决） | ✅ 部分交付（40 工具；69 files / 1238 tests） |
 | A14 | 本机地址灰名单：**维持「一律拒」**（审计建议：灰名单不可预测、每个放行点都是 SSRF/凭据外泄面；若产品确需本地自动化，须显式部署级 host:port allowlist + DNS rebinding 防护，不能做后缀匹配）。用户拍板前保持现状 | ✅ 维持现状（零代码改动，已记录裁决） |
 | A11 | 上传目录部署级可配：`Config.uploadDirs`（schemastery `.default([])`）→ runtime 选项 → `uploadAllowDirs`（downloadDir ∪ uploadDirs ∪ session cwd，去重、去尾斜杠、拒绝 `/` 与相对路径）；**权限面**：这些目录下任意文件都可被上传（递归信任），模型/脚本不得提供目录 | ✅ 完成（config→runtime 路径有用例） |
+| D2 | 标签配额：`capacity.ts` 从可用内存派生（192MiB/tab、0.5 份额、[4,32]、cgroup memory.max 夹取），`TabPool` 与 surface 共用上限；**配额（maxTabs）与槽位等待速率（tabSlotWaitTimeoutMs）可分别配置** | ✅ 完成（含 N/N+1、close 释放、回滚不占槽、cgroup 合成用例） |
 | 待办 | A11/A14/A16、B4/B5/B7、C10/C12/C15/C16、D1–D3、browser_run | 排队（C1–C9/C13/C14 已完成并提交 e9d8ceb；下一批 C16/B4/B5/C10/C12/C15 按审计 R1–R4 口径推进） |
 
 > 每批完成后由 `red-team-auditor` 做反证审计（改回旧行为必须变红 / 对抗绕过 / 误杀检查），报告在 `temp/audit/`。

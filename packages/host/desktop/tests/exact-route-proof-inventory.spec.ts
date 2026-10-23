@@ -41,7 +41,7 @@
  */
 import { readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript6'
 import { describe, expect, it } from 'vitest'
 
 /** 仓库根（`packages/host/desktop/tests` 上溯四级）。 */

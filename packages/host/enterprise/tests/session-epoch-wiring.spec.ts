@@ -104,7 +104,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript6'
 import { describe, expect, it } from 'vitest'
 
 /** 仓库根（`packages/host/enterprise/tests` 上溯四级）。 */

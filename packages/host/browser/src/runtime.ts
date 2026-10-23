@@ -3691,8 +3691,8 @@ export class BrowserRuntime {
       }
       case 'browser_emulate': return await this.emulate(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, signal)
       case 'browser_clipboard': return args['action'] === 'write' ? await this.clipboardWrite(String(args['text'] ?? ''), signal) : await this.clipboardRead(signal)
-      case 'browser_history_search': return { entries: this.history({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
-      case 'browser_bookmarks_list': return { bookmarks: this.listBookmarks({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}) }) }
+      case 'browser_history_search': return { entries: this.history({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}), ...(typeof args['group'] === 'string' ? { group: args['group'] } : {}) }) }
+      case 'browser_bookmarks_list': return { bookmarks: this.listBookmarks({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
       // Large binary results must cross the bridge as attachment refs, which this
       // runtime layer cannot mint: refuse instead of shipping an 8 MiB base64 line.
       case 'browser_screenshot': throw browserError('policy', 'browser_run: the screenshot helper is not wired yet (it will return an attachment reference in the next layer)')

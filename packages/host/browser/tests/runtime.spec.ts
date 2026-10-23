@@ -1968,6 +1968,28 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('program: history/bookmarks helpers forward their filters', async () => {
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+        const call = (name: string): ((args: unknown) => Promise<unknown>) => bridge[name] as unknown as (args: unknown) => Promise<unknown>
+        await call('history')({ q: 'docs', limit: 5, group: 'session-1' })
+        await call('bookmarks')({ q: 'wiki', limit: 3 })
+        return { result: null }
+      },
+    }
+    const { runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    const historyFilters: Array<Record<string, unknown>> = []
+    const bookmarkFilters: Array<Record<string, unknown>> = []
+    const spied = runtime as unknown as Record<string, (...args: unknown[]) => unknown>
+    spied['history'] = (filter: Record<string, unknown>) => { historyFilters.push(filter); return [] }
+    spied['listBookmarks'] = (filter: Record<string, unknown>) => { bookmarkFilters.push(filter); return [] }
+    await runtime.runProgram('x')
+    expect(historyFilters[0]).toMatchObject({ q: 'docs', limit: 5, group: 'session-1' })
+    expect(bookmarkFilters[0]).toMatchObject({ q: 'wiki', limit: 3 })
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

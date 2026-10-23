@@ -1898,7 +1898,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     parameters: {
       q: { type: 'string', description: 'Search text in url/title.' },
       limit: { type: 'integer', description: 'Max entries (default 100).' },
-      group: { type: 'string', description: 'Only entries recorded under this session/group key.' },
+      group: { type: 'string', description: 'Only entries recorded under this session/group key (an empty string means "no filter", not "entries without a group").' },
     },
     output: {
       schema: {

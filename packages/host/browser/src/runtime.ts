@@ -50,7 +50,8 @@ import type {
 } from './types.ts'
 
 /** Default cooperative tool-call budget (ms). */
-const DEFAULT_TIMEOUT_MS = 30_000
+// One 30s: the tool budget from budgets.ts (no second literal to drift).
+const DEFAULT_TIMEOUT_MS = BROWSER_TOOL_TIMEOUT_MS
 
 /** Default cap on waiting for Electron's loadURL promise (ms). */
 const DEFAULT_LOAD_TIMEOUT_MS = 20_000
@@ -5538,8 +5539,8 @@ export class BrowserRuntime {
     if (options.condition === 'popup' || options.condition === 'download' || options.condition === 'file-chooser') {
       const bus = this.tabEvents.get(resolved)
       if (bus === undefined) return { ok: false, reason: `wait_for ${options.condition}: no event bus for this tab` }
-      const deadlineAt = options.deadlineAt ?? Date.now() + (options.timeoutMs ?? 30_000)
-      const remaining = Math.max(1, Math.min(options.timeoutMs ?? 30_000, deadlineAt - Date.now()))
+      const deadlineAt = options.deadlineAt ?? Date.now() + (options.timeoutMs ?? BROWSER_TOOL_TIMEOUT_MS)
+      const remaining = Math.max(1, Math.min(options.timeoutMs ?? BROWSER_TOOL_TIMEOUT_MS, deadlineAt - Date.now()))
       const armed = bus.arm(options.condition, remaining)
       try {
         await armed.promise
@@ -5559,7 +5560,7 @@ export class BrowserRuntime {
     return await this.agentRun('browser_wait_for', async () => {
       // Compute the condition deadline INSIDE the critical section: whatever
       // time the mutex/gate took is already spent budget.
-      const configured = options.timeoutMs ?? Math.min(this.options.timeoutMs, 30_000)
+      const configured = options.timeoutMs ?? Math.min(this.options.timeoutMs, BROWSER_TOOL_TIMEOUT_MS)
       const remaining = options.deadlineAt === undefined ? Number.POSITIVE_INFINITY : options.deadlineAt - Date.now()
       const timeout = Math.min(configured, WAIT_FOR_HARD_CAP_MS, Math.max(0, remaining))
       const deadline = Date.now() + timeout

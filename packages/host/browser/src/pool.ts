@@ -11,6 +11,7 @@
 
 import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 import { browserError } from './errors.ts'
+import { defaultTabQuota } from './capacity.ts'
 import type { BrowserError } from './errors.ts'
 import { TAB_SLOT_WAIT_TIMEOUT_MS, USER_GATE_TIMEOUT_MS } from './budgets.ts'
 
@@ -76,7 +77,7 @@ export interface TabReservation {
 }
 
 const POOL_DEFAULTS = {
-  maxTabs: 16,
+  maxTabs: defaultTabQuota(),
   userGateTimeoutMs: USER_GATE_TIMEOUT_MS,
   // 必须短于工具预算（budgets.ts 的 TAB_SLOT_WAIT_TIMEOUT_MS 说明理由）：
   // 超时后抛出的 quota 错误要能真的送达模型，而不是被 timeout-policy 换掉。

@@ -30,12 +30,15 @@
  */
 
 import { createHash } from 'node:crypto'
+import { MAX_TAB_QUOTA } from './capacity.ts'
 
 /** Surface 种类（§16.1 冻结：只有这两种）。 */
 export type SurfaceKind = 'browser-tab' | 'app'
 
 /** 浏览器标签配额（§16.1：应用窗口**不**吃这个配额）。 */
-export const MAX_BROWSER_TABS = 16
+// Registry cap is the derived quota's ceiling (D2): a bigger machine never
+// registers more surfaces than the capacity module allows.
+export const MAX_BROWSER_TABS = MAX_TAB_QUOTA
 
 /** Cordis 服务名：浏览器插件 `provide` 出去的 surface 注册表（`windows.ts` 的 inject）。 */
 export const BROWSER_SURFACE_SERVICE = 'browserSurface'

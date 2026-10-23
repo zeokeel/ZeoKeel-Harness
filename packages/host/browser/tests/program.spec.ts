@@ -36,6 +36,11 @@ describe('program result/error shaping', () => {
     expect(big.truncated).toBe(true)
     expect(typeof big.value).toBe('string')
     expect(Buffer.byteLength(String(big.value), 'utf8')).toBeLessThanOrEqual(256 * 1024)
+    // 150 Ki characters = 300 KiB bytes: only a BYTE cap reports truncation here
+    // (a char-based early return would say "not truncated" and ship 300 KiB).
+    const boundary = truncateProgramResult('é'.repeat(150 * 1024))
+    expect(boundary.truncated).toBe(true)
+    expect(Buffer.byteLength(String(boundary.value), 'utf8')).toBeLessThanOrEqual(256 * 1024)
     expect(() => truncateProgramResult(BigInt(1))).toThrow(/serializable/u)
   })
 

@@ -172,18 +172,18 @@ interface Harness {
   dispose: () => void
 }
 
-function makeHarness(options: Record<string, unknown> = {}, credentials?: CredentialResolverLike): Harness {
+function makeHarness(options: Record<string, unknown> = {}, credentials?: CredentialResolverLike, extraDeps?: Record<string, unknown>, enabledGroups?: ReadonlySet<string>): Harness {
   const adapter = new MockAdapter()
   const dir = join(process.cwd(), 'tests', `.bta-store-${Math.random().toString(36).slice(2)}`)
   mkdirSync(dir, { recursive: true })
   const store = new BrowserStore({ dir })
-  const runtime = new BrowserRuntime(adapter as never, options, credentials as never, undefined, { store })
+  const runtime = new BrowserRuntime(adapter as never, options, credentials as never, undefined, { store, ...(extraDeps ?? {}) } as never)
   const tools = new Map<string, ToolDefinition>()
   const ctx = {
     tools: { register: (definition: ToolDefinition) => { tools.set(definition.name, definition); return () => tools.delete(definition.name) } },
     systemPrompt: { section: () => () => {} },
   } as unknown as Parameters<typeof applyBrowserTools>[0]
-  const disposeTools = applyBrowserTools(ctx, runtime)
+  const disposeTools = applyBrowserTools(ctx, runtime, enabledGroups)
   return {
     runtime,
     adapter,
@@ -617,6 +617,25 @@ describe('snapshot frames at the tool layer（2026-10-23 C16）', () => {
       { frameId: 'F1-NEW', url: 'https://a.example/frame', depth: 1, contextId: 6 },
     ]
     await expect(harness.call('browser_click', { target: 1 })).rejects.toMatchObject({ code: 'stale-snapshot' })
+  })
+})
+
+describe('browser_run registration surface（2026-10-23）', () => {
+  it('registers only when both the runtime and the opt-in are present, in the script group', async () => {
+    const fakeProgram = { execute: async () => ({ result: null }) }
+    // Programming mode is double-gated: the script GROUP must be enabled AND the
+    // deployment must inject a ptc runtime + opt in (audit R5).
+    const withScriptGroup = new Set(['navigate', 'interact', 'read', 'write', 'memory', 'artifacts', 'control', 'script'])
+    const enabled = track(makeHarness({ programEnabled: true }, undefined, { programRuntime: fakeProgram }, withScriptGroup))
+    expect(enabled.tools.has('browser_run')).toBe(true)
+    expect([...enabled.tools.keys()]).toHaveLength(41)
+    const defaulted = track(makeHarness({}, undefined, { programRuntime: fakeProgram }, withScriptGroup))
+    expect(defaulted.tools.has('browser_run')).toBe(false)
+    const noRuntime = track(makeHarness({ programEnabled: true }, undefined, undefined, withScriptGroup))
+    expect(noRuntime.tools.has('browser_run')).toBe(false)
+    // Without the script group the tool stays out even when opted in.
+    const groupOff = track(makeHarness({ programEnabled: true }, undefined, { programRuntime: fakeProgram }))
+    expect(groupOff.tools.has('browser_run')).toBe(false)
   })
 })
 

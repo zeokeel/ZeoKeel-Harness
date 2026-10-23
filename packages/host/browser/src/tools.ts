@@ -36,6 +36,7 @@ import {
 
 // Re-exported for the budget-registry tests (single source stays budgets.ts).
 export { BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS, BROWSER_PROGRAM_TOOL_TIMEOUT_MS, DOWNLOAD_COMPLETION_TIMEOUT_MS, EXPECT_TIMEOUT_DEFAULT_MS, EXPECT_TIMEOUT_MAX_MS } from './budgets.ts'
+import { uploadAllowDirs } from './uploads.ts'
 import { MODIFIER_BITS } from './runtime.ts'
 import type { BrowserInteractionHit, BrowserWaitUntil } from './types.ts'
 
@@ -325,22 +326,9 @@ interface AgentProjectInfo {
 }
 
 /** Upload whitelist: downloads dir (always) + the calling session's cwd. */
-function uploadAllowDirs(runtime: BrowserRuntime, session: AgentProjectInfo['session']): string[] {
-  // Single source: the deployment's configured upload dirs (never a tool or
-  // script argument) plus the downloads dir and the session cwd. Duplicates are
-  // collapsed so a misconfiguration cannot widen the list accidentally.
-  const normalize = (dir: string): string => dir.trim().replace(/\/+$/u, '')
-  const dirs = new Set<string>()
-  for (const raw of [runtime.options.downloadDir, ...runtime.options.uploadDirs]) {
-    const dir = normalize(raw)
-    // '/' would make the whole filesystem uploadable; relative paths depend on
-    // the process cwd and are refused (deployment config must be absolute).
-    if (dir === '' || dir === '/' || !dir.startsWith('/')) continue
-    dirs.add(dir)
-  }
+function uploadAllowDirsForTool(runtime: BrowserRuntime, session: AgentProjectInfo['session']): string[] {
   const cwd = session?.header?.cwd ?? session?.meta?.cwd ?? session?.cwd
-  if (typeof cwd === 'string' && normalize(cwd) !== '') dirs.add(normalize(cwd))
-  return [...dirs]
+  return uploadAllowDirs({ downloadDir: runtime.options.downloadDir, uploadDirs: runtime.options.uploadDirs, ...(typeof cwd === 'string' ? { sessionCwd: cwd } : {}) })
 }
 
 /**
@@ -1022,11 +1010,11 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
       if (cancelRequested) {
-        const outcome = await runtime.chooseFiles(tabId, { cancel: true }, uploadAllowDirs(runtime, (exec.agent as AgentProjectInfo | undefined)?.session), exec.signal)
+        const outcome = await runtime.chooseFiles(tabId, { cancel: true }, uploadAllowDirsForTool(runtime, (exec.agent as AgentProjectInfo | undefined)?.session), exec.signal)
         exec.signal.throwIfAborted()
         return { ok: true, cancelled: outcome.cancelled === true }
       }
-      const allowedDirs = uploadAllowDirs(runtime, (exec.agent as AgentProjectInfo | undefined)?.session)
+      const allowedDirs = uploadAllowDirsForTool(runtime, (exec.agent as AgentProjectInfo | undefined)?.session)
       const outcome = await runtime.chooseFiles(tabId, { files: paths as string[] }, allowedDirs, exec.signal)
       exec.signal.throwIfAborted()
       return outcome.files === undefined ? { ok: true } : { ok: true, files: outcome.files }
@@ -1500,7 +1488,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     async execute(args, exec) {
       const { tab, paths } = args as { tab?: number; paths: string[] }
       if (!Array.isArray(paths) || paths.length === 0) throw new Error('paths must be a non-empty array of absolute paths')
-      const allowedDirs = uploadAllowDirs(runtime, (exec.agent as AgentProjectInfo | undefined)?.session)
+      const allowedDirs = uploadAllowDirsForTool(runtime, (exec.agent as AgentProjectInfo | undefined)?.session)
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
       return await runtime.uploadFile(tabId, paths, exec.signal, allowedDirs)

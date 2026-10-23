@@ -1881,25 +1881,28 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
-  it('program: fileChooser is refused (upload allow-list never comes from the script)', async () => {
-    let message = ''
+  it('program: fileChooser never takes its allow-list from the script', async () => {
+    const seen: string[][] = []
     const fakeProgram = {
       execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
-        try {
-          await (bridge['fileChooser'] as unknown as (args: unknown) => Promise<unknown>)({ files: ['/etc/passwd'], allowedDirs: ['/etc'] })
-        } catch (cause) {
-          message = cause instanceof Error ? cause.message : String(cause)
-        }
+        await (bridge['fileChooser'] as unknown as (args: unknown) => Promise<unknown>)({ files: ['/etc/passwd'], allowedDirs: ['/etc'] }).catch(() => undefined)
         return { result: null }
       },
     }
-    const { runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, { programRuntime: fakeProgram })
+    const { runtime, cleanup } = makeRuntime({ programEnabled: true, uploadDirs: ['/tmp/vetted'] }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    ;(runtime as unknown as { chooseFiles: (...args: unknown[]) => Promise<unknown> }).chooseFiles = async (...args: unknown[]) => {
+      seen.push(args[2] as string[])
+      return { files: [] }
+    }
     await runtime.runProgram('x')
-    expect(message).toContain('not wired')
-    // No DOM.setFileInputFiles may be attempted with script-provided paths.
-    expect(message).not.toContain('/etc/passwd')
+    // Script-supplied directories never appear in the allow-list handed to the
+    // runtime; the list is the session context (downloads dir here).
+    expect(seen[0]).not.toContain('/etc')
+    expect(seen[0]).toContain('/tmp/vetted')
     cleanup()
   })
+
 
   it('program: helpers keep the tool semantics (press modifiers/action, type delay, scroll options, fetch header lines)', async () => {
     const calls: Record<string, unknown[]> = { pressKey: [], typeInto: [], scroll: [], pageFetch: [] }
@@ -2387,6 +2390,40 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     await held
     const opened = await opening
     expect(opened.id).toBeGreaterThan(1)
+    cleanup()
+  })
+
+  it('program: fileChooser allow-list comes from context (script dirs ignored) and screenshots become refs', async () => {
+    const seenDirs: string[][] = []
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+        const call = (name: string): ((args: unknown) => Promise<unknown>) => bridge[name] as unknown as (args: unknown) => Promise<unknown>
+        await call('fileChooser')({ files: ['/tmp/vetted/a.txt'], allowedDirs: ['/etc'] })
+        const shot = await call('screenshot')({})
+        return { result: shot }
+      },
+    }
+    const stored: Array<{ dataUrl: string, meta: { fileName: string, mimeType: string } }> = []
+    const { adapter, runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, {
+      programRuntime: fakeProgram,
+      sessionCwd: () => '/tmp/workspace',
+      attachments: { store: async (dataUrl: string, meta: { fileName: string, mimeType: string }) => { stored.push({ dataUrl, meta }); return 'attach:42' } },
+    })
+    await runtime.open('https://a.example')
+    adapter.lastView().transport.handler = () => ({ result: { value: 'data:image/png;base64,AAAA' } })
+    ;(runtime as unknown as { chooseFiles: (...args: unknown[]) => Promise<unknown> }).chooseFiles = async (...args: unknown[]) => {
+      seenDirs.push(args[2] as string[])
+      return { files: ['/tmp/vetted/a.txt'] }
+    }
+    ;(runtime as unknown as { screenshotWithOptions: (...args: unknown[]) => Promise<unknown> }).screenshotWithOptions = async () => ({ data: 'data:image/png;base64,' + 'A'.repeat(1024), fullPage: false, format: 'png' })
+    const outcome = await runtime.runProgram('x') as unknown as { result: { ref: string } }
+    // The script's own allowedDirs never reaches chooseFiles.
+    expect(seenDirs[0]).not.toContain('/etc')
+    expect(seenDirs[0]).toContain('/tmp/workspace')
+    // Screenshot crosses the bridge as a reference, not raw base64.
+    expect(outcome.result.ref).toBe('attach:42')
+    expect(stored[0]!.meta.mimeType).toBe('image/png')
+    expect(JSON.stringify(outcome)).not.toContain('base64')
     cleanup()
   })
 

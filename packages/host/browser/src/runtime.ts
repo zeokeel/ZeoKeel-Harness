@@ -20,6 +20,7 @@ import {
   QUEUE_MIN_WORK_MS,
   TOOL_DEADLINE_MARGIN_MS,
 } from './budgets.ts'
+import { uploadAllowDirs } from './uploads.ts'
 import { CdpSession } from './cdp.ts'
 import { BROWSER_PARTITION, BROWSER_SHELL_TOOLBAR_HEIGHT, type ElectronAdapter, type NativeBrowserWindow, type NativeSession, type NativeView } from './electron-adapter.ts'
 import { BrowserGuard, ensureSessionGuard, isLocalHostname, looksLikeAbsoluteUrl } from './guard.ts'
@@ -499,6 +500,12 @@ export interface RuntimeDeps {
   /** Programming-mode runtime injected by the host (absent ⇒ browser_run is not
    * registered at all; there is no fallback path — audit R5/R9). */
   programRuntime?: ProgramRuntime
+  /** Session workspace for the upload allow-list (never a model-supplied path). */
+  sessionCwd?: () => string | undefined
+  /** Attachment store for large program results (screenshots become refs). */
+  attachments?: {
+    store(dataUrl: string, meta: { fileName: string, mimeType: string }): Promise<string>
+  }
   currentUsername?: () => string | null
   /**
    * Locale provider for the copy the runtime produces (window title, activity
@@ -3951,12 +3958,17 @@ export class BrowserRuntime {
         ...(typeof args['settle'] === 'boolean' ? { settle: args['settle'] } : {}),
       })
       case 'browser_wait_for': return await this.waitFor(Number(args['tab'] ?? this.pool.activeTab ?? 1), args as never, signal)
-      case 'browser_file_chooser':
-        // SECURITY (audit run8 P0): the upload allow-list is the HOST's session
-        // context (downloads dir + session workspace), never the script's input.
-        // Until programInvoke can obtain that context, this helper is refused —
-        // otherwise a script could upload any local file into the page.
-        throw browserError('policy', 'browser_run: the fileChooser helper is not wired yet — the upload allow-list must come from the session context, not from the program')
+      case 'browser_file_chooser': {
+        // SECURITY (audit run8 P0): the allow-list comes from the runtime's
+        // session context (downloads dir + configured upload dirs + session cwd),
+        // NEVER from the program. `allowedDirs` in args is ignored by design.
+        const dirs = uploadAllowDirs({
+          downloadDir: this.options.downloadDir,
+          uploadDirs: this.options.uploadDirs,
+          ...(this.deps.sessionCwd?.() === undefined ? {} : { sessionCwd: this.deps.sessionCwd() }),
+        })
+        return await this.chooseFiles(Number(args['tab'] ?? this.pool.activeTab ?? 1), (args['paths'] === undefined && args['files'] === undefined ? args : { paths: args['paths'] ?? args['files'] }) as never, dirs, signal)
+      }
 
       case 'browser_download': {
         const wait = args['waitForCompletion'] !== false
@@ -3993,9 +4005,15 @@ export class BrowserRuntime {
       case 'browser_clipboard': return args['action'] === 'write' ? await this.clipboardWrite(String(args['text'] ?? ''), signal) : await this.clipboardRead(signal)
       case 'browser_history_search': return { entries: this.history({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}), ...(typeof args['group'] === 'string' ? { group: args['group'] } : {}) }) }
       case 'browser_bookmarks_list': return { bookmarks: this.listBookmarks({ ...(typeof args['q'] === 'string' ? { q: args['q'] } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
-      // Large binary results must cross the bridge as attachment refs, which this
-      // runtime layer cannot mint: refuse instead of shipping an 8 MiB base64 line.
-      case 'browser_screenshot': throw browserError('policy', 'browser_run: the screenshot helper is not wired yet (it will return an attachment reference in the next layer)')
+      case 'browser_screenshot': {
+        // Large binary results cross the bridge as attachment REFS (4 MiB cap):
+        // the store is host-provided, otherwise this helper is refused.
+        const store = this.deps.attachments
+        if (store === undefined) throw browserError('policy', 'browser_run: the screenshot helper needs the host attachment store (not wired in this deployment)')
+        const shot = await this.screenshotWithOptions(Number(args['tab'] ?? this.pool.activeTab ?? 1), { format: args['format'] === 'jpeg' ? 'jpeg' : 'png', fullPage: args['fullPage'] === true }, signal)
+        const ref = await store.store(shot.data, { fileName: `browser-tab-${String(args['tab'] ?? this.pool.activeTab ?? 1)}-${String(Date.now())}.${shot.format === 'jpeg' ? 'jpg' : 'png'}`, mimeType: shot.format === 'jpeg' ? 'image/jpeg' : 'image/png' })
+        return { ref, format: shot.format, fullPage: shot.fullPage }
+      }
       default: throw browserError('policy', `browser_run: helper ${tool} is not wired in this build`)
     }
   }

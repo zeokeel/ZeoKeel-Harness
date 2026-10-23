@@ -13,6 +13,7 @@ import {
   BROWSER_TOOL_TIMEOUT_MS,
   FRAME_CONTEXT_WAIT_MS,
   FRAME_INDEX_SETTLE_MS,
+  CLOSE_ALL_CREATION_WAIT_MS,
   CLOSE_IDLE_WAIT_MS,
   LIFECYCLE_CREATION_BUDGET_MS,
   NAVIGATE_LOAD_BOUND_MS,
@@ -2731,7 +2732,7 @@ export class BrowserRuntime {
     const mine = new Promise<void>((resolve) => { release = resolve })
     this.lifecycleLock = mine
     try {
-      await this.waitForTurn(prev, `the running tab-creation operation (${q})`, deadlineAt, signal, !this.lifecycleLockHeld)
+      await this.waitForTurn(prev, `the running tab-creation operation (${q})`, deadlineAt + QUEUE_MIN_WORK_MS, signal, !this.lifecycleLockHeld)
       this.lifecycleLockHeld = true
       try {
         return await work()
@@ -3448,14 +3449,6 @@ export class BrowserRuntime {
         this.closingTabs.add(id)
         this.tabs.get(id)?.cdp.abortPending(browserError('not-found', 'browser: the browser was closed while this command was in flight'))
       }
-      // Cancel in-flight ledger materialization (a previous user's restore
-      // must not resurrect tabs after the pool was cleared).
-      this.materializeEpoch++
-      // BR-1 (2026-09-23)：换号/关全部 = 作用域换代。任何正在 `await loadURL`
-      // 的 agent/用户操作恢复时必须看到这个新世代，否则它会把上一个账号的 URL
-      // 写进**新账号**的 history 与 op log（探针 br-session-switch-race 复现）。
-      this.scopeEpoch++
-      this.pendingLedgerTabs = []
       try {
         for (const id of [...this.tabs.keys()]) this.destroyTab(id)
         // R7: closing EVERYTHING ends the session's origin accounting (account
@@ -3486,7 +3479,7 @@ export class BrowserRuntime {
       try {
         // Same L10 coordination on the USER path (close-all must serialize with
         // an in-flight creation segment, whatever the caller).
-        return await this.withLifecycleLock('close-all', undefined, Date.now() + CLOSE_IDLE_WAIT_MS, body)
+        return await this.closeAllUnderLifecycle(body)
       } finally {
         // close-all ends any user-held state (it must not stay locked after a
         // session switch) but does not fake a takeover: an in-flight op must
@@ -3494,7 +3487,7 @@ export class BrowserRuntime {
         this.pool.setUserControl(false)
       }
     }
-    return await this.agentRun('browser_close', async () => await this.withLifecycleLock('close-all', undefined, Date.now() + CLOSE_IDLE_WAIT_MS, body))
+    return await this.agentRun('browser_close', async () => await this.closeAllUnderLifecycle(body))
   }
 
   // ----------------------------------------------------------- interactions
@@ -6042,6 +6035,28 @@ export class BrowserRuntime {
   private stopPendingLoads(): void {
     for (const tab of this.tabs.values()) {
       try { tab.view.webContents.stop?.() } catch { /* teardown never throws */ }
+    }
+  }
+
+  /**
+   * Run close-all under L10, but NEVER leave tabs behind: a creation segment that
+   * outlives the budget is cleared with a forced destroy (recorded). Session
+   * switch relies on close-all leaving `listTabs() === 0` (P1-1, BR-1 family).
+   */
+  private async closeAllUnderLifecycle(body: () => Promise<void>): Promise<void> {
+    try {
+      // The creation segment budget is bounded by the close-all wait: a hung
+      // segment must not delay an account switch beyond CLOSE_ALL_CREATION_WAIT_MS.
+      return await this.withLifecycleLock('close-all', undefined, Date.now() + CLOSE_ALL_CREATION_WAIT_MS, body)
+    } catch (cause) {
+      if (!(cause instanceof BrowserError) || cause.code !== 'timeout') throw cause
+      // Forced clear: no L10 (a hung creation segment must not keep the previous
+      // account's tabs alive), but every destroy still goes through destroyTab.
+      // This RETURNS instead of throwing: close-all promises an empty pool and a
+      // session switch must not proceed with the previous account's tabs alive.
+      this.record('browser_close', 0, 'close-all forced after the creation segment did not settle', true)
+      for (const id of [...this.tabs.keys()]) this.destroyTab(id)
+      this.pool.clear()
     }
   }
 

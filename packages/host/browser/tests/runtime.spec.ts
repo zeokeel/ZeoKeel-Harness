@@ -2219,6 +2219,33 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('D1: closeAll never leaves tabs behind (waits beyond 1s, forces on a hung segment)', async () => {
+    const { runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const internal = runtime as unknown as {
+      withLifecycleLock: <T>(q: string, signal: AbortSignal | undefined, deadlineAt: number, work: () => Promise<T>) => Promise<T>
+    }
+    // 1) A creation segment that lasts >1 s is still waited for (no forced clear).
+    let releaseSlow!: () => void
+    const slow = internal.withLifecycleLock('probe-slow', undefined, Date.now() + 60_000, () => new Promise<void>((resolve) => { releaseSlow = resolve }))
+    slow.catch(() => undefined)
+    await sleep(20)
+    const closingSlow = runtime.closeAll(true)
+    await sleep(2_500)
+    releaseSlow()
+    await closingSlow
+    expect(runtime.listTabs()).toHaveLength(0)
+    // 2) A HUNG segment trips the forced clear: closeAll still resolves and the
+    // pool is empty (a session switch must never proceed with old tabs alive).
+    await runtime.open('https://b.example')
+    const hung = internal.withLifecycleLock('probe-hung', undefined, Date.now() + 60_000, () => new Promise<void>(() => {}))
+    hung.catch(() => undefined)
+    await sleep(20)
+    await runtime.closeAll(true)
+    expect(runtime.listTabs()).toHaveLength(0)
+    cleanup()
+  }, 30_000)
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

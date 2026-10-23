@@ -56,8 +56,12 @@ export const WAIT_FOR_MAX_MS = 40_000
 
 /** Extra margin used by the wait_for registration formula (single source). */
 export const WAIT_FOR_DEADLINE_MARGIN_MS = 5_000
-/** Bound for waiting on a tab to go idle while closing it (D1 three-phase close). */
-export const CLOSE_IDLE_WAIT_MS = 2_000
+/** Bound for waiting on a tab to go idle while closing it (D1 three-phase close).
+ * NOTE: `waitForTurn` keeps QUEUE_MIN_WORK_MS for the work itself, so the
+ * EFFECTIVE idle wait is this value minus that margin. */
+export const CLOSE_IDLE_WAIT_MS = 3_000
+/** Bound for close-all to wait for an in-flight creation segment before forcing. */
+export const CLOSE_ALL_CREATION_WAIT_MS = 5_000
 
 /** Budget for one tab-creation segment (open/restore under L10; independent of
  * the tool budget so restore of a large ledger is not clamped to 30s). */

@@ -521,6 +521,16 @@ describe('snapshot extras at the tool layer（2026-10-23 P1）', () => {
   })
 })
 
+describe('click addressing errors（2026-10-23 C16 P2）', () => {
+  it('target and x/y are mutually exclusive, and a lone coordinate is rejected', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    await expect(harness.call('browser_click', { target: '#a', x: 1, y: 2 })).rejects.toThrow(/mutually exclusive/u)
+    await expect(harness.call('browser_click', { x: 1 })).rejects.toThrow(/BOTH x and y/u)
+    await expect(harness.call('browser_click', { y: 2 })).rejects.toThrow(/BOTH x and y/u)
+  })
+})
+
 describe('wait_for 扩展条件（2026-10-23 C14）', () => {
   it('function needs a non-empty expression', async () => {
     const harness = track(makeHarness())

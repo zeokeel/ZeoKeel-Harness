@@ -1424,6 +1424,42 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('shadow selectors reach type/select/get_text/scroll (no action-only dead end)', async () => {
+    const { adapter, runtime, cleanup } = makeRuntime()
+    await runtime.open('https://a.example')
+    const view = adapter.lastView()
+    const expressions: string[] = []
+    let reads = 0
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      expressions.push(expression)
+      if (expression.includes('isContentEditable')) {
+        // typeInto's read-back must change so it takes the typed path.
+        reads += 1
+        return { result: { value: reads === 1 ? 'a' : 'ab' } }
+      }
+      return { result: { value: 'x' } }
+    }
+    const shadowSelector = '#host >>> input'
+    await runtime.textWithMeta(1, shadowSelector)
+    expect(expressions.at(-1)).toContain('__query')
+    expressions.length = 0
+    await runtime.scroll(1, 0, shadowSelector)
+    expect(expressions.some(expression => expression.includes('__query'))).toBe(true)
+    expressions.length = 0
+    await runtime.selectOptionChoice(1, '#host >>> select', { index: 0 })
+    expect(expressions.at(-1)).toContain('__query')
+    expressions.length = 0
+    await runtime.typeInto(1, shadowSelector, 'abc', false)
+    expect(expressions.some(expression => expression.includes('__query'))).toBe(true)
+    // Selector without >>> keeps the plain path (no helper injected).
+    expressions.length = 0
+    await runtime.textWithMeta(1, '#plain')
+    expect(expressions.at(-1)).not.toContain('__query')
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

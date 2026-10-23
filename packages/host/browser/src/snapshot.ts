@@ -76,6 +76,26 @@ const ELEMENT_TEXT_CAP = 4_096
  * break，输出既没有命中总数也没有截断标记）。{@link extractSnapshot} 仍然
  * 兼容裸数组（历史桩/旧探针），只是那种形状拿不到计数。
  */
+/** Page-side shadow-piercing resolver shared by the text extraction probe
+ * (mirrors the runtime helper; `>>>` means shadow boundary and a hop without a
+ * shadowRoot is a hard miss, never a silent light-DOM fallback). */
+const TEXT_SHADOW_QUERY = `
+  const __query = (sel) => {
+    const parts = String(sel).split(/\s*>>>\s*/).filter((part) => part !== '');
+    let el = null;
+    let scope = document;
+    for (let index = 0; index < parts.length; index += 1) {
+      el = scope.querySelector(parts[index]);
+      if (!el) return null;
+      if (index < parts.length - 1) {
+        if (!el.shadowRoot) return null;
+        scope = el.shadowRoot;
+      }
+    }
+    return el;
+  };
+`
+
 const SNAPSHOT_PROBE = `
 (() => {
   const out = [];
@@ -625,7 +645,10 @@ export async function extractTextWithMeta(
 ): Promise<TextExtraction> {
   const expression = selector === undefined || selector.trim() === ''
     ? `(document.body ? document.body.innerText : '')`
-    : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`
+    : (/\s*>>>\s*/.test(String(selector))
+      ? `(() => { ${TEXT_SHADOW_QUERY} const el = __query(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`
+      : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`)
+
   const result = await send<{ result?: { value?: unknown }, exceptionDetails?: unknown }>('Runtime.evaluate', {
     expression,
     returnByValue: true,

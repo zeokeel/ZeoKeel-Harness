@@ -558,7 +558,7 @@ export function selectPageScript(selector: string, choice: {
 }): string {
   return `
           (() => {
-            const el = document.querySelector(${JSON.stringify(String(selector))});
+            ${querySnippet(selector)}
             if (!el) return { error: 'element not found' };
             if (el.tagName !== 'SELECT') return { error: 'not a select element' };
             const choice = ${JSON.stringify({ value: choice.value, label: choice.label, index: choice.index, clear: choice.clear === true })};
@@ -3910,19 +3910,14 @@ export class BrowserRuntime {
       const tab = this.tab(resolved)
       // Shadow-piercing ('>>>') is used ONLY when the selector asks for it: the
       // default path stays byte-identical to the pre-2026-10-23 expression.
-      const shadowPiercing = String(selector).includes(' >>> ')
+      const shadowPiercing = /\s*>>>\s*/.test(String(selector))
       const expression = shadowPiercing
         ? `
           (() => {
             try {
-              const parts = ${JSON.stringify(String(selector))}.split(' >>> ');
-              let el = null;
-              let root = document;
-              for (const part of parts) {
-                el = root.querySelector(part);
-                if (!el) return { error: 'element not found' };
-                root = el.shadowRoot || el;
-              }
+              ${SHADOW_QUERY_SOURCE}
+              const el = __query(${JSON.stringify(String(selector))});
+              if (!el) return { error: 'element not found' };
               el.scrollIntoView({ block: 'center', inline: 'center' });
               const r = el.getBoundingClientRect();
               return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -4281,7 +4276,7 @@ export class BrowserRuntime {
       await tab.cdp.send('Runtime.evaluate', {
         expression: `
           (() => {
-            const el = document.querySelector(${JSON.stringify(String(selector))});
+            ${querySnippet(selector)}
             if (!el) return { error: 'element not found' };
             el.focus();
             ${clear ? 'if (typeof el.select === "function") el.select();' : ''}
@@ -4335,7 +4330,7 @@ export class BrowserRuntime {
       const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', {
         expression: `
           (() => {
-            const el = document.querySelector(${JSON.stringify(String(selector))});
+            ${querySnippet(selector)}
             if (!el) return null;
             if (typeof el.value === 'string') return el.value;
             if (el.isContentEditable) return el.textContent ?? '';
@@ -4764,7 +4759,7 @@ export class BrowserRuntime {
         const targeted = selector !== undefined && selector !== ''
         const expression = !targeted
           ? `window.scrollBy({ top: ${Math.round(deltaY)}, left: ${Math.round(options.deltaX ?? 0)}, behavior: 'instant' }); 'ok'`
-          : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); if (!el) return 'not found'; el.scrollIntoView({ block: 'center' }); return 'ok'; })()`
+          : `(() => { ${querySnippet(selector)} if (!el) return 'not found'; el.scrollIntoView({ block: 'center' }); return 'ok'; })()`
         const result = await tab.cdp.send<EvalResult>('Runtime.evaluate', { expression, returnByValue: true })
         // 页内判定必须回传（2026-09-15 审计残留）：旧实现丢掉返回值，选择器没命中
         // 也报成功，模型以为已经滚到了目标位置。
@@ -5838,6 +5833,42 @@ export const RESERVED_HOTKEYS: readonly string[] = [
   // macOS application shortcuts (same class as the Windows/Linux ones).
   'meta+q', 'meta+w', 'meta+h', 'meta+m', 'meta+alt+escape',
 ]
+
+/**
+ * Page-side selector resolver shared by every action (2026-10-23 C16 P2).
+ *
+ * `a >>> b >>> c` walks OPEN shadow roots hop by hop. An intermediate element
+ * WITHOUT a shadowRoot is a hard not-found (fail-closed): silently falling back
+ * to the light DOM would click/type the wrong element — the same class of bug the
+ * C13 unique-match rule exists to prevent. A selector without `>>>` is exactly
+ * `document.querySelector`, so the default path is unchanged.
+ */
+const SHADOW_QUERY_SOURCE = `
+  const __query = (sel) => {
+    const parts = String(sel).split(/\s*>>>\s*/).filter((part) => part !== '');
+    let el = null;
+    let scope = document;
+    for (let index = 0; index < parts.length; index += 1) {
+      el = scope.querySelector(parts[index]);
+      if (!el) return null;
+      if (index < parts.length - 1) {
+        if (!el.shadowRoot) return null;
+        scope = el.shadowRoot;
+      }
+    }
+    return el;
+  };
+`
+
+/** Build the page-side element lookup snippet for one selector: the shadow
+ * helper is only injected when the selector actually uses `>>>`, so the default
+ * expressions stay byte-identical (existing assertion helpers recognise them). */
+function querySnippet(selector: string): string {
+  const json = JSON.stringify(String(selector))
+  return /\s*>>>\s*/.test(String(selector))
+    ? `${SHADOW_QUERY_SOURCE}\nconst el = __query(${json});`
+    : `const el = document.querySelector(${json});`
+}
 
 /** Common key on a page → CDP `code`. */
 const KEY_CODES: Record<string, string> = {

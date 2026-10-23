@@ -83,3 +83,24 @@ CI 的墙钟 ≈ max(gate, server) ⇒ 预计从 ≈35 min 降到 **≈25 min**�
 - `check:workflows` / `check:ci-scripts` / `gen-module-contract --check` / `check:doc-claims` /
   `check:inventories` 全绿（本轮实测）。
 - 本地 `make test-server`（同一组 `-p 4` 参数）在 `max_connections=100` 的 PG 上全量通过。
+
+## 首个真实 CI 跑（2026-10-23，PR #1，`beed158f`）
+
+对照 = 同一分支上一个提交 `e7151871` 的两次线上跑。两次都是 push + pull_request 各一条，
+所有 job 全绿。
+
+| 指标 | 改前（`e7151871`） | 改后（`beed158f`） | 变化 |
+| --- | --- | --- | --- |
+| **整条 CI 墙钟** | 25 / 26 min | **16 min** | **−9~10 min（−38%）** |
+| `Go server` job | 23 / 24 min | **9 min** | **−14~15 min** |
+| `Gate (tests + workspace build)` | 6 min | 5 min | −1 min |
+| `Webadmin feature variants`（新 job） | —（原来在 server 里串行 6.4 min） | **5 min，与 go test 并行** | 关键路径 −6.4 min |
+| `Gate (root guards)` / 三个 desktop job | 1–2 / 3–10 min | 同左 | 不变 |
+
+比预测的"≈25 min"还好，原因：`-p 4` 之外，变体矩阵搬出 server job（−6.4 min）与 TS7 的
+webadmin 构建（−10s）叠加；server job 的 go test 段从 ≈26 min 落到 ≈7–8 min
+（4 vCPU 上 `-p 4` 的加速比对这套测试比文档里的 1.5× 更接近 2.5×）。
+
+**新的瓶颈已经不是服务端**：`desktop-linux`（打包 + 平台验证 + `e2e:client`）≈10 min，
+串在 gate（5 min）之后 ⇒ 整条 CI 的墙钟现在由它决定。下一步若要继续压 CI，应从这里下手
+（打包缓存 / e2e 与打包解耦），而不是继续动 Go。

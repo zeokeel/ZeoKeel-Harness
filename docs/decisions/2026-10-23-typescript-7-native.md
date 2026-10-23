@@ -23,8 +23,11 @@ TypeScript 7（Go 原生编译器，`typescript@7.0.2` 的 bin 仍叫 `tsc`）�
 3. 这 3 个包里 **10 个守卫 spec** 的 `import ts from 'typescript'` → `'typescript6'`。
 4. 新判据 `packages/host/desktop/tests/typescript-compiler.spec.ts`（随 `yarn check` 的
    desktop 阶段跑）。
+5. **`server/webadmin`**（独立的 npm 工程，原来 TS 5.9.3）：`typescript` → `^7.0.2`，并删掉
+   `tsconfig.json` 的 `baseUrl`（TS7 已移除该选项，报 `TS5102`；无 `baseUrl` 时 `paths` 相对
+   tsconfig 目录解析，`"@/*": ["./src/*"]` 原样可用）。
 
-构建脚本**一个字都没改**：所有 `tsc -p …` 原样，靠依赖解析换编译器。
+workspace 包的构建脚本**一个字都没改**：所有 `tsc -p …` 原样，靠依赖解析换编译器。
 
 ### 为什么不能"纯 TS7"（第 2/3 步的原因）
 
@@ -65,7 +68,8 @@ yarn 工程实测）：
 | desktop `typecheck:tests` | 11.9s | **2.4s** | 5.0× |
 | 全仓 28 个 tsconfig | 110.6s | **17.8s** | 6.2× |
 | `prebuild` 全量（15 包） | 112s | **39s** | 2.9× |
-| webadmin `tsc -b`（探针，未落地） | 14.5s | **1.5s** | 9.7× |
+| webadmin `tsc -b`（`npm run build` 里的编译段） | 14.5s | **~2s** | 7× |
+| webadmin `npm run build` 总时长 | — | 13.3s（其中 vite build 10.9s） | — |
 
 ## 验证
 
@@ -76,6 +80,8 @@ yarn 工程实测）：
   83s 是 vitest 与 8 个 verify 脚本）。真正放大收益的是内循环与冷构建（上表）。
 - 编译器 API 的 10 个 spec：`debug-switches` + `wait-budget-contract` 80 tests 通过。
 - 新增判据 `typescript-compiler.spec.ts`：6 条断言，2.9s（含 4 次 `yarn exec tsc --version` 实跑）。
+- **webadmin**：`npm run build` ✓（tsc -b + vite）；`npm test` 61 files / 972 tests ✓；
+  `check:variant-tests` 4 个非缺省变体 ✓；`check:features` 5 个产物级变体 ✓。
 - **声明产物对照**：371 个 `.d.ts` 里 346 个与 6.x 产物**逐字节相同**，22 个只差引号风格，
   3 个只差联合成员顺序（语义等价）。
 - **混合工具链**：把 7 的产物覆盖回各包 `lib/types`，再用 **6.0.3** 跑 28 个配置 —— 全绿
@@ -97,9 +103,6 @@ yarn 工程实测）：
 
 ## 遗留 / 后续
 
-- **`server/webadmin` 未迁**（独立 npm 工程，TS 5.9.3，`tsc -b && vite build`）：TS7 **移除了
-  `baseUrl`**（`TS5102`）。探针实测：删掉 `baseUrl`、`paths` 改相对后 **0 错误**，类型检查
-  14.5s → 1.5s。它属于 server 侧门禁，单独一个改动迁。
 - `packages/vendor/memory-evolve/tsconfig.json` 也有 `baseUrl` + `ignoreDeprecations: "6.0"`，
   但它不跑 `tsc`（esbuild 构建），本轮不动。
 - `yarn dev:watch`（`tsdown --watch` 增量实测 335ms + `tsc --watch`）尚未接线，是内循环提速的

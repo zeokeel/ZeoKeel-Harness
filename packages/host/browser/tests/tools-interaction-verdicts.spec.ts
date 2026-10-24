@@ -24,6 +24,7 @@ import { BrowserStore } from '../src/store.ts'
 import { DEFAULT_GROUPS, applyBrowserTools, parseToolGroups } from '../src/tools.ts'
 import type { ElectronAdapter, NativeBounds, NativeSession, NativeView } from '../src/electron-adapter.ts'
 import type { CdpTransport } from '../src/cdp.ts'
+import { ALL_TOOL_GROUPS } from './helpers/all-groups.ts'
 
 // ------------------------------------------------------------------ mocks
 
@@ -183,7 +184,7 @@ function makeHarness(options: Record<string, unknown> = {}, credentials?: Creden
     tools: { register: (definition: ToolDefinition) => { tools.set(definition.name, definition); return () => tools.delete(definition.name) } },
     systemPrompt: { section: () => () => {} },
   } as unknown as Parameters<typeof applyBrowserTools>[0]
-  const disposeTools = applyBrowserTools(ctx, runtime, enabledGroups)
+  const disposeTools = applyBrowserTools(ctx, runtime, enabledGroups ?? ALL_TOOL_GROUPS)
   return {
     runtime,
     adapter,
@@ -459,7 +460,7 @@ describe('expect receipts（2026-10-23 C2）', () => {
       }
     }).downloadRecorder()
     const id = recorder.add({ url: 'https://files.example/y.bin', fileName: 'y.bin', path: '', size: 0, status: 'in-progress', actor: 'ai', group: '' })
-    const call = harness.call('browser_downloads_list', { wait: true }) as Promise<{ downloads: Array<{ id: number, status: string }> }>
+    const call = harness.call('browser_download', { action: 'list', wait: true }) as Promise<{ downloads: Array<{ id: number, status: string }> }>
     setTimeout(() => { recorder.update(id, { status: 'done' }) }, 50)
     const value = await call
     expect(value.downloads.find(entry => entry.id === id)?.status).toBe('done')
@@ -625,10 +626,10 @@ describe('browser_run registration surface（2026-10-23）', () => {
     const fakeProgram = { execute: async () => ({ result: null }) }
     // Programming mode is double-gated: the script GROUP must be enabled AND the
     // deployment must inject a ptc runtime + opt in (audit R5).
-    const withScriptGroup = new Set(['navigate', 'interact', 'read', 'write', 'memory', 'artifacts', 'control', 'script'])
+    const withScriptGroup = new Set([...ALL_TOOL_GROUPS, 'script'])
     const enabled = track(makeHarness({ programEnabled: true }, undefined, { programRuntime: fakeProgram }, withScriptGroup))
     expect(enabled.tools.has('browser_run')).toBe(true)
-    expect([...enabled.tools.keys()]).toHaveLength(41)
+    expect([...enabled.tools.keys()]).toHaveLength(34)
     const defaulted = track(makeHarness({}, undefined, { programRuntime: fakeProgram }, withScriptGroup))
     expect(defaulted.tools.has('browser_run')).toBe(false)
     const noRuntime = track(makeHarness({ programEnabled: true }, undefined, undefined, withScriptGroup))
@@ -828,7 +829,7 @@ describe('2026-09-15 P1：browser_release 不在模型工具面上', () => {
     const names = [...harness.tools.keys()]
     expect(names).not.toContain('browser_release')
     expect(names).toContain('browser_takeover')
-    expect(names).toHaveLength(40)
+    expect(names).toHaveLength(33)
     // C15 cookie management stays refused: a main-process cookie channel would
     // defeat the credential-isolation invariant (audit-0921 tripwire).
     expect(names).not.toContain('browser_cookies')

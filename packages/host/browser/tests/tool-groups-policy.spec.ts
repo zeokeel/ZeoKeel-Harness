@@ -23,7 +23,7 @@ import { Config } from '../src/index.ts'
 import { DEFAULT_GROUPS, applyBrowserTools, parseToolGroups } from '../src/tools.ts'
 
 /** 七个工具组（与 `GROUP_OF` 的取值集合一致）。 */
-const ALL_GROUPS = ['navigate', 'interact', 'read', 'write', 'memory', 'artifacts', 'control'] as const
+const ALL_GROUPS = ['navigate', 'interact', 'read', 'write', 'memory', 'human', 'advanced', 'control'] as const
 
 /**
  * 用真的 `applyBrowserTools` 收集"会被注册进模型工具面"的工具名。
@@ -45,10 +45,12 @@ function registeredTools(groups: ReadonlySet<string>): string[] {
 }
 
 describe('toolGroups：键缺席才是"全开"，显式数组按字面生效', () => {
-  it('键缺席 = 七组全开（唯一保留的 fail-open 缺省，且是文档写明的缺省）', () => {
-    expect([...parseToolGroups(undefined)].sort()).toEqual([...ALL_GROUPS].sort())
+  it('键缺席 = 默认组全开（唯一保留的 fail-open 缺省，且是文档写明的缺省）', () => {
+    expect([...parseToolGroups(undefined)].sort()).toEqual([...DEFAULT_GROUPS].sort())
     expect(registeredTools(parseToolGroups(undefined)).length).toBeGreaterThan(0)
     expect(registeredTools(DEFAULT_GROUPS).length).toBe(registeredTools(parseToolGroups(undefined)).length)
+    // The explicit full list (default + low-frequency groups) must register more than the default.
+    expect(registeredTools(new Set(ALL_GROUPS)).length).toBeGreaterThan(registeredTools(DEFAULT_GROUPS).length)
   })
 
   it('显式空数组 = 全关（此前回落到全开：`[]` 把七组全部打开）', () => {

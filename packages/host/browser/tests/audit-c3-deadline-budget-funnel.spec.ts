@@ -40,6 +40,7 @@ import {
 } from '../src/budgets.ts'
 import type { ElectronAdapter, NativeBounds, NativeSession, NativeView } from '../src/electron-adapter.ts'
 import type { CdpTransport } from '../src/cdp.ts'
+import { ALL_TOOL_GROUPS } from './helpers/all-groups.ts'
 
 // ------------------------------------------------------------------ 测试替身
 
@@ -353,9 +354,6 @@ type WaitLegKind = 'slot' | 'load' | 'condition' | 'capture' | 'frame'
 const TOOL_WAIT_LEGS: Readonly<Record<string, readonly WaitLegKind[]>> = {
   browser_open: ['slot', 'load'],
   browser_navigate: ['load'],
-  browser_reload: ['load'],
-  browser_go_back: ['load'],
-  browser_go_forward: ['load'],
   browser_wait_for: ['condition'],
   browser_screenshot: ['capture'],
   browser_eval: ['frame'],
@@ -366,9 +364,7 @@ const TOOL_WAIT_LEGS: Readonly<Record<string, readonly WaitLegKind[]>> = {
   browser_dialog: [],
   browser_file_chooser: [],
   browser_hover: [],
-  browser_dblclick: [],
   browser_drag: [],
-  browser_hotkey: [],
   browser_clipboard: [],
   browser_fetch: [],
   browser_emulate: [],
@@ -386,8 +382,6 @@ const TOOL_WAIT_LEGS: Readonly<Record<string, readonly WaitLegKind[]>> = {
   browser_bookmarks_remove: [],
   browser_history_search: [],
   browser_download: [],
-  browser_downloads_list: [],
-  browser_downloads_remove: [],
   browser_takeover: [],
   browser_fill_credentials: [],
   browser_credentials_list: [],
@@ -416,7 +410,7 @@ const TOOL_WAIT_LEGS: Readonly<Record<string, readonly WaitLegKind[]>> = {
  */
 const REQUIRED_LEGS_BY_KIND: Readonly<Record<WaitLegKind, readonly string[]>> = {
   slot: ['browser_open'],
-  load: ['browser_open', 'browser_navigate', 'browser_reload', 'browser_go_back', 'browser_go_forward'],
+  load: ['browser_open', 'browser_navigate'],
   condition: ['browser_wait_for'],
   capture: ['browser_screenshot'],
   frame: ['browser_eval'],
@@ -430,7 +424,7 @@ function registerAllTools(): Map<string, RegisteredTool> {
     tools: { register: (definition: RegisteredTool) => { tools.set(definition.name, definition); return () => {} } },
     systemPrompt: { section: () => () => {} },
   } as unknown as Parameters<typeof applyBrowserTools>[0]
-  applyBrowserTools(ctx, stub as BrowserRuntime)
+  applyBrowserTools(ctx, stub as BrowserRuntime, ALL_TOOL_GROUPS)
   return tools
 }
 

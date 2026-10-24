@@ -250,7 +250,7 @@ const DOWNLOAD_DISPLAY_PATH_LIMIT = 200
  *    重载，最多 {@link CRASH_MAX_RELOADS} 次重载；
  *  · 越过上限 ⇒ **停止自动重载**，把标签标记成 `crashed`、在 op log 写下可执行的
  *    提示（用户看得到），模型在 `browser_list_tabs` 里看到同一个标记；
- *  · 只有显式 `browser_reload`（人/模型主动重试）或一次新的 `browser_navigate`
+ *  · 只有显式 `browser_navigate` (direction: reload)（人/模型主动重试）或一次新的导航
  *    才重置计数 —— 崩溃循环不再自己喂自己。
  */
 const CRASH_MAX_RELOADS = 2
@@ -333,7 +333,7 @@ interface BrowserTab {
   frameTrackingReady: boolean
   /**
    * 崩溃终态（2026-09-23 审计 BR-2）：自动重载次数越过上限后为 `true`，直到显式
-   * `browser_reload`/新的 `browser_navigate` 重新开始。投影进
+   * `browser_navigate` (direction: reload) / 新的导航重新开始。投影进
    * {@link BrowserTabState.crashed}，用户（op log）与模型（`browser_list_tabs`）都能看到。
    */
   crashed: boolean
@@ -1548,8 +1548,8 @@ export class BrowserRuntime {
           state.terminal = true
           this.record('browser_page_crash', id, hostCopy(
             this.locale(),
-            `页面连续崩溃 ${attempts} 次，已停止自动重载 —— 用 browser_reload 手动重试，或关掉这个标签页`,
-            `the page crashed ${attempts} times in a row — automatic reload stopped; retry with browser_reload or close the tab`,
+            `页面连续崩溃 ${attempts} 次，已停止自动重载 —— 用 browser_navigate (direction: reload) 手动重试，或关掉这个标签页`,
+            `the page crashed ${attempts} times in a row — automatic reload stopped; retry with browser_navigate (direction: reload) or close the tab`,
           ), true)
           this.emitAll('state')
           return
@@ -3892,21 +3892,25 @@ export class BrowserRuntime {
   private async programInvoke(tool: string, args: Record<string, unknown>, signal: AbortSignal, sessionCwd?: string): Promise<unknown> {
     switch (tool) {
       case 'browser_open': return await this.open(String(args['url'] ?? ''), signal)
-      case 'browser_navigate': return await this.navigate(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['url'] ?? ''), 'domcontentloaded', signal)
+      case 'browser_navigate': {
+        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
+        if (args['direction'] === 'back') return await this.goBack(tabId, signal)
+        if (args['direction'] === 'forward') return await this.goForward(tabId, signal)
+        if (args['direction'] === 'reload') return await this.reload(tabId, signal)
+        return await this.navigate(tabId, String(args['url'] ?? ''), 'domcontentloaded', signal)
+      }
       case 'browser_get_snapshot': return await this.modelSnapshot(Number(args['tab'] ?? this.pool.activeTab ?? 1), signal)
       case 'browser_get_text': return await this.textWithMeta(Number(args['tab'] ?? this.pool.activeTab ?? 1), args['selector'] as string | undefined, signal)
       case 'browser_click': {
         const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
         const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
-        return await this.clickAt(tabId, await this.locateElement(tabId, target.selector, signal), signal)
+        const clickCount = typeof args['clickCount'] === 'number' ? args['clickCount'] : 1
+        return await this.clickAt(tabId, await this.locateElement(tabId, target.selector, signal), signal, undefined, clickCount > 1 ? { clickCount, doubleClick: true } : {})
       }
       case 'browser_eval': return { value: await this.eval(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['expression'] ?? ''), typeof args['frame'] === 'number' ? args['frame'] : undefined, signal) }
       case 'browser_list_tabs': return { tabs: this.listTabs() }
       case 'browser_switch_tab': return await this.switchTab(Number(args['tab'] ?? 1))
       case 'browser_close_tab': return await this.closeTab(Number(args['tab'] ?? this.pool.activeTab ?? 1), false, signal)
-      case 'browser_go_back': return await this.goBack(Number(args['tab'] ?? this.pool.activeTab ?? 1), signal)
-      case 'browser_go_forward': return await this.goForward(Number(args['tab'] ?? this.pool.activeTab ?? 1), signal)
-      case 'browser_reload': return await this.reload(Number(args['tab'] ?? this.pool.activeTab ?? 1), signal)
       case 'browser_type': {
         const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
         const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
@@ -3933,16 +3937,10 @@ export class BrowserRuntime {
           ...(typeof args['times'] === 'number' ? { times: args['times'] } : {}),
         })
       }
-      case 'browser_hotkey': return await this.hotkey(Number(args['tab'] ?? this.pool.activeTab ?? 1), (args['keys'] as string[]) ?? [], signal)
       case 'browser_hover': {
         const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
         const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
         return await this.hoverAt(tabId, await this.locateElement(tabId, target.selector, signal), signal)
-      }
-      case 'browser_dblclick': {
-        const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
-        const target = await this.resolveTargetSelector(tabId, String(args['target'] ?? ''), signal)
-        return await this.clickAt(tabId, await this.locateElement(tabId, target.selector, signal), signal, undefined, { doubleClick: true })
       }
       case 'browser_drag': {
         const tabId = Number(args['tab'] ?? this.pool.activeTab ?? 1)
@@ -3978,6 +3976,8 @@ export class BrowserRuntime {
       }
 
       case 'browser_download': {
+        if (args['action'] === 'list') return { downloads: this.downloads({ ...(typeof args['status'] === 'string' ? { status: args['status'] as never } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
+        if (args['action'] === 'remove') return { ok: this.removeDownload(Number(args['id'])) }
         const wait = args['waitForCompletion'] !== false
         if (!wait) { await this.downloadUrl(String(args['url'] ?? ''), signal); return { started: true } }
         const before = this.highestDownloadId()
@@ -3986,7 +3986,6 @@ export class BrowserRuntime {
         const entry = await this.waitForNewDownload(before, DOWNLOAD_COMPLETION_TIMEOUT_MS, owner, signal)
         return entry === null ? { started: true, timedOut: true } : { started: true, download: entry }
       }
-      case 'browser_downloads_list': return { downloads: this.downloads({ ...(typeof args['status'] === 'string' ? { status: args['status'] as never } : {}), ...(typeof args['limit'] === 'number' ? { limit: args['limit'] } : {}) }) }
       case 'browser_fetch': {
         const rawHeaders = args['headers']
         const headers: Record<string, string> = {}

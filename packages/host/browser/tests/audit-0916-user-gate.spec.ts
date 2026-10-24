@@ -20,6 +20,7 @@ import { TabPool } from '../src/pool.ts'
 import { applyBrowserTools, BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS } from '../src/tools.ts'
 import type { BrowserRuntime } from '../src/runtime.ts'
 import { NO_CONTROL_HINT, readControlHint, showsWaitingHint } from '../src/client/control-hint.ts'
+import { ALL_TOOL_GROUPS } from './helpers/all-groups.ts'
 
 interface RegisteredTool {
   name: string
@@ -38,18 +39,13 @@ interface RegisteredTool {
 const EXPECTED_DEADLINES: Record<string, number> = {
   browser_open: BROWSER_TOOL_TIMEOUT_MS,
   browser_navigate: BROWSER_TOOL_TIMEOUT_MS,
-  browser_reload: BROWSER_TOOL_TIMEOUT_MS,
-  browser_go_back: BROWSER_TOOL_TIMEOUT_MS,
-  browser_go_forward: BROWSER_TOOL_TIMEOUT_MS,
   browser_list_tabs: BROWSER_TOOL_TIMEOUT_MS,
   browser_switch_tab: BROWSER_TOOL_TIMEOUT_MS,
   browser_close_tab: BROWSER_TOOL_TIMEOUT_MS,
   browser_dialog: BROWSER_TOOL_TIMEOUT_MS,
   browser_file_chooser: BROWSER_TOOL_TIMEOUT_MS,
   browser_hover: BROWSER_TOOL_TIMEOUT_MS,
-  browser_dblclick: BROWSER_TOOL_TIMEOUT_MS,
   browser_drag: BROWSER_TOOL_TIMEOUT_MS,
-  browser_hotkey: BROWSER_TOOL_TIMEOUT_MS,
   browser_clipboard: BROWSER_TOOL_TIMEOUT_MS,
   browser_fetch: BROWSER_TOOL_TIMEOUT_MS,
   browser_emulate: BROWSER_TOOL_TIMEOUT_MS,
@@ -71,8 +67,6 @@ const EXPECTED_DEADLINES: Record<string, number> = {
   browser_bookmarks_remove: BROWSER_TOOL_TIMEOUT_MS,
   browser_history_search: BROWSER_TOOL_TIMEOUT_MS,
   browser_download: BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS,
-  browser_downloads_list: BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS,
-  browser_downloads_remove: BROWSER_TOOL_TIMEOUT_MS,
   browser_takeover: BROWSER_TOOL_TIMEOUT_MS,
   browser_fill_credentials: BROWSER_TOOL_TIMEOUT_MS,
   browser_clear_data: BROWSER_TOOL_TIMEOUT_MS,
@@ -94,7 +88,7 @@ function registerAllTools(): Map<string, RegisteredTool> {
     tools: { register: (definition: RegisteredTool) => { tools.set(definition.name, definition); return () => {} } },
     systemPrompt: { section: () => () => {} },
   } as unknown as Parameters<typeof applyBrowserTools>[0]
-  applyBrowserTools(ctx, stub as BrowserRuntime)
+  applyBrowserTools(ctx, stub as BrowserRuntime, ALL_TOOL_GROUPS)
   return tools
 }
 

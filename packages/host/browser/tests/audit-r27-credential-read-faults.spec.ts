@@ -55,6 +55,7 @@ import { applyBrowserTools } from '../src/tools.ts'
 import { connectorStoreModule, connectorUserScopeModule, connectorsPackagePresent } from './helpers/connectors-module.ts'
 import type { ElectronAdapter, NativeBounds, NativeSession, NativeView } from '../src/electron-adapter.ts'
 import type { CdpTransport } from '../src/cdp.ts'
+import { ALL_TOOL_GROUPS } from './helpers/all-groups.ts'
 
 // 2026-10-13：夹具用真 store（包不在检出里时是 undefined，见
 // `helpers/connectors-module.ts` 的文件头）。本文件四条 describe 全部要用它造真
@@ -202,7 +203,7 @@ function makeHarness(credentials: unknown): Harness {
     tools: { register: (definition: ToolDefinition) => { tools.set(definition.name, definition); return () => tools.delete(definition.name) } },
     systemPrompt: { section: () => () => {} },
   } as unknown as Parameters<typeof applyBrowserTools>[0]
-  const disposeTools = applyBrowserTools(ctx, runtime)
+  const disposeTools = applyBrowserTools(ctx, runtime, ALL_TOOL_GROUPS)
   return {
     runtime,
     adapter,

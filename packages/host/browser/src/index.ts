@@ -163,6 +163,9 @@ export interface Config {
    * 真 cordis 的生产形态，不是只调 `parseToolGroups(undefined)`）。
    */
   toolGroups?: string[]
+  // Default groups (2026-10-24 trim): navigate/interact/read/write/control.
+  // `memory` (bookmarks/history), `human` (takeover/credentials) and `advanced`
+  // (drag/emulate) are off by default; add them explicitly to opt in.
   /**
    * 每个连接器自己的站点地址（origin 或完整 URL），用于 `browser_fill_credentials`
    * 的站点绑定（2026-09-15 审计 BUG-03）。缺省时基准取自凭据字段里的地址；两者

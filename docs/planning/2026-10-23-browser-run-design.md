@@ -75,7 +75,7 @@
 - ✅ screenshot helper → 宿主 attachment store 返回 ref（无裸 base64 过 4 MiB 桥）。
 - ✅ fileChooser helper → 与工具共用 `uploads.ts` 单一真源（downloads dir + `Config.uploadDirs` + session cwd）；脚本 `allowedDirs` 构造上被忽略；端到端用例（真实 chooser + `/etc/passwd` policy 拒绝）。
 - ✅ `attachments` 适配器（`ctx.attachments.saveImages` → `attachment:<id>`）与 per-run `sessionCwd`（`exec.agent.session`）已注入。
-- ✅ 装配注入：`createRestrictedProgramRuntime`（真实子进程 bootstrap）+ `Config.programEnabled`（仅 true 时注入；默认 false 不注册、`runProgram` 抛 `policy`）+ 装配级 40/41 工具断言 + Electron `ELECTRON_RUN_AS_NODE` 与 env 白名单。
+- ✅ 装配注入：`createRestrictedProgramRuntime`（真实子进程 bootstrap）+ `Config.programEnabled`（仅 true 时注入；默认 false 不注册、`runProgram` 抛 `policy`）+ 装配级注册面断言（2026-10-24 收敛后默认 24 / 全组 33） + Electron `ELECTRON_RUN_AS_NODE` 与 env 白名单。
 - ✅ A11/Config 注入行端到端 fixture（`createBrowserRuntimeFor` + 区分输入变异）；纯 Node 进程级 R2（abort → SIGKILL + await exit <1s，无僵尸、`exitCode` 观测）。
 - ✅ **打包/Electron 形态探针已接线并有实跑证据**：`packages/host/browser/scripts/e2e-browser-run.mjs`（`yarn e2e:program`）用**打包后的 Electron 二进制**以 Node 模式运行探针 harness，经真实 `createPtcProgramRuntime` 断言：
   - `return 1 + 1` → 2，helper 桥往返 → 7；

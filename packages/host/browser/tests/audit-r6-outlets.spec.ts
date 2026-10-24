@@ -26,6 +26,7 @@ import { BrowserStore, maskSensitiveKeyValueText, stripSensitiveText, stripSensi
 import { applyBrowserTools } from '../src/tools.ts'
 import type { ElectronAdapter, NativeBounds, NativeSession, NativeView } from '../src/electron-adapter.ts'
 import type { CdpTransport } from '../src/cdp.ts'
+import { ALL_TOOL_GROUPS } from './helpers/all-groups.ts'
 
 // ------------------------------------------------------------------ mocks
 
@@ -162,7 +163,7 @@ function makeHarness(credentials?: (id: string) => Promise<{ username?: string; 
     tools: { register: (definition: { name: string }) => { tools.set(definition.name, definition as never); return () => {} } },
     systemPrompt: { section: () => () => {} },
     attachments: { saveImages: async () => [] },
-  } as never, runtime)
+  } as never, runtime, ALL_TOOL_GROUPS)
   return {
     runtime,
     adapter,

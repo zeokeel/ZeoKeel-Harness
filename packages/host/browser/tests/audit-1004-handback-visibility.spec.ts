@@ -294,7 +294,7 @@ function registerControlTools(runtime: BrowserRuntime): Map<string, RegisteredTo
     tools: { register: (definition: RegisteredTool) => { tools.set(definition.name, definition); return () => {} } },
     systemPrompt: { section: () => () => {} },
   } as unknown as Parameters<typeof applyBrowserTools>[0]
-  applyBrowserTools(ctx, runtime, new Set(['control']))
+  applyBrowserTools(ctx, runtime, new Set(['control', 'human']))
   return tools
 }
 

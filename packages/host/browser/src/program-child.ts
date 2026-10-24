@@ -129,13 +129,22 @@ const executeProgram = async (source) => {
  * @param env - parent environment.
  * @returns the child environment.
  */
+/** Environment keys the child genuinely needs (everything else is dropped, so
+ * API keys/proxies/tokens in the parent env never reach the program's process). */
+export const CHILD_ENV_ALLOWLIST: readonly string[] = [
+  'PATH', 'HOME', 'USERPROFILE', 'TMPDIR', 'TMP', 'TEMP', 'SYSTEMROOT', 'COMSPEC',
+  'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'DSH_HOME', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME',
+]
+
 export function childSpawnEnv(
   versions: NodeJS.ProcessVersions | Record<string, string | undefined>,
   env: NodeJS.ProcessEnv,
 ): NodeJS.ProcessEnv {
-  const next: NodeJS.ProcessEnv = { ...env }
-  delete next['NODE_OPTIONS']
-  delete next['NODE_PATH']
+  const next: NodeJS.ProcessEnv = {}
+  for (const key of CHILD_ENV_ALLOWLIST) {
+    const value = env[key]
+    if (value !== undefined) next[key] = value
+  }
   const electron = typeof (versions as { electron?: unknown }).electron === 'string'
   if (electron) next['ELECTRON_RUN_AS_NODE'] = '1'
   return next

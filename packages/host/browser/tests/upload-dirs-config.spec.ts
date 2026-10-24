@@ -109,7 +109,12 @@ describe('Config.uploadDirs', () => {
     }
     const withoutProgram = namesFor({}, {})
     const withProgram = namesFor({ programEnabled: true }, { programRuntime: { execute: async () => ({ result: null }) } })
+    // Third form pins the OPT-IN gate itself: a runtime injected but the flag
+    // false must NOT register the tool (removing the && gate turns this red).
+    const runtimeButOff = namesFor({ programEnabled: false }, { programRuntime: { execute: async () => ({ result: null }) } })
     expect(withoutProgram).not.toContain('browser_run')
+    expect(runtimeButOff).not.toContain('browser_run')
+    expect(runtimeButOff).toHaveLength(withoutProgram.length)
     expect(withProgram).toContain('browser_run')
     expect(withProgram.length).toBe(withoutProgram.length + 1)
   })

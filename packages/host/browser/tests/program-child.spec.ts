@@ -80,12 +80,16 @@ describe('child bootstrap', () => {
 
 describe('child spawn environment', () => {
   it('sets ELECTRON_RUN_AS_NODE only for an Electron parent and strips loaders', () => {
-    const parentEnv = { NODE_OPTIONS: '-r evil.js', NODE_PATH: '/tmp/modules', PATH: '/usr/bin', HOME: '/home/u' }
+    const parentEnv = { NODE_OPTIONS: '-r evil.js', NODE_PATH: '/tmp/modules', PATH: '/usr/bin', HOME: '/home/u', OPENAI_API_KEY: 'secret', HTTP_PROXY: 'http://proxy', DSH_HOME: '/dsh' }
     const electron = childSpawnEnv({ electron: '44.0.0', node: '22.0.0' }, parentEnv)
     expect(electron['ELECTRON_RUN_AS_NODE']).toBe('1')
     expect(electron['NODE_OPTIONS']).toBeUndefined()
     expect(electron['NODE_PATH']).toBeUndefined()
     expect(electron['PATH']).toBe('/usr/bin')
+    expect(electron['DSH_HOME']).toBe('/dsh')
+    // Secrets/proxies in the parent env never reach the child (allowlist only).
+    expect(electron['OPENAI_API_KEY']).toBeUndefined()
+    expect(electron['HTTP_PROXY']).toBeUndefined()
     const node = childSpawnEnv({ node: '22.0.0' }, parentEnv)
     expect(node['ELECTRON_RUN_AS_NODE']).toBeUndefined()
     expect(node['NODE_OPTIONS']).toBeUndefined()

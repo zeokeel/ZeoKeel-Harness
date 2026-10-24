@@ -117,13 +117,40 @@ const executeProgram = async (source) => {
  * @param helperNames - helper names the child exposes as `browser.*`.
  * @returns a ProgramRuntime backed by the restricted child bootstrap.
  */
+/**
+ * Environment for the child process.
+ *
+ * In an Electron main process `process.execPath` is the Electron binary, and it
+ * runs as Node only with `ELECTRON_RUN_AS_NODE=1` (the packaged fuse keeps that
+ * path available on purpose — see `verify-packaged-runtime.ts`). `NODE_OPTIONS`
+ * and `NODE_PATH` are dropped: they would load arbitrary code BEFORE our
+ * bootstrap and defeat the restricted world.
+ * @param versions - `process.versions` of the parent.
+ * @param env - parent environment.
+ * @returns the child environment.
+ */
+export function childSpawnEnv(
+  versions: NodeJS.ProcessVersions | Record<string, string | undefined>,
+  env: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const next: NodeJS.ProcessEnv = { ...env }
+  delete next['NODE_OPTIONS']
+  delete next['NODE_PATH']
+  const electron = typeof (versions as { electron?: unknown }).electron === 'string'
+  if (electron) next['ELECTRON_RUN_AS_NODE'] = '1'
+  return next
+}
+
 export function createRestrictedProgramRuntime(
   helperNames: readonly string[],
 ): ProgramRuntime {
   const source = childBootstrapSource(helperNames)
   return createPtcProgramRuntime({
     spawn: () => {
-      const child = spawnProcess(process.execPath, ['-e', source], { stdio: ['pipe', 'pipe', 'pipe'] })
+      const child = spawnProcess(process.execPath, ['-e', source], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: childSpawnEnv(process.versions, process.env),
+      })
       const exit = new Promise<number>((resolve) => { child.on('exit', code => resolve(code ?? 0)) })
       return { stdin: child.stdin, stdout: child.stdout, kill: () => { child.kill('SIGKILL') }, exit }
     },

@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { Config, createAttachmentStoreAdapter, createBrowserRuntimeFor, runtimeOptionsForConfig, uploadDirsForRuntime } from '../src/index.ts'
+import { DEFAULT_GROUPS, applyBrowserTools } from '../src/tools.ts'
 import { BrowserRuntime } from '../src/runtime.ts'
 
 describe('Config.uploadDirs', () => {
@@ -91,5 +92,25 @@ describe('Config.uploadDirs', () => {
     const message = await enabled.runProgram('x').then(() => '', (error: unknown) => (error as Error).message)
     expect(message).toContain('attachment store')
     enabled.dispose()
+  })
+
+  it('assembly-level: programEnabled registers exactly one extra tool (browser_run)', () => {
+    const namesFor = (config: Record<string, unknown>, deps: Record<string, unknown>): string[] => {
+      const runtime = createBrowserRuntimeFor({} as never, Config(config) as never, undefined, { partition: 'persist:test-tools', deps })
+      const names: string[] = []
+      const ctx = {
+        tools: { register: (definition: { name: string }) => { names.push(definition.name); return () => {} } },
+        systemPrompt: { section: () => () => {} },
+      }
+      const groups = new Set([...DEFAULT_GROUPS, 'script'])
+      applyBrowserTools(ctx as never, runtime, groups)
+      runtime.dispose()
+      return names
+    }
+    const withoutProgram = namesFor({}, {})
+    const withProgram = namesFor({ programEnabled: true }, { programRuntime: { execute: async () => ({ result: null }) } })
+    expect(withoutProgram).not.toContain('browser_run')
+    expect(withProgram).toContain('browser_run')
+    expect(withProgram.length).toBe(withoutProgram.length + 1)
   })
 })

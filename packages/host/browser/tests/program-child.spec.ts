@@ -5,7 +5,7 @@
  */
 import { spawn as spawnProcess } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { childBootstrapSource, createRestrictedProgramRuntime } from '../src/program-child.ts'
+import { childBootstrapSource, childSpawnEnv, createRestrictedProgramRuntime } from '../src/program-child.ts'
 import { PTC_MAX_PROGRAM_BYTES, createPtcProgramRuntime, type ProgramChild } from '../src/program-ptc.ts'
 
 const NAMES = ['obj', 'fail'] as const
@@ -76,6 +76,20 @@ describe('child bootstrap', () => {
     expect(Date.now() - started).toBeLessThan(2_000)
     await expect.poll(() => exits.length, { timeout: 2_000 }).toBe(1)
   }, 20_000)
+})
+
+describe('child spawn environment', () => {
+  it('sets ELECTRON_RUN_AS_NODE only for an Electron parent and strips loaders', () => {
+    const parentEnv = { NODE_OPTIONS: '-r evil.js', NODE_PATH: '/tmp/modules', PATH: '/usr/bin', HOME: '/home/u' }
+    const electron = childSpawnEnv({ electron: '44.0.0', node: '22.0.0' }, parentEnv)
+    expect(electron['ELECTRON_RUN_AS_NODE']).toBe('1')
+    expect(electron['NODE_OPTIONS']).toBeUndefined()
+    expect(electron['NODE_PATH']).toBeUndefined()
+    expect(electron['PATH']).toBe('/usr/bin')
+    const node = childSpawnEnv({ node: '22.0.0' }, parentEnv)
+    expect(node['ELECTRON_RUN_AS_NODE']).toBeUndefined()
+    expect(node['NODE_OPTIONS']).toBeUndefined()
+  })
 })
 
 describe('production wiring', () => {

@@ -89,6 +89,6 @@
   - `execute(program, bridge, { signal })` → `ptcRuntime.run({ program, bindings: [{ global: 'browser', functions: <桥接函数> }], timeoutMs, signal })`；
   - 返回值 `value` → `result`；`console` → 受控消息通道文本；错误按 code 透传；
   - `release(owner)` 在 run 结束/取消时调用，配合审计要求"真 kill + await exit"（由 ptc 服务自身保证，浏览器包只负责释放与预算）。
-- `attachments` 适配：`ctx.attachments.saveImages([{ data, mediaType, name }])` → `store(dataUrl, meta) => ref`，ref 不得含 base64/本地路径，失败要给可读错误。
+- `attachments` 适配：`ctx.attachments.saveImages([{ data, mediaType, name }])` → `store(dataUrl, meta) => ref`，ref 不得含 base64/本地路径，失败要给可读错误。**program 侧 ref 是不透明字符串 `attachment:<id>`**（工具侧 screenshot 返回原生 ref 对象——两者消费面不同，已在此写明）。
 - `sessionCwd`：**每次 `browser_run` 从 `exec.agent.session` 快照**后传入 `runtime.runProgram(program, signal, sessionCwd)`（实现为 per-run 字段，运行期不读全局可变值；下一次 run 不带即清空）——多会话/换 workspace 不会陈旧。已落地并有「program 与工具 allowlist 相同 / 不继承上次 workspace」用例。
 - 装配 fixture（P3-1）：用 `apply(ctx)` 捕获 runtime，断言 `runtime.options` 等于 `runtimeOptionsForConfig(...)`，并把装配行变异（换回 `{...config}`）变红。

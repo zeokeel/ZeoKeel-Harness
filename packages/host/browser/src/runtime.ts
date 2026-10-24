@@ -743,8 +743,6 @@ export class BrowserRuntime {
   private lifecycleLockHeld = false
   /** Tabs being closed: queued operations must fail fast (not-found). */
   private readonly closingTabs = new Set<number>()
-  /** Session cwd snapshot for the CURRENT program run (per run, never global). */
-  private programSessionCwd: string | undefined
   /** Epoch captured when a tab-creation segment started (session-switch guard). */
   private creationScope: number | undefined
   /** S1: aborts NON-CDP waits (download/event waits) on user takeover. Replaced
@@ -3836,9 +3834,6 @@ export class BrowserRuntime {
   async runProgram(program: string, signal?: AbortSignal, sessionCwd?: string): Promise<{ result: never, console: string, truncated: boolean, helperCalls: number }> {
     const programRuntime = this.deps.programRuntime
     if (programRuntime === undefined) throw browserError('policy', 'browser_run: programming mode is not available in this deployment')
-    // Per-run snapshot: a program's upload allow-list must reflect THIS run's
-    // session workspace (multi-session hosts would otherwise read a stale value).
-    this.programSessionCwd = sessionCwd
     if (signal?.aborted === true) throw browserError('interrupted', 'browser_run: cancelled')
     // D 类 (driver): browser_run takes NO tab/global lock — its helpers do — but
     // it must still respect the user gate at start and abort on a takeover.
@@ -3852,7 +3847,7 @@ export class BrowserRuntime {
       if (this.controlState().controlled) controller.abort()
     }, 100)
     const deadlineAt = Date.now() + PROGRAM_SCRIPT_BUDGET_MS
-    const bridge = createProgramBridge(async (tool, args) => this.programInvoke(tool, args, controller.signal), {
+    const bridge = createProgramBridge(async (tool, args) => this.programInvoke(tool, args, controller.signal, sessionCwd), {
       deadlineAt,
       maxCalls: PROGRAM_MAX_HELPER_CALLS,
       signal: controller.signal,
@@ -3893,7 +3888,7 @@ export class BrowserRuntime {
   }
 
   /** Route one helper call to the SAME runtime path its tool uses. */
-  private async programInvoke(tool: string, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
+  private async programInvoke(tool: string, args: Record<string, unknown>, signal: AbortSignal, sessionCwd?: string): Promise<unknown> {
     switch (tool) {
       case 'browser_open': return await this.open(String(args['url'] ?? ''), signal)
       case 'browser_navigate': return await this.navigate(Number(args['tab'] ?? this.pool.activeTab ?? 1), String(args['url'] ?? ''), 'domcontentloaded', signal)
@@ -3968,7 +3963,7 @@ export class BrowserRuntime {
         const dirs = uploadAllowDirs({
           downloadDir: this.options.downloadDir,
           uploadDirs: this.options.uploadDirs,
-          ...(this.programSessionCwd === undefined ? {} : { sessionCwd: this.programSessionCwd }),
+          ...(sessionCwd === undefined ? {} : { sessionCwd }),
         })
         // `chooseFiles` takes `{files}` / `{cancel}`; build that shape explicitly
         // (a wrong shape surfaced as a TypeError instead of a browser error).

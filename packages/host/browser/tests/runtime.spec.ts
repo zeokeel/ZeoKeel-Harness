@@ -2474,6 +2474,37 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
     cleanup()
   })
 
+  it('program: two concurrent runs keep their OWN session cwd in the allow-list', async () => {
+    const seen: string[][] = []
+    let arrivals = 0
+    let releaseBoth!: () => void
+    const both = new Promise<void>((resolve) => { releaseBoth = resolve })
+    const fakeProgram = {
+      execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+        arrivals += 1
+        if (arrivals === 2) releaseBoth()
+        await both
+        await (bridge['fileChooser'] as unknown as (args: unknown) => Promise<unknown>)({ paths: ['/tmp/x.txt'] }).catch(() => undefined)
+        return { result: null }
+      },
+    }
+    const { runtime, cleanup } = makeRuntime({ programEnabled: true, uploadDirs: ['/tmp/vetted'] }, undefined, { programRuntime: fakeProgram })
+    await runtime.open('https://a.example')
+    ;(runtime as unknown as { chooseFiles: (...args: unknown[]) => Promise<unknown> }).chooseFiles = async (...args: unknown[]) => {
+      seen.push(args[2] as string[])
+      return { files: [] }
+    }
+    await Promise.all([
+      runtime.runProgram('a', undefined, '/tmp/ws-a'),
+      runtime.runProgram('b', undefined, '/tmp/ws-b'),
+    ])
+    // Each run's allow-list must carry ITS OWN workspace (a shared runtime field
+    // would make both runs see the last one).
+    const flat = seen.map(dirs => dirs.find(dir => dir.startsWith('/tmp/ws-')) ?? '')
+    expect(flat.sort()).toEqual(['/tmp/ws-a', '/tmp/ws-b'])
+    cleanup()
+  })
+
   it('dialog: browser_dialog itself is never blocked by its own fail-fast', async () => {
     const { adapter, runtime, cleanup } = makeRuntime()
     await runtime.open('https://a.example')

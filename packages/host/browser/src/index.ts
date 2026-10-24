@@ -89,12 +89,18 @@ interface ConnectionTrustFence {
  * @returns the runtime-facing adapter.
  */
 export function createAttachmentStoreAdapter(store: {
-  saveImages(inputs: readonly { data: Uint8Array, mediaType: never, name?: string }[]): Promise<readonly { attachmentId: unknown }[]>
+  saveImages(inputs: readonly { data: Uint8Array, mediaType: string, name?: string }[]): Promise<readonly { attachmentId: unknown }[]>
 }): { store(dataUrl: string, meta: { fileName: string, mimeType: string }): Promise<string> } {
   return {
     store: async (dataUrl: string, meta: { fileName: string, mimeType: string }): Promise<string> => {
-      const base64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl
-      const bytes = Uint8Array.from(Buffer.from(base64, 'base64'))
+      const marker = dataUrl.indexOf(',')
+      const header = marker >= 0 ? dataUrl.slice(0, marker) : ''
+      const encoded = marker >= 0 ? dataUrl.slice(marker + 1) : ''
+      // Fail loud on a non-data URL or invalid base64 instead of storing garbage.
+      if (!header.startsWith('data:') || !header.includes(';base64') || encoded === '' || !/^[A-Za-z0-9+/=\s]+$/u.test(encoded)) {
+        throw new Error('browser_run: the screenshot payload is not a base64 data URL')
+      }
+      const bytes = Uint8Array.from(Buffer.from(encoded, 'base64'))
       const refs = await store.saveImages([{ data: bytes, mediaType: meta.mimeType as never, name: meta.fileName }])
       const first = refs[0]
       if (first === undefined) throw new Error('browser_run: the attachment store returned no reference')

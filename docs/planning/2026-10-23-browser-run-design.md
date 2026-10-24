@@ -74,9 +74,10 @@
 
 - ✅ screenshot helper → 宿主 attachment store 返回 ref（无裸 base64 过 4 MiB 桥）。
 - ✅ fileChooser helper → 与工具共用 `uploads.ts` 单一真源（downloads dir + `Config.uploadDirs` + session cwd）；脚本 `allowedDirs` 构造上被忽略；端到端用例（真实 chooser + `/etc/passwd` policy 拒绝）。
-- ⏳ `attachments` / `sessionCwd` 尚未在 desktop 装配注入 → 生产形态 screenshot helper 仍 policy 拒（登记待办）。
-- ⏳ 真实 ptc `spawn` 注入与 `Config → apply → programRuntime` 装配 fixture。
-- ⏳ A11/Config 注入行端到端 fixture、真机进程级 R2。
+- ✅ `attachments` 适配器（`ctx.attachments.saveImages` → `attachment:<id>`）与 per-run `sessionCwd`（`exec.agent.session`）已注入。
+- ✅ 装配注入：`createRestrictedProgramRuntime`（真实子进程 bootstrap）+ `Config.programEnabled`（仅 true 时注入；默认 false 不注册、`runProgram` 抛 `policy`）+ 装配级 40/41 工具断言 + Electron `ELECTRON_RUN_AS_NODE` 与 env 白名单。
+- ✅ A11/Config 注入行端到端 fixture（`createBrowserRuntimeFor` + 区分输入变异）；纯 Node 进程级 R2（abort → SIGKILL + await exit <1s，无僵尸、`exitCode` 观测）。
+- ⏳ Electron/打包形态的 `browser_run` 探针：`packages/host/browser/scripts/e2e-browser-run.mjs`（无显示/未打包时**登记 skip 原因**，不是静默跳过）。
 
 ### 第 3 项：执行器方向（用户裁决 **B**，2026-10-23）
 

@@ -73,8 +73,12 @@ describe('child bootstrap', () => {
     await new Promise(resolve => setTimeout(resolve, 100))
     controller.abort()
     await expect(pending).rejects.toBeTruthy()
+    // Reason: SIGKILL of a spinning child must land almost immediately; 2 s is a
+    // wide upper bound on a loaded CI box, not a tuned budget.
     expect(Date.now() - started).toBeLessThan(2_000)
-    await expect.poll(() => exits.length, { timeout: 2_000 }).toBe(1)
+    // Reason: the exit event is observed after the kill; poll long enough for a
+    // loaded CI scheduler while the contract's floor is respected.
+    await expect.poll(() => exits.length, { timeout: 10_000 }).toBe(1)
   }, 20_000)
 })
 

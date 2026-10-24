@@ -35,15 +35,16 @@ import { connectorStoreContractViolation, connectorStoreCtorOf, type ConnectorSt
 import { credentialSiteOrigin } from './credential-site.ts'
 import { browserError, type BrowserError } from './errors.ts'
 import { browserPartitionFor, createRealElectronAdapter } from './electron-adapter.ts'
+import type { ElectronAdapter } from './electron-adapter.ts'
 import { browserSameOriginMarker, isLoopbackRequest } from './loopback.ts'
-import { BrowserRuntime } from './runtime.ts'
+import { BrowserRuntime, type RuntimeDeps } from './runtime.ts'
 import { BROWSER_SURFACE_SERVICE, createSurfaceRegistry, encodePartitionSegment, serverPartitionHash } from './surface.ts'
 import { TabPool } from './pool.ts'
 import { BrowserStore } from './store.ts'
 import { DEFAULT_GROUPS, applyBrowserTools, parseToolGroups } from './tools.ts'
 import { browserOverlayHtml, browserShellHtml } from './shell-pages.ts'
 import { hostLocaleFrom, type HostLocale } from '@zeokeel/dsh-host-locale'
-import type { CredentialResolver } from './types.ts'
+import type { BrowserToolOptions, CredentialResolver } from './types.ts'
 import type { DownloadEntry } from './store.ts'
 type DownloadEntryStatus = DownloadEntry['status']
 
@@ -406,6 +407,24 @@ export function runtimeOptionsForConfig(config: Config, userDataDir?: string): R
   }
 }
 
+/**
+ * Construct the browser runtime from parsed config (the apply path delegates here,
+ * so a fixture can assert the runtime options WITHOUT an Electron environment).
+ * @param adapter - Electron adapter (a fake in tests).
+ * @param config - parsed plugin config.
+ * @param userDataDir - host data dir for downloads.
+ * @param wiring - credential resolver, partition and runtime deps.
+ * @returns the configured runtime.
+ */
+export function createBrowserRuntimeFor(
+  adapter: ElectronAdapter,
+  config: Config,
+  userDataDir: string | undefined,
+  wiring: { credentialResolver?: CredentialResolver | undefined, partition: string, deps: RuntimeDeps },
+): BrowserRuntime {
+  return new BrowserRuntime(adapter, runtimeOptionsForConfig(config, userDataDir) as BrowserToolOptions, wiring.credentialResolver, wiring.partition, wiring.deps)
+}
+
 export const Config: z<Config> = z.object({
   maxTabs: z.number(),
   timeoutMs: z.number(),
@@ -672,19 +691,22 @@ export function apply(ctx: Context, config: Config = {}): void {
     }
   }
   const attachmentStore = ctx.attachments === undefined ? undefined : createAttachmentStoreAdapter(ctx.attachments)
-  const runtime = new BrowserRuntime(
+  const runtime = createBrowserRuntimeFor(
     createRealElectronAdapter(undefined, () => hostLocale()),
-    runtimeOptionsForConfig(config, userDataDir),
-    credentialResolver,
-    browserPartitionFor(currentUser(), currentServerHash()),
+    config,
+    userDataDir,
     {
-      pool,
-      store,
-      currentUsername: currentUser,
-      locale: () => hostLocale(),
-      surfaces,
-      ...(appOriginScheme === undefined ? {} : { appOriginScheme }),
-      ...(attachmentStore === undefined ? {} : { attachments: attachmentStore }),
+      credentialResolver,
+      partition: browserPartitionFor(currentUser(), currentServerHash()),
+      deps: {
+        pool,
+        store,
+        currentUsername: currentUser,
+        locale: () => hostLocale(),
+        surfaces,
+        ...(appOriginScheme === undefined ? {} : { appOriginScheme }),
+        ...(attachmentStore === undefined ? {} : { attachments: attachmentStore }),
+      },
     },
   )
   const shellOrigin = `http://127.0.0.1:${String(ctx.webServer.port)}`

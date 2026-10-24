@@ -3,7 +3,7 @@
  * must carry the list (default empty) so the runtime option is reachable.
  */
 import { describe, expect, it } from 'vitest'
-import { Config, createAttachmentStoreAdapter, runtimeOptionsForConfig, uploadDirsForRuntime } from '../src/index.ts'
+import { Config, createAttachmentStoreAdapter, createBrowserRuntimeFor, runtimeOptionsForConfig, uploadDirsForRuntime } from '../src/index.ts'
 import { BrowserRuntime } from '../src/runtime.ts'
 
 describe('Config.uploadDirs', () => {
@@ -57,5 +57,15 @@ describe('Config.uploadDirs', () => {
     await expect(adapter.store('data:image/png,QUJD', meta)).rejects.toThrow(/base64 data URL/u)
     await expect(adapter.store('data:image/png;base64,', meta)).rejects.toThrow(/base64 data URL/u)
     await expect(adapter.store('data:image/png;base64,@@@', meta)).rejects.toThrow(/base64 data URL/u)
+  })
+
+  it('runtime factory (the apply path) carries config and fail-louds without a program runtime', async () => {
+    const runtime = createBrowserRuntimeFor({} as never, Config({ uploadDirs: ['/tmp/vetted'], maxTabs: 5 }) as never, undefined, { partition: 'persist:test-factory', deps: {} })
+    expect(runtime.options.uploadDirs).toEqual(['/tmp/vetted'])
+    expect(runtime.options.maxTabs).toBe(5)
+    // No programRuntime injected -> programming mode is unavailable (fail loud),
+    // and the tool would not be registered (covered in the registration tests).
+    await expect(runtime.runProgram('1')).rejects.toMatchObject({ code: 'policy' })
+    runtime.dispose()
   })
 })

@@ -1211,3 +1211,6 @@ function num(value: string | null, fallback: number | undefined): number | undef
 
 export type { BrowserRuntime } from './runtime.ts'
 export type { BrowserOpLogEntry, BrowserSnapshotElement, BrowserTabState, BrowserToolOptions, BrowserWindowState } from './types.ts'
+
+export { createRestrictedProgramRuntime, childBootstrapSource, childSpawnEnv } from './program-child.ts'
+export { createPtcProgramRuntime, PTC_MAX_PROGRAM_BYTES, PTC_MAX_RESULT_BYTES } from './program-ptc.ts'

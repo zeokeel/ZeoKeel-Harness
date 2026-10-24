@@ -77,7 +77,12 @@
 - ✅ `attachments` 适配器（`ctx.attachments.saveImages` → `attachment:<id>`）与 per-run `sessionCwd`（`exec.agent.session`）已注入。
 - ✅ 装配注入：`createRestrictedProgramRuntime`（真实子进程 bootstrap）+ `Config.programEnabled`（仅 true 时注入；默认 false 不注册、`runProgram` 抛 `policy`）+ 装配级 40/41 工具断言 + Electron `ELECTRON_RUN_AS_NODE` 与 env 白名单。
 - ✅ A11/Config 注入行端到端 fixture（`createBrowserRuntimeFor` + 区分输入变异）；纯 Node 进程级 R2（abort → SIGKILL + await exit <1s，无僵尸、`exitCode` 观测）。
-- ⏳ **TODO：打包/Electron 形态的 `browser_run` 探针（环境门控 + 待接线）**：`packages/host/browser/scripts/e2e-browser-run.mjs` 目前只有 skip 框架（无显示/未打包登记原因）；**断言尚未接线**（`1+1`、`while(true){}`+abort<1s、next tool <1s、`exitCode`），需复用 desktop `e2e:client` 的 CDP harness 实现。发布说明请如实写「打包形态真机探针待接线」。
+- ✅ **打包/Electron 形态探针已接线并有实跑证据**：`packages/host/browser/scripts/e2e-browser-run.mjs`（`yarn e2e:program`）用**打包后的 Electron 二进制**以 Node 模式运行探针 harness，经真实 `createPtcProgramRuntime` 断言：
+  - `return 1 + 1` → 2，helper 桥往返 → 7；
+  - `while(true){}` + abort → **203 ms** 拒绝、子进程 **exit 已观测**（无僵尸）；
+  - abort 之后的新调用 **59 ms** 完成（无残留锁）。
+  实跑输出：`BROWSER-RUN-E2E {"ok":true,"arithmetic":2,"helper":7,"abortMs":203,"nextMs":59}` + `E2E-PASS`。
+  缺少打包产物/`lib/` 时打印**登记式 skip 原因**（环境 skip，非功能 skip）；断言失败则 exit 非零。
 
 ### 第 3 项：执行器方向（用户裁决 **B**，2026-10-23）
 

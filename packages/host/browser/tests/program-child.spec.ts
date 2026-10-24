@@ -6,7 +6,7 @@
 import { spawn as spawnProcess } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { childBootstrapSource } from '../src/program-child.ts'
-import { createPtcProgramRuntime, type ProgramChild } from '../src/program-ptc.ts'
+import { PTC_MAX_PROGRAM_BYTES, createPtcProgramRuntime, type ProgramChild } from '../src/program-ptc.ts'
 
 const NAMES = ['obj', 'fail'] as const
 
@@ -15,7 +15,8 @@ function runtime() {
   const rt = createPtcProgramRuntime({
     spawn: (program: string): ProgramChild => {
       const source = childBootstrapSource(NAMES)
-      const child = spawnProcess(process.execPath, ['-e', source, program], { stdio: ['pipe', 'pipe', 'pipe'] })
+      // The program travels over stdin, never argv (argv is visible in ps).
+      const child = spawnProcess(process.execPath, ['-e', source], { stdio: ['pipe', 'pipe', 'pipe'] })
       const exit = new Promise<number>((resolve) => { child.on('exit', code => { exits.push(code ?? -1); resolve(code ?? -1) }) })
       return { stdin: child.stdin, stdout: child.stdout, kill: () => { child.kill('SIGKILL') }, exit }
     },
@@ -35,6 +36,20 @@ describe('child bootstrap', () => {
     const probe = await rt.execute(`console.log('child-hi'); const v = await browser.obj(); return { a: v.a, b: v.nested.b, proc: typeof globalThis['pro' + 'cess'], req: typeof globalThis['re' + 'quire'], fetch: typeof globalThis['fet' + 'ch'] }`, bridge)
     expect(probe.result).toEqual({ a: 1, b: 2, proc: 'undefined', req: 'undefined', fetch: 'undefined' })
     expect(probe.console).toContain('child-hi')
+  })
+
+  it('the temporary host callback is deleted before user code runs', async () => {
+    const { rt } = runtime()
+    const probe = await rt.execute(`const host = globalThis['__host' + 'Invoke'];
+      return { visible: typeof host, escape: typeof host === 'function' ? (() => { try { return host.constructor.constructor('return typeof pro' + 'cess')() } catch { return 'blocked' } })() : 'n/a' }`, bridge)
+    expect(probe.result).toEqual({ visible: 'undefined', escape: 'n/a' })
+  })
+
+  it('a program larger than 256 KiB is refused before spawning', async () => {
+    let spawned = 0
+    const rt = createPtcProgramRuntime({ spawn: (): ProgramChild => { spawned += 1; throw new Error('must not spawn') } })
+    await expect(rt.execute('x'.repeat(PTC_MAX_PROGRAM_BYTES + 1), bridge)).rejects.toMatchObject({ code: 'policy' })
+    expect(spawned).toBe(0)
   })
 
   it('context-realm constructor chains and dynamic import are refused in the child', async () => {

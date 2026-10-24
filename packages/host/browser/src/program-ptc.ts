@@ -38,6 +38,8 @@ export const PTC_MAX_LINE_BYTES = 1024 * 1024
 export const PTC_MAX_CONSOLE_BYTES = 64 * 1024
 /** Bridge result size cap (screenshot base64 must NOT cross this as a helper result). */
 export const PTC_MAX_RESULT_BYTES = 4 * 1024 * 1024
+/** Maximum program source size (256 KiB): the program travels over stdin, not argv. */
+export const PTC_MAX_PROGRAM_BYTES = 256 * 1024
 
 export interface PtcRuntimeOptions {
   /** Start one isolated process (host wired; one per run, never shared). */
@@ -57,10 +59,14 @@ export function createPtcProgramRuntime(options: PtcRuntimeOptions): ProgramRunt
       // An already-aborted signal must not spawn a process that would run to the
       // deadline (addEventListener never fires for an already-aborted signal).
       if (execOptions?.signal?.aborted === true) throw Object.assign(new Error('browser_run: cancelled'), { code: 'interrupted' })
+      if (Buffer.byteLength(program, 'utf8') > PTC_MAX_PROGRAM_BYTES) {
+        throw Object.assign(new Error('browser_run: the program is larger than 256 KiB'), { code: 'policy' })
+      }
       const spawned = options.spawn(program)
       const child = spawned
       const stdin = child.stdin
       const stdout = child.stdout
+      if (stdin !== null) stdin.write(`${JSON.stringify({ type: 'program', program })}\n`)
       if (stdin === null || stdout === null) {
         void child.kill()
         throw new Error('browser_run: the program runtime did not expose a stdin/stdout bridge')

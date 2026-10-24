@@ -74,6 +74,10 @@ process.stdin.on('data', (chunk) => {
     if (line.trim() === '') continue;
     let message;
     try { message = JSON.parse(line); } catch { continue; }
+    if (message.type === 'program' && typeof message.program === 'string') {
+      void executeProgram(message.program);
+      continue;
+    }
     const item = pending.get(message.id);
     if (item === undefined) continue;
     pending.delete(message.id);
@@ -87,17 +91,17 @@ process.stdin.on('data', (chunk) => {
   }
 });
 process.stdin.on('end', () => { write({ type: 'error', message: 'browser_run: the host closed the bridge' }); });
-// With node -e, the program is the FIRST user argument (argv[1]).
-const program = process.argv[1] ?? '';
-(async () => {
+// The program arrives as the FIRST stdin line (never argv: argv is visible in
+// ps and bounded by ARG_MAX). Everything else on stdin is a bridge response.
+const executeProgram = async (source) => {
   try {
-    const value = await vm.runInContext('(async () => {\\n' + program + '\\n})()', context, { timeout: 120000, displayErrors: false });
+    const value = await vm.runInContext('(async () => {' + String.fromCharCode(10) + source + String.fromCharCode(10) + '})()', context, { timeout: 120000, displayErrors: false });
     write({ type: 'result', result: value === undefined ? null : value });
   } catch (cause) {
     let message = 'program failed';
     try { message = cause instanceof Error ? cause.message : String(cause); } catch { /* keep default */ }
     write({ type: 'error', message });
   }
-})();
+};
 `
 }

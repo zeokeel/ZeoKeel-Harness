@@ -9,6 +9,7 @@
  * @module @zeokeel/dsh-browser
  */
 
+import { jsonForPage } from './page-code.ts'
 import {
   BROWSER_TOOL_TIMEOUT_MS,
   FRAME_CONTEXT_WAIT_MS,
@@ -6888,7 +6889,7 @@ const FETCH_TIMEOUT_MS = 10_000
  * helper is only injected when the selector actually uses `>>>`, so the default
  * expressions stay byte-identical (existing assertion helpers recognise them). */
 export function querySnippet(selector: string): string {
-  const json = JSON.stringify(String(selector))
+  const json = jsonForPage(String(selector))
   return /[ \t]{0,16}>>>[ \t]{0,16}/.test(String(selector))
     ? `${SHADOW_QUERY_SOURCE}\nconst el = __query(${json});`
     : `const el = document.querySelector(${json});`

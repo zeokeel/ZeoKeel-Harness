@@ -21,6 +21,7 @@ import { BrowserStore } from '../src/store.ts'
 import { applyBrowserTools } from '../src/tools.ts'
 import type { ElectronAdapter, NativeBounds, NativeSession, NativeView } from '../src/electron-adapter.ts'
 import type { CdpTransport } from '../src/cdp.ts'
+import { ALL_TOOL_GROUPS } from './helpers/all-groups.ts'
 
 // ------------------------------------------------------------------ mocks
 
@@ -260,7 +261,7 @@ describe('P0-A 快照不得回传注入的凭证密码', () => {
       tools: { register: (definition: { name: string }) => { tools.set(definition.name, definition as never); return () => tools.delete(definition.name) } },
       systemPrompt: { section: () => () => {} },
     } as unknown as Parameters<typeof applyBrowserTools>[0]
-    const dispose = applyBrowserTools(ctx, runtime)
+    const dispose = applyBrowserTools(ctx, runtime, ALL_TOOL_GROUPS)
     const exec = { agent: undefined, signal: new AbortController().signal }
 
     const fill = tools.get('browser_fill_credentials')!
@@ -349,7 +350,7 @@ describe('FIX-03 / R-4 注入过的凭证不得被读回模型', () => {
       tools: { register: (definition: { name: string }) => { tools.set(definition.name, definition as never); return () => tools.delete(definition.name) } },
       systemPrompt: { section: () => () => {} },
     } as unknown as Parameters<typeof applyBrowserTools>[0]
-    const dispose = applyBrowserTools(ctx, runtime)
+    const dispose = applyBrowserTools(ctx, runtime, ALL_TOOL_GROUPS)
     const exec = { agent: undefined, signal: new AbortController().signal }
 
     await tools.get('browser_fill_credentials')!.execute({ connectorId: 'corp-sso' }, exec)

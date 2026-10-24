@@ -38,7 +38,7 @@ import { DEFAULT_GROUPS, applyBrowserTools, parseToolGroups } from '../src/tools
 const PRODUCTION_CONFIG = { appOriginScheme: 'zeokeel-app' } as const
 
 /** 工具面大小（2026-10-23 实测 32 = `tools.ts` 的 `GROUP_OF` 键数；新增 browser_dialog）。 */
-const TOOL_COUNT = 40
+const TOOL_COUNT = 24
 
 /** 用真的 `applyBrowserTools` 收集"会被注册进模型工具面"的工具名（能力断言）。 */
 function registeredTools(groups: ReadonlySet<string>): string[] {
@@ -57,7 +57,7 @@ function normalizedToolGroups(input: Record<string, unknown>): string[] | undefi
 }
 
 describe('R22 V6 F1：生产装配形态（缺键经 schema）必须注册全部浏览器工具', () => {
-  it('Config({}) ⇒ 缺键不得被物化成 []，注册面 = 全开 40 个', () => {
+  it('Config({}) ⇒ 缺键不得被物化成 []，注册面 = 默认 24 个', () => {
     const groups = normalizedToolGroups({})
     // 第一层：schema 层。缺键被物化成 `[]` 就是本 P0 的成因。
     expect(groups).not.toEqual([])
@@ -69,12 +69,12 @@ describe('R22 V6 F1：生产装配形态（缺键经 schema）必须注册全部
     expect(registered).toContain('browser_eval')
   })
 
-  it('Config({ appOriginScheme })（生产 profile 的真实形态）⇒ 注册 40 个工具', () => {
+  it('Config({ appOriginScheme })（生产 profile 的真实形态）⇒ 注册 24 个工具', () => {
     const groups = normalizedToolGroups({ ...PRODUCTION_CONFIG })
     expect(registeredTools(parseToolGroups(groups))).toHaveLength(TOOL_COUNT)
   })
 
-  it('真 cordis：ctx.plugin 把 schema 归一化后的 config 交给 apply ⇒ 注册 40 个（端到端装配面）', async () => {
+  it('真 cordis：ctx.plugin 把 schema 归一化后的 config 交给 apply ⇒ 注册 24 个（端到端装配面）', async () => {
     const registered: string[] = []
     const seen: Array<string[] | undefined> = []
     const plugin = {

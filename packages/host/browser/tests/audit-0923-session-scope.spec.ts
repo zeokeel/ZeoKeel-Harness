@@ -261,7 +261,7 @@ describe('BR-2 渲染进程崩溃必须有界（2026-09-23 审计）', () => {
     // 第一次立即重载 + 一次退避重载 + 一条终态记录（不是无界刷屏）。
     expect(crashOps.length).toBeLessThanOrEqual(3)
     expect(crashOps.at(-1)?.summary).toContain('automatic reload stopped')
-    expect(crashOps.at(-1)?.summary).toContain('browser_reload')
+    expect(crashOps.at(-1)?.summary).toContain('browser_navigate (direction: reload)')
     expect(crashOps.at(-1)?.failed).toBe(true)
     // 终态对模型可见（browser_list_tabs 的 crashed 列）。
     expect(h.runtime.tabState(1).crashed).toBe(true)

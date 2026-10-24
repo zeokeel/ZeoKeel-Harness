@@ -959,7 +959,7 @@ export class BrowserStore {
     const { status: statusOverride, ...rest } = entry
     // R-1 (2026-09-13): `url` was the only redacted field. `fileName` comes
     // from `Content-Disposition`/the URL basename and `path` embeds that name,
-    // so a signed download URL reached `browser_downloads_list` — and the disk
+    // so a signed download URL reached `browser_download` (action: list) — and the disk
     // — in cleartext beside a `****` url. Same text-level redactor, at the
     // write path, so every reader (tool exit, shell panel, JSONL) agrees.
     const url = stripSensitiveUrl(entry.url)
@@ -973,7 +973,7 @@ export class BrowserStore {
     // hands back the DECODED name while `getURL()` keeps the escaping, so
     // `…/report%2DDLTOK1.zip` + name `report-DLTOK1.zip` made the old
     // `entry.url.includes(fileName)` false and the credential reached
-    // `browser_downloads_list` right next to a `token=****` url.
+    // `browser_download` (action: list) right next to a `token=****` url.
     //
     // `path` deliberately stays truthful: it is the handle `downloads_open`
     // and the file tools use to reach a real file on disk, and the same name is

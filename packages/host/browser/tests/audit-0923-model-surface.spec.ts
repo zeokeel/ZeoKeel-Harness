@@ -109,7 +109,7 @@ describe('CP-1 browser_list_tabs 的 render 与 JSON 出口同构（2026-09-23 �
     })
     const text = render(tool, await tool.execute({}, exec))
     expect(text).toContain('crashed')
-    expect(text).toContain('browser_reload')
+    expect(text).toContain('browser_navigate')
   })
 })
 

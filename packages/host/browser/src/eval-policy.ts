@@ -287,10 +287,10 @@ function destructiveMemberReason(segments: readonly string[] | undefined, name: 
     if ((lower === 'location' || lower === 'history') && global) {
       return lower === 'location'
         ? 'assigning to location is not allowed — use browser_navigate (the navigation policy is not bypassed by eval)'
-        : 'assigning to history is not allowed — use browser_go_back / browser_navigate'
+        : 'assigning to history is not allowed — use browser_navigate (direction: back)'
     }
     if (global && receiverMatches(segments, NAV_RECEIVERS)) return 'assigning to location is not allowed — use browser_navigate (the navigation policy is not bypassed by eval)'
-    if (global && receiverMatches(segments, HISTORY_RECEIVERS)) return 'assigning to history is not allowed — use browser_go_back / browser_navigate'
+    if (global && receiverMatches(segments, HISTORY_RECEIVERS)) return 'assigning to history is not allowed — use browser_navigate (direction: back)'
     if (global && receiverMatches(segments, STORAGE_RECEIVERS)) return 'writing localStorage/sessionStorage is not allowed'
     return null
   }
@@ -299,7 +299,7 @@ function destructiveMemberReason(segments: readonly string[] | undefined, name: 
     return `document.${name}() is not allowed — it replaces or destroys the page; use browser_navigate and browser_get_snapshot instead`
   }
   if (global && NAV_CALLS.has(lower) && receiverMatches(segments, NAV_RECEIVERS)) return `location.${name}() is not allowed — use browser_navigate`
-  if (global && HISTORY_CALLS.has(lower) && receiverMatches(segments, HISTORY_RECEIVERS)) return `history.${name}() is not allowed — use browser_go_back / browser_navigate`
+  if (global && HISTORY_CALLS.has(lower) && receiverMatches(segments, HISTORY_RECEIVERS)) return `history.${name}() is not allowed — use browser_navigate (direction: back)`
   if (global && STORAGE_CALLS.has(lower) && receiverMatches(segments, STORAGE_RECEIVERS)) return `${name}() on localStorage/sessionStorage is not allowed`
   return null
 }
@@ -419,10 +419,10 @@ function destructiveGlobalIdentifier(node: AnyNode | undefined, aliases: AliasMa
   const name = (node as { name?: string }).name
   if (name === undefined) return null
   if (aliases.location.has(name)) return 'assigning to location is not allowed — use browser_navigate (the navigation policy is not bypassed by eval)'
-  if (aliases.history.has(name)) return 'assigning to history is not allowed — use browser_go_back / browser_navigate'
+  if (aliases.history.has(name)) return 'assigning to history is not allowed — use browser_navigate (direction: back)'
   if (aliases.storage.has(name)) return 'writing localStorage/sessionStorage is not allowed'
   if (name === 'location') return 'assigning to location is not allowed — use browser_navigate (the navigation policy is not bypassed by eval)'
-  if (name === 'history') return 'assigning to history is not allowed — use browser_go_back / browser_navigate'
+  if (name === 'history') return 'assigning to history is not allowed — use browser_navigate (direction: back)'
   if (name === 'localStorage' || name === 'sessionStorage') return `writing ${name} is not allowed`
   if (name === 'document') return 'mutating the document object is not allowed'
   return null

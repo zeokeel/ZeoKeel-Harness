@@ -38,6 +38,7 @@
 | [内置浏览器拦截全量清单](planning/2026-10-23-browser-gate-inventory.md) | 52 项可勾选的拦截/限流/脱敏清单：现状、关掉后果、风险与建议 |
 | [浏览器锁序表（D1）](planning/2026-10-23-browser-lock-order.md) | 锁清单/方向/接管/关闭与变异点 |
 | [浏览器编程模式 browser_run 设计](planning/2026-10-23-browser-run-design.md) | 执行隔离、helper=现有能力复用、预算、数据出口、失败模式与必红变异 |
+[内置浏览器工具面收敛](planning/2026-10-24-browser-tool-surface-trim.md)
 | [浏览器 iframe/shadow/截图/fetch/模拟设计](planning/2026-10-23-browser-frames-emulation-plan.md) | C16/B4/B5/C10/C12/C15 的方案、边界与反证清单 |
 | [浏览器指针/键盘/剪贴板/滚动设计](planning/2026-10-23-browser-pointer-keyboard-plan.md) | C5–C8 工具面、CDP 映射、预算与反证清单 |
 | [浏览器对话框/弹窗/文件/下载设计](planning/2026-10-23-browser-dialogs-popups-plan.md) | C1–C4 事件接线、先布防再动作的回执语义、预算序关系与反证清单 |

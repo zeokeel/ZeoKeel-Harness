@@ -343,7 +343,6 @@ describe('应用窗口 surface 的落点（§16.1）', () => {
       'browser_eval',
       'browser_wait_for',
       'browser_close_tab',
-      'browser_reload',
     ]
     for (const name of others) {
       const error = await failure(harness.call(name, { app_id: 'notes', target: 1, expression: '1', condition: 'settled' }))

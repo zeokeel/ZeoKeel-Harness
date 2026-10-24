@@ -101,7 +101,7 @@ export function createAttachmentStoreAdapter(store: {
         throw new Error('browser_run: the screenshot payload is not a base64 data URL')
       }
       const bytes = Uint8Array.from(Buffer.from(encoded, 'base64'))
-      const refs = await store.saveImages([{ data: bytes, mediaType: meta.mimeType as never, name: meta.fileName }])
+      const refs = await store.saveImages([{ data: bytes, mediaType: meta.mimeType, name: meta.fileName }])
       const first = refs[0]
       if (first === undefined) throw new Error('browser_run: the attachment store returned no reference')
       return `attachment:${String(first.attachmentId)}`

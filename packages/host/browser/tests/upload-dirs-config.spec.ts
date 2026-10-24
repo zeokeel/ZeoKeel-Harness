@@ -49,4 +49,13 @@ describe('Config.uploadDirs', () => {
     expect(ref).not.toContain('base64')
     expect(saved[0]).toMatchObject({ bytes: 3, mediaType: 'image/png', name: 'shot.png' })
   })
+
+  it('attachment adapter rejects non-data-url payloads', async () => {
+    const adapter = createAttachmentStoreAdapter({ saveImages: async () => [{ attachmentId: 'x' }] })
+    const meta = { fileName: 'shot.png', mimeType: 'image/png' }
+    await expect(adapter.store('https://a.example/x.png', meta)).rejects.toThrow(/base64 data URL/u)
+    await expect(adapter.store('data:image/png,QUJD', meta)).rejects.toThrow(/base64 data URL/u)
+    await expect(adapter.store('data:image/png;base64,', meta)).rejects.toThrow(/base64 data URL/u)
+    await expect(adapter.store('data:image/png;base64,@@@', meta)).rejects.toThrow(/base64 data URL/u)
+  })
 })

@@ -4681,7 +4681,7 @@ export class BrowserRuntime {
       const tab = this.tab(resolved)
       // Shadow-piercing ('>>>') is used ONLY when the selector asks for it: the
       // default path stays byte-identical to the pre-2026-10-23 expression.
-      const shadowPiercing = /\s*>>>\s*/.test(String(selector))
+      const shadowPiercing = /[ \t]{0,16}>>>[ \t]{0,16}/.test(String(selector))
       const expression = shadowPiercing
         ? `
           (() => {
@@ -6889,7 +6889,7 @@ const FETCH_TIMEOUT_MS = 10_000
  * expressions stay byte-identical (existing assertion helpers recognise them). */
 export function querySnippet(selector: string): string {
   const json = JSON.stringify(String(selector))
-  return /\s*>>>\s*/.test(String(selector))
+  return /[ \t]{0,16}>>>[ \t]{0,16}/.test(String(selector))
     ? `${SHADOW_QUERY_SOURCE}\nconst el = __query(${json});`
     : `const el = document.querySelector(${json});`
 }

@@ -650,7 +650,7 @@ export async function extractTextWithMeta(
 ): Promise<TextExtraction> {
   const expression = selector === undefined || selector.trim() === ''
     ? `(document.body ? document.body.innerText : '')`
-    : (/\s*>>>\s*/.test(String(selector))
+    : (/[ \t]{0,16}>>>[ \t]{0,16}/.test(String(selector))
       ? `(() => { ${TEXT_SHADOW_QUERY} const el = __query(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`
       : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`)
 

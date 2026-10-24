@@ -52,7 +52,7 @@ function unquote(raw: string): [string, boolean] {
 
 /** Parse a `role=<role>[name="…"]` body (also used after `loc=role:`). */
 function parseRoleSpec(body: string): TargetSpec {
-  const match = /^([A-Za-z][\w-]*)\s*(?:\[\s*name\s*(\*=|=)\s*("[^"]*"|'[^']*'|[^\]]+?)\s*\])?\s*$/u.exec(body)
+  const match = /^([A-Za-z][\w-]*)[ \t]{0,16}(?:\[[ \t]{0,16}name[ \t]{0,16}(\*=|=)[ \t]{0,16}("[^"]{0,200}"|'[^']{0,200}'|[^\]]{1,200})[ \t]{0,16}\])?[ \t]{0,16}$/u.exec(body)
   if (match === null) {
     throw browserError('policy', `browser: invalid role locator ${JSON.stringify(body)} — expected role=button or role=button[name="Sign in"]`)
   }

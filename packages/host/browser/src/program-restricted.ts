@@ -10,6 +10,11 @@
  * reach the context's Function, whose string constructor is disabled by
  * `codeGeneration`.
  *
+ * TIMEOUT SPLIT: the vm `timeout` only bounds SYNCHRONOUS execution; an async
+ * program (await loops) is bounded by the caller's deadline/abort in
+ * `runProgram` (`PROGRAM_SCRIPT_BUDGET_MS`, per-op controller). Both layers are
+ * required — neither replaces the other.
+ *
  * HONEST BOUNDARY: `vm` is not an OS-level sandbox. The capability promise is a
  * PRODUCT boundary built from: separate process, no fs/net/process objects, a
  * context-realm bridge, disabled code generation, a hard deadline, and the fact
@@ -67,12 +72,29 @@ export function createRestrictedExecutor(
           const value = await invoke(kind, Array.isArray(args) ? args : [])
           return JSON.stringify({ value: value === undefined ? null : value })
         } catch (cause) {
-          const error = cause as { code?: unknown, message?: unknown }
-          return JSON.stringify({
-            __error: true,
-            code: typeof error.code === 'string' ? error.code : 'error',
-            message: typeof error.message === 'string' ? error.message : String(cause),
-          })
+          // Build the envelope from PRIMITIVES only: a hostile thrown value may
+          // have a throwing getter/toString, so every read is guarded and the
+          // envelope can never carry a host object.
+          const readString = (value: unknown, fallback: string): string => {
+            try {
+              return typeof value === 'string' ? value : fallback
+            } catch {
+              return fallback
+            }
+          }
+          let code = 'error'
+          let message = 'unknown error'
+          try {
+            const error = cause as { code?: unknown, message?: unknown }
+            code = readString(error?.code, 'error')
+            message = readString(error?.message, 'unknown error')
+            if (message === 'unknown error') {
+              try { message = String(cause) } catch { message = 'unknown error' }
+            }
+          } catch {
+            // ignore: the envelope must still be a primitive-only string
+          }
+          return JSON.stringify({ __error: true, code, message })
         }
       }
       const bootstrap = `(() => {

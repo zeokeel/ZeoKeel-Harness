@@ -4,21 +4,23 @@
  * able to terminate its string or smuggle a script terminator.
  */
 import { describe, expect, it } from 'vitest'
-import { escapeUnsafeChars, jsonForPage } from '../src/page-code.ts'
+import { jsonForPage } from '../src/page-code.ts'
 
 describe('page literals', () => {
-  it('escapes script terminators, quotes-adjacent control chars and U+2028/9', () => {
-    expect(escapeUnsafeChars('</script>')).toBe('\\u003C/script\\u003E')
-    expect(escapeUnsafeChars('a\nb\tc')).toBe('a\\nb\\tc')
-    expect(escapeUnsafeChars('x\u2028y\u2029z')).toBe('x\\u2028y\\u2029z')
-    expect(escapeUnsafeChars('plain selectors stay readable')).toBe('plain selectors stay readable')
+  it('escapes terminators, quotes, backslashes and line separators', () => {
+    expect(jsonForPage('</script>')).toBe('"\\u003C\\u002Fscript\\u003E"')
+    expect(jsonForPage('a"b')).toBe('"a\\u0022b"')
+    expect(jsonForPage('a\\b')).toBe('"a\\u005cb"')
+    expect(jsonForPage('a\nb')).toBe('"a\\u000ab"')
+    expect(jsonForPage('x\u2028y')).toBe('"x\\u2028y"')
+    expect(jsonForPage('plain selectors stay readable')).toBe('"plain selectors stay readable"')
+    expect(jsonForPage('#a.b > c')).toBe('"#a.b \\u003E c"')
   })
 
-  it('serializes a selector to a safe JS literal', () => {
-    expect(jsonForPage('#a')).toBe(JSON.stringify('#a'))
-    const literal = jsonForPage('div[title="</script>"]')
-    expect(literal).not.toContain('</script>')
-    expect(literal.startsWith('"')).toBe(true)
-    expect(JSON.parse(literal.replace(/\\u003C/g, '<').replace(/\\u003E/g, '>'))).toBe('div[title="</script>"]')
+  it('round-trips arbitrary values through a JS literal parse', () => {
+    for (const value of ['#a', 'div[title="</script>"]', 'a\\b', 'x\u2028y', '${danger}', '`tick`']) {
+      // JSON.parse accepts the literal; JSON is a subset of JS literal syntax here.
+      expect(JSON.parse(jsonForPage(value))).toBe(value)
+    }
   })
 })

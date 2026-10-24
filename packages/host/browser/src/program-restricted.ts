@@ -1,45 +1,27 @@
 /**
  * Restricted program executor (user decision **B**, 2026-10-23).
  *
- * `browser_run` promises **no filesystem / network / process**. Upstream
- * `ctx.ptcRuntime` cannot provide that (its Node backend leaves ambient Node APIs
- * reachable), so this module runs the script inside `vm` with a context that
- * contains ONLY the bridge helpers and a minimal console. The child-process
- * bootstrap (program-ptc.ts protocol) uses the same context constructor.
+ * `browser_run` promises **no filesystem / network / process**. The program runs
+ * in a `vm` context whose globals are created INSIDE that context: the bridge
+ * (`browser`) and `console` are context-realm objects whose methods close over a
+ * single host callback that is deleted from the global scope right after
+ * bootstrap. No host function/object is reachable from the program, so
+ * `browser.method.constructor` / `console.log.constructor` / prototype walks all
+ * reach the context's Function, whose string constructor is disabled by
+ * `codeGeneration`.
  *
- * HONEST BOUNDARY: a `vm` context is not an OS-level sandbox. What this does and
- * does not guarantee is documented in
- * `docs/planning/2026-10-23-browser-run-design.md`; the capability promise relies
- * on (a) never passing fs/net/process objects, (b) a strict static denylist, and
- * (c) running the code in a separate process so a crash/escape cannot reach the
- * host's memory directly. This is a product boundary, not a security boundary
- * against a hostile local operator.
+ * HONEST BOUNDARY: `vm` is not an OS-level sandbox. The capability promise is a
+ * PRODUCT boundary built from: separate process, no fs/net/process objects, a
+ * context-realm bridge, disabled code generation, a hard deadline, and the fact
+ * that a local operator who can run code as this user can already run Node.
+ * See `docs/planning/2026-10-23-browser-run-design.md`.
  * @module @zeokeel/dsh-browser
  */
 
 import { createContext, runInContext } from 'node:vm'
 
-/** Names refused anywhere in a program (capability promise). */
-export const PROGRAM_DENIED_IDENTIFIERS: readonly string[] = [
-  'require', 'process', 'fetch', 'XMLHttpRequest', 'WebSocket',
-  'child_process', 'fs', 'net', 'http', 'https', 'dns', 'import',
-  'globalThis', 'global', 'module', 'exports', '__dirname', '__filename',
-]
-
-/**
- * Refuse a program that references a denied identifier as a WORD (not inside a
- * string/comment is not attempted: this is a second layer, the vm context is the
- * first, and the honest boundary note above applies).
- * @param program - script source.
- */
-export function assertProgramAllowed(program: string): void {
-  for (const name of PROGRAM_DENIED_IDENTIFIERS) {
-    const pattern = new RegExp(`(^|[^\\w$])${name}([^\\w$]|$)`, 'u')
-    if (pattern.test(program)) {
-      throw new Error(`browser_run: the program references a forbidden capability (${name}) — only the browser helpers are available`)
-    }
-  }
-}
+/** One helper call that escapes to the host. */
+export type RestrictedInvoke = (helper: string, args: unknown[]) => Promise<unknown>
 
 /** Console lines captured from the program. */
 export interface RestrictedRunResult {
@@ -47,29 +29,57 @@ export interface RestrictedRunResult {
   readonly console: string
 }
 
+/** A sandbox with a bootstrapped bridge. */
+export interface RestrictedExecutor {
+  run(program: string): Promise<RestrictedRunResult>
+}
+
 /**
- * Run a program in the restricted context.
- * @param program - script source (function body with top-level await/return).
- * @param bridge - the frozen browser helper object.
- * @returns the completion value and captured console text.
+ * Build a restricted executor for the given helper names.
+ * @param names - bridge method names (the program's only capability).
+ * @param invoke - host callback the context-realm methods call.
+ * @param timeoutMs - synchronous-execution cap (async work is bounded by the caller).
+ * @returns an executor whose `run` evaluates one program.
  */
-export async function runRestrictedProgram(
-  program: string,
-  bridge: Readonly<Record<string, unknown>>,
-): Promise<RestrictedRunResult> {
-  assertProgramAllowed(program)
-  const logs: string[] = []
-  const record = (level: string) => (...args: unknown[]) => {
-    logs.push(`${level}: ${args.map(value => (typeof value === 'string' ? value : JSON.stringify(value))).join(' ')}`)
+export function createRestrictedExecutor(
+  names: readonly string[],
+  invoke: RestrictedInvoke,
+  timeoutMs = 120_000,
+): RestrictedExecutor {
+  return {
+    async run(program: string): Promise<RestrictedRunResult> {
+      const logs: string[] = []
+      const context = createContext(Object.create(null), {
+        codeGeneration: { strings: false, wasm: false },
+      })
+      const sandbox = context as unknown as Record<string, unknown>
+      // The ONE host reference ever placed in the context. It is deleted from the
+      // global scope by the bootstrap below before any user code can run; the
+      // context-realm closures keep the only remaining reference.
+      sandbox['__hostInvoke'] = (helper: string, args: unknown[], level?: string): Promise<unknown> => {
+        if (level !== undefined) {
+          logs.push(`${level}: ${args.map(value => (typeof value === 'string' ? value : JSON.stringify(value))).join(' ')}`)
+          return Promise.resolve(undefined)
+        }
+        return invoke(helper, args)
+      }
+      const bootstrap = `(() => {
+        const host = globalThis['__hostInvoke'];
+        delete globalThis['__hostInvoke'];
+        const log = (level) => (...args) => { void host('__console__', args, level); };
+        const consoleObj = Object.freeze({ log: log('log'), error: log('error'), warn: log('warn'), info: log('info') });
+        const browser = {};
+        for (const name of ${JSON.stringify(names)}) {
+          browser[name] = (...args) => host(name, args);
+        }
+        Object.freeze(browser);
+        Object.defineProperty(globalThis, 'browser', { value: browser, enumerable: false, configurable: false, writable: false });
+        Object.defineProperty(globalThis, 'console', { value: consoleObj, enumerable: false, configurable: false, writable: false });
+      })()`
+      runInContext(bootstrap, context, { timeout: 1_000, displayErrors: true })
+      const source = `(async () => {\n${program}\n})()`
+      const value = await runInContext(source, context, { timeout: timeoutMs, displayErrors: false })
+      return { result: value === undefined ? null : value, console: logs.join('\n') }
+    },
   }
-  // No eval/Function compilation inside the program's realm: the classic
-  // `({}).constructor.constructor('return process')()` vm escape needs it.
-  const context = createContext(Object.create(null), { codeGeneration: { strings: false, wasm: false } })
-  // Only these three globals exist in the program's world.
-  const sandbox = context as unknown as Record<string, unknown>
-  sandbox['browser'] = bridge
-  sandbox['console'] = { log: record('log'), error: record('error'), warn: record('warn'), info: record('info') }
-  const source = `(async () => {\n${program}\n})()`
-  const value = await runInContext(source, context, { timeout: 120_000, displayErrors: false })
-  return { result: value === undefined ? null : value, console: logs.join('\n') }
 }

@@ -7,6 +7,7 @@
  * @module @zeokeel/dsh-browser
  */
 
+import { jsonForPage } from './page-code.ts'
 import type { BrowserSnapshotElement } from './types.ts'
 
 /** Default cap on snapshot entries per call (2026-10-23 capability unlock: was 200). */
@@ -651,8 +652,8 @@ export async function extractTextWithMeta(
   const expression = selector === undefined || selector.trim() === ''
     ? `(document.body ? document.body.innerText : '')`
     : (/[ \t]{0,16}>>>[ \t]{0,16}/.test(String(selector))
-      ? `(() => { ${TEXT_SHADOW_QUERY} const el = __query(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`
-      : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`)
+      ? `(() => { ${TEXT_SHADOW_QUERY} const el = __query(${jsonForPage(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`
+      : `(() => { const el = document.querySelector(${jsonForPage(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`)
 
   const result = await send<{ result?: { value?: unknown }, exceptionDetails?: unknown }>('Runtime.evaluate', {
     expression,

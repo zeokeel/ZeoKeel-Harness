@@ -92,6 +92,8 @@ jobs:
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
+          # Vendored third-party parsers are excluded (see the config's header).
+          config-file: ./.github/codeql/codeql-config.yml
 
       - if: matrix.language == 'go'
         uses: github/codeql-action/autobuild@v4

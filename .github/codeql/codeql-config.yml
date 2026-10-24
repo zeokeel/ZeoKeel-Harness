@@ -1,0 +1,10 @@
+# CodeQL configuration (2026-10-23).
+#
+# Vendored third-party parsers are excluded from analysis: `vendor/acorn.cjs` is a
+# byte-for-byte copy of the Acorn parser used as the AST validator for
+# `browser_eval` (vendored deliberately so the validation layer cannot be swapped
+# by a dependency resolution). Its internals are upstream code, not ours; scanning
+# them produced ReDoS advisories that cannot be fixed without forking the parser.
+name: dsh-codeql
+paths-ignore:
+  - 'packages/host/browser/src/vendor/**'

@@ -17,7 +17,7 @@ describe('restricted executor', () => {
     const invoke = vi.fn(async (helper: string) => (helper === 'tick' ? 42 : 'ok'))
     const outcome = await executor(invoke).run('console.log("hi"); const value = await browser.tick(); return { value }')
     expect(outcome.result).toEqual({ value: 42 })
-    expect(outcome.console).toContain('log: hi')
+    expect(outcome.console).toContain('"hi"')
     expect(invoke).toHaveBeenCalledWith('tick', [])
   })
 
@@ -37,6 +37,28 @@ describe('restricted executor', () => {
     const probe = await executor().run(`const p = 'pro' + 'cess'; const f = 'fet' + 'ch'; const r = 're' + 'quire';
       return { proc: typeof globalThis[p], fetch: typeof globalThis[f], require: typeof globalThis[r], version: typeof globalThis[p]?.version }`)
     expect(probe.result).toEqual({ proc: 'undefined', fetch: 'undefined', require: 'undefined', version: 'undefined' })
+  })
+
+  it('host values cross the bridge as JSON only (context-realm objects and errors)', async () => {
+    const invoke = async (helper: string): Promise<unknown> => {
+      if (helper === 'tick') return { nested: { ok: [1, 2, 3] }, text: 'x' }
+      throw Object.assign(new Error('host said no'), { code: 'policy' })
+    }
+    const ex = executor(invoke)
+    // 1) a returned host object becomes a context object: its constructor chain
+    //    cannot build code.
+    await expect(ex.run('const obj = await browser.tick(); return obj.constructor.constructor("return 1")()'))
+      .rejects.toThrow(/Code generation from strings disallowed/u)
+    // 2) JSON round trip keeps real data.
+    const data = await ex.run('const obj = await browser.tick(); return obj.nested.ok.length + obj.nested.ok[2]')
+    expect(data.result).toBe(6)
+    // 3) a rejected helper becomes a context Error with its code, and that Error's
+    //    constructor chain is also the context one.
+    const caught = ex.run(`try { await browser.open() } catch (error) { error.codeSeen = error.code; error.escape = String(error.constructor.constructor("return 1")()) } return 1`)
+    await expect(caught).rejects.toThrow(/Code generation from strings disallowed/u)
+    // 4) the same through .then
+    await expect(ex.run('return browser.tick().then(obj => obj.constructor.constructor("return 1")())'))
+      .rejects.toThrow(/Code generation from strings disallowed/u)
   })
 
   it('dynamic import without a module callback is refused', async () => {

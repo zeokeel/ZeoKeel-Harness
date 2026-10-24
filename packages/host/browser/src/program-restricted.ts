@@ -53,24 +53,48 @@ export function createRestrictedExecutor(
         codeGeneration: { strings: false, wasm: false },
       })
       const sandbox = context as unknown as Record<string, unknown>
-      // The ONE host reference ever placed in the context. It is deleted from the
-      // global scope by the bootstrap below before any user code can run; the
-      // context-realm closures keep the only remaining reference.
-      sandbox['__hostInvoke'] = (helper: string, args: unknown[], level?: string): Promise<unknown> => {
-        if (level !== undefined) {
-          logs.push(`${level}: ${args.map(value => (typeof value === 'string' ? value : JSON.stringify(value))).join(' ')}`)
-          return Promise.resolve(undefined)
+      // The ONE host reference placed in the context. Every value crossing it is a
+      // JSON STRING: host objects/errors can never reach the program's realm, so
+      // `result.constructor.constructor` and caught-error prototype walks stay in
+      // the context realm (see the tests).
+      sandbox['__hostInvoke'] = async (kind: string, payload: string, level?: string): Promise<string> => {
+        if (kind === '__console__') {
+          logs.push(`${level ?? 'log'}: ${payload}`)
+          return 'null'
         }
-        return invoke(helper, args)
+        try {
+          const args = JSON.parse(payload) as unknown[]
+          const value = await invoke(kind, Array.isArray(args) ? args : [])
+          return JSON.stringify({ value: value === undefined ? null : value })
+        } catch (cause) {
+          const error = cause as { code?: unknown, message?: unknown }
+          return JSON.stringify({
+            __error: true,
+            code: typeof error.code === 'string' ? error.code : 'error',
+            message: typeof error.message === 'string' ? error.message : String(cause),
+          })
+        }
       }
       const bootstrap = `(() => {
         const host = globalThis['__hostInvoke'];
         delete globalThis['__hostInvoke'];
-        const log = (level) => (...args) => { void host('__console__', args, level); };
+        const serialize = (value) => {
+          try { return JSON.stringify(value); } catch { return '"<unserializable>"'; }
+        };
+        const log = (level) => (...args) => { void host('__console__', args.map(serialize).join(' '), level); };
         const consoleObj = Object.freeze({ log: log('log'), error: log('error'), warn: log('warn'), info: log('info') });
         const browser = {};
         for (const name of ${JSON.stringify(names)}) {
-          browser[name] = (...args) => host(name, args);
+          browser[name] = async (...args) => {
+            const raw = await host(name, JSON.stringify(args.length === 0 ? [] : args));
+            const envelope = JSON.parse(raw);
+            if (envelope !== null && typeof envelope === 'object' && envelope.__error === true) {
+              const error = new Error(String(envelope.message));
+              error.code = String(envelope.code);
+              throw error;
+            }
+            return envelope === null || typeof envelope !== 'object' ? null : envelope.value;
+          };
         }
         Object.freeze(browser);
         Object.defineProperty(globalThis, 'browser', { value: browser, enumerable: false, configurable: false, writable: false });

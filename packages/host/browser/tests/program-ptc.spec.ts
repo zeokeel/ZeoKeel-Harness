@@ -4,6 +4,7 @@
  * kill the process and await its exit, and helper errors travel back verbatim.
  */
 import { describe, expect, it, vi } from 'vitest'
+import { spawn as spawnProcess } from 'node:child_process'
 import { createPtcProgramRuntime, type ProgramChild } from '../src/program-ptc.ts'
 
 function fakeChild(): { child: ProgramChild, emit: (message: unknown) => void, emitRaw: (chunk: Buffer) => void, end: () => void, written: string[], killed: () => boolean, exitNow: (code?: number) => void } {
@@ -154,4 +155,34 @@ describe('createPtcProgramRuntime', () => {
     fake.emit({ type: 'result', result: 'ok' })
     await expect(pending).resolves.toMatchObject({ result: 'ok' })
   })
+})
+
+describe('real child process (R2 probe, no display needed)', () => {
+  it('abort kills the real subprocess and awaits its exit', async () => {
+    const exits: Array<Promise<number>> = []
+    const runtime = createPtcProgramRuntime({
+      spawn: (): ProgramChild => {
+        const child = spawnProcess(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: ['pipe', 'pipe', 'pipe'] })
+        const exit = new Promise<number>((resolve) => { child.on('exit', code => resolve(code ?? 0)) })
+        exits.push(exit)
+        return {
+          stdin: child.stdin,
+          stdout: child.stdout,
+          kill: () => { child.kill('SIGKILL') },
+          exit,
+        }
+      },
+    })
+    const controller = new AbortController()
+    const started = Date.now()
+    const pending = runtime.execute('sleep', {}, { signal: controller.signal })
+    await new Promise(resolve => setTimeout(resolve, 80))
+    controller.abort()
+    await expect(pending).rejects.toBeTruthy()
+    const elapsed = Date.now() - started
+    // The child must be gone (exit observed) and the whole cancellation well
+    // under a second — no zombie and no lock held.
+    await expect(exits[0]).resolves.toBeTypeOf('number')
+    expect(elapsed).toBeLessThan(1_000)
+  }, 20_000)
 })

@@ -439,6 +439,9 @@ export const Config: z<Config> = z.object({
   // Same array-materialisation trap as toolGroups: an absent array key becomes [],
   // so an operator-configured empty default is explicit here.
   uploadDirs: z.array(z.string()).default([]),
+  // Same array-materialisation trap as toolGroups; explicit default keeps the
+  // opt-in explicit (a missing key must NOT enable programming mode).
+  programEnabled: z.boolean().default(false),
   // `.default(...)` 不是装饰：Schemastery 把**缺键的数组**物化成 `[]`（标量字段缺键
   // 才是 `undefined`），而生产装配注入的 config 里根本没有这个键（见字段注释）。少了
   // 它就等于"生产形态 = 全关"（2026-09-26 R22 V6 F1 的 P0 回归）。

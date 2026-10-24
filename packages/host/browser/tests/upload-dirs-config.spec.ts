@@ -60,12 +60,36 @@ describe('Config.uploadDirs', () => {
   })
 
   it('runtime factory (the apply path) carries config and fail-louds without a program runtime', async () => {
-    const runtime = createBrowserRuntimeFor({} as never, Config({ uploadDirs: ['/tmp/vetted'], maxTabs: 5 }) as never, undefined, { partition: 'persist:test-factory', deps: {} })
+    const runtime = createBrowserRuntimeFor({} as never, Config({ uploadDirs: ['/tmp/vetted', 'relative/dir', '/'], maxTabs: 5 }) as never, '/tmp/userdata', { partition: 'persist:test-factory', deps: {} })
+    // Distinguishing inputs: raw spread would keep relative/dir and '/', and the
+    // downloads fallback would not be applied.
     expect(runtime.options.uploadDirs).toEqual(['/tmp/vetted'])
     expect(runtime.options.maxTabs).toBe(5)
+    expect(String(runtime.options.downloadDir)).toContain('downloads')
+    // Opt-in flag defaults to false through the same path.
+    expect(runtime.options.programEnabled).toBe(false)
     // No programRuntime injected -> programming mode is unavailable (fail loud),
     // and the tool would not be registered (covered in the registration tests).
     await expect(runtime.runProgram('1')).rejects.toMatchObject({ code: 'policy' })
     runtime.dispose()
+  })
+
+  it('Config defaults keep programming mode off', () => {
+    const options = runtimeOptionsForConfig(Config({}) as never, undefined) as Record<string, unknown>
+    expect(options['programEnabled']).toBe(false)
+    expect(options['uploadDirs']).toEqual([])
+  })
+
+  it('program mode needs the runtime AND the opt-in; missing attachments fail loud', async () => {
+    const fakeProgram = { execute: async (_program: string, bridge: Readonly<Record<string, (...args: never[]) => Promise<unknown>>>) => {
+      await (bridge['screenshot'] as unknown as (args: unknown) => Promise<unknown>)({})
+      return { result: null }
+    } }
+    const enabled = createBrowserRuntimeFor({} as never, Config({ programEnabled: true }) as never, undefined, { partition: 'persist:test-program-on', deps: { programRuntime: fakeProgram } })
+    expect(enabled.options.programEnabled).toBe(true)
+    // No attachments injected -> the screenshot helper refuses with policy.
+    const message = await enabled.runProgram('x').then(() => '', (error: unknown) => (error as Error).message)
+    expect(message).toContain('attachment store')
+    enabled.dispose()
   })
 })

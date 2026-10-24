@@ -82,6 +82,27 @@ interface ConnectionTrustFence {
 }
 
 /** Services required by the embedded browser. */
+/**
+ * Adapt `ctx.attachments.saveImages` to the runtime's `store(dataUrl, meta) => ref`
+ * contract. The model only ever sees an opaque reference (never base64 or a path).
+ * @param store - the host attachment store.
+ * @returns the runtime-facing adapter.
+ */
+export function createAttachmentStoreAdapter(store: {
+  saveImages(inputs: readonly { data: Uint8Array, mediaType: never, name?: string }[]): Promise<readonly { attachmentId: unknown }[]>
+}): { store(dataUrl: string, meta: { fileName: string, mimeType: string }): Promise<string> } {
+  return {
+    store: async (dataUrl: string, meta: { fileName: string, mimeType: string }): Promise<string> => {
+      const base64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl
+      const bytes = Uint8Array.from(Buffer.from(base64, 'base64'))
+      const refs = await store.saveImages([{ data: bytes, mediaType: meta.mimeType as never, name: meta.fileName }])
+      const first = refs[0]
+      if (first === undefined) throw new Error('browser_run: the attachment store returned no reference')
+      return `attachment:${String(first.attachmentId)}`
+    },
+  }
+}
+
 export const inject = ['webServer', 'tools', 'systemPrompt', 'attachments']
 
 /** Plugin config: runtime caps and enablement. */
@@ -644,12 +665,21 @@ export function apply(ctx: Context, config: Config = {}): void {
       ctx.logger?.warn?.(`zeokeel-browser: providing the surface registry failed (${cause instanceof Error ? cause.message : String(cause)})`)
     }
   }
+  const attachmentStore = ctx.attachments === undefined ? undefined : createAttachmentStoreAdapter(ctx.attachments)
   const runtime = new BrowserRuntime(
     createRealElectronAdapter(undefined, () => hostLocale()),
     runtimeOptionsForConfig(config, userDataDir),
     credentialResolver,
     browserPartitionFor(currentUser(), currentServerHash()),
-    { pool, store, currentUsername: currentUser, locale: () => hostLocale(), surfaces, ...(appOriginScheme === undefined ? {} : { appOriginScheme }) },
+    {
+      pool,
+      store,
+      currentUsername: currentUser,
+      locale: () => hostLocale(),
+      surfaces,
+      ...(appOriginScheme === undefined ? {} : { appOriginScheme }),
+      ...(attachmentStore === undefined ? {} : { attachments: attachmentStore }),
+    },
   )
   const shellOrigin = `http://127.0.0.1:${String(ctx.webServer.port)}`
   runtime.setShellOrigin(shellOrigin)

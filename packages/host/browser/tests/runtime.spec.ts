@@ -1895,11 +1895,16 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
       seen.push(args[2] as string[])
       return { files: [] }
     }
+    // Per-run session cwd snapshot feeds the allow-list; the next run without it
+    // must not inherit the previous run's workspace.
+    await runtime.runProgram('x', undefined, '/tmp/workspace')
     await runtime.runProgram('x')
     // Script-supplied directories never appear in the allow-list handed to the
     // runtime; the list is the session context (downloads dir here).
     expect(seen[0]).not.toContain('/etc')
     expect(seen[0]).toContain('/tmp/vetted')
+    expect(seen[0]).toContain('/tmp/workspace')
+    expect(seen[1]).not.toContain('/tmp/workspace')
     cleanup()
   })
 
@@ -2404,9 +2409,8 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
       },
     }
     const stored: Array<{ dataUrl: string, meta: { fileName: string, mimeType: string } }> = []
-    const { adapter, runtime, cleanup } = makeRuntime({ programEnabled: true }, undefined, {
+    const { adapter, runtime, cleanup } = makeRuntime({ programEnabled: true, uploadDirs: ['/tmp/vetted'] }, undefined, {
       programRuntime: fakeProgram,
-      sessionCwd: () => '/tmp/workspace',
       attachments: { store: async (dataUrl: string, meta: { fileName: string, mimeType: string }) => { stored.push({ dataUrl, meta }); return 'attach:42' } },
     })
     await runtime.open('https://a.example')
@@ -2416,7 +2420,7 @@ describe('BrowserRuntime v4.2 — flat pool', () => {
       return { files: ['/tmp/vetted/a.txt'] }
     }
     ;(runtime as unknown as { screenshotWithOptions: (...args: unknown[]) => Promise<unknown> }).screenshotWithOptions = async () => ({ data: 'data:image/png;base64,' + 'A'.repeat(1024), fullPage: false, format: 'png' })
-    const outcome = await runtime.runProgram('x') as unknown as { result: { ref: string } }
+    const outcome = await runtime.runProgram('x', undefined, '/tmp/workspace') as unknown as { result: { ref: string } }
     // The script's own allowedDirs never reaches chooseFiles.
     expect(seenDirs[0]).not.toContain('/etc')
     expect(seenDirs[0]).toContain('/tmp/workspace')

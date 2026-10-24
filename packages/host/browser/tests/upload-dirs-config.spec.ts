@@ -3,7 +3,7 @@
  * must carry the list (default empty) so the runtime option is reachable.
  */
 import { describe, expect, it } from 'vitest'
-import { Config, runtimeOptionsForConfig, uploadDirsForRuntime } from '../src/index.ts'
+import { Config, createAttachmentStoreAdapter, runtimeOptionsForConfig, uploadDirsForRuntime } from '../src/index.ts'
 import { BrowserRuntime } from '../src/runtime.ts'
 
 describe('Config.uploadDirs', () => {
@@ -34,5 +34,19 @@ describe('Config.uploadDirs', () => {
     expect(runtime.options.maxTabs).toBe(7)
     expect(String(runtime.options.downloadDir)).toContain('downloads')
     runtime.dispose()
+  })
+
+  it('attachment adapter turns base64 into an opaque reference', async () => {
+    const saved: Array<{ bytes: number, mediaType: string, name?: string }> = []
+    const adapter = createAttachmentStoreAdapter({
+      saveImages: async (inputs) => {
+        for (const input of inputs) saved.push({ bytes: input.data.length, mediaType: input.mediaType as unknown as string, ...(input.name === undefined ? {} : { name: input.name }) })
+        return [{ attachmentId: 'abc123' }]
+      },
+    })
+    const ref = await adapter.store('data:image/png;base64,QUJD', { fileName: 'shot.png', mimeType: 'image/png' })
+    expect(ref).toBe('attachment:abc123')
+    expect(ref).not.toContain('base64')
+    expect(saved[0]).toMatchObject({ bytes: 3, mediaType: 'image/png', name: 'shot.png' })
   })
 })

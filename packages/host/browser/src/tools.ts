@@ -1294,7 +1294,9 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
         const { program } = args as { program?: unknown }
         if (typeof program !== 'string' || program.trim() === '') throw new Error('program is required')
         noteAgent(runtime, exec.agent)
-        const outcome = await runtime.runProgram(program, exec.signal)
+        const session = (exec.agent as AgentProjectInfo | undefined)?.session
+        const sessionCwd = session?.header?.cwd ?? session?.meta?.cwd ?? session?.cwd
+        const outcome = await runtime.runProgram(program, exec.signal, typeof sessionCwd === 'string' ? sessionCwd : undefined)
         exec.signal.throwIfAborted()
         return outcome
       },

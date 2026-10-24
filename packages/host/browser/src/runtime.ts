@@ -500,8 +500,6 @@ export interface RuntimeDeps {
   /** Programming-mode runtime injected by the host (absent ⇒ browser_run is not
    * registered at all; there is no fallback path — audit R5/R9). */
   programRuntime?: ProgramRuntime
-  /** Session workspace for the upload allow-list (never a model-supplied path). */
-  sessionCwd?: () => string | undefined
   /** Attachment store for large program results (screenshots become refs). */
   attachments?: {
     store(dataUrl: string, meta: { fileName: string, mimeType: string }): Promise<string>
@@ -745,6 +743,8 @@ export class BrowserRuntime {
   private lifecycleLockHeld = false
   /** Tabs being closed: queued operations must fail fast (not-found). */
   private readonly closingTabs = new Set<number>()
+  /** Session cwd snapshot for the CURRENT program run (per run, never global). */
+  private programSessionCwd: string | undefined
   /** Epoch captured when a tab-creation segment started (session-switch guard). */
   private creationScope: number | undefined
   /** S1: aborts NON-CDP waits (download/event waits) on user takeover. Replaced
@@ -3833,9 +3833,12 @@ export class BrowserRuntime {
    * @param program - the script text.
    * @param signal - tool abort.
    */
-  async runProgram(program: string, signal?: AbortSignal): Promise<{ result: never, console: string, truncated: boolean, helperCalls: number }> {
+  async runProgram(program: string, signal?: AbortSignal, sessionCwd?: string): Promise<{ result: never, console: string, truncated: boolean, helperCalls: number }> {
     const programRuntime = this.deps.programRuntime
     if (programRuntime === undefined) throw browserError('policy', 'browser_run: programming mode is not available in this deployment')
+    // Per-run snapshot: a program's upload allow-list must reflect THIS run's
+    // session workspace (multi-session hosts would otherwise read a stale value).
+    this.programSessionCwd = sessionCwd
     if (signal?.aborted === true) throw browserError('interrupted', 'browser_run: cancelled')
     // D 类 (driver): browser_run takes NO tab/global lock — its helpers do — but
     // it must still respect the user gate at start and abort on a takeover.
@@ -3965,7 +3968,7 @@ export class BrowserRuntime {
         const dirs = uploadAllowDirs({
           downloadDir: this.options.downloadDir,
           uploadDirs: this.options.uploadDirs,
-          ...(this.deps.sessionCwd?.() === undefined ? {} : { sessionCwd: this.deps.sessionCwd() }),
+          ...(this.programSessionCwd === undefined ? {} : { sessionCwd: this.programSessionCwd }),
         })
         // `chooseFiles` takes `{files}` / `{cancel}`; build that shape explicitly
         // (a wrong shape surfaced as a TypeError instead of a browser error).

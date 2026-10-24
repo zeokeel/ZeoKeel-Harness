@@ -41,6 +41,8 @@ import { BrowserRuntime, type RuntimeDeps } from './runtime.ts'
 import { BROWSER_SURFACE_SERVICE, createSurfaceRegistry, encodePartitionSegment, serverPartitionHash } from './surface.ts'
 import { TabPool } from './pool.ts'
 import { BrowserStore } from './store.ts'
+import { PROGRAM_HELPERS } from './program.ts'
+import { createRestrictedProgramRuntime } from './program-child.ts'
 import { DEFAULT_GROUPS, applyBrowserTools, parseToolGroups } from './tools.ts'
 import { browserOverlayHtml, browserShellHtml } from './shell-pages.ts'
 import { hostLocaleFrom, type HostLocale } from '@zeokeel/dsh-host-locale'
@@ -138,6 +140,10 @@ export interface Config {
    * absolute paths, '/' is refused; recursive trust — everything under them can
    * be uploaded). Injected into the runtime options; never a tool argument. */
   uploadDirs?: string[]
+
+  /** Offer `browser_run` (default false). The host injects the restricted
+   * program runtime only when this is true (A7/run8 capability boundary). */
+  programEnabled?: boolean
   downloadDir?: string
   /**
    * 启用的工具组白名单（**键缺席 = 七组全开**）。
@@ -709,6 +715,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         surfaces,
         ...(appOriginScheme === undefined ? {} : { appOriginScheme }),
         ...(attachmentStore === undefined ? {} : { attachments: attachmentStore }),
+        ...(config.programEnabled === true ? { programRuntime: createRestrictedProgramRuntime(Object.keys(PROGRAM_HELPERS)) } : {}),
       },
     },
   )

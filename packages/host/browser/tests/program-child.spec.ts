@@ -5,7 +5,7 @@
  */
 import { spawn as spawnProcess } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { childBootstrapSource } from '../src/program-child.ts'
+import { childBootstrapSource, createRestrictedProgramRuntime } from '../src/program-child.ts'
 import { PTC_MAX_PROGRAM_BYTES, createPtcProgramRuntime, type ProgramChild } from '../src/program-ptc.ts'
 
 const NAMES = ['obj', 'fail'] as const
@@ -75,5 +75,13 @@ describe('child bootstrap', () => {
     await expect(pending).rejects.toBeTruthy()
     expect(Date.now() - started).toBeLessThan(2_000)
     await expect.poll(() => exits.length, { timeout: 2_000 }).toBe(1)
+  }, 20_000)
+})
+
+describe('production wiring', () => {
+  it('the factory runs a program through a real child with the helper bridge', async () => {
+    const rt = createRestrictedProgramRuntime(['ping'])
+    const outcome = await rt.execute('const env = ((await browser.ping()).pong); return { env }', { ping: async () => ({ pong: 7 }) })
+    expect(outcome.result).toEqual({ env: 7 })
   }, 20_000)
 })

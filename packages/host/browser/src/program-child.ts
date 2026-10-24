@@ -1,3 +1,7 @@
+import { spawn as spawnProcess } from 'node:child_process'
+import { createPtcProgramRuntime } from './program-ptc.ts'
+import type { ProgramRuntime } from './program.ts'
+
 /**
  * Child-process bootstrap for the restricted executor (2026-10-23, decision B).
  *
@@ -104,4 +108,24 @@ const executeProgram = async (source) => {
   }
 };
 `
+}
+
+/**
+ * The production wiring for `browser_run`: a restricted executor running in a
+ * real Node child (decision B). The host callback surface is the program bridge
+ * handed to `execute`, so helpers reach the runtime through the normal path.
+ * @param helperNames - helper names the child exposes as `browser.*`.
+ * @returns a ProgramRuntime backed by the restricted child bootstrap.
+ */
+export function createRestrictedProgramRuntime(
+  helperNames: readonly string[],
+): ProgramRuntime {
+  const source = childBootstrapSource(helperNames)
+  return createPtcProgramRuntime({
+    spawn: () => {
+      const child = spawnProcess(process.execPath, ['-e', source], { stdio: ['pipe', 'pipe', 'pipe'] })
+      const exit = new Promise<number>((resolve) => { child.on('exit', code => resolve(code ?? 0)) })
+      return { stdin: child.stdin, stdout: child.stdout, kill: () => { child.kill('SIGKILL') }, exit }
+    },
+  })
 }

@@ -8,5 +8,6 @@
 #    purpose; they are not shipped code.
 name: dsh-codeql
 paths-ignore:
-  - 'packages/host/browser/src/vendor/**'
   - 'packages/host/browser/tests/**'
+  - 'packages/host/browser/src/vendor/**'
+  - '**/vendor/**'

@@ -11,7 +11,7 @@
  * ```
  *
  * 三条**冻结语义**（写错就是缺陷）：
- *  1. **配额只算浏览器标签**：应用窗口不占 `maxTabs`（16），也不进浏览器台账
+ *  1. **配额只算浏览器标签**：应用窗口不占 `maxTabs`（配额由 capacity 模块从内存派生），也不进浏览器台账
  *     （`browser_list_tabs` 的浏览器分区、活动面板、`ledger`）；
  *  2. **默认寻址只指向浏览器当前标签**：应用窗口必须**显式**给 `app_id` —— 没有
  *     目标时"顺手操作应用窗口"是最危险的行为（用户可能正拿着控制权）；
@@ -30,12 +30,15 @@
  */
 
 import { createHash } from 'node:crypto'
+import { MAX_TAB_QUOTA } from './capacity.ts'
 
 /** Surface 种类（§16.1 冻结：只有这两种）。 */
 export type SurfaceKind = 'browser-tab' | 'app'
 
 /** 浏览器标签配额（§16.1：应用窗口**不**吃这个配额）。 */
-export const MAX_BROWSER_TABS = 16
+// Registry cap is the derived quota's ceiling (D2): a bigger machine never
+// registers more surfaces than the capacity module allows.
+export const MAX_BROWSER_TABS = MAX_TAB_QUOTA
 
 /** Cordis 服务名：浏览器插件 `provide` 出去的 surface 注册表（`windows.ts` 的 inject）。 */
 export const BROWSER_SURFACE_SERVICE = 'browserSurface'

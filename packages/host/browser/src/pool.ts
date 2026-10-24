@@ -11,6 +11,7 @@
 
 import { DEFAULT_HOST_LOCALE, hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 import { browserError } from './errors.ts'
+import { MAX_TAB_QUOTA, defaultTabQuota } from './capacity.ts'
 import type { BrowserError } from './errors.ts'
 import { TAB_SLOT_WAIT_TIMEOUT_MS, USER_GATE_TIMEOUT_MS } from './budgets.ts'
 
@@ -76,7 +77,7 @@ export interface TabReservation {
 }
 
 const POOL_DEFAULTS = {
-  maxTabs: 16,
+  maxTabs: Math.min(MAX_TAB_QUOTA, defaultTabQuota()),
   userGateTimeoutMs: USER_GATE_TIMEOUT_MS,
   // 必须短于工具预算（budgets.ts 的 TAB_SLOT_WAIT_TIMEOUT_MS 说明理由）：
   // 超时后抛出的 quota 错误要能真的送达模型，而不是被 timeout-policy 换掉。
@@ -135,36 +136,24 @@ class PoolMutex {
    */
   constructor(private readonly locale: () => HostLocale) {}
 
-  async run(
-    work: () => Promise<void>,
+  /**
+   * Admit ONE operation without holding the mutex for its whole execution
+   * (D1/B1). Admission (gate wait) stays ordered; the returned release ends the
+   * admission turn and the operation runs outside it. Same-tab serialization is
+   * the runtime's per-tab lock job; whole-operation exclusion is reserved for
+   * global operations (the runtime's global lock).
+   */
+  async admit(
     gate: () => boolean,
     signal?: AbortSignal,
-    /** 用户闸等待预算（ms，<=0 表示不设限）。 */
     gateBudgetMs = 0,
-    /**
-     * "等前一个操作"的预算（ms，<=0 = 不设限）—— R4-B-15（2026-09-23 审计）。
-     *
-     * 排队曾经只可取消、没有时间上限：前一个操作合法占用全局锁 40s 时，排在后面
-     * 的工具会在排队中越过自己的 deadline，工具自己的诊断被上游换成笼统超时。
-     * 预算由调用方按**本次调用剩余的工具额度**算出（runtime），到点抛可读的
-     * `timed out waiting for the running browser operation`。
-     */
     queueBudgetMs = 0,
-  ): Promise<void> {
+  ): Promise<() => void> {
     const prev = this.tail
-    // The tool deadline is armed when the model issues the call, so queue time
-    // must count against the gate budget. Timing the budget from "after the
-    // mutex admitted us" let a long predecessor eat most of the tool deadline
-    // and the gate still waited its full budget afterwards — the deadline then
-    // replaced the explicit `window-controlled` refusal with the generic
-    // `tool call timed out after 30000ms` (2026-09-16 audit E2).
     const budgetStartedAt = Date.now()
     let release!: () => void
     this.tail = new Promise<void>((resolve) => { release = resolve })
     try {
-      // Waiting for the previous operation must be cancellable too: a wedged
-      // predecessor used to block every later call forever (2026-09-08 P0-4).
-      // R4-B-15: and it must be BOUNDED — see `queueBudgetMs`.
       await raceAbort(withQueueBudget(prev, queueBudgetMs, this.locale), gate, signal, this.locale)
       while (gate()) {
         if (signal !== undefined && signal.aborted) {
@@ -174,8 +163,6 @@ class PoolMutex {
             ' (this call was stopped)',
           ))
         }
-        // 2026-09-15 审计 P0-1：用户接管后不能无限期挂住模型回合。
-        // 2026-09-16：预算必须短于工具预算，否则这段文案永远到不了模型面前。
         if (gateBudgetMs > 0 && Date.now() - budgetStartedAt >= gateBudgetMs) {
           const seconds = Math.round(gateBudgetMs / 1000)
           throw browserError('window-controlled', hostCopy(
@@ -186,11 +173,14 @@ class PoolMutex {
         }
         await sleep(120)
       }
-      return await work()
-    } finally {
+      return release
+    } catch (error) {
       release()
+      throw error
     }
   }
+
+
 }
 
 /** Await a promise, rejecting as soon as `signal` aborts. The rejection code
@@ -288,7 +278,15 @@ export class TabPool {
   disposed = false
 
   constructor(options: PoolOptions = {}) {
-    this.options = { ...POOL_DEFAULTS, ...options }
+    // One ceiling: an explicit quota is clamped to the same MAX_TAB_QUOTA the
+    // surface registry uses, so the pool reports its own quota error first.
+    this.options = {
+      ...POOL_DEFAULTS,
+      ...options,
+      // Upper bound is shared with the surface registry; a small explicit quota is
+      // honoured (tests/deployments may shrink it deliberately), but never 0.
+      maxTabs: Math.min(MAX_TAB_QUOTA, Math.max(1, options.maxTabs ?? POOL_DEFAULTS.maxTabs)),
+    }
     this.mutex = new PoolMutex(this.options.locale)
   }
 
@@ -306,6 +304,11 @@ export class TabPool {
   // ------------------------------------------------------------- state
 
   get controlled(): boolean {
+    return this.windowControlled
+  }
+
+  /** Whether the user currently holds the browser (D1 S2 re-check). */
+  isUserControlled(): boolean {
     return this.windowControlled
   }
 
@@ -354,15 +357,17 @@ export class TabPool {
     this.busyDepth++
     this.emit('busy')
     try {
-      let result!: T
-      await this.mutex.run(
-        async () => { result = await work() },
+      // D1/B1: admission is serialized, execution is not. The admission turn is
+      // released before the work runs; per-tab / global exclusion lives in the
+      // runtime locks (and their queue budgets moved there).
+      const release = await this.mutex.admit(
         () => this.windowControlled,
         signal,
         this.options.userGateTimeoutMs,
         queueBudgetMs,
       )
-      return result
+      release()
+      return await work()
     } finally {
       this.busyDepth--
       if (this.busyDepth === 0) this.busyTool = ''

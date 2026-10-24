@@ -54,8 +54,24 @@ export const USER_GATE_TIMEOUT_MS = BROWSER_TOOL_TIMEOUT_MS - USER_GATE_RESERVE_
  */
 export const WAIT_FOR_MAX_MS = 40_000
 
-/** Registered deadline of `browser_wait_for`: gate + max wait + 5s margin. */
-export const BROWSER_WAIT_FOR_DEADLINE_MS = USER_GATE_TIMEOUT_MS + WAIT_FOR_MAX_MS + 5_000
+/** Extra margin used by the wait_for registration formula (single source). */
+export const WAIT_FOR_DEADLINE_MARGIN_MS = 5_000
+/** Bound for waiting on a tab to go idle while closing it (D1 three-phase close).
+ * NOTE: `waitForTurn` keeps QUEUE_MIN_WORK_MS for the work itself, so the
+ * EFFECTIVE idle wait is this value minus that margin. */
+export const CLOSE_IDLE_WAIT_MS = 3_000
+/** Bound for close-all to wait for an in-flight creation segment before forcing. */
+export const CLOSE_ALL_CREATION_WAIT_MS = 5_000
+
+/** Budget for one tab-creation segment (open/restore under L10; independent of
+ * the tool budget so restore of a large ledger is not clamped to 30s). */
+export const LIFECYCLE_CREATION_BUDGET_MS = 60_000
+
+/** Absolute ceiling for one wait_for condition (never above the tool budget). */
+export const WAIT_FOR_HARD_CAP_MS = 120_000
+
+/** Registered deadline of `browser_wait_for`: gate + max wait + margin. */
+export const BROWSER_WAIT_FOR_DEADLINE_MS = USER_GATE_TIMEOUT_MS + WAIT_FOR_MAX_MS + WAIT_FOR_DEADLINE_MARGIN_MS
 
 /**
  * How long an agent `browser_open` waits for a free tab slot when the pool is
@@ -79,6 +95,23 @@ export const TAB_SLOT_WAIT_TIMEOUT_MS = 5_000
  * timeout-policy 在 deadline **到达时**替换整条结果，所以内部等待必须在它之前
  * 收手：留 1s 给结果投影、op-log 记录、账本落盘与回程。
  */
+
+/**
+ * Long-running tool budgets (D3: EVERY product latency lives here).
+ *
+ * The download receipt waits 60 s for a terminal status, so its registered
+ * budget must stay above that; the programming tool's budget must stay above the
+ * script budget. Conservation is asserted in `tests/budgets-conservation.spec.ts`.
+ */
+export const DOWNLOAD_COMPLETION_TIMEOUT_MS = 60_000
+export const BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS = DOWNLOAD_COMPLETION_TIMEOUT_MS + 30_000
+export const PROGRAM_SCRIPT_BUDGET_MS = 120_000
+export const BROWSER_PROGRAM_TOOL_TIMEOUT_MS = PROGRAM_SCRIPT_BUDGET_MS + 30_000
+/** Helper-call cap per program (failures count). */
+export const PROGRAM_MAX_HELPER_CALLS = 200
+/** Default/ceiling for the `expect` receipt wait. */
+export const EXPECT_TIMEOUT_DEFAULT_MS = 5_000
+export const EXPECT_TIMEOUT_MAX_MS = 10_000
 export const TOOL_DEADLINE_MARGIN_MS = 1_000
 
 /**

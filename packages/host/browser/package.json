@@ -47,7 +47,8 @@
     "build": "tsdown && tsc -p tsconfig.json --emitDeclarationOnly && tsc -p tsconfig.client.json --emitDeclarationOnly",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "test": "vitest run",
-    "check": "yarn run build && yarn run test"
+    "check": "yarn run build && yarn run test",
+    "e2e:program": "node scripts/e2e-browser-run.mjs"
   },
   "dependencies": {
     "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",

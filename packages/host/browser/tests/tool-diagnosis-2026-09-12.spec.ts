@@ -285,28 +285,27 @@ describe('缺陷 5：browser_eval 不应把 outerHTML/innerHTML 的**读取**当
     }
   })
 
-  it('真正的写路径仍然被单表达式护栏挡住', () => {
+  it('普通 DOM 写路径现在是允许的（2026-10-23 capability unlock）', () => {
     for (const expression of [
       'document.body.innerHTML = "x"',
       'document.querySelector("#a").outerHTML = "x"',
-    ]) {
-      let thrown: unknown
-      try {
-        validateEvalExpression(expression)
-      } catch (error) {
-        thrown = error
-      }
-      expect(thrown, `写路径必须继续拒绝：${expression}`).toBeInstanceOf(BrowserError)
-    }
-  })
-
-  it('其余副作用 API 的拦截没有被这次放宽带走', () => {
-    for (const expression of [
-      `localStorage.setItem('a','b')`,
       `document.querySelector('#f').submit()`,
       `document.querySelector('#a').remove()`,
     ]) {
-      expect(() => validateEvalExpression(expression), `副作用 API 漏放：${expression}`).toThrow(BrowserError)
+      expect(() => validateEvalExpression(expression), `普通页面写被误拦：${expression}`).not.toThrow()
+    }
+  })
+
+  it('真正的破坏面仍然被拒（页面状态 / 导航 / 代码执行）', () => {
+    for (const expression of [
+      `localStorage.setItem('a','b')`,
+      `document.write('x')`,
+      `document.cookie = 'a=1'`,
+      `location.href = 'https://example.com'`,
+      `history.pushState(null, '', '/x')`,
+      `eval('1')`,
+    ]) {
+      expect(() => validateEvalExpression(expression), `破坏面漏放：${expression}`).toThrow(BrowserError)
     }
   })
 })

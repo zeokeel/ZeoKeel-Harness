@@ -9,13 +9,17 @@
 
 import type { BrowserSnapshotElement } from './types.ts'
 
-/** Default cap on snapshot entries per call. */
-const SNAPSHOT_LIMIT = 200
+/** Default cap on snapshot entries per call (2026-10-23 capability unlock: was 200). */
+export const SNAPSHOT_DEFAULT_LIMIT = 400
+/** @deprecated kept for the existing internal call sites. */
+const SNAPSHOT_LIMIT = SNAPSHOT_DEFAULT_LIMIT
 /** Hard safety cap on snapshot entries (a deployment may raise the limit up to
  * this bound; the probe itself is bounded so a hostile page cannot flood). */
 const SNAPSHOT_MAX_LIMIT = 2_000
-/** Cap on extracted text characters per call. */
-const TEXT_LIMIT = 32 * 1024
+/** Cap on extracted text characters per call (2026-10-23 capability unlock: was 32 KiB). */
+export const TEXT_DEFAULT_LIMIT = 64 * 1024
+/** @deprecated kept for the existing internal call sites. */
+const TEXT_LIMIT = TEXT_DEFAULT_LIMIT
 
 /** Hard cap on extracted text characters per call (exported: the effective
  * limit is `min(textLimit, this)` and BOTH the extraction and every caller that
@@ -23,8 +27,8 @@ const TEXT_LIMIT = 32 * 1024
  * {@link effectiveTextLimit}).
  *
  * 2026-09-15 审计 P2：`browser_get_text` 曾用 `text.length >= runtime.options.
- * textLimit` 自己推算 `truncated`，而真正生效的上限是 `min(textLimit, 32768)`
- * ——`textLimit=65536` 时工具会拿 65536 去比一条已经被 32KiB 截断的文本，标记
+ * textLimit` 自己推算 `truncated`，而真正生效的上限是 `min(textLimit, 65536)`
+ * ——`textLimit=65536` 时工具会拿 65536 去比一条被硬顶截断的文本，标记
  * 与实际相反。 */
 export const MAX_TEXT_LIMIT = TEXT_LIMIT
 
@@ -43,9 +47,9 @@ const SNAPSHOT_ELEMENT_COUNT_EXTRA = 1_000
  * roots (a hostile page must not turn a snapshot into an O(page) walk). */
 const SNAPSHOT_SHADOW_SCAN_CAP = 20_000
 /** Model-facing cap on one snapshot element's text (the probe's documented
- * "80 chars"). Applied by {@link extractSnapshot} AFTER the caller's value
+ * "200 chars", 2026-10-23). Applied by {@link extractSnapshot} AFTER the caller's value
  * projection, never inside the page (R7). */
-export const SNAPSHOT_TEXT_LIMIT = 80
+export const SNAPSHOT_TEXT_LIMIT = 200
 /**
  * Page-side cap on one element's text (R7, 2026-09-13).
  *
@@ -57,7 +61,7 @@ export const SNAPSHOT_TEXT_LIMIT = 80
  * a megabyte of `innerText` per element over CDP); the real cap now runs
  * host-side, after redaction.
  */
-const ELEMENT_TEXT_CAP = 1_024
+const ELEMENT_TEXT_CAP = 4_096
 
 /**
  * Probe script: collect interactable elements in DOM order. The page can see
@@ -72,6 +76,26 @@ const ELEMENT_TEXT_CAP = 1_024
  * break，输出既没有命中总数也没有截断标记）。{@link extractSnapshot} 仍然
  * 兼容裸数组（历史桩/旧探针），只是那种形状拿不到计数。
  */
+/** Page-side shadow-piercing resolver shared by the text extraction probe
+ * (mirrors the runtime helper; `>>>` means shadow boundary and a hop without a
+ * shadowRoot is a hard miss, never a silent light-DOM fallback). */
+export const TEXT_SHADOW_QUERY = `
+  const __query = (sel) => {
+    const parts = String(sel).split(/\\s*>>>\\s*/).filter((part) => part !== '');
+    let el = null;
+    let scope = document;
+    for (let index = 0; index < parts.length; index += 1) {
+      el = scope.querySelector(parts[index]);
+      if (!el) return null;
+      if (index < parts.length - 1) {
+        if (!el.shadowRoot) return null;
+        scope = el.shadowRoot;
+      }
+    }
+    return el;
+  };
+`
+
 const SNAPSHOT_PROBE = `
 (() => {
   const out = [];
@@ -276,6 +300,10 @@ export interface SnapshotExtractionMeta {
   shadowScanCapped: boolean
   /** Counting hit its bound (`total` is a lower bound). */
   countCapped: boolean
+  /** Frames that were skipped because they are cross-origin (1-based indices;
+   * only populated when the caller asked for `includeFrames`; audit R2 — their
+   * DOM is not readable from the main world). */
+  crossOriginFrames?: number[]
 }
 
 /** Result of {@link extractSnapshotWithMeta}. */
@@ -291,6 +319,170 @@ export interface SnapshotExtraction {
  * 2026-09-15 审计 P2：静默截断与盲区都要有可读提示。文案是模型面字符串，
  * 与本包其它模型面文案一致用英文（注释/内部报告用中文）。
  */
+/** Hard cap on open-shadow-root depth walked by the snapshot extras (C16). */
+export const SHADOW_DEPTH_LIMIT = 8
+
+/** Options for the append-only snapshot extras (audit R1: default false). */
+export interface SnapshotExtrasOptions {
+  /** Append open-shadow-root descendants (selector form `host >>> inner`). */
+  includeShadow?: boolean
+  /** Append same-origin iframe descendants (entry carries `frame: N`). */
+  includeFrames?: boolean
+}
+
+/**
+ * Extra probe for open shadow roots and same-origin iframes (C16/B4).
+ *
+ * APPEND-ONLY by design: the main probe is untouched, so the default snapshot is
+ * byte-identical to the pre-2026-10-23 one (audit R1).
+ *
+ * Semantics pinned by jsdom tests (audit P1):
+ * - shadow: every element with an OPEN shadowRoot is walked, whether or not it
+ *   matches the interactable selector; nested hosts keep their full path
+ *   (`#outer >>> #inner >>> a`). `>>>` means SHADOW boundary only.
+ * - frames: entries carry `frame: N` and a selector **local to that frame**
+ *   (never `#iframe >>> …`, which would be a shadow token).
+ * - text is cut only loosely here (2048) so the HOST can redact before the
+ *   model-facing 200-char slice (R7: redact first, cut second).
+ * - `visible` / `disabled` are computed, never hard-coded.
+ * @param includeShadow - walk open shadow roots.
+ * @param includeFrames - walk same-origin iframes.
+ * @param remaining - how many entries may still be appended.
+ * @returns a page script returning JSON.
+ */
+export function snapshotExtrasProbe(includeShadow: boolean, includeFrames: boolean, remaining: number): string {
+  return `
+(() => {
+  const SEL = 'a,button,input,select,textarea,[role="button"],[role="link"],[role="menuitem"],[tabindex]:not([tabindex="-1"])';
+  const MAX = ${Math.max(0, Math.floor(remaining))};
+  const WANT_SHADOW = ${includeShadow ? 'true' : 'false'};
+  const WANT_FRAMES = ${includeFrames ? 'true' : 'false'};
+  const TEXT_CAP = 2048;
+  const DEPTH_LIMIT = ${SHADOW_DEPTH_LIMIT};
+  const out = [];
+  const crossOrigin = [];
+  let truncated = false;
+  let framesSeen = 0;
+  const kindOf = (el) => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'a' && el.href) return 'link';
+    if (tag === 'button') return 'button';
+    if (tag === 'input') return 'input';
+    if (tag === 'select') return 'select';
+    if (tag === 'textarea') return 'textarea';
+    return 'other';
+  };
+  const textOf = (el) => {
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      const type = String(el.type || '').toLowerCase();
+      if (type === 'password') return (el.getAttribute('placeholder') || '(password field)').slice(0, TEXT_CAP);
+      return (el.getAttribute('placeholder') || el.value || '').slice(0, TEXT_CAP);
+    }
+    const t = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+    return t.slice(0, TEXT_CAP);
+  };
+  const visibleOf = (el) => {
+    try {
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return false;
+      const style = getComputedStyle(el);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    } catch (cause) { return false; }
+  };
+  const disabledOf = (el) => el.disabled === true || (el.getAttribute && el.getAttribute('aria-disabled') === 'true');
+  const pathOf = (el, root) => {
+    if (el.id) return '#' + CSS.escape(el.id);
+    const parts = [];
+    let node = el;
+    while (node && node !== root && node.nodeType === 1) {
+      const tag = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (!parent) { parts.unshift(tag); break; }
+      const index = Array.prototype.indexOf.call(parent.children, node) + 1;
+      parts.unshift(tag + ':nth-child(' + index + ')');
+      node = parent;
+    }
+    return parts.join(' > ');
+  };
+  const push = (el, selector, shadow, frame) => {
+    if (out.length >= MAX) { truncated = true; return; }
+    out.push({
+      selector,
+      kind: kindOf(el),
+      text: textOf(el),
+      visible: visibleOf(el),
+      disabled: disabledOf(el),
+      ...(shadow ? { shadow: true } : {}),
+      ...(frame === undefined ? {} : { frame }),
+    });
+  };
+  if (WANT_SHADOW) {
+    const all = document.querySelectorAll('*');
+    const scanCap = Math.min(all.length, 20000);
+    // Breadth-first over shadow scopes, carrying each host's full selector path.
+    const queue = [];
+    for (let i = 0; i < scanCap; i += 1) {
+      const el = all[i];
+      if (el.shadowRoot && el.shadowRoot.mode === 'open') {
+        queue.push({ root: el.shadowRoot, base: pathOf(el, document.documentElement), depth: 0 });
+      }
+    }
+    while (queue.length > 0 && out.length < MAX) {
+      const scope = queue.shift();
+      if (scope.depth >= DEPTH_LIMIT) continue;
+      for (const inner of scope.root.querySelectorAll(SEL)) {
+        push(inner, scope.base + ' >>> ' + pathOf(inner, scope.root), true, undefined);
+        if (out.length >= MAX) break;
+      }
+      if (out.length >= MAX) break;
+      for (const inner of scope.root.querySelectorAll('*')) {
+        if (inner.shadowRoot && inner.shadowRoot.mode === 'open') {
+          queue.push({ root: inner.shadowRoot, base: scope.base + ' >>> ' + pathOf(inner, scope.root), depth: scope.depth + 1 });
+        }
+      }
+    }
+  }
+  if (WANT_FRAMES) {
+    // Frames are numbered DEPTH-FIRST in document order — the SAME numbering as
+    // resolveFrame / browser_eval(frame:N). A cross-origin frame still consumes
+    // its number (it is reported, just not readable), so the two sides never
+    // disagree about which frame means "frame: N" (audit P1-1).
+    let frameNumber = 0;
+    const walkFrame = (frameEl) => {
+      if (out.length >= MAX) return;
+      frameNumber += 1;
+      const number = frameNumber;
+      let doc = null;
+      try { doc = frameEl.contentDocument; } catch (cause) { doc = null; }
+      if (doc === null) { crossOrigin.push(number); return; }
+      for (const el of doc.querySelectorAll(SEL)) {
+        push(el, pathOf(el, doc.documentElement), false, number);
+        if (out.length >= MAX) break;
+      }
+      for (const child of doc.querySelectorAll('iframe,frame')) {
+        if (out.length >= MAX) break;
+        // Same-origin descendants recurse; the helper handles the cross-origin
+        // case by consuming the number.
+        const before = frameNumber;
+        walkFrame(child);
+        // A child that could not be read still counted: nothing else to do.
+        if (frameNumber === before) frameNumber += 1;
+      }
+    };
+    for (const frameEl of document.querySelectorAll('iframe,frame')) {
+      if (out.length >= MAX) break;
+      walkFrame(frameEl);
+    }
+    framesSeen = frameNumber;
+  }
+  // Hitting the budget is reported as truncated: the caller cannot tell whether
+  // more elements exist, so it must not present the list as complete.
+  if (out.length >= MAX) truncated = true;
+  return JSON.stringify({ entries: out, crossOrigin, truncated, frames: framesSeen });
+})()
+`
+}
+
 export function snapshotNote(meta: SnapshotExtractionMeta): string | undefined {
   const parts: string[] = []
   if (meta.truncated) {
@@ -444,11 +636,11 @@ export interface TextExtraction {
  * Extract visible text of the page (or of `selector` when given).
  *
  * `projectText` (R7, 2026-09-13) runs on the WHOLE extracted text and the cap is
- * applied afterwards: the previous order (slice 32KiB, then redact) left the
+ * applied afterwards: the previous order (slice at the cap, then redact) left the
  * first characters of a credential that straddled the cap in cleartext.
  *
  * 2026-09-15 审计 P2：截断标记由这里（唯一知道投影前长度与生效上限的地方）
- * 算出来，工具不再用 `Math.min(textLimit, 32768)` 自己推算。
+ * 算出来，工具不再用 `Math.min(textLimit, 硬顶)` 自己推算。
  */
 export async function extractTextWithMeta(
   send: <T>(method: string, params?: Record<string, unknown>) => Promise<T>,
@@ -458,7 +650,10 @@ export async function extractTextWithMeta(
 ): Promise<TextExtraction> {
   const expression = selector === undefined || selector.trim() === ''
     ? `(document.body ? document.body.innerText : '')`
-    : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`
+    : (/[ \t]{0,16}>>>[ \t]{0,16}/.test(String(selector))
+      ? `(() => { ${TEXT_SHADOW_QUERY} const el = __query(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`
+      : `(() => { const el = document.querySelector(${JSON.stringify(String(selector))}); return el ? (el.innerText || el.textContent || '') : ''; })()`)
+
   const result = await send<{ result?: { value?: unknown }, exceptionDetails?: unknown }>('Runtime.evaluate', {
     expression,
     returnByValue: true,
@@ -475,7 +670,7 @@ export async function extractTextWithMeta(
   //    字符留在页面上（`textLimit=65536` + 40000 字符的实测形状走这条）。
   //  · `projected.length > limit`：擦除**之后**仍然超长 ⇒ 这次返回被切了尾巴。
   // 旧实现把判定放在工具里用 `text.length >= runtime.options.textLimit` 推算，
-  // 上限取错（65536 vs 生效的 32768）且 `>=` 在"恰好等于上限、其实没截断"时误报。
+  // 上限取错（配置值 vs 生效的硬顶）且 `>=` 在"恰好等于上限、其实没截断"时误报。
   return { text: projected.slice(0, limit), truncated: text.length > limit || projected.length > limit, total: text.length }
 }
 

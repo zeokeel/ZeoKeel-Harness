@@ -278,6 +278,7 @@ export function isExecutionFacePath(path) {
  * 任何删掉的执行体必须从这里移除（死条目即红）。
  */
 export const EXECUTION_FACE_REGISTRY = [
+  'packages/host/browser/scripts/e2e-browser-run.mjs',
   'packages/host/desktop/scripts/asar-bigint-probe.mjs',
   'packages/host/desktop/scripts/asar-entry-path.ts',
   'packages/host/desktop/scripts/boot-desktop-profile.mjs',

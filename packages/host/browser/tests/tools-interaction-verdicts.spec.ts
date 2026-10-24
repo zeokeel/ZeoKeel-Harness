@@ -38,8 +38,19 @@ class MockTransport implements CdpTransport {
     this.commands.push({ method, params })
     return this.handler(method, params)
   }
-  on(): unknown { return this }
-  removeListener(): unknown { return this }
+  private readonly eventListeners = new Map<string, Set<(...args: unknown[]) => void>>()
+  on(event: string, listener: (...args: unknown[]) => void): void {
+    const set = this.eventListeners.get(event) ?? new Set()
+    set.add(listener)
+    this.eventListeners.set(event, set)
+  }
+  removeListener(event: string, listener: (...args: unknown[]) => void): void {
+    this.eventListeners.get(event)?.delete(listener)
+  }
+  /** Deliver one CDP event (as Electron's debugger 'message' does). */
+  emit(method: string, params: unknown = {}): void {
+    for (const listener of [...(this.eventListeners.get('message') ?? [])]) listener({}, method, params)
+  }
 }
 
 class MockSession implements NativeSession {
@@ -161,18 +172,18 @@ interface Harness {
   dispose: () => void
 }
 
-function makeHarness(options: Record<string, unknown> = {}, credentials?: CredentialResolverLike): Harness {
+function makeHarness(options: Record<string, unknown> = {}, credentials?: CredentialResolverLike, extraDeps?: Record<string, unknown>, enabledGroups?: ReadonlySet<string>): Harness {
   const adapter = new MockAdapter()
   const dir = join(process.cwd(), 'tests', `.bta-store-${Math.random().toString(36).slice(2)}`)
   mkdirSync(dir, { recursive: true })
   const store = new BrowserStore({ dir })
-  const runtime = new BrowserRuntime(adapter as never, options, credentials as never, undefined, { store })
+  const runtime = new BrowserRuntime(adapter as never, options, credentials as never, undefined, { store, ...(extraDeps ?? {}) } as never)
   const tools = new Map<string, ToolDefinition>()
   const ctx = {
     tools: { register: (definition: ToolDefinition) => { tools.set(definition.name, definition); return () => tools.delete(definition.name) } },
     systemPrompt: { section: () => () => {} },
   } as unknown as Parameters<typeof applyBrowserTools>[0]
-  const disposeTools = applyBrowserTools(ctx, runtime)
+  const disposeTools = applyBrowserTools(ctx, runtime, enabledGroups)
   return {
     runtime,
     adapter,
@@ -310,26 +321,444 @@ describe('2026-09-15 P2：browser_press / browser_scroll 不得静默成功', ()
       if (method !== 'Runtime.evaluate') return {}
       return { result: { value: 'ok' } }
     }
-    await expect(harness.call('browser_scroll', { deltaY: 200 })).resolves.toEqual({ ok: true })
+    // C8 added the actual scroll position to the result (the read-back is a second
+    // Runtime.evaluate; this mock returns 'ok' for both).
+    await expect(harness.call('browser_scroll', { deltaY: 200 })).resolves.toMatchObject({ ok: true, scrollX: 0, scrollY: 0 })
   })
 })
 
 // ------------------------------------------- P2: truncated / 快照盲区
 
+describe('locator ambiguity must not leak injected credentials（batch3 P1-2）', () => {
+  it('candidate text goes through the tab value redactor before the error message', async () => {
+    const SECRET = 'S3cr3tPass-xyz'
+    const harness = track(makeHarness({}, async () => ({ username: 'alice', password: SECRET })))
+    await harness.runtime.open('https://login.example/form')
+    const view = harness.adapter.lastView()
+    view.transport.handler = (method, params) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params?.['expression'] ?? '')
+      if (expression.includes('passField') || expression.includes('password')) {
+        return { result: { value: { filled: 2, username: true, password: true } } }
+      }
+      if (expression.includes('matched.length')) {
+        return {
+          result: {
+            value: JSON.stringify({
+              count: 2,
+              selector: null,
+              candidates: [`button ${SECRET}`, `button ${SECRET}-2`],
+            }),
+          },
+        }
+      }
+      return { result: { value: '' } }
+    }
+    await harness.runtime.fillCredentials(1, 'connector-x')
+    const error = await harness.call('browser_click', { target: 'role=button' }).catch((cause: unknown) => cause as Error)
+    expect(error).toBeInstanceOf(Error)
+    expect(String((error as Error).message)).not.toContain(SECRET)
+    expect(String((error as Error).message)).toContain('matched 2 elements')
+  })
+})
+
+describe('expect receipts（2026-10-23 C2）', () => {
+  it('a popup caused by the action lands in the receipt (armed before the action)', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    const openHandler = view.setWindowOpenHandler.mock.calls.at(-1)?.[0] as ((details: { url: string }) => unknown) | undefined
+    expect(openHandler).toBeTypeOf('function')
+    view.transport.handler = (method: string) => {
+      if (method !== 'Runtime.evaluate') return {}
+      // The page opens a popup while the scroll runs.
+      openHandler!({ url: 'https://popup.example/from-action' })
+      return { result: { value: 'ok' } }
+    }
+    const value = await harness.call('browser_scroll', { deltaY: 10, expect: 'popup' }) as { ok: boolean, receipt?: { expected?: string, timedOut?: boolean, event?: { payload?: { tab?: number } } } }
+    expect(value.ok).toBe(true)
+    expect(value.receipt?.expected).toBe('popup')
+    expect(value.receipt?.timedOut).toBeUndefined()
+    expect(value.receipt?.event?.payload?.tab).toBeGreaterThan(1)
+  })
+
+  it('a stale buffered event never fakes the receipt (strict arm) and is reported as preExisting', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const bus = harness.runtime.eventBus(harness.runtime.currentTabId()!)!
+    bus.push('popup', { tab: 999 })
+    const view = harness.adapter.lastView()
+    const openHandler = view.setWindowOpenHandler.mock.calls.at(-1)?.[0] as ((details: { url: string }) => unknown) | undefined
+    view.transport.handler = (method: string) => {
+      if (method !== 'Runtime.evaluate') return {}
+      openHandler!({ url: 'https://popup.example/fresh' })
+      return { result: { value: 'ok' } }
+    }
+    const value = await harness.call('browser_scroll', { deltaY: 5, expect: 'popup' }) as { receipt?: { event?: { payload?: { tab?: number } }, preExisting?: Array<{ payload?: { tab?: number } }> } }
+    expect(value.receipt?.event?.payload?.tab).not.toBe(999)
+    expect(value.receipt?.preExisting?.[0]?.payload?.tab).toBe(999)
+  })
+
+  it('expect timeout is a receipt flag, not an action failure', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    view.transport.handler = () => ({ result: { value: 'ok' } })
+    const value = await harness.call('browser_scroll', { deltaY: 5, expect: 'popup', expectTimeoutMs: 50 }) as { ok: boolean, receipt?: { timedOut?: boolean } }
+    expect(value.ok).toBe(true)
+    expect(value.receipt?.timedOut).toBe(true)
+  })
+
+  it('a dialog that opens mid-action turns the failure into an actionable error', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    // The page opens a dialog WHILE the click's evaluation is in flight. The
+    // command then fails (aborted / policy) and the model must be told to answer
+    // the dialog instead of seeing a bare "not found".
+    view.transport.handler = (method: string) => {
+      if (method === 'Runtime.evaluate') {
+        view.transport.emit('Page.javascriptDialogOpening', { type: 'confirm', message: 'Buy now?' })
+      }
+      return {}
+    }
+    const error = await harness.call('browser_click', { target: '#buy', expect: 'dialog', expectTimeoutMs: 5_000 })
+      .then(() => undefined, (cause: unknown) => cause as Error)
+    expect(error).toBeInstanceOf(Error)
+    expect(String(error?.message)).toContain('browser_dialog')
+    expect(harness.runtime.dialogState(1)).toBeDefined()
+  })
+
+  it('the expect wait is clamped by the production call site (not just the helper)', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    view.transport.handler = () => ({ result: { value: 'ok' } })
+    const bus = harness.runtime.eventBus(1)!
+    const seen: number[] = []
+    const spy = vi.spyOn(bus, 'arm').mockImplementation((_kind, timeoutMs) => {
+      seen.push(timeoutMs)
+      return {
+        promise: Promise.reject(Object.assign(new Error('browser: no popup event'), { code: 'timeout' })),
+        cancel: () => {},
+      }
+    })
+    const value = await harness.call('browser_scroll', { deltaY: 5, expect: 'popup', expectTimeoutMs: 60_000 }) as { ok: boolean, receipt?: { timedOut?: boolean } }
+    spy.mockRestore()
+    expect(seen).toEqual([10_000])
+    expect(value.receipt?.timedOut).toBe(true)
+  })
+
+  it('browser_downloads_list wait:true returns after the newest in-progress download finishes', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const recorder = (harness.runtime as unknown as {
+      downloadRecorder: () => {
+        add: (entry: { url: string, fileName: string, path: string, size: number, status: 'in-progress', actor: 'ai', group: string }) => number
+        update: (id: number, patch: { status: 'done' }) => void
+      }
+    }).downloadRecorder()
+    const id = recorder.add({ url: 'https://files.example/y.bin', fileName: 'y.bin', path: '', size: 0, status: 'in-progress', actor: 'ai', group: '' })
+    const call = harness.call('browser_downloads_list', { wait: true }) as Promise<{ downloads: Array<{ id: number, status: string }> }>
+    setTimeout(() => { recorder.update(id, { status: 'done' }) }, 50)
+    const value = await call
+    expect(value.downloads.find(entry => entry.id === id)?.status).toBe('done')
+  })
+
+  it('browser_file_chooser cancels with an empty selection over CDP', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    const calls: Array<{ method: string, params?: Record<string, unknown> }> = []
+    view.transport.handler = (method: string, params: Record<string, unknown> = {}) => { calls.push({ method, params }); return {} }
+    view.transport.emit('Page.fileChooserOpened', { backendNodeId: 21, mode: 'selectSingle' })
+    const value = await harness.call('browser_file_chooser', { cancel: true }) as { ok: boolean, cancelled?: boolean }
+    expect(value).toMatchObject({ ok: true, cancelled: true })
+    expect(calls).toContainEqual({ method: 'DOM.setFileInputFiles', params: { files: [], backendNodeId: 21 } })
+    // Without a pending chooser the tool fails loud instead of pretending.
+    await expect(harness.call('browser_file_chooser', { cancel: true })).rejects.toMatchObject({ code: 'not-found' })
+  })
+
+  it('a failing action cancels the armed waiter (nothing is left to eat the next event)', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    view.transport.handler = () => ({ result: { value: '' } })
+    await expect(harness.call('browser_scroll', { deltaY: 5, expect: 'popup', expectTimeoutMs: 5_000 })).resolves.toBeTruthy()
+    // Ambiguous/absent target path: action throws before any event.
+    view.transport.handler = (method: string) => (method === 'Runtime.evaluate'
+      ? { result: { value: JSON.stringify({ count: 0, selector: null, candidates: [] }) } }
+      : {})
+    await expect(harness.call('browser_click', { target: 'text=missing', expect: 'popup' })).rejects.toBeTruthy()
+    const bus = harness.runtime.eventBus(harness.runtime.currentTabId()!)
+    expect(bus?.waiterCount('popup')).toBe(0)
+  })
+})
+
+describe('snapshot extras at the tool layer（2026-10-23 P1）', () => {
+  it('browser_get_snapshot exposes cross-origin frames to the model', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        return { result: { value: JSON.stringify({ entries: [], crossOrigin: [2], truncated: false, frames: 2 }) } }
+      }
+      return {
+        result: {
+          value: {
+            elements: [], total: 0, truncated: false, frames: 1, shadowRoots: 0, shadowScanCapped: false, countCapped: false,
+          },
+        },
+      }
+    }
+    const value = await harness.call('browser_get_snapshot', { includeFrames: true }) as { crossOriginFrames?: number[], elements: unknown[] }
+    expect(value.elements).toEqual([])
+    // The blind spot must be observable by the MODEL, not only in runtime meta.
+    expect(value.crossOriginFrames).toEqual([2])
+  })
+})
+
+describe('frame action parameter validation（2026-10-23 C16 frame）', () => {
+  it('rejects a negative frame, right-button frame clicks and frame reads with a locator', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    await expect(harness.call('browser_click', { target: '#a', frame: -1 })).rejects.toThrow(/frame must be >= 0/u)
+    await expect(harness.call('browser_click', { target: '#a', frame: 1, button: 'right' })).rejects.toThrow(/left-button only/u)
+    await expect(harness.call('browser_click', { target: '#a', frame: 1, clickCount: 2 })).rejects.toThrow(/single-click only/u)
+    await expect(harness.call('browser_get_text', { frame: 1, selector: 'text=x' })).rejects.toThrow(/CSS or >>> selector only/u)
+  })
+})
+
+describe('snapshot frames at the tool layer（2026-10-23 C16）', () => {
+  interface Frames { frames: Array<{ frameId: string, url: string, depth: number, contextId?: number }> }
+  const installSnapshotWithFrame = (harness: ReturnType<typeof makeHarness>): { internal: Frames & { frameIndex: (tab: unknown) => Promise<unknown> } } => {
+    const view = harness.adapter.lastView()
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        return { result: { value: JSON.stringify({ entries: [{ selector: '#in', kind: 'button', text: 'Go', frame: 1, visible: true, disabled: false }], crossOrigin: [] }) } }
+      }
+      if (expression.includes('document.querySelectorAll')) {
+        return { result: { value: { elements: [], total: 0, truncated: false, frames: 1, shadowRoots: 0, shadowScanCapped: false, countCapped: false } } }
+      }
+      return { result: { value: 'clicked' } }
+    }
+    const internal = harness.runtime as unknown as Frames & { frameIndex: (tab: unknown) => Promise<unknown> }
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1', url: 'https://a.example/frame', depth: 1, contextId: 5 },
+    ]
+    return { internal }
+  }
+
+  it('a snapshot element inside a frame carries its frame into the action', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const { internal } = installSnapshotWithFrame(harness)
+    await harness.call('browser_get_snapshot', { includeFrames: true })
+    const before = harness.adapter.lastView().transport.commands.length
+    await harness.call('browser_click', { target: 1 })
+    const sent = harness.adapter.lastView().transport.commands.slice(before).filter(entry => entry.method === 'Runtime.evaluate')
+    const framed = sent.at(-1)!
+    // The frame of the snapshot entry was used automatically (contextId 5) and the
+    // selector stayed frame-local.
+    expect(framed.params?.['contextId']).toBe(5)
+    expect(String(framed.params?.['expression'] ?? '')).toContain('#in')
+  })
+
+  it('browser_get_text on a frame also refuses the old numbering', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const { internal } = installSnapshotWithFrame(harness)
+    await harness.call('browser_get_snapshot', { includeFrames: true })
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1-NEW', url: 'https://a.example/frame', depth: 1, contextId: 6 },
+    ]
+    await expect(harness.call('browser_get_text', { frame: 1 })).rejects.toMatchObject({ code: 'stale-snapshot' })
+  })
+
+  it('an explicit frame conflicting with the snapshot entry frame is a parameter error', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    view.transport.handler = (method: string, params: Record<string, unknown>) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params['expression'] ?? '')
+      if (expression.includes('crossOrigin')) {
+        return { result: { value: JSON.stringify({ entries: [{ selector: '#in', kind: 'button', text: 'Go', frame: 2, visible: true, disabled: false }], crossOrigin: [] }) } }
+      }
+      if (expression.includes('document.querySelectorAll')) {
+        return { result: { value: { elements: [], total: 0, truncated: false, frames: 2, shadowRoots: 0, shadowScanCapped: false, countCapped: false } } }
+      }
+      return { result: { value: 'clicked' } }
+    }
+    const internal = harness.runtime as unknown as { frameIndex: (tab: unknown) => Promise<unknown> }
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1', url: 'https://a.example/a', depth: 1, contextId: 5 },
+      { frameId: 'F2', url: 'https://a.example/b', depth: 1, contextId: 6 },
+    ]
+    await harness.call('browser_get_snapshot', { includeFrames: true })
+    await expect(harness.call('browser_click', { target: 1, frame: 3 })).rejects.toThrow(/conflicts with the frame of snapshot element/u)
+  })
+
+  it('the tool-level stale check refuses old numbers after the frame changed', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const { internal } = installSnapshotWithFrame(harness)
+    await harness.call('browser_get_snapshot', { includeFrames: true })
+    internal.frameIndex = async () => [
+      { frameId: 'F0', url: 'https://a.example/', depth: 0 },
+      { frameId: 'F1-NEW', url: 'https://a.example/frame', depth: 1, contextId: 6 },
+    ]
+    await expect(harness.call('browser_click', { target: 1 })).rejects.toMatchObject({ code: 'stale-snapshot' })
+  })
+})
+
+describe('browser_run registration surface（2026-10-23）', () => {
+  it('registers only when both the runtime and the opt-in are present, in the script group', async () => {
+    const fakeProgram = { execute: async () => ({ result: null }) }
+    // Programming mode is double-gated: the script GROUP must be enabled AND the
+    // deployment must inject a ptc runtime + opt in (audit R5).
+    const withScriptGroup = new Set(['navigate', 'interact', 'read', 'write', 'memory', 'artifacts', 'control', 'script'])
+    const enabled = track(makeHarness({ programEnabled: true }, undefined, { programRuntime: fakeProgram }, withScriptGroup))
+    expect(enabled.tools.has('browser_run')).toBe(true)
+    expect([...enabled.tools.keys()]).toHaveLength(41)
+    const defaulted = track(makeHarness({}, undefined, { programRuntime: fakeProgram }, withScriptGroup))
+    expect(defaulted.tools.has('browser_run')).toBe(false)
+    const noRuntime = track(makeHarness({ programEnabled: true }, undefined, undefined, withScriptGroup))
+    expect(noRuntime.tools.has('browser_run')).toBe(false)
+    // Without the script group the tool stays out even when opted in.
+    const groupOff = track(makeHarness({ programEnabled: true }, undefined, { programRuntime: fakeProgram }))
+    expect(groupOff.tools.has('browser_run')).toBe(false)
+  })
+})
+
+describe('history filters（2026-10-23 B7）', () => {
+  it('passes the group filter through to the store query', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const seen: Array<Record<string, unknown>> = []
+    ;(harness.runtime as unknown as { history: (filter: Record<string, unknown>) => unknown[] }).history = (filter) => {
+      seen.push(filter)
+      return []
+    }
+    await harness.call('browser_history_search', { q: 'docs', limit: 5, group: 'session-1' })
+    expect(seen[0]).toMatchObject({ q: 'docs', limit: 5, group: 'session-1' })
+  })
+})
+
+describe('screenshot parameter validation（2026-10-23 C12/B5）', () => {
+  it('rejects fullPage with clip, a non-positive clip and png with quality', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    await expect(harness.call('browser_screenshot', { fullPage: true, clip: { x: 0, y: 0, width: 10, height: 10 } })).rejects.toThrow(/mutually exclusive/u)
+    await expect(harness.call('browser_screenshot', { clip: { x: 0, y: 0, width: 0, height: 10 } })).rejects.toThrow(/must be positive/u)
+    await expect(harness.call('browser_screenshot', { format: 'png', quality: 50 })).rejects.toThrow(/jpeg only/u)
+  })
+})
+
+describe('click addressing errors（2026-10-23 C16 P2）', () => {
+  it('target and x/y are mutually exclusive, and a lone coordinate is rejected', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    await expect(harness.call('browser_click', { target: '#a', x: 1, y: 2 })).rejects.toThrow(/mutually exclusive/u)
+    await expect(harness.call('browser_click', { x: 1 })).rejects.toThrow(/BOTH x and y/u)
+    await expect(harness.call('browser_click', { y: 2 })).rejects.toThrow(/BOTH x and y/u)
+  })
+})
+
+describe('wait_for 扩展条件（2026-10-23 C14）', () => {
+  it('function needs a non-empty expression', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    await expect(harness.call('browser_wait_for', { condition: 'function' })).rejects.toThrow(/expression is required/u)
+  })
+
+  it('url-match needs a pattern', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    await expect(harness.call('browser_wait_for', { condition: 'url-match' })).rejects.toThrow(/pattern is required/u)
+  })
+})
+
+describe('locator targets（2026-10-23 C13）', () => {
+  it('browser_get_text accepts a text= locator', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    view.transport.handler = (method, params) => {
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params?.['expression'] ?? '')
+      if (expression.includes('matched.length')) {
+        return { result: { value: JSON.stringify({ count: 1, selector: '#main', candidates: [] }) } }
+      }
+      if (expression.includes('innerText')) return { result: { value: 'hello world' } }
+      return { result: { value: '' } }
+    }
+    const value = await harness.call('browser_get_text', { selector: 'text=Hello' }) as { text: string }
+    expect(value.text).toContain('hello')
+  })
+
+  it('browser_click fails loud on an ambiguous locator and never clicks', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const view = harness.adapter.lastView()
+    let clicked = false
+    view.transport.handler = (method, params) => {
+      if (method === 'Input.dispatchMouseEvent') { clicked = true; return {} }
+      if (method !== 'Runtime.evaluate') return {}
+      const expression = String(params?.['expression'] ?? '')
+      if (expression.includes('matched.length')) {
+        return { result: { value: JSON.stringify({ count: 3, selector: null, candidates: ['button a', 'button b', 'button c'] }) } }
+      }
+      return { result: { value: '' } }
+    }
+    await expect(harness.call('browser_click', { target: 'role=button' })).rejects.toMatchObject({
+      code: 'not-found',
+      message: expect.stringContaining('matched 3 elements'),
+    })
+    expect(clicked).toBe(false)
+  })
+})
+
+describe('browser_clear_data 语义（2026-10-23 能力解锁）', () => {
+  it('scope=all-data clears every site INCLUDING cookies (no options)', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const session = harness.adapter.lastView().session
+    await expect(harness.call('browser_clear_data', { scope: 'all-data' })).resolves.toEqual({ ok: true })
+    expect(session.clearStorageData).toHaveBeenCalledWith()
+    expect(session.clearCache).toHaveBeenCalled()
+  })
+
+  it('default scope clears partition storage but keeps cookies', async () => {
+    const harness = track(makeHarness())
+    await harness.runtime.open('https://a.example')
+    const session = harness.adapter.lastView().session
+    await expect(harness.call('browser_clear_data')).resolves.toEqual({ ok: true })
+    expect(session.clearStorageData).toHaveBeenCalledWith({ storages: expect.any(Array) })
+    expect(session.clearStorageData).not.toHaveBeenCalledWith()
+  })
+})
+
 describe('2026-09-15 P2：读取输出的真实截断与盲区', () => {
-  it('browser_get_text：textLimit=65536 + 40000 字符 ⇒ truncated=true', async () => {
+  it('browser_get_text：textLimit=65536 + 80000 字符 ⇒ truncated=true（生效上限 65536）', async () => {
     const harness = track(makeHarness({ textLimit: 65_536 }))
     await harness.runtime.open('https://a.example')
     harness.adapter.lastView().transport.handler = (method, params) => {
       if (method !== 'Runtime.evaluate') return {}
-      return String(params?.['expression'] ?? '').includes('innerText') ? { result: { value: 'a'.repeat(40_000) } } : {}
+      return String(params?.['expression'] ?? '').includes('innerText') ? { result: { value: 'a'.repeat(80_000) } } : {}
     }
 
     const value = await harness.call('browser_get_text', {}) as { text: string; truncated: boolean }
-    expect(value.text).toHaveLength(32 * 1024)
+    expect(value.text).toHaveLength(64 * 1024)
     expect(value.truncated).toBe(true)
-    // 反向对照：旧口径 `text.length >= runtime.options.textLimit`（65536）会判 false
-    expect(value.text.length >= 65_536).toBe(false)
   })
 
   it('browser_get_snapshot：截断与盲区写进工具输出（truncated/total/note）', async () => {
@@ -399,7 +828,10 @@ describe('2026-09-15 P1：browser_release 不在模型工具面上', () => {
     const names = [...harness.tools.keys()]
     expect(names).not.toContain('browser_release')
     expect(names).toContain('browser_takeover')
-    expect(names).toHaveLength(31)
+    expect(names).toHaveLength(40)
+    // C15 cookie management stays refused: a main-process cookie channel would
+    // defeat the credential-isolation invariant (audit-0921 tripwire).
+    expect(names).not.toContain('browser_cookies')
   })
 
   it('control 分组的工具集合被钉死（移除后不能悄悄长回来）', () => {
@@ -1033,5 +1465,57 @@ describe('2026-09-15 P3：scroll 的页内判定', () => {
     const error = await fail(harness.runtime.scroll(1, 0, '#nope'))
     expect(error.code).toBe('not-found')
     expect(harness.runtime.opLog.some((entry) => entry.tool === 'browser_scroll')).toBe(false)
+  })
+})
+
+describe('upload dirs are deployment config, not a tool argument（2026-10-23 A11）', () => {
+  it('a configured dir is accepted, others are refused, and no tool parameter can widen the list', async () => {
+    const harness = track(makeHarness({ uploadDirs: ['/tmp/vetted'] }))
+    await harness.runtime.open('https://a.example')
+    const seen: string[][] = []
+    ;(harness.runtime as unknown as { uploadFile: (...args: unknown[]) => Promise<{ uploaded: number }> }).uploadFile = async (...args: unknown[]) => {
+      seen.push(args[3] as string[])
+      return { uploaded: 1 }
+    }
+    await expect(harness.call('browser_upload_file', { paths: ['/tmp/vetted/a.txt'] })).resolves.toMatchObject({ uploaded: 1 })
+    // The allow-list handed to the runtime contains the deployment dir and is
+    // derived ONLY from configuration (there is no tool parameter for it).
+    expect(seen[0]).toContain('/tmp/vetted')
+    const params = harness.tools.get('browser_upload_file')!.parameters as unknown as { properties: Record<string, unknown> }
+    expect(Object.keys(params.properties).sort()).toEqual(['paths', 'tab'])
+    // Default deployment: the same path is not allow-listed (nothing to fall back to).
+    const defaulted = track(makeHarness())
+    await defaulted.runtime.open('https://a.example')
+    const seenDefault: string[][] = []
+    ;(defaulted.runtime as unknown as { uploadFile: (...args: unknown[]) => Promise<{ uploaded: number }> }).uploadFile = async (...args: unknown[]) => {
+      seenDefault.push(args[3] as string[])
+      return { uploaded: 1 }
+    }
+    await defaulted.call('browser_upload_file', { paths: ['/tmp/vetted/a.txt'] })
+    expect(seenDefault[0]).not.toContain('/tmp/vetted')
+    // Trailing slashes collapse and the filesystem root is refused outright.
+    const messy = track(makeHarness({ uploadDirs: ['/tmp/vetted/', '/'] }))
+    await messy.runtime.open('https://a.example')
+    const seenMessy: string[][] = []
+    ;(messy.runtime as unknown as { uploadFile: (...args: unknown[]) => Promise<{ uploaded: number }> }).uploadFile = async (...args: unknown[]) => {
+      seenMessy.push(args[3] as string[])
+      return { uploaded: 1 }
+    }
+    await messy.call('browser_upload_file', { paths: ['/tmp/vetted/a.txt'] })
+    expect(seenMessy[0]).toContain('/tmp/vetted')
+    expect(seenMessy[0]).not.toContain('/tmp/vetted/')
+    expect(seenMessy[0]).not.toContain('/')
+    // Relative paths are refused by the allow-list itself (they would resolve
+    // against the process cwd, not a deployment decision).
+    const relative = track(makeHarness({ uploadDirs: ['relative/dir', ''] }))
+    await relative.runtime.open('https://a.example')
+    const seenRelative: string[][] = []
+    ;(relative.runtime as unknown as { uploadFile: (...args: unknown[]) => Promise<{ uploaded: number }> }).uploadFile = async (...args: unknown[]) => {
+      seenRelative.push(args[3] as string[])
+      return { uploaded: 1 }
+    }
+    await relative.call('browser_upload_file', { paths: ['/tmp/x.txt'] })
+    expect(seenRelative[0]).not.toContain('relative/dir')
+    expect(seenRelative[0]).not.toContain('')
   })
 })

@@ -33,6 +33,15 @@
 
 | [架构说明](architecture.md) | Electron、Host、loopback Web、固定 profile 和打包之间的关系（维护者视角） |
 | [CI 与分支整体规划](ci-and-branch-plan.md) | CI 触发器/job/产物/发布如何运转；分支与 tag 规范、团队协作与产物取用、master 保护建议 |
+| [内置浏览器 vs ego-lite](competitive/2026-10-23-builtin-browser-vs-ego-lite.md) | 31 个模型工具与外部 ego-browser 的逐域对比、十个可借鉴设计（含 PTC/code-first 承载点）与落地路线 |
+| [内置浏览器编程模式规划](planning/2026-10-23-browser-code-mode-plan.md) | 只给浏览器加 `browser_run`（不全局切 PTC）的方案、拦截继承矩阵、里程碑与「编程模式 vs 逐步调用」论证 |
+| [内置浏览器拦截全量清单](planning/2026-10-23-browser-gate-inventory.md) | 52 项可勾选的拦截/限流/脱敏清单：现状、关掉后果、风险与建议 |
+| [浏览器锁序表（D1）](planning/2026-10-23-browser-lock-order.md) | 锁清单/方向/接管/关闭与变异点 |
+| [浏览器编程模式 browser_run 设计](planning/2026-10-23-browser-run-design.md) | 执行隔离、helper=现有能力复用、预算、数据出口、失败模式与必红变异 |
+| [浏览器 iframe/shadow/截图/fetch/模拟设计](planning/2026-10-23-browser-frames-emulation-plan.md) | C16/B4/B5/C10/C12/C15 的方案、边界与反证清单 |
+| [浏览器指针/键盘/剪贴板/滚动设计](planning/2026-10-23-browser-pointer-keyboard-plan.md) | C5–C8 工具面、CDP 映射、预算与反证清单 |
+| [浏览器对话框/弹窗/文件/下载设计](planning/2026-10-23-browser-dialogs-popups-plan.md) | C1–C4 事件接线、先布防再动作的回执语义、预算序关系与反证清单 |
+| [限制 AI 能力的浏览器功能清单](planning/2026-10-23-browser-ai-capability-limits.md) | 45 项按「删/放宽/留」分类的能力限制（eval 策略、截断、缺失能力、并发），含 P0 删除顺序 |
 | [Desktop service 参考](../packages/host/desktop/docs/plugin-services.md) | `desktopRuntime`/`desktopActions` 的稳定 contract 和 TypeScript 示例 |
 | [包级参考](../packages/host/desktop/README.md) | 完整的构建、运行、发布和已知限制 |
 | [服务端 API 完整参考](../server/docs/03-api-reference.md) | 全部 HTTP 端点（官网只放公开摘要） |

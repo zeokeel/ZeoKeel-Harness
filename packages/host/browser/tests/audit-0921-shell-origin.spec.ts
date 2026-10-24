@@ -311,6 +311,37 @@ describe('内置浏览器不得导航到本机 shell origin（三轮审计 P1-�
     await runtime.dispose()
   })
 
+  it('④ browser_eval 执行期间，页面自己发起的顶层导航一律被拒（window.location 不可 shim 的兜底）', async () => {
+    // 2026-10-23 batch1-fix 审计 P0-1：真实 Chromium 里 `window.location` 与
+    // `location.href/assign/replace/reload` 是 own + non-configurable
+    // （[LegacyUnforgeable]），页面侧 shim 拿不到它们。因此 eval 期间的兜底只能是
+    // 宿主导航闸：只要有一次 eval 在途，顶层导航（含重定向）就不许发生。
+    const { runtime } = makeRuntime(false)
+    const adapter = (runtime as unknown as { adapter: MockAdapter }).adapter
+    await runtime.open('https://a.example')
+    const view = adapter.createdViews.at(-1)
+    expect(view, '应能拿到刚创建的标签视图').toBeDefined()
+    const fire = (event: string, url: string): boolean => {
+      const state = { prevented: false }
+      const handler = view!.listeners.get(event)?.[0]
+      expect(handler, `标签视图必须注册 ${event} 闸门`).toBeTypeOf('function')
+      handler!({ preventDefault: () => { state.prevented = true } }, url)
+      return state.prevented
+    }
+    const internal = runtime as unknown as { evalInFlight: Map<number, number> }
+    // 反向对照：没有 eval 在途时，外站导航不得被拦。
+    expect(fire('will-navigate', 'https://evil.example/next')).toBe(false)
+    internal.evalInFlight.set(runtime.currentTabId()!, 1)
+    try {
+      expect(fire('will-navigate', 'https://evil.example/next')).toBe(true)
+      expect(fire('will-redirect', 'https://evil.example/next')).toBe(true)
+    } finally {
+      internal.evalInFlight.clear()
+    }
+    expect(fire('will-navigate', 'https://evil.example/next')).toBe(false)
+    await runtime.dispose()
+  })
+
   it('③ shellOrigin 未设置时，本机目标仍被拒、外站不受影响', async () => {
     // `shellOrigin` 缺席（非 Electron 宿主/测试）不能让本机判据整体失效 ——
     // 本机禁访的依据一度是"那里有被镜像的凭据"，现在是"本机回环面 = 宿主控制面"，

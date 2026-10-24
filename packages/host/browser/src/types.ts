@@ -82,6 +82,10 @@ export interface BrowserSnapshotElement {
   readonly visible: boolean
   /** Whether the element is disabled. */
   readonly disabled: boolean
+  /** Present when this entry came from an iframe (1-based DOM index; audit C16). */
+  frame?: number
+  /** Present when this entry came from an open shadow root (selector uses `>>>`). */
+  shadow?: boolean
 }
 
 /**
@@ -110,6 +114,12 @@ export interface BrowserInteractionHit {
 
 /** Runtime config surfaced to the model about the embedded browser. */
 export interface BrowserToolOptions {
+  /** Extra directories `browser_upload_file` may read from (deployment config,
+   * never a tool/script argument; joined with the downloads dir + session cwd). */
+  uploadDirs?: string[]
+
+  /** Offer the programming-mode tool `browser_run` (default false: opt-in, audit R5). */
+  programEnabled?: boolean
   /** Maximum tabs (default 8). */
   maxTabs?: number
   /** Cooperative tool-call timeout budget ms (default 30000). */
@@ -127,9 +137,9 @@ export interface BrowserToolOptions {
    * see `index.ts`'s `evalEnabled` field, R21 F-02).
    */
   evalEnabled?: boolean
-  /** Cap on snapshot entries per call (default 200). */
+  /** Cap on snapshot entries per call (default 400). */
   snapshotLimit?: number
-  /** Cap on extracted text characters per call (default 32768). */
+  /** Cap on extracted text characters per call (default 65536; hard cap MAX_TEXT_LIMIT). */
   textLimit?: number
   /** Screenshot max width in CSS pixels (default 1280). */
   screenshotMaxWidth?: number

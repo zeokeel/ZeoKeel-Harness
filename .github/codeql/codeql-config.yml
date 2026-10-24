@@ -1,0 +1,13 @@
+# CodeQL configuration (2026-10-23).
+#
+# Excluded from analysis:
+#  - `packages/host/browser/src/vendor/**`: a byte-for-byte vendored copy of the
+#    Acorn parser (deliberately vendored so the eval AST validator cannot be
+#    swapped by a dependency resolution). Its internals are upstream code.
+#  - `packages/host/browser/tests/**`: test fixtures build page-script strings on
+#    purpose; they are not shipped code.
+name: dsh-codeql
+paths-ignore:
+  - 'packages/host/browser/tests/**'
+  - 'packages/host/browser/src/vendor/**'
+  - '**/vendor/**'

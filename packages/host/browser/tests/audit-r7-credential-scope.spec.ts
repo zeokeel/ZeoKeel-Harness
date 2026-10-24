@@ -440,8 +440,8 @@ describe('r7c-4 擦除必须先于截断（快照 80 字符 / get_text 32KiB）'
     expect(text.length).toBeLessThanOrEqual(80)
   })
 
-  it('get_text 的 32KiB 窗口同样先擦后截，尾部不再是口令残片', async () => {
-    const big = 'x'.repeat(32 * 1024 - 4) + ID_SAFE_SECRET
+  it('get_text 的 64KiB 窗口同样先擦后截，尾部不再是口令残片', async () => {
+    const big = 'x'.repeat(64 * 1024 - 4) + ID_SAFE_SECRET
     const h = track(makeHarness(async () => ({ username: 'alice', password: ID_SAFE_SECRET })))
     await h.runtime.open('https://login.example/form')
     h.adapter.lastView().transport.handler = (method, params) => {
@@ -456,7 +456,7 @@ describe('r7c-4 擦除必须先于截断（快照 80 字符 / get_text 32KiB）'
     const out = await h.call('browser_get_text', {}) as { text: string; truncated: boolean }
     expect(out.text).not.toContain(ID_SAFE_SECRET.slice(0, 4)) // 修复前尾部 'S3cr' 明文
     expect(out.text.endsWith('****')).toBe(true)
-    expect(out.text.length).toBe(32 * 1024)
+    expect(out.text.length).toBe(64 * 1024)
     expect(out.truncated).toBe(true)
   })
 

@@ -250,9 +250,15 @@ describe('EV-1 browser_eval 的结果脱敏只擦片段（2026-09-23 审计）',
   })
 
   it('超长正文里的凭据仍不会以明文逃出（先掩码后截断的顺序不变）', () => {
+    // 2026-10-23：单串上限从 4 KiB 提到 32 KiB，4 KB 正文不再被截断 —— 判据从
+    // "截断后仍是掩码"变成"不截断也必须已掩码"，另加一条超过新上限的截断用例。
     const longToken = `prefix ${'y'.repeat(4200)} token=super-secret-value`
     const out = serializeEvalResult(longToken)
     expect(out).not.toContain('super-secret-value')
-    expect(out.endsWith('…"')).toBe(true)
+    expect(out).toContain('token=****')
+    const giant = `prefix ${'y'.repeat(40_000)} token=super-secret-value`
+    const giantOut = serializeEvalResult(giant)
+    expect(giantOut).not.toContain('super-secret-value')
+    expect(giantOut.endsWith('…"')).toBe(true)
   })
 })

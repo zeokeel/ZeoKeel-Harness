@@ -35,15 +35,18 @@ import { connectorStoreContractViolation, connectorStoreCtorOf, type ConnectorSt
 import { credentialSiteOrigin } from './credential-site.ts'
 import { browserError, type BrowserError } from './errors.ts'
 import { browserPartitionFor, createRealElectronAdapter } from './electron-adapter.ts'
+import type { ElectronAdapter } from './electron-adapter.ts'
 import { browserSameOriginMarker, isLoopbackRequest } from './loopback.ts'
-import { BrowserRuntime } from './runtime.ts'
+import { BrowserRuntime, type RuntimeDeps } from './runtime.ts'
 import { BROWSER_SURFACE_SERVICE, createSurfaceRegistry, encodePartitionSegment, serverPartitionHash } from './surface.ts'
 import { TabPool } from './pool.ts'
 import { BrowserStore } from './store.ts'
+import { PROGRAM_HELPERS } from './program.ts'
+import { createRestrictedProgramRuntime } from './program-child.ts'
 import { DEFAULT_GROUPS, applyBrowserTools, parseToolGroups } from './tools.ts'
 import { browserOverlayHtml, browserShellHtml } from './shell-pages.ts'
 import { hostLocaleFrom, type HostLocale } from '@zeokeel/dsh-host-locale'
-import type { CredentialResolver } from './types.ts'
+import type { BrowserToolOptions, CredentialResolver } from './types.ts'
 import type { DownloadEntry } from './store.ts'
 type DownloadEntryStatus = DownloadEntry['status']
 
@@ -82,6 +85,33 @@ interface ConnectionTrustFence {
 }
 
 /** Services required by the embedded browser. */
+/**
+ * Adapt `ctx.attachments.saveImages` to the runtime's `store(dataUrl, meta) => ref`
+ * contract. The model only ever sees an opaque reference (never base64 or a path).
+ * @param store - the host attachment store.
+ * @returns the runtime-facing adapter.
+ */
+export function createAttachmentStoreAdapter(store: {
+  saveImages(inputs: readonly { data: Uint8Array, mediaType: string, name?: string }[]): Promise<readonly { attachmentId: unknown }[]>
+}): { store(dataUrl: string, meta: { fileName: string, mimeType: string }): Promise<string> } {
+  return {
+    store: async (dataUrl: string, meta: { fileName: string, mimeType: string }): Promise<string> => {
+      const marker = dataUrl.indexOf(',')
+      const header = marker >= 0 ? dataUrl.slice(0, marker) : ''
+      const encoded = marker >= 0 ? dataUrl.slice(marker + 1) : ''
+      // Fail loud on a non-data URL or invalid base64 instead of storing garbage.
+      if (!header.startsWith('data:') || !header.includes(';base64') || encoded === '' || !/^[A-Za-z0-9+/=\s]+$/u.test(encoded)) {
+        throw new Error('browser_run: the screenshot payload is not a base64 data URL')
+      }
+      const bytes = Uint8Array.from(Buffer.from(encoded, 'base64'))
+      const refs = await store.saveImages([{ data: bytes, mediaType: meta.mimeType, name: meta.fileName }])
+      const first = refs[0]
+      if (first === undefined) throw new Error('browser_run: the attachment store returned no reference')
+      return `attachment:${String(first.attachmentId)}`
+    },
+  }
+}
+
 export const inject = ['webServer', 'tools', 'systemPrompt', 'attachments']
 
 /** Plugin config: runtime caps and enablement. */
@@ -106,6 +136,14 @@ export interface Config {
   screenshotMaxWidth?: number
   screenshotQuality?: number
   waitTimeoutMs?: number
+  /** Extra directories `browser_upload_file` may read from (deployment config;
+   * absolute paths, '/' is refused; recursive trust — everything under them can
+   * be uploaded). Injected into the runtime options; never a tool argument. */
+  uploadDirs?: string[]
+
+  /** Offer `browser_run` (default false). The host injects the restricted
+   * program runtime only when this is true (A7/run8 capability boundary). */
+  programEnabled?: boolean
   downloadDir?: string
   /**
    * 启用的工具组白名单（**键缺席 = 七组全开**）。
@@ -348,6 +386,51 @@ export function createCredentialResolver(options: {
   }
 }
 
+/**
+ * Normalise the deployment upload-directory list for the runtime options.
+ * Absolute paths only; empty strings and `/` (which would allow the whole
+ * filesystem) are dropped. Single source for the plugin injection point.
+ * @param config - parsed plugin config.
+ * @returns the effective upload dirs.
+ */
+export function uploadDirsForRuntime(config: Config): string[] {
+  return (config.uploadDirs ?? []).map(dir => dir.trim()).filter(dir => dir !== '' && dir !== '/' && dir.startsWith('/'))
+}
+
+/**
+ * Build the runtime options from the parsed plugin config (A11/Config wiring
+ * single source). Extracted so an end-to-end fixture can assert that operator
+ * configuration really reaches `runtime.options`.
+ * @param config - parsed plugin config.
+ * @param userDataDir - host data dir (downloads fallback).
+ * @returns options for {@link BrowserRuntime}.
+ */
+export function runtimeOptionsForConfig(config: Config, userDataDir?: string): Record<string, unknown> {
+  return {
+    ...config,
+    uploadDirs: uploadDirsForRuntime(config),
+    downloadDir: config.downloadDir ?? (userDataDir !== undefined ? join(userDataDir, 'downloads') : join(dshHomePath(), 'downloads')),
+  }
+}
+
+/**
+ * Construct the browser runtime from parsed config (the apply path delegates here,
+ * so a fixture can assert the runtime options WITHOUT an Electron environment).
+ * @param adapter - Electron adapter (a fake in tests).
+ * @param config - parsed plugin config.
+ * @param userDataDir - host data dir for downloads.
+ * @param wiring - credential resolver, partition and runtime deps.
+ * @returns the configured runtime.
+ */
+export function createBrowserRuntimeFor(
+  adapter: ElectronAdapter,
+  config: Config,
+  userDataDir: string | undefined,
+  wiring: { credentialResolver?: CredentialResolver | undefined, partition: string, deps: RuntimeDeps },
+): BrowserRuntime {
+  return new BrowserRuntime(adapter, runtimeOptionsForConfig(config, userDataDir) as BrowserToolOptions, wiring.credentialResolver, wiring.partition, wiring.deps)
+}
+
 export const Config: z<Config> = z.object({
   maxTabs: z.number(),
   timeoutMs: z.number(),
@@ -359,6 +442,12 @@ export const Config: z<Config> = z.object({
   screenshotQuality: z.number(),
   waitTimeoutMs: z.number(),
   downloadDir: z.string(),
+  // Same array-materialisation trap as toolGroups: an absent array key becomes [],
+  // so an operator-configured empty default is explicit here.
+  uploadDirs: z.array(z.string()).default([]),
+  // Same array-materialisation trap as toolGroups; explicit default keeps the
+  // opt-in explicit (a missing key must NOT enable programming mode).
+  programEnabled: z.boolean().default(false),
   // `.default(...)` 不是装饰：Schemastery 把**缺键的数组**物化成 `[]`（标量字段缺键
   // 才是 `undefined`），而生产装配注入的 config 里根本没有这个键（见字段注释）。少了
   // 它就等于"生产形态 = 全关"（2026-09-26 R22 V6 F1 的 P0 回归）。
@@ -610,15 +699,25 @@ export function apply(ctx: Context, config: Config = {}): void {
       ctx.logger?.warn?.(`zeokeel-browser: providing the surface registry failed (${cause instanceof Error ? cause.message : String(cause)})`)
     }
   }
-  const runtime = new BrowserRuntime(
+  const attachmentStore = ctx.attachments === undefined ? undefined : createAttachmentStoreAdapter(ctx.attachments)
+  const runtime = createBrowserRuntimeFor(
     createRealElectronAdapter(undefined, () => hostLocale()),
+    config,
+    userDataDir,
     {
-      ...config,
-      downloadDir: config.downloadDir ?? (userDataDir !== undefined ? join(userDataDir, 'downloads') : join(fallbackDataRoot(), 'downloads')),
+      credentialResolver,
+      partition: browserPartitionFor(currentUser(), currentServerHash()),
+      deps: {
+        pool,
+        store,
+        currentUsername: currentUser,
+        locale: () => hostLocale(),
+        surfaces,
+        ...(appOriginScheme === undefined ? {} : { appOriginScheme }),
+        ...(attachmentStore === undefined ? {} : { attachments: attachmentStore }),
+        ...(config.programEnabled === true ? { programRuntime: createRestrictedProgramRuntime(Object.keys(PROGRAM_HELPERS)) } : {}),
+      },
     },
-    credentialResolver,
-    browserPartitionFor(currentUser(), currentServerHash()),
-    { pool, store, currentUsername: currentUser, locale: () => hostLocale(), surfaces, ...(appOriginScheme === undefined ? {} : { appOriginScheme }) },
   )
   const shellOrigin = `http://127.0.0.1:${String(ctx.webServer.port)}`
   runtime.setShellOrigin(shellOrigin)
@@ -1112,3 +1211,6 @@ function num(value: string | null, fallback: number | undefined): number | undef
 
 export type { BrowserRuntime } from './runtime.ts'
 export type { BrowserOpLogEntry, BrowserSnapshotElement, BrowserTabState, BrowserToolOptions, BrowserWindowState } from './types.ts'
+
+export { createRestrictedProgramRuntime, childBootstrapSource, childSpawnEnv } from './program-child.ts'
+export { createPtcProgramRuntime, PTC_MAX_PROGRAM_BYTES, PTC_MAX_RESULT_BYTES } from './program-ptc.ts'

@@ -7,12 +7,17 @@ class MockTransport implements CdpTransport {
   readonly sent: Array<{ method: string; params: Record<string, unknown> }> = []
   readonly listeners: Array<(event: unknown, method: string, params: unknown) => void> = []
   handler: ((method: string, params: Record<string, unknown>) => unknown) | undefined
+  /** When set, the transport aborts the session synchronously inside sendCommand
+   * (models an event handler that fires while the command is being written). */
+  cancelDuringSend = false
+  onSend: (() => void) | undefined
 
   isAttached(): boolean { return this.attached }
   attach(): void { this.attached = true }
   detach(): void { this.attached = false }
   sendCommand(method: string, params: Record<string, unknown>): Promise<unknown> {
     this.sent.push({ method, params })
+    if (this.cancelDuringSend) this.onSend?.()
     return Promise.resolve(this.handler?.(method, params) ?? {})
   }
   on(_event: string, listener: (event: unknown, method: string, params: unknown) => void): void {
@@ -150,5 +155,47 @@ describe('CdpSession — command timeout / cancellation (2026-09-08 P0-4)', () =
     // A late transport reply after the local timeout must not throw or re-settle.
     resolveLate?.({ ok: true })
     await Promise.resolve()
+  })
+})
+
+
+describe('CdpSession.beforeCommand (2026-10-23 C1 choke point)', () => {
+  it('vetoes a command before it reaches the transport', async () => {
+    const transport = new MockTransport()
+    const session = new CdpSession(transport, { beforeCommand: (method) => { if (method !== 'Page.enable') throw new Error('vetoed') } })
+    await session.attach()
+    await expect(session.send('Runtime.evaluate', { expression: '1' })).rejects.toThrow('vetoed')
+    expect(transport.sent).toEqual([])
+    await expect(session.send('Page.enable')).resolves.toBeDefined()
+    expect(transport.sent.map(entry => entry.method)).toEqual(['Page.enable'])
+  })
+
+  it('captures the abort channel BEFORE sending: a synchronous abort from inside sendCommand still wins', async () => {
+    const transport = new MockTransport()
+    const session = new CdpSession(transport)
+    await session.attach()
+    transport.handler = () => new Promise(() => { /* never settles */ })
+    transport.onSend = () => session.abortPending(new Error('dialog opened synchronously'))
+    transport.cancelDuringSend = true
+    const started = Date.now()
+    await expect(session.send('Runtime.evaluate', { expression: '1' })).rejects.toBeTruthy()
+    expect(Date.now() - started).toBeLessThan(1_000)
+  })
+
+  it('abortPending rejects in-flight commands and keeps the session usable', async () => {
+    const transport = new MockTransport()
+    let release: (() => void) | undefined
+    transport.handler = () => new Promise((resolve) => { release = () => resolve({ ok: true }) })
+    const session = new CdpSession(transport)
+    await session.attach()
+    const first = session.send('Runtime.evaluate', { expression: '1' })
+    await Promise.resolve()
+    // "In flight" must mean the transport really received it.
+    expect(transport.sent.map(entry => entry.method)).toEqual(['Runtime.evaluate'])
+    session.abortPending(new Error('dialog'))
+    await expect(first).rejects.toBeTruthy()
+    transport.handler = () => ({ ok: true })
+    await expect(session.send('Runtime.evaluate', { expression: '2' })).resolves.toEqual({ ok: true })
+    release?.()
   })
 })

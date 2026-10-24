@@ -15,23 +15,43 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { BrowserRuntime, type WaitForOptions } from './runtime.ts'
-import { browserError } from './errors.ts'
+import { browserError, BrowserError } from './errors.ts'
 import type { BrowserSurface } from './surface.ts'
 import { httpOriginOf } from './credential-site.ts'
 import { snapshotNote } from './snapshot.ts'
-import { BROWSER_TOOL_TIMEOUT_MS, BROWSER_WAIT_FOR_DEADLINE_MS, TOOL_DEADLINE_MARGIN_MS, WAIT_FOR_MAX_MS } from './budgets.ts'
+import { parseTargetSpec } from './locator.ts'
+import {
+  BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS,
+  BROWSER_PROGRAM_TOOL_TIMEOUT_MS,
+  BROWSER_TOOL_TIMEOUT_MS,
+  BROWSER_WAIT_FOR_DEADLINE_MS,
+  DOWNLOAD_COMPLETION_TIMEOUT_MS,
+  EXPECT_TIMEOUT_DEFAULT_MS,
+  EXPECT_TIMEOUT_MAX_MS,
+  PROGRAM_MAX_HELPER_CALLS,
+  PROGRAM_SCRIPT_BUDGET_MS,
+  TOOL_DEADLINE_MARGIN_MS,
+  WAIT_FOR_MAX_MS,
+} from './budgets.ts'
+
+// Re-exported for the budget-registry tests (single source stays budgets.ts).
+export { BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS, BROWSER_PROGRAM_TOOL_TIMEOUT_MS, DOWNLOAD_COMPLETION_TIMEOUT_MS, EXPECT_TIMEOUT_DEFAULT_MS, EXPECT_TIMEOUT_MAX_MS } from './budgets.ts'
+import { uploadAllowDirs } from './uploads.ts'
+import { MODIFIER_BITS } from './runtime.ts'
 import type { BrowserInteractionHit, BrowserWaitUntil } from './types.ts'
 
 /** Valid waitUntil values for navigation tools. */
 const WAIT_UNTILS: readonly BrowserWaitUntil[] = ['domcontentloaded', 'load', 'networkidle']
 
-const WAIT_CONDITIONS = ['element-present', 'element-visible', 'text-appear', 'url-change', 'network-idle', 'settled'] as const
+
+const WAIT_CONDITIONS = ['element-present', 'element-visible', 'text-appear', 'url-change', 'url-match', 'network-idle', 'settled', 'function', 'popup', 'download', 'file-chooser'] as const
 
 /** Tool guidance band shown to the model (v4 wording). */
 const BROWSER_GUIDANCE = `You have an embedded browser shared with the user. Rules:
 1. Start with browser_open (url optional), then browser_navigate. browser_get_snapshot lists numbered interactable elements; target them by number or CSS selector.
 2. A number always means "that element of the snapshot you last took on this tab" — it is never re-resolved against the live page. After navigation or any page change, take a fresh snapshot first: pages re-render and renumber, so a stale number is refused with a 'stale-snapshot' error instead of clicking something you never saw. Every click/type/select result reports which element it actually hit.
-3. browser_screenshot only for visual confirmation; snapshots/text are cheaper. browser_eval runs one expression (a heuristic guardrail rejects statements/assignments and eval/Function; fetch/XHR and any page JS are allowed) and returns its resolved value — promise results are awaited.
+3. browser_screenshot only for visual confirmation; snapshots/text are cheaper. browser_eval runs a JavaScript PROGRAM in your tab and returns the last expression's resolved value (promises awaited): statements, loops, 'new' and top-level await are allowed, and ordinary DOM work (query, sort/filter data, focus/click/scroll, fetch/XHR/WebSocket) is allowed. It refuses only navigation (location/history), document.write/open/close, cookie/storage writes and eval/Function — use browser_navigate for navigation.
+   When the page opens a JavaScript dialog (alert/confirm/prompt) every other browser action on that tab fails with a 'dialog is showing' error: answer it with browser_dialog (accept or dismiss, promptText for prompts) instead of retrying.
 4. The user may take over the browser at any time from the browser window. Your queued actions then wait; only the user gives control back — never ask for it back, there is no tool for that, so do not fight the user. While the user holds control your browser actions fail with a 'window-controlled' error saying the user is operating the browser: that is NOT a broken page — ask the user to hand control back from the browser window, then retry (browser_list_tabs reports the same state).
 5. Use wait_for before acting on dynamic pages (SPAs) instead of sleeping.
 6. Bookmarks/history/downloads are shared with the user; save important pages with bookmarks_add; check your results via downloads_list (paths are usable by file tools).
@@ -84,6 +104,8 @@ function safeHit(runtime: BrowserRuntime, tabId: number, hit: BrowserInteraction
 interface ResolvedTarget {
   readonly selector: string
   readonly hit: BrowserInteractionHit
+  /** Snapshot entries that live in an iframe carry their frame index (C16). */
+  readonly frame?: number
 }
 
 /**
@@ -99,16 +121,30 @@ interface ResolvedTarget {
  * @param target - 快照编号（≥1 的整数）或 CSS 选择器。
  * @returns 选择器 + 命中身份。
  */
-function resolveTarget(runtime: BrowserRuntime, tabId: number, target: number | string): ResolvedTarget {
+async function resolveTarget(
+  runtime: BrowserRuntime,
+  tabId: number,
+  target: number | string,
+  signal?: AbortSignal,
+): Promise<ResolvedTarget> {
   if (typeof target === 'string') {
     if (target.trim() === '') throw new Error('target selector must not be empty')
-    const selector = target.trim()
+    const spec = parseTargetSpec(target)
+    if (spec.kind === 'index') return anchoredTarget(runtime, tabId, spec.index)
+    if (spec.kind === 'css') return { selector: spec.selector, hit: { selector: spec.selector } }
+    const { selector } = await runtime.resolveTargetSelector(tabId, target, signal)
     return { selector, hit: { selector } }
   }
+  return anchoredTarget(runtime, tabId, target)
+}
+
+/** Resolve a snapshot number against the LAST snapshot taken on this tab. */
+function anchoredTarget(runtime: BrowserRuntime, tabId: number, target: number): ResolvedTarget {
   if (!Number.isInteger(target) || target < 1) throw new Error('target number must be a positive integer')
   const { element, generation } = runtime.resolveSnapshotIndex(tabId, target)
   return {
     selector: element.selector,
+    ...(typeof element.frame === 'number' ? { frame: element.frame } : {}),
     hit: {
       index: element.index,
       snapshot: generation,
@@ -290,11 +326,9 @@ interface AgentProjectInfo {
 }
 
 /** Upload whitelist: downloads dir (always) + the calling session's cwd. */
-function uploadAllowDirs(runtime: BrowserRuntime, session: AgentProjectInfo['session']): string[] {
-  const dirs = [runtime.options.downloadDir]
+function uploadAllowDirsForTool(runtime: BrowserRuntime, session: AgentProjectInfo['session']): string[] {
   const cwd = session?.header?.cwd ?? session?.meta?.cwd ?? session?.cwd
-  if (typeof cwd === 'string' && cwd.trim() !== '') dirs.push(cwd.trim())
-  return dirs
+  return uploadAllowDirs({ downloadDir: runtime.options.downloadDir, uploadDirs: runtime.options.uploadDirs, ...(typeof cwd === 'string' ? { sessionCwd: cwd } : {}) })
 }
 
 /**
@@ -309,6 +343,90 @@ function uploadAllowDirs(runtime: BrowserRuntime, session: AgentProjectInfo['ses
  *   own disposers are not effect-scoped here, so dropping them left 32 tools
  *   registered against a disposed runtime (P2-29).
  */
+
+/**
+ * Clamp the `expectTimeoutMs` tool argument into `[1, EXPECT_TIMEOUT_MAX_MS]`.
+ * A non-finite value falls back to the default; an absent one too. The cap keeps
+ * the wait inside the tool registration budget so the upstream timeout policy can
+ * never replace our own `receipt.timedOut`.
+ * @param value - raw tool argument.
+ * @returns the effective wait in ms.
+ */
+export function clampExpectTimeoutMs(value: number | undefined): number {
+  const raw = value === undefined || !Number.isFinite(value) ? EXPECT_TIMEOUT_DEFAULT_MS : Math.floor(value)
+  return Math.min(EXPECT_TIMEOUT_MAX_MS, Math.max(1, raw))
+}
+
+/**
+ * Run one interaction with an optional `expect` arm (2026-10-23 C2).
+ *
+ * The waiter is armed BEFORE the action (arm → act → receipt). A pre-existing
+ * buffered event never fakes the receipt (strict mode); it is reported as
+ * `preExisting`. A timeout is NOT an action failure — the click already happened,
+ * so the receipt says `timedOut: true` and the model decides what to do. Every
+ * exit path cancels the waiter (and swallows its rejection) so a failed action
+ * cannot leave a waiter behind to eat the next event.
+ * @param runtime - browser runtime.
+ * @param tabId - target tab.
+ * @param args - tool args (`expect`, `expectTimeoutMs`).
+ * @param signal - caller cancellation.
+ * @param act - the action itself.
+ * @returns the action result plus an optional receipt.
+ */
+async function runWithExpectedEvent(
+  runtime: BrowserRuntime,
+  tabId: number,
+  args: { expect?: 'popup' | 'download' | 'dialog' | 'file-chooser', expectTimeoutMs?: number },
+  signal: AbortSignal | undefined,
+  act: () => Promise<unknown>,
+): Promise<{ result: unknown, receipt?: Record<string, unknown> }> {
+  const kind = args.expect
+  if (kind === undefined) return { result: await act() }
+  const bus = runtime.eventBus(tabId)
+  if (bus === undefined) throw browserError('policy', 'browser: this tab has no event bus (it was closed?)')
+  // Cap the wait: the tool registration budget is BROWSER_TOOL_TIMEOUT_MS, and an
+  // unbounded `expectTimeoutMs` would let the upstream timeout replace our own
+  // receipt (`receipt.timedOut` never arrives — audit M2 P2-2).
+  const timeout = clampExpectTimeoutMs(args.expectTimeoutMs)
+  // Strict mode: drain what happened BEFORE the arm into the receipt instead of
+  // letting it satisfy the arm (audit M2 P2-1: a stale event used to fake a
+  // receipt and shift every later expect by one).
+  const preExisting = bus.drain(kind).map(event => ({ seq: event.seq, at: event.at, payload: event.payload }))
+  const armed = bus.arm(kind, timeout, { consumeBuffered: false })
+  // The cancel path rejects; attach a handler now so a throwing action cannot
+  // leave an unhandled rejection behind.
+  const guarded = armed.promise.catch(() => undefined)
+  let receipt: Record<string, unknown>
+  try {
+    const result = await act()
+    signal?.throwIfAborted()
+    try {
+      const event = await armed.promise
+      receipt = { expected: kind, event: { seq: event.seq, at: event.at, payload: event.payload } }
+    } catch (cause) {
+      if ((cause as { code?: string }).code === 'timeout') receipt = { expected: kind, timedOut: true }
+      else throw cause
+    }
+    if (preExisting.length > 0) receipt['preExisting'] = preExisting
+    return { result, receipt }
+  } catch (cause) {
+    armed.cancel()
+    await guarded
+    // If the failure is a page dialog that opened mid-action, say so: otherwise
+    // the model only sees a CDP abort/timeout and has no way forward.
+    if (runtime.dialogState(tabId) !== undefined) {
+      const base = cause instanceof Error ? cause.message : String(cause)
+      const code = cause instanceof BrowserError ? cause.code : 'policy'
+      throw browserError(code, `${base} (a page dialog opened — call browser_dialog)`)
+    }
+    throw cause
+  } finally {
+    // Idempotent after settlement; removes a waiter if the action threw.
+    armed.cancel()
+    await guarded
+  }
+}
+
 export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabledGroups: ReadonlySet<string> = DEFAULT_GROUPS): () => void {
   const disposers: Array<() => void> = []
   // Dedicated helper so per-group enablement (enterprise policy, P2) filters
@@ -667,12 +785,17 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     description: string
     run: (r: BrowserRuntime, id: number, target: ResolvedTarget, signal: AbortSignal | undefined, args: Record<string, unknown>) => Promise<unknown> | unknown
   }> = [
-    { name: 'browser_click', title: 'Click', description: '[interact] Click an element of your tab (snapshot number or CSS selector). A snapshot number always means the element of the snapshot you last took on this tab; if the page navigated since, the call fails (stale-snapshot) instead of clicking a re-numbered element. The result reports which element was actually hit.', run: (r, id, target, signal) => (async () => {
+    { name: 'browser_click', title: 'Click', description: '[interact] Click an element of your tab (snapshot number, CSS selector, locator, or x/y coordinates). A snapshot number always means the element of the snapshot you last took on this tab; if the page navigated since, the call fails (stale-snapshot) instead of clicking a re-numbered element. The result reports which element was actually hit.', run: (r, id, target, signal, args) => (async () => {
       const point = await r.locateElement(id, target.selector, signal)
-      await r.clickAt(id, point, signal, target.hit)
+      await r.clickAt(id, point, signal, target.hit, (args as { button?: 'left' | 'right' | 'middle', clickCount?: number, modifiers?: number } | undefined) ?? undefined)
       return { ok: true }
     })() },
-    { name: 'browser_type', title: 'Type', description: '[interact] Type text into an input of your tab (snapshot number or CSS selector); clears the field first by default. A snapshot number always means the element of the snapshot you last took on this tab (stale-snapshot otherwise); the result reports which element was actually hit.', run: (r, id, target, signal, args) => r.typeInto(id, target.selector, String((args as { text: string }).text), (args as { clear?: boolean }).clear !== false, signal, target.hit) },
+    { name: 'browser_dblclick', title: 'Double click', description: '[interact] Double-click an element of your tab (snapshot number, CSS selector or locator). Sends two press/release pairs (clickCount 1 then 2) so Chromium emits a real dblclick.', run: (r, id, target, signal, args) => (async () => {
+      const point = await r.locateElement(id, target.selector, signal)
+      await r.clickAt(id, point, signal, target.hit, { doubleClick: true, ...((args as { modifiers?: number } | undefined) ?? {}) })
+      return { ok: true }
+    })() },
+    { name: 'browser_type', title: 'Type', description: '[interact] Type text into an input of your tab (snapshot number or CSS selector); clears the field first by default. A snapshot number always means the element of the snapshot you last took on this tab (stale-snapshot otherwise); the result reports which element was actually hit.', run: (r, id, target, signal, args) => r.typeInto(id, target.selector, String((args as { text: string }).text), (args as { clear?: boolean }).clear !== false, signal, target.hit, (args as { delayMs?: number }).delayMs) },
     { name: 'browser_select', title: 'Select option', description: '[interact] Select an option in a dropdown of your tab (snapshot number or CSS selector). A snapshot number always means the element of the snapshot you last took on this tab (stale-snapshot otherwise); the result reports which element was actually hit.', run: (r, id, target, signal, args) => r.selectOption(id, target.selector, (args as { value: string }).value, signal, target.hit) },
   ]
   for (const spec of interactSpecs) {
@@ -681,12 +804,51 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       description: spec.description,
       parameters: {
         tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
-        target: { oneOf: [{ type: 'integer' }, { type: 'string' }], required: true, description: 'Snapshot element number (as listed by browser_get_snapshot on this tab) or CSS selector.' },
-        ...(spec.name === 'browser_type' ? { text: { type: 'string', required: true, description: 'The text to type (any Unicode).' }, clear: { type: 'boolean', description: 'Clear the field before typing (default true).' } } : {}),
-        ...(spec.name === 'browser_select' ? { value: { type: 'string', required: true, description: 'The option value to select.' } } : {}),
+        target: { oneOf: [{ type: 'integer' }, { type: 'string' }], description: 'Snapshot element number (as listed by browser_get_snapshot on this tab) or a target string: a CSS selector, or a locator — text=Sign in / text="Sign in" (exact), role=button, role=button[name="Sign in"], loc=role:button[name*=Sign], loc=href:/checkout, xpath=//button[1], @12 / ref=12. Required unless x+y are given (browser_click only).' },
+        frame: { type: 'integer', description: 'Act inside this frame (1-based DOM index; 0 = main frame). Frame clicks are DOM-dispatched on the element.' },
+        x: { type: 'integer', description: 'Viewport X for a coordinate click (browser_click only; requires y).' },
+        y: { type: 'integer', description: 'Viewport Y for a coordinate click (browser_click only; requires x).' },
+        button: { type: 'string', enum: ['left', 'right', 'middle'], description: 'Mouse button (default left).' },
+        clickCount: { type: 'integer', description: 'Click count (1 default, 2 = double click).' },
+        modifiers: { type: 'array', items: { type: 'string', enum: ['ctrl', 'alt', 'meta', 'shift'] }, description: 'Modifier keys held during the click.' },
+
+        expect: { type: 'string', enum: ['popup', 'download', 'dialog', 'file-chooser'], description: 'Arm a receipt for an event this action is expected to cause. The waiter is armed BEFORE the action runs; an event that happened earlier never fakes the receipt (it is reported as preExisting).' },
+        expectTimeoutMs: { type: 'integer', description: 'How long to wait for the expected event (default 5000 ms; clamped to 10000 ms).' },
+        ...(spec.name === 'browser_type' ? {
+          text: { type: 'string', required: true, description: 'The text to type (any Unicode).' },
+          clear: { type: 'boolean', description: 'Clear the field before typing (default true).' },
+          delayMs: { type: 'integer', description: 'Per-character delay for slow inputs (default 0; the TOTAL delay is capped at 5000 ms).' },
+        } : {}),
+        ...(spec.name === 'browser_select' ? {
+          value: { oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }], description: 'Option value(s) to select.' },
+          label: { oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }], description: 'Visible option label(s) to select (exact, then case-insensitive).' },
+          index: { oneOf: [{ type: 'integer' }, { type: 'array', items: { type: 'integer' } }], description: 'Zero-based option index(es) to select.' },
+          clear: { type: 'boolean', description: 'Clear the selection instead of selecting (true).' },
+        } : {}),
       },
       output: {
-        schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean' }, hit: INTERACTION_HIT_SCHEMA } },
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            ok: { type: 'boolean' },
+            hit: INTERACTION_HIT_SCHEMA,
+            ...(spec.name === 'browser_select'
+              ? { selected: { type: 'array', items: { type: 'string' } }, count: { type: 'integer' } }
+              : {}),
+            ...(spec.name === 'browser_type' ? { appliedDelayMs: { type: 'integer' } } : {}),
+            receipt: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                expected: { type: 'string' },
+                timedOut: { type: 'boolean' },
+                event: { type: 'json' },
+                preExisting: { type: 'array', items: { type: 'json' } },
+              },
+            },
+          },
+        },
         render: (_args, value) => [{ type: 'text', text: formatInteraction(spec.title, value) }],
       },
       timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
@@ -695,10 +857,448 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       async execute(args, exec) {
         noteAgent(runtime, exec.agent)
         const tabId = await tabOf((args as { tab?: number }).tab)
-        const target = resolveTarget(runtime, tabId, (args as { target: number | string }).target)
-        await spec.run(runtime, tabId, target, exec.signal, args)
+        const interactArgs = args as {
+          target?: number | string
+          x?: number
+          y?: number
+          button?: 'left' | 'right' | 'middle'
+          clickCount?: number
+          modifiers?: string[]
+          expect?: 'popup' | 'download' | 'dialog' | 'file-chooser'
+          expectTimeoutMs?: number
+          frame?: number
+        }
+        if (typeof interactArgs.frame === 'number' && interactArgs.frame < 0) throw new Error('frame must be >= 0')
+        if (typeof interactArgs.frame === 'number' && interactArgs.frame > 0) {
+          if (spec.name !== 'browser_click') throw new Error(`frame is not supported for ${spec.name} yet — use browser_click or browser_get_text`)
+          if (typeof interactArgs.x === 'number' || typeof interactArgs.y === 'number') throw new Error('frame and x/y are mutually exclusive')
+          if (interactArgs.target === undefined) throw new Error('target is required when frame is set')
+          if (interactArgs.button !== undefined && interactArgs.button !== 'left') throw new Error('frame clicks are left-button only')
+          if ((interactArgs.clickCount ?? 1) > 1) throw new Error('frame clicks are single-click only')
+          if ((interactArgs.modifiers ?? []).length > 0) throw new Error('frame clicks do not take modifiers yet')
+        }
+        const modifierBits = (interactArgs.modifiers ?? []).reduce((sum, name) => {
+          const bit = MODIFIER_BITS[name as 'ctrl' | 'alt' | 'meta' | 'shift']
+          if (bit === undefined) throw new Error(`unknown modifier: ${name}`)
+          return sum + bit
+        }, 0)
+        const pointClick = spec.name === 'browser_click' && typeof interactArgs.x === 'number' && typeof interactArgs.y === 'number'
+        const hasX = typeof interactArgs.x === 'number'
+        const hasY = typeof interactArgs.y === 'number'
+        if (hasX !== hasY) throw new Error('a coordinate click needs BOTH x and y (pass target for element addressing instead)')
+        if (pointClick && interactArgs.target !== undefined) throw new Error('target and x/y are mutually exclusive — pass one addressing form')
+        if (!pointClick && interactArgs.target === undefined) throw new Error('target is required (or pass x and y for a coordinate click)')
+        const target = pointClick ? undefined : await resolveTarget(runtime, tabId, interactArgs.target as number | string, exec.signal)
+        if (typeof interactArgs.frame === 'number' && interactArgs.frame > 0 && target?.frame !== undefined && interactArgs.frame !== target.frame) {
+          throw new Error(`frame ${String(interactArgs.frame)} conflicts with the frame of snapshot element ${String(target.hit.index)} (frame ${String(target.frame)})`)
+        }
+        const frameIndex = typeof interactArgs.frame === 'number' && interactArgs.frame > 0
+          ? interactArgs.frame
+          : (target?.frame ?? 0)
+        if (frameIndex > 0) await runtime.assertFrameFresh(tabId, frameIndex)
+        const outcome = await runWithExpectedEvent(runtime, tabId, interactArgs, exec.signal, async () => {
+          if (frameIndex > 0) {
+            await runtime.clickInFrame(tabId, frameIndex, (target as { selector: string }).selector, exec.signal)
+            return { ok: true }
+          }
+          if (target === undefined) {
+            await runtime.clickAt(tabId, { x: interactArgs.x as number, y: interactArgs.y as number }, exec.signal, undefined, {
+              ...(interactArgs.button === undefined ? {} : { button: interactArgs.button }),
+              ...(interactArgs.clickCount === undefined ? {} : { clickCount: interactArgs.clickCount }),
+              modifiers: modifierBits,
+            })
+            return { ok: true }
+          }
+          // Click-like specs take the modifier/button options as their own args.
+          const specArgs = spec.name === 'browser_click' || spec.name === 'browser_dblclick'
+            ? { ...(args as Record<string, unknown>), button: interactArgs.button, clickCount: interactArgs.clickCount, modifiers: modifierBits }
+            : args
+          return await spec.run(runtime, tabId, target, exec.signal, specArgs)
+        })
         exec.signal.throwIfAborted()
-        return { ok: true, hit: safeHit(runtime, tabId, target.hit) }
+        const selected = (outcome.result ?? {}) as { selected?: string[], count?: number, appliedDelayMs?: number }
+        return {
+          ok: true,
+          ...(spec.name === 'browser_type' && selected.appliedDelayMs !== undefined ? { appliedDelayMs: selected.appliedDelayMs } : {}),
+          ...(target === undefined ? {} : { hit: safeHit(runtime, tabId, target.hit) }),
+          ...(spec.name === 'browser_select' && selected.selected !== undefined
+            ? { selected: selected.selected, count: selected.count ?? selected.selected.length }
+            : {}),
+          ...(outcome.receipt === undefined ? {} : { receipt: outcome.receipt }),
+        }
+      },
+    }))
+  }
+
+  register(defineTool({
+    name: 'browser_dialog',
+    description: '[interact] Answer the JavaScript dialog (alert / confirm / prompt / beforeunload) that is blocking your tab. While a dialog is open every other browser action on that tab fails fast with a "dialog is showing" error — answer it here instead of retrying. Accepting a beforeunload dialog means leaving the page. promptText only applies to prompt dialogs (and only when accepting). REFUSED when the tab has no pending dialog (not-found) — there is nothing to answer.',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      action: { type: 'string', enum: ['accept', 'dismiss'], required: true, description: 'accept (OK / leave page) or dismiss (Cancel / stay).' },
+      promptText: { type: 'string', description: 'Text to enter for a prompt dialog (accept only).' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          ok: { type: 'boolean' },
+          dialog: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              type: { type: 'string' },
+              message: { type: 'string' },
+              url: { type: 'string' },
+            },
+          },
+        },
+      },
+      render: (_args, value) => {
+        const dialog = (value as { dialog?: { type?: string, message?: string } }).dialog
+        return [{ type: 'text', text: dialog === undefined ? 'Dialog answered.' : `Answered ${dialog.type ?? 'dialog'} dialog: ${String(dialog.message ?? '').slice(0, 120)}` }]
+      },
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Answer dialog'),
+    async execute(args, exec) {
+      const { tab, action, promptText } = args as { tab?: number; action?: unknown; promptText?: unknown }
+      if (action !== 'accept' && action !== 'dismiss') throw new Error('action must be accept or dismiss')
+      if (promptText !== undefined && typeof promptText !== 'string') throw new Error('promptText must be a string')
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      const dialog = await runtime.handleDialog(tabId, action, promptText as string | undefined, exec.signal)
+      exec.signal.throwIfAborted()
+      return { ok: true, dialog: { type: dialog.type, message: dialog.message, url: dialog.url } }
+    },
+  }))
+
+  register(defineTool({
+    name: 'browser_file_chooser',
+    description: '[interact] Answer the file chooser a click on <input type="file"> opened. While a chooser is pending the page waits: pass paths (absolute files inside the allowed upload directories) to select them, or cancel:true to finish with an empty selection. The chooser is intercepted over CDP, so there is no native dialog to click. Paths go through the same allow-list as browser_upload_file.',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      paths: { type: 'array', items: { type: 'string' }, description: 'Absolute file paths to select.' },
+      cancel: { type: 'boolean', description: 'Finish with an empty selection (true).' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          ok: { type: 'boolean' },
+          files: { type: 'array', items: { type: 'string' } },
+          cancelled: { type: 'boolean' },
+        },
+      },
+      render: (_args, value) => {
+        const files = (value as { files?: string[] }).files
+        return [{ type: 'text', text: files === undefined ? 'File chooser cancelled.' : `File chooser: ${files.length} file(s) selected.` }]
+      },
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Answer file chooser'),
+    async execute(args, exec) {
+      const { tab, paths, cancel } = args as { tab?: number; paths?: unknown; cancel?: unknown }
+      const cancelRequested = cancel === true
+      const hasPaths = Array.isArray(paths) && paths.length > 0
+      if (cancelRequested === hasPaths) throw new Error('pass either paths or cancel:true (exactly one)')
+      if (hasPaths && !paths.every(item => typeof item === 'string')) throw new Error('paths must be strings')
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      if (cancelRequested) {
+        const outcome = await runtime.chooseFiles(tabId, { cancel: true }, uploadAllowDirsForTool(runtime, (exec.agent as AgentProjectInfo | undefined)?.session), exec.signal)
+        exec.signal.throwIfAborted()
+        return { ok: true, cancelled: outcome.cancelled === true }
+      }
+      const allowedDirs = uploadAllowDirsForTool(runtime, (exec.agent as AgentProjectInfo | undefined)?.session)
+      const outcome = await runtime.chooseFiles(tabId, { files: paths as string[] }, allowedDirs, exec.signal)
+      exec.signal.throwIfAborted()
+      return outcome.files === undefined ? { ok: true } : { ok: true, files: outcome.files }
+    },
+  }))
+
+  register(defineTool({
+    name: 'browser_hover',
+    description: '[interact] Move the pointer over an element (snapshot number, CSS selector or locator) to trigger :hover / mouseenter handlers. Uses real mouse events when the window can receive input, otherwise DOM-level pointerover/mouseover events (recorded in the op log).',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      target: { oneOf: [{ type: 'integer' }, { type: 'string' }], required: true, description: 'Snapshot element number, CSS selector, or locator (text=… / role=… / xpath=… / loc=…).' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean' }, hit: INTERACTION_HIT_SCHEMA } },
+      render: (_args, value) => [{ type: 'text', text: formatInteraction('Hovered', value) }],
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Hover'),
+    async execute(args, exec) {
+      const { tab, target: rawTarget } = args as { tab?: number; target: number | string }
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      const target = await resolveTarget(runtime, tabId, rawTarget, exec.signal)
+      const point = await runtime.locateElement(tabId, target.selector, exec.signal)
+      await runtime.hoverAt(tabId, point, exec.signal)
+      exec.signal.throwIfAborted()
+      return { ok: true, hit: safeHit(runtime, tabId, target.hit) }
+    },
+  }))
+
+  register(defineTool({
+    name: 'browser_drag',
+    description: '[interact] Pointer-drag from one element to another (snapshot number, CSS selector or locator for both ends). v1 sends a real pointer sequence (pressed → intermediate moves → released); HTML5 dragstart/drop are NOT synthesized, so DnD libraries that require native drag events will not react. Requires a window that can receive real input.',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      from: { oneOf: [{ type: 'integer' }, { type: 'string' }], required: true, description: 'Drag start: snapshot number, CSS selector or locator.' },
+      to: { oneOf: [{ type: 'integer' }, { type: 'string' }], required: true, description: 'Drag end: snapshot number, CSS selector or locator.' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean' }, mode: { type: 'string' } } },
+      render: () => [{ type: 'text', text: 'Dragged (pointer mode).' }],
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Drag'),
+    async execute(args, exec) {
+      const { tab, from, to } = args as { tab?: number; from: number | string; to: number | string }
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      const start = await resolveTarget(runtime, tabId, from, exec.signal)
+      const end = await resolveTarget(runtime, tabId, to, exec.signal)
+      const startPoint = await runtime.locateElement(tabId, start.selector, exec.signal)
+      const endPoint = await runtime.locateElement(tabId, end.selector, exec.signal)
+      await runtime.dragAt(tabId, startPoint, endPoint, exec.signal)
+      exec.signal.throwIfAborted()
+      return { ok: true, mode: 'pointer' }
+    },
+  }))
+
+  register(defineTool({
+    name: 'browser_hotkey',
+    description: '[interact] Press a keyboard chord (e.g. ["Control","A"], ["Shift","Tab"]): keys go down in order and up in reverse. Browser-application shortcuts (Ctrl+W/F12/Ctrl+Shift+I/...) are refused before any event is sent. Requires a window that can receive real input.',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      keys: { type: 'array', items: { type: 'string' }, required: true, description: 'Chord keys, modifiers first (1–4 keys), e.g. ["Control","A"].' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean' } } },
+      render: () => [{ type: 'text', text: 'Chord sent.' }],
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Press chord'),
+    async execute(args, exec) {
+      const { tab, keys } = args as { tab?: number; keys: string[] }
+      if (!Array.isArray(keys) || keys.some(key => typeof key !== 'string')) throw new Error('keys must be strings')
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      await runtime.hotkey(tabId, keys, exec.signal)
+      exec.signal.throwIfAborted()
+      return { ok: true }
+    },
+  }))
+
+  register(defineTool({
+    name: 'browser_clipboard',
+    description: '[control] Read or write the OS clipboard (this is the system clipboard, not navigator.clipboard). read returns at most 64 KiB (truncated flag); write accepts at most 1 MiB of text. Reading is the agent explicitly asking for clipboard content — nothing is read automatically.',
+    parameters: {
+      action: { type: 'string', enum: ['read', 'write'], required: true, description: 'read or write.' },
+      text: { type: 'string', description: 'Text to write (required for write; max 1 MiB).' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          text: { type: 'string' },
+          truncated: { type: 'boolean' },
+          length: { type: 'integer' },
+        },
+      },
+      render: (_args, value) => {
+        const text = (value as { text?: string }).text
+        return [{ type: 'text', text: text === undefined ? 'Clipboard written.' : `Clipboard: ${text.length} chars${(value as { truncated?: boolean }).truncated === true ? ' (truncated)' : ''}` }]
+      },
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Clipboard'),
+    async execute(args, exec) {
+      const { action, text } = args as { action?: 'read' | 'write'; text?: unknown }
+      noteAgent(runtime, exec.agent)
+      if (action === 'read') {
+        const result = await runtime.clipboardRead(exec.signal)
+        exec.signal.throwIfAborted()
+        return { text: result.text, truncated: result.truncated, length: result.text.length }
+      }
+      if (action === 'write') {
+        if (typeof text !== 'string') throw new Error('text is required for clipboard write')
+        await runtime.clipboardWrite(text, exec.signal)
+        exec.signal.throwIfAborted()
+        return { length: text.length }
+      }
+      throw new Error('action must be read or write')
+    },
+  }))
+
+  register(defineTool({
+    name: 'browser_fetch',
+    description: '[write] Run an HTTP request from INSIDE the page (same-origin cookies are sent automatically) without navigating. Redirects are NOT followed (`redirect:error`): a 3xx response fails instead of silently hitting another host. Auth headers are ambient and cannot be overridden; the body is capped and the response is bounded: text is decoded as UTF-8 and capped, non-text responses return metadata only (bytes comes from content-length when present).',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      url: { type: 'string', required: true, description: 'Absolute http(s) URL.' },
+      method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'], description: 'HTTP method (default GET; GET/HEAD take no body).' },
+      headers: { type: 'array', items: { type: 'string' }, description: 'Extra request headers as "Name: value" lines. Authorization/Cookie/Host/Origin/Referer/Content-Length/X-Forwarded-…/Proxy-… are refused; content-type must be a text type or json/xml/urlencoded.' },
+      body: { type: 'string', description: 'Request body (max 256 KiB UTF-8; not allowed for GET/HEAD).' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          status: { type: 'integer' },
+          ok: { type: 'boolean' },
+          url: { type: 'string' },
+          contentType: { type: 'string' },
+          bytes: { type: 'integer' },
+          body: { type: 'string' },
+          truncated: { type: 'boolean' },
+          bodyOmitted: { type: 'boolean' },
+        },
+      },
+      render: (_args, value) => {
+        const result = value as { status?: number, bytes?: number, bodyOmitted?: boolean }
+        return [{ type: 'text', text: `Fetch: HTTP ${String(result.status ?? 0)}, ${String(result.bytes ?? 0)} bytes${result.bodyOmitted === true ? ' (body omitted: non-text)' : ''}` }]
+      },
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Fetch in page'),
+    async execute(args, exec) {
+      const { tab, url, method, headers, body } = args as { tab?: number, url: string, method?: string, headers?: string[], body?: string }
+      if (typeof url !== 'string' || url.trim() === '') throw new Error('url is required')
+      const headerMap: Record<string, string> = {}
+      for (const line of headers ?? []) {
+        const index = line.indexOf(':')
+        if (index <= 0) throw new Error(`header line must look like "Name: value": ${line}`)
+        headerMap[line.slice(0, index).trim()] = line.slice(index + 1).trim()
+      }
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      const result = await runtime.pageFetch(tabId, {
+        url: url.trim(),
+        ...(method === undefined ? {} : { method }),
+        ...(Object.keys(headerMap).length === 0 ? {} : { headers: headerMap }),
+        ...(body === undefined ? {} : { body }),
+      }, exec.signal)
+      exec.signal.throwIfAborted()
+      return {
+        status: result.status,
+        ok: result.ok,
+        url: result.url,
+        contentType: result.contentType,
+        bytes: result.bytes,
+        ...(result.body === null ? {} : { body: result.body }),
+        truncated: result.truncated,
+        bodyOmitted: result.bodyOmitted,
+      }
+    },
+  }))
+
+  register(defineTool({
+    name: 'browser_emulate',
+    description: '[control] Emulate a viewport and/or user agent for your tab (responsive pages, device UAs). Width/height are clamped to 200-4096, scale 0.1-4. Pass reset:true to drop both overrides. The state is per tab and visible in the activity log.',
+    parameters: {
+      tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      viewport: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          width: { type: 'integer' },
+          height: { type: 'integer' },
+          deviceScaleFactor: { type: 'number' },
+          mobile: { type: 'boolean' },
+        },
+        description: 'Viewport override (width/height 200-4096).',
+      },
+      userAgent: { type: 'string', description: 'User-Agent override string.' },
+      reset: { type: 'boolean', description: 'Clear both overrides (true).' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          viewport: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { width: { type: 'integer' }, height: { type: 'integer' }, deviceScaleFactor: { type: 'number' }, mobile: { type: 'boolean' } },
+          },
+          userAgent: { type: 'string' },
+        },
+      },
+      render: (_args, value) => {
+        const state = value as { viewport?: { width?: number, height?: number }, userAgent?: string }
+        return [{ type: 'text', text: state.viewport === undefined && state.userAgent === undefined ? 'Emulation reset.' : `Emulation: ${state.viewport === undefined ? 'viewport unchanged' : `${String(state.viewport.width)}x${String(state.viewport.height)}`}${state.userAgent === undefined ? '' : ', user-agent set'}` }]
+      },
+    },
+    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    isConcurrencySafe: () => false,
+    presentCall: present('Emulate device'),
+    async execute(args, exec) {
+      const { tab, viewport, userAgent, reset } = args as { tab?: number, viewport?: { width: number, height: number, deviceScaleFactor?: number, mobile?: boolean }, userAgent?: string, reset?: boolean }
+      noteAgent(runtime, exec.agent)
+      const tabId = await tabOf(tab)
+      const result = await runtime.emulate(tabId, {
+        ...(viewport === undefined ? {} : { viewport }),
+        ...(userAgent === undefined ? {} : { userAgent }),
+        ...(reset === undefined ? {} : { reset }),
+      }, exec.signal)
+      exec.signal.throwIfAborted()
+      return result
+    },
+  }))
+
+  // Programming mode (2026-10-23): registered ONLY when the host injected a ptc
+  // runtime. There is no fallback to eval or to a tool sequence (audit R5/R9).
+  if (runtime.programRuntimeAvailable && runtime.options.programEnabled === true) {
+    register(defineTool({
+      name: 'browser_run',
+      description: `[script] Run a TypeScript program that drives the browser through the frozen \`browser\` helpers (same capabilities as the individual tools; no filesystem, network, process, CDP or cookie access — helpers are the only capability). Useful for multi-step work: read, branch, loop, aggregate. Script eval/Function is a language feature and NOT a browser channel: page work still goes through browser.eval (which keeps the eval policy). Returns the program result (JSON, ≤256 KiB), console output and the helper-call count. Program budget ${String(Math.round(PROGRAM_SCRIPT_BUDGET_MS / 1000))}s, at most ${String(PROGRAM_MAX_HELPER_CALLS)} helper calls. Helper results: tabs→{tabs}, downloads→{downloads}, history→{entries}, bookmarks→{bookmarks}, download→{started,download|timedOut}, fetch→{status,ok,body,...}; the screenshot and fileChooser helpers are not wired yet and fail with an explicit policy error.`,
+      parameters: {
+        program: { type: 'string', required: true, description: 'TypeScript/JS program; may await browser.* helpers; return a JSON value.' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            result: { type: 'json' },
+            console: { type: 'string' },
+            truncated: { type: 'boolean' },
+            helperCalls: { type: 'integer' },
+          },
+        },
+        render: (_args, value) => {
+          const out = value as { truncated?: boolean, helperCalls?: number }
+          return [{ type: 'text', text: `Browser program finished (${String(out.helperCalls ?? 0)} helper calls${out.truncated === true ? ', result truncated' : ''}).` }]
+        },
+      },
+      timeoutMs: BROWSER_PROGRAM_TOOL_TIMEOUT_MS,
+      isConcurrencySafe: () => false,
+      presentCall: present('Run browser program'),
+      async execute(args, exec) {
+        const { program } = args as { program?: unknown }
+        if (typeof program !== 'string' || program.trim() === '') throw new Error('program is required')
+        noteAgent(runtime, exec.agent)
+        const session = (exec.agent as AgentProjectInfo | undefined)?.session
+        const sessionCwd = session?.header?.cwd ?? session?.meta?.cwd ?? session?.cwd
+        const outcome = await runtime.runProgram(program, exec.signal, typeof sessionCwd === 'string' ? sessionCwd : undefined)
+        exec.signal.throwIfAborted()
+        return outcome
       },
     }))
   }
@@ -709,23 +1309,45 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
       key: { type: 'string', required: true, description: 'The key to press.' },
+      modifiers: { type: 'array', items: { type: 'string', enum: ['ctrl', 'alt', 'meta', 'shift'] }, description: 'Modifier keys held during the press (ctrl/alt/meta/shift).' },
+      action: { type: 'string', enum: ['press', 'down', 'up'], description: 'press (default), or hold/release a key with down/up (pair them; the runtime force-releases on teardown).' },
+      times: { type: 'integer', description: 'Repeat count for press (default 1, max 50).' },
+      expect: { type: 'string', enum: ['popup', 'download', 'dialog', 'file-chooser'], description: 'Arm a receipt for an event this action is expected to cause (armed BEFORE the action).' },
+      expectTimeoutMs: { type: 'integer', description: 'How long to wait for the expected event (default 5000 ms; clamped to 10000 ms).' },
     },
     output: {
-      schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean' } } },
+      schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean' },             receipt: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                expected: { type: 'string' },
+                timedOut: { type: 'boolean' },
+                event: { type: 'json' },
+                preExisting: { type: 'array', items: { type: 'json' } },
+              },
+            }, } },
       render: () => [{ type: 'text', text: 'Key pressed.' }],
     },
     timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
     isConcurrencySafe: () => false,
     presentCall: present('Press key'),
     async execute(args, exec) {
-      const { tab, key } = args as { tab?: number; key: string }
+      const { tab, key, modifiers, action, times } = args as { tab?: number; key: string; modifiers?: string[]; action?: 'press' | 'down' | 'up'; times?: number }
       if (typeof key !== 'string' || key.length === 0) throw new Error('key must be a non-empty string')
+      const modifierBits = (modifiers ?? []).reduce((sum, name) => {
+        const bit = MODIFIER_BITS[name as 'ctrl' | 'alt' | 'meta' | 'shift']
+        if (bit === undefined) throw new Error(`unknown modifier: ${name}`)
+        return sum + bit
+      }, 0)
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
-      await runtime.pressKey(tabId, key, exec.signal)
-      exec.signal.throwIfAborted()
-      assertNoFailedOp(runtime, tabId, 'browser_press', `browser: the key press was not delivered — the page had no element to receive "${key}" (nothing was focused and there is no body)`)
-      return { ok: true }
+      const outcome = await runWithExpectedEvent(runtime, tabId, args as { expect?: 'popup' | 'download' | 'dialog' | 'file-chooser', expectTimeoutMs?: number }, exec.signal, async () => {
+        await runtime.pressKey(tabId, key, exec.signal, { modifiers: modifierBits, ...(action === undefined ? {} : { action }), ...(times === undefined ? {} : { times }) })
+        exec.signal.throwIfAborted()
+        assertNoFailedOp(runtime, tabId, 'browser_press', `browser: the key press was not delivered — the page had no element to receive "${key}" (nothing was focused and there is no body)`)
+        return { ok: true }
+      })
+      return { ok: true, ...(outcome.receipt === undefined ? {} : { receipt: outcome.receipt }) }
     },
   }))
 
@@ -735,33 +1357,70 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
       deltaY: { type: 'integer', description: 'Vertical scroll amount in pixels (negative scrolls up).' },
-      target: { oneOf: [{ type: 'integer' }, { type: 'string' }], description: 'Snapshot element number (as listed by browser_get_snapshot on this tab) or CSS selector to bring into view.' },
+      deltaX: { type: 'integer', description: 'Horizontal scroll amount in pixels.' },
+      position: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { x: { type: 'integer' }, y: { type: 'integer' } },
+        description: 'Absolute scroll position (mutually exclusive with deltaY/deltaX/target/untilBottom).',
+      },
+      untilBottom: { type: 'boolean', description: 'Scroll one screen at a time until the bottom (max 20 steps; the result says reachedBottom).' },
+      settle: { type: 'boolean', description: 'After scrolling, wait up to 2 s for the scroll height to stop growing (lazy-loaded lists).' },
+      target: { oneOf: [{ type: 'integer' }, { type: 'string' }], description: 'Snapshot element number, CSS selector, or locator (text=… / role=… / xpath=… / loc=…) to bring into view.' },
+      expect: { type: 'string', enum: ['popup', 'download', 'dialog', 'file-chooser'], description: 'Arm a receipt for an event this action is expected to cause (armed BEFORE the action).' },
+      expectTimeoutMs: { type: 'integer', description: 'How long to wait for the expected event (default 5000 ms; clamped to 10000 ms).' },
     },
     output: {
-      schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean' }, hit: INTERACTION_HIT_SCHEMA } },
+      schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean' }, hit: INTERACTION_HIT_SCHEMA, scrollX: { type: 'integer' }, scrollY: { type: 'integer' }, reachedBottom: { type: 'boolean' }, bottomReason: { type: 'string', enum: ['reached', 'no-progress', 'step-limit'] },             receipt: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                expected: { type: 'string' },
+                timedOut: { type: 'boolean' },
+                event: { type: 'json' },
+                preExisting: { type: 'array', items: { type: 'json' } },
+              },
+            }, } },
       render: (_args, value) => [{ type: 'text', text: formatInteraction('Scrolled', value) }],
     },
     timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
     isConcurrencySafe: () => false,
     presentCall: present('Scroll'),
     async execute(args, exec) {
-      const { tab, deltaY, target } = args as { tab?: number; deltaY?: number; target?: number | string }
+      const { tab, deltaY, deltaX, position, untilBottom, settle, target } = args as {
+        tab?: number
+        deltaY?: number
+        deltaX?: number
+        position?: { x: number; y: number }
+        untilBottom?: boolean
+        settle?: boolean
+        target?: number | string
+      }
+      const hasDelta = deltaY !== undefined || deltaX !== undefined
+      if (position !== undefined && (hasDelta || target !== undefined || untilBottom === true)) {
+        throw new Error('position is mutually exclusive with deltaY/deltaX/target/untilBottom')
+      }
+      if (untilBottom === true && target !== undefined) throw new Error('untilBottom is mutually exclusive with target')
+      if (target !== undefined && hasDelta) throw new Error('target scrolling takes no deltaY/deltaX')
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
-      const resolved = target === undefined ? undefined : resolveTarget(runtime, tabId, target)
+      const resolved = target === undefined ? undefined : await resolveTarget(runtime, tabId, target, exec.signal)
       const selector = resolved?.selector
-      // 2026-09-15 审计 P2：`runtime.scroll` 的页内脚本在元素不存在时只返回
-      // 'not found'，而 runtime 丢弃了这个返回值、照常记一条成功——工具于是回
-      // {ok:true}，模型以为滚过去了。工具层用一次与 browser_type 同口径的真实
-      // DOM 读回（locateElement 就是 `document.querySelector` + 判定，且顺带做了
-      // 它要求的 scrollIntoView）把否定结果变成明确的 not-found 失败。
-      //
-      // 诚实边界：读回之后元素若恰好消失，runtime 那一层仍会静默成功——要彻底
-      // 关掉得让 `runtime.scroll` 返回页内判定（runtime 生命周期文件本轮冻结）。
-      if (selector !== undefined) await runtime.locateElement(tabId, selector, exec.signal)
-      await runtime.scroll(tabId, deltaY ?? 0, selector, exec.signal)
+      const outcome = await runWithExpectedEvent(runtime, tabId, args as { expect?: 'popup' | 'download' | 'dialog' | 'file-chooser', expectTimeoutMs?: number }, exec.signal, async () => {
+        // 2026-09-15 审计 P2：页内脚本在元素不存在时只返回 'not found' 而旧实现丢弃
+        // 返回值；工具层用 locateElement 做一次真实 DOM 读回，把否定结果变成
+        // not-found（读回后元素恰好消失仍会静默成功，属已知边界）。
+        if (selector !== undefined) await runtime.locateElement(tabId, selector, exec.signal)
+        return await runtime.scroll(tabId, deltaY ?? 0, selector, exec.signal, {
+          ...(deltaX === undefined ? {} : { deltaX }),
+          ...(position === undefined ? {} : { position }),
+          ...(untilBottom === undefined ? {} : { untilBottom }),
+          ...(settle === undefined ? {} : { settle }),
+        })
+      })
       exec.signal.throwIfAborted()
-      return resolved === undefined ? { ok: true } : { ok: true, hit: safeHit(runtime, tabId, resolved.hit) }
+      const scrollOutcome = (outcome.result ?? {}) as { reachedBottom?: boolean, scrollX?: number, scrollY?: number }
+      return { ok: true, ...(resolved === undefined ? {} : { hit: safeHit(runtime, tabId, resolved.hit) }), ...scrollOutcome, ...(outcome.receipt === undefined ? {} : { receipt: outcome.receipt }) }
     },
   }))
 
@@ -816,10 +1475,10 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_upload_file',
-    description: '[interact] Upload local files through the page file input (default first input[type=file]; no dialogs). Only paths inside the downloads dir or the current workspace are allowed.',
+    description: '[interact] Upload local files through the page file input (default first input[type=file]; no dialogs). Only paths inside the deployment-configured upload dirs, the downloads dir or the current workspace are allowed (this list is configuration, never a tool argument).',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
-      paths: { type: 'array', required: true, items: { type: 'string' }, description: 'Absolute paths to upload (allowed: downloads dir + current workspace).' },
+      paths: { type: 'array', required: true, items: { type: 'string' }, description: 'Absolute paths to upload (allowed: deployment upload dirs + downloads dir + current workspace).' },
     },
     output: {
       schema: { type: 'object', additionalProperties: false, properties: { uploaded: { type: 'integer' } } },
@@ -831,7 +1490,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     async execute(args, exec) {
       const { tab, paths } = args as { tab?: number; paths: string[] }
       if (!Array.isArray(paths) || paths.length === 0) throw new Error('paths must be a non-empty array of absolute paths')
-      const allowedDirs = uploadAllowDirs(runtime, (exec.agent as AgentProjectInfo | undefined)?.session)
+      const allowedDirs = uploadAllowDirsForTool(runtime, (exec.agent as AgentProjectInfo | undefined)?.session)
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
       return await runtime.uploadFile(tabId, paths, exec.signal, allowedDirs)
@@ -845,12 +1504,15 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     description: '[read] List the numbered interactable elements of your tab (links, buttons, inputs, selects, textareas) plus page header info (url/title). Numbers are the targets for click/type/select/scroll — and they always mean "this snapshot", never a re-numbered live page: after the page navigates, a stale number is refused (stale-snapshot) so you can never act on an element you have not seen. Password fields are listed (number/selector usable) but never expose their value: the text reads the field label or "(password field)". On a tab that received credentials through browser_fill_credentials, the injected values are masked (****) in the element text, url and title — VERBATIM occurrences only (a value the page transformed is not covered). The list is bounded: when it was cut, or when the page contains sub-frames / shadow roots whose content this snapshot does NOT include, `truncated`/`total`/`note` say so — an absent element is not proof it does not exist.',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      includeShadow: { type: 'boolean', description: 'Also list elements inside OPEN shadow roots (append-only; their selector uses " >>> "; default false keeps the output identical to before).' },
+      includeFrames: { type: 'boolean', description: 'Also list elements inside same-origin iframes, depth-first (append-only; entries carry frame:N using the same numbering as browser_eval(frame:N); cross-origin frames consume a number and are reported as unreadable; default false).' },
     },
     output: {
       schema: {
         type: 'object',
         additionalProperties: false,
         properties: {
+          crossOriginFrames: { type: 'array', items: { type: 'integer' }, description: 'Frames skipped because they are cross-origin (only with includeFrames).' },
           elements: {
             type: 'array',
             items: {
@@ -863,6 +1525,8 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
                 selector: { type: 'string' },
                 visible: { type: 'boolean' },
                 disabled: { type: 'boolean' },
+                frame: { type: 'integer' },
+                shadow: { type: 'boolean' },
               },
             },
           },
@@ -887,7 +1551,11 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     async execute(args, exec) {
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf((args as { tab?: number }).tab)
-      const { elements, meta, generation } = await runtime.modelSnapshot(tabId, exec.signal)
+      const extras = {
+        ...(args as { includeShadow?: boolean }).includeShadow === true ? { includeShadow: true } : {},
+        ...(args as { includeFrames?: boolean }).includeFrames === true ? { includeFrames: true } : {},
+      }
+      const { elements, meta, generation } = await runtime.modelSnapshot(tabId, exec.signal, extras)
       exec.signal.throwIfAborted()
       const state = runtime.tabState(tabId)
       // R7（2026-09-13）P0：`selector` 由页面可控的 id/class 拼成（`el.id = password`
@@ -906,7 +1574,12 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       })
       const note = snapshotNote(meta)
       return {
-        elements: safeElements,
+        elements: safeElements.map((element) => ({
+          ...element,
+          ...(element.shadow === true ? { shadow: true } : {}),
+          ...(typeof element.frame === 'number' ? { frame: element.frame } : {}),
+        })),
+        ...(meta.crossOriginFrames === undefined || meta.crossOriginFrames.length === 0 ? {} : { crossOriginFrames: meta.crossOriginFrames }),
         url: state.url,
         title: state.title,
         snapshot: generation,
@@ -922,7 +1595,8 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     description: '[read] Extract the visible text of your tab, or of one element (CSS selector). Bounded output. On a tab that received credentials through browser_fill_credentials, the injected values are masked (****) in the returned text for the rest of that tab\'s life — VERBATIM occurrences only: text the page derived from the value (base64, reversed, character-split, an image) is not covered, and this tool is not a security boundary against a hostile page.',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
-      selector: { type: 'string', description: 'Optional CSS selector; without it the whole page text is returned.' },
+      selector: { type: 'string', description: 'Optional CSS selector or locator (text=… / role=… / xpath=… / loc=…); without it the whole page text is returned.' },
+      frame: { type: 'integer', description: 'Read from this frame instead (1-based DOM index, same numbering as snapshot frame:N; 0 = main frame).' },
     },
     output: {
       schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string' }, truncated: { type: 'boolean' } } },
@@ -933,13 +1607,32 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     isConcurrencySafe: () => false,
     presentCall: present('Page text'),
     async execute(args, exec) {
-      const { tab, selector } = args as { tab?: number; selector?: string }
+      const { tab, selector, frame } = args as { tab?: number; selector?: string; frame?: number }
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
+      if (typeof frame === 'number' && frame < 0) throw new Error('frame must be >= 0')
+      if (typeof frame === 'number' && frame > 0) {
+        await runtime.assertFrameFresh(tabId, frame)
+        if (selector !== undefined && parseTargetSpec(selector).kind !== 'css') {
+          throw new Error('frame reads accept a CSS or >>> selector only (text=/role=/xpath= resolve in the main frame)')
+        }
+        const frameRead = await runtime.textInFrame(tabId, frame, selector, exec.signal)
+        exec.signal.throwIfAborted()
+        return frameRead
+      }
+      // 2026-10-23（C13 + B6）：selector 现在也接受定位器语法（text=/role=/xpath=/loc=），
+      // 纯 CSS（含 `css=` 前缀）保持原语义直接透传。
+      let effectiveSelector = selector
+      if (selector !== undefined) {
+        const spec = parseTargetSpec(selector)
+        effectiveSelector = spec.kind === 'css'
+          ? spec.selector
+          : (await runtime.resolveTargetSelector(tabId, selector, exec.signal)).selector
+      }
       // 2026-09-15 审计 P2：`truncated` 由 runtime 的文字漏斗（投影前长度 vs 生效
-      // 上限 `min(textLimit, 32KiB)`）给出，工具不再用 `runtime.options.textLimit`
-      // 自行推算——那会把一条已被 32KiB 截断的文本拿去和 65536 比。
-      const { text, truncated } = await runtime.textWithMeta(tabId, selector, exec.signal)
+      // 上限 `min(textLimit, 64KiB)`）给出，工具不再用 `runtime.options.textLimit`
+      // 自行推算——那会把一条已被硬顶截断的文本拿去和配置值比。
+      const { text, truncated } = await runtime.textWithMeta(tabId, effectiveSelector, exec.signal)
       exec.signal.throwIfAborted()
       return { text, truncated }
     },
@@ -947,15 +1640,25 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_screenshot',
-    description: '[read] Capture the visible page of your tab as a JPEG image. Use sparingly — snapshots and text are cheaper. REFUSED on a tab inside the credential window (after browser_fill_credentials and before that tab navigates): a page can render an injected credential as text or a barcode, and no image redaction can undo that; the window ends on the next navigation of that tab.',
+    description: '[read] Capture your tab as an image (JPEG by default; fullPage/clip/format/quality supported). Use sparingly — snapshots and text are cheaper. REFUSED on a tab inside the credential window (after browser_fill_credentials and before that tab navigates): a page can render an injected credential as text or a barcode, and no image redaction can undo that; the window ends on the next navigation of that tab.',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
+      fullPage: { type: 'boolean', description: 'Capture the whole scrollable page (clear → captureBeyondViewport → restore emulation overrides). Falls back to the viewport with fullPage:false when it cannot.' },
+      clip: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { x: { type: 'integer' }, y: { type: 'integer' }, width: { type: 'integer' }, height: { type: 'integer' } },
+        description: 'Crop rectangle in CSS pixels (mutually exclusive with fullPage).',
+      },
+      format: { type: 'string', enum: ['jpeg', 'png'], description: 'Image format (default jpeg).' },
+      quality: { type: 'integer', description: 'JPEG quality 1-100 (default 70).' },
     },
     output: {
       schema: {
         type: 'object',
         additionalProperties: false,
         properties: {
+          fullPage: { type: 'boolean', description: 'True only when the whole page was captured.' },
           image: {
             type: 'object',
             additionalProperties: false,
@@ -997,30 +1700,48 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     presentCall: present('Screenshot'),
     async execute(args, exec) {
       noteAgent(runtime, exec.agent)
-      const tabId = await tabOf((args as { tab?: number }).tab)
-      const dataUrl = await runtime.screenshot(tabId, exec.signal)
+      const captureArgs = args as { tab?: number, fullPage?: boolean, clip?: { x: number, y: number, width: number, height: number }, format?: 'jpeg' | 'png', quality?: number }
+      if (captureArgs.fullPage === true && captureArgs.clip !== undefined) throw new Error('fullPage and clip are mutually exclusive')
+      const tabId = await tabOf(captureArgs.tab)
+      const hasOptions = captureArgs.fullPage === true || captureArgs.clip !== undefined || captureArgs.format !== undefined || captureArgs.quality !== undefined
+      if (captureArgs.clip !== undefined && (captureArgs.clip.width <= 0 || captureArgs.clip.height <= 0)) {
+        throw new Error('clip width and height must be positive')
+      }
+      if (captureArgs.format === 'png' && captureArgs.quality !== undefined) throw new Error('quality applies to jpeg only')
+      const capture = hasOptions
+        ? await runtime.screenshotWithOptions(tabId, {
+          ...(captureArgs.fullPage === undefined ? {} : { fullPage: captureArgs.fullPage }),
+          ...(captureArgs.clip === undefined ? {} : { clip: captureArgs.clip }),
+          ...(captureArgs.format === undefined ? {} : { format: captureArgs.format }),
+          ...(captureArgs.quality === undefined ? {} : { quality: captureArgs.quality }),
+        }, exec.signal)
+        : { data: await runtime.screenshot(tabId, exec.signal), fullPage: false, format: 'jpeg' as const }
       exec.signal.throwIfAborted()
+      const format = capture.format
+      const dataUrl = capture.data
       const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
       const data = Buffer.from(base64, 'base64')
       const refs = await ctx.attachments.saveImages([{
         data: new Uint8Array(data),
-        mediaType: 'image/jpeg' as const,
-        name: `browser-tab-${tabId}.jpg`,
+        mediaType: format === 'png' ? 'image/png' as const : 'image/jpeg' as const,
+        name: format === 'png' ? `browser-tab-${tabId}.png` : `browser-tab-${tabId}.jpg`,
       }])
       const ref = refs[0]
       if (ref === undefined) throw new Error('browser: screenshot could not be stored')
-      return { image: ref }
+      return { image: ref, fullPage: capture.fullPage }
     },
   }))
 
   register(defineTool({
     name: 'browser_wait_for',
-    description: `[read] Wait for a page condition (element/text/url/network-idle/settled) before acting — use instead of sleeping on dynamic pages. timeoutMs is clamped to ${String(WAIT_FOR_MAX_MS)} ms of waiting; the tool call itself is budgeted at ${String(Math.round(BROWSER_WAIT_FOR_DEADLINE_MS / 1000))} s, so a user-gate wait plus the full condition wait still returns this tool's own result instead of a generic timeout.`,
+    description: `[read] Wait for a page condition (element/text/url-change/url-match/network-idle/settled/function) before acting — use instead of sleeping on dynamic pages. timeoutMs is clamped to ${String(WAIT_FOR_MAX_MS)} ms of waiting; the tool call itself is budgeted at ${String(Math.round(BROWSER_WAIT_FOR_DEADLINE_MS / 1000))} s, so a user-gate wait plus the full condition wait still returns this tool's own result instead of a generic timeout.`,
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
       condition: { type: 'string', enum: WAIT_CONDITIONS, required: true, description: 'What to wait for.' },
-      selector: { type: 'string', description: 'CSS selector (element-present / element-visible).' },
+      selector: { type: 'string', description: 'CSS selector or locator (text=… / role=… / xpath=…) for element conditions.' },
       text: { type: 'string', description: 'Text to appear (text-appear).' },
+      pattern: { type: 'string', description: 'URL glob for url-match (`*` wildcards, matched against location.href).' },
+      expression: { type: 'string', description: 'JS expression polled for `function` — truthy resolves the wait (same destructive-surface policy as browser_eval).' },
       timeoutMs: { type: 'integer', description: `Budget in ms (default 30000; effective maximum ${String(WAIT_FOR_MAX_MS)}).` },
     },
     output: {
@@ -1032,7 +1753,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     presentCall: present('Wait for condition'),
     async execute(args, exec) {
       const startedAt = Date.now()
-      const { tab, condition, selector, text, timeoutMs } = args as { tab?: number; condition: WaitForOptions['condition']; selector?: string; text?: string; timeoutMs?: number }
+      const { tab, condition, selector, text, pattern, expression, timeoutMs } = args as { tab?: number; condition: WaitForOptions['condition']; selector?: string; text?: string; pattern?: string; expression?: string; timeoutMs?: number }
       if (!WAIT_CONDITIONS.includes(condition)) throw new Error(`condition must be one of: ${WAIT_CONDITIONS.join(', ')}`)
       if ((condition === 'element-present' || condition === 'element-visible') && (selector === undefined || selector === '')) {
         throw new Error('selector is required for element conditions')
@@ -1040,14 +1761,20 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       if (condition === 'text-appear' && (text === undefined || text === '')) {
         throw new Error('text is required for text-appear')
       }
+      if (condition === 'url-match' && (pattern === undefined || pattern === '')) {
+        throw new Error('pattern is required for url-match')
+      }
+      if (condition === 'function' && (expression === undefined || expression.trim() === '')) {
+        throw new Error('expression is required for function')
+      }
       noteAgent(runtime, exec.agent)
       const tabId = await tabOf(tab)
       // Clamp the wait itself so gate (10s) + wait (<=40s) stay inside the tool
       // deadline with margin; otherwise timeout-policy replaces the tool's own
       // result with the generic `tool call timed out` at the boundary.
-      const waitMs = Math.min(timeoutMs ?? 30_000, WAIT_FOR_MAX_MS)
+      const waitMs = Math.min(timeoutMs ?? BROWSER_TOOL_TIMEOUT_MS, WAIT_FOR_MAX_MS)
       return await runtime.waitFor(tabId, {
-        condition, selector, text, timeoutMs: waitMs,
+        condition, selector, text, pattern, expression, timeoutMs: waitMs,
         // The registered deadline is armed at dispatch; leave 1s margin for the
         // return path so timeout-policy cannot replace our own result.
         deadlineAt: startedAt + BROWSER_WAIT_FOR_DEADLINE_MS - 1_000,
@@ -1057,10 +1784,10 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_eval',
-    description: '[write] Evaluate one JavaScript expression in your tab and return its resolved value (promise results are awaited) — for non-explicit page data (SSR globals, hidden fields, datasets) or page-authored requests. A heuristic guardrail accepts a single expression and rejects statements/assignments plus eval/Function and page-writing APIs; the refusal is receiver-aware, so pure data shaping is fine (String.prototype.replace such as document.body.innerText.replace(/\\s+/g, \' \'), trim/split/join, and in-place methods like sort/fill on an array the expression itself built) while navigation and page state changes stay refused (location.replace, history.replaceState, localStorage.setItem, click/submit/write/open) — including when they are reached through Reflect (Reflect.construct is refused like `new`, and Reflect.apply/get must name a statically known function, so localStorage[\'set\'+\'Item\'] is caught); network requests (fetch/XHR/WebSocket) are allowed on ordinary tabs. REFUSED on a tab inside the credential window (after browser_fill_credentials and before that tab navigates): while the injected credential is still in the page any read-back can be a channel, so there is no eval at all until the tab navigates — submit the form with browser_click instead. After that window closes eval works again and the returned value is masked against the values injected into that tab (verbatim occurrences only — a script that returns the value transformed is not covered). It is a misuse guardrail, not a security boundary.',
+    description: '[write] Run a JavaScript PROGRAM in your tab and return its resolved value (promises are awaited). Statements, assignments, loops, `new` and top-level `await` are allowed; the value of the last expression is returned (or use `return`). Ordinary page work is allowed: DOM reads/writes, sorting/filtering data, focus/click/scroll, fetch/XHR/WebSocket. Refused: navigation (`location.assign/replace/reload`, assigning to `location`/`history`, `history.pushState/replaceState`), `document.write/writeln/open/close`, writes to `document.cookie` / `localStorage` / `sessionStorage`, and `eval`/`Function` — use browser_navigate for navigation. The navigation refusal covers the call itself; a navigation the page schedules for later (e.g. `setTimeout`) is outside this gate. REFUSED on a tab inside the credential window (after browser_fill_credentials and before that tab navigates): while the injected credential is still in the page any read-back can be a channel, so there is no eval at all until the tab navigates — submit the form with browser_click instead. After that window closes eval works again and the returned value is masked against the values injected into that tab (verbatim occurrences only). It is a misuse guardrail, not a security boundary. Helpers: readText(sel)/readAttr(sel,name)/readJson(sel)/readVar(path).',
     parameters: {
       tab: { type: 'integer', description: 'Your tab id (defaults to your active tab).' },
-      expression: { type: 'string', required: true, description: 'One expression (no statements/assignments; pure data shaping on strings/arrays is allowed; fetch/XHR/WebSocket allowed except on credential tabs; eval/Function rejected). Helpers: readText(sel)/readAttr(sel,name)/readJson(sel)/readVar(path).' },
+      expression: { type: 'string', required: true, description: 'The program (statements allowed; top-level await allowed; the last expression value is returned). Refused: location/history navigation, document.write/open/close, cookie/storage writes, eval/Function. Helpers: readText(sel)/readAttr(sel,name)/readJson(sel)/readVar(path).' },
       frame: { type: 'integer', description: 'Frame index in DOM order (0 = main frame, default; 1 = first iframe in the page, including cross-origin ones). The expression runs in that frame\'s own JavaScript world, exactly like frame 0 — page globals are visible. If the page contains a frame the index cannot map 1:1, the call fails with an explicit error instead of using a neighbouring frame.' },
     },
     output: {
@@ -1172,10 +1899,11 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_history_search',
-    description: '[memory] Search the shared visit history (your session + the user\'s), newest first.',
+    description: '[memory] Search the shared visit history (your session + the user\'s), newest first. Filter by session/group key to see one conversation\'s visits.',
     parameters: {
       q: { type: 'string', description: 'Search text in url/title.' },
       limit: { type: 'integer', description: 'Max entries (default 100).' },
+      group: { type: 'string', description: 'Only entries recorded under this session/group key (an empty string means "no filter", not "entries without a group").' },
     },
     output: {
       schema: {
@@ -1205,8 +1933,8 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     presentCall: present('Search history'),
     async execute(args, exec) {
       noteAgent(runtime, exec.agent)
-      const { q, limit } = args as { q?: string; limit?: number }
-      return { entries: runtime.history({ q, limit }).map((h) => ({ time: h.time, url: h.url, title: h.title, actor: h.actor, group: h.group })) }
+      const { q, limit, group } = args as { q?: string; limit?: number; group?: string }
+      return { entries: runtime.history({ q, limit, ...(group === undefined ? {} : { group }) }).map((h) => ({ time: h.time, url: h.url, title: h.title, actor: h.actor, group: h.group })) }
     },
   }))
 
@@ -1214,33 +1942,79 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_download',
-    description: '[artifacts] Trigger a download of a URL through your session (saved to the programmatic downloads dir; no dialogs).',
+    description: '[artifacts] Trigger a download of a URL through your session (saved to the programmatic downloads dir; no dialogs). By default it waits for the download to finish and returns its record; pass waitForCompletion:false to return immediately.',
     parameters: {
       url: { type: 'string', required: true, description: 'Direct download URL.' },
+      waitForCompletion: { type: 'boolean', description: 'Wait for the download to reach done/rejected/cancelled (default true, up to 60 s).' },
     },
     output: {
-      schema: { type: 'object', additionalProperties: false, properties: { started: { type: 'boolean' } } },
-      render: () => [{ type: 'text', text: 'Download started (see downloads_list for progress).' }],
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          started: { type: 'boolean' },
+          download: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'integer' },
+              fileName: { type: 'string' },
+              path: { type: 'string' },
+              size: { type: 'integer' },
+              status: { type: 'string' },
+              tab: { type: 'integer' },
+              attribution: { type: 'string' },
+            },
+          },
+          timedOut: { type: 'boolean' },
+        },
+      },
+      render: (_args, value) => {
+        const download = (value as { download?: { fileName?: string, status?: string } }).download
+        return [{ type: 'text', text: download === undefined ? 'Download started (see downloads_list for progress).' : `Download ${download.status ?? ''}: ${download.fileName ?? ''}`.trim() }]
+      },
     },
-    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    timeoutMs: BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS,
     isConcurrencySafe: () => false,
     presentCall: present('Download file'),
     async execute(args, exec) {
       const { url } = args as { url: string }
       if (typeof url !== 'string' || url.trim() === '') throw new Error('url is required')
       noteAgent(runtime, exec.agent)
+      const wait = (args as { waitForCompletion?: boolean }).waitForCompletion !== false
+      if (!wait) {
+        await runtime.downloadUrl(url.trim(), exec.signal)
+        exec.signal.throwIfAborted()
+        return { started: true }
+      }
+      const before = runtime.highestDownloadId()
       await runtime.downloadUrl(url.trim(), exec.signal)
       exec.signal.throwIfAborted()
-      return { started: true }
+      const owner = runtime.downloadOwnerTab()
+      const entry = await runtime.waitForNewDownload(before, DOWNLOAD_COMPLETION_TIMEOUT_MS, owner, exec.signal)
+      if (entry === null) return { started: true, timedOut: true }
+      return {
+        started: true,
+        download: {
+          id: entry.id,
+          fileName: entry.fileName,
+          path: entry.path,
+          size: entry.size,
+          status: entry.status,
+          // Downloads are a session-level event: attribution stays best-effort.
+          ...(owner === undefined ? {} : { tab: owner, attribution: 'best-effort' as const }),
+        },
+      }
     },
   }))
 
   register(defineTool({
     name: 'browser_downloads_list',
-    description: '[artifacts] List downloads (shared) with paths usable by file tools; newest first.',
+    description: '[artifacts] List downloads (shared) with paths usable by file tools; newest first. Pass wait:true to wait for the newest in-progress download to reach done/rejected/cancelled before listing.',
     parameters: {
       status: { type: 'string', enum: ['in-progress', 'done', 'cancelled', 'rejected'], description: 'Filter by status.' },
       limit: { type: 'integer', description: 'Max entries (default 100).' },
+      wait: { type: 'boolean', description: 'Wait (up to 60 s) for the newest in-progress download to finish before listing.' },
     },
     output: {
       schema: {
@@ -1267,12 +2041,25 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
       },
       render: (_args, value) => [{ type: 'text', text: formatDownloads(value) }],
     },
-    timeoutMs: BROWSER_TOOL_TIMEOUT_MS,
+    timeoutMs: BROWSER_DOWNLOAD_TOOL_TIMEOUT_MS,
     isConcurrencySafe: () => true,
     presentCall: present('List downloads'),
     async execute(args, exec) {
       noteAgent(runtime, exec.agent)
-      const { status, limit } = args as { status?: 'in-progress' | 'done' | 'cancelled' | 'rejected'; limit?: number }
+      const { status, limit, wait } = args as { status?: 'in-progress' | 'done' | 'cancelled' | 'rejected'; limit?: number; wait?: boolean }
+      if (wait === true) {
+        // Prefer the in-progress download owned by the active tab (best-effort
+        // attribution), else the newest one.
+        const active = runtime.downloadOwnerTab()
+        const inProgress = runtime.downloads({ status: 'in-progress', limit: 50 })
+        // Same strictness as the receipt: when we know the tab, only its download
+        // may be waited for (no silent fallback to another tab's transfer).
+        const pending = active === undefined
+          ? inProgress[0]
+          : inProgress.find(entry => runtime.downloadOwnerOf(entry.id) === active)
+        if (pending !== undefined) await runtime.waitForDownload(pending.id, DOWNLOAD_COMPLETION_TIMEOUT_MS, exec.signal)
+        exec.signal.throwIfAborted()
+      }
       return { downloads: runtime.downloads({ status, limit }).map((d) => ({ id: d.id, url: d.url, fileName: d.fileName, path: d.path, size: d.size, status: d.status, createdAt: d.createdAt })) }
     },
   }))
@@ -1408,7 +2195,7 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
 
   register(defineTool({
     name: 'browser_clear_data',
-    description: '[control] Clear site data (storage/cache) for your tabs. Clearing EVERYTHING incl. cookies (all-data) requires the user to confirm in the browser window menu — the tool refuses it.',
+    description: '[control] Clear site data (storage/cache). scope=\'group\' clears the stored data (localStorage/IndexedDB/cache) of the CURRENT PARTITION — every site shares one partition per account/server, so this is broader than just this conversation\'s tabs; cookies are kept. scope=\'all-data\' additionally clears cookies and every site\'s data (irreversible — visible in the activity panel and recorded in the op log).',
     parameters: {
       scope: { type: 'string', enum: ['group', 'all-data'], description: 'What to clear (default group).' },
     },
@@ -1421,16 +2208,12 @@ export function applyBrowserTools(ctx: Context, runtime: BrowserRuntime, enabled
     presentCall: present('Clear site data'),
     async execute(args, exec) {
       const scope = (args as { scope?: string }).scope
-      if (scope === 'all-data') {
-        // Design §7.3-4: all-data needs the USER's shell confirmation — the
-        // tool surface refuses; users clear everything via the browser menu.
-        // 菜单文案是按请求语言渲染的（OVERLAY_COPY.zh/en），而本工具的文案在 apply
-        // 期就固定 —— 写死任一种语言的菜单项名，对另一种语言的用户就是一条不存在
-        // 的指令（默认 UI 是 zh）。控件一律按功能/位置描述（2026-09-17 审计 S01-4）。
-        throw browserError('policy', 'browser: clear_data all-data requires a user confirmation in the browser window menu — ask the user to open the ⋮ menu and pick the destructive clear-browsing-data entry (it asks to confirm clearing everything)')
-      }
+      // 2026-10-23 capability unlock：本地信任模式下不再要求用户在浏览器菜单里
+      // 二次确认 —— AI 可以清掉全部 cookie/storage（不可逆，但 op log 会记下来，
+      // 客户端活动面板也照常显示）。scope 仍是两种：group（本会话）/ all-data（全部）。
+      const all = scope === 'all-data'
       noteAgent(runtime, exec.agent)
-      await runtime.runGated('browser_clear_data', () => runtime.clearData(false), exec.signal)
+      await runtime.runGated('browser_clear_data', () => runtime.clearData(all), exec.signal)
       exec.signal.throwIfAborted()
       return { ok: true }
     },
@@ -1602,11 +2385,12 @@ function formatCredentials(value: unknown): string {
  * {@link parseToolGroups} 与 `index.ts` 的 `toolGroups` 字段注释（2026-09-26
  * R21 F-02：先把"企业策略可禁用"这条承诺撤回，等渠道包真的接上生产者再恢复）。
  */
-const GROUP_OF: Record<string, 'navigate' | 'interact' | 'read' | 'write' | 'memory' | 'artifacts' | 'control'> = {
+const GROUP_OF: Record<string, 'navigate' | 'interact' | 'read' | 'write' | 'memory' | 'artifacts' | 'control' | 'script'> = {
+  browser_run: 'script',
   browser_open: 'navigate', browser_navigate: 'navigate', browser_reload: 'navigate',
   browser_go_back: 'navigate', browser_go_forward: 'navigate', browser_list_tabs: 'navigate',
   browser_switch_tab: 'navigate', browser_close_tab: 'navigate',
-  browser_click: 'interact', browser_type: 'interact', browser_press: 'interact',
+  browser_dialog: 'interact', browser_file_chooser: 'interact', browser_fetch: 'write', browser_hover: 'interact', browser_dblclick: 'interact', browser_drag: 'interact', browser_hotkey: 'interact', browser_clipboard: 'control', browser_click: 'interact', browser_type: 'interact', browser_press: 'interact',
   browser_select: 'interact', browser_scroll: 'interact', browser_fill_form: 'interact',
   browser_upload_file: 'interact',
   browser_get_snapshot: 'read', browser_get_text: 'read', browser_screenshot: 'read',
@@ -1650,7 +2434,7 @@ export const DEFAULT_GROUPS: ReadonlySet<string> = new Set(['navigate', 'interac
  */
 export function parseToolGroups(value: string[] | undefined): ReadonlySet<string> {
   if (value === undefined) return DEFAULT_GROUPS
-  const allowed = new Set(['navigate', 'interact', 'read', 'write', 'memory', 'artifacts', 'control'])
+  const allowed = new Set(['navigate', 'interact', 'read', 'write', 'memory', 'artifacts', 'control', 'script'])
   const set = new Set<string>()
   for (const item of value) if (allowed.has(item)) set.add(item)
   return set

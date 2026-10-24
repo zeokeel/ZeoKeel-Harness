@@ -199,7 +199,8 @@ async function measureQueuedScreenshot(configMs: number, queueMs: number): Promi
   view.transport.hung.add('Page.captureScreenshot')
   vi.useFakeTimers()
   try {
-    const hold = runtime.runGated('probe-hold', async () => { await sleep(queueMs) })
+    // D1: the queue that matters for a tab operation is that TAB's lock.
+    const hold = runtime.withTabLock(1, undefined, Date.now() + queueMs + 60_000, async () => { await sleep(queueMs) })
     await vi.advanceTimersByTimeAsync(10)
     const started = Date.now()
     let settled = false
@@ -305,7 +306,7 @@ describe('C3-02 残段③：额度不足时在尝试抓帧之前快速结构化�
     view.transport.hung.add('Page.captureScreenshot')
     vi.useFakeTimers()
     try {
-      const hold = runtime.runGated('probe-hold', async () => { await sleep(27_600) })
+      const hold = runtime.withTabLock(1, undefined, Date.now() + 27_600 + 60_000, async () => { await sleep(27_600) })
       await vi.advanceTimersByTimeAsync(10)
       const started = Date.now()
       let settled = false

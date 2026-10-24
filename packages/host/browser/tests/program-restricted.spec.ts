@@ -61,6 +61,22 @@ describe('restricted executor', () => {
       .rejects.toThrow(/Code generation from strings disallowed/u)
   })
 
+  it('a hostile thrown value cannot leak host objects (primitive-only envelope)', async () => {
+    const hostile = {
+      get code(): string { throw new Error('boom-code') },
+      get message(): string { throw new Error('boom-message') },
+      toString(): string { throw new Error('boom-toString') },
+    }
+    const ex = executor(async () => { throw hostile })
+    const caught = await ex.run(`try { await browser.open() } catch (error) {
+      return { isError: error instanceof Error, code: error.code, message: error.message }
+    }`)
+    expect(caught.result).toEqual({ isError: true, code: 'error', message: 'unknown error' })
+    // The context Error's constructor chain is still the vm one.
+    await expect(ex.run(`try { await browser.open() } catch (error) { return String(error.constructor.constructor("return 1")()) }`))
+      .rejects.toThrow(/Code generation from strings disallowed/u)
+  })
+
   it('dynamic import without a module callback is refused', async () => {
     await expect(executor().run('return await import("node:fs")')).rejects.toBeTruthy()
   })

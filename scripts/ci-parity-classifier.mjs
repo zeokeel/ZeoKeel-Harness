@@ -56,6 +56,7 @@ if (!existsSync(CLASSIFIER)) {
  * （`server/skills` 与 `packages` 下的 `.md` 这类随包文档，判据在 Go 测试与包 check 里
  * ⇒ 判成 docs-only 就等于把它们整片跳过）；其余是代码。
  */
+/** @type {Array<[string, string, string[]]>} */
 const PUSH_CASES = [
   ['只改 docs/**', 'false', ['docs/a.md']],
   ['只改 site/**', 'false', ['site/a.md']],
@@ -68,6 +69,7 @@ const PUSH_CASES = [
 ]
 
 /** 非 push 形态：`[标签, 期望 code, env 覆盖]`。 */
+/** @type {Array<[string, string, Record<string, string>]>} */
 const SAFE_CASES = [
   ['tag（正式）→ 一律按有代码改动处理', 'true', { GITHUB_REF: 'refs/tags/v0.0.0' }],
   ['tag（预发）→ 同上', 'true', { GITHUB_REF: 'refs/tags/v0.0.0-beta.1' }],
@@ -82,6 +84,7 @@ const SAFE_CASES = [
  * 作基点 —— 判据面覆盖整条分支相对主线的改动（不是只看最后一个提交）。因此
  * "只改官网/文档的分支首推"不再白跑三平台构建，而"带代码改动的首推"仍然是 `true`。
  */
+/** @type {Array<[string, string, string[]]>} */
 const BRANCH_CASES = [
   ['分支首推 + 只改 docs/**', 'false', ['docs/b.md']],
   ['分支首推 + 只改 site/**', 'false', ['site/b.md']],

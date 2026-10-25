@@ -14720,6 +14720,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "zeokeel-harness@workspace:."
   dependencies:
+    "@types/node": "npm:^22.20.0"
+    typescript: "npm:7.0.2"
     yaml: "npm:^2.9.0"
   dependenciesMeta:
     "@deepseek-ai/dsh-subprocess-local":

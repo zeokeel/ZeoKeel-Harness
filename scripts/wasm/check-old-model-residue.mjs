@@ -204,7 +204,6 @@ function loadBudgets() {
 const BUDGETS = loadBudgets()
 
 const failures = []
-const hits = []
 
 function ok(message) {
   console.log(`  PASS ${message}`)

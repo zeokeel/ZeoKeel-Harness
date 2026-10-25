@@ -68,7 +68,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parsePatchSections } from './patch-targets.mjs'
 // R5-D-6:核对面必须**派生**（打包白名单 + Node 解析顺序），不能是固定枚举根。

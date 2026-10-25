@@ -69,7 +69,7 @@
  * 另外，`advisory` 还必须先登记在编排器的 `ADVISORY_REGISTRY` 里，否则这里直接 exit 2。
  */
 
-import { spawn, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -91,7 +91,6 @@ import {
   sanitizeGuardEnvironment,
   selfTestVerdictClassifier,
   spawnRegisteredGuard,
-  spawnYarnFallbackGuard,
 } from './check-workspaces.mjs'
 
 // **共享实现的兼容导出面**（2026-09-24 第十一轮审计 I1）：`sanitizeGuardEnvironment` /
@@ -192,24 +191,28 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // 预算登记表** `CI_JOB_BUDGET_MINUTES = { server: 60 }` —— 预算被静默削低（60→45，
   // 此前 exit 0）现在当场判红，合成负例 `b14-timeout-budget-below-registered` 是这条
   // 判据的钉子。⇒ 该守卫脚本内容变了，摘要按本表上方的纪律在同一批里复算更新。
-  ['check:workflows', { script: 'node scripts/check-workflows.mjs', argvTail: [], digest: 'e3f5b7c90c95856bb0b8be4fe180f9d27f18432e6784ad45fff7f4436a779961' }],
-  ['check:ci-scripts', { script: 'node scripts/verify-ci-scripts.mjs', argvTail: [], digest: 'dfa20efbe3038619cc821b4b245b40616d05dc40447ad9eb186729eeae74c618' }],
+  ['check:workflows', { script: 'node scripts/check-workflows.mjs', argvTail: [], digest: 'bc64a06badbf6bcdf889c92efef7a15958f79fc2dd447da2f384ed840db91430' }],
+  ['check:ci-scripts', { script: 'node scripts/verify-ci-scripts.mjs', argvTail: [], digest: 'fe5236b036e0ddd8d67a5bbd6a62d1a6ca01dc593db87abf7bf486ae4a95ef91' }],
   ['check:patch-resolutions', { script: 'node scripts/verify-patch-resolutions.mjs', argvTail: [], digest: '6dcde2281311235a57722608d91e6a1fa59734411ad65cda76ea2bdc43145c83' }],
-  ['check:patch-pin', { script: 'node scripts/check-patch-pin.mjs', argvTail: [], digest: 'a8fe5b45df5dfadd7a87332b31f9e14c4a6722a41f21cf0f0d9afa6450a3ba84' }],
-  ['check:patches', { script: 'node scripts/verify-patches.mjs', argvTail: [], digest: '22131d86472ff930f22687192b07216c5cf74ab594d0091a6766e661a2c24683' }],
+  ['check:patch-pin', { script: 'node scripts/check-patch-pin.mjs', argvTail: [], digest: '032f939468b5e77f74b2cf8996a9115f45f9441787fbd4744223fc8b7f21a524' }],
+  ['check:patches', { script: 'node scripts/verify-patches.mjs', argvTail: [], digest: 'f83e7255215c990a455ae8f0ba1fed01030f39b157b0c3f0cbb3e44dc00c9d67' }],
   ['check:inventories', { script: 'node scripts/verify-inventories.mjs', argvTail: [], digest: '39528c7984ee7baf0cad92faaa3b421f7f64e4d08b524d63417e896abb57267d' }],
-  ['check:theme-tokens', { script: 'node scripts/check-theme-tokens.mjs', argvTail: [], digest: '1523cdf07984516d5696ee76aaa87cdb12cf5c94c69908b27ac4ec7e210bc5e4' }],
-  ['check:glitchtip', { script: 'node scripts/verify-glitchtip-ops-check.mjs', argvTail: [], digest: 'f73f2ebcecbfeaaa57c069ca2e662dc1842b9d37d53eb413fc36bb85a987be3e' }],
-  ['check:check-workspaces', { script: 'node scripts/verify-check-workspaces.mjs', argvTail: [], digest: 'db0fbe482d056ec29188e2386481648b19d45f18deac1be0e7dfc403e45ab138' }],
+  ['check:theme-tokens', { script: 'node scripts/check-theme-tokens.mjs', argvTail: [], digest: '44ce265f1905428a9de8d5d841d3487c8f0c287ba4685fa55ad9d8f0ecfea358' }],
+  ['check:glitchtip', { script: 'node scripts/verify-glitchtip-ops-check.mjs', argvTail: [], digest: 'cddf0b335eec7fc01ba889c78e3bbffb8ea9ded6b2317e2f0ada0a1e4262e169' }],
+  ['check:check-workspaces', { script: 'node scripts/verify-check-workspaces.mjs', argvTail: [], digest: '1a764b3c7b757dd3676ae12100b44b3ded3cf56278988156deace91d1a5b0a15' }],
   ['check:no-leftover-mutants', { script: 'node scripts/check-no-leftover-mutants.mjs', argvTail: [], digest: 'c1a84c22a47bea2c1368bfba32f33b20feca66deb30abcbbc0eb40318f807285' }],
-  ['check:migration-range', { script: 'node scripts/check-migration-range.mjs', argvTail: [], digest: 'c9575a51a7f4dcb09a618d3130cc5a144da5f84af4c3daf8ff6620f8c28d0fc0' }],
-  ['check:doc-claims', { script: 'node scripts/check-doc-claims.mjs', argvTail: [], digest: '33f55875602af4b7af9aa1252e29b8987c49099b70bfc67689792e1c13d88125' }],
-  ['check:no-real-domains', { script: 'node scripts/check-no-real-domains.mjs', argvTail: [], digest: '6831f5572e9cf5fa68496d3f254d25bcb073ed54f65c1cd1321b2391fce051fe' }],
+  ['check:migration-range', { script: 'node scripts/check-migration-range.mjs', argvTail: [], digest: 'b764a0a1f02289ebed7627560a29b2305eda0199fd96844ffba6cd6eeedc90b1' }],
+  ['check:doc-claims', { script: 'node scripts/check-doc-claims.mjs', argvTail: [], digest: 'e2fcf535a987fe29ffc7c24183ce22323982289b681f779b01aedecfa5806cbc' }],
+  ['check:no-real-domains', { script: 'node scripts/check-no-real-domains.mjs', argvTail: [], digest: '36b915d697c3abcea2cf816bee8876fa666b8a6e4ae6142ee7b0b6689ef6f4ff' }],
   // `--portable`：只跑便携子集（需要真 PG / 显示器的组归 server job 与 W6 三平台）。
   // FIX-48③ 起：本脚本 run-id 化（证据目录 `temp/wasm-client-only/runs/<run-id>/`），
   // 摘要在同一个 PR 里同步（可评审的 diff）。
   ['check:wasm-client-only', { script: 'bash scripts/verify-wasm-client-only.sh', argvTail: ['--portable'], digest: 'e666a0c6caa588af64985ac0ccb4f4174d7e4266722b050d032abe322350241f' }],
-  ['check:integration-tests', { script: 'node scripts/check-integration-tests.mjs', argvTail: [], digest: '3270b6b2395a59429146ec287c2e46596d78f609f964ab8e6836b6915de6d782' }],
+  ['check:integration-tests', { script: 'node scripts/check-integration-tests.mjs', argvTail: [], digest: '69ce146a0ecb5fcf6b76f71478de14b27af631fa4ef793a70c70f1c4c98db607' }],
+  // 2026-10-25：根脚本的类型面（`allowJs + checkJs + noUnused*`，TS 7）。它是第 18 条根守卫 ——
+  // 判据本体是 `scripts/check-scripts-types.mjs`（调 `tsc -p tsconfig.scripts.json`），
+  // 所以它的内容摘要同样进这张表：改写它 = 改写"根脚本类型面"这个结论。
+  ['check:scripts-types', { script: 'node scripts/check-scripts-types.mjs', argvTail: [], digest: '6ebd25af0e58c762d4c215887470e5ea1ee0374f36302da01626219df0e7e660' }],
   // 守卫脚本**内容**的判据（第十轮审计 C-06/C-17）。它的判据面里同时包含:
   //   · 本表每条 `digest` ↔ 该守卫脚本的 sha256(内容替换/符号链接替换都红);
   //   · 门禁自己依赖的解析器(`node_modules/yaml`)的**文件集** sha256 ↔ 登记值。
@@ -228,7 +231,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // （同一份 `sha256sum` 口径）。
   // 2026-10-14（渠道缺省 + 渠道清单工具）：install-integrity 再补登
   // `scripts/channel-modules.mjs` ⇒ 本摘要同步。
-  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: '1adfa6c94ad2d79a47794cc61a5b54bf9a3e7f83cdc7b081ebe4ae89cda7e814' }],
+  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: '8d6f34eaf003ef4de2a5c4bbd6909087c8ccf7c3732d1f0043ac9a5755625b66' }],
 ])
 
 /**

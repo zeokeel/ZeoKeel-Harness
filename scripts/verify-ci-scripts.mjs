@@ -883,7 +883,8 @@ function fakeChannelRepo(ids, options = {}) {
 
 /**
  * 跑 ci-channels.sh。
- * @param options - `refName` 是 `GITHUB_REF_NAME`,`ref` 是 `GITHUB_REF`。
+ * @param {{ source?: string, refName?: string, ref?: string, dest: string, list: string, env?: Record<string, string>, args?: string[] }} options
+ *   `refName` 是 `GITHUB_REF_NAME`,`ref` 是 `GITHUB_REF`。
  *   缺省把 refName 当成 tag(`refs/tags/<refName>`)—— 多数用例测的是 tag 策略;
  *   分支用例显式传 `ref: 'refs/heads/…'`(`GITHUB_REF` 由 GitHub 注入,分支 push
  *   上就是 `refs/heads/<分支名>`)。
@@ -1499,12 +1500,6 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 //   ⑥ 静态接线:gate 声明并解析 `channels_rev`,四处调用点都带同一个 pin 来源,
 //      release job 必须**直接** needs gate(`needs` 上下文只含直接依赖)。
 {
-  const policyFields = stdout => Object.fromEntries(
-    (stdout ?? '').split('\n').filter(Boolean)
-      .filter(line => line.includes('='))
-      .map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]),
-  )
-
   // 合成渠道仓:提交 1 = official + 两个品牌渠道(目录数已达 R8-C-7 的下限 —— 夹具必须与
   // 真实渠道仓同形,否则这条用例会被"渠道目录数少于下限"先拦住);提交 2 增加 beta
   // (内容差异可观测:pin 到提交 1 时渠道集里没有 beta)。
@@ -1962,7 +1957,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     check(leaked.status !== 0, 'clone 失败必须非零退出')
     check(
       !out.includes('FAKEPAT1') && !out.includes('FAKEPAT2'),
-      `clone 路径的失败诊断不得回显凭据（含 `/` 的密码形态；R8-D-9），实际：${out}`,
+      `clone 路径的失败诊断不得回显凭据（含 \`/\` 的密码形态；R8-D-9），实际：${out}`,
     )
     check(out.includes('<redacted>@github.com'), `clone 路径的诊断同样必须脱敏成 <redacted>@host，实际：${out}`)
     check(
@@ -3936,6 +3931,10 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
    */
   const scanCodeTokens = source => {
     const tokens = []
+    /**
+     * 括号栈：`code` 帧带 `depth`（花括号深度），`template` 帧只标记"在模板文本里"（无深度）。
+     * @type {{ kind: string, depth?: number }[]}
+     */
     const frames = [{ kind: 'code', depth: 0 }]
     const isIdentStart = c => c !== undefined && /[A-Za-z_$]/u.test(c)
     const isIdentPart = c => c !== undefined && /[A-Za-z0-9_$]/u.test(c)
@@ -6298,6 +6297,7 @@ ${fakeListObjectsV2Case('$store')}esac
   }
   /** `clean` 只换环境里的 GITHUB_RUN_ID(其余与上面的 runTransfer 同形)。 */
   const runClean = runId => {
+    /** 传给 `clean` 的环境(`GITHUB_RUN_ID` 按需补) @type {Record<string, string>} */
     const env = {
       PATH: `${attemptWork}:${process.env.PATH ?? ''}`,
       HOME: process.env.HOME ?? '',
@@ -6557,8 +6557,6 @@ esac
 //   ③ **本次 BASE 永不删**(即便对象是旧的 —— 前缀排除是硬条件,不看年龄)。
 {
   const work = tempDir('ci-orphan-')
-  const stage = join(work, 'client-assets')
-  const out = join(work, 'release-artifacts')
   const list = join(work, 'channels.list')
   const store = join(work, 'store')
   writeFileSync(list, 'official\nexample-brand\n')
@@ -7559,8 +7557,9 @@ exit 0
    * 三份部署文档共用的分析器（纯函数，第 18 节自检样本也跑它）。返回 `{ code, message }[]`。
    *
    * @param source 文档全文
-   * @param options.en 英文页（"跨代"取 `cross-generation`）
-   * @param options.boundary 归档开始带渠道 tag 的版本号（git 真值）；`null` = 本层不判
+   * @param {{ en?: boolean, boundary?: string | null }} [options] 分析开关：`en` = 英文页
+   *   （"跨代"取 `cross-generation`）；`boundary` = 归档开始带渠道 tag 的版本号（git 真值），
+   *   `null`/缺省 = 本层不判
    */
   const analyzeDeployDoc = (source, { en, boundary = null } = {}) => {
     const problems = []

@@ -44,10 +44,10 @@
  */
 
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
 
 const argv = process.argv.slice(2)
-let root = resolve(process.cwd())
+/** `--root <dir>` 的取值（缺省 `null` = 用 cwd，与父进程同一口径）。 */
+let rootDir = null
 for (let index = 0; index < argv.length; index += 1) {
   if (argv[index] === '--root') {
     const value = argv[index + 1]
@@ -55,7 +55,7 @@ for (let index = 0; index < argv.length; index += 1) {
       console.error('doc-claims-passline-child: --root 需要一个目录')
       process.exit(2)
     }
-    root = resolve(value)
+    rootDir = value
     index += 1
     continue
   }
@@ -64,6 +64,18 @@ for (let index = 0; index < argv.length; index += 1) {
   console.error(`doc-claims-passline-child: 未知参数 ${argv[index]} —— 本入口不接受任何开关`
     + '（只允许 `--root <dir>`；通过行探测不是一个可以打开/关掉的模式）。')
   process.exit(2)
+}
+
+// `--root` 必须**真的**决定判哪一棵树：`check-doc-claims.mjs` 在模块加载期按 `process.cwd()`
+// 解析根（它自己的 `--root` 走 argv 解析，但本入口 import 它时不再传 argv）。所以这里先切
+// 目录再 import —— 否则父进程判 `<dir>`、子进程判 cwd，探测就是"两边各判一棵树"的假一致。
+if (rootDir !== null) {
+  try {
+    process.chdir(rootDir)
+  } catch (error) {
+    console.error(`doc-claims-passline-child: --root ${rootDir} 不可进入 —— ${error?.message ?? String(error)}`)
+    process.exit(2)
+  }
 }
 
 const childUrl = new URL('./check-doc-claims.mjs', import.meta.url)

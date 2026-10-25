@@ -1,0 +1,55 @@
+{
+  // 根脚本（`scripts/**`）的类型检查工程 —— `yarn typecheck:scripts`，
+  // 门禁面 = 第 18 条根守卫 `check:scripts-types`（`scripts/check-scripts-types.mjs`）。
+  //
+  // ## 为什么要有它
+  //
+  // 根 `scripts/**` 是**门禁判据本体**（17 条守卫 + CI 判据执行体），但此前一行类型
+  // 检查都没有：它们按 `.mjs` 直接被 `node` 跑（Node 24 原生剥类型，`.ts` 同理），
+  // 既没有 tsconfig 覆盖，也没有 `// @ts-check`。`yarn typecheck` 只覆盖两个 workspace 包
+  // （`@zeokeel/dsh-enterprise` / `dsh-plugin-desktop`），`scripts/**` 完全在面外。
+  //
+  // 本工程用 `allowJs + checkJs` 把**同一个文件、原样不改扩展名**纳入 TypeScript 检查：
+  // 类型信息来自 JSDoc（`@param` / `@returns` / `@type`），不引入任何构建步骤，
+  // 也不改运行期加载方式（`.mjs` 仍由 `node` 原样执行）。
+  //
+  // ## 编译器口径
+  //
+  // 与全仓一致：`typescript` 7.0.2（原生 `tsc`，根 `devDependencies` 里那份；
+  // 判据 `packages/host/desktop/tests/typescript-compiler.spec.ts` 管 workspace 包，
+  // 根这份与它们同版本）。**TS 7 的 `strict` 缺省是 `true`**（TS 5/6 缺省是 `false`）——
+  // 下面的 `"strict": false` 是**必须显式写**的收口基线，不是"忘了写"。
+  //
+  // ## 基线：`strict: false`，0 错误；`noUnusedLocals`/`noUnusedParameters` 已开
+  //
+  // 存量脚本按无类型 JS 写成，直接开 `strict` 会有 3000+ 条（`noImplicitAny` 一族占了
+  // 大头）。当前基线在 `strict: false` 下**全绿**，并且**死代码也进判据**：
+  // `noUnusedLocals` / `noUnusedParameters` 打开（2026-10-25 清掉 37 条 TS6133 之后），
+  // 未使用的 import / 变量 / 函数 / 参数会当场变红。`strictNullChecks` / `noImplicitAny`
+  // 是下一步棘轮（打开后按文件收口，别一次性翻）。
+  //
+  // ## 两条已知边界（认账）
+  //
+  // 1. `scripts/wasm/probes/**` 是**Electron 渲染进程**里的探针（用 `window` / `location` /
+  //    `require('electron')`），不是 Node 脚本：`lib` 只有 ES2024、`types` 只有 `node` 的
+  //    工程判它只会产出假红。它们的类型面属于桌面包（`packages/host/desktop`），不在本工程。
+  // 2. `checkJs` 只做**类型**检查，不做语法降级。已知一处 TS 解析器边界：
+  //    `() => ({ … })` 之后紧跟裸 `{}` 块时 TS 6/7 都会按箭头体误判（ASI 形态），
+  //    `scripts/check-integration-tests.mjs` 里用显式分号断句（见该处注释）。
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.mjs", "scripts/**/*.cjs"],
+  "exclude": ["scripts/wasm/probes/**"]
+}

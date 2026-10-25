@@ -47,7 +47,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
-import { availableParallelism, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 // **执行体入口的共享实现**（R11-I1）：`yarnrcTopLevelKeys` / `yarnrcScalarValue` 是 `.yarnrc.yml` 的
@@ -106,7 +106,7 @@ function sha256(data) {
 /**
  * 在仓库根跑一次 git（同步；用于"摘要锚到 **git 对象**"这一层 —— R12-D-01 的 B 面）。
  * @param args - git 参数。
- * @param encoding - `utf8`（缺省）或 `buffer`。
+ * @param {'utf8' | 'buffer'} [encoding] - `utf8`（缺省）或 `buffer`。
  * @returns `spawnSync` 的结果。
  */
 function gitInRoot(args, encoding = 'utf8') {
@@ -397,7 +397,7 @@ const REGISTERED_INSTALL_INTEGRITY_BODIES = [
     // `EXECUTION_POINT_REGISTRY` / `EXECUTION_FACE_REGISTRY` 两侧各自的登记（P0 集成的
     // 能力中心、网关客户端、模块编译契约等 + master 的 schedule 与审计判据）合并后，
     // 本件内容再次变化 ⇒ 摘要按 `sha256sum scripts/check-install-integrity.mjs` 同步。
-    sha256: '7dc24213ab1d5e306d5090c38edb7085111443a97bcd3b2b914c965d6a0051e3',
+    sha256: 'ed607c658a4ca943205f635b34f852b5cbcd63ee5d1b081b82d2bd2422c70652',
     methods: [
       'judge-body-bytes-equal-head',
       'yarnrc-forbidden-keys',
@@ -446,7 +446,7 @@ const REGISTERED_GUARD_JUDGE_BODIES = [
     path: 'scripts/doc-claims-passline-child.mjs',
     guard: 'check:doc-claims',
     // 由 `node scripts/check-guard-parser-integrity.mjs --print-digests` 打印（粘贴回本行）。
-    sha256: '9c21665f4315701b1b7da24cbcf7463767cb3b4ffa2afa7274cf996caadd32ab',
+    sha256: 'c22c7c83e2b5c7469ca71fa2492a23ff373cb2790506203aee2d5a01b448d424',
     methods: [
       'passline-child-imports-main-module',
       'passline-child-prints-main-module-pass-line',
@@ -1488,6 +1488,7 @@ export function remoteAnchorProblems(options = {}) {
     return { failures, advisories, note: null, status: 'unavailable' }
   }
   const directory = mkdtempSync(join(runnerTemp, REMOTE_ANCHOR_DIR_PREFIX))
+  /** @type {(args: string[], encoding?: 'utf8' | 'buffer') => any} */
   const run = (args, encoding = 'utf8') => spawnSync('git', ['-C', directory, ...args],
     { encoding, maxBuffer: 128 * 1024 * 1024 })
   try {

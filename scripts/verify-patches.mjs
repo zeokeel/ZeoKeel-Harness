@@ -630,7 +630,7 @@ if (targets.length === 0) {
 
 // GNU patch 可用性:缺失时直接给可操作信息,而不是每个补丁报一次 ENOENT。
 const probe = spawnSync('patch', ['--version'], { encoding: 'utf8' })
-if (probe.error?.code === 'ENOENT') {
+if (/** @type {NodeJS.ErrnoException | undefined} */ (probe.error)?.code === 'ENOENT') {
   process.stderr.write(
     'verify-patches: 未找到 GNU patch。Linux 上 `apt-get install patch`;macOS 自带;'
     + 'Windows 需要 Git Bash / gnuwin32 的 patch.exe(CI 门禁在 ubuntu 上跑)\n',

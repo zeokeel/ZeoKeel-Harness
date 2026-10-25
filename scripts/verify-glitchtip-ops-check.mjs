@@ -158,8 +158,8 @@ async function startKeysApi(rows) {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify(rows))
   })
-  await new Promise(resolve_ => server.listen(0, '127.0.0.1', resolve_))
-  const { port } = server.address()
+  await new Promise(resolve_ => server.listen(0, '127.0.0.1', () => resolve_(undefined)))
+  const { port } = /** @type {import('node:net').AddressInfo} */ (server.address())
   return { baseUrl: `http://127.0.0.1:${port}`, state, close: () => new Promise(r => server.close(r)) }
 }
 
@@ -697,6 +697,19 @@ async function runContainerCase({ workPrefix, envLines = [], sshStatus = 0, sshS
   });
   check(served === 1, `G-8(c): 假 keys API 应收到 1 个请求，实际 ${served}`)
   check(sshInvoked, 'G-8(c): 假 ssh 未收到调用(接线失败)')
+  // 假 keys API **恒**返回 `@glitchtip.example.com` 的 DSN，而本用例的容器站点 URL 是
+  // `preferred.example.com` ⇒ 期望 DSN 必须由容器 env 推导成 `@preferred.example.com`
+  // ⇒ 两边不一致 ⇒ **必须 exit 1 并给"不一致"FAIL**。这一格才是"优先级真的被消费"的证据：
+  // 只在文案里写"来源 GLITCHTIP_URL"骗不过它。
+  check(
+    result.status === 1,
+    `G-8(c): 期望 DSN（由容器站点 URL 推导）与后台展示的 DSN 不一致时必须 exit 1(实际 ${result.status})`,
+  )
+  check(
+    Array.isArray(report?.verdict)
+    && report.verdict.some(line => line.startsWith('FAIL: 期望 DSN 与后台展示的 DSN **不一致**')),
+    `G-8(c): 必须给"期望 DSN 与后台展示的 DSN 不一致"的 FAIL verdict，实际 ${JSON.stringify(report?.verdict)}`,
+  )
   check(
     report?.containerEnv?.siteUrlSource === 'GLITCHTIP_URL'
     && report?.containerEnv?.domain === 'https://preferred.example.com',

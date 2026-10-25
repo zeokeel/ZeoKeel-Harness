@@ -25,7 +25,6 @@ import path from "node:path"
     const OFFICIAL_HOME_DIR = ".zeokeel-harness"
     const missing = []
     const invalid = []
-    const warnings = []
     // identity.display_name 是客户端**所有**名字的最终兜底(登录页/界面/门户),
     // short_name 是登录页与服务端 applyDefaults 的直接来源:两者缺一,渠道构建
     // 就会在某个可见位置显示中性占位。

@@ -156,7 +156,7 @@ ctx.effect(() => ctx.slots.inject('sidebar.footer.action', () => ctx.slots.regis
 
 | 命令 | 作用 |
 |---|---|
-| `corepack yarn check` | 全量门禁：构建 + typecheck + 测试 + 17 条根守卫（受依赖图约束的并行编排） |
+| `corepack yarn check` | 全量门禁：构建 + typecheck + 测试 + 18 条根守卫（受依赖图约束的并行编排） |
 | `yarn check:fast` | 只跑本次改动影响的包（按 `git status`/`git diff` 映射；顶层文件改动升格为全量） |
 | `yarn workspace <包名> check` | 单包：构建 + 测试 |
 | `yarn workspace <包名> typecheck` | 单包类型检查（**vitest 不做全量类型检查**，新判据必须跑 tsc） |

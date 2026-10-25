@@ -97,6 +97,26 @@ export const MAX_MODULES_DEFAULT_ON = 3
  */
 const CONTRACT_CANDIDATES = [MODULE_CONTRACT_FILE, join('..', MODULE_CONTRACT_FILE)]
 
+// 下面三个 `@typedef` 只服务 `tsc --checkJs`：此前写 `@param {object}` / `@returns {object}`
+// 的位置收成**具体形状**，否则 `.modules` / `.ids` 这类取值在 `checkJs` 下全是 TS2339
+// （`Property 'x' does not exist on type 'object'`）。
+// **真源仍然只有 `module-contract.json` 一份** —— 这些标注不是第二套口径。
+
+/**
+ * 契约里的一个模块条目（`module-contract.json` 的 `modules[i]` 的可用字段）。
+ * @typedef {{id: string, goConst: string, title: string, defaultInChannel: boolean}} ContractModule
+ */
+
+/**
+ * 契约本体（{@link parseModuleContract} 的产物形状）。
+ * @typedef {{version: number, modules: ContractModule[]}} ModuleContract
+ */
+
+/**
+ * 生成区渲染上下文（{@link contractContext} 的产物，`regions[].body(ctx)` 的入参）。
+ * @typedef {{ids: string[], idsText: string, modules: ContractModule[]}} RenderContext
+ */
+
 /** 生成区的成对标记（注释前缀由文件本身决定：`//` 或 `#`）。 */
 const MARKER_OPEN_RE = /^([ \t]*)(\/\/|#)[ \t]*@generated:module-contract\b/u
 const MARKER_CLOSE_RE = /^([ \t]*)(\/\/|#)[ \t]*@end:module-contract\b/u
@@ -112,7 +132,7 @@ const markerClose = (comment, indent) => `${indent}${comment} @end:module-contra
 const quotedIds = (ids) => ids.map(id => `'${id}'`).join(', ')
 
 /**
- * **生成面登记表**：6 个文件、10 个生成区。
+ * **生成面登记表**：6 个文件、11 个生成区。
  *
  * ⚠️ **`regions` 的顺序 = 该文件里标记出现的顺序**（渲染时按序号配对 `@generated` 与
  * `@end`）—— 同一个文件里有多个生成区时，数组顺序与源码顺序不一致会让 `--check` 报
@@ -258,7 +278,7 @@ export const VERIFIED_FACES = [
 /**
  * 面数（供根守卫的汇总串引用；唯一真源在这里，别在调用点重算）。
  *
- * `faces` = 6 个生成文件 + 4 处结构核验 = 10 面；`regions` = 8 个生成区。
+ * `faces` = 6 个生成文件 + 4 处结构核验 = 10 面；`regions` = 11 个生成区 + 4 处核验 = 15 条。
  */
 export const MODULE_CONTRACT_FACE_COUNTS = {
   generatedFiles: GENERATED_SITES.length,
@@ -383,7 +403,7 @@ export function parseModuleContract(text) {
     else seenIds.set(id, index)
     if (seenConsts.has(goConst)) problems.push(`${at}.goConst 与 modules[${seenConsts.get(goConst)}] 重复：${goConst}`)
     else seenConsts.set(goConst, index)
-    modules.push({ id, goConst, title, defaultInChannel, line: index })
+    modules.push({ id, goConst, title, defaultInChannel })
   }
   if (problems.length > 0) return { contract: null, problems }
   return { contract: { version: 1, modules }, problems }
@@ -391,8 +411,8 @@ export function parseModuleContract(text) {
 
 /**
  * 契约 → 渲染上下文。
- * @param {{modules: Array<{id: string, goConst: string, title: string, defaultInChannel: boolean}>}} contract - 契约。
- * @returns {{ids: string[], idsText: string, modules: object[]}} 渲染上下文。
+ * @param {{modules: ContractModule[]}} contract - 契约。
+ * @returns {RenderContext} 渲染上下文。
  */
 const contractContext = (contract) => ({
   ids: contract.modules.map(module => module.id),
@@ -403,7 +423,7 @@ const contractContext = (contract) => ({
 /**
  * **读真源**（候选路径 + fail-loud）：所有模式共用这一条，避免三处各写一遍解析。
  * @param {{root?: string, cwd?: string}} [options] - 覆盖项。
- * @returns {{contract: object|null, problems: string[], path: string|null}} 契约 / 问题 / 命中路径。
+ * @returns {{contract: ModuleContract|null, problems: string[], path: string|null}} 契约 / 问题 / 命中路径。
  */
 export function loadModuleContract(options = {}) {
   for (const candidate of CONTRACT_CANDIDATES) {
@@ -452,7 +472,6 @@ export function contractSelfProblems(contract) {
 /**
  * 定位一个文件里的全部生成区标记。
  * @param {string[]} lines - 文件行。
- * @returns {{opens: object[], closes: object[]}} 开始/结束标记（按出现顺序）。
  */
 function locateMarkers(lines) {
   const opens = []
@@ -469,8 +488,8 @@ function locateMarkers(lines) {
 /**
  * **纯函数重算**：给定磁盘正文 ⇒ 期望正文（生成区内容被重写，其余逐字节保留）。
  * @param {string} text - 磁盘正文。
- * @param {object} site - {@link GENERATED_SITES} 的一项。
- * @param {object} ctx - {@link contractContext} 的产物。
+ * @param {(typeof GENERATED_SITES)[number]} site - {@link GENERATED_SITES} 的一项。
+ * @param {RenderContext} ctx - {@link contractContext} 的产物。
  * @returns {{text: string, problems: string[]}} 期望正文与问题清单（问题非空 = 标记块坏了）。
  */
 export function renderSite(text, site, ctx) {
@@ -543,7 +562,7 @@ export function scanWorkflowTagLiterals(text, idsText) {
 
 /**
  * 核验面 ①：`channel-features.ts` 的 `module: '<名>'` 出现顺序 == 契约顺序。
- * @param {object} ctx - 渲染上下文。
+ * @param {RenderContext} ctx - 渲染上下文。
  * @param {{root?: string, cwd?: string}} options - 覆盖项。
  * @returns {string[]} 问题清单。
  */
@@ -561,7 +580,7 @@ function verifyClientSurfaceOrder(ctx, options) {
 
 /**
  * 核验面 ②：router 标签分片成对且首行标签逐字正确 + 无孤儿模块标签。
- * @param {object} ctx - 渲染上下文。
+ * @param {RenderContext} ctx - 渲染上下文。
  * @param {{root?: string, cwd?: string}} options - 覆盖项。
  * @returns {string[]} 问题清单。
  */
@@ -610,7 +629,7 @@ function verifyRouterShards(ctx, options) {
 
 /**
  * 核验面 ③：`featureGlobalName()` 真跑后 == `__FEATURE_<ID大写>__`。
- * @param {object} ctx - 渲染上下文。
+ * @param {RenderContext} ctx - 渲染上下文。
  * @param {{root?: string, cwd?: string}} options - 覆盖项。
  * @returns {Promise<string[]>} 问题清单。
  */
@@ -643,7 +662,7 @@ async function verifyWebadminGlobalName(ctx, options) {
 
 /**
  * 核验面 ④：Go `AllModules()` 的源码顺序 == 契约顺序。
- * @param {object} ctx - 渲染上下文。
+ * @param {RenderContext} ctx - 渲染上下文。
  * @param {{root?: string, cwd?: string}} options - 覆盖项。
  * @returns {string[]} 问题清单。
  */
@@ -693,7 +712,7 @@ function verifyGoAllModules(ctx, options) {
  *     router 分片、`featureGlobalName()`、`AllModules()`、ci.yml 里手写的非契约 `-tags=`）
  *     ⇒ 跑生成器**不会**修好，必须按每条点名的位置人工补齐。
  * @param {{root?: string, cwd?: string}} [options] - 覆盖项（自检/测试用）。
- * @returns {Promise<{ok: boolean, problems: string[], contractProblems: string[], generatedProblems: string[], structuralProblems: string[], counts: object, contract: object|null}>} 判定结果。
+ * @returns {Promise<{ok: boolean, problems: string[], contractProblems: string[], generatedProblems: string[], structuralProblems: string[], counts: typeof MODULE_CONTRACT_FACE_COUNTS, contract: ModuleContract|null}>} 判定结果。
  */
 export async function checkModuleContract(options = {}) {
   const contractProblems = []

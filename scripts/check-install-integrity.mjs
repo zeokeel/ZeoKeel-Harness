@@ -384,6 +384,7 @@ export const EXECUTION_FACE_REGISTRY = [
   // 就等于改写判据本体** ⇒ 形状族枚举到它，这里显式登记。
   'scripts/check-release-notes-migrations.mjs',
   'scripts/check-root-guards.mjs',
+  'scripts/check-scripts-types.mjs',
   'scripts/check-site-links.mjs',
   'scripts/check-theme-tokens.mjs',
   'scripts/check-verdict-credential.mjs',
@@ -713,7 +714,7 @@ function sha256(data) {
  * 在指定仓库里跑 git（同步，不抛异常）。
  * @param root - 仓库根。
  * @param args - git 参数。
- * @param encoding - `utf8`（缺省）或 `buffer`。
+ * @param {'utf8' | 'buffer'} [encoding] - `utf8`（缺省）或 `buffer`。
  * @returns `spawnSync` 的结果。
  */
 function git(root, args, encoding = 'utf8') {
@@ -1275,7 +1276,7 @@ export function workflowRunBlocks(text) {
  * 的第一个词（链式：`corepack yarn …` 会继续往下走）。两者之外的词一律不看 ——
  * 这正是"被执行"与"被提到"的分界。
  * @param text - shell 文本。
- * @param exists - 存在性谓词（缺省全真；调用方传 `HEAD` 的路径集合）。
+ * @param {(path: string) => boolean} [exists] - 存在性谓词（缺省全真；调用方传 `HEAD` 的路径集合）。
  * @returns 仓内路径数组（升序、去重）。
  */
 export function commandPositionPaths(text, exists = () => true) {
@@ -1310,7 +1311,7 @@ export function commandPositionPaths(text, exists = () => true) {
  * 指的是 `<包>/scripts/build.mjs`），解析不出再退回仓库根口径。
  * @param value - script 值。
  * @param baseDir - 包目录（仓库根传 `''`）。
- * @param exists - 存在性谓词。
+ * @param {(path: string) => boolean} [exists] - 存在性谓词。
  * @returns 仓内路径数组（升序、去重）。
  */
 export function manifestScriptPaths(value, baseDir = '', exists = () => true) {

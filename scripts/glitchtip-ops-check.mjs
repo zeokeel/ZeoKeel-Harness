@@ -297,16 +297,6 @@ function buildExpectedDsn(baseUrl, observed) {
   return `${base.protocol}//${observed.publicKey}@${base.hostname}${port}${prefix}/${observed.projectId}`;
 }
 
-/** 从容器 env 里取 GLITCHTIP_DOMAIN 的主机名，用于交叉核对。 */
-function hostFromDomain(value) {
-  if (!value) return null;
-  try {
-    return new URL(value).hostname;
-  } catch {
-    return value.replace(/^https?:\/\//i, '').replace(/\/.*$/, '') || null;
-  }
-}
-
 /**
  * 把值安全地包进 POSIX sh 单引号。
  *

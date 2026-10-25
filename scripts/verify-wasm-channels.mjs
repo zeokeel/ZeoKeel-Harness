@@ -66,8 +66,6 @@ const FROZEN_SCHEME_REGEX = '^[a-z][a-z0-9+.-]{1,31}$'
  */
 const PIN_TAG_PATTERN = /^dsh-v\d+\.\d+\.\d+-(?:alpha|beta|rc)\.\d+$/
 const APP_SCHEME_FIELD = 'desktop.app_origin_scheme'
-/** §10 冻结的保留 scheme **契约**（真源是设计总纲原文，这里只作为解析失败时的对照提示）。 */
-const RESERVED_SCHEMES = ['http', 'https', 'file', 'data', 'javascript', 'about']
 
 /** 报告里的相对路径（失败信息要能直接点开）。 */
 const REL = path => path.replace(`${ROOT}/`, '')
@@ -169,7 +167,7 @@ function fakeChannelRepo(specs) {
 
 /**
  * 跑一次 ci-channels.sh（dry-run：只解析渠道集 + 校验字段，不打包）。
- * @param options - `{ source, refName, ref }`。
+ * @param {{ source: string, refName?: string, ref?: string }} options - 运行参数。
  */
 function runChannels({ source, refName = '', ref }) {
   const cwd = tempDir('wasm-channels-run-')

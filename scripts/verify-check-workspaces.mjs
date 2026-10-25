@@ -1795,7 +1795,8 @@ function sha256File(path) {
   )
 
   // -------------------------------------------------------------------------
-  // **全部 16 条**根守卫的逐字登记（2026-09-25 第九轮审计 B 泳道 P1-5 的第二判据）。
+  // **全部 20 条**根守卫的逐字登记（2026-09-25 第九轮审计 B 泳道 P1-5 的第二判据；
+  // 2026-10-26 起 18→20：新增 `check:architecture` / `check:change-intent`）。
   //
   // 现场：上面那几条只把 **6 条**守卫钉到了具体脚本文件，其余 10 条（含 `check:workflows`
   // 自己、`check:ci-scripts`、`check:inventories`、`check:patches`…）**没有第二判据** ——
@@ -1828,6 +1829,11 @@ function sha256File(path) {
     // 2026-10-25：根脚本的类型面（`tsconfig.scripts.json`，allowJs + checkJs + noUnused*）。
     // 它的判据本体是 `scripts/check-scripts-types.mjs`（调 `tsc -p tsconfig.scripts.json`）。
     ['check:scripts-types', 'node scripts/check-scripts-types.mjs'],
+    // 2026-10-26：两条新根守卫（第 19/20 条）—— TS 架构规则（dependency-cruiser）与
+    // `changes/*.json` 字段契约。与 F1 的 `REGISTERED_GUARD_ENTRIES` 一样逐字登记脚本路径：
+    // 把 package.json 指向另一个"能通过"的守卫时，两处同时改才可能静默。
+    ['check:architecture', 'node scripts/check-architecture.mjs'],
+    ['check:change-intent', 'node scripts/check-change-intent.mjs'],
     // 2026-09-24 第十轮审计 C-06（P2）：F1 泳道新增的守卫 —— 它把「守卫脚本的**内容**」
     // 也变成判据（`digest` = sha256）。本表是**第二份独立登记**（不是 import F1 的表），
     // 两处同时被改才会静默；下面还有一条独立的"复算摘要对拍"。

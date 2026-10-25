@@ -1,0 +1,54 @@
+# Agent 开发环境的可执行入口（不要和 server/Makefile 混用）
+#
+#   make -f Makefile.agent doctor       # 工具链自检（缺必备项 exit 1）
+#   make -f Makefile.agent arch-ts      # TS 架构判据（0 新增违规才 exit 0）
+#   make -f Makefile.agent arch-go      # Go 架构判据（基线即配置，只拦新增边）
+#   make -f Makefile.agent arch         # = arch-ts
+#   make -f Makefile.agent install-arch # 安装架构工具（幂等）
+#
+# 为什么是独立文件而不是根 Makefile：根目录没有 Makefile 约定，避免和 server/Makefile 的
+# 目标名（check/test-server…）混淆。所有命令都可在没有本文件时手抄运行（见 docs/agent/toolchain.md）。
+
+SHELL := /bin/bash
+ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null || pwd)
+DC := $(ROOT)/node_modules/.bin/dependency-cruiser
+GO_ARCH := $(ROOT)/server/temp/gopath/bin/go-arch-lint
+
+.PHONY: doctor arch arch-ts arch-go install-arch
+
+doctor:
+	@set -u; fail=0; \
+	printf '%-20s' 'node'; if node -v >/dev/null 2>&1; then node -v; else echo 'MISSING（需要 ^22.19.0 或 >=24）'; fail=1; fi; \
+	printf '%-20s' 'corepack yarn'; if v=$$(corepack yarn --version 2>/dev/null); then echo "$$v"; case "$$v" in 4.18.0) : ;; *) echo '  WARN：期望 4.18.0（packageManager）' ;; esac; else echo 'MISSING（corepack enable）'; fail=1; fi; \
+	printf '%-20s' 'git'; if git --version >/dev/null 2>&1; then git --version; else echo 'MISSING'; fail=1; fi; \
+	printf '%-20s' 'submodule'; if git -C "$(ROOT)" submodule status deepseek-harness 2>/dev/null | grep -q '^-'; then echo '未初始化（git submodule update --init --recursive）'; fail=1; elif git -C "$(ROOT)" submodule status deepseek-harness >/dev/null 2>&1; then echo 'ok'; else echo 'MISSING'; fail=1; fi; \
+	printf '%-20s' 'go'; if command -v go >/dev/null 2>&1; then go version; else echo '未安装（改 server/ 时才需要）'; fi; \
+	printf '%-20s' 'dependency-cruiser'; if [ -x "$(DC)" ]; then "$(DC)" --version; else echo '未安装（corepack yarn install --immutable）'; fi; \
+	printf '%-20s' 'go-arch-lint'; if [ -x "$(GO_ARCH)" ]; then "$(GO_ARCH)" --version 2>/dev/null || echo '已安装'; else echo '未安装（make -f Makefile.agent install-arch）'; fi; \
+	if [ "$$fail" -ne 0 ]; then echo '== 必备项缺失：先修环境，不要在坏环境上写代码 =='; exit 1; fi; \
+	echo '== 必备项齐全 =='
+
+arch-ts:
+	@cd "$(ROOT)" && "$(DC)" packages community \
+		--config .dependency-cruiser.cjs \
+		--ignore-known .dependency-cruiser-known-violations.json \
+		--output-type err
+
+arch-go:
+	@if [ ! -x "$(GO_ARCH)" ]; then echo 'go-arch-lint 未安装：见 docs/agent/toolchain.md §2.2（make -f Makefile.agent install-arch）' >&2; exit 2; fi; \
+	if [ ! -f "$(ROOT)/server/.go-arch-lint.yml" ]; then echo 'Go 架构配置丢失：server/.go-arch-lint.yml 必须入库（基线即配置，见 docs/agent/architecture.md §3）；删配置等于删判据，拒绝静默通过' >&2; exit 2; fi; \
+	cd "$(ROOT)/server" && "$(GO_ARCH)" check
+
+arch: arch-ts
+
+install-arch:
+	@echo '== TS：dependency-cruiser 已在根 devDependencies（yarn.lock 钉死），只需安装依赖 =='
+	@cd "$(ROOT)" && corepack yarn install --immutable
+	@echo '== Go：安装 go-arch-lint（模块缓存写到仓库内可写目录） =='
+	@mkdir -p "$(ROOT)/server/temp/gopath" "$(ROOT)/server/temp/gomodcache" "$(ROOT)/server/temp/gocache"
+	@cd "$(ROOT)/server" && \
+		GOCACHE="$(ROOT)/server/temp/gocache" \
+		GOMODCACHE="$(ROOT)/server/temp/gomodcache" \
+		GOPATH="$(ROOT)/server/temp/gopath" \
+		go install github.com/fe3dback/go-arch-lint@v1.19.0
+	@echo '== 安装完成：make -f Makefile.agent doctor =='

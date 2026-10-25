@@ -1,0 +1,73 @@
+{
+  "id": "2026-10-26-agent-dev-environment",
+  "status": "implemented",
+  "intent": {
+    "zh": "把「AI 写的代码细节失配」这类 bug 的防线从『事后审计』前移到『环境 + 架构判据 + 变更验收』：建立可复现的 agent 开发环境、按阶段选工具、把依赖方向变成可执行判据，并重写 AGENTS.md 使其符合 AGENTS.md 约定。",
+    "en": "Move the defense against AI detail-level defects from post-hoc audits to environment, architecture fitness checks and change acceptance: reproducible agent environment, staged toolchain, dependency-direction rules, and an AGENTS.md-conformant handbook."
+  },
+  "modules": [
+    "AGENTS.md",
+    "docs/agent/",
+    "changes/",
+    ".dependency-cruiser.cjs",
+    ".dependency-cruiser-known-violations.json",
+    "Makefile.agent",
+    "package.json",
+    "yarn.lock"
+  ],
+  "acceptance": [
+    {
+      "criterion": "工具链自检可复现：doctor 打印 node/yarn/git/submodule 等版本，缺必备项时非零退出",
+      "evidence": "probe",
+      "command": "make -f Makefile.agent doctor"
+    },
+    {
+      "criterion": "TS 架构判据可执行且可被打坏：正常 exit 0；注入一条 client 面引用 host 面的探针后必须变红并点名规则",
+      "evidence": "guard",
+      "command": "make -f Makefile.agent arch-ts"
+    },
+    {
+      "criterion": "文档数字与真源一致（prebuild 15 个 workspace 包等 14 项）",
+      "evidence": "guard",
+      "command": "node scripts/check-doc-claims.mjs"
+    },
+    {
+      "criterion": "新增文档/配置不含未登记的域名或客户身份",
+      "evidence": "guard",
+      "command": "node scripts/check-no-real-domains.mjs"
+    },
+    {
+      "criterion": "仓库拓扑与 workspace/上游 pin 一致",
+      "evidence": "guard",
+      "command": "node scripts/verify-layout.mjs"
+    }
+  ],
+  "risk": "新增两个根 devDependency（dependency-cruiser、@swc/core）会改变 yarn.lock 与 node_modules；未改变任何运行期产物。Go 侧架构判据未启用，属于已知缺口。",
+  "rollback": "删除 Makefile.agent、.dependency-cruiser.cjs、.dependency-cruiser-known-violations.json、docs/agent/、changes/2026-10-26-agent-dev-environment.json，并 `yarn remove -D dependency-cruiser @swc/core`；AGENTS.md 从 git 恢复。",
+  "verification": [
+    {
+      "command": "make -f Makefile.agent doctor",
+      "result": "exit 0；node v24.16.0 / yarn 4.18.0 / git 2.47.3 / submodule ok / go 1.26.5 / dependency-cruiser 18.7.0 / go-arch-lint 已安装"
+    },
+    {
+      "command": "make -f Makefile.agent arch-ts",
+      "result": "exit 0；1255 modules / 4757 dependencies；5 条存量循环依赖被基线忽略"
+    },
+    {
+      "command": "注入 packages/host/capability-center/src/client/__arch_probe.ts 后 make -f Makefile.agent arch-ts",
+      "result": "exit 2；error client-face-no-host-face: .../src/client/__arch_probe.ts → .../src/host/skill-routes.ts；删除探针后恢复 exit 0"
+    },
+    {
+      "command": "node scripts/check-doc-claims.mjs",
+      "result": "exit 0；已覆盖 14 项，全部与真源一致"
+    },
+    {
+      "command": "node scripts/check-no-real-domains.mjs",
+      "result": "exit 0；零命中"
+    },
+    {
+      "command": "node scripts/verify-layout.mjs",
+      "result": "exit 0；Yarn workspace 与 upstream pin 一致"
+    }
+  ]
+}

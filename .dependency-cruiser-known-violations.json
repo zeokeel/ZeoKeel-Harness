@@ -1,0 +1,171 @@
+[
+  {
+    "type": "cycle",
+    "from": "packages/client/wasm-apps/src/client/AppCenterPanel.tsx",
+    "to": "packages/client/wasm-apps/src/client/catalog-filter.ts",
+    "unresolvedTo": "./catalog-filter.ts",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "packages/client/wasm-apps/src/client/catalog-filter.ts",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "packages/client/wasm-apps/src/client/AppCenterPanel.tsx",
+        "dependencyTypes": [
+          "local",
+          "import",
+          "type-only"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "packages/host/browser/src/electron-adapter.ts",
+    "to": "packages/host/browser/src/runtime.ts",
+    "unresolvedTo": "./runtime.ts",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "packages/host/browser/src/runtime.ts",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "packages/host/browser/src/electron-adapter.ts",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "packages/host/browser/src/guard.ts",
+    "to": "packages/host/browser/src/electron-adapter.ts",
+    "unresolvedTo": "./electron-adapter.ts",
+    "dependencyTypes": [
+      "local",
+      "import",
+      "type-only"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "packages/host/browser/src/electron-adapter.ts",
+        "dependencyTypes": [
+          "local",
+          "import",
+          "type-only"
+        ]
+      },
+      {
+        "name": "packages/host/browser/src/runtime.ts",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "packages/host/browser/src/guard.ts",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "packages/host/browser/src/runtime.ts",
+    "to": "packages/host/browser/src/shots.ts",
+    "unresolvedTo": "./shots.ts",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "packages/host/browser/src/shots.ts",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "packages/host/browser/src/electron-adapter.ts",
+        "dependencyTypes": [
+          "local",
+          "import",
+          "type-only"
+        ]
+      },
+      {
+        "name": "packages/host/browser/src/runtime.ts",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "packages/vendor/memory-evolve/src/client/index.ts",
+    "to": "packages/vendor/memory-evolve/src/client/PromptView.tsx",
+    "unresolvedTo": "./PromptView.tsx",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "packages/vendor/memory-evolve/src/client/PromptView.tsx",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "packages/vendor/memory-evolve/src/client/index.ts",
+        "dependencyTypes": [
+          "local",
+          "import",
+          "type-only"
+        ]
+      }
+    ]
+  }
+]

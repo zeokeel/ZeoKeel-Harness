@@ -710,7 +710,9 @@ for (const probe of ['.glitchtip-recon/c.txt', '.glitchtip-recon/nested/other.tx
   // 于是"任何语境下都不得设置"这句自述对空串不成立（实测 EXIT=0 + 通过行）。空串同样是
   // "被设置"，必须一样拒绝 —— 这一格由**第二个守卫**独立钉住（守卫自己那份自检在
   // `check-doc-claims.mjs` 里，两处同时被改才会静默）。
-  for (const [label, baseEnv] of [['CI=true', { ...process.env, CI: 'true' }], ['无 CI', noCiEnv]]) {
+  for (const [label, baseEnv] of /** @type {Array<[string, Record<string, string>]>} */ ([
+    ['CI=true', { ...process.env, CI: 'true' }], ['无 CI', noCiEnv],
+  ])) {
     for (const seamValue of ['1', '']) {
       const shown = JSON.stringify(seamValue)
       const seamSet = spawnSync(process.execPath, [guard], {
@@ -1823,6 +1825,9 @@ function sha256File(path) {
     ['check:no-real-domains', 'node scripts/check-no-real-domains.mjs'],
     ['check:wasm-client-only', 'bash scripts/verify-wasm-client-only.sh'],
     ['check:integration-tests', 'node scripts/check-integration-tests.mjs'],
+    // 2026-10-25：根脚本的类型面（`tsconfig.scripts.json`，allowJs + checkJs + noUnused*）。
+    // 它的判据本体是 `scripts/check-scripts-types.mjs`（调 `tsc -p tsconfig.scripts.json`）。
+    ['check:scripts-types', 'node scripts/check-scripts-types.mjs'],
     // 2026-09-24 第十轮审计 C-06（P2）：F1 泳道新增的守卫 —— 它把「守卫脚本的**内容**」
     // 也变成判据（`digest` = sha256）。本表是**第二份独立登记**（不是 import F1 的表），
     // 两处同时被改才会静默；下面还有一条独立的"复算摘要对拍"。

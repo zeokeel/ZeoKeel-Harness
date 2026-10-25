@@ -444,8 +444,9 @@ function headingLines(text) {
  * 所以走**显式登记表** {@link LEGIT_REPEATED_SECTION_KEYS}（带理由 + 双向对账），
  * 而不是把标题塞进 `FIXED_SECTION_KEYS` 放宽判据。
  *
- * @param {{note: string, workSections: string[], allHeadings: string[]}[]} notes - 各版本的章节面。
- * @param {object} [options] - `registry`：合法重名登记表（默认 {@link LEGIT_REPEATED_SECTION_KEYS}）。
+ * @param {{note?: string, workSections: string[], allHeadings: string[]}[]} notes - 各版本的章节面。
+ * @param {{registry?: {key: string, reason: string}[]}} [options] - `registry`：合法重名登记表
+ *   （默认 {@link LEGIT_REPEATED_SECTION_KEYS}）。
  * @returns {string[]} 漂移描述。
  */
 function crossNoteSectionFindings(notes, options = {}) {
@@ -523,7 +524,7 @@ function crossNoteSectionFindings(notes, options = {}) {
  * 单独抽出来是为了让"登记表 ↔ 真实数据"的双向对账与真值表打印**读同一份观测**，
  * 两处各算一遍迟早会不一致。
  *
- * @param {{note: string, workSections: string[]}[]} notes - 各版本的章节面。
+ * @param {{note?: string, workSections?: string[]}[]} notes - 各版本的章节面（缺字段的条目按"无"处理）。
  * @returns {Map<string, string[]>} 观测到的重名标题 → 版本列表（只含 ≥1 版；`length > 1` = 真重名）。
  */
 function observedSectionKeyOwners(notes) {
@@ -556,7 +557,7 @@ function observedSectionKeyOwners(notes) {
  * **没有输入时不得静默通过**：`notes` 为空 ⇒ 红（"判不了"不是"没问题"）。
  *
  * @param {{note: string, workSections: string[]}[]} notes - 各版本的章节面。
- * @param {object[]} [registry] - 登记表（默认 {@link LEGIT_REPEATED_SECTION_KEYS}）。
+ * @param {{key?: string, reason?: string}[]} [registry] - 登记表（默认 {@link LEGIT_REPEATED_SECTION_KEYS}）。
  * @returns {string[]} 漂移描述。
  */
 function legitRepeatedSectionFindings(notes, registry = LEGIT_REPEATED_SECTION_KEYS) {
@@ -633,8 +634,8 @@ function missingTagSections(tagSections, workSections) {
  * @param {string} input.note - tag。
  * @param {string[]} input.tagSections - tag 版本的二级标题。
  * @param {string[]} input.workSections - 工作树的二级标题。
- * @param {object[]} input.registry - 登记项（默认 {@link POST_TAG_SECTIONS}）。
- * @param {object[]} [input.movedRegistry] - 反向登记项（默认 {@link MOVED_TAG_SECTIONS}）。
+ * @param {{note: string, heading: string, rounds?: number[], landedBy?: string[], reason?: string}[]} [input.registry] - 登记项（默认 {@link POST_TAG_SECTIONS}）。
+ * @param {{note: string, heading: string, movedTo?: string, reason?: string}[]} [input.movedRegistry] - 反向登记项（默认 {@link MOVED_TAG_SECTIONS}）。
  * @param {Map<string, Set<string>>|null} [input.sectionsByNote] - 各版本**工作树**的章节身份集合
  *   （`note` → `Set<sectionKey>`），用于"搬去哪一版"的双向对账；省略时该向只判存在性。
  * @param {(commit: string) => boolean|null} input.isAncestor - 提交是否在 tag 内（`null` = 判不了）。

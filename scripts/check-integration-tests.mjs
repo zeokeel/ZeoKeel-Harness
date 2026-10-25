@@ -1054,7 +1054,7 @@ function cookies(req) {
 /**
  * 起一个按场景应答的假网关。
  * @param {string} scenario - good | skip | dex-http-deeplink | ldap-legacy-channel | ldap-rbac-fall-open
- * @returns {Promise<{ base: string, close: () => Promise<void> }>} 监听地址与关闭函数。
+ * @returns {Promise<{ base: string, emittedLocations: any[], close: () => Promise<void> }>} 监听地址、真的发出过的 Location 与关闭函数。
  */
 function startGateway(scenario) {
   const providerConfigured = scenario !== 'skip'
@@ -1225,7 +1225,7 @@ function startGateway(scenario) {
   return new Promise((resolvePromise, rejectPromise) => {
     server.on('error', rejectPromise)
     server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address()
+      const { port } = /** @type {import('node:net').AddressInfo} */ (server.address())
       resolvePromise({
         base: `http://127.0.0.1:${port}`,
         // 收尾判"两种 Location 形态都真的被发出去过"用的**原始事实**（每个场景各自一份）。
@@ -1241,7 +1241,7 @@ function startGateway(scenario) {
 /**
  * 登记面**直接读取**的根路径（R26 FIX-J1-5）：`integration-tests/` 目录本身，
  * 加上每个登记项的第一个路径段（去重排序）。
- * @param entries - 登记项（缺省 = 真表；自证传合成表）。
+ * @param {Array<{ path: string }>} [entries] - 登记项（缺省 = 真表；自证传合成表）。
  * @returns 根路径（仓内相对）列表。
  */
 function requiredIntegrationRoots(entries = INTEGRATION_ENTRIES) {
@@ -1252,7 +1252,7 @@ function requiredIntegrationRoots(entries = INTEGRATION_ENTRIES) {
  * 上述根路径里**不存在**的那些（前置失败的输入）。
  * @param root - 仓库根（绝对路径）。
  * @param exists - 判定函数（注入以便自证：真跑传 `fs.existsSync`）。
- * @param entries - 登记项（缺省 = 真表）。
+ * @param {Array<{ path: string }>} [entries] - 登记项（缺省 = 真表）。
  * @returns 缺失的根（仓内相对）列表。
  */
 function integrationRootProblems(root, exists, entries = INTEGRATION_ENTRIES) {
@@ -1492,7 +1492,6 @@ async function main() {
   //     的角色上，且 `minJudgments` 必须与该腿**自己的机器可读判定清单**逐数相等；
   //   · **SKIP 必须具名**：原因码闭集 + 声明/使用双向对账 + 唯一出口 + 真跑一次。
   // -------------------------------------------------------------------------
-  const expectedAggregateByPath = new Map(expectedAggregate.map(entry => [entry.path, entry]))
   for (const entry of INTEGRATION_ENTRIES) {
     const wired = typeof entry.aggregateName === 'string'
     const label = `${entry.path}（角色 ${entry.role}）`
@@ -1509,7 +1508,7 @@ async function main() {
         `形态⑥: ${label} 接进了聚合层却没有 \`minJudgments\`（运行期非 SKIP 判定条数下限，正整数）`
           + ' —— 没有下限的接线等于"跑不跑、验没验都不影响门禁"')
     } else {
-      check(entry.minJudgments === undefined,
+      check(/** @type {any} */ (entry).minJudgments === undefined,
         `形态⑥: ${label} 没有接进聚合层却声明了 \`minJudgments\` —— 判定条数只能来自聚合层里真的跑起来的腿`)
     }
 
@@ -3253,20 +3252,6 @@ function expressionScriptWordIndex(words) {
   return { scriptIndex: -1, commandText: null, terminated: false }
 }
 /**
- * **包运行器**（`npx` / `bunx` / `npm exec` / `yarn dlx` / `pnpm dlx` / `bun x`）的语义。
- *
- * 它后面那一位是**包名 / 包内 bin**（由包管理器在外部命名空间里解析），不是本仓的
- * 可执行名 —— 所以它不过 {@link CI_COMMAND_REGISTRY} 的逐词登记（修前 `npx eslint .`
- * 会被判成"未登记的可执行名 `eslint`"，属 R17A-04 的误报）。
- *
- * 但**遮蔽真命令名**是另一回事：`npx make …` / `npx bash -c …` 这种"用包运行器把真命令
- * 换个名字"的形态仍然 fail-closed（`package-runner-command`）—— 判据是"这一位是不是闭包
- * 认识的命令词"。`npm exec -- <命令>` 的 `--` 之后是**真命令**，照常走登记制。
- */
-const PACKAGE_RUNNER_WORDS = new Set([
-  'npx', 'bunx', 'npm exec', 'npm x', 'yarn dlx', 'yarn exec', 'pnpm exec', 'pnpm dlx', 'bun x',
-])
-/**
  * **命令位上的外部 Python 模块**（`python3 -m <模块>`）—— R17A-04 的另一半。
  *
  * `-m` 的取值是模块名，绝大多数是**标准库/第三方**（`pip` / `json.tool` / `pytest` / `http.server`），
@@ -3817,13 +3802,6 @@ function shellScriptPositionShape(word) {
   return /[\s;|&<>(){}'"]/u.test(word) ? '含空白/引号/括弧的字面量' : undefined
 }
 /**
- * @param word - 脚本位那一位。
- * @returns `true` = 读不懂。
- */
-function unreadableShellScriptArgument(word) {
-  return shellScriptPositionShape(word) !== undefined
-}
-/**
  * **根变量前缀**的脚本位（`$GITHUB_WORKSPACE/scripts/x.sh` / `${PWD}/x.mjs`）。
  *
  * 这两个变量是 GitHub Actions 运行器的**内置工作区变量**：取值就是 checkout 根
@@ -4163,7 +4141,11 @@ function unwrapCommandWordsUncached(words, strict = true) {
   let index = 0
   /** 是否已经吃掉了至少一层**已登记**的包装（决定"命令位是变量"要不要 fail-closed）。 */
   let wrapped = false
-  const stop = () => ({ heads, nestedTexts, modules, commandWords, problems })
+  // 行尾这个分号是给 TypeScript 解析器的：`() => ({ … })` 之后紧跟一个裸 `{ … }` 块时，
+  // TS 6 / TS 7 都会把那个 `{` 当成箭头体继续解析并报 `error TS1005: '=>' expected`
+  // （V8 按 ASI 接受同一份代码）。显式分号只为断句，运行期语义与 ASI 版本完全相同。
+  // 判据：`yarn typecheck:scripts`（tsconfig.scripts.json）。
+  const stop = () => ({ heads, nestedTexts, modules, commandWords, problems });
   // **进程替换** `<(...)` / `>(...)`（R17-X，R17A-02；**R19A-01 收口**）：`bash <(echo '<命令文本>')`
   // 里真正被执行的是那个**子进程的输出**，闭包结构上判不了它 ⇒ 见到就 fail-closed（不是"没看见"）。
   //
@@ -4653,7 +4635,7 @@ function unwrapCommandWordsUncached(words, strict = true) {
       for (const { flag, text } of codeTexts) acceptCode(`${label} ${flag}`, text)
       if (execTexts.length > 0 || codeTexts.length > 0) return stop()
       if (lookup) return stop()
-      // 包运行器的**包内 bin**（`yarn dlx <工具>`）：见 {@link PACKAGE_RUNNER_WORDS}。
+      // 包运行器的**包内 bin**（`yarn dlx <工具>`）：见 {@link consumePackageRunnerBin}。
       if (multi.packageRunnerBin === true && consumePackageRunnerBin(label)) return stop()
       continue
     }
@@ -4708,7 +4690,7 @@ function unwrapCommandWordsUncached(words, strict = true) {
       acceptNested(label, text, NESTED_SHELL_LENIENT)
       return stop()
     }
-    // 包运行器的**包内 bin**（`npx <工具>`）：见 {@link PACKAGE_RUNNER_WORDS}。
+    // 包运行器的**包内 bin**（`npx <工具>`）：见 {@link consumePackageRunnerBin}。
     if (spec.packageRunnerBin === true && consumePackageRunnerBin(label)) return stop()
     // **解释器**（`node <脚本> [参数…]` / `python3 <脚本>`）：脚本是**参数位上的载体**，
     // 由调用方的通用扫描跟随；它不是新的命令位（把 `x.mjs` 当命令名去登记是错的 ——
@@ -5848,7 +5830,7 @@ function tagWriteRedirections(source) {
     .replace(WRITE_FD_DUPLICATION, ' ')
     // 目标词**必须留下**（`$3` 缺省时不能写成字面 `undefined`）—— 标记词只是插在操作符前面，
     // 词法器随后丢掉操作符，于是"标记词的下一位"正好是目标词。
-    .replace(WRITE_REDIRECTION, (match, lead, operator, target) =>
+    .replace(WRITE_REDIRECTION, (_match, lead, operator, target) =>
       `${lead} ${WRITE_REDIRECT_SENTINEL} ${operator}${target === undefined ? '' : ` ${target}`}`)
 }
 /**
@@ -5864,6 +5846,10 @@ const HEREDOC_OPERATOR = /(?<!<)<<(?!<)(-?)[ \t]*(?:['"]?)([A-Za-z_][A-Za-z0-9_]
  * `COMMAND_PYTHON_WORDS` 在文件后面才声明，但本表只在运行期求值，不存在 TDZ。
  */
 const HEREDOC_PROGRAM_WORDS = new Set([...COMMAND_SHELL_WORDS, ...COMMAND_PYTHON_WORDS])
+/** 词数组 memo 的条目上限（超限后不再写入；见 {@link shellCommandWordListsFor} 的缓存键）。 */
+const SHELL_WORDS_CACHE_MAX = 4000
+/** shell 分析结果缓存（按文本逐字作键；{@link shellCommandAnalysis} 用）。 */
+const SHELL_ANALYSIS_CACHE = new Map()
 /** 一段文本 → 单引号 shell 字面量（内部单引号按 `'\''` 断开，与 shell 语义一致）。 */
 function shellSingleQuote(text) {
   return `'${String(text).split("'").join("'\\''")}'`
@@ -5886,8 +5872,6 @@ function shellSingleQuote(text) {
  * @param text - shell / Makefile 正文。
  * @returns 词数组的数组（按出现顺序，已做常量传播）。
  */
-const SHELL_WORDS_CACHE = new Map()
-const SHELL_WORDS_CACHE_MAX = 4000
 function shellCommandWordLists(text) {
   return shellCommandAnalysis(text).commands
 }
@@ -5900,7 +5884,6 @@ function shellCommandWordLists(text) {
  * @param text - shell / Makefile 正文（已 `String()` 归一）。
  * @returns `{ commands, substitutions }`。
  */
-const SHELL_ANALYSIS_CACHE = new Map()
 function shellCommandAnalysis(text) {
   const key = String(text)
   const cached = SHELL_ANALYSIS_CACHE.get(key)
@@ -6787,7 +6770,7 @@ function ciExecutionSurface(options) {
    * 作用域里的 `resolveCarrierPath`），所以收尾的判决级见证拿不到它 —— 这里在每轮循环里把
    * 当前实现挂出来，`writeTargets` 再转交给 `runtimeWriteDetectorProblem()` 在合成样本上自证。
    * 掏空被指向的那份实现时这个引用仍然指向掏空版 ⇒ 见证必然失败（这正是要的语义）。
-   * @type {((source: string) => Set<string>) | null}
+   * @type {((source: string, env?: Record<string, string>) => Set<any>) | null}
    */
   let writeTargetsImpl = null
   const problems = []
@@ -8857,7 +8840,7 @@ function ciExecutionSurfaceSelfTest() {
       ['CI_SURFACE_COMMAND_SHAPE_ACK', CI_SURFACE_COMMAND_SHAPE_ACK],
       ['CI_SURFACE_VARIABLE_COMMAND_ACK', CI_SURFACE_VARIABLE_COMMAND_ACK],
     ]) {
-      const bad = table.filter(entry => !entry.file || !entry.word || !entry.why
+      const bad = /** @type {any[]} */ (table).filter(entry => !entry.file || !entry.word || !entry.why
         || (table === CI_SURFACE_COMMAND_SHAPE_ACK
           && (!entry.approvedBy || typeof entry.scriptPositional !== 'boolean')))
       check(bad.length === 0,
@@ -10258,16 +10241,9 @@ function enclosingBlockHeaderProblem(source, at) {
  * @returns 归一化后的调用点个数。
  */
 function witnessCallSiteCount(id, code) {
-  const masked = String(code)
-    .split('\n')
-    // 整行注释**按行**滤掉（与第一段 b 的注释跳过同一口径）：折行诱饵不可能藏进被滤掉的行里，
-    // 而"注释里恰好出现同样的片段"这一类假命中也不会被算进来（本表的 JSDoc 天然含同样的片段）。
-    .filter(line => {
-      const trimmed = line.trim()
-      return trimmed !== '' && !trimmed.startsWith('//')
-        && !trimmed.startsWith('*') && !trimmed.startsWith('/*')
-    })
-    .join('\n')
+  // 整行注释**按行**滤掉（与第一段 b 的注释跳过同一口径）：折行诱饵不可能藏进被滤掉的行里，
+  // 而"注释里恰好出现同样的片段"这一类假命中也不会被算进来（本表的 JSDoc 天然含同样的片段）。
+  const masked = maskWholeLineComments(code)
   const normalized = masked.replace(/\s+/gu, '')
   const countOf = spelling => normalized.split(`witnessed(${spelling},`).length - 1
   // ① 字面量第一实参：单引号 / 双引号 / 模板字符串（反引号）三种写法同判。
@@ -10279,6 +10255,23 @@ function witnessCallSiteCount(id, code) {
     `(?:const|let|var)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*(?:'${escaped}'|"${escaped}"|\`${escaped}\`)`, 'gu')
   for (const match of masked.matchAll(binding)) count += countOf(match[1])
   return count
+}
+
+/**
+ * **整行注释遮罩**：把整行注释替换成空行（行数不变），代码行原样保留。
+ *
+ * 两处计数共用同一份口径（{@link witnessCallSiteCount} 与"判决句恰好一次"）：
+ * 注释里出现同样的片段**既不能算命中**（否则真判决被删、只剩注释里的同片段时会算成 1 ⇒ 假绿），
+ * **也不能算多余**（否则注释里多写一句会算成 2 ⇒ 假红）。保持行结构是为了不让跨行 needle
+ * 在遮罩后拼出新的匹配。
+ * @param code - 源码正文。
+ * @returns 遮罩后的文本。
+ */
+function maskWholeLineComments(code) {
+  return String(code).split('\n').map(line => {
+    const trimmed = line.trim()
+    return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*') ? '' : line
+  }).join('\n')
 }
 /**
  * {@link constantBlockHeaderProblem} 的**判决级见证**（R23 FIX-22 / W4-07）。
@@ -10446,7 +10439,6 @@ function callSiteReachabilityProblem(source, id, language, callee) {
     return `找不到以判据 id 为首参的调用点（\`${callee}(<id>, …)\`）`
   }
   const py = language === 'py'
-  const comment = py ? '#' : '//'
   const controlFlow = py ? /^(?:if|elif|while|for)\b/u : /^(?:if|while|for|switch)\b/u
   const earlyExit = py
     ? /^(?:return|raise|break|continue)\b|^sys\.exit\(/u
@@ -10698,19 +10690,15 @@ function pythonEmptyIterationDomain(keyword, condition, source) {
   const guardCode = registryStart < 0 || registryEnd < 0
     ? guardSource
     : guardSource.slice(0, registryStart) + guardSource.slice(registryEnd)
+  // 计数口径与 {@link witnessCallSiteCount} 同一份：整行注释先遮罩 —— 否则"真判决被删、
+  // 只剩注释里的同片段"会算成 1（假绿），而注释里多写一句同样的片段会算成 2（假红）。
+  const maskedGuardCode = maskWholeLineComments(guardCode)
   const labelsWithoutSites = COVERED_LAYER_LABELS.filter(label =>
     !REQUIRED_JUDGMENT_SITES.some(site => site.layer === label))
   const sitesSeen = []
-  // **只数代码行**：本表自己的 JSDoc 里出现过 `witnessed('criteria-tautology', …)` 这类片段，
-  // 把注释算进来会让"见证调用点唯一"这条判据自伤（与 `judgmentNeedleStatementProblem` 的
-  // 注释跳过同一口径）。
-  const guardCodeLines = guardCode.split('\n').filter(line => {
-    const trimmed = line.trim()
-    return trimmed !== '' && !trimmed.startsWith('//') && !trimmed.startsWith('*') && !trimmed.startsWith('/*')
-  })
   for (const site of REQUIRED_JUDGMENT_SITES) {
     // **判决本体里恰好一次**：掏空真判决（`check(mutant.status !== 0,` → `check(true,`）⇒ 归零 ⇒ 红。
-    const occurrences = guardCode.split(site.needle).length - 1
+    const occurrences = maskedGuardCode.split(site.needle).length - 1
     if (occurrences === 1) {
       // ---- 第一段b：**这一位必须是行首的独立语句**（R21 fix-6 / E-02）------------------
       //

@@ -753,7 +753,6 @@ function* walk(target) {
   }
 }
 
-const failures = []
 const hits = []
 let scanned = 0
 /** 每个扫描根的实际产出（缩面判据的绝对下限按它判，不是靠"总数看着还行"）。 */

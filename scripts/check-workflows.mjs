@@ -1040,8 +1040,9 @@ export function checkWorkflowText(name, text, options = {}) {
   failures.push(...budget.failures)
   failures.push(...checkInlineRunExitStatus(name, document, blocks, allowlist, reported))
   // 策略 4(2026-09-19 第三轮审计 F2-3):块标量里的 `|| exit 0` / `! cmd` / 管道 + 缺
-  // `set -eo pipefail` 三类静默失败。挂在白名单与 reported 去重之后,与 7a/7c 同口径。
-  failures.push(...checkBlockScalarErrorHandling(name, document, blocks, allowlist, reported))
+  // `set -eo pipefail` 三类静默失败。判据键是 (jobId, 步骤名) —— 一个块只报一次，
+  // 因此**不接** `reported` 去重（那是 7a/7c 给"同一语句被多策略命中"用的）。
+  failures.push(...checkBlockScalarErrorHandling(name, document, blocks, allowlist))
   // 策略 5(2026-09-23 第三轮审计 R3-C C-7/C-3):CI 不得把根门禁换成弱化形态,
   // 且 docs-only 判定不得跳过根守卫。
   failures.push(...checkRootGateIntegrity(name, document, text, notes))
@@ -2479,7 +2480,8 @@ function checkPinnedJobPermissions(file, document, notes, options = {}) {
 function selfTestPinnedJobPermissions() {
   const failures = []
   let assertions = 0
-  const documentWith = (overrides = {}, extraJobs = {}) => ({
+  /** @type {(extraJobs?: Record<string, any>) => { permissions: Record<string, any>, jobs: Record<string, any> }} */
+  const documentWith = (extraJobs = {}) => ({
     permissions: { ...WORKFLOW_PERMISSIONS_REGISTRY.permissions },
     jobs: {
       ...Object.fromEntries(PINNED_JOB_PERMISSIONS_REGISTRY.map(entry => [entry.job, {
@@ -2525,7 +2527,7 @@ function selfTestPinnedJobPermissions() {
   }
   // ⑤ 双向对账之一：新增一个**未登记**的 job。
   assertions += 1
-  if (!reddens(documentWith({}, { 'brand-new-job': { permissions: { contents: 'write' } } }), 'brand-new-job')) {
+  if (!reddens(documentWith({ 'brand-new-job': { permissions: { contents: 'write' } } }), 'brand-new-job')) {
     failures.push('[SK-21] 自证：新增一个未登记的 job 时判据**没有报红** —— 登记面又会退回"只覆盖当初点名的那些"。')
   }
   // ⑥ 双向对账之二：登记表里的 job 在 document 里**不存在**（死条目）。
@@ -2575,12 +2577,12 @@ function selfTestPinnedJobPermissions() {
 // 范围：**所有 workflow**（不限 `ci.yml`）—— 空矩阵在哪个 workflow 上都是"这个 job 不跑"。
 /**
  * `strategy.matrix` 的**实例数下界**判定（R26 FIX-J1-3）。
- * @param file - workflow 文件名。
+ * @param _file - workflow 文件名。
  * @param jobId - job 名（诊断用）。
  * @param strategy - `job.strategy` 的原始取值。
  * @returns 人读的问题描述数组（空 = 可证明至少产生一个实例，或没有 matrix）。
  */
-function strategyMatrixProblems(file, jobId, strategy) {
+function strategyMatrixProblems(_file, jobId, strategy) {
   const problems = []
   if (strategy === undefined || strategy === null) return problems
   if (typeof strategy !== 'object' || Array.isArray(strategy)) {
@@ -3476,7 +3478,7 @@ const PINNED_STEP_POLICIES = [
     ifPolicy: 'docs-only-and-not-tag',
     // 载荷 = 必须在 `server/webadmin` 里跑（`webadmin` 的 600+ 用例不在根 `yarn check` 的
     // workspace 枚举里；换目录 = 这一步跑的不是同一批用例 —— 与 [SK-18] 的 cwd 判据同一取向）。
-    payload: (script, item) => (item?.step?.['working-directory'] === 'server/webadmin' ? null
+    payload: (_script, item) => (item?.step?.['working-directory'] === 'server/webadmin' ? null
       : `它的 \`working-directory\` 是 \`${item?.step?.['working-directory'] ?? '(缺)'}\` 而不是 `
         + '\`server/webadmin\`（`webadmin` 的用例只在那个目录里跑：换 cwd 就等于换了一批用例）'),
   },
@@ -7717,7 +7719,7 @@ function checkWrappedPayload(file, item, index, lineNumber, wrapped, allowlist, 
  *
  * @returns 失败项列表。
  */
-function checkBlockScalarErrorHandling(file, document, blocks, allowlist, reported) {
+function checkBlockScalarErrorHandling(file, document, blocks, allowlist) {
   const failures = []
   for (const item of shellSteps(document, blocks)) {
     if (NON_POSIX_SHELLS.test(item.shell)) continue
@@ -8031,11 +8033,11 @@ function checkRootGateIntegrity(file, document, text, notes) {
  *
  * @param file - workflow 文件名。
  * @param document - parseYaml 的结果。
- * @param text - 原始文本。
+ * @param _text - 原始文本。
  * @param notes - 提示收集器。
  * @returns 失败项列表。
  */
-function checkDocsOnlyClassifier(file, document, text, notes) {
+function checkDocsOnlyClassifier(file, document, _text, notes) {
   const failures = []
   const jobs = typeof document?.jobs === 'object' && document.jobs !== null ? document.jobs : {}
   let classifier = null
@@ -9920,16 +9922,8 @@ function rawCommandPositionArgvs(script, target) {
  * 命令位判据(`scripts/*.mjs` / `*.sh` / `*.ts`);其余的 `require`(`GITHUB_OUTPUT` /
  * `docs/releases/` / `test -f` / `exit 1` / `gh release` / `dist:mac:notarize`)是"这段
  * 文本里必须出现的东西",继续按子串判 —— 它们本来就不是"执行某个脚本"的断言。
- * @param script - 去注释后的可执行文本。
- * @param require - 登记项。
- * @returns 是否满足。
- */
-function commandRequireSatisfied(script, require) {
-  return commandRequireState(script, require) === 'satisfied'
-}
-
-/**
- * 同上，但返回**三态**（FF-2，2026-10-05）：`require` 被"只跑自检"的调用满足时，报错必须
+ *
+ * 返回**三态**（FF-2，2026-10-05）：`require` 被"只跑自检"的调用满足时，报错必须
  * 说清"不是没接上，而是只跑了自检" —— 否则诊断会把人指向"这一行被删了"的错误方向。
  *
  * @param script - 去注释后的可执行文本。
@@ -10885,6 +10879,7 @@ function checkVerdictAssertionBlocks(file, document, notes, options = {}) {
  * @param blocks - extractRunBlocks 的结果(供 shellSteps 解析有效 shell 与行号)。
  * @param allowlist - 语句级吞码白名单(与 [SK-7a] 共用)。
  * @param notes - 提示收集器。
+ * @param {false | any[]} [requiredCiSteps] - 判据步骤登记表；`false` = 显式关闭对账。
  * @returns 失败项列表。
  */
 function checkPinnedStepExecutability(file, document, blocks, allowlist, notes, requiredCiSteps = REQUIRED_CI_STEPS) {
@@ -12015,15 +12010,6 @@ function checkReleaseSurface(file, document, text, notes) {
  */
 export function selfTestPolicies() {
   const failures = []
-  const run = (label, steps, options = {}) => {
-    const file = options.file ?? 'selftest.yml'
-    // 合成的被钉 job（`verify`）要用**同一张** `runs-on` 登记表的口径：注入一条合成登记项，
-    // 否则新加的 `runs-on` 判据会把一堆与它无关的绿样本判红（收紧过度也是缺陷）。
-    const result = checkWorkflowText(file, selftestWorkflow(steps, options), {
-      registries: options.registries ?? SELFTEST_RUNS_ON_REGISTRY,
-    })
-    return { label, failures: result.failures }
-  }
   const tags = (result, tag) => result.failures.filter(failure => failure.detail.includes(tag))
   /**
    * 自检样本登记表(2026-09-19 第三轮审计 F3-4:"自检自身被掏空无人察觉")。
@@ -12308,7 +12294,7 @@ export function selfTestPolicies() {
     '          set -euo pipefail',
     '          npm test | tail -5',
   ])
-  const swallowedInComment = expectGreen('g-comment-and-quotes-literal', [
+  expectGreen('g-comment-and-quotes-literal', [
     '      - name: 注释里的 || true 不是吞码',
     '        run: |',
     '          set -euo pipefail',
@@ -14151,7 +14137,8 @@ export function selfTestPolicies() {
     null, argvRegistry([[]]))
 
   // ---- 策略 6([SK-10]):docs-only 分类器的规则逐条钉死 ----
-  const CLASSIFIER_SHAPE = ({ cases, failsafes = 3, jobIf = '' } = {}) => [
+  /** @type {(shape?: { cases?: string[], failsafes?: number, jobIf?: string }) => string} */
+  const CLASSIFIER_SHAPE = ({ cases = [], failsafes = 3, jobIf = '' } = {}) => [
     'name: selftest',
     'on: push',
     'jobs:',

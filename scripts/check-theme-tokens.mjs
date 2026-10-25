@@ -298,7 +298,7 @@ export function varCalls(text) {
 /**
  * 扫描单个文件里所有 `var(--dsw-…)` 引用。
  * @param {string} file - 绝对路径。
- * @param {ReadonlySet<string>} defined - 有效 token 集合（会被就地扩充我们自己的定义）。
+ * @param {Set<string>} defined - 有效 token 集合（会被就地扩充我们自己的定义）。
  * @returns {{ line: number, token: string, status: 'dead' | 'broken', snippet: string }[]} 问题列表。
  */
 export function scanFile(file, defined) {

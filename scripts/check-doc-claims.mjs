@@ -1279,14 +1279,20 @@ const TEXT_CLAIM_RULES = [
       { file: 'site/src/content/docs/deployment/channels.md', note: '渠道包字段表（中文）' },
       { file: 'site/src/content/docs/en/deployment/channels.md', note: '渠道包字段表（英文）' },
     ],
-    /** claim = 提到 `speech_model_origin` 的那一行（字段的取值形状声明）。 */
+    /**
+     * claim = 提到 `speech_model_origin` 的那一行（字段的取值形状声明）。
+     *
+     * 下面标注的形参是**调用面**（主循环传 `line` / `index` / `truth`）：本条只用 `line`，
+     * 但签名要容纳三者 —— 否则"claim 想用行号/真源"那天会在调用处撞上参数个数。
+     * @type {(line: string, index: number, truth: unknown) => boolean}
+     */
     claim: line => line.includes('speech_model_origin'),
     /**
      * E-12：`desktop.speech_model_origin` 的取值形状必须与代码常量同向。
      * 修前文档写「只写 `https://host[:port]`」，而代码/上游 schema/构建期校验三处都是 `https?`
      * ⇒ 明文 `http://` 其实可用，文档却说不可用（分区 C 实测：改回旧句后三条桌面包用例 67/67 全绿）。
      */
-    judge: (line, index, context) => {
+    judge: (line, _index, context) => {
       if (!line.includes('speech_model_origin')) return null
       const implSchemes = Array.isArray(context.truth.schemes) ? [...context.truth.schemes].sort() : undefined
       if (implSchemes === undefined) {
@@ -1322,14 +1328,17 @@ const TEXT_CLAIM_RULES = [
     read: source => voiceBundleDefaultFrom(source),
     min: 2,
     sites: [{ file: VOICE_LOCALE_SOURCE, note: '`voice.intro` 的中英两条（`voice-setup.tsx` 无条件渲染）' }],
-    /** claim = `voice.intro` 的两条文案本身（`voice.privacy` 等同族键不算）。 */
+    /**
+     * claim = `voice.intro` 的两条文案本身（`voice.privacy` 等同族键不算）。
+     * @type {(line: string, index: number, truth: unknown) => boolean}
+     */
     claim: line => line.includes("'voice.intro'"),
     /**
      * `voice.intro` 在任何 phase 下都渲染 ⇒ 它必须对"随包渠道"与"关掉随包的渠道"**都**成立。
      * 修前两种语言都写"首次使用需要先下载识别模型"，而构建期缺省是**随包**
      * （`speechBundleModel !== false`），分区 C 实测：改回旧话术 ⇒ 三条桌面包用例 67/67 全绿。
      */
-    judge: (line, index, context) => {
+    judge: (line, _index, context) => {
       if (!line.includes("'voice.intro'")) return null
       const chinese = /[\u4e00-\u9fff]/u.test(line)
       const oldPremise = chinese
@@ -1383,6 +1392,7 @@ const TEXT_CLAIM_RULES = [
      * 判据刻意**不把载荷数字本身**当 claim 的一部分：数字写错由
      * `voice-model-payload` 那条**硬数字**规则判（它有自己的真源与容差），
      * 这条只判"载荷数字被当成了什么" —— 两者分工，互不掩盖。
+     * @type {(line: string, index: number, truth: unknown) => boolean}
      */
     claim: line => /权重|weights/iu.test(line) && /\d+\s*(?:MiB|MB)/u.test(line),
     /**
@@ -1390,7 +1400,7 @@ const TEXT_CLAIM_RULES = [
      * 修前 README 写「代价是安装包约 +230MiB」——单值表述对 macOS 高估约 90MiB。
      * 判据：出现"安装包 + <载荷数字> MiB"这种**把载荷当增量**的写法即红（区间/分平台写法放行）。
      */
-    judge: (line, index, context) => {
+    judge: (line, _index, context) => {
       const payload = Number(context.truth)
       if (!new RegExp(`(?<![\\d.])${payload}(?![\\d.])`, 'u').test(line)) return null
       const zh = new RegExp(`安装包[^。\\n]{0,12}?${payload}\\s*(?:MiB|MB)`, 'u')
@@ -2134,6 +2144,29 @@ if (expectedModules === undefined || expectedModules.length === 0) {
 //
 // 两种真源形态：`read(source 文本)`（真源是**一个文件**）与 `readRoot(root)`（真源是
 // **一批文件/一个目录**，例如 `migrations-pg/` 的文件数 —— 见 `migration-count`）。
+/**
+ * 规则本体 {@link NUMBER_CLAIM_RULES} + 运行期状态（`truth` 由真源解析后填入）。
+ *
+ * `read` / `readRoot` **二选一**：真源是"一个文件"时用 `read`（形参是文件文本），是
+ * "一批文件/一个目录"时用 `readRoot`（形参是仓库根）。两个都可缺省 —— 缺的那一半在下面的
+ * 循环里按"判不了"处理（`typeof` 判定，不是猜一个分支）。
+ * @type {{
+ *   id: string,
+ *   label: string,
+ *   source: string,
+ *   read?: (source: string) => number|undefined,
+ *   readRoot?: (root: string) => number|undefined,
+ *   min: number,
+ *   forms: {pattern: RegExp}[],
+ *   anchor?: RegExp,
+ *   window?: number,
+ *   required?: {file: string, note: string}[],
+ *   truth?: number,
+ *   hits: number,
+ *   excluded: number,
+ *   hitsByFile: Map<string, number>,
+ * }[]}
+ */
 const numericRules = NUMBER_CLAIM_RULES.map(rule => ({
   ...rule, truth: undefined, hits: 0, excluded: 0, hitsByFile: new Map(),
 }))
@@ -2193,7 +2226,7 @@ for (const target of SCAN_PATHS) {
       for (const rule of FORBIDDEN_DOC_NUMBERS) {
         if (!rule.files.includes(file)) continue
         for (const pattern of rule.patterns) {
-          for (const match of line.matchAll(pattern)) {
+          for (const _match of line.matchAll(pattern)) {
             rule.hits += 1
             hits.push({
               kind: 'HARD-COUNT',
@@ -2322,7 +2355,7 @@ for (const rule of textRules) {
  * 扫一遍站点源码，返回命中事实（本函数**不**打印、不退出 —— 判定在调用方）。
  *
  * @param scanRoot - 扫描根（真仓 = root；自检 = 合成临时树）。
- * @param options - `{ allowEntries, releaseLinePrefix }`。
+ * @param {{allowEntries?: {file: string, literals: string[], why: string}[], releaseLinePrefix?: string}} [options] - `{ allowEntries, releaseLinePrefix }`。
  * @returns `{ files, entries, hitCount, allowedHits, deadEntries, unlisted }`：
  *   · `entries` —— 每条命中 `{ file, line, literal, allowed, text }`（`allowed` = 该字面量在允准面里）；
  *   · `hitCount` —— 命中总数（含允准面）；`allowedHits` —— 每个允准文件的命中数；
@@ -2393,7 +2426,6 @@ const siteVersionScan = scanSiteReleaseVersions(root, {
 const siteVersionFiles = siteVersionScan.files
 /** 命中的版本字面量**总数**（含允准面）—— 「已覆盖」与地板按它算。 */
 const siteVersionHits = siteVersionScan.hitCount
-const siteVersionAllowedHits = siteVersionScan.allowedHits
 /**
  * E-13 的命中 → **报告对象**（唯一投影点；收口轮把 `hits.push` 的载荷搬进函数里，
  * 让 `--selftest` 能在合成树上**功能性**地断言"这条路径真的产出命中"）。

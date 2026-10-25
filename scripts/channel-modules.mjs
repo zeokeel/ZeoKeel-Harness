@@ -122,9 +122,9 @@ function resolveInputPath(given) {
 /**
  * 读一份 `channel.json` 并**真跑**语义解析。
  * @param {string} given - 用户给的路径。
- * @param {object} constants - `channel-constants.ts` 的模块。
- * @returns {{path: string|null, doc: object|null, features: unknown, declared: string[],
- *   normalized: object|null, problems: string[]}} 解析结果（`problems` 非空 = 红）。
+ * @param {{normalizeChannelFeatures: (features: unknown) => Record<string, boolean>}} constants - `channel-constants.ts` 的模块。
+ * @returns {{path: string|null, features: unknown, declared: string[],
+ *   normalized: Record<string, boolean>|null, problems: string[]}} 解析结果（`problems` 非空 = 红）。
  */
 function readChannelFeatures(given, constants) {
   const problems = []
@@ -132,7 +132,6 @@ function readChannelFeatures(given, constants) {
   if (path === null) {
     return {
       path: null,
-      doc: null,
       features: undefined,
       declared: [],
       normalized: null,
@@ -145,7 +144,7 @@ function readChannelFeatures(given, constants) {
     text = readFileSync(path, 'utf8')
   } catch (error) {
     return {
-      path, doc: null, features: undefined, declared: [], normalized: null,
+      path, features: undefined, declared: [], normalized: null,
       problems: [`${path} 读失败：${error?.message ?? String(error)}`],
     }
   }
@@ -154,13 +153,13 @@ function readChannelFeatures(given, constants) {
     doc = JSON.parse(text)
   } catch (error) {
     return {
-      path, doc: null, features: undefined, declared: [], normalized: null,
+      path, features: undefined, declared: [], normalized: null,
       problems: [`${path} 不是合法 JSON：${error?.message ?? String(error)}`],
     }
   }
   if (!isPlainRecord(doc)) {
     return {
-      path, doc: null, features: undefined, declared: [], normalized: null,
+      path, features: undefined, declared: [], normalized: null,
       problems: [`${path} 的顶层必须是对象（channel.json 形态）`],
     }
   }
@@ -168,13 +167,13 @@ function readChannelFeatures(given, constants) {
   const declared = isPlainRecord(features) ? Object.keys(features) : []
   try {
     const normalized = constants.normalizeChannelFeatures(features)
-    return { path, doc, features, declared, normalized, problems }
+    return { path, features, declared, normalized, problems }
   } catch (error) {
     const detail = Array.isArray(error?.problems) && error.problems.length > 0
       ? error.problems
       : [error?.message ?? String(error)]
     return {
-      path, doc, features, declared, normalized: null,
+      path, features, declared, normalized: null,
       problems: detail.map(item => `${path}：${item}`),
     }
   }
@@ -232,9 +231,20 @@ async function cmdTemplate() {
 }
 
 /**
+ * `--explain` / `--check` 的求值视图（{@link evaluateChannel} 的产物）。
+ *
+ * 这个 `@typedef` 只服务 `tsc --checkJs`：原先 `@returns … view: object|null` 的宽标注
+ * 会让 `view.path` / `view.ids` / `view.declared` 一律报 TS2339。字段仍由
+ * `evaluateChannel` 现场组装，**不是**第二份真源。
+ * @typedef {{path: string, ids: string[], defaults: Record<string, boolean>, features: unknown,
+ *   declared: string[], inferred: string[], normalized: Record<string, boolean>|null,
+ *   problems: string[]}} ChannelView
+ */
+
+/**
  * `--explain` / `--check` 的公共求值：显式声明 / 按缺省推断 / 交付 / 裁掉 / 变体串。
  * @param {string} path - channel.json 路径。
- * @returns {Promise<{problems: string[], view: object|null}>} 结果。
+ * @returns {Promise<{problems: string[], view: ChannelView|null}>} 结果。
  */
 async function evaluateChannel(path) {
   const loaded = await loadModuleView()

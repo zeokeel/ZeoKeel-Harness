@@ -24,7 +24,6 @@
 
 import { spawn } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, writeSync } from 'node:fs'
-import { availableParallelism } from 'node:os'
 import { MEMORY_PER_TASK_MB, detectCapacity } from './build-capacity.mjs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -156,6 +155,12 @@ const GUARDS = [
   // `digest` = 脚本 sha256）并复算真实脚本对拍，第二判据在
   // `scripts/verify-check-workspaces.mjs`（独立复算 + 符号链接断言）。
   { name: 'check:guard-parser-integrity', args: ['run', 'check:guard-parser-integrity'], path: '守卫脚本内容摘要（sha256）↔ 登记表' },
+  // 2026-10-25：根 `scripts/**` 的**类型面**进判据（`allowJs + checkJs`，TS 7）。
+  // 此前它只是一个手动命令 `yarn typecheck:scripts` —— 没人跑就等于没有；现在它是门禁里的
+  // 一条根守卫（`scripts/check-scripts-types.mjs` 调 `tsc -p tsconfig.scripts.json`，
+  // 判据面 = 约 7 万行根脚本的类型 + 死代码）。Electron 渲染进程探针 `scripts/wasm/probes/**`
+  // 显式不在面内（理由见 tsconfig.scripts.json）。
+  { name: 'check:scripts-types', args: ['run', 'check:scripts-types'], path: '根脚本类型面（tsconfig.scripts.json：allowJs + checkJs + noUnused*）' },
 ]
 
 /**
@@ -2161,7 +2166,7 @@ export function endUninterceptably(code) {
   }
   try {
     // ③ 不触发 `exit` 事件（`process.on('exit', () => { process.exitCode = 0 })` 改不了它）。
-    process.reallyExit(code)
+    /** @type {any} */ (process).reallyExit(code)
   } catch {
     // 三层都被换掉 ⇒ 落到 ④：不返回。
   }
@@ -2637,7 +2642,9 @@ export async function main(argv = process.argv.slice(2)) {
       console.log(`${pkg.name.padEnd(30)} needs: ${pkg.needs.join(', ') || '—'}`)
     }
     console.log(`guards: ${guards.map(guard => guard.name).join(', ') || '—'}`)
-    const advisories = guards.filter(guard => guard.advisory === true).map(guard => guard.name)
+    const advisories = guards
+      .filter(guard => /** @type {any} */ (guard).advisory === true)
+      .map(guard => guard.name)
     if (advisories.length > 0) console.log(`guards(advisory,只告警不拦门禁): ${advisories.join(', ')}`)
     // 登记表本身也是清单判据的输入（verify-check-workspaces 会与 check-root-guards --list
     // 对拍这条）—— 空表要**显式**说出来，不能靠"没打印那一行"来推断。

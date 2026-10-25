@@ -353,8 +353,9 @@ function rationalePathTokens(region) {
  * 白名单理由链判据（判据说明见 {@link REGISTERED_WHITELIST_RATIONALE_PATHS}）。
  *
  * @param {string} root - 扫描根。
- * @param {object} [options] - 测试缝（自证用）：`isRepoScan` / `entries` / `exemptions` /
- *   `source` / `minRegistered` / `maxExemptions`。
+ * @param {{ isRepoScan?: boolean, entries?: any[], exemptions?: any[], source?: string,
+ *   minRegistered?: number, maxExemptions?: number }} [options] - 测试缝（自证用）：
+ *   `isRepoScan` / `entries` / `exemptions` / `source` / `minRegistered` / `maxExemptions`。
  * @returns {{ failures: string[], skipped: boolean, registered: number, exemptions: number,
  *   pathTokens: string[] }} 失败原因；`skipped` = 本次未生效（**不得**读作"判过且通过"）。
  */

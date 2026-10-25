@@ -18,7 +18,6 @@ const cnt = (key, params) => translate(NOTIFY_DICT, key, params, getLocale())
 
 /** Translate through COI2_DICT in the active host locale. */
 const cix2 = (key, params) => translate(COI2_DICT, key, params, getLocale())
-import { fileURLToPath } from 'node:url'
 import { AdapterStore } from './adapters.js'
 import { SessionStore } from './session-store.js'
 import { TaskStore } from './tasks-store.js'
@@ -31,10 +30,12 @@ import { BroadcastStore, messageToolDefinition } from './broadcast.js'
 import { installBroadcastApi } from './broadcast-api.js'
 import { PresenceTracker } from './presence.js'
 import { readAliases } from '../aliases.js'
-import { normalizeSkillText, isSafeSkillName, syncBuiltinSkills, acquireSkillDirLock } from './skills-sync.js'
-
-/** 插件包内 skills/ 目录（内置技能源头）。 */
-const PLUGIN_SKILLS_DIR = fileURLToPath(new URL('../../skills/', import.meta.url))
+// 内置技能同步（syncBuiltinSkillsIfEnabled / PLUGIN_SKILLS_DIR）不在这里：
+// 上游 issue #58（2026-09-28）把它移出本模块，提到插件主装配 lib/index.js 调用，
+// 只受 coiSyncSkills 控制、不再被 coiEnabled 连带关闭（本地 2026-09-18 已同款解耦）。
+// 本模块只剩适配器指南的写入需要 normalizeSkillText。
+import { normalizeSkillText, isSafeSkillName, acquireSkillDirLock } from './skills-sync.js'
+import { PLUGIN_SOURCE_KIND } from './source.js'
 
 /** COI 运行时配置（GUI 可改，持久化到 coi/config.json）。 */
 const RUNTIME_DEFAULTS = {
@@ -201,35 +202,6 @@ export function buildNotify(cfg, deps) {
 export function installCoi(ctx, config, deps) {
   const coiDataDir = config.coiDataDir
   mkdirSync(coiDataDir, { recursive: true })
-
-  // 内置技能同步：适配器使用指南的源头在插件（skills/ 目录），启动时
-  // 同步到技能库——默认启用、技能管理 Tab 可禁用、随插件升级更新。
-  // 失败静默（技能同步不影响调度）。
-  if (config.coiSyncSkills !== false) {
-    try {
-      const synced = syncBuiltinSkills(PLUGIN_SKILLS_DIR, config.skillDir)
-      const changed = synced.filter((s) => s.action === 'synced')
-      if (changed.length > 0) {
-        console.log(`[dsh-memory-evolve] COI 内置技能已同步：${changed.map((s) => s.name).join(', ')}`)
-      }
-      // P1-1 兼容路径（2026-09-23）：内容与随包技能逐字相同、原本没有溯源的目录
-      // （A9 之前落下的历史副本）本次只补写 `channel: 'plugin'` —— 如实打一行，
-      // 不并进"已同步"（本次没有换入任何内容）。
-      const adopted = synced.filter((s) => s.action === 'adopted')
-      if (adopted.length > 0) {
-        console.log(`[dsh-memory-evolve] COI 内置技能已采纳（内容与随包技能逐字一致、原缺溯源，已补写 channel: plugin）：${adopted.map((s) => s.name).join(', ')}`)
-      }
-      // R4-B-4（2026-09-23 第四轮审计）：用户显式卸载过的随包技能有墓碑 ⇒ 本轮
-      // 刻意不落盘。这不是失败，但必须**看得见** —— 否则"用户卸载过、我们尊重它"
-      // 与"同步静默什么都没做"两种状态在日志里无法区分。
-      const skipped = synced.filter((s) => s.action === 'skipped')
-      if (skipped.length > 0) {
-        console.log(`[dsh-memory-evolve] COI 内置技能按用户卸载（墓碑）跳过：${skipped.map((s) => s.name).join(', ')}`)
-      }
-    } catch (error) {
-      console.warn(`[dsh-memory-evolve] COI 内置技能同步失败（忽略）：${error.message}`)
-    }
-  }
 
   const adapters = new AdapterStore(join(coiDataDir, 'adapters.json'))
   const sessions = new SessionStore(join(coiDataDir, 'sessions.json'))
@@ -469,7 +441,9 @@ export function installBroadcast(ctx, config) {
     if (!agentsService) return { delivered: false, woken: false }
     const agent = agentsService.get(sessionId)
     if (!agent) return { delivered: false, woken: false }
-    const source = { kind: 'plugin', plugin: 'dsh-memory-evolve', form: 'notice', summary: text.split('\n')[0].slice(0, 80) }
+    // v4 会话格式要求 producer-owned source kind：`plugin:<包名>`，且不得再带
+    // `plugin` 字段（见 source.js 的说明）—— 上游 issue #68。
+    const source = { kind: PLUGIN_SOURCE_KIND, form: 'notice', summary: text.split('\n')[0].slice(0, 80) }
     if (wake && agent.status === 'idle') {
       agent.followup({
         id: randomUUID(),

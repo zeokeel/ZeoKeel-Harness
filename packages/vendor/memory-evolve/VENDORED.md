@@ -7,8 +7,10 @@ GitHub 拉取。上游是第三方仓库，本地按「上游变更 → 三方�
 ## 来源与当前基线
 
 - 上游仓库：https://github.com/csyangwen/dsh-memory-evolve
-- **当前基线：`c337dc1a`（tag `v26091501`，2026-09-15）**；2026-09-16 从 `b4994fa`
-  （tag `v26090901`，2026-09-09）升级。上一版基线说明见本文件历史（提交 `8c20bc0c0b`）。
+- **当前基线：`e6f6b84`（tag `v26092802`，2026-09-28）**；2026-10-25 从 `c337dc1a`
+  （tag `v26091501`，2026-09-15）升级（本轮拿到了什么、冲突怎么收的，见文末
+  「本次升级（`c337dc1a` → `e6f6b84`，2026-10-25）」）。上一版基线说明见本文件历史
+  （提交 `8c20bc0c0b` / 「本次升级（`b4994fa` → `c337dc1a`）」一节）。
 - 上游把 `lib/` 作为发布产物提交：**node 侧 JS 直接写在 `lib/`**（我们的改动也落在这里），
   浏览器 bundle `lib/client.js` 由 `scripts/build.mjs` 从 `src/client/**` 用 esbuild 生成。
   **改了 client 侧（`src/client/**`）必须重建 `lib/client.js`，两者一起提交**：运行期加载的是
@@ -412,10 +414,58 @@ patch 持锁拒且内容一字未改、`approvePendingSkill` 持锁拒且待确�
 逐字对照（修复前：合法副本 `unchanged`/用户内容 `synced` 且用户文件被删；修复后：合法副本
 `adopted → synced`、用户内容 `refused` 且文件与正文原样）。
 
+## 本次升级（`c337dc1a` → `e6f6b84`，2026-10-25）
+
+上游 `v26091501` → `v26092802` 共 **10 个提交 / 36 文件 / +2216 −177**（全部 2026-09-28 一批）。
+合并按本文件的三方流程做（`c337dc1a` 为空基线、本目录现状态为 ours、目标 tag 为 theirs），
+冲突 **10 个文件 / 64 块**（生成物 `lib/client.js` 23 块、`SkillsBrowser.tsx` 22 块，宿主侧真正
+要手判的约 15 块）。逐条去向如下。
+
+| 上游提交 | 内容 | 本目录怎么落 |
+|---|---|---|
+| `db83f84` | DSH 0.2.0 宿主兼容：settings `get()`→`describe()`、事件 `settings/updated`→`settings/document-updated` | **取上游**：新增 `lib/settings-compat.js`；`lib/i18n.js` 的 `resolveLocale`、`lib/index.js` 的 locale watcher（**双事件订阅**）、`lib/models.js` 的供应商目录读法、`lib/session-orch.js` 的 provider 解析全部改走兼容层。**本地实测 pinned DSH 0.2.1-rc.2 的 settings 服务只剩 `describe()`**（`packages/settings/settings/src/index.ts`），此前宿主侧语言恒为中文、打开「模型设置」后 `ctx.settings.get` 抛 TypeError |
+| `e6f6b84` | DSH 0.2.0 客户端兼容：图标导出 `…16/…14`→`…Regular`；`sessions.open`→`uiWorkspace.openSession` | **取上游**：新增 `src/client/client-compat.ts`（`openSessionCompat`，老宿主 `sessions.open` → 新宿主 `uiWorkspace.openSession`）并接线到 `src/client/index.ts` 的通知铃/画板跳转；新增 `src/client/ui-icons.ts` 跨版本解析层，`SkillsBrowser.tsx`/`CanvasView.tsx` 改为从它取图标（本地 2026-10-21 那版是直连 `…Regular`，效果相同；采用上游兼容层后本地的 `icon-exports` 回归改为「现代名必须在产物里、旧名只允许作 `resolveIcon` 兜底参数」） |
+| `f48ab4d` | COI 注入消息改用会话格式 v4 的 producer-owned source kind（#68） | **取上游**：新增 `lib/coi/source.js`（`PLUGIN_SOURCE_KIND = 'plugin:dsh-memory-evolve'`），`lib/coi/index.js` / `scheduler.js` / `ws-coord.js` 共 4 处注入点改为 `kind: PLUGIN_SOURCE_KIND` 且删掉并列的 `plugin` 字段。pinned DSH 的 `SESSION_FORMAT_VERSION = 4` 且 `assertV4MessageSources` 明确拒绝裸 `kind:'plugin'`，旧写法会让注入发生的那一轮整轮失败 |
+| `ed7529b` | `runGit` 超时主动 settle + 杀进程组，不再挂死（#69） | **取上游**（`lib/sync/repo.js`；本地 `LC_ALL=C` / `setEncoding('utf8')` 两处修复原样保留） |
+| `dd206f6` | 匹配层对展示层剥离的 `[summary:…]` 免疫（#59） | **两边语义合流**：上游的 `normalizeForMatch` 与本地 `entryMatchKey` 是同一实现的别名（`export const normalizeForMatch = entryMatchKey`，**不复制第二份**）；`peekExact` 改为返回**磁盘原文**；`ArchiveStore.remove` 两侧归一化（否则 `promoteArchived` 转正后归档那条删不掉）。**归档轨重复条目**按上游语义 `findExactIndex(…, { first: true })` 取首条，主轨的多条命中仍按歧义拒绝（本地口径不变） |
+| `1e931fb` / `e73a28e` | #67：skillDir 哨兵显式落地、同步不再静默、CRLF 版本门控；#58：内置技能同步与 COI 解耦、key 建议写明工具名 | **两边语义合流**：`skillVersion`/`normalizeSkillText` 的 CRLF 容错、`syncBuiltinSkills` 的 "非字符串就抛看得懂的错"、`DEFAULT_SKILL_DIR`、`syncBuiltinSkillsIfEnabled` 全部取上游；`lib/index.js` 的启动同步调用点收口到 `syncBuiltinSkillsIfEnabled(config)`（本地 2026-09-18 已同款解耦，两边合流成一份实现），**`installCoi` 里本地刻意保留的那次幂等二次调用随之删除**（上游 #58 结构）。本地日志口径保留：synced / adopted / skipped / 失败四类分别落行，失败行点名技能与 `code`（上游只有单行摘要） |
+| `ab1b641` | memory-consolidate v2（同轨写串行 + `replace` 整条替换警告） | **取上游正文**；本地版本里「步骤 5：备份推送**只能由用户触发**（AI 不执行同步）」这一节保留（上游正文仍给一条 curl，与本地「记忆同步无 AI 侧入口」的决策冲突）；上游新增的「四、故障处理」让「何时运行」编号变五，本地回归改为按 H2 边界取节、不钉编号 |
+| `ba02abd` `2a74c58` | CHANGELOG 更正、删误提交的 `.dsh/` 残留 + `.gitignore` | 取上游 |
+
+**本轮的本地偏离（逐条都要看得见）**
+
+1. **`skillDir` 缺省仍是 `<DSH_HOME>/skills`**（2026-09-18 本地决定：与客户端「能力中心安装」
+   同一个根，否则同一技能两份副本、随包副本 rank 压过服务端副本）。上游新引入的
+   `DEFAULT_SKILL_DIR`（`~/.agents/skills`）只作为 `config.skillDir` **未解析时的兜底**，不参与
+   缺省值；`tests/skills-sync-default-dir.test.js` 的上游断言被改写为「本地缺省 = DSH_HOME/skills
+   且**不得等于** DEFAULT_SKILL_DIR」，防止将来被"统一"回去。
+2. **图标**：采用上游 `ui-icons.ts` 作为唯一兼容层后，本地 `tests/icon-exports.test.js` 判据从
+   「产物不得含旧名」改为「产物必须含现代名 + 旧名只作 `resolveIcon` 兜底参数」，并把
+   `src/client/ui-icons.ts` 列为源码侧唯一豁免（上游自己的规则）。
+3. **随包同步的测试口径**：本地加固会在技能库根上创建 `.skill-locks` / `.skill-tmp` 私有目录，
+   上游两处新用例改为过滤点号目录再数技能；"写入失败"的形态从上游的"抛错→null"改为
+   **逐技能 `refused`（`SKILL_LOCKED`）+ 一行汇总 warn**（核心不变量不变：绝不抛穿 `apply()`、
+   失败必须点名）。
+4. **归档轨多条命中取首条**（见上表 `dd206f6`）；主轨歧义拒绝不变。
+5. `tests/read-failure-write-gate.test.js` 的 FIX-47 登记表新增 1 条 `not-family`
+   （`coi/skills-sync.js#syncBuiltinSkillsIfEnabled#return-empty#destDir#1`：收口 catch 只返回
+   `null`，不读基线、不写盘）。
+6. 上游 8 个新测试文件随合并入库（`settings-compat` / `client-compat` / `client-icons-compat` /
+   `injection-source-kind` / `skills-sync-decoupled` / `skills-sync-default-dir` /
+   `store-display-match` / `sync-git-timeout`，约 1200 行）。
+
+**合并后必须复核的本地不变量**：§H 的 12 个死代码符号仍为 0 命中、`lib/coi/dynamics.js` 仍不存在；
+§J-2 的锁写者清单（`grep -rn "acquireSkillDirLock" lib/`）不减；`lib/http-guard.js` /
+`lib/skill-manifest.js` / `lib/sync/filesets.js` 等本地新增文件原样在位；`tests/icon-exports.test.js`
+与 FIX-47 登记表两条新判据照跑。本轮实测：死代码 13 项全为 0、`dynamics.js` 不存在、锁接线 13 行
+（1 定义 + 4 import + 7 调用 + 1 注释引用）、`hostTrustFence` 9 处（与合并前一致）。
+
 ## 验证
 
-- 插件自带测试：**1102 例（1101 pass / 0 fail / 1 skipped）**（2026-09-23 §I 修复批实测，
-  `HOME=<可写目录> corepack yarn test`；§I 之前为 1082 例、闸门批之后为 1092 例）。
+- 插件自带测试：**1263 例（1262 pass / 0 fail / 1 skipped）**（2026-10-25 合并上游 `v26092802`
+  后实测；升级前为 1102 例）。命令：`cd packages/vendor/memory-evolve && node scripts/run-tests.mjs`。
+- 历史口径（2026-09-23 §I 修复批）：1102 例（1101 pass / 0 fail / 1 skipped；§I 之前为
+  1082 例、闸门批之后为 1092 例），命令 `HOME=<可写目录> corepack yarn test`。
   **本套测试自 2026-09-16 起进了根门禁**
   （`scripts/check-workspaces.mjs` 的 `dsh-memory-evolve` 任务，`firstWave` 与 desktop
   check 并发）；此前它在 `verify-inventories.mjs` 挂着 `CHECK_CHAIN_EXEMPTIONS` 豁免，

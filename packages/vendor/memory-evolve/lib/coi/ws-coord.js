@@ -40,6 +40,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve as pathResolve } from 'node:path'
 import { translate, getLocale, COI2_DICT } from '../i18n.js'
 import { writeFileAtomicSafeAt } from '../sync/filesets.js'
+import { PLUGIN_SOURCE_KIND } from './source.js'
 
 /** Translate through COI2_DICT in the active host locale. */
 const cw2 = (key, params) => translate(COI2_DICT, key, params, getLocale())
@@ -90,7 +91,9 @@ function userMessage(text) {
     role: 'user',
     id: randomUUID(),
     content: [{ type: 'text', text: String(text) }],
-    source: { kind: 'plugin', plugin: 'dsh-memory-evolve' },
+    // v4 会话格式要求 producer-owned source kind（`plugin:<包名>`，无 plugin 字段），
+    // 见 ./source.js —— 上游 issue #68。
+    source: { kind: PLUGIN_SOURCE_KIND },
   }
 }
 
@@ -923,8 +926,7 @@ export function installWsCoord(ctx, config, deps = {}) {
         role: 'user',
         content: [{ type: 'text', text }],
         source: {
-          kind: 'plugin',
-          plugin: 'dsh-memory-evolve',
+          kind: PLUGIN_SOURCE_KIND,
           form: 'notice',
           summary: text.split('\n')[0].slice(0, 80),
         },

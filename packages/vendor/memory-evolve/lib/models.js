@@ -41,6 +41,8 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { isSymlinkFreeRepoTarget, symlinkRefusedError, writeFileAtomicSafe } from './store.js'
 import { writeFileAtomicSafeAt } from './sync/filesets.js'
+// DSH 0.2.0 settings 服务兼容层（get→describe）：见 settings-compat.js 头注释
+import { makeSettingsReader } from './settings-compat.js'
 
 /** 插件模型配置文件（相对 memoryDir）。 */
 const MODELS_FILE = 'models.json'
@@ -184,8 +186,14 @@ export async function buildModelsSnapshotAsync(ctx, store) {
   const entries = ctx.llm.listConfigurableProviders()
   const activeIds = new Set(ctx.llm.listProviders().map((p) => p.id))
   const nsCache = new Map()
+  // 供应商配置读法走版本兼容层（上游 db83f84，2026-09-28）：老宿主 settings.get(ns)，
+  // 新宿主（DSH ≥0.2.0）用 describe() 建一次表再按 ns 查（读取器内部只 describe
+  // 一次，避免「每个 provider 一次 describe」的开销）。读不到按未配置处理。
+  // ⚠️ 本地 FIX-26 的读侧断言（models.json 落点）不受影响：这里改的是 DSH settings
+  // 服务读法，不是插件自己的配置文件。
+  const readNs = makeSettingsReader(ctx)
   const getNs = (ns) => {
-    if (!nsCache.has(ns)) nsCache.set(ns, ctx.settings.get(ns))
+    if (!nsCache.has(ns)) nsCache.set(ns, readNs(ns))
     return nsCache.get(ns)
   }
 

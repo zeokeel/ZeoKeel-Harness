@@ -84,6 +84,10 @@ const SCAN_REGISTRY = new Map([
     verdict: 'not-family',
     reason: '待确认队列的列表扫描：读失败 ⇒ 该条目从结果里略过；返回的列表只喂给面板渲染与审批动作，函数本身不写任何文件。',
   }],
+  ['coi/skills-sync.js#syncBuiltinSkillsIfEnabled#return-empty#destDir#1', {
+    verdict: 'not-family',
+    reason: '这是**同步装配点**的收口 catch（上游 issue #58 抽出的 `syncBuiltinSkillsIfEnabled`）：它把"同步整体抛错"变成 `null`（调用方据此判断"没跑成"），自身不读任何基线、也不写任何文件——真正的读/写全在 `syncBuiltinSkills()` 里，且那边的失败已经是逐技能 `refused`（本地来源闸门）+ 一行点名 warn，不存在"以空基线回写"。',
+  }],
   ['update.js#acquireUpdateLock#bare#lockPath#1', {
     verdict: 'not-family',
     reason: '**不同族**：这里读失败被解释成"锁损坏" ⇒ 走**抢占**（`rename` 搬走再核对内容），是"防死锁优先于防误抢"的**有意**取舍（代码注释逐字写着 `// 损坏锁 → 抢占`），不是"以空基线回写"。',

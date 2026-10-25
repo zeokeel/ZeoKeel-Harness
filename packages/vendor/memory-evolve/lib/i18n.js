@@ -16,8 +16,11 @@
  * 其"zh stays default"声明矛盾，属破坏性变更，故纠正。
  *
  * The DSH locale plugin registers the namespace read-only from our side: we
- * never call settings.update/replace — we only .get() the resolved section
- * and listen to the 'settings/updated' commit event. When the user flips
+ * never call settings.update/replace — we only read the resolved section
+ * (settings.get on DSH ≤0.1.5, settings.describe on DSH ≥0.2.0; see
+ * lib/settings-compat.js) and listen to the settings commit event
+ * ('settings/document-updated' on DSH ≥0.2.0, legacy 'settings/updated'
+ * otherwise). When the user flips
  * Language mid-session, `setLocale` re-resolves and every getter-based tool
  * description + next-built snapshot/message follows immediately (no restart,
  * no re-registration — the tools registry reads `definition.description` at
@@ -29,6 +32,8 @@
  *
  * @module dsh-memory-evolve/i18n
  */
+
+import { readSettingsNamespace } from './settings-compat.js'
 
 /** Active host locale. Module-level singleton: one process speaks one language.
  *  Default 'zh'（2026-08-25 自实现拍板）：保持历史中文行为；仅当 DSH
@@ -44,6 +49,9 @@ export const LOCALES = ['zh', 'en']
  * settings section when the settings service exists. Default is 'zh'：仅当
  * DSH Language preference 显式为 'en' 时切英文；unset / 'auto' / 未知值
  * 一律保持中文（历史行为兼容）。Never throws.
+ *
+ * 命名空间读法走 lib/settings-compat.js：DSH ≤0.1.5 用 settings.get('locale')，
+ * DSH ≥0.2.0 的 settings 已移除 get()，改为 settings.describe() 里按 ns 查值。
  * @param {object|undefined} ctx - plugin context with an optional settings service.
  * @returns {'zh'|'en'} the resolved locale id.
  */
@@ -54,9 +62,7 @@ export function resolveLocale(ctx) {
   if (fromEnv === 'zh') return 'zh'
   if (fromEnv === 'en') return 'en'
   try {
-    const settings = ctx?.get?.('settings')
-    if (!settings || typeof settings.get !== 'function') return 'zh'
-    const section = settings.get('locale')
+    const section = readSettingsNamespace(ctx, 'locale')
     const pref = section && typeof section === 'object' ? section.preference : undefined
     return pref === 'en' ? 'en' : 'zh'
   } catch {
@@ -612,8 +618,8 @@ export const SNAPSHOT_DICT = {
     'Only after completing an **independent achievement** (a substantive deliverable, a key decision, or a pitfall conclusion), write ONE concise entry to {targets} with a single memory call (entries array)',
   ],
   'snap.subagentKeyTail': [
-    '；重要结论可另向 target=key 提交建议（用户确认后生效）；没有独立成果就跳过，不要为写而写。',
-    '; for important conclusions you may additionally submit a suggestion to target=key (takes effect after user confirmation); skip entirely when there is no independent achievement — do not write for writing\'s sake.',
+    '；重要结论可另用 memory 工具 action=add 向 target=key 提交建议（走待确认队列，用户确认后生效）；没有独立成果就跳过，不要为写而写。',
+    '; for important conclusions you may additionally use the memory tool action=add to submit a suggestion to target=key (pending-confirmation queue; takes effect after user confirmation); skip entirely when there is no independent achievement — do not write for writing\'s sake.',
   ],
   'snap.subagentSkipTail': [
     '；没有独立成果就跳过，不要为写而写。',
@@ -625,8 +631,8 @@ export const SNAPSHOT_DICT = {
   ],
   'snap.and': [' 与 ', ' and '],
   'snap.keyDuty': [
-    '本轮出现重要项目事实（长期约定/决策/架构/踩坑）时另向 target=key 提交 1 条建议（用户确认后写入并注入），没有则跳过',
-    'when durable project facts appear this turn (long-lived conventions/decisions/architecture/pitfalls), additionally submit one suggestion to target=key (written and injected after user confirmation); skip when there are none',
+    '本轮出现重要项目事实（长期约定/决策/架构/踩坑）时另用 memory 工具 action=add 向 target=key 提交 1 条建议（走待确认队列，用户确认后写入并注入），没有则跳过',
+    'when durable project facts appear this turn (long-lived conventions/decisions/architecture/pitfalls), additionally use the memory tool action=add to submit one suggestion to target=key (it enters the pending-confirmation queue and is written and injected after user confirmation); skip when there are none',
   ],
   'snap.feedbackDuty': [
     '本回合真人用户输入有明显情绪（正面/负面）时，各条目带 feedback 参数（sentiment/category/quote/note，程序自动生成【反馈】行）——daily 的 category 写通用分类（如 编程/后端/数据库，至少一级可到三级；分类指工作类型如 编程→前端开发→JavaScript，不是任务涉及的功能/模块名），project 的 category 写本项目内分层（如 记忆模块/写入链路，按项目实际结构）；中性任务指令或其他会话 AI 消息不带 feedback',

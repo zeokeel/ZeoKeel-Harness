@@ -8,10 +8,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
-import {
-  IconPlusOutlineRegular,
-  IconSearchOutlineRegular,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+// 图标走 ../ui-icons.ts 的跨版本解析层（上游 e6f6b84）：DSH 0.2.0 起旧名
+// （…16）被删除，直接 import 旧名会让画板整块 UI 崩掉。
+import { IconPlusOutline, IconSearchOutline } from '../ui-icons.ts'
 import { CanvasBoard } from './CanvasBoard.tsx'
 import { CanvasDialogs } from './CanvasDialogs.tsx'
 import type { NoteSubmit, PathSubmit } from './CanvasDialogs.tsx'
@@ -654,7 +653,7 @@ export function CanvasView(props: ConvViewProps & CanvasViewProps): JSX.Element 
         </div>
 
         <label className="cg-search">
-          <IconSearchOutlineRegular />
+          <IconSearchOutline />
           <input
             value={query}
             placeholder={t('canvas.search.placeholder')}
@@ -664,13 +663,13 @@ export function CanvasView(props: ConvViewProps & CanvasViewProps): JSX.Element 
 
         <div className="cg-toolbar-group">
           <button type="button" className="cg-btn cg-ghost" onClick={() => setDialog('path')}>
-            <IconPlusOutlineRegular /> {t('canvas.action.path')}
+            <IconPlusOutline /> {t('canvas.action.path')}
           </button>
           <button type="button" className="cg-btn cg-ghost" onClick={() => setDialog('note')}>
-            <IconPlusOutlineRegular /> {t('canvas.action.note')}
+            <IconPlusOutline /> {t('canvas.action.note')}
           </button>
           <button type="button" className="cg-btn cg-ghost" onClick={() => setDialog('catalog')}>
-            <IconPlusOutlineRegular /> {t('canvas.action.catalog')}
+            <IconPlusOutline /> {t('canvas.action.catalog')}
           </button>
         </div>
 

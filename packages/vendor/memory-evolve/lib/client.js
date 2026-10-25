@@ -1,9 +1,11 @@
 window.__ModuleLoader__.load({ id: "dsh-memory-evolve", factory: (require) => {
 var module = { exports: {} }; var exports = module.exports;
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -17,6 +19,14 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/client/index.ts
@@ -87,71 +97,6 @@ function createTodoTabLifecycle(register, poke) {
       badge.dispose();
     },
     enabled: () => enabled
-  };
-}
-
-// src/client/ui-guards.js
-var SCROLL_FOLLOW_THRESHOLD_PX = 24;
-function createScrollFollow(threshold = SCROLL_FOLLOW_THRESHOLD_PX) {
-  let following = true;
-  const nearBottom = (el) => {
-    if (el === null || el === void 0) return true;
-    const height = Number(el.scrollHeight) || 0;
-    const top = Number(el.scrollTop) || 0;
-    const client = Number(el.clientHeight) || 0;
-    return height - top - client <= threshold;
-  };
-  return {
-    onScroll(el) {
-      if (el === null || el === void 0) return;
-      following = nearBottom(el);
-    },
-    apply(el) {
-      if (el === null || el === void 0) return false;
-      if (!following) return false;
-      el.scrollTop = el.scrollHeight;
-      return true;
-    },
-    reset() {
-      following = true;
-    },
-    following: () => following
-  };
-}
-function createNoticeTimer(apply, opts = {}) {
-  const delayMs = opts.delayMs ?? 4e3;
-  const schedule = opts.schedule ?? setTimeout;
-  const cancel = opts.cancel ?? clearTimeout;
-  let timer;
-  return {
-    show(text) {
-      if (timer !== void 0) cancel(timer);
-      apply(text);
-      timer = schedule(() => {
-        timer = void 0;
-        apply(null);
-      }, delayMs);
-    },
-    dispose() {
-      if (timer === void 0) return;
-      cancel(timer);
-      timer = void 0;
-    },
-    pending: () => timer !== void 0
-  };
-}
-function createLatestOnly() {
-  let seq = 0;
-  return {
-    begin() {
-      seq += 1;
-      const token = seq;
-      return () => token === seq;
-    },
-    invalidate() {
-      seq += 1;
-    },
-    current: () => seq
   };
 }
 
@@ -1741,7 +1686,7 @@ function MemoryTabView(props) {
                 className: "mt-item-edit",
                 rows: 3,
                 value: editDraft,
-                onChange: (event) => setEditDraft(event.target.value.replaceAll("\xA7",() => ("")))
+                onChange: (event) => setEditDraft(event.target.value.replaceAll("\xA7", () => ""))
               }
             ),
             /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "mt-entry-edit-row", children: [
@@ -1836,7 +1781,29 @@ var import_react4 = require("react");
 
 // src/client/skills-browser/SkillsBrowser.tsx
 var import_react3 = require("react");
-var import_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+
+// src/client/ui-icons.ts
+var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+var MissingIcon = () => null;
+function resolveIcon(modern, legacy) {
+  const table = primitives;
+  return table[modern] ?? table[legacy] ?? table[modern.replace(/Regular$/u, "Medium")] ?? MissingIcon;
+}
+var IconSearchOutline = resolveIcon("IconSearchOutlineRegular", "IconSearchOutline16");
+var IconRefreshOutline = resolveIcon("IconRefreshOutlineRegular", "IconRefreshOutline16");
+var IconFolderOpen = resolveIcon("IconFolderOpenRegular", "IconFolderOpen16");
+var IconFolderClose = resolveIcon("IconFolderCloseRegular", "IconFolderClose16");
+var IconChevronDown = resolveIcon("IconChevronDownOutlineRegular", "IconChevronDownOutline14");
+var IconChevronRight = resolveIcon("IconChevronRightOutlineRegular", "IconChevronRightOutline14");
+var IconCloseOutline = resolveIcon("IconCloseOutlineRegular", "IconCloseOutline16");
+var IconEditOutline = resolveIcon("IconEditOutlineRegular", "IconEditOutline16");
+var IconCheckOutline = resolveIcon("IconCheckOutlineRegular", "IconCheckOutline16");
+var IconLoadingOutline = resolveIcon("IconLoadingOutlineRegular", "IconLoadingOutline16");
+var IconWarningOutline = resolveIcon("IconWarningOutlineRegular", "IconWarningOutline16");
+var IconDataOutline = resolveIcon("IconDataOutlineRegular", "IconDataOutline16");
+var IconPlusOutline = resolveIcon("IconPlusOutlineRegular", "IconPlusOutline16");
+
+// src/client/skills-browser/SkillsBrowser.tsx
 var import_jsx_runtime4 = require("react/jsx-runtime");
 var API = "/skills-manager/api";
 var LS_KEY = "skills-manager.state.v1";
@@ -1895,8 +1862,8 @@ function sourceClass(source) {
 }
 function ResourceIcon({ skill }) {
   const rb = skill.resourceBase;
-  if (rb?.kind === "directory") return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpenRegular, { className: "sb-card-meta-icon" });
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconDataOutlineRegular, { className: "sb-card-meta-icon" });
+  if (rb?.kind === "directory") return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconFolderOpen, { className: "sb-card-meta-icon" });
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconDataOutline, { className: "sb-card-meta-icon" });
 }
 var PAGE_SIZE2 = 20;
 function SkillList(props) {
@@ -1984,11 +1951,11 @@ function SkillList(props) {
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-list", children: [
       loading && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-note", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconLoadingOutline, { className: "sb-spin" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: t("loading.skills") })
       ] }),
       !loading && error !== null && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-note sb-note--error", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconWarningOutline, {}),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: error }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "sb-btn sb-btn--ghost", onClick: onRetry, children: t("refresh") })
       ] }),
@@ -2032,7 +1999,7 @@ function SkillList(props) {
                       onToggleDisabled(skill);
                     }
                   },
-                  children: togglingName === skill.name ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }) : skill.disabled ? t("enable") : t("disable")
+                  children: togglingName === skill.name ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconLoadingOutline, { className: "sb-spin" }) : skill.disabled ? t("enable") : t("disable")
                 }
               )
             ] })
@@ -2088,14 +2055,14 @@ function FileTree(props) {
     const indent = { paddingLeft: 8 + depth * 14 };
     if (loadingDirs.has(dirAbs)) {
       return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-tree-note", style: indent, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconLoadingOutline, { className: "sb-spin" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: t("loading.dir") })
       ] });
     }
     const dirError = dirErrors.get(dirAbs);
     if (dirError !== void 0) {
       return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-tree-note sb-note--error", style: indent, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconWarningOutline, {}),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-tree-errmsg", title: dirError, children: dirError }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "sb-tree-retry", onClick: () => onRetryDir(dirAbs), children: t("refresh") })
       ] });
@@ -2119,8 +2086,8 @@ function FileTree(props) {
               onClick: () => onToggleDir(abs),
               title: abs,
               children: [
-                isOpen ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronDownOutlineRegular, {}) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronRightOutlineRegular, {}),
-                isOpen ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpenRegular, {}) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderCloseRegular, {}),
+                isOpen ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconChevronDownOutline, {}) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconChevronRightOutline, {}),
+                isOpen ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconFolderOpen, {}) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconFolderClose, {}),
                 /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-tree-name", children: entry.name })
               ]
             }
@@ -2164,7 +2131,7 @@ function FileTree(props) {
         )
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "sb-crumbs", children: crumbs.map((crumb, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "sb-crumb-seg", children: [
-        i > 0 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconChevronRightOutlineRegular, { className: "sb-crumb-sep" }),
+        i > 0 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconChevronRightOutline, { className: "sb-crumb-sep" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "sb-crumb", onClick: () => onJump(crumb.abs), children: crumb.label })
       ] }, crumb.abs)) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "sb-tree", children: renderEntries(root, 0) })
@@ -2204,13 +2171,13 @@ function FileEditor(props) {
   let body;
   if (fileLoading) {
     body = /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-editor-empty", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconLoadingOutline, { className: "sb-spin" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: t("loading.dir") })
     ] });
   } else if (fileError !== null) {
     const msg = fileError.kind === "not.text" ? t("not.text") : fileError.kind === "too.large" ? t("too.large") : t("read.failed", { message: fileError.message });
     body = /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-editor-empty sb-note--error", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconWarningOutline, {}),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: msg })
     ] });
   } else if (file === null) {
@@ -2248,7 +2215,7 @@ function FileEditor(props) {
       ] }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-editor-path", children: t("no.file") }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-spacer" }),
       file !== null && !editing && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("button", { type: "button", className: "sb-btn", onClick: onEdit, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconEditOutlineRegular, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconEditOutline, {}),
         t("edit")
       ] }),
       editing && dirty && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-dirty-dot", title: t("dirty.hint") }),
@@ -2261,7 +2228,7 @@ function FileEditor(props) {
             onClick: onSave,
             disabled: saveState === "saving" || !dirty,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCheckOutlineRegular, {}),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconCheckOutline, {}),
               saveState === "saving" ? t("saving") : t("save")
             ]
           }
@@ -2304,19 +2271,19 @@ function DirsModal(props) {
             disabled: mutating || input.trim() === "",
             onClick: onAdd,
             children: [
-              mutating ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }) : null,
+              mutating ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconLoadingOutline, { className: "sb-spin" }) : null,
               t("dirs.add")
             ]
           }
         )
       ] }),
       error !== null && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-action-error", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconWarningOutline, {}),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-action-error-text", children: error })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-dirs-list", children: [
         loading && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-note", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconLoadingOutline, { className: "sb-spin" }),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: t("loading.skills") })
         ] }),
         !loading && dirs.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "sb-note", children: t("dirs.empty") }),
@@ -2779,7 +2746,7 @@ function SkillsBrowser({ t, sessionId }) {
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-side", children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-side-toolbar", children: [
           /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-search", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconSearchOutlineRegular, { className: "sb-search-icon" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconSearchOutline, { className: "sb-search-icon" }),
             /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
               "input",
               {
@@ -2797,7 +2764,7 @@ function SkillsBrowser({ t, sessionId }) {
                 className: "sb-search-clear",
                 onClick: () => setQuery(""),
                 "aria-label": t("cancel"),
-                children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCloseOutlineRegular, {})
+                children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconCloseOutline, {})
               }
             )
           ] }),
@@ -2812,7 +2779,7 @@ function SkillsBrowser({ t, sessionId }) {
                 void loadDirs();
               },
               title: t("manage.dirs"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconFolderOpenRegular, {})
+              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconFolderOpen, {})
             }
           ),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
@@ -2823,7 +2790,7 @@ function SkillsBrowser({ t, sessionId }) {
               onClick: () => void handleRefresh(),
               disabled: refreshing,
               title: t("refresh"),
-              children: refreshing ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconLoadingOutlineRegular, { className: "sb-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconRefreshOutlineRegular, {})
+              children: refreshing ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconLoadingOutline, { className: "sb-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconRefreshOutline, {})
             }
           )
         ] }),
@@ -2851,7 +2818,7 @@ function SkillsBrowser({ t, sessionId }) {
           }
         ),
         actionError !== null && /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "sb-action-error", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconWarningOutlineRegular, {}),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconWarningOutline, {}),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "sb-action-error-text", children: actionError }),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
             "button",
@@ -2859,7 +2826,7 @@ function SkillsBrowser({ t, sessionId }) {
               type: "button",
               className: "sb-btn sb-btn--ghost",
               onClick: () => setActionError(null),
-              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconCloseOutlineRegular, {})
+              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(IconCloseOutline, {})
             }
           )
         ] }),
@@ -3774,6 +3741,9 @@ function TodosTabView(props) {
 // src/client/SettingsTabView.tsx
 var import_react8 = require("react");
 
+// src/client/VersionTabView.tsx
+var import_react7 = require("react");
+
 // src/client/view-error.js
 function hostErrorFromResponse(status, body) {
   const record = body !== null && typeof body === "object" ? body : {};
@@ -3790,7 +3760,6 @@ function viewErrorOf(err) {
 }
 
 // src/client/VersionTabView.tsx
-var import_react7 = require("react");
 var import_jsx_runtime8 = require("react/jsx-runtime");
 async function fetchStatus(force) {
   const res = await fetch(`/memory-evolve/api/update/status${force ? "?force=1" : ""}`);
@@ -4629,6 +4598,95 @@ function UiSettingsTabView(props) {
 
 // src/client/CoIView.tsx
 var import_react11 = require("react");
+
+// src/client/ui-guards.js
+var SCROLL_FOLLOW_THRESHOLD_PX = 24;
+function createScrollFollow(threshold = SCROLL_FOLLOW_THRESHOLD_PX) {
+  let following = true;
+  const nearBottom = (el) => {
+    if (el === null || el === void 0) return true;
+    const height = Number(el.scrollHeight) || 0;
+    const top = Number(el.scrollTop) || 0;
+    const client = Number(el.clientHeight) || 0;
+    return height - top - client <= threshold;
+  };
+  return {
+    /**
+     * 滚动事件：按用户当前位置更新跟随开关（上滚即停止跟随）。
+     *
+     * 未挂载/缺席的元素（null/undefined）必须**保持既有状态**：内联日志面板与
+     * 全屏弹窗共用同一个 onScroll，弹窗关闭时 fullLogRef.current === null 且是
+     * 最后一次调用 —— 旧写法把 null 当"未知元素 = 仍贴底"，于是内联面板的每次
+     * 滚动都以下一个 following = true 收尾，上滚闸门整个失效（2026-09-17 三轮
+     * 对抗复核 ME-9 残留：探测到 following=true、下一轮 2s 轮询把用户拽回底部）。
+     */
+    onScroll(el) {
+      if (el === null || el === void 0) return;
+      following = nearBottom(el);
+    },
+    /**
+     * 新内容到达：仅在仍跟随时才滚到底；返回是否真的滚动了
+     * （false = 用户正在回读，保持其滚动位置）。
+     */
+    apply(el) {
+      if (el === null || el === void 0) return false;
+      if (!following) return false;
+      el.scrollTop = el.scrollHeight;
+      return true;
+    },
+    /** 切换会话/任务时重置为跟随（新日志从底部跟起）。 */
+    reset() {
+      following = true;
+    },
+    following: () => following
+  };
+}
+function createNoticeTimer(apply2, opts = {}) {
+  const delayMs = opts.delayMs ?? 4e3;
+  const schedule2 = opts.schedule ?? setTimeout;
+  const cancel = opts.cancel ?? clearTimeout;
+  let timer;
+  return {
+    /** 显示新提示：重置计时（旧定时器作废，绝不会清掉新提示）。 */
+    show(text) {
+      if (timer !== void 0) cancel(timer);
+      apply2(text);
+      timer = schedule2(() => {
+        timer = void 0;
+        apply2(null);
+      }, delayMs);
+    },
+    /** 卸载/切换时清理挂起的定时器（避免卸载后 setState）。 */
+    dispose() {
+      if (timer === void 0) return;
+      cancel(timer);
+      timer = void 0;
+    },
+    pending: () => timer !== void 0
+  };
+}
+function createLatestOnly() {
+  let seq = 0;
+  return {
+    /**
+     * 开一次请求，返回「这次请求是否仍是最新」的判定函数。
+     * @returns {() => boolean} true = 仍是最新（可以落地）；false = 已被更
+     *   新的请求取代（丢弃结果，且不要动任何 state）。
+     */
+    begin() {
+      seq += 1;
+      const token = seq;
+      return () => token === seq;
+    },
+    /** 作废所有在飞请求（卸载/换会话用）。 */
+    invalidate() {
+      seq += 1;
+    },
+    current: () => seq
+  };
+}
+
+// src/client/CoIView.tsx
 var import_jsx_runtime12 = require("react/jsx-runtime");
 function dict(t) {
   return (key, params) => t(key, params);
@@ -4897,7 +4955,7 @@ function TasksPane({ t: tt, dsSessionId }) {
     }
   }, []);
   const removeTask = async (id) => {
-    if (!window.confirm(t("coi.tasks.confirmDelete").replace("{id}",() => (id)))) return;
+    if (!window.confirm(t("coi.tasks.confirmDelete").replace("{id}", () => id))) return;
     try {
       const res = await deleteJson(`/tasks/${encodeURIComponent(id)}`);
       if (res.ok !== true) {
@@ -5672,13 +5730,16 @@ function AdaptersPane({ t: tt }) {
             a.skillName
           ] }),
           a.skillName !== void 0 && a.skillName !== "" && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "button", className: "coi-btn coi-btn-mini", onClick: () => void openSkillEdit(a), children: t("coi.adapters.skillBtn") }),
-          typeof a.guide === "string" && a.guide !== "" && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", {
-            type: "button",
-            className: "coi-btn coi-btn-mini",
-            "aria-expanded": guideOpen === a.id,
-            onClick: () => setGuideOpen(guideOpen === a.id ? null : a.id),
-            children: t("coi.adapters.guide")
-          }),
+          typeof a.guide === "string" && a.guide !== "" && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+            "button",
+            {
+              type: "button",
+              className: "coi-btn coi-btn-mini",
+              "aria-expanded": guideOpen === a.id,
+              onClick: () => setGuideOpen(guideOpen === a.id ? null : a.id),
+              children: t("coi.adapters.guide")
+            }
+          ),
           /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
             "button",
             {
@@ -8373,11 +8434,11 @@ function EffectHint(props) {
   if (e === 0) {
     text = D("prompt.effectOnce");
   } else if (r === 0) {
-    text = e === 1 ? D("prompt.effectInfinite") : D("prompt.effectInfiniteCadence").replace("{n}",() => (String(e)));
+    text = e === 1 ? D("prompt.effectInfinite") : D("prompt.effectInfiniteCadence").replace("{n}", () => String(e));
   } else if (r === 1) {
     text = D("prompt.effectOnce");
   } else {
-    text = e === 1 ? D("prompt.effectFinite").replace("{n}",() => (String(r))) : D("prompt.effectFiniteCadence").replace("{n}",() => (String(r))).replace("{m}",() => (String(e)));
+    text = e === 1 ? D("prompt.effectFinite").replace("{n}", () => String(r)) : D("prompt.effectFiniteCadence").replace("{n}", () => String(r)).replace("{m}", () => String(e));
   }
   return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "pm-effect-hint", children: text });
 }
@@ -8401,7 +8462,7 @@ function NumInput(props) {
   ] });
 }
 function fillPlaceholders(text, values) {
-  return text.replace(/\{(\w+)\}/gu, (match, name) => (Object.hasOwn(values, name) ? values[name] : match));
+  return text.replace(/\{(\w+)\}/gu, (match, name) => Object.hasOwn(values, name) ? values[name] : match);
 }
 function PromptView(props) {
   const t = dict2(props.t);
@@ -8463,7 +8524,7 @@ function PromptView(props) {
       setInjections(i.injections);
       setCategories(c.categories);
     } catch (err) {
-      showError(say("prompt.loadFailed").replace("{message}",() => (errText3(err))));
+      showError(say("prompt.loadFailed").replace("{message}", () => errText3(err)));
     }
   }, [showError]);
   (0, import_react17.useEffect)(() => {
@@ -8543,7 +8604,7 @@ function PromptView(props) {
   };
   const deletePrompt = async () => {
     if (selectedId === null) return;
-    const text = say("prompt.deleteConfirm").replace("{name}",() => (selected?.name ?? ""));
+    const text = say("prompt.deleteConfirm").replace("{name}", () => selected?.name ?? "");
     if (!window.confirm(text)) return;
     try {
       await api4(`/memory-evolve/api/prompts/${encodeURIComponent(selectedId)}`, { method: "DELETE" });
@@ -8555,10 +8616,15 @@ function PromptView(props) {
     }
   };
   const afterInjected = async (injection) => {
-    const times = injection.roundsLeft === null ? say("prompt.injectInfiniteShort") : injection.roundsLeft === 1 ? say("prompt.onceOnly") : say("prompt.injectRound").replace("{n}",() => (String(injection.roundsLeft)));
-    const cadence = injection.every === 0 || injection.roundsLeft === 1 ? "" : (injection.every ?? 1) === 1 ? say("prompt.everyTurnParen") : say("prompt.injectCadenceParen").replace("{n}",() => (String(injection.every)));
+    const times = injection.roundsLeft === null ? say("prompt.injectInfiniteShort") : injection.roundsLeft === 1 ? say("prompt.onceOnly") : say("prompt.injectRound").replace("{n}", () => String(injection.roundsLeft));
+    const cadence = injection.every === 0 || injection.roundsLeft === 1 ? "" : (injection.every ?? 1) === 1 ? say("prompt.everyTurnParen") : say("prompt.injectCadenceParen").replace("{n}", () => String(injection.every));
     const ending = injection.every === 0 || injection.roundsLeft === 1 ? say("prompt.injectedOnceEnding") : injection.roundsLeft === null ? say("prompt.injectedInfiniteEnding") : say("prompt.injectedFiniteEnding");
-    showNotice(fillPlaceholders(say("prompt.injected"), { name: injection.title, rounds: times, cadence, ending }));
+    showNotice(fillPlaceholders(say("prompt.injected"), {
+      name: injection.title,
+      rounds: times,
+      cadence,
+      ending
+    }));
     await load();
     setShowInjections(true);
     window.dispatchEvent(new CustomEvent("dsh-memory-evolve:badge-change"));
@@ -8601,7 +8667,7 @@ function PromptView(props) {
         { method: "POST", body: JSON.stringify({ immediate: true, sessionId: props.sessionId }) }
       );
       const name2 = data.injection.title;
-      showNotice(data.steered ? say("prompt.injectedNow").replace("{name}",() => (name2)) : say("prompt.injectedNowFallback").replace("{name}",() => (name2)));
+      showNotice(data.steered ? say("prompt.injectedNow").replace("{name}", () => name2) : say("prompt.injectedNowFallback").replace("{name}", () => name2));
       await load();
       setShowInjections(true);
       window.dispatchEvent(new CustomEvent("dsh-memory-evolve:badge-change"));
@@ -8651,7 +8717,7 @@ function PromptView(props) {
       );
       if (immediate) {
         const name2 = data.injection.title;
-        showNotice(data.steered ? say("prompt.injectedNow").replace("{name}",() => (name2)) : say("prompt.injectedNowFallback").replace("{name}",() => (name2)));
+        showNotice(data.steered ? say("prompt.injectedNow").replace("{name}", () => name2) : say("prompt.injectedNowFallback").replace("{name}", () => name2));
       } else {
         await afterInjected(data.injection);
       }
@@ -8675,9 +8741,9 @@ function PromptView(props) {
   const activeInjectionOf = (promptId) => injections.find((i) => i.sourcePromptId === promptId);
   const cadenceLabel = (inj) => {
     if (inj.every === 0) return say("prompt.onceOnly");
-    return (inj.every ?? 1) === 1 ? say("prompt.everyTurn") : say("prompt.injectCadence").replace("{n}",() => (String(inj.every)));
+    return (inj.every ?? 1) === 1 ? say("prompt.everyTurn") : say("prompt.injectCadence").replace("{n}", () => String(inj.every));
   };
-  const remainingLabel = (inj) => inj.roundsLeft === null ? say("prompt.injectInfinite") : say("prompt.injectRound").replace("{n}",() => (String(inj.roundsLeft)));
+  const remainingLabel = (inj) => inj.roundsLeft === null ? say("prompt.injectInfinite") : say("prompt.injectRound").replace("{n}", () => String(inj.roundsLeft));
   const addCategory = async () => {
     const name2 = newCategoryName.trim();
     if (!name2) return;
@@ -8690,7 +8756,7 @@ function PromptView(props) {
       setCategory(name2);
       setNewCategoryName("");
       setAddingCategory(false);
-      if (data.alreadyExists) showNotice(say("prompt.categoryExists").replace("{name}",() => (name2)));
+      if (data.alreadyExists) showNotice(say("prompt.categoryExists").replace("{name}", () => name2));
     } catch (err) {
       showError(errText3(err));
     }
@@ -8712,7 +8778,7 @@ function PromptView(props) {
       setRenamingCategory(null);
       setRenameValue("");
       await load();
-      const suffix = data.renamed > 0 ? say("prompt.categoryRenamedSuffix").replace("{count}",() => (String(data.renamed))) : "";
+      const suffix = data.renamed > 0 ? say("prompt.categoryRenamedSuffix").replace("{count}", () => String(data.renamed)) : "";
       showNotice(`${fillPlaceholders(say("prompt.categoryRenamed"), { from, to, renamed: "" })}${suffix}`);
     } catch (err) {
       showError(errText3(err));
@@ -8720,7 +8786,7 @@ function PromptView(props) {
   };
   const removeCategory = async (name2) => {
     const count = prompts.filter((p) => p.category === name2).length;
-    const hint = count > 0 ? say("prompt.categoryMoved").replace("{count}",() => (String(count))) : "";
+    const hint = count > 0 ? say("prompt.categoryMoved").replace("{count}", () => String(count)) : "";
     const confirmText = fillPlaceholders(say("prompt.deleteCategoryConfirm"), { name: name2, hint });
     if (!window.confirm(confirmText)) return;
     try {
@@ -8732,8 +8798,8 @@ function PromptView(props) {
       setCategories(cats.categories);
       if (category === name2) setCategory("\u5168\u90E8");
       await load();
-      const moved = data.moved > 0 ? say("prompt.categoryMoved").replace("{count}",() => (String(data.moved))) : "";
-      showNotice(`${say("prompt.categoryDeleted").replace("{name}",() => (name2))}${moved}`);
+      const moved = data.moved > 0 ? say("prompt.categoryMoved").replace("{count}", () => String(data.moved)) : "";
+      showNotice(`${say("prompt.categoryDeleted").replace("{name}", () => name2)}${moved}`);
     } catch (err) {
       showError(errText3(err));
     }
@@ -8848,7 +8914,7 @@ function PromptView(props) {
         injections.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "pm-overlay-empty", children: say("prompt.noInjection") }),
         injections.map((inj) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "pm-overlay-item", children: [
           /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "pm-overlay-item-main", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "pm-overlay-item-title", children: say("prompt.quotedTitle").replace("{name}",() => (inj.title)) }),
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "pm-overlay-item-title", children: say("prompt.quotedTitle").replace("{name}", () => inj.title) }),
             /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "pm-overlay-item-sub", children: [
               remainingLabel(inj),
               " \xB7 ",
@@ -8995,12 +9061,12 @@ function PromptView(props) {
                     /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-name", children: p.name }),
                     /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-badge", children: p.category }),
                     p.enabled === false && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-badge pm-item-badge-off", title: say("prompt.disabledHint"), children: say("prompt.enabledOff") }),
-                    active !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-badge pm-item-badge-active", title: say("prompt.injectHint"), children: active.roundsLeft === null ? say("prompt.injectingBadgeInfinite") : say("prompt.injectingBadge").replace("{n}",() => (String(active.roundsLeft))) })
+                    active !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-badge pm-item-badge-active", title: say("prompt.injectHint"), children: active.roundsLeft === null ? say("prompt.injectingBadgeInfinite") : say("prompt.injectingBadge").replace("{n}", () => String(active.roundsLeft)) })
                   ] }),
                   /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "pm-item-summary", children: summaryLine(p) }),
                   /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "pm-item-row3", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-usage", children: say("prompt.usage").replace("{n}",() => (String(p.usageCount ?? 0))) }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-used", children: p.lastUsedAt !== null ? say("prompt.lastUsed").replace("{time}",() => (formatTime4(p.lastUsedAt))) : say("prompt.neverUsed") })
+                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-usage", children: say("prompt.usage").replace("{n}", () => String(p.usageCount ?? 0)) }),
+                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "pm-item-used", children: p.lastUsedAt !== null ? say("prompt.lastUsed").replace("{time}", () => formatTime4(p.lastUsedAt)) : say("prompt.neverUsed") })
                   ] })
                 ]
               },
@@ -9235,7 +9301,7 @@ function PromptView(props) {
                 if (active !== void 0) {
                   return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
                     /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "pm-inject-status", children: [
-                      active.roundsLeft === null ? say("prompt.injectingBadgeInfinite") : say("prompt.injectingBadge").replace("{n}",() => (String(active.roundsLeft))),
+                      active.roundsLeft === null ? say("prompt.injectingBadgeInfinite") : say("prompt.injectingBadge").replace("{n}", () => String(active.roundsLeft)),
                       " ",
                       "\xB7 ",
                       cadenceLabel(active)
@@ -10417,7 +10483,6 @@ function createBookmarkInjector(getSessionId, deps) {
 
 // src/client/canvas-grok/CanvasView.tsx
 var import_react24 = require("react");
-var import_dsh_client_ui_primitives2 = require("@deepseek-ai/dsh-client-ui-primitives");
 
 // src/client/canvas-grok/CanvasBoard.tsx
 var import_react22 = require("react");
@@ -12067,7 +12132,7 @@ ${t("canvas.content.truncated")}` : text;
         ] })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("label", { className: "cg-search", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconSearchOutlineRegular, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(IconSearchOutline, {}),
         /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
           "input",
           {
@@ -12079,17 +12144,17 @@ ${t("canvas.content.truncated")}` : text;
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("div", { className: "cg-toolbar-group", children: [
         /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("button", { type: "button", className: "cg-btn cg-ghost", onClick: () => setDialog("path"), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutlineRegular, {}),
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(IconPlusOutline, {}),
           " ",
           t("canvas.action.path")
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("button", { type: "button", className: "cg-btn cg-ghost", onClick: () => setDialog("note"), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutlineRegular, {}),
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(IconPlusOutline, {}),
           " ",
           t("canvas.action.note")
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("button", { type: "button", className: "cg-btn cg-ghost", onClick: () => setDialog("catalog"), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_dsh_client_ui_primitives2.IconPlusOutlineRegular, {}),
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(IconPlusOutline, {}),
           " ",
           t("canvas.action.catalog")
         ] })
@@ -12275,7 +12340,7 @@ function createSessionFilter(texts) {
       const need = collapsed && matched !== null && matched.running > 0;
       const badge = row.querySelector(".dsh-ui-ws-run-badge");
       if (need) {
-        const label = texts.runningLabel.replace("{count}",() => (String(matched.running)));
+        const label = texts.runningLabel.replace("{count}", () => String(matched.running));
         if (badge !== null) {
           if (badge.textContent !== label) badge.textContent = label;
         } else {
@@ -15734,6 +15799,29 @@ function createNotificationBell(opts) {
   };
 }
 
+// src/client/client-compat.ts
+function openSessionCompat(ctx, sessionId) {
+  if (!ctx || typeof sessionId !== "string" || sessionId.length === 0) return false;
+  const read = (name) => {
+    try {
+      return ctx.get?.(name);
+    } catch {
+      return void 0;
+    }
+  };
+  const sessions = read("sessions");
+  if (sessions && typeof sessions.open === "function") {
+    sessions.open(sessionId);
+    return true;
+  }
+  const workspace = read("uiWorkspace");
+  if (workspace && typeof workspace.openSession === "function") {
+    workspace.openSession(sessionId);
+    return true;
+  }
+  return false;
+}
+
 // src/client/notification-styles.css
 var notification_styles_default = "/**\n * web \u7AD9\u5185\u901A\u77E5\u94C3\u94DB\u6837\u5F0F\uFF08me-notify-* \u524D\u7F00\uFF0C\u4E0E\u5176\u4ED6\u6A21\u5757 me- \u524D\u7F00\u4E00\u81F4\uFF09\u3002\n *\n * \u989C\u8272\u4E00\u5F8B\u8D70 DSH \u8BBE\u8BA1 token\uFF08--dsw-alias-* / --dsw-static-*\uFF09\uFF0C\u6DF1\u6D45\u8272\u81EA\u52A8\u9002\u914D\u3002\n * \u4E0D\u8981\u7ED9 .me-notify-host \u52A0 transform / filter / backdrop-filter\u2014\u2014\n * \u5927\u5F39\u7A97 backdrop \u662F position:fixed\uFF0C\u7956\u5148\u4E00\u65E6\u5F62\u6210 containing block \u5C31\u4F1A\u7F29\u5728 40px \u94C3\u94DB\u91CC\u3002\n */\n\n/* ================================================================\n * \u5BBF\u4E3B\uFF1A\u53EA\u5305\u4F4F 40\xD740 \u94C3\u94DB\uFF0C\u5F39\u7A97\u7528 absolute \u5F80\u5916\u4F38\u3002\n * left / top \u7531 JS \u5199\u5165\uFF1B\u59CB\u7EC8\u7528 left\uFF08\u4E0D\u7528 right\uFF09\u624D\u80FD\u505A\u5DE6\u53F3\u5438\u9644\u8FC7\u6E21\u3002\n * ================================================================ */\n.me-notify-host {\n  position: fixed;\n  z-index: 2147483000;\n  width: 40px;\n  height: 40px;\n  box-sizing: border-box;\n  font-family: var(--dsw-font-family, inherit);\n  transition:\n    left 0.28s cubic-bezier(0.22, 1, 0.36, 1),\n    top 0.28s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n/* \u62D6\u62FD\u4E2D\u5173\u6389\u8FC7\u6E21\uFF0C\u5426\u5219\u6307\u9488\u4F1A\u300C\u62D6\u7740\u5F39\u7C27\u300D\u3002 */\n.me-notify-host.me-notify-dragging {\n  transition: none;\n}\n\n/* ================================================================\n * \u94C3\u94DB\u6309\u94AE\n * ================================================================ */\n.me-notify-bell {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 40px;\n  height: 40px;\n  padding: 0;\n  border: 1px solid var(--dsw-alias-border-l2, var(--dsw-static-gray-6, #d0d5dd));\n  border-radius: 50%;\n  background: var(--dsw-alias-bg-layer-1, var(--dsw-static-white, #ffffff));\n  color: var(--dsw-alias-label-primary, var(--dsw-static-gray-11, #111827));\n  cursor: grab;\n  touch-action: none; /* \u89E6\u6478\u62D6\u65F6\u4E0D\u8981\u628A\u9875\u9762\u8DDF\u7740\u6EDA */\n  user-select: none;\n  -webkit-user-select: none;\n  box-shadow:\n    0 1px 2px color-mix(in srgb, var(--dsw-alias-label-primary, #111) 6%, transparent),\n    0 6px 16px color-mix(in srgb, var(--dsw-alias-label-primary, #111) 8%, transparent);\n  transition:\n    transform 0.16s ease,\n    box-shadow 0.16s ease,\n    border-color 0.16s ease,\n    background 0.16s ease;\n}\n\n.me-notify-bell:hover {\n  transform: scale(1.05);\n  border-color: var(--dsw-alias-border-l3, var(--dsw-static-gray-6, #d0d5dd));\n  box-shadow:\n    0 2px 4px color-mix(in srgb, var(--dsw-alias-label-primary, #111) 8%, transparent),\n    0 10px 22px color-mix(in srgb, var(--dsw-alias-label-primary, #111) 10%, transparent);\n}\n\n.me-notify-bell:active,\n.me-notify-dragging .me-notify-bell {\n  cursor: grabbing;\n  transform: scale(1.04);\n}\n\n/* \u6709\u672A\u8BFB\u65F6\u7ED9\u4E00\u5708\u5F88\u6DE1\u7684\u54C1\u724C\u63CF\u8FB9\uFF0C\u4E0D\u9760\u523A\u773C\u7EAF\u8272\u558A\u4EBA\u3002 */\n.me-notify-bell-unread {\n  border-color: color-mix(in srgb, var(--dsw-static-blue-9, #2563eb) 45%, var(--dsw-alias-border-l2, #d0d5dd));\n}\n\n.me-notify-bell-icon {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-primary, var(--dsw-static-gray-11, #111827));\n}\n\n/* \u672A\u8BFB\u6570\u5B57\u5FBD\u6807\u3002 */\n.me-notify-badge {\n  position: absolute;\n  top: -4px;\n  right: -5px;\n  min-width: 18px;\n  height: 18px;\n  padding: 0 5px;\n  border-radius: 9px;\n  background: var(--dsw-alias-state-error-primary, var(--dsw-static-red-5, #e5484d));\n  color: var(--dsw-alias-label-primary-inverted, #fff);\n  font-size: 10px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  line-height: 18px;\n  text-align: center;\n  box-shadow: 0 0 0 2px var(--dsw-alias-bg-layer-1, var(--dsw-static-white, #fff));\n  pointer-events: none;\n}\n\n/* ================================================================\n * \u901A\u77E5\u5F39\u7A97\uFF08\u76F8\u5BF9 40px host \u5411\u5916\u5C55\u5F00\uFF09\n * ================================================================ */\n.me-notify-pop {\n  position: absolute;\n  top: calc(100% + 8px);\n  width: 380px;\n  max-width: calc(100vw - 32px);\n  max-height: 70vh;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--dsw-alias-border-l2, var(--dsw-static-gray-6, #d0d5dd));\n  border-radius: 14px;\n  background: var(--dsw-alias-bg-layer-1, var(--dsw-static-white, #ffffff));\n  color: var(--dsw-alias-label-primary, var(--dsw-static-gray-11, #111827));\n  box-shadow:\n    0 8px 24px color-mix(in srgb, var(--dsw-alias-label-primary, #111) 10%, transparent),\n    0 2px 6px color-mix(in srgb, var(--dsw-alias-label-primary, #111) 6%, transparent);\n  overflow: hidden;\n  animation: me-notify-pop-in 0.18s ease-out;\n}\n\n/* \u53F3\u5438\u9644\uFF1A\u5F39\u7A97\u53F3\u7F18\u5BF9\u9F50\u94C3\u94DB\uFF1B\u5DE6\u5438\u9644\uFF1A\u5DE6\u7F18\u5BF9\u9F50\u3002 */\n.me-notify-side-right .me-notify-pop {\n  right: 0;\n  left: auto;\n  transform-origin: top right;\n}\n\n.me-notify-side-left .me-notify-pop {\n  left: 0;\n  right: auto;\n  transform-origin: top left;\n}\n\n/* \u94C3\u94DB\u5728\u4E0B\u534A\u5C4F\u65F6\u5F80\u4E0A\u5F39\u51FA\uFF0C\u907F\u514D\u5217\u8868\u88AB\u88C1\u3002 */\n.me-notify-pop.me-notify-pop-up {\n  top: auto;\n  bottom: calc(100% + 8px);\n  animation-name: me-notify-pop-in-up;\n}\n\n.me-notify-side-right .me-notify-pop-up { transform-origin: bottom right; }\n.me-notify-side-left .me-notify-pop-up { transform-origin: bottom left; }\n\n@keyframes me-notify-pop-in {\n  from { opacity: 0; transform: translateY(-6px) scale(0.98); }\n  to   { opacity: 1; transform: none; }\n}\n\n@keyframes me-notify-pop-in-up {\n  from { opacity: 0; transform: translateY(6px) scale(0.98); }\n  to   { opacity: 1; transform: none; }\n}\n\n/* \u5F39\u7A97\u5934\u90E8\uFF08\u6807\u9898 + \u672A\u8BFB\u6570 + \u5168\u90E8\u5DF2\u8BFB\uFF09\u3002 */\n.me-notify-pop-head {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 11px 14px;\n  border-bottom: 1px solid var(--dsw-alias-border-l2, var(--dsw-static-gray-5, #e5e7eb));\n}\n\n.me-notify-pop-title {\n  font-size: 14px;\n  font-weight: 600;\n  letter-spacing: 0.01em;\n}\n\n.me-notify-pop-count {\n  min-width: 18px;\n  height: 18px;\n  padding: 0 6px;\n  border-radius: 9px;\n  background: color-mix(in srgb, var(--dsw-static-blue-9, #2563eb) 12%, transparent);\n  color: var(--dsw-static-blue-9, #2563eb);\n  font-size: 11px;\n  font-weight: 650;\n  line-height: 18px;\n  text-align: center;\n}\n\n.me-notify-readall {\n  margin-left: auto;\n  border: none;\n  background: none;\n  color: var(--dsw-static-blue-9, #2563eb);\n  font-size: 12px;\n  cursor: pointer;\n  padding: 4px 6px;\n  border-radius: 6px;\n}\n\n.me-notify-readall:hover {\n  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));\n}\n\n/* \u5217\u8868\u5BB9\u5668\uFF08\u6EDA\u52A8\uFF09\u3002 */\n.me-notify-list {\n  overflow-y: auto;\n  max-height: 60vh;\n  padding: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  overscroll-behavior: contain;\n}\n\n/* \u7A7A\u6001 / \u52A0\u8F7D\u6001\u3002 */\n.me-notify-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 36px 14px;\n  text-align: center;\n  color: var(--dsw-alias-label-tertiary, var(--dsw-static-gray-9, #6b7280));\n  font-size: 13px;\n}\n\n.me-notify-empty-icon {\n  display: inline-flex;\n  opacity: 0.45;\n}\n\n/* ================================================================\n * \u5355\u6761\u901A\u77E5\uFF08\u5361\u7247\uFF1A\u53D1\u9001\u4EBA+\u65F6\u95F4 / \u4E3B\u9898 / \u53BB\u91CD\u540E\u7684\u7B80\u4ECB / \u64CD\u4F5C\uFF09\n * ================================================================ */\n.me-notify-item {\n  padding: 10px 12px 10px 14px;\n  border: 1px solid var(--dsw-alias-border-l2, var(--dsw-static-gray-5, #e5e7eb));\n  border-radius: 10px;\n  background: var(--dsw-alias-bg-layer-1, var(--dsw-static-white, #fff));\n  /* \u5DE6\u4FA7\u7EC6\u5F3A\u8C03\u6761\uFF1A\u5217\u8868\u5168\u662F\u672A\u8BFB\uFF0C\u7528\u54C1\u724C\u8272\u70B9\u4E00\u4E0B\u5373\u53EF\uFF0C\u4E0D\u8981\u5927\u7EA2\u5757\u3002 */\n  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--dsw-static-blue-9, #2563eb) 70%, transparent);\n  transition: background 0.12s ease, border-color 0.12s ease;\n}\n\n.me-notify-item:hover {\n  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.04));\n  border-color: var(--dsw-alias-border-l3, var(--dsw-static-gray-6, #d0d5dd));\n}\n\n/* \u7B2C\u4E00\u884C\uFF1A\u53D1\u9001\u4EBA\uFF08\u5DE6\uFF09+ \u65F6\u95F4\uFF08\u53F3\uFF09\u3002 */\n.me-notify-item-head,\n.me-notify-modal-meta {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  margin-bottom: 6px;\n}\n\n.me-notify-sender {\n  flex-shrink: 0;\n  padding: 1px 7px;\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 600;\n  line-height: 18px;\n}\n\n/* notify=\u666E\u901A\u901A\u77E5\uFF08\u84DD\uFF09\uFF0Cdirect=\u76F4\u53D1\uFF08\u7EFF\uFF09\uFF1B\u7528 color-mix \u538B\u9971\u548C\uFF0C\u8DDF\u4E3B\u9898\u8D70\u3002 */\n.me-notify-sender.me-notify-notify {\n  background: color-mix(in srgb, var(--dsw-static-blue-9, #2563eb) 12%, transparent);\n  color: var(--dsw-static-blue-9, #2563eb);\n}\n\n.me-notify-sender.me-notify-direct {\n  background: color-mix(in srgb, var(--dsw-static-green-5, #16a34a) 14%, transparent);\n  color: var(--dsw-static-green-5, #16a34a);\n}\n\n.me-notify-coi-chip {\n  flex-shrink: 0;\n  padding: 1px 6px;\n  border-radius: 4px;\n  font-size: 10px;\n  font-weight: 650;\n  letter-spacing: 0.04em;\n  color: var(--dsw-alias-label-tertiary, var(--dsw-static-gray-9, #6b7280));\n  background: var(--dsw-alias-bg-module-platform, var(--dsw-static-gray-2, #f3f4f6));\n}\n\n.me-notify-time {\n  flex-shrink: 0;\n  margin-left: auto;\n  font-size: 11px;\n  color: var(--dsw-alias-label-tertiary, var(--dsw-static-gray-9, #6b7280));\n  font-variant-numeric: tabular-nums;\n}\n\n/* \u7B2C\u4E8C\u884C\uFF1A\u4E3B\u9898\uFF08\u53EF\u70B9\u51FB\u8DF3\u8F6C\u5230\u53D1\u9001\u4F1A\u8BDD\uFF1Bsystem \u901A\u77E5 disabled\uFF09\u3002 */\n.me-notify-subject {\n  display: block;\n  width: 100%;\n  margin: 0 0 4px;\n  padding: 0;\n  border: none;\n  background: none;\n  text-align: left;\n  font-size: 13.5px;\n  font-weight: 600;\n  line-height: 1.4;\n  color: inherit;\n  cursor: pointer;\n  word-break: break-word;\n}\n\n.me-notify-subject:disabled {\n  cursor: default;\n}\n\n.me-notify-subject:not(:disabled):hover {\n  color: var(--dsw-static-blue-9, #2563eb);\n}\n\n/* \u5185\u5BB9\uFF1AJS \u5DF2\u6298\u53E0\u7A7A\u884C\uFF1Bpre-wrap \u53EA\u4FDD\u7559\u6709\u610F\u4E49\u7684\u6362\u884C\u3002 */\n.me-notify-content {\n  font-size: 12.5px;\n  line-height: 1.55;\n  color: var(--dsw-alias-label-secondary, var(--dsw-static-gray-10, #374151));\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* \u957F\u6587\u622A\u65AD\uFF1A\u7EA6 5 \u884C + \u5E95\u90E8\u6E10\u9690\uFF0C\u70B9\u300C\u67E5\u770B\u8BE6\u60C5\u300D\u770B\u5168\u6587\u3002 */\n.me-notify-content-clamped {\n  position: relative;\n  max-height: 97px; /* \u2248 5 \u884C \xD7 19.4px */\n  overflow: hidden;\n}\n\n.me-notify-content-clamped::after {\n  content: '';\n  position: absolute;\n  left: 0;\n  right: 0;\n  bottom: 0;\n  height: 28px;\n  background: linear-gradient(\n    to bottom,\n    transparent,\n    var(--dsw-alias-bg-layer-1, var(--dsw-static-white, #ffffff))\n  );\n  pointer-events: none;\n}\n\n.me-notify-item:hover .me-notify-content-clamped::after {\n  background: linear-gradient(\n    to bottom,\n    transparent,\n    var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-1, #fff))\n  );\n}\n\n/* \u5E95\u90E8\u64CD\u4F5C\uFF1A\u5DF2\u8BFB\u6309\u94AE + \u957F\u6587\u300C\u67E5\u770B\u8BE6\u60C5\u300D\u3002 */\n.me-notify-item-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  margin-top: 8px;\n}\n\n.me-notify-markread {\n  height: 26px;\n  padding: 0 10px;\n  border: 1px solid var(--dsw-alias-border-l2, var(--dsw-static-gray-6, #d0d5dd));\n  border-radius: 6px;\n  background: var(--dsw-alias-button-elevated-fill, var(--dsw-alias-bg-layer-1, #fff));\n  font-size: 12px;\n  color: var(--dsw-alias-label-secondary, var(--dsw-static-gray-11, #111827));\n  cursor: pointer;\n}\n\n.me-notify-markread:hover {\n  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-static-gray-2, #f9fafb));\n  border-color: var(--dsw-alias-border-l3, var(--dsw-static-gray-6, #d0d5dd));\n}\n\n.me-notify-more {\n  height: 26px;\n  padding: 0 8px;\n  border: none;\n  background: none;\n  color: var(--dsw-static-blue-9, #2563eb);\n  font-size: 12px;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.me-notify-more:hover {\n  background: color-mix(in srgb, var(--dsw-static-blue-9, #2563eb) 8%, transparent);\n}\n\n/* \u9644\u4EF6\uFF08\u56FE\u7247\u7F29\u7565\u56FE / \u6587\u4EF6\u94FE\u63A5\uFF09\u3002 */\n.me-notify-attachments {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin-top: 8px;\n}\n\n.me-notify-att-img {\n  width: 64px;\n  height: 64px;\n  object-fit: cover;\n  border-radius: 8px;\n  border: 1px solid var(--dsw-alias-border-l2, var(--dsw-static-gray-5, #e5e7eb));\n}\n\n.me-notify-att-file {\n  display: inline-block;\n  max-width: 220px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  padding: 4px 8px;\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-module-platform, var(--dsw-static-gray-2, #f9fafb));\n  font-size: 12px;\n  color: var(--dsw-static-blue-9, #2563eb);\n  text-decoration: none;\n}\n\n.me-notify-att-file:hover {\n  text-decoration: underline;\n}\n\n/* \u8BE6\u60C5\u64CD\u4F5C\u6309\u94AE\u3002 */\n.me-notify-detail-actions {\n  display: flex;\n  gap: 8px;\n  margin-top: 4px;\n}\n\n.me-notify-jump,\n.me-notify-delete {\n  height: 30px;\n  padding: 0 12px;\n  border-radius: 7px;\n  border: 1px solid var(--dsw-alias-border-l2, var(--dsw-static-gray-6, #d0d5dd));\n  background: var(--dsw-alias-button-elevated-fill, var(--dsw-alias-bg-layer-1, #fff));\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.me-notify-jump {\n  border-color: color-mix(in srgb, var(--dsw-static-blue-9, #2563eb) 45%, var(--dsw-alias-border-l2, #d0d5dd));\n  color: var(--dsw-static-blue-9, #2563eb);\n}\n\n.me-notify-delete {\n  color: var(--dsw-alias-state-error-primary, #e5484d);\n}\n\n.me-notify-jump:hover {\n  background: color-mix(in srgb, var(--dsw-static-blue-9, #2563eb) 8%, transparent);\n}\n\n.me-notify-delete:hover {\n  background: var(--dsw-alias-interactive-bg-hover-danger, rgba(236, 19, 19, 0.05));\n}\n\n/* ================================================================\n * \u300C\u67E5\u770B\u8BE6\u60C5\u300D\u5927\u5F39\u7A97\uFF08\u957F\u901A\u77E5\u5168\u6587\uFF0C720px \xD7 85vh\uFF0C\u53EF\u6EDA\u52A8\uFF09\u3002\n * ================================================================ */\n.me-notify-modal-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483100;\n  background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.4));\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 20px;\n  animation: me-notify-fade-in 0.16s ease-out;\n}\n\n@keyframes me-notify-fade-in {\n  from { opacity: 0; }\n  to   { opacity: 1; }\n}\n\n.me-notify-modal {\n  width: 720px;\n  max-width: 100%;\n  max-height: 85vh;\n  display: flex;\n  flex-direction: column;\n  border-radius: 16px;\n  background: var(--dsw-alias-bg-layer-1, var(--dsw-static-white, #ffffff));\n  color: var(--dsw-alias-label-primary, var(--dsw-static-gray-11, #111827));\n  border: 1px solid var(--dsw-alias-border-l2, transparent);\n  box-shadow: 0 16px 48px color-mix(in srgb, var(--dsw-alias-label-primary, #111) 18%, transparent);\n  overflow: hidden;\n  animation: me-notify-modal-in 0.2s ease-out;\n}\n\n@keyframes me-notify-modal-in {\n  from { opacity: 0; transform: translateY(8px) scale(0.98); }\n  to   { opacity: 1; transform: none; }\n}\n\n.me-notify-modal-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  padding: 14px 16px;\n  border-bottom: 1px solid var(--dsw-alias-border-l2, var(--dsw-static-gray-5, #e5e7eb));\n}\n\n.me-notify-modal-title {\n  font-size: 15px;\n  font-weight: 600;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.me-notify-modal-close {\n  flex-shrink: 0;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 28px;\n  height: 28px;\n  border: none;\n  border-radius: 8px;\n  background: none;\n  color: var(--dsw-alias-label-tertiary, var(--dsw-static-gray-9, #6b7280));\n  cursor: pointer;\n  padding: 0;\n}\n\n.me-notify-modal-close:hover {\n  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));\n  color: var(--dsw-alias-label-primary, var(--dsw-static-gray-11, #111827));\n}\n\n.me-notify-modal-body {\n  overflow-y: auto;\n  padding: 16px;\n  overscroll-behavior: contain;\n}\n\n.me-notify-modal-meta {\n  margin-bottom: 12px;\n}\n\n.me-notify-mail {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  margin-bottom: 12px;\n}\n\n.me-notify-mail-headline {\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary, var(--dsw-static-gray-9, #6b7280));\n}\n\n.me-notify-mail-intro {\n  font-size: 13.5px;\n  line-height: 1.65;\n  color: var(--dsw-alias-label-primary, var(--dsw-static-gray-11, #111827));\n}\n\n.me-notify-modal-content {\n  margin: 0 0 12px;\n  padding: 12px 14px;\n  border-radius: 10px;\n  background: var(--dsw-alias-bg-module-platform, var(--dsw-static-gray-2, #f9fafb));\n  font-family: inherit;\n  font-size: 13px;\n  line-height: 1.7;\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary, var(--dsw-static-gray-11, #111827));\n}\n\n.me-notify-mail .me-notify-modal-content {\n  margin-bottom: 0;\n}\n\n/* ================================================================\n * \u79FB\u52A8\u7AEF\u9002\u914D\uFF08\u2264767px\uFF09\uFF1A\u94C3\u94DB\u7565\u7F29\uFF0C\u5F39\u7A97\u5168\u5BBD\u8D34\u8FB9\uFF0C\u62D6\u62FD\u4ECD\u53EF\u7528\u3002\n * \u517C\u5BB9\u7EAF web \u79FB\u52A8\u7AEF\u6D4F\u89C8\u5668 + dsh-android-edapp\uFF08\u5176\u6302 html[data-dsh-mobile]\uFF0C\n * \u6B64\u5904\u7528 @media \u5BBD\u5EA6\u5224\u65AD\uFF0C\u4E24\u6761\u8DEF\u5F84\u90FD\u8986\u76D6\uFF09\u3002\n * ================================================================ */\n@media (max-width: 767px) {\n  .me-notify-host,\n  .me-notify-bell {\n    width: 36px;\n    height: 36px;\n  }\n\n  /* \u5F39\u7A97\uFF1A\u5168\u5BBD\u8D34\u8FB9\uFF08\u5DE6\u53F3\u5404 10px\uFF09\uFF0C\u4E0D\u8D85\u51FA\u5C4F\u5E55\u5BBD\u5EA6\u3002 */\n  .me-notify-pop {\n    width: calc(100vw - 20px);\n    max-width: none;\n  }\n\n  .me-notify-modal {\n    width: 100%;\n    max-height: 85vh;\n    border-radius: 14px;\n  }\n\n  .me-notify-modal-backdrop {\n    padding: 12px;\n  }\n}\n";
 
@@ -18795,7 +18883,7 @@ function apply(ctx) {
     if (notifyBellCancelled) return;
     disposeNotifyBell = createNotificationBell({
       openSession: (sessionId) => {
-        ctx.sessions.open(sessionId);
+        openSessionCompat(ctx, sessionId);
       },
       t
     }).dispose;
@@ -19152,7 +19240,7 @@ function apply(ctx) {
     disposeCanvasTab = registerCanvasTab(
       ctx,
       { t, openSession: (sessionId) => {
-        ctx.sessions.open(sessionId);
+        openSessionCompat(ctx, sessionId);
       } }
     );
   }).catch(() => {

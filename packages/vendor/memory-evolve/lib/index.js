@@ -20,7 +20,6 @@ import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { ArchiveStore, MemoryStore, SuggestionQueue, extractEntryDate, gitBranch, gitBranchList, parseEntryBranches, parseEntryDshOnly, parseEntrySummary, autoSummary, stripEntrySummary, todayStamp } from './store.js'
 import { stripEntryId, extractEntryId, legacyIdFor } from './sync/entryid.js'
 import { readAliases } from './aliases.js'
@@ -33,7 +32,7 @@ import { installMemorySync, makeProjectDirResolver } from './sync/index.js'
 import { registerManagedRoot, unregisterManagedRoot, writeFileAtomicSafeAt } from './sync/filesets.js'
 import { createSearchDocsController, searchDocsCommand } from './search-docs.js'
 import { installBroadcast, installCoi } from './coi/index.js'
-import { syncBuiltinSkills } from './coi/skills-sync.js'
+import { syncBuiltinSkillsIfEnabled } from './coi/skills-sync.js'
 import { installNotify, installChannelSend, installSessionImages } from './notify.js'
 import { buildWsCoordBlock, installWsCoord } from './coi/ws-coord.js'
 import { installSession } from './session-orch.js'
@@ -48,18 +47,13 @@ import { installCanvas } from './canvas.js'
 import { getUpdateChecker } from './update.js'
 import { installAdvisor } from './advisor/index.js'
 import { resolveLocale, setLocale, getLocale, translate, MEMORY_DICT, REVIEW_DICT, TODO_DICT, SKILL_DICT, SNAPSHOT_DICT, MISC_DICT } from './i18n.js'
+// DSH 0.2.0 settings 服务兼容层（get→describe、事件改名）：详见 settings-compat.js 头注释
+import { hasSettingsRead, SETTINGS_CHANGE_EVENTS } from './settings-compat.js'
 
 /** Translate through the MEMORY dictionary in the active locale. */
 const mt = (key, params) => translate(MEMORY_DICT, key, params)
 /** Translate through the SNAPSHOT dictionary in the active locale. */
 const st = (key, params) => translate(SNAPSHOT_DICT, key, params)
-
-/**
- * 插件包内 `skills/` 目录（内置技能的源头）。
- * 与 `lib/coi/index.js` 的 `PLUGIN_SKILLS_DIR` 指向同一份内容 —— 那边给 COI
- * 安装流程用，这边给**与 COI 无关**的启动期同步用（见 apply 里的「内置技能同步」）。
- */
-const PLUGIN_SKILLS_DIR = fileURLToPath(new URL('../skills/', import.meta.url))
 
 // Re-exported for the web API layer (api.js imports them from here).
 export { gitBranch, gitBranchList } from './store.js'
@@ -78,7 +72,8 @@ export const name = 'dsh-memory-evolve'
 // 需读该会话 log 里自己最后使用的模型（request/header），否则恢复的
 // agent.options 为空、{{model}} 变量无值导致被唤醒会话回合失败。
 // settings / llm 于 2026-08-11 加入——模型配置模块（de_models 工具 +
-// 「模型设置」Tab）需要读取模型目录（settings.get）与供应商/思考等级
+// 「模型设置」Tab）需要读取模型目录（DSH settings 服务，读法走 settings-compat 的
+// get→describe 兼容层）与供应商/思考等级
 // 元数据（llm.listConfigurableProviders / resolveModelInfo）。
 export const inject = ['tools', 'systemPrompt', 'agents', 'sessionTitle', 'sessionPersistence', 'settings', 'llm']
 
@@ -1798,14 +1793,21 @@ export function apply(ctx, rawConfig = {}) {
   // snapshot builders read the active locale per call, so a flip takes
   // effect on the next model request / injected turn without re-registering
   // anything. The 'locale' namespace belongs to DSH's own locale plugin —
-  // we only .get() it here and never write to it.
+  // we only read it here and never write to it.
+  //
+  // 2026-09-28（上游 db83f84，DSH 0.2.0 适配；本合并取上游实现并保留本地接线）：
+  // 宿主把 settings 服务的 get() 移除、改为 describe()，并把提交事件从
+  // 'settings/updated' 改名为 'settings/document-updated'。两个事件名都订阅
+  // （未知事件名在 cordis 里只是永不触发，不会报错），读值统一走
+  // settings-compat 的版本兼容层，于是新老宿主都能就地跟随语言切换。
   setLocale(resolveLocale(ctx))
   ctx.effect(() => {
     const settings = ctx.get('settings')
-    if (!settings || typeof settings.get !== 'function') return () => {}
-    return ctx.on('settings/updated', (ns) => {
+    if (!hasSettingsRead(settings)) return () => {}
+    const disposers = SETTINGS_CHANGE_EVENTS.map((event) => ctx.on(event, (ns) => {
       if (ns === 'locale') setLocale(resolveLocale(ctx))
-    })
+    }))
+    return () => { for (const dispose of disposers) dispose() }
   }, 'dsh-memory-evolve: locale watcher')
   // NF-3（2026-09-13 第八轮）：登记受管记忆仓库根——写原语据此区分
   // 「仓库内状态文件（共享分支可实体化 120000 链接）保持拒收」与
@@ -2223,7 +2225,8 @@ export function apply(ctx, rawConfig = {}) {
   }
   sessionImageCtrl.sync()
 
-  // 7. 内置技能同步（**与 COI 无关**，2026-09-18 从 installCoi 里解耦）。
+  // 7. 内置技能同步（**与 COI 无关**，2026-09-18 从 installCoi 里解耦；上游 issue #58
+  //    2026-09-28 同款，合并后收口到 syncBuiltinSkillsIfEnabled 这一份实现）。
   //
   //     背景：`syncBuiltinSkills` 原先只在 `installCoi()` 里被调用，而
   //     `installCoi` 只在 `coiEnabled === true` 时才安装（默认 false）——
@@ -2242,40 +2245,12 @@ export function apply(ctx, rawConfig = {}) {
   //     （默认 `<DSH_HOME>/skills`）。失败**不静默**：missing / refused 都
   //     打日志并点名技能，否则「技能没装上」在打包版里完全不可见。
   //
-  //     注：`installCoi` 内部仍保留上游那次同步调用（COI 开启时二次调用），
-  //     两次都是同一份源与目标，第二次按 x-version 判定为 unchanged，幂等。
-  //     保留它是为了把 vendored 上游代码的改动面压到最小。
-  if (config.coiSyncSkills !== false) {
-    try {
-      const synced = syncBuiltinSkills(PLUGIN_SKILLS_DIR, config.skillDir)
-      const changed = synced.filter((s) => s.action === 'synced')
-      // P1-1 兼容路径（2026-09-23）：`adopted` = 内容与随包技能逐字相同、原本没有
-      // 溯源（A9 之前落下的历史副本），本次只补写了 `channel: 'plugin'`。它既不是
-      // "同步了"也不是"失败"，单独一行日志，否则这类落点会静默消失（既不在 changed
-      // 也不在 failed 里）。
-      const adopted = synced.filter((s) => s.action === 'adopted')
-      // R4-B-4（2026-09-23 第四轮审计）：`skipped` = 用户显式卸载过这个随包技能
-      // （技能库里有墓碑），本轮刻意不落盘。它既不是 changed 也不是 failed，必须
-      // 单独一行 —— 否则"用户卸载过、我们尊重它"与"同步静默什么都没做"在日志里
-      // 无法区分（正是这条 finding 的现场形态）。
-      const skipped = synced.filter((s) => s.action === 'skipped')
-      const failed = synced.filter((s) => s.action === 'missing' || s.action === 'refused')
-      if (changed.length > 0) {
-        console.log(`[dsh-memory-evolve] 内置技能已同步到 ${config.skillDir}：${changed.map((s) => s.name).join(', ')}`)
-      }
-      if (adopted.length > 0) {
-        console.log(`[dsh-memory-evolve] 内置技能已采纳（内容与随包技能逐字一致、原缺溯源，已补写 channel: plugin）：${adopted.map((s) => s.name).join(', ')}`)
-      }
-      if (skipped.length > 0) {
-        console.log(`[dsh-memory-evolve] 内置技能按用户卸载（墓碑）跳过：${skipped.map((s) => s.name).join(', ')}`)
-      }
-      if (failed.length > 0) {
-        console.warn(`[dsh-memory-evolve] 内置技能未就位（${config.skillDir}）：${failed.map((s) => `${s.name}=${s.action}${s.code === undefined ? '' : `(${s.code})`}`).join(', ')}`)
-      }
-    } catch (error) {
-      console.warn(`[dsh-memory-evolve] 内置技能同步失败（忽略）：${error.message}`)
-    }
-  }
+  //     2026-10-25 三方合并：上游 #58 把调用点从 installCoi 提到这里（与本地上
+  //     2026-09-18 的改动同向），并抽成 `syncBuiltinSkillsIfEnabled(config)`；
+  //     本地原先在 installCoi 里保留的那次"幂等二次调用"随之删除（同一份源与目标，
+  //     第二次本来就只判 unchanged）。**本地日志口径保留**：synced / adopted /
+  //     skipped / 失败四类分别落行（见该函数注释），不是上游的单行摘要。
+  syncBuiltinSkillsIfEnabled(config)
 
   // 7.1 COI 调度模块（de_coi 工具/命令/API）：统一调度 kimi/codex/grok/hermes
   //    等 CLI 代理。模块边界：lib/coi/* 独立目录，只通过 memoryStore.add

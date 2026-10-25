@@ -279,6 +279,19 @@ export function entryMatchKey(entry) {
   return stripEntrySummary(stripEntryId(String(entry ?? '')))
 }
 
+/**
+ * 上游名（issue #59）：与本地 {@link entryMatchKey} **同一份实现的两个名字**。
+ *
+ * 合并说明（2026-10-25）：上游把同一套双重剥离命名为 `normalizeForMatch` 并导出，
+ * 供 `lib/review.js` 的 `promoteArchived()` 与 `tests/store-display-match.test.js`
+ * 引用；本地加固（§7，2026-09-23）与 `tests/memory-entry-match-key.test.js` 用的是
+ * `entryMatchKey`。两者语义逐字相同，**禁止再复制第二份实现**——展示层每剥一种
+ * 新元数据（`[id:…]`、`[summary:…]`…）两处都得跟着扩展，这个坑已经踩过两次。
+ * @param {string} entry - 条目文本（磁盘原文或展示文本均可）。
+ * @returns {string} 归一化后的可比文本。
+ */
+export const normalizeForMatch = entryMatchKey
+
 export function serializeEntries(entries) {
   return entries.join(ENTRY_DELIMITER) + '\n'
 }
@@ -390,16 +403,23 @@ export function isProjectSyncEnabled(dir) {
  * 展示层剥掉 `[id:…]` 与 `[summary:…]` 后回传的文本仍能命中磁盘原文
  * （审查 P0：Tab/API 精确操作在启用 sync 后失效；§7：带 `[summary:…]` 的条目
  * 无法删除/编辑/归档）。
- * 返回唯一命中下标；0 条/多条返回 -1（调用方按"不存在"处理——多条属数据
- * 异常，保守拒绝）。
+ * @param {string[]} entries - 磁盘上的条目数组。
+ * @param {string} exact - 待匹配的整条文本。
+ * @param {object} [options]
+ * @param {boolean} [options.first=false] - 多条命中时的取舍：false 报歧义（主轨用）；
+ *   true 取首条（归档轨用，见 ArchiveStore.removeExact）。
+ * @returns {number} 命中下标；未命中返回 -1。
  */
-function findExactIndex(entries, exact) {
+function findExactIndex(entries, exact, { first = false } = {}) {
   const target = entryMatchKey(exact)
   let found = -1
   for (let i = 0; i < entries.length; i++) {
     if (entryMatchKey(entries[i]) === target) {
-      if (found !== -1) return -1 // 多条命中 → 歧义，拒绝
-      found = i
+      // 多条命中：主轨（first=false）按歧义拒绝——重复条目属数据异常，保守拒绝；
+      // 归档轨（first=true，上游 issue #59）取首条——归档本来就允许同一内容重复，
+      // 且归档页只可能点到其中一条。
+      if (found !== -1 && !first) return -1
+      if (found === -1) found = i
     }
   }
   return found
@@ -1343,10 +1363,14 @@ export class MemoryStore {
       if (reload.kind === 'read-failed') {
         return { ok: false, message: st('store.fileUnreadableOp'), target }
       }
-      if (findExactIndex(reload.entries, exact) === -1) {
+      const index = findExactIndex(reload.entries, exact)
+      if (index === -1) {
         return { ok: false, message: stt('storetail.mainMissing'), target }
       }
-      return { ok: true, entry: exact, target }
+      // 返回**磁盘原文**而不是入参（上游 issue #59）：归档「先写后删」因此保留
+      // `[id:…]` 与 `[summary:…]`，转正回主轨时不丢元数据（store.add 的
+      // stampEntry 会把身份证装回最前、时间戳重新盖）。
+      return { ok: true, entry: reload.entries[index], target }
     })
   }
 
@@ -1846,12 +1870,19 @@ export class ArchiveStore {
     if (plan.ok !== true) return plan
     return this.underWriteLock(this.archiveLockDir(target, cwd), () => {
       const entries = this.entriesOf(target, cwd)
-      const matches = entries.filter((entry) => entry.includes(match))
+      // 两侧都过 entryMatchKey（上游 issue #59）：归档页回传的是**展示文本**
+      // （已剥 `[id:…]` / `[summary:…]`），而归档文件里存的是含元数据的原文——
+      // 直接在原文上 `includes(展示文本)` 会因中间插了元数据而断链。这条路径是
+      // promoteArchived() 转正成功后清理归档用的：不修就会出现「转正成功但归档
+      // 那条删不掉 → 同一内容同时留在主轨与归档」且不报错（上游 issue #59 明确
+      // 点名的半吊子修复）。
+      const needle = entryMatchKey(match)
+      const matches = entries.filter((entry) => entryMatchKey(entry).includes(needle))
       if (matches.length === 0) return { ok: false, message: stt('storetail.archiveNoMatch', { match }) }
       if (matches.length > 1) {
         return { ok: false, message: stt('storetail.archiveMultiMatch', { match, count: matches.length }) }
       }
-      const next = entries.filter((entry) => !entry.includes(match))
+      const next = entries.filter((entry) => !entryMatchKey(entry).includes(needle))
       // 建目录本身也会穿透符号链接祖先：建目录前先复检（TOCTOU 第二层）
       if (!assertSafeRepoTarget(this.dir, plan.safe)) return this.refusedResult(plan.path)
       mkdirSync(dirname(plan.safe), { recursive: true })
@@ -1871,20 +1902,14 @@ export class ArchiveStore {
       const entries = this.entriesOf(target, cwd)
       // §7（上游 issue #59，2026-09-23）：归档页展示时剥掉了 `[id:…]`，此前这里是
       // 严格 `entries.indexOf(content)` ⇒ 带身份证（或头部 `[summary:…]`）的条目在
-      // 归档页"删除"永远报不存在。匹配键与展示层同一份实现（`entryMatchKey`）；
-      // 多条命中按歧义拒绝，与 `remove`/`findExactIndex` 同口径。
-      const key = entryMatchKey(content)
-      const hits = []
-      for (let i = 0; i < entries.length; i++) {
-        if (entryMatchKey(entries[i]) === key) hits.push(i)
-      }
-      if (hits.length === 0) {
+      // 归档页"删除"永远报不存在。匹配键与展示层同一份实现（`entryMatchKey`）。
+      // 2026-10-25 合并上游：归档轨**允许重复条目**，多条命中取首条
+      // （`{ first: true }`；主轨仍是歧义拒绝，两种口径各自钉在
+      // tests/memory-entry-match-key.test.js 与上游 tests/store-display-match.test.js）。
+      const index = findExactIndex(entries, content, { first: true })
+      if (index === -1) {
         return { ok: false, message: stt('storetail.archiveEntryMissing') }
       }
-      if (hits.length > 1) {
-        return { ok: false, message: stt('storetail.archiveMultiMatch', { match: content, count: hits.length }) }
-      }
-      const index = hits[0]
       const next = [...entries]
       next.splice(index, 1)
       // 建目录本身也会穿透符号链接祖先：建目录前先复检（TOCTOU 第二层）
@@ -1893,7 +1918,7 @@ export class ArchiveStore {
       if (!assertSafeRepoTarget(this.dir, plan.safe)) return this.refusedResult(plan.path)
       const written = writeFileAtomicSafe(this.dir, plan.safe, serializeEntries(next))
       if (written.ok !== true) return this.refusedResult(written.refusedPath)
-      return { ok: true, removed: content }
+      return { ok: true, removed: entries[index] }
     })
   }
 }

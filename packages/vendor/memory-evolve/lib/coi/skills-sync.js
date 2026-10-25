@@ -51,7 +51,9 @@
  */
 import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
+import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { isSymlinkFreeRepoTarget, openExclusiveSafe, removeCreatedFile, writeFileAtomicSafeAt, writeTargetRefusedError } from '../sync/filesets.js'
 import { hasDisableFlag, normalizeSkillManifestBytes, toggleDisableFlag } from '../skill-manifest.js'
 
@@ -277,6 +279,19 @@ export const BUILTIN_SKILLS = [
 export const PLATFORM_SKILLS = ['app-builder']
 
 /**
+ * 技能库默认目录兜底（`~/.agents/skills`，上游口径）。
+ *
+ * ⚠️ **本地缺省落点与上游不同**：2026-09-18 起 `resolveConfig()` 把 `skillDir: null`
+ * 哨兵实体化成 **`<DSH_HOME>/skills`**（与客户端「能力中心安装」同一个根，上游
+ * skill-filesystem 的 user-dsh root / rank 400）——理由见 lib/index.js 的
+ * resolveConfig 注释与 tests/builtin-skills-decoupled.test.js。本常量来自上游
+ * issue #67（`syncBuiltinSkillsIfEnabled` 的显式兜底），只在**配置没解析**时兜住
+ * 调用点，不参与本地缺省值的决策：两处口径若据此"统一"，会把她改回 ~/.agents/skills
+ * 造成同一技能两份副本（本地回归会红）。
+ */
+export const DEFAULT_SKILL_DIR = join(homedir(), '.agents', 'skills')
+
+/**
  * 技能名白名单（kebab-case，与 dsh-skill 的公开规则一致）。
  * 技能名直接参与路径拼接（`join(skillDir, name, 'SKILL.md')`），
  * 未校验时 `../../x` 可把读写落点带出技能库。
@@ -291,9 +306,18 @@ export function isSafeSkillName(name) {
   return typeof name === 'string' && SKILL_NAME_RE.test(name)
 }
 
-/** 从 SKILL.md frontmatter 读 x-version；缺省 0。 */
+/**
+ * 从 SKILL.md frontmatter 读 x-version；缺省 0。
+ *
+ * **必须容忍 CRLF**（上游 issue #67）：Windows 上 git（`core.autocrlf=true`）检出的
+ * SKILL.md 是 CRLF，而旧写法 `^---\n` 只认 LF——两端都解析成 0，版本门控退化为
+ * "永远相等"，于是 x-version 升级在 Windows 上**静默失效**。回归
+ * `tests/skills-sync-default-dir.test.js` 钉住两种换行解析出同一个版本号。
+ * @param {string} text - SKILL.md 全文。
+ * @returns {number} frontmatter 里的 x-version，缺失或无法解析时为 0。
+ */
 function skillVersion(text) {
-  const match = String(text).match(/^---\n[\s\S]*?^x-version:\s*(\d+)\s*$/m)
+  const match = String(text).match(/^---\r?\n[\s\S]*?^x-version:[ \t]*(\d+)[ \t]*\r?$/m)
   return match ? Number(match[1]) : 0
 }
 
@@ -580,13 +604,15 @@ export function normalizeSkillText(raw, skillName, displayName) {
   if (!text) throw new Error('技能内容不能为空')
   if (text.length > 128 * 1024) throw new Error('技能内容超过 128 KiB 上限')
   const lines = text.split('\n')
-  if (lines[0] === '---') {
-    const end = lines.indexOf('---', 1)
+  // 上游 issue #67：边界行按 trim() 比较（Windows CRLF 检出/复制粘贴时
+  // `lines[0] === '---'` 恒不成立，会被误判成"没有 frontmatter"而叠加第二份头）。
+  if (lines[0].trim() === '---') {
+    const end = lines.findIndex((line, index) => index > 0 && line.trim() === '---')
     if (end < 0) throw new Error('frontmatter 未闭合：需要以 --- 结尾的 YAML 头')
     const fm = lines.slice(1, end).join('\n')
     const missing = []
-    if (!/^name:\s*\S+/m.test(fm)) missing.push('name')
-    if (!/^description:\s*\S+/m.test(fm)) missing.push('description')
+    if (!/^name:[ \t]*\S+/m.test(fm)) missing.push('name')
+    if (!/^description:[ \t]*\S+/m.test(fm)) missing.push('description')
     if (missing.length > 0) {
       throw new Error(`frontmatter 缺少必填字段：${missing.join('、')}（SKILL.md 必须含 name 与 description）`)
     }
@@ -789,6 +815,16 @@ function readSkillTombstone(userSkillsDir, name) {
  *   独立复审 N1）—— 后者是自动同步路径上唯一会覆盖内容的写者，必须拦。
  */
 export function syncBuiltinSkills(pluginSkillsDir, userSkillsDir) {
+  // 上游 issue #67：装配错误要报得看得懂，而不是 Node 的
+  // `The "path" argument must be of type string`。配置里的 null 哨兵必须先由
+  // 调用点实体化（`resolveConfig()` 或显式传 DEFAULT_SKILL_DIR）——本函数不做隐式
+  // 兜底，那会把"配置没解析"这种装配错误变成静默行为。
+  if (typeof userSkillsDir !== 'string' || userSkillsDir.length === 0) {
+    throw new Error(
+      `syncBuiltinSkills: userSkillsDir 必须是技能库目录的绝对路径，收到 ${JSON.stringify(userSkillsDir)}`
+      + '——配置里的 null 哨兵需先经 resolveConfig() 或 DEFAULT_SKILL_DIR 实体化',
+    )
+  }
   const results = []
   // S13-3 复核（2026-09-17）：先清扫上次同步留下的暂存/旁置目录。SIGKILL/断电
   // 不会走 catch，`<name>.staging-<pid>-<ts>` 会永久留在技能库里（它的 SKILL.md
@@ -1625,4 +1661,66 @@ function findSymlinkEntry(dir, prefix = '') {
     }
   }
   return null
+}
+
+/**
+ * 插件包内 skills/ 目录（内置技能源头）。导出供测试断言源头确实在包内。
+ */
+export const PLUGIN_SKILLS_DIR = fileURLToPath(new URL('../../skills/', import.meta.url))
+
+/**
+ * 启动时同步内置技能——**与 COI 调度解耦**（上游 issue #58；本地 2026-09-18 已同款
+ * 解耦，2026-10-25 合并上游时把两个调用点收口成本函数：lib/index.js 只调它）。
+ *
+ * 判定只看 `coiSyncSkills`，与 `coiEnabled` 无关。此前的调用点在 `installCoi()` 内，
+ * 而 `installCoi` 由 `coiEnabled` 门控（默认 `false`）——于是**默认配置下内置技能
+ * 永远不会进技能库**，与 §7.5 broadcast 当初"独立子模块挂在 COI 下拆不开"同款。
+ *
+ * 三个 stage 各自独立、失败不阻断启动：读取 → 同步 → 报告。异常在此收口并打一行
+ * warn（同步失败绝不影响插件其余功能）。
+ *
+ * **本地增强（合并时保留，不是上游行为）**：报告按 `synced` / `adopted` / `skipped` /
+ * 失败（`missing` + `refused`）四类分别落行——`adopted`（P1-1 兼容路径）与
+ * `skipped`（R4-B-4 墓碑）既不是"同步了"也不是"失败"，不单独打就会静默消失；
+ * 失败行点名技能与 `code`，否则"技能没装上"在打包版里完全不可见。上游实现只报
+ * "更新 N 个"一行，本地那半句必须留（`tests/builtin-skills-decoupled.test.js`
+ * 钉的是文件事实，日志口径由本注释与 VENDORED.md 记录）。
+ *
+ * @param {object} config - 已解析插件配置（读 `coiSyncSkills` / `skillDir`）。
+ * @param {string} [pluginSkillsDir] - 内置技能源头目录（缺省用包内 skills/，测试可注入）。
+ * @returns {Array<{name:string, action:'synced'|'unchanged'|'adopted'|'missing'|'refused'|'skipped', message?:string, code?:string}> | null}
+ *   同步结果；`coiSyncSkills === false` 或同步抛错时为 null。
+ */
+export function syncBuiltinSkillsIfEnabled(config, pluginSkillsDir = PLUGIN_SKILLS_DIR) {
+  if (config?.coiSyncSkills === false) return null
+  const skillDir = config?.skillDir ?? DEFAULT_SKILL_DIR
+  try {
+    const synced = syncBuiltinSkills(pluginSkillsDir, skillDir)
+    const changed = synced.filter((s) => s.action === 'synced')
+    const adopted = synced.filter((s) => s.action === 'adopted')
+    const skipped = synced.filter((s) => s.action === 'skipped')
+    const failed = synced.filter((s) => s.action === 'missing' || s.action === 'refused')
+    // 每次启动都落一行：成功路径此前只在有变更时 log，"技能从来没装上"只能靠反查
+    // 技能目录的 mtime 才能发现（上游 issue #67）。
+    console.log(
+      `[dsh-memory-evolve] 内置技能同步 → ${skillDir}：共 ${synced.length} 个，更新 ${changed.length} 个`
+      + `${changed.length > 0 ? `（${changed.map((s) => s.name).join(', ')}）` : ''}`,
+    )
+    if (adopted.length > 0) {
+      console.log(`[dsh-memory-evolve] 内置技能已采纳（内容与随包技能逐字一致、原缺溯源，已补写 channel: plugin）：${adopted.map((s) => s.name).join(', ')}`)
+    }
+    if (skipped.length > 0) {
+      console.log(`[dsh-memory-evolve] 内置技能按用户卸载（墓碑）跳过：${skipped.map((s) => s.name).join(', ')}`)
+    }
+    if (failed.length > 0) {
+      console.warn(
+        `[dsh-memory-evolve] 内置技能未就位/缺少内置技能（${skillDir}）：`
+        + failed.map((s) => `${s.name}=${s.action}${s.code === undefined ? '' : `(${s.code})`}`).join(', '),
+      )
+    }
+    return synced
+  } catch (error) {
+    console.warn(`[dsh-memory-evolve] 内置技能同步失败（忽略）：${error.message}`)
+    return null
+  }
 }

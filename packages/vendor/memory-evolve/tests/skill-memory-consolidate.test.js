@@ -206,8 +206,13 @@ test('SKILL.md 步骤 5：备份推送只提示用户在「记忆同步」Tab �
   // 写成「待下次自动备份」。
   const skill = readFileSync(join(PKG_ROOT, 'skills', 'memory-consolidate', 'SKILL.md'), 'utf8')
   const start = skill.indexOf('### 步骤 5')
-  const end = skill.indexOf('## 四、何时运行')
-  assert.ok(start >= 0 && end > start, '技能必须仍有「步骤 5」与「四、何时运行」两节')
+  // 节的边界用"步骤 5 之后的第一个 H2"而不是写死编号：上游 memory-consolidate v2
+  // （ab1b641，2026-10-25 合并）在本节之后插了「四、故障处理」，「何时运行」因此
+  // 变成「五、」。写死编号会让**合并上游正文**直接变红，而本用例真正要钉的是
+  // 步骤 5 的**内容契约**（不得给 AI 一条必然失败的 curl），不是章节序号。
+  const end = start >= 0 ? skill.indexOf('\n## ', start) : -1
+  assert.ok(start >= 0 && end > start, '技能必须仍有「步骤 5」一节，且其后要有下一个 H2 章节收尾')
+  assert.match(skill, /## [一二三四五六]、何时运行/u, '「何时运行」章节必须仍在（编号随上游正文可漂）')
   const step5 = skill.slice(start, end)
   assert.doesNotMatch(step5, /curl\s+-X\s+POST/, '不得再给模型一条必然 400 的 curl 命令')
   assert.doesNotMatch(step5, /127\.0\.0\.1:3080/, '不得写死开发机的 dsh web 端口（桌面端口是运行时分配的）')

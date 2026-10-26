@@ -3128,21 +3128,42 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   // (扩展名)定的,把带脚本的 SVG 命名成 logo.png/logo.ico 就能同时绕过扩展名
   // 检查与下发类型(服务端按 .png 下发,浏览器却按 SVG 文档渲染),所以凡"内容
   // 像 XML/SVG 文档"的素材一律按 SVG 检查,不管扩展名。
+  // 这一节的被测对象是**素材的脚本特征扫描**，所以渠道必须是**品牌渠道**：
+  // 公共渠道(official/beta)的素材字节自 2026-10-26 起有判据要求"必须是
+  // brands/official/* 的逐字节副本"（`scripts/lib/check-channel-json.mjs`），
+  // 拿公共渠道当夹具会让每个用例先被那条**字节**判据拦下 —— 断言看似通过、
+  // 测到的东西与它声称的无关。品牌渠道的品牌是任意客户几何，字节判据不适用。
   const svgGateRepo = (assets, files) => {
-    const root = tempDir('ci-channels-svg-gate-')
-    mkdirSync(join(root, 'channels', 'official'), { recursive: true })
-    writeFileSync(join(root, 'channels', 'official', 'channel.json'), JSON.stringify({
+    const repo = tempDir('ci-channels-svg-gate-')
+    const dir = join(repo, 'channels', 'example-svg')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'channel.json'), JSON.stringify({
       schema: 1,
-      channel_id: 'official',
-      identity: { display_name: 'Official', short_name: 'Official' },
-      desktop: { app_origin_scheme: 'zeokeel-app' },
-      assets,
+      channel_id: 'example-svg',
+      identity: { display_name: 'Example SVG', short_name: 'Example' },
+      // assets.logo 是品牌渠道必填的声明(2026-09-26 审计 Z3-3);
+      // 用例自己声明 logo 时由 `assets` 覆盖(本节不测那条名字判据)。
+      assets: { logo: 'logo.svg', ...assets },
+      desktop: {
+        product_name: 'Example SVG AI',
+        slug: 'example-svg-AI',
+        app_id: 'com.example.examplesvg',
+        home_dir: '.example-svg-harness',
+        deep_link_scheme: 'examplesvglink',
+        app_origin_scheme: 'examplesvg-app',
+      },
     }))
     for (const [fileName, content] of Object.entries(files)) {
-      writeFileSync(join(root, 'channels', 'official', fileName), content)
+      writeFileSync(join(dir, fileName), content)
     }
-    padChannelRepo(root) // 下限补位（同所有稳定 tag 夹具）
-    return root
+    // 品牌渠道的必需素材：安装器图标(真 PNG，另一条判据逐条校验形状)与 logo 文件。
+    // 本节只关心"扫描器对给定文件说了什么"，未指定的素材取官方几何(品牌渠道允许任意几何)。
+    copyFileSync(join(root, 'brands', 'official', 'app-icon.png'), join(dir, 'app-icon.png'))
+    if (!existsSync(join(dir, 'logo.svg'))) {
+      copyFileSync(join(root, 'brands', 'official', 'logo.svg'), join(dir, 'logo.svg'))
+    }
+    padChannelRepo(repo) // 下限补位（同所有稳定 tag 夹具）
+    return repo
   }
   const benignScriptishWords = [
     '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
@@ -3170,7 +3191,10 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   )
 
   // 恶意改名:内容是可执行 SVG,扩展名是 .png/.ico → 必须按内容嗅探拦下。
-  for (const [key, fileName] of [['logo', 'logo.png'], ['favicon', 'favicon.ico']]) {
+  // 键取 `logo_dark` 而不是 `logo`:assets.logo 的文件名被判据钉死成
+  // CHANNEL_ASSET_FILES.logo(改名成 logo.png 会先撞**名字**判据 ⇒ 用例就测不到内容嗅探);
+  // 内容嗅探对所有素材键走的是**同一段**代码,"扩展名不是免检牌"这条语义一点没变。
+  for (const [key, fileName] of [['logo_dark', 'logo.png'], ['favicon', 'favicon.ico']]) {
     const renamed = runChannels({
       source: svgGateRepo({ [key]: fileName }, { [fileName]: evilSvg }),
       refName: 'v2.7.0', dest: 'channels', list: 'q.list',
@@ -3192,7 +3216,8 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     Buffer.from(evilSvg, 'utf16le'),
   ])
   const utf16Gate = runChannels({
-    source: svgGateRepo({ logo: 'logo.png' }, { 'logo.png': utf16Evil }),
+    // 同"恶意改名"那条:用 logo_dark 承载 .png 扩展名,避免先撞 assets.logo 的名字判据。
+    source: svgGateRepo({ logo_dark: 'logo.png' }, { 'logo.png': utf16Evil }),
     refName: 'v2.7.0', dest: 'channels', list: 'r.list',
   })
   check(utf16Gate.status !== 0, 'UTF-16 编码的恶意 SVG 必须同样被拦下')
@@ -3839,7 +3864,10 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     'copy.client_tagline': 'Official harness',
     'copy.portal_welcome': 'Welcome',
     'assets.logo': 'logo.svg',
-    'assets.logo_dark': 'logo.svg',
+    // 暗色 logo 必须指向**真源的暗色文件**并把该文件放进渠道目录(2026-10-26 品牌字节判据:
+    // 公共渠道的素材副本必须与 brands/official/* 逐字节相同)。原先写 'logo.svg' 是合成值 —
+    // 那条值现在会被判据正确拦下(它是白天几何,不是暗色真源),所以夹具按真源同形补齐。
+    'assets.logo_dark': 'logo-dark.svg',
     'assets.favicon': 'logo.svg',
     'assets.accent': '#123456',
     'defaults.server_url': 'https://harness.example.com',
@@ -3876,7 +3904,9 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
     }
     mkdirSync(join(dir, 'channels', 'official'), { recursive: true })
     writeFileSync(join(dir, 'channels', 'official', 'channel.json'), JSON.stringify(official, null, 2))
-    for (const name of ['logo.svg']) {
+    // 官方渠道的素材按**真源同形**落盘：白天/暗色两件都是 brands/official 的逐字节副本
+    // (2026-10-26 品牌字节判据对公共渠道生效；夹具只补几何，不测这条判据本身)。
+    for (const name of ['logo.svg', 'logo-dark.svg']) {
       copyFileSync(join(root, 'brands', 'official', name), join(dir, 'channels', 'official', name))
     }
     padChannelRepo(dir)

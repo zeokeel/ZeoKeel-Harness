@@ -15,6 +15,7 @@
  */
 import fs from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 
     const dir = path.dirname(process.argv[2])
     const id = process.env.CHANNEL_ID
@@ -374,6 +375,45 @@ import path from "node:path"
       invalid.push("assets.logo(必须是渠道目录里的 " + LOGO_FILE_NAME
         + "：托盘位图与随包 favicon 只按这个文件名派生，声明别的名字会让同一个包装上两套品牌)")
     }
+    // ---- 公共渠道的品牌素材必须是品牌真源的逐字节副本(2026-10-26 生产事故)----
+    //
+    // 事故形态:公开仓 2026-10-21 换掉整套品牌几何(brands/official/*,commit
+    // 6ebd2916ed),渠道仓里公共渠道目录下的素材仍是**旧几何的字节**;发布链把它们
+    // 原样带进服务端镜像(server/Dockerfile 的 `COPY --from=channelassets` 整目录
+    // 复制)与客户端随包素材(brand-prepare.mjs 按文件名取 logo/app-icon 派生托盘位图
+    // 与随包 favicon),于是门户、管理端、登录页显示的是上一个项目的 mark ——
+    // 而既有判据全都只看字段与形状,**没有一条看字节**,流水线一路绿到线上。
+    // 判据来源:AGENTS.md「品牌几何唯一真源是 brands/official/logo.svg,所有图标/标识
+    // 必须由它派生(白天/夜间两版)」;这里把它变成"渠道包里出现的那份副本必须与真源
+    // 逐字节相同"。两个边界是刻意留的:
+    //   · **缺文件仍然合法** —— 公共渠道逐文件回落 brands/official 是设计行为
+    //     (brand-prepare.mjs 每次回落都有显式日志),不要求每个公共渠道目录都拷一份;
+    //   · **品牌渠道不适用** —— 它们的品牌就是客户自己的,在这里拦会当场误伤。
+    // 真源按**本脚本自身位置**解析(import.meta.url),不用 cwd:调用方不保证 cwd,
+    // 而"从 cwd 找 brands/"会在别的调用姿态下变成"读不到 ⇒ 跳过" —— 那正是这条
+    // 判据要终结的静默。报错只点名**字段 + 期望的真源路径**(两者都是公开仓里的
+    // 公开路径),不回显渠道侧的任何取值(与上面 slug/app_id 同一条输出纪律)。
+    const BRAND_AUTHORITY_DIR = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)), "..", "..", "brands", "official",
+    )
+    // 素材键 → 真源文件名。favicon 与 logo 同源:门户/管理端的图标位就是同一个 mark。
+    const BRAND_AUTHORITY_FILES = new Map([["logo", "logo.svg"], ["logo_dark", "logo-dark.svg"], ["favicon", "logo.svg"]])
+    // 比较器:actual 是渠道包里那份的字节,authorityName 是真源文件名。
+    const requireAuthorityBytes = (field, actual, authorityName) => {
+      let authority
+      try {
+        authority = fs.readFileSync(path.join(BRAND_AUTHORITY_DIR, authorityName))
+      } catch {
+        // 真源读不到 ⇒ 这条判据会静默退化成装饰。按"判据自身跑不起来不能算通过"处理。
+        invalid.push(field + "(无法判定:读不到品牌真源 brands/official/" + authorityName + ")")
+        return
+      }
+      if (!actual.equals(authority)) {
+        invalid.push(field + "(渠道目录里的副本必须与品牌真源 brands/official/" + authorityName
+          + " 逐字节相同:公开仓换品牌几何后渠道仓的副本没跟着换,发布链会把旧 mark 带进门户/管理端/客户端;"
+          + "修法=用真源文件原样覆盖渠道目录里的同名素材,不要手工编辑或重新导出)")
+      }
+    }
     // 未知素材字段**只计数**（键名不回显，R8-D-14；理由见下面那条 warning）。
     let unknownAssetKeys = 0
     for (const [key, value] of Object.entries(cfg?.assets ?? {})) {
@@ -399,6 +439,9 @@ import path from "node:path"
       // 素材的脚本特征检查:先嗅探内容(不看扩展名),.svg 扩展名照旧必查。
       // 内容不进日志:只报字段名与特征种类(元素/属性名)。
       const assetBuf = fs.readFileSync(path.join(dir, name))
+      // 公共渠道的品牌素材必须**逐字节**等于真源(理由见上面那段事故说明)。
+      const authorityName = publicChannel ? BRAND_AUTHORITY_FILES.get(key) : undefined
+      if (authorityName !== undefined) requireAuthorityBytes("assets." + key, assetBuf, authorityName)
       const utf16 = assetBuf.length >= 2
         && ((assetBuf[0] === 0xff && assetBuf[1] === 0xfe) || (assetBuf[0] === 0xfe && assetBuf[1] === 0xff))
       if (looksLikeMarkup(assetBuf) || utf16 || /\.svg$/i.test(name)) {
@@ -407,6 +450,19 @@ import path from "node:path"
           invalid.push("assets." + key + "(素材是 SVG/XML 文档且含脚本特征:" + [...new Set(hits)].slice(0, 3).join("/")
             + " —— 素材会被原样下发给浏览器,顶层打开即可执行脚本,请用图形工具重新导出为纯图形 SVG)")
         }
+      }
+    }
+    // 打包管线**按文件名**消费 logo(channel-constants.ts 的 CHANNEL_ASSET_FILES.logo,
+    // 外层 shell 以 CHANNEL_LOGO_FILE 传进来),**不要求** channel.json 声明 assets.logo ——
+    // 所以"目录里有 logo 素材但没写 assets.logo"这条路径同样会被 brand-prepare 拿去
+    // 派生托盘位图与随包 favicon。本次事故正是这个形态:公共渠道目录里躺着旧 logo,
+    // 而 assets.logo 压根没声明(公共渠道不强制),上面的逐字段判据一句话都没说。
+    if (publicChannel && declaredLogo === undefined) {
+      const defaultLogoPath = path.join(dir, LOGO_FILE_NAME || "logo.svg")
+      const defaultLogoStat = fs.lstatSync(defaultLogoPath, { throwIfNoEntry: false })
+      if (defaultLogoStat !== undefined && defaultLogoStat.isFile()) {
+        requireAuthorityBytes("assets.logo(未声明,但渠道目录里存在打包侧按文件名消费的 logo 素材)",
+          fs.readFileSync(defaultLogoPath), "logo.svg")
       }
     }
     // mac 图标管线要求:1024×1024、RGBA16、带 ICC(见 generate-mac-app-icon.mjs)。
@@ -423,6 +479,9 @@ import path from "node:path"
       invalid.push("app-icon.png(素材必须是渠道目录内的普通文件(符号链接一律拒绝),当前不是普通文件)")
     } else if (iconStat !== undefined) {
       const buf = fs.readFileSync(iconPath)
+      // 公共渠道的安装器图标同样必须是真源的逐字节副本(映射见上面的品牌素材说明):
+      // 它是 mac 图标管线的源,旧字节会一路变成 Dock/任务栏/安装器图标。
+      if (publicChannel) requireAuthorityBytes("app-icon.png", buf, "app-icon.png")
       const png = buf.length > 33 && buf.readUInt32BE(0) === 0x89504e47
       if (!png) invalid.push("app-icon.png(不是 PNG)")
       else {

@@ -1432,6 +1432,27 @@ export function tabCounts(items: readonly CapabilityItem[]): Record<SourceTab, n
 }
 
 /**
+ * 分段角标 = catalog 行 + 会在网格里额外出现的「安装」入口卡（F-54 显示修复）。
+ *
+ * update 卡与本机已装技能同名，`planSectionCards` 会去重成一张，因此**不计入**；
+ * 只有 install 卡（本机没有的）会让网格多出一张卡。计数不含搜索/类型筛选，
+ * 角标表达的是该分段总量。
+ */
+export function tabCountsWithBuiltin(
+  items: readonly CapabilityItem[],
+  builtinCards: readonly { action: 'install' | 'update' }[],
+): Record<SourceTab, number> {
+  const base = tabCounts(items)
+  const installs = builtinCards.filter(card => card.action === 'install').length
+  return { ...base, all: base.all + installs, market: base.market + installs }
+}
+
+/** 结果计数 = 当前网格的 catalog 卡 + 额外内置入口卡（与角标同一口径）。 */
+export function resultCountWithBuiltin(itemCount: number, builtinCount: number): number {
+  return itemCount + builtinCount
+}
+
+/**
  * 页脚/详情里的动作判定（`planCardAction` + 分段口径的收窄，**唯一入口**）。
  *
  * 只加一条分段语义（2026-10-26）：在「我上传」里，**没有本机副本的 pending/rejected
@@ -2298,9 +2319,6 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
   /** 已归并的全量行（卡片去重的唯一位置；计数/详情/分段都从它派生）。 */
   const mergedAll = useMemo(() => mergeItems(items), [items])
 
-  /** 四个分段的角标计数（按归并行算，同 kind:name 只算一次）。 */
-  const counts = useMemo(() => tabCounts(mergedAll), [mergedAll])
-
   /**
    * 当前分段可见的行：分段 → 搜索 → 类型 → 排序。搜索口径与内置技能一致
    * （name/displayName/description，大小写不敏感）。
@@ -2326,6 +2344,42 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     () => new Set(mergedAll.filter(i => i.kind === 'skill' && i.source === 'local').map(i => i.name)),
     [mergedAll],
   )
+
+  /**
+   * 内置技能也会以卡片出现在网格里，所以分段计数/结果计数不能只数 catalog 行：
+   * 修前「市场」角标是 0、网格里却有一张可安装的平台内置卡（E2E 截图可见）。
+   *
+   * 计数用**不带搜索/类型筛选**的全量计划（与用户当前输入无关，角标表达总量）；
+   * 已安装且同版本的内置技能本机已有卡片，planBuiltinCards 不会出卡；update 卡
+   * 与本机卡同名，按 planSectionCards 的去重口径不重复计数，只有 install 卡计入。
+   */
+  const builtinPlannedAll = useMemo(() => planBuiltinCards({
+    rows: builtin.rows,
+    installedNames: new Set([...builtin.installed, ...localSkillNames]),
+    installedVersions: builtin.versions,
+    query: '',
+    kindFilter: 'all',
+    busy: builtin.busy,
+    failed: builtin.failed,
+  }), [builtin.rows, builtin.installed, builtin.versions, builtin.busy, builtin.failed, localSkillNames])
+
+  /** 四个分段的角标计数（catalog 行 + 市场里额外出现的 install 入口卡）。 */
+  const counts = useMemo(
+    () => tabCountsWithBuiltin(mergedAll, builtinPlannedAll),
+    [mergedAll, builtinPlannedAll],
+  )
+
+  /** 当前网格会额外渲染的 install 入口卡（已在本机目录里的同名技能不重复计数）。 */
+  const visibleBuiltinCount = useMemo(() => {
+    if (tab === 'own') return 0
+    const cards = tab === 'market'
+      ? builtinCardsForTab(builtinPlannedAll, 'market')
+      : tab === 'installed'
+        ? builtinCardsForTab(builtinPlannedAll, 'mine')
+        : builtinPlannedAll
+    const names = new Set(mergedAll.map(item => `${item.kind}:${item.name}`))
+    return cards.filter(card => !names.has(`skill:${card.skill.name}`)).length
+  }, [tab, mergedAll, builtinPlannedAll])
 
   /** 各分段"决定页面骨架"的分区（own 分区还要本机分区补草稿）。 */
   const primarySectionsFor = (which: SourceTab): SectionKey[] =>
@@ -2696,7 +2750,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
               <p style={NAME} title={title}>{title}</p>
               <Chip tone="neutral" plain>{t('capability.builtinBadge')}</Chip>
             </div>
-            <p style={SLUG}>{skill.author !== undefined && skill.author !== '' ? `v${skill.version} · ${skill.author}` : `v${skill.version}`}</p>
+            <p style={SLUG}>{`v${skill.version}`}</p>
           </div>
         </div>
         {skill.description !== undefined && skill.description !== '' && (
@@ -2953,7 +3007,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
             </span>
             {readOnly && <Chip tone="warn" title={t('capability.readOnlyHint')}>{t('capability.readOnlyBadge')}</Chip>}
             <span style={{ ...META, margin: 0 }} data-role="capability-result-count">
-              {t('capability.resultCount', { count: String(visible.length) })}
+              {t('capability.resultCount', { count: String(resultCountWithBuiltin(visible.length, visibleBuiltinCount)) })}
             </span>
           </div>
         ) : undefined}

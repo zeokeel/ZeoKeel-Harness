@@ -50,7 +50,7 @@ export const zh = {
   // 空态主操作（筛选/搜索生效时）：清除筛选，回到该分段的全部内容。
   'capability.clearFilters': '清除筛选',
   // 类型筛选
-  'capability.filterAll': '全部',
+  'capability.filterAll': '全部类型',
   'capability.filterSkill': '技能',
   'capability.filterAgent': '智能体',
   'capability.searchPlaceholder': '搜索技能/智能体…',
@@ -206,7 +206,7 @@ export const en: Record<keyof typeof zh, string> = {
   'capability.refresh': 'Refresh',
   // Primary action when a filter/search hides everything.
   'capability.clearFilters': 'Clear filters',
-  'capability.filterAll': 'All',
+  'capability.filterAll': 'All types',
   'capability.filterSkill': 'Skills',
   'capability.filterAgent': 'Agents',
   'capability.searchPlaceholder': 'Search skills/agents…',

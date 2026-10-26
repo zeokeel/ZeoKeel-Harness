@@ -381,6 +381,8 @@ rejected --approve--> 409 ARCHIVE_CLEARED
 | 客户端设计 | 四分段 + 计数、类型 chips、搜索、排序、网格/列表、卡片密度、整页详情、骨架卡、空态主操作 | ✅ 已实现（`CapabilityCenterPanel.tsx`） |
 | 客户端功能 | F-07 卸载后立即移除/重载、F-08 我上传（`source=own`，pending/rejected 可见）、F-09 官方可更新、F-10 409 仅 `LOCAL_CONTENT` 进确认、F-11 轮询/刷新三区、F-29 `is_owner` 缺失不再误判 | ✅ 已实现 |
 | 客户端动作 | 卡片/列表/详情共用 `planCardActionForTab`；key 统一 `kind:name`；`CapabilityDetailDialog` 保留导出兼容 | ✅ |
+| Wave2 后端/管理端 | F-12 跨层 E2E、F-13 审核三面收敛、F-15 归属/发布锁、F-16 存在性泄漏、F-18/F-39 索引+CHECK、F-21/F-48/F-50/F-51/F-53 管理端、F-30/F-32/F-33/F-38 客户端 | ✅ |
+| 发版前终审 | 无 P0/P1 残留；已知限制见 §13.2（F-19/F-20/F-24/F-25/F-26 产品决定） | 条件 YES |
 | 管理端显示 | D-01~D-16：`display_name` 投影与回退、`quality`/`source` 徽章、组织行归并、转移/确认/弹窗标题、可编辑展示名、审批预览 key、空版本/千分位/服务器时间、展示名搜索排序、作者/归属列头解释、内置 source、锁名说明 | ✅ 已实现 |
 | 未改 API 语义 | 只增 DTO 字段；owner 仍只走「转移归属」；版本/审批状态机未改 | ✅ |
 
@@ -397,8 +399,8 @@ rejected --approve--> 409 ARCHIVE_CLEARED
 - **F-27**：归属冲突码文档 404/409 混用（文档债）。
 - **F-28**：死分支/死字段残余（`enabled` 等；影响低）。
 - **F-37**：30s 轮询回退安装态的时序判据（seq 守卫已有，极端时序仍需注入测试）。
-- **F-42**：同名冲突四码统一（若本轮未完全收敛，标为残余）。
-- **F-47**：常量复制/字面量清理（若未完全收敛，标为残余）。
+- **F-42**：同名冲突码仍有残余 —— `createSkillAdmin` 重名回 400 `VALIDATION`，而统一发布内核回 409 `NAME_TAKEN`（2026-10-26 终审实测，不是“未验证”）。
+- **F-47**：`agentshare` 已复用 `sharedskills.MaxBodyBytes`（本轮收敛）；残余是 MCP 等其它字面量/常量复制（不影响动作面，按非阻断债处理）。
 - **F-54**：错误码全量本地化、详情快照、score 展示等残余。
 - **F-55**：测试寄居/路由文档/发布规范/release note/dirty 排除/轮询回退等文档债。
 - **真机 E2E**：集成脚本 `integration-tests/capability-lifecycle.py` 已入库并通过静态/自检守卫，但**真机运行**需要 Docker+真 server+Xvfb；`e2e-client.mjs` 已更新未跑。

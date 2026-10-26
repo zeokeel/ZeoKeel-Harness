@@ -1,0 +1,51 @@
+{
+  "id": "2026-10-26-capability-center-counts-polish",
+  "status": "verified",
+  "intent": {
+    "zh": "修 E2E 截图暴露的能力中心计数/筛选显示问题：分段角标与结果计数没有把市场里的平台内置「安装」入口卡算进去（「市场 0」但网格有 1 张卡、「全部 5」实际 6 张），类型筛选「全部」与分段「全部」重名，内置卡重复显示来源；并补先红回归用例与终审文档口径。",
+    "en": "Fix capability-center count/filter display issues exposed by the E2E screenshot: builtin install entry cards were not counted in tab/result counts, the type filter reused the all label, and builtin cards duplicated their source; add regression tests and align final-audit doc status."
+  },
+  "modules": [
+    "packages/host/capability-center/src/client/CapabilityCenterPanel.tsx",
+    "packages/host/capability-center/src/client/locales.ts",
+    "packages/host/capability-center/tests/capability-core.spec.ts",
+    "docs/planning/2026-10-26-capability-center-flow-inventory.md"
+  ],
+  "acceptance": [
+    {
+      "criterion": "能力中心包 build+88 tests 通过；新增 tabCountsWithBuiltin/resultCountWithBuiltin 回归（install 计入、update 不重复）",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-capability-center check"
+    },
+    {
+      "criterion": "真机 E2E 全部通过（含能力中心四个分段/详情/内置卡计数）",
+      "evidence": "test",
+      "command": "xvfb-run -a corepack yarn workspace dsh-plugin-desktop e2e:client"
+    },
+    {
+      "criterion": "全仓 37 个任务全绿",
+      "evidence": "guard",
+      "command": "corepack yarn check"
+    }
+  ],
+  "risk": "仅显示层计数/文案；不改动作判定。E2E 需 packaged app；回滚到 d4d9f98389。",
+  "rollback": "git checkout d4d9f98389 -- packages/host/capability-center/src/client/CapabilityCenterPanel.tsx packages/host/capability-center/src/client/locales.ts packages/host/capability-center/tests/capability-core.spec.ts docs/planning/2026-10-26-capability-center-flow-inventory.md",
+  "verification": [
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-capability-center check",
+      "result": "exit 0；5 files / 88 tests（含 tabCountsWithBuiltin/resultCountWithBuiltin 回归）"
+    },
+    {
+      "command": "xvfb-run -a corepack yarn workspace dsh-plugin-desktop e2e:client",
+      "result": "exit 0；E2E 全部通过（能力中心四分段/详情/计数截图复核：全部6、市场1、共6/1）"
+    },
+    {
+      "command": "corepack yarn check",
+      "result": "exit 0；计划 37 / 实跑 37，37 通过、0 失败、0 跳过，总耗时 343.3s"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs && node scripts/check-migration-range.mjs",
+      "result": "exit 0；7 条变更记录合规；迁移区间 0001–0090 一致"
+    }
+  ]
+}

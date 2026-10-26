@@ -44,6 +44,8 @@ import {
   planCardActionForTab,
   readFailureEnvelope,
   tabCounts,
+  tabCountsWithBuiltin,
+  resultCountWithBuiltin,
   uninstallEndpoint,
   uninstallRequestUrl,
   uploadActionLabelKey,
@@ -187,6 +189,17 @@ describe('itemsForTab / isOwnUploadItem：四分段与作者面证据', () => {
   it('tabCounts 按归并行计数（同一 kind:name 只算一次）', () => {
     const counts = tabCounts(mergeItems([catalogRow({ installed: true }), localRow()]))
     expect(counts).toMatchObject({ all: 1, installed: 1, market: 1 })
+  })
+
+  it('tabCountsWithBuiltin：install 卡计入全部/市场，update 卡不重复计数', () => {
+    const items = mergeItems([catalogRow({ installed: true }), localRow()])
+    const counts = tabCountsWithBuiltin(items, [{ action: 'install' }, { action: 'update' }])
+    // install 卡是网格里多出来的一张；update 卡与本机已装行同名、被 planSectionCards 去重。
+    expect(counts.all).toBe(2)
+    expect(counts.market).toBe(2)
+    expect(counts.installed).toBe(1)
+    expect(resultCountWithBuiltin(counts.all, 0)).toBe(2)
+    expect(resultCountWithBuiltin(1, 1)).toBe(2)
   })
 })
 

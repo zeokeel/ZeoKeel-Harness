@@ -77,12 +77,17 @@ func CurrentMarketReleaseFor(db *sql.DB, kind, appID string, withArchive bool) (
 	return currentRelease(db, kind, appID, withArchive)
 }
 
-// currentRelease 取某 App 的展示版本:最高 approved 且未软删。
-func currentRelease(db *sql.DB, kind, appID string, withArchive bool) (*Release, error) {
-	list, err := ListReleases(db, kind, appID)
-	if err != nil {
-		return nil, err
-	}
+// PickCurrentRelease 从版本清单里选出**生效版本**:版本号最大的 approved 且未软删。
+//
+// 这是「展示/交付版本」的**唯一判定实现**(F-04,能力中心审计 2026-10-26):
+// 目录投影(apps.title/description)、市场下载(GetSkill / CurrentMarketReleaseFor)、
+// 能力中心列表都消费同一个答案。此前的缺陷是投影另写了一条 `ORDER BY id DESC`
+// —— 版本号乱序批准时(先批准 v2.0.0、后批准补发的 v1.9.0),投影指向 id 更大
+// 的旧版本 ⇒ 目录标题/描述与员工实际下载到的版本分叉。
+//
+// 为什么是 semver 最大而不是 id 最大:交付面是 semver 最大(客户端凭版本号比较
+// 升级),投影必须与交付同口径;id 只表示**入库顺序**,与新旧无关。
+func PickCurrentRelease(list []Release) *Release {
 	var best *Release
 	for i := range list {
 		r := list[i]
@@ -93,6 +98,16 @@ func currentRelease(db *sql.DB, kind, appID string, withArchive bool) (*Release,
 			best = &list[i]
 		}
 	}
+	return best
+}
+
+// currentRelease 取某 App 的展示版本:最高 approved 且未软删。
+func currentRelease(db *sql.DB, kind, appID string, withArchive bool) (*Release, error) {
+	list, err := ListReleases(db, kind, appID)
+	if err != nil {
+		return nil, err
+	}
+	best := PickCurrentRelease(list)
 	if best == nil {
 		return nil, nil
 	}

@@ -480,8 +480,12 @@ func TestReplaceGrantsUnknownGroup(t *testing.T) {
 	}
 }
 
-// TestDeleteClearsGrants: 硬删技能行后,其全部授权必须级联清理
+// TestDeleteClearsGrants: 删掉 name 下**最后一个**版本后,其全部授权必须级联清理
 // (旧授权不得复活重建的资源)——修复 2026-08-28(prod 演示删除后残留孤儿授权)。
+//
+// 2026-10-26(F-01):版本删除只对**未生效**版本(pending/rejected)开放 ——
+// approved 版本删除会不可恢复地销毁归档字节,服务端回 409。因此本用例改用
+// 待审版本验证同一条授权级联语义(级联判据与审核状态无关,只与"还剩几个版本"有关)。
 func TestDeleteClearsGrants(t *testing.T) {
 	r, db, adminHdr, userHdr, _ := setup(t)
 	defer db.Close()
@@ -501,15 +505,8 @@ func TestDeleteClearsGrants(t *testing.T) {
 		}
 	}
 	post()
-	wA := httptest.NewRecorder()
-	reqA := httptest.NewRequest("POST", "/api/server/admin/shared-skills/del-grant/1.0.0/approve", nil)
-	for k, v := range adminHdr {
-		reqA.Header.Set(k, v)
-	}
-	r.ServeHTTP(wA, reqA)
-	if wA.Code != 200 {
-		t.Fatalf("approve = %d", wA.Code)
-	}
+	// 待审版本即可见授权操作(授权按 name 生效,与审核状态无关);
+	// F-01 之后它也是**唯一可删**的版本状态。
 	wG := httptest.NewRecorder()
 	reqG := httptest.NewRequest("PUT", "/api/server/admin/shared-skills/del-grant/grants", strings.NewReader(`{"groups":["全员"]}`))
 	reqG.Header.Set("Content-Type", "application/json")
@@ -898,19 +895,15 @@ func TestDeleteVersionKeepsGrantsWhileOthersRemain(t *testing.T) {
 		r.ServeHTTP(w, req)
 		return w.Code
 	}
+	// 2026-10-26(F-01):版本删除只对**未生效**版本开放,因此这里刻意保持两个
+	// 版本都是待审 —— 授权级联的判据(还剩几个未删版本)与审核状态无关。
 	upload("1.0.0")
-	if code := admin("POST", "/api/server/admin/shared-skills/multi-grant/1.0.0/approve", ""); code != 200 {
-		t.Fatalf("approve v1 = %d", code)
-	}
 	upload("2.0.0")
-	if code := admin("POST", "/api/server/admin/shared-skills/multi-grant/2.0.0/approve", ""); code != 200 {
-		t.Fatalf("approve v2 = %d", code)
-	}
 	if code := admin("PUT", "/api/server/admin/shared-skills/multi-grant/grants", `{"groups":["全员"]}`); code != 200 {
 		t.Fatalf("grant = %d", code)
 	}
 
-	// 删历史版本 → 授权保留(2.0.0 仍可被授权用户访问)
+	// 删掉一个版本 → 授权保留(2.0.0 仍是未删版本,授权按 name 生效)
 	if code := admin("DELETE", "/api/server/admin/shared-skills/multi-grant/1.0.0", ""); code != 200 {
 		t.Fatalf("delete v1 = %d", code)
 	}

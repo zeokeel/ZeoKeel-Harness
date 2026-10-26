@@ -290,8 +290,19 @@ func listAgentPresetsByFace(db *sql.DB, viewer string, granted []string, ownOnly
 }
 
 // DeleteAgentPresetByVersion 删除指定版本(软删)。
+//
+// ⚠️ 这是**通用原语**(播种/数据修复用):它不区分审核状态。产品的
+// 「删除版本」入口必须走 DeleteAgentPresetVersion —— 已通过审核的版本
+// 不可删除(F-01,能力中心 P0:删除 = 不可恢复地销毁归档字节)。
 func DeleteAgentPresetByVersion(db *sql.DB, name, version string) error {
 	return SoftDeleteRelease(db, AppKindAgent, name, version)
+}
+
+// DeleteAgentPresetVersion 是**产品删除入口**的语义:只允许删除尚未生效的
+// 版本(pending/rejected)。approved → ErrReleaseApprovedNotDeletable。
+// 判定实现只有一份,见 DeleteReleaseUnlessApproved。
+func DeleteAgentPresetVersion(db *sql.DB, name, version string) error {
+	return DeleteReleaseUnlessApproved(db, AppKindAgent, name, version)
 }
 
 // ValidAgentQuality 质量标记合法值。

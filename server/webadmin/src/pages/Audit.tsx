@@ -161,6 +161,7 @@ export const ACTION_LABEL: Record<string, string> = {
   ldap_sync: 'LDAP 同步',
   // 能力中心归属转移与报表订阅。
   app_owner_transfer: '转移能力归属',
+  app_delete: '释放空壳能力名称',
   report_subscription_create: '新建报表订阅',
   report_subscription_update: '更新报表订阅',
   report_subscription_delete: '删除报表订阅',

@@ -576,7 +576,9 @@ func decide(db *sql.DB, status serverstore.SharedSkillStatus, auditAction string
 				"该版本归档已在拒绝时清理,无法再通过审核(拒绝即释放存储):请让作者上传新版本")
 			return
 		}
-		if err := serverstore.SetReleaseStatusForReview(db, serverstore.AppKindSkill, name, version, string(status), reason); err != nil {
+		// F-14(2026-10-26):技能/智能体审核用 IfWritable 变体 —— 下架冻结写进
+		// UPDATE 的 WHERE(`AND apps.enabled = 1`),不再是 check-then-act。
+		if err := serverstore.SetReleaseStatusForReviewIfWritable(db, serverstore.AppKindSkill, name, version, string(status), reason); err != nil {
 			if errors.Is(err, serverstore.ErrReleaseArchiveCleared) {
 				serverauth.WriteError(c, http.StatusConflict, "ARCHIVE_CLEARED",
 					"该版本归档已在拒绝时清理,无法再通过审核(拒绝即释放存储):请让作者上传新版本")
@@ -588,6 +590,13 @@ func decide(db *sql.DB, status serverstore.SharedSkillStatus, auditAction string
 			if errors.Is(err, serverstore.ErrReleaseApprovedNotRejectable) {
 				serverauth.WriteError(c, http.StatusConflict, serverstore.CodeReleaseNotRejectable,
 					serverstore.MsgReleaseNotRejectable+"。"+serverstore.HintReleaseNotRejectable)
+				return
+			}
+			// F-14:并发下「预检时还上架、落库时已下架」⇒ 409 APP_DELISTED
+			// (与上面的预检同码同文案;不是 500 服务器错误)。
+			if errors.Is(err, serverstore.ErrAppDelisted) {
+				serverauth.WriteError(c, http.StatusConflict, appstore.CodeAppDelisted,
+					"该技能已下架，无法通过审核：请先重新上架再审核")
 				return
 			}
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "更新失败")
@@ -611,21 +620,41 @@ func decide(db *sql.DB, status serverstore.SharedSkillStatus, auditAction string
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
+
+// remove 删除一个**尚未生效**的版本(pending/rejected)。
+//
+// F-01(能力中心 P0,2026-10-26):已通过审核的版本**不可删除** —— 删除会在
+// 同一条 UPDATE 里把 archive 置 NULL(不可恢复),正在服务的版本立刻无法安装,
+// 而 apps 投影仍停在旧标题上。判定唯一实现在 serverstore.DeleteReleaseUnlessApproved
+// (SQL 谓词 `status <> 'approved'`),此处只做错误码映射;要停止提供请用下架
+// (PUT …/:name/enabled,可逆)。
+//
+// 删除后重算投影:apps 行是目录对全员下发的投影(app_releases 才是真相),
+// 任何版本增减都让"投影 = 最高 approved 版本"这条不变量重新成立一次。虽然
+// pending/rejected 本就不参与投影,这里仍显式重算 —— 与 decide/approve 同一
+// 收尾纪律(缺了它,历史上被写脏的投影行没有任何自愈路径)。
 func remove(db *sql.DB, cacheDir string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name, version := c.Param("name"), c.Param("version")
 		if !requireOrgSkill(c, db, name) {
 			return
 		}
-		if err := serverstore.DeleteSharedSkill(db, name, version); err != nil {
+		if err := serverstore.DeleteSharedSkillVersion(db, name, version); err != nil {
 			if errors.Is(err, serverstore.ErrNotFound) {
 				serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "技能不存在")
+				return
+			}
+			// F-01:approved 版本不可删除(409 + 明确错误码 + 指路可逆动作)。
+			if errors.Is(err, serverstore.ErrReleaseApprovedNotDeletable) {
+				serverauth.WriteError(c, http.StatusConflict, serverstore.CodeReleaseNotDeletable,
+					serverstore.MsgReleaseNotDeletable+"。"+serverstore.HintReleaseNotDeletable)
 				return
 			}
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "删除失败")
 			return
 		}
-		_ = serverstore.DeleteSharedSkillArchive(db, name, version)
+		// 归档已在上面那条软删 UPDATE 里随 deleted_at 一起置 NULL(原子),
+		// 不再补第二条 UPDATE —— 两条语句之间正是被并发 approve 穿过的窗口。
 		// 授权清理:授权按 name 生效(同名多版本共享),因此只有该 name 下
 		// **已无其它未删版本**时才清空——P2-10:此前删一个历史版本即静默
 		// 撤销全员对剩余版本的访问。计数失败时保守跳过(不误撤销)。
@@ -638,6 +667,13 @@ func remove(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		safe := safeName(name, version)
 		if safe != "" && util.SafePathSegment(name) && util.SafePathSegment(version) {
 			_ = os.Remove(filepath.Join(cacheDir, safe))
+		}
+		// 投影重算失败不回滚删除(已经落库),如实回 500 请管理员重试:
+		// 重试会再次走到这里,幂等。
+		if _, perr := serverstore.RecomputeAppProjection(db, serverstore.AppKindSkill, name); perr != nil {
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL",
+				"版本已删除,但技能投影更新失败(请重试一次)")
+			return
 		}
 		_ = serverstore.AuditLog(db, adminUsername(c), "shared_skill_delete", name+"@"+version)
 		c.JSON(http.StatusOK, gin.H{"ok": true})

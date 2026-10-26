@@ -54,7 +54,11 @@ func ReviewPending(db *sql.DB, kind, appID, version string, approve bool, reason
 		if !dist.Writable() {
 			return ErrAppDelisted
 		}
-		if err := SetReleaseStatusForReview(db, kind, appID, version, ReleaseStatusApproved, ""); err != nil {
+		// F-14(2026-10-26):上面的 Writable() 预检只为友好文案;并发下的真正防线
+		// 是下面这条 UPDATE 里的 `AND apps.enabled = 1`(IfWritable 变体)——
+		// 预检与落库之间管理员按下「下架」时,approve 会得到 ErrAppDelisted 而不是
+		// 产出一个「已批准但没人看得见」的版本。
+		if err := SetReleaseStatusForReviewIfWritable(db, kind, appID, version, ReleaseStatusApproved, ""); err != nil {
 			return err
 		}
 	} else {

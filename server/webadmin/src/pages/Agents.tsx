@@ -16,7 +16,7 @@ import { GrantDialog } from '../components/grant-dialog'
 import { ArchivePreviewDialog, ArchivePreviewData } from '../components/archive-preview-dialog'
 import { Download, UserCog, Bot, Upload, Lock } from 'lucide-react'
 import { agentRequest, grantsBase, previewFileBase } from '../lib/capability-endpoints'
-import { displayNameOf as agentDisplayName, formatCount, versionText } from '../lib/capability-display'
+import { dedupeLatestByName, displayNameOf as agentDisplayName, formatCount, versionText } from '../lib/capability-display'
 
 interface AgentRow {
   name: string
@@ -144,11 +144,11 @@ export default function Agents() {
         request(`${ADMIN_API}/capabilities/approvals?status=approved&type=agent`).catch(() => ({ approvals: [] })),
       ])
       const merged: AgentRow[] = (d.agents ?? []).map(toMarketAgent)
-      for (const row of (approvals.approvals ?? []) as {
+      for (const row of dedupeLatestByName((approvals.approvals ?? []) as {
         name: string; version: string; display_name: string; description: string
         author: string; owner?: string; enabled?: boolean; downloads?: number
         official?: boolean; quality?: string
-      }[]) {
+      }[])) {
         // 归属取服务端下发的 owner(apps.owner),**不是** author(本行上传者);
         // 上下架状态透传服务端值,缺省按"未知即未上架"(绝不回落 true)。
         merged.push({
@@ -301,6 +301,22 @@ export default function Agents() {
     }
   }
 
+  /** F-02：释放只有身份、没有版本的智能体空壳名称（服务端守卫同技能）。 */
+  const releaseShell = async (a: AgentRow): Promise<void> => {
+    if (busy !== null) return
+    if (!window.confirm(`释放空壳「${agentDisplayName(a)}」的名称？\n\n该名称下没有任何版本，释放后可重新登记；官方归属或已有版本会被服务端拒绝。`)) return
+    setBusy(`release-${a.name}`)
+    setOpError('')
+    try {
+      await request(`${ADMIN_API}/apps/agent/${encodeURIComponent(a.name)}`, { method: 'DELETE' })
+      await load()
+    } catch (err: any) {
+      setOpError(`释放名称失败：${err.message}`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   /** P3 D-12：管理端搜索按展示名/目录名/描述，与卡片标题口径一致。 */
   const visibleAgents = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('zh-CN')
@@ -420,6 +436,14 @@ export default function Agents() {
                               onClick={() => { setUploadAgent(a); setUploadVersion(''); setUploadFile(null); setUploadErr('') }}
                             >上传新版</Button>
                           </span>
+                          {(!a.version || a.version === '') && (
+                            <Button
+                              variant="destructive"
+                              disabled={busy !== null}
+                              title="该智能体只有身份、没有任何版本；释放名称后可重新登记"
+                              onClick={() => { void releaseShell(a) }}
+                            >{busy === `release-${a.name}` ? '释放中…' : '释放名称'}</Button>
+                          )}
                           <Button
                             variant="outline"
                             disabled={editReq === null}

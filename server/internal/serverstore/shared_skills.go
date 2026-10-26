@@ -233,8 +233,20 @@ func IncrementSharedSkillDownload(db *sql.DB, name, version string) (bool, error
 }
 
 // DeleteSharedSkill 删除一个版本 = 软删(版本号永久占位,不可复用)。
+//
+// ⚠️ 这是**通用原语**(播种/数据修复用):它不区分审核状态。产品的
+// 「删除版本」入口必须走 DeleteSharedSkillVersion —— 已通过审核的版本
+// 不可删除(F-01,能力中心 P0:删除 = 不可恢复地销毁归档字节)。
 func DeleteSharedSkill(db *sql.DB, name, version string) error {
 	return SoftDeleteRelease(db, AppKindSkill, name, version)
+}
+
+// DeleteSharedSkillVersion 是**产品删除入口**的语义:只允许删除尚未生效的
+// 版本(pending/rejected)。approved → ErrReleaseApprovedNotDeletable(调用方
+// 映射 409 RELEASE_APPROVED_NOT_DELETABLE)。判定实现只有一份,见
+// DeleteReleaseUnlessApproved。
+func DeleteSharedSkillVersion(db *sql.DB, name, version string) error {
+	return DeleteReleaseUnlessApproved(db, AppKindSkill, name, version)
 }
 
 // SharedSkillVersionCount 返回该 name 下剩余的未软删版本数。

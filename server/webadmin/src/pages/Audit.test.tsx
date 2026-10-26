@@ -531,7 +531,9 @@ function goSourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name)
     if (entry.isDirectory()) {
-      if (['node_modules', 'webadmin', 'data', '.git', 'vendor'].includes(entry.name)) continue
+      // `temp/` 是本地测试缓存（如 GOMODCACHE），不是服务端写入面；扫进去会把
+      // 第三方模块的 Go 源码当成审计真源（2026-10-26 实测）。
+      if (['node_modules', 'webadmin', 'data', '.git', 'vendor', 'temp'].includes(entry.name)) continue
       goSourceFiles(full, out)
     } else if (entry.name.endsWith('.go') && !entry.name.endsWith('_test.go')) {
       out.push(full)

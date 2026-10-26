@@ -30,7 +30,9 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	g := r.Group(base, serverauth.AdminAuth(db))
 	serverauth.AdminRoute(g, "GET", "/skills", serverauth.PermMarketRead, func(c *gin.Context) { listSkillsAdmin(c, db) })
 	serverauth.AdminRoute(g, "POST", "/skills", serverauth.PermMarketWrite, func(c *gin.Context) { createSkillAdmin(c, db) })
-	serverauth.AdminRoute(g, "POST", "/skills/:name/archive", serverauth.PermMarketWrite, func(c *gin.Context) { uploadSkillArchiveAdmin(c, db, cacheDir) })
+	// F-05:直发即 approved,与审批同权(capability:write);生产路由唯一真源在
+	// internal/router,本函数是测试镜像,必须逐条同权。
+	serverauth.AdminRoute(g, "POST", "/skills/:name/archive", serverauth.PermCapabilityWrite, func(c *gin.Context) { uploadSkillArchiveAdmin(c, db, cacheDir) })
 	serverauth.AdminRoute(g, "PUT", "/skills/:name", serverauth.PermMarketWrite, func(c *gin.Context) { updateSkillAdmin(c, db, cacheDir) })
 	serverauth.AdminRoute(g, "DELETE", "/skills/:name", serverauth.PermMarketWrite, func(c *gin.Context) { deleteSkillAdmin(c, db) })
 	// 重新上架(审计 A5-M1: 下架不可逆曾导致误下架无法恢复)
@@ -42,7 +44,7 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	// 此前只有 POST …/archive(上传新版),市场行的那个链接必 404。
 	serverauth.AdminRoute(g, "GET", "/skills/:name/archive", serverauth.PermMarketRead, func(c *gin.Context) { downloadSkillArchiveAdmin(c, db) })
 	// 存量规范化(决策 2026-09-01 §八):产出符合发布契约的新版本(patch+1)。
-	serverauth.AdminRoute(g, "POST", "/skills/:name/normalize", serverauth.PermMarketWrite, func(c *gin.Context) { normalizeSkillAdmin(c, db, cacheDir) })
+	serverauth.AdminRoute(g, "POST", "/skills/:name/normalize", serverauth.PermCapabilityWrite, func(c *gin.Context) { normalizeSkillAdmin(c, db, cacheDir) })
 	// 授权管理(严格默认:未授权不可见/不可下载)
 	serverauth.AdminRoute(g, "GET", "/skills/:name/grants", serverauth.PermMarketRead, func(c *gin.Context) { listSkillGrants(c, db) })
 	serverauth.AdminRoute(g, "PUT", "/skills/:name/grants", serverauth.PermMarketWrite, func(c *gin.Context) { replaceSkillGrants(c, db) })
@@ -708,6 +710,16 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 	}
 	// 规范化产出的是新版本:版本号必须体现在包内(包内即真相)。
 	normalized = forceVersion(normalized, nextVersion)
+	// F-03(能力中心审计 2026-10-26):规范化必须服从**发布内核的硬规则** ——
+	// 此前它绕过内核直接 `ReplaceSkillArchive` → CreateRelease(approved),既不判
+	// 版本递增/同版本,也不判 changelog、下架冻结与官方/能力锁 ⇒ 规范化成了
+	// 一条后门发布路径。现在落库改走 appstore.Publish(AdminPublish=true),由
+	// 内核原子判定;本函数只负责把包改造成合规形态。
+	//
+	// changelog(非首个版本必填)不能凭空编造语义内容,但规范化**确实**发生了
+	// 可列出的改动,因此把 changes 作为真实的更新说明写进 frontmatter;包内
+	// 已有非空 changelog 时保持原值(作者写的说明优先)。
+	normalized = ensureChangelogField(normalized, normalizeChangelog(changes))
 	files["SKILL.md"] = []byte(normalized)
 	// 溯源目录是客户端本地产物,不应存在于归档中。
 	for path := range files {
@@ -731,7 +743,8 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		return
 	}
 	// 自检:规范化产物必须通过与上传同一套严格校验,否则不入库。
-	if _, perr := skillmanifest.Parse(entries, md, s.Name); perr != nil {
+	man, perr := skillmanifest.Parse(entries, md, s.Name)
+	if perr != nil {
 		var me *skillmanifest.Error
 		if errors.As(perr, &me) {
 			serverauth.WriteError(c, skillmanifest.StatusFor(me.Code), me.Code,
@@ -741,20 +754,100 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "规范化后仍不合规")
 		return
 	}
-	if err := serverstore.ReplaceSkillArchive(db, s.Name, nextVersion, checksum, rebuilt); err != nil {
+	// F-03:发布内核是唯一的落库入口 —— 版本递增/同版本、changelog、下架冻结、
+	// 官方锁、能力锁、跨渠道同名互斥全部在 Publish 里原子判定(AdminPublish=true
+	// 表示这次写入是管理员裁决:发布即 approved)。
+	res, perr := appstore.Publish(db, appstore.PublishRequest{
+		Kind:            serverstore.AppKindSkill,
+		AppID:           s.Name,
+		Channel:         serverstore.AppChannelMarket,
+		Archive:         rebuilt,
+		Publisher:       adminUsername(c),
+		AdminPublish:    true,
+		DeclaredVersion: nextVersion,
+		Manifest:        appstore.FromSkillManifest(man),
+		Checksum:        checksum,
+	})
+	if perr != nil {
+		var ae *appstore.Error
+		if errors.As(perr, &ae) {
+			serverauth.WriteError(c, ae.Status, ae.Code, ae.Message)
+			return
+		}
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
 		return
 	}
-	if m2, perr2 := skillmanifest.Parse(entries, md, s.Name); perr2 == nil {
-		// 空包内 title 不清空既有展示名(与上传/更新同一口径)。
-		if title := strings.TrimSpace(m2.Title); title != "" {
-			_ = serverstore.SetSkillDisplayName(db, s.Name, title)
-		}
+	if title := strings.TrimSpace(man.Title); title != "" {
+		// 空包内 title 不清空既有展示名(与上传/更新同一口径);非空时 Publish
+		// 已把投影切到本版,这里只是幂等的显式回写(与 upload 路径同形)。
+		_ = serverstore.SetSkillDisplayName(db, s.Name, title)
 	}
 	invalidateSkillCache(cacheDir, s.Name)
 	_ = serverstore.AuditLog(db, adminUsername(c), "skill_normalize",
-		s.Name+" v"+s.Version+" → v"+nextVersion+" ("+strings.Join(changes, "; ")+")")
-	c.JSON(http.StatusOK, gin.H{"ok": true, "version": nextVersion, "checksum": checksum, "changes": changes})
+		s.Name+" v"+s.Version+" → v"+res.Version+" ("+strings.Join(changes, "; ")+")")
+	c.JSON(http.StatusOK, gin.H{"ok": true, "version": res.Version, "checksum": checksum, "changes": changes})
+}
+
+// normalizeChangelog 把规范化改动清单渲染成符合 MaxChangelogRunes 的更新说明。
+//
+// 规范化只在**确实有改动**时走到发布内核(已合规的包在上面的幂等分支提前
+// 返回),所以这段文字描述的是真实发生的事,不是编造的用户语义内容。
+func normalizeChangelog(changes []string) string {
+	if len(changes) == 0 {
+		return "规范化:补齐发布契约要求的字段"
+	}
+	out := "自动规范化:" + strings.Join(changes, ";")
+	if runes := []rune(out); len(runes) > skillmanifest.MaxChangelogRunes {
+		out = string(runes[:skillmanifest.MaxChangelogRunes-1]) + "…"
+	}
+	return out
+}
+
+// ensureChangelogField 保证规范化产物带有**非空** changelog 字段。
+//
+// F-03:changelog 是发布内核的硬规则(非首个版本必填),规范化不得绕过它,
+// 也不该因为存量包没有 changelog 就整条路径失败 —— 用本次规范化的真实改动
+// 清单补齐。包内已有非空 changelog 时保持原值(作者写的说明是内容,不是噪音)。
+func ensureChangelogField(skillMD, changelog string) string {
+	lines := strings.Split(skillMD, "\n")
+	// 只在 frontmatter 区域内改:首行必须是 `---`,结束行是下一条 `---`。
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return skillMD
+	}
+	end := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			end = i
+			break
+		}
+	}
+	if end < 0 {
+		return skillMD
+	}
+	for i := 1; i < end; i++ {
+		if !strings.HasPrefix(lines[i], "changelog:") {
+			continue
+		}
+		if strings.TrimSpace(strings.TrimPrefix(lines[i], "changelog:")) != "" {
+			return skillMD // 已有非空 changelog:保持作者原文
+		}
+		// 空 changelog 行:直接替换(避免同一字段出现两次)。
+		lines[i] = "changelog: " + yamlSingleQuoted(changelog)
+		return strings.Join(lines, "\n")
+	}
+	out := make([]string, 0, len(lines)+1)
+	out = append(out, lines[:end]...)
+	out = append(out, "changelog: "+yamlSingleQuoted(changelog))
+	out = append(out, lines[end:]...)
+	return strings.Join(out, "\n")
+}
+
+// yamlSingleQuoted 把任意文本渲染成 YAML 单引号标量(单引号转义规则:” 表示 ')。
+//
+// 不引号包裹时,中文冒号/括号/连字符都可能被 YAML 解析成结构;双引号标量的
+// 转义集又不完全等价 JSON。单引号标量只认 ” 一种转义,最稳。
+func yamlSingleQuoted(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 // forceVersion 保证 frontmatter 的 version 与入库版本一致(规范化时旧包可能

@@ -213,6 +213,38 @@ func TestAdminSessionIdleExpired(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// F-05(能力中心审计 2026-10-26):权限反转的**现状锁定**。
+//
+// 缺陷形态:`POST /skills|/agents/:name/archive`(管理员直发,发布即 approved)
+// 挂 `market:write`,而「批准一条员工待审版本」挂 `capability:write` —— 一旦
+// 产品把运营角色(`market:write`)与审核角色(`capability:write`)拆开,持有
+// 运营权限的人就能**绕过审核门**直接发布已批准内容。
+//
+// 为什么不在本轮改路由权限:当前 RBAC 只有 super_admin / auditor / user 三档,
+// 两个权限点**恒同时授予**(super_admin 全量、其余为空),所以反转在今天不可
+// 利用;而改路由会让 webadmin 的既有按钮/权限映射先变(产品决定未拍板)。
+//
+// 因此本轮把"不可利用"这件事变成一条**可执行的判据**:任何角色只要持有
+// market:write 就必须同时持有 capability:write(即不存在"能直发、不能审核"的
+// 角色)。将来新增运营角色时,这条会立刻红 —— 那时必须同时把直发路由迁到
+// capability:write(或明确的产品拆分方案),而不是让反转悄悄上线。
+func TestDirectPublishPermissionImpliesApprovalPermission(t *testing.T) {
+	if !HasPermission(&serverstore.User{Role: serverstore.RoleSuperAdmin}, PermMarketWrite) ||
+		!HasPermission(&serverstore.User{Role: serverstore.RoleSuperAdmin}, PermCapabilityWrite) {
+		t.Fatal("super_admin 行为必须保持不变:同时持有 market:write 与 capability:write")
+	}
+	for role := range rolePerms {
+		u := &serverstore.User{Role: role}
+		if HasPermission(u, PermMarketWrite) && !HasPermission(u, PermCapabilityWrite) {
+			t.Fatalf("角色 %q 持有 market:write(管理员直发 /skills|/agents/:name/archive)"+
+				"但不持有 capability:write(审批),等于直发即绕审核门(能力中心 F-05)。\n"+
+				"  处置:把直发路由(router/optional_skills_on.go 的 POST …/:name/archive"+
+				" 与 …/:name/normalize)迁到 capability:write,或按明确的产品拆分方案调整角色。", role)
+		}
+	}
+}
+
 func stringsHasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }

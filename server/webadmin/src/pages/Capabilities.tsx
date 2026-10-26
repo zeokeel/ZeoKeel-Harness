@@ -211,15 +211,20 @@ export default function Capabilities() {
 
   // tab 徽章计数:status=all 全量(与当前 tab/type 无关——计数反映每种
   // 状态的真实总量;type 筛选时同样按 type 拉全状态)。
-  useEffect(() => {
-    let cancelled = false
+  // P2 F-23：动作成功后必须显式刷新；此前 effect 只依赖 typeFilter，表变了而
+  // 徽章停在旧值（表空却显示「待审核(1)」）。
+  const refreshCounts = useCallback(async (): Promise<void> => {
     const qs = new URLSearchParams({ status: 'all' })
     if (typeFilter !== 'all') qs.set('type', typeFilter)
-    void request<{ approvals: ApprovalRow[] }>(`${ADMIN_API}/capabilities/approvals?${qs}`)
-      .then((data) => { if (!cancelled) setCountRows(data.approvals ?? []) })
-      .catch(() => { /* 徽章保持上次值,不阻塞列表 */ })
-    return () => { cancelled = true }
+    try {
+      const data = await request<{ approvals: ApprovalRow[] }>(`${ADMIN_API}/capabilities/approvals?${qs}`)
+      setCountRows(data.approvals ?? [])
+    } catch {
+      // 徽章保持上次值，不阻塞列表。
+    }
   }, [typeFilter])
+
+  useEffect(() => { void refreshCounts() }, [refreshCounts])
 
   const shown = allRows
 
@@ -245,6 +250,7 @@ export default function Capabilities() {
       setConfirm(null)
       setReason('')
       await load(tab, typeFilter)
+      await refreshCounts()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -265,6 +271,7 @@ export default function Capabilities() {
     try {
       await request(`${row.grants_base}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) })
       await load(tab, typeFilter)
+      await refreshCounts()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -279,6 +286,7 @@ export default function Capabilities() {
     try {
       await request(`${row.base_path}/quality`, { method: 'PUT', body: JSON.stringify({ quality }) })
       await load(tab, typeFilter)
+      await refreshCounts()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -287,6 +295,8 @@ export default function Capabilities() {
   }
 
   const openPreview = async (row: ApprovalRow) => {
+    // P2 F-22：拒绝时服务端已清空归档，预览必 404；入口不应出现，这里再兜一层。
+    if (row.status === 'rejected') return
     // 预览 key 由 previewKeyOf 一处产出(优先级 bug 的回归判据见该函数注释)。
     setPreviewKey(previewKeyOf(row))
     setPreviewRow(row)
@@ -459,14 +469,18 @@ export default function Capabilities() {
                     <TableCell className="text-muted-foreground" title={SERVER_TIME_TITLE}>{serverTimeText(row.created_at)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => { void openPreview(row) }} title="查看内容预览">
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm"
-                          onClick={() => { window.open(`${row.base_path}/archive`, '_blank') }}
-                          title="下载归档核查" aria-label="下载归档核查">
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        {row.status !== 'rejected' && (
+                          <>
+                            <Button variant="ghost" size="sm" onClick={() => { void openPreview(row) }} title="查看内容预览">
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm"
+                              onClick={() => { window.open(`${row.base_path}/archive`, '_blank') }}
+                              title="下载归档核查" aria-label="下载归档核查">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                         <Button variant="ghost" size="sm" disabled={isBusy}
                           onClick={() => { setTransferRow(row) }}
                           title="转移归属(负责人)" aria-label="转移归属(负责人)">
@@ -517,7 +531,7 @@ export default function Capabilities() {
                         {row.status === 'pending' && (
                           <Button size="sm" variant="outline" disabled={isBusy} onClick={() => { setReason(''); setConfirm(row); setConfirmKind('reject') }}>拒绝</Button>
                         )}
-                        {!isMarket && (
+                        {!isMarket && row.status !== 'approved' && (
                           <Button size="sm" variant="destructive" disabled={isBusy} onClick={() => { setConfirm(row); setConfirmKind('delete') }}>删除</Button>
                         )}
                       </div>

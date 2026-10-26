@@ -41,3 +41,47 @@ export function serverTimeText(value: string): string {
 
 /** 时间列的悬停说明：接口未带时区，避免管理员误读成本机时间。 */
 export const SERVER_TIME_TITLE = '服务器本地时间（接口未带时区标记）'
+
+
+/**
+ * 版本比较：按点分数字段比较，非数字段回退字符串比较。
+ *
+ * 只用于管理端“同名多版本只显示最新一张卡”的展示去重，不参与服务端版本校验；
+ * 真正的版本递增/永久占位判据在 appstore.Publish。
+ */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.trim().split(/[.+-]/)
+  const pb = b.trim().split(/[.+-]/)
+  const len = Math.max(pa.length, pb.length)
+  for (let i = 0; i < len; i += 1) {
+    const x = pa[i] ?? ''
+    const y = pb[i] ?? ''
+    const nx = Number(x)
+    const ny = Number(y)
+    if (Number.isFinite(nx) && Number.isFinite(ny)) {
+      if (nx !== ny) return nx - ny
+      continue
+    }
+    const byText = x.localeCompare(y)
+    if (byText !== 0) return byText
+  }
+  return 0
+}
+
+/**
+ * 同名多版本去重：只保留版本最高的那一行（P1 F-06）。
+ *
+ * 审批队列 `status=approved` 是**每版本一行**；管理端技能/智能体页把它当目录行
+ * 直接 push 会渲染出多张同名卡（预览/上传指向旧版）。展示层按 name 去重，
+ * 保留版本最高的一行；操作仍然走服务端按 name 寻址的端点。
+ */
+export function dedupeLatestByName<T extends { name: string; version: string }>(rows: readonly T[]): T[] {
+  const latest = new Map<string, T>()
+  for (const row of rows) {
+    const previous = latest.get(row.name)
+    if (previous === undefined || compareVersions(row.version, previous.version) > 0) {
+      latest.set(row.name, row)
+    }
+  }
+  return [...latest.values()]
+}

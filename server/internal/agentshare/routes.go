@@ -612,7 +612,8 @@ func decide(db *sql.DB, status serverstore.AgentPresetStatus, auditAction string
 		if !approveNeedsArchive(c, db, status, p.Name, p.Version) {
 			return
 		}
-		if err := serverstore.SetReleaseStatusForReview(db, serverstore.AppKindAgent, p.Name, p.Version, string(status), reasonOf(c)); err != nil {
+		// F-14(2026-10-26):下架冻结写进 UPDATE 的 WHERE(IfWritable 变体)。
+		if err := serverstore.SetReleaseStatusForReviewIfWritable(db, serverstore.AppKindAgent, p.Name, p.Version, string(status), reasonOf(c)); err != nil {
 			writeDecideError(c, err)
 			return
 		}
@@ -662,7 +663,7 @@ func decideVersioned(db *sql.DB, status serverstore.AgentPresetStatus, auditActi
 		if !approveNeedsArchive(c, db, status, name, version) {
 			return
 		}
-		if err := serverstore.SetReleaseStatusForReview(db, serverstore.AppKindAgent, name, version, string(status), reasonOf(c)); err != nil {
+		if err := serverstore.SetReleaseStatusForReviewIfWritable(db, serverstore.AppKindAgent, name, version, string(status), reasonOf(c)); err != nil {
 			writeDecideError(c, err)
 			return
 		}
@@ -800,6 +801,10 @@ func writeDecideError(c *gin.Context, err error) {
 	case errors.Is(err, serverstore.ErrReleaseArchiveCleared):
 		serverauth.WriteError(c, http.StatusConflict, "ARCHIVE_CLEARED",
 			"该版本归档已在拒绝时清理,无法再通过审核(拒绝即释放存储):请让作者上传新版本")
+	case errors.Is(err, serverstore.ErrAppDelisted):
+		// F-14:并发下「预检时还上架、落库时已下架」⇒ 409 APP_DELISTED。
+		serverauth.WriteError(c, http.StatusConflict, appstore.CodeAppDelisted,
+			"该智能体已下架，无法通过审核：请先重新上架再审核")
 	case errors.Is(err, serverstore.ErrNotFound):
 		serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "预设不存在")
 	default:
@@ -873,6 +878,16 @@ func remove(db *sql.DB, cacheDir string) gin.HandlerFunc {
 }
 
 // removeVersioned deletes one name@version row plus its archive.
+//
+// F-01(能力中心 P0,2026-10-26):已通过审核的版本**不可删除** —— 删除会在
+// 同一条 UPDATE 里把 archive 置 NULL(不可恢复),正在服务的版本立刻无法
+// 下载,而 apps 投影仍停在旧标题上。判定唯一实现在
+// serverstore.DeleteReleaseUnlessApproved(SQL 谓词 `status <> 'approved'`),
+// 本函数只做错误码映射;要停止提供请用下架(PUT …/:name/enabled,可逆)。
+//
+// 删除成功后重算投影:与 decide 的收尾纪律一致(apps 行是目录下发的投影),
+// 即使 pending/rejected 不参与投影,也显式让"投影 = 最高 approved 版本"
+// 这条不变量重新成立一次(脏投影行因此有自愈路径)。
 func removeVersioned(db *sql.DB, cacheDir string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name, version := c.Param("name"), c.Param("version")
@@ -883,16 +898,28 @@ func removeVersioned(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		if !requireOrgAgent(c, db, name) {
 			return
 		}
-		if err := serverstore.DeleteAgentPresetByVersion(db, name, version); err != nil {
+		if err := serverstore.DeleteAgentPresetVersion(db, name, version); err != nil {
 			if errors.Is(err, serverstore.ErrNotFound) {
 				serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "预设不存在")
+				return
+			}
+			// F-01:approved 版本不可删除(409 + 明确错误码 + 指路可逆动作)。
+			if errors.Is(err, serverstore.ErrReleaseApprovedNotDeletable) {
+				serverauth.WriteError(c, http.StatusConflict, serverstore.CodeReleaseNotDeletable,
+					serverstore.MsgReleaseNotDeletable+"。"+serverstore.HintReleaseNotDeletable)
 				return
 			}
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "删除失败")
 			return
 		}
-		_ = serverstore.ClearAgentPresetArchive(db, name, version)
+		// 归档已在软删 UPDATE 里随 deleted_at 一起置 NULL(原子),不再补第二条
+		// UPDATE —— 两条语句之间正是被并发 approve 穿过的窗口。
 		_ = os.Remove(filepath.Join(cacheDir, safeName(name, version)))
+		if _, perr := serverstore.RecomputeAppProjection(db, serverstore.AppKindAgent, name); perr != nil {
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL",
+				"版本已删除,但预设投影更新失败(请重试一次)")
+			return
+		}
 		_ = serverstore.AuditLog(db, adminUsername(c), "agent_preset_delete", name+"@"+version)
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}

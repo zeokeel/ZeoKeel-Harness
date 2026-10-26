@@ -414,6 +414,13 @@ func registerServer(srv *gin.RouterGroup, d Deps) {
 	// 把它放进 skills 会让"只开 apps"的变体失去应用归属转移入口 —— 那是功能缺失，
 	// 不是裁剪。权限点 `capability:write` 本来就随 RBAC 常量保留（权限模型不随变体变）。
 	serverauth.AdminRoute(authed, "PUT", "/apps/:kind/:app_id/owner", serverauth.PermCapabilityWrite, d.Appstore.TransferOwner)
+	// 空壳释放(F-02,2026-10-26):硬删一个**没有未软删版本且非官方**的 App,
+	// 把被错误登记占用的名称还给平台(POST /skills、POST /agents 只登记身份,
+	// 打错名字后此前只能改库)。有版本 ⇒ 409 APP_HAS_RELEASES 指路下架/删版本;
+	// 官方归属 ⇒ 409 APP_OFFICIAL。权限与归属转移同族(capability:write):
+	// 它动的是应用身份而不是市场运营数据;与归属转移同在基础面(两个变体都注册,
+	// appstore 是共享底座)。
+	serverauth.AdminRoute(authed, "DELETE", "/apps/:kind/:app_id", serverauth.PermCapabilityWrite, d.Appstore.DeleteApp)
 
 	// 报表订阅(2026-09 P1):月度用量报表推送 webhook
 	// 列表含 hook_url(凭据本体)⇒ 用独立的 report:read(不进 AuditorPermissions),

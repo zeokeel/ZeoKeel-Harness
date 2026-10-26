@@ -511,7 +511,7 @@ describe('市场待审版本(queued market rows)', () => {
     expect(screen.getByRole('button', { name: '拒绝' })).toBeEnabled()
   })
 
-  it('对照:org 行(无 channel)行为完全不变 — 删除/上下架/授权照旧', async () => {
+  it('P0 F-01: 已通过 org 行不渲染删除(approved 不可删),下架/授权照旧', async () => {
     const approved = { ...SKILL_ROWS[0]!, status: 'approved' as const, quality: 'featured' as const, enabled: true }
     mockRequest.mockImplementation(async (path: string) => {
       if (path === '/api/server/admin/capabilities/approvals?status=approved') return { approvals: [approved] }
@@ -523,9 +523,26 @@ describe('市场待审版本(queued market rows)', () => {
     const u = userEvent.setup()
     await u.click(screen.getByRole('tab', { name: '已通过（0）' }))
     await screen.findByText('CodeQL 审计')
-    expect(screen.getByRole('button', { name: '删除' })).toBeInTheDocument()
+    // 已通过版本删除会清空归档且不可恢复；服务端 409，UI 不渲染入口。
+    expect(screen.queryByRole('button', { name: '删除' })).toBeNull()
     expect(screen.getByRole('button', { name: '下架' })).toBeInTheDocument()
     expect(screen.getByTitle('授权')).toBeInTheDocument()
+  })
+
+  it('P2 F-22: 已拒绝行不渲染预览/下载(归档已在拒绝时清理)', async () => {
+    const rejected = { ...SKILL_ROWS[0]!, status: 'rejected' as const, reason: '内容不合规' }
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/capabilities/approvals?status=rejected') return { approvals: [rejected] }
+      if (path === '/api/server/admin/capabilities/approvals?status=all') return { approvals: [rejected] }
+      if (path === '/api/server/admin/departments') return { departments: [] }
+      return {}
+    })
+    const u = userEvent.setup()
+    render(<Capabilities />)
+    await u.click(screen.getByRole('tab', { name: /已拒绝/ }))
+    await screen.findByText('CodeQL 审计')
+    expect(screen.queryByTitle('查看内容预览')).toBeNull()
+    expect(screen.queryByTitle('下载归档核查')).toBeNull()
   })
 })
 

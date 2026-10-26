@@ -15,7 +15,7 @@ import { CapabilityLockPanel } from '../components/capability-lock-panel'
 import { GrantDialog } from '../components/grant-dialog'
 import { Store, Download, Package, Activity, UserCog } from 'lucide-react'
 import { grantsBase, previewFileBase, skillRequest } from '../lib/capability-endpoints'
-import { displayNameOf, formatCount, versionText } from '../lib/capability-display'
+import { dedupeLatestByName, displayNameOf, formatCount, versionText } from '../lib/capability-display'
 
 interface Skill {
   id: number
@@ -175,11 +175,11 @@ export default function Marketplace() {
         request(`${ADMIN_API}/capabilities/approvals?status=approved&type=skill`).catch(() => ({ approvals: [] })),
       ])
       const merged: Skill[] = (s.skills ?? []).map(toMarketSkill)
-      for (const row of (approvals.approvals ?? []) as {
+      for (const row of dedupeLatestByName((approvals.approvals ?? []) as {
         name: string; version: string; display_name: string; description: string
         author: string; owner?: string; enabled?: boolean; downloads?: number; calls?: number
         official?: boolean; quality?: string
-      }[]) {
+      }[])) {
         // UI 归一: 员工上传(审批通过)的技能并入技能市场页, 来源徽章 org。
         // 归属取服务端下发的 owner(apps.owner),**不是** author(本行上传者);
         // 上下架状态同样透传服务端值,缺省按"未知即未上架"——绝不回落 true
@@ -407,6 +407,25 @@ export default function Marketplace() {
     }
   }
 
+  /**
+   * F-02：释放「空壳」名称。管理员新建只登记身份（无版本），打错名后此前只能改库；
+   * 服务端只允许无未软删版本且非官方的 App 硬删，有版本会回 409 APP_HAS_RELEASES。
+   */
+  const releaseShell = async (s: Skill): Promise<void> => {
+    if (busy !== null) return
+    if (!window.confirm(`释放空壳「${displayNameOf(s)}」的名称？\n\n该名称下没有任何版本，释放后可重新登记；官方归属或已有版本会被服务端拒绝。`)) return
+    setBusy(`release-${s.name}`)
+    setOpError('')
+    try {
+      await request(`${ADMIN_API}/apps/skill/${encodeURIComponent(s.name)}`, { method: 'DELETE' })
+      await loadSkills()
+    } catch (err: any) {
+      setOpError(`释放名称失败：${err.message}`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   /** P3 D-12：管理端搜索按展示名/目录名/描述，与卡片标题口径一致。 */
   const visibleSkills = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('zh-CN')
@@ -538,6 +557,14 @@ export default function Marketplace() {
                               onClick={() => openReplace(s)}
                             >上传新版</Button>
                           </span>
+                          {s.version === '' && (
+                            <Button
+                              variant="destructive"
+                              disabled={busy !== null}
+                              title="该能力只有身份、没有任何版本；释放名称后可重新登记"
+                              onClick={() => { void releaseShell(s) }}
+                            >{busy === `release-${s.name}` ? '释放中…' : '释放名称'}</Button>
+                          )}
                           <Button variant="outline" onClick={() => setTransferSkill(s)} title="转移归属(负责人)">归属</Button>
                           <Button variant="outline" onClick={() => setGrantDialog(s)}>授权</Button>
                           {s.enabled

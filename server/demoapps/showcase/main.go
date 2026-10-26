@@ -1245,18 +1245,20 @@ func yesNo(v bool) string {
 	return "否"
 }
 
-// brandMarkup 是品牌 mark 的内联 SVG（几何取自仓库品牌真源 brands/official/logo.svg：
-// 圆角方块底板 + 一对花括号 + 连接线 + 两个节点圆，1.25× 放大）。
-// 浅色用黑底白 mark、深色用白底黑 mark（与 logo.svg / logo-dark.svg 的关系一致，
-// 颜色由 CSS 变量切换，几何一字不改）。
+// brandMarkup 是应用自己那几页（403 页等）里的品牌标识：直接引用应用资源
+// web/static/brand-day.svg / brand-night.svg —— 品牌真源 brands/official/logo.svg
+// 与 logo-dark.svg 的**逐字节副本**（顶栏 index.html 用的是同一对文件）。
+//
+// 为什么这里不再画几何：旧实现把"圆角方块 + 括号 + 连接线 + 两个节点圆"手抄在
+// 本文件与 index.html 里；公开仓 2026-10-21 换品牌后没人再动它，演示应用就一直在
+// 用上一个项目的 mark，而所有门禁都绿（它们只看得到"页面上有 SVG"）。几何只能有
+// 一份真源 —— 判据是 brand_test.go（逐字节对拍 + 禁止再出现手绘几何）。
+//
+// 为什么是两个 <img> 而不是一个：浅色界面用白底白天版、深色界面用黑底夜间版，
+// 与门户页/管理后台/客户端同一套双色对；选边交给 app.css 的 prefers-color-scheme。
 func brandMarkup(class string) string {
-	return `<svg class="` + class + `" viewBox="0 0 1254 1254" aria-hidden="true" focusable="false">` +
-		`<rect x="0" y="0" width="1254" height="1254" rx="180" fill="var(--mark-tile)"/>` +
-		`<g transform="translate(627 627) scale(1.25) translate(-627 -627)">` +
-		`<path d="M 334 409 C 300 409 273 431 273 466 V 548 C 273 582 254 607 220 620 C 254 633 273 658 273 692 V 775 C 273 810 300 843 334 843" fill="none" stroke="var(--mark-ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>` +
-		`<path d="M 920 409 C 954 409 981 431 981 466 V 548 C 981 582 1000 607 1034 620 C 1000 633 981 658 981 692 V 775 C 981 810 954 843 920 843" fill="none" stroke="var(--mark-ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>` +
-		`<line x1="435" y1="627" x2="817" y2="627" stroke="var(--mark-ink)" stroke-width="20" stroke-linecap="round"/>` +
-		`<circle cx="435" cy="627" r="65" fill="var(--mark-ink)"/>` +
-		`<circle cx="817" cy="627" r="65" fill="var(--mark-ink)"/>` +
-		`</g></svg>`
+	return `<span class="` + class + `" aria-hidden="true">` +
+		`<img class="mark-day" src="/static/brand-day.svg" alt="">` +
+		`<img class="mark-night" src="/static/brand-night.svg" alt="">` +
+		`</span>`
 }

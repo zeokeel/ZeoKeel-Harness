@@ -152,10 +152,14 @@ COPY demoapps/board/web /demo/web/board
 COPY demoapps/scripts/pack-assets.mjs /demo/pack-assets.mjs
 RUN set -eu; mkdir -p /demo/packed \
  && for app in showcase forum board; do \
+      extra=""; \
+      if [ "$app" = "showcase" ]; then \
+        extra="web/$app/static/brand-day.svg=static/brand-day.svg web/$app/static/brand-night.svg=static/brand-night.svg"; \
+      fi; \
       node pack-assets.mjs --in apps/$app.wasm --out packed/$app.wasm \
         web/$app/index.html=index.html \
         web/$app/app.css=static/app.css \
-        web/$app/app.js=static/app.js; \
+        web/$app/app.js=static/app.js $extra; \
     done \
  && cp apps/demos.json packed/demos.json \
  && chmod -R a+rX /demo/packed

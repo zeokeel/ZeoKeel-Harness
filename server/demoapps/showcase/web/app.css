@@ -16,9 +16,8 @@
   --font: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* 品牌 mark：浅色=黑底白 mark（= brands/official/logo.svg） */
-  --mark-tile: #000000;
-  --mark-ink: #ffffff;
+  /* 品牌标识不用 CSS 变量拼色：白天/夜间两版是 web/static/brand-{day,night}.svg
+     （= 品牌真源 logo.svg / logo-dark.svg 的逐字节副本），由下面的媒体查询选边。 */
 
   --bg-0: #eef1f9;
   --bg-1: #f8f9fe;
@@ -47,10 +46,6 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* 深色=白底黑 mark（= brands/official/logo-dark.svg 的色关系，几何不变） */
-    --mark-tile: #ffffff;
-    --mark-ink: #000000;
-
     --bg-0: #05070e;
     --bg-1: #0b0f1c;
     --ink: #edf0fa;
@@ -158,7 +153,19 @@ body.page {
   border-bottom: 1px solid var(--line-2);
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
-.mark { width: 30px; height: 30px; border-radius: 9px; flex: none; box-shadow: var(--shadow); }
+/* 品牌标识容器：几何来自 web/static/brand-day.svg / brand-night.svg（品牌真源的
+   逐字节副本，见 index.html 的注释与 brand_test.go）。浅色界面显示白天版、深色界面
+   显示夜间版；两者都是 1254 画布，按容器等比缩放。
+   容器**不加圆角/底色/阴影**：真源里的圆角方块就是标识本体的形状，任何二次裁剪
+   都会让"画出来的样子"与权威文件不一致（旧版手绘 mark 的圆角/阴影是那套几何的
+   一部分，已随 mark 一起去掉）。 */
+.mark { width: 30px; height: 30px; flex: none; }
+.mark img { display: block; width: 100%; height: 100%; }
+.mark .mark-night { display: none; }
+@media (prefers-color-scheme: dark) {
+  .mark .mark-day { display: none; }
+  .mark .mark-night { display: block; }
+}
 .brandText { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
 .brandText strong { font-size: 16px; letter-spacing: 0.2px; }
 .brandSub { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -624,7 +631,7 @@ table.data tbody tr { animation: rowIn 0.36s ease both; animation-delay: calc(va
 .deniedCard h1 { margin: 0; font-size: 19px; }
 .deniedCard h2 { margin: 0 0 6px; font-size: 13px; }
 .deniedCard p { margin: 0; font-size: 12.5px; line-height: 1.65; color: var(--ink-2); }
-.mark-lg { width: 44px; height: 44px; border-radius: 13px; }
+.mark-lg { width: 44px; height: 44px; }
 .deniedReason { color: var(--bad) !important; font-weight: 600; }
 .deniedBox { border: 1px solid var(--line-2); border-radius: 13px; padding: 10px 11px; background: var(--panel-2); display: flex; flex-direction: column; gap: 6px; }
 

@@ -116,6 +116,7 @@ export const zh = {
   // 空态的主操作（2026-10-26 设计）：去市场看看 / 查看已安装。
   'capability.goMarket': '去市场看看',
   'capability.goInstalled': '查看已安装',
+  'capability.goAll': '查看全部',
   'capability.retry': '重试',
   'capability.loadError': '加载失败',
   // R16B-26：失败面塌缩（与 R16B-08 同族）——只回一句「加载失败」时
@@ -243,6 +244,7 @@ export const en: Record<keyof typeof zh, string> = {
   // Primary actions for empty states (2026-10-26 design).
   'capability.goMarket': 'Browse the market',
   'capability.goInstalled': 'See installed',
+  'capability.goAll': 'View all',
   'capability.retry': 'Retry',
   'capability.loadError': 'Failed to load',
   'capability.loadErrorDetail': 'Failed to load: {error}',

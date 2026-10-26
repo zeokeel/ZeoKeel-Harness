@@ -236,7 +236,10 @@ export default function BuiltinSkills() {
                 {skills.map((s) => (
                   <TableRow key={s.name} data-testid={`builtin-row-${s.name}`}>
                     <TableCell>
-                      <div className="font-medium">{s.title || s.name}</div>
+                      <div className="flex items-center gap-2 font-medium">
+                        {s.title || s.name}
+                        {s.source && <Badge variant="outline" className="px-1 py-0 text-[10px]">来源：{s.source}</Badge>}
+                      </div>
                       <div className="font-mono text-xs text-muted-foreground">{s.name}</div>
                       {s.description && (
                         <div className="mt-1 max-w-[42rem] text-xs text-muted-foreground">{s.description}</div>

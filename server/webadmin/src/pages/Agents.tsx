@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { request, ADMIN_API } from '../api'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -16,6 +16,7 @@ import { GrantDialog } from '../components/grant-dialog'
 import { ArchivePreviewDialog, ArchivePreviewData } from '../components/archive-preview-dialog'
 import { Download, UserCog, Bot, Upload, Lock } from 'lucide-react'
 import { agentRequest, grantsBase, previewFileBase } from '../lib/capability-endpoints'
+import { displayNameOf as agentDisplayName, formatCount, versionText } from '../lib/capability-display'
 
 interface AgentRow {
   name: string
@@ -56,10 +57,6 @@ function toMarketAgent(raw: Omit<AgentRow, 'owner' | 'channel'>): AgentRow {
  * (2026-10-26 D 系列显示修复)。卡片标题与各弹窗标题统一走这里,
  * 任何入口都不再把空串或英文目录名当标题。
  */
-function agentDisplayName(row: { display_name?: string; title?: string; name: string }): string {
-  return row.display_name?.trim() || row.title?.trim() || row.name
-}
-
 /** 请求初始化(不传 body 时不带该键,保持既有调用形态)。 */
 function initOf(req: { method: string; body?: string }): RequestInit {
   return req.body === undefined ? { method: req.method } : { method: req.method, body: req.body }
@@ -101,6 +98,7 @@ function isOrg(row: { channel?: 'market' | 'org' }): boolean {
  */
 export default function Agents() {
   const [agents, setAgents] = useState<AgentRow[]>([])
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [opError, setOpError] = useState('')
@@ -167,7 +165,8 @@ export default function Agents() {
         if (!!a.official !== !!b.official) return a.official ? -1 : 1
         if (!!(a.quality === 'featured') !== !!(b.quality === 'featured')) return a.quality === 'featured' ? -1 : 1
         if (score(a) !== score(b)) return score(b) - score(a)
-        return a.name.localeCompare(b.name)
+        // P3 D-12：按展示名排序（目录名只在展示名相同时兜底）。
+        return agentDisplayName(a).localeCompare(agentDisplayName(b), 'zh-CN') || a.name.localeCompare(b.name)
       })
       setAgents(merged)
     } catch (err: any) {
@@ -302,6 +301,16 @@ export default function Agents() {
     }
   }
 
+  /** P3 D-12：管理端搜索按展示名/目录名/描述，与卡片标题口径一致。 */
+  const visibleAgents = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('zh-CN')
+    if (q === '') return agents
+    return agents.filter((a) =>
+      agentDisplayName(a).toLocaleLowerCase('zh-CN').includes(q)
+      || a.name.toLocaleLowerCase('zh-CN').includes(q)
+      || (a.description ?? '').toLocaleLowerCase('zh-CN').includes(q))
+  }, [agents, query])
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -323,6 +332,15 @@ export default function Agents() {
         <CardHeader>
           <CardTitle>智能体(Agent)</CardTitle>
           <CardDescription>与技能同规则:归档直存数据库、包内 preset.yml 携带版本/描述/作者/分类、发布即已审核</CardDescription>
+          <div className="flex justify-end pt-2">
+            <Input
+              value={query}
+              onChange={(e) => { setQuery(e.target.value) }}
+              placeholder="搜索展示名 / 目录名 / 描述"
+              aria-label="搜索智能体"
+              className="h-8 w-56"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {error ? (
@@ -336,7 +354,12 @@ export default function Agents() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {agents.map((a) => (
+              {visibleAgents.length === 0 && (
+                <div className="col-span-full">
+                  <EmptyState title="没有匹配的智能体" desc={`没有展示名/目录名/描述匹配「${query.trim()}」的智能体`} />
+                </div>
+              )}
+              {visibleAgents.map((a) => (
                 <div key={a.name} className="group flex flex-col rounded-lg border bg-card p-4 transition-all duration-200 hover:border-[#1E40AF]/40 hover:shadow-md">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -347,7 +370,7 @@ export default function Agents() {
                         {/* 主标题 = 展示名;目录名只在两者不同时作副标题,避免重复。 */}
                         <div className="truncate text-sm font-semibold" title={a.name}>{agentDisplayName(a)}</div>
                         <div className="text-[11px] text-muted-foreground">
-                          {a.version ? `v${a.version}` : '尚未发布版本'}
+                          {versionText(a.version)}
                           {agentDisplayName(a) !== a.name && <span className="ml-1.5 font-mono">{a.name}</span>}
                         </div>
                       </div>
@@ -364,8 +387,8 @@ export default function Agents() {
                     <UserCog className="h-3 w-3 shrink-0" /><span className="truncate">归属 {a.official ? '官方' : (a.owner || '未指定')}</span>
                   </div>
                   <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
-                    {a.quality && a.quality !== '' && <Badge variant="secondary" className="px-1 py-0 text-[10px]">{a.quality}</Badge>}
-                    <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />下载 {a.downloads ?? 0}</span>
+                    {a.quality === 'featured' && <Badge variant="secondary" className="px-1 py-0 text-[10px]">精选</Badge>}
+                    <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />下载 {formatCount(a.downloads)}</span>
                   </div>
                   {/* 组织共享行仍没有 元数据编辑 端点(服务端确实不存在)⇒ 该入口对
                       org 行禁用并说明原因,绝不回落市场命名空间(必然 404)。

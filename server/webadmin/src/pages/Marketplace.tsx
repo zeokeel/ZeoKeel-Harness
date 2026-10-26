@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { request, ADMIN_API } from '../api'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -15,6 +15,7 @@ import { CapabilityLockPanel } from '../components/capability-lock-panel'
 import { GrantDialog } from '../components/grant-dialog'
 import { Store, Download, Package, Activity, UserCog } from 'lucide-react'
 import { grantsBase, previewFileBase, skillRequest } from '../lib/capability-endpoints'
+import { displayNameOf, formatCount, versionText } from '../lib/capability-display'
 
 interface Skill {
   id: number
@@ -64,16 +65,6 @@ interface Dept {
 /** 该行是否来自组织共享库(渠道决定命名空间)。 */
 function isOrg(row: { channel?: 'market' | 'org' }): boolean {
   return row.channel === 'org'
-}
-
-/**
- * 行的展示名回退:display_name → name(2026-10-26 D 系列显示修复)。
- *
- * 服务端已做「apps.title → 展示版本 title → name」的回退,这里再兜一层是为了
- * 兼容旧服务端/旧行(缺 display_name 键),保证任何入口都不把空串当标题。
- */
-function displayNameOf(row: { display_name?: string; name: string }): string {
-  return row.display_name?.trim() || row.name
 }
 
 /** 市场命名空间列表行 → 行模型(channel=market;归属见 Skill.owner 注释)。 */
@@ -138,6 +129,7 @@ const UPLOAD_UNAVAILABLE = '该来源暂不支持在管理端上传新版本'
 
 export default function Marketplace() {
   const [skills, setSkills] = useState<Skill[]>([])
+  const [query, setQuery] = useState('')
   const [departments, setDepartments] = useState<Dept[]>([])
 
   const [skillsLoading, setSkillsLoading] = useState(true)
@@ -206,7 +198,8 @@ export default function Marketplace() {
         if (!!a.official !== !!b.official) return a.official ? -1 : 1
         if (!!(a.quality === 'featured') !== !!(b.quality === 'featured')) return a.quality === 'featured' ? -1 : 1
         if (score(a) !== score(b)) return score(b) - score(a)
-        return a.name.localeCompare(b.name)
+        // P3 D-12：按展示名排序（目录名只在展示名相同时兜底）。
+        return displayNameOf(a).localeCompare(displayNameOf(b), 'zh-CN') || a.name.localeCompare(b.name)
       })
       setSkills(merged)
     } catch (err: any) {
@@ -414,6 +407,16 @@ export default function Marketplace() {
     }
   }
 
+  /** P3 D-12：管理端搜索按展示名/目录名/描述，与卡片标题口径一致。 */
+  const visibleSkills = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('zh-CN')
+    if (q === '') return skills
+    return skills.filter((s) =>
+      displayNameOf(s).toLocaleLowerCase('zh-CN').includes(q)
+      || s.name.toLocaleLowerCase('zh-CN').includes(q)
+      || (s.description ?? '').toLocaleLowerCase('zh-CN').includes(q))
+  }, [skills, query])
+
   return (
     <div className="space-y-6">
       {opError && <div className="rounded-md border border-destructive/40 p-3 text-sm text-destructive">{opError}</div>}
@@ -422,7 +425,14 @@ export default function Marketplace() {
         <CardHeader>
           <CardTitle>技能(Skill)</CardTitle>
           <CardDescription>官方技能(蓝标) / 员工上传(审批后);授权制;未授权用户不可见不可安装</CardDescription>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Input
+              value={query}
+              onChange={(e) => { setQuery(e.target.value) }}
+              placeholder="搜索展示名 / 目录名 / 描述"
+              aria-label="搜索技能"
+              className="h-8 w-56"
+            />
             <Button size="sm" variant="outline" onClick={() => setLockOpen(true)}>锁定管理</Button>
             <Button size="sm" onClick={openCreateSkill}>上架技能</Button>
           </div>
@@ -439,7 +449,12 @@ export default function Marketplace() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {skills.map((s) => (
+              {visibleSkills.length === 0 && (
+                <div className="col-span-full">
+                  <EmptyState title="没有匹配的技能" desc={`没有展示名/目录名/描述匹配「${query.trim()}」的技能`} />
+                </div>
+              )}
+              {visibleSkills.map((s) => (
                 <div
                   key={s.name}
                   className="group flex flex-col rounded-lg border bg-card p-4 transition-all duration-200 hover:border-[#1E40AF]/40 hover:shadow-md"
@@ -454,7 +469,7 @@ export default function Marketplace() {
                             只在两者不同时显示,避免「中文名 + 同一串 slug」重复。 */}
                         <div className="truncate text-sm font-semibold" title={s.name}>{displayNameOf(s)}</div>
                         <div className="text-[11px] text-muted-foreground">
-                          {s.version ? `v${s.version}` : '—'}
+                          {versionText(s.version)}
                           {displayNameOf(s) !== s.name && <span className="ml-1.5 font-mono">{s.name}</span>}
                           {s.source === 'upload' && <Badge variant="outline" className="ml-1.5 px-1 py-0 text-[10px]">上传包</Badge>}
                         </div>
@@ -475,8 +490,8 @@ export default function Marketplace() {
                     <UserCog className="h-3 w-3 shrink-0" /><span className="truncate">归属 {s.official ? '官方' : (s.owner || '未指定')}</span>
                   </div>
                   <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
-                    <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />下载 {s.downloads ?? 0}</span>
-                    <span className="inline-flex items-center gap-1"><Activity className="h-3 w-3" />调用 {s.calls ?? 0}</span>
+                    <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />下载 {formatCount(s.downloads)}</span>
+                    <span className="inline-flex items-center gap-1"><Activity className="h-3 w-3" />调用 {formatCount(s.calls)}</span>
                   </div>
                   {/* 组织共享行仍没有 编辑/规范化 端点(服务端确实不存在)⇒ 这两个入口
                       对该行禁用并说明原因,绝不回落市场命名空间(必然 404)。

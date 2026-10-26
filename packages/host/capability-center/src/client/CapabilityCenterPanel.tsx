@@ -2152,7 +2152,11 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
       ? <PanelButton variant="secondary" size="md" onClick={() => { setFilter('all'); setSearch('') }}>{t('capability.clearFilters')}</PanelButton>
       : tab === 'market'
         ? <PanelButton variant="secondary" size="md" onClick={() => { setTab('installed') }}>{t('capability.goInstalled')}</PanelButton>
-        : <PanelButton variant="primary" size="md" onClick={() => { setTab('market') }}>{t('capability.goMarket')}</PanelButton>
+        : tab === 'own'
+          // 「我上传」为空时没有可上传对象（上传入口在本机草稿卡上）：给“查看全部”
+          // 让作者先找到本机内容，而不是跳到与自己无关的市场。
+          ? <PanelButton variant="primary" size="md" onClick={() => { setTab('all') }}>{t('capability.goAll')}</PanelButton>
+          : <PanelButton variant="primary" size="md" onClick={() => { setTab('market') }}>{t('capability.goMarket')}</PanelButton>
     return (
       <div style={{ gridColumn: '1 / -1' }}>
         <EmptyState icon={<icons.IconCapability size={22} />} tone="neutral" title={title} action={emptyAction} />

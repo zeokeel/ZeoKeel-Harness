@@ -13,6 +13,7 @@ import { Download, FileText, RefreshCw, Share2, ShieldCheck, Sparkles, TriangleA
 import { GrantDialog } from '../components/grant-dialog'
 import { ArchivePreviewDialog, ArchivePreviewData } from '../components/archive-preview-dialog'
 import { TransferOwnerDialog } from '../components/transfer-owner-dialog'
+import { displayNameOf, formatCount, SERVER_TIME_TITLE, serverTimeText } from '../lib/capability-display'
 
 /**
  * 能力中心·统一审批(决策 2026-08-25 Phase 3,2026-09 恢复):共享技能与
@@ -73,17 +74,6 @@ interface Dept {
 }
 
 /**
- * 审批行的展示名回退:display_name → name(2026-10-26 D 系列显示修复)。
- *
- * 展示名是卡片/弹窗标题的唯一来源;`name` 是英文目录名,只作副标题与寻址。
- * 服务端已把 App 级 title 回退进 display_name(市场待审行常缺包内 title),
- * 这里再兜一层兼容旧响应。
- */
-function displayNameOf(row: { display_name?: string; name: string }): string {
-  return row.display_name?.trim() || row.name
-}
-
-/**
  * 预览弹层的重挂 key(2026-10-26 D 系列显示修复)。
  *
  * 必须先算 `(display_name || name)` 再拼 `@version`:写成
@@ -104,13 +94,6 @@ const STATUS_META: Record<ApprovalRow['status'], { label: string; variant: 'seco
 const KIND_META: Record<ApprovalRow['kind'], { label: string; icon: typeof Sparkles }> = {
   skill: { label: '技能', icon: Sparkles },
   agent: { label: '智能体', icon: Share2 },
-}
-
-function fmtTime(iso: string): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-CN', { hour12: false })
 }
 
 /**
@@ -377,8 +360,8 @@ export default function Capabilities() {
                 <TableHead>来源</TableHead>
                 <TableHead>名称 / 标题</TableHead>
                 <TableHead>版本</TableHead>
-                <TableHead>作者</TableHead>
-                <TableHead>归属</TableHead>
+                <TableHead title="上传者（release.publisher）；与归属人可不同">作者（上传者）</TableHead>
+                <TableHead title="负责人（apps.owner），决定谁能续传新版本">归属（负责人）</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>质量</TableHead>
                 <TableHead>下载/调用</TableHead>
@@ -471,9 +454,9 @@ export default function Capabilities() {
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      下载 {row.downloads ?? 0}{row.kind === 'skill' ? ` / 调用 ${row.calls ?? 0}` : ''}
+                      下载 {formatCount(row.downloads)}{row.kind === 'skill' ? ` / 调用 ${formatCount(row.calls)}` : ''}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{fmtTime(row.created_at)}</TableCell>
+                    <TableCell className="text-muted-foreground" title={SERVER_TIME_TITLE}>{serverTimeText(row.created_at)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => { void openPreview(row) }} title="查看内容预览">

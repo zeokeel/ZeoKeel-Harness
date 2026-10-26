@@ -1,0 +1,63 @@
+{
+  "id": "2026-10-26-capability-center-p3-polish",
+  "status": "verified",
+  "intent": {
+    "zh": "收口能力中心盘点里剩余的显示类 P3：管理端版本空态/排序/搜索/千分位/服务器时间、作者与归属口径、内置来源、锁名说明，以及「我上传」空态入口；同时补一份盘点文档的实施状态与完整性自检。",
+    "en": "Close the remaining display-related P3s from the capability-center audit: admin empty-version/sort/search/number/time formatting, author-vs-owner labels, builtin source, lock name semantics, and the empty state for My uploads; also record implementation status and completeness in the audit document."
+  },
+  "modules": [
+    "server/webadmin/src/lib/capability-display.ts",
+    "server/webadmin/src/lib/capability-display.test.ts",
+    "server/webadmin/src/pages/Marketplace.tsx",
+    "server/webadmin/src/pages/Agents.tsx",
+    "server/webadmin/src/pages/Capabilities.tsx",
+    "server/webadmin/src/pages/Capabilities.test.tsx",
+    "server/webadmin/src/pages/BuiltinSkills.tsx",
+    "server/webadmin/src/components/capability-lock-panel.tsx",
+    "packages/host/capability-center/src/client/CapabilityCenterPanel.tsx",
+    "packages/host/capability-center/src/client/locales.ts",
+    "docs/planning/2026-10-26-capability-center-flow-inventory.md"
+  ],
+  "acceptance": [
+    {
+      "criterion": "管理端共用显示 helper、搜索/排序/版本/计数/时间与三个页面类型检查、页面用例全部通过",
+      "evidence": "test",
+      "command": "cd server/webadmin && npx tsc --noEmit && npx vitest run src/lib/capability-display.test.ts src/pages/Marketplace.test.tsx src/pages/Agents.test.tsx src/pages/Capabilities.test.tsx src/pages/BuiltinSkills.test.tsx"
+    },
+    {
+      "criterion": "客户端新增「查看全部」空态文案后 build+locales 双语与 41 tests 通过",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-capability-center check"
+    },
+    {
+      "criterion": "全仓 37 个任务全部通过（含 desktop/webadmin/Go 相关包）",
+      "evidence": "guard",
+      "command": "corepack yarn check"
+    },
+    {
+      "criterion": "新增/改动的展示代码不引入硬编码颜色或不存在 token",
+      "evidence": "guard",
+      "command": "node scripts/check-theme-tokens.mjs"
+    }
+  ],
+  "risk": "纯展示层收口；不改接口字段/owner/状态机。唯一行为变化是管理端列表默认按展示名排序、增加搜索框，以及无版本文案统一为「尚未发布」。",
+  "rollback": "git checkout 7555b23c3a -- server/webadmin/src/lib/capability-display.ts server/webadmin/src/lib/capability-display.test.ts server/webadmin/src/pages/Marketplace.tsx server/webadmin/src/pages/Agents.tsx server/webadmin/src/pages/Capabilities.tsx server/webadmin/src/pages/BuiltinSkills.tsx server/webadmin/src/components/capability-lock-panel.tsx packages/host/capability-center/src/client/CapabilityCenterPanel.tsx packages/host/capability-center/src/client/locales.ts docs/planning/2026-10-26-capability-center-flow-inventory.md",
+  "verification": [
+    {
+      "command": "cd server/webadmin && npx tsc --noEmit && npx vitest run src/lib/capability-display.test.ts src/pages/Marketplace.test.tsx src/pages/Agents.test.tsx src/pages/Capabilities.test.tsx src/pages/BuiltinSkills.test.tsx",
+      "result": "exit 0；tsc 无输出；5 个文件、81 tests 全通过（含 capability-display 4 tests）"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-capability-center check",
+      "result": "exit 0；build 完成；3 个 spec、41 tests 全通过（locales 双语对齐）"
+    },
+    {
+      "command": "corepack yarn check",
+      "result": "exit 0；计划 37 / 实跑 37，37 通过、0 失败、0 跳过，总耗时 324.2s"
+    },
+    {
+      "command": "node scripts/check-theme-tokens.mjs",
+      "result": "exit 0；扫描 974 个源码文件、0 条提示、0 条阻断"
+    }
+  ]
+}

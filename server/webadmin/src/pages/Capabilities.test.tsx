@@ -240,7 +240,7 @@ describe('Capabilities 能力中心(统一审批)', () => {
   it('归属列显示 apps.owner(与上传者可不同)', async () => {
     render(<Capabilities />)
     await screen.findByText('CodeQL 审计')
-    expect(screen.getByRole('columnheader', { name: '归属' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: '归属（负责人）' })).toBeInTheDocument()
     // SKILL_ROWS/AGENT_ROWS:author=bob(上传者)、owner=alice(归属人)→ 两列都渲染。
     expect(screen.getAllByText('alice', { selector: 'td' }).length).toBeGreaterThan(0)
     expect(screen.getAllByText('bob', { selector: 'td' }).length).toBeGreaterThan(0)

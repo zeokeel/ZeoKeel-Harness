@@ -116,13 +116,13 @@ export function CapabilityLockPanel({ open, onClose }: { open: boolean; onClose:
             : (
               <Table>
                 <TableHeader>
-                  <TableRow><TableHead>类型</TableHead><TableHead>名称</TableHead><TableHead>理由</TableHead><TableHead>操作人</TableHead><TableHead /></TableRow>
+                  <TableRow><TableHead>类型</TableHead><TableHead title="锁定按目录名预占，可先于内容创建">名称（目录名）</TableHead><TableHead>理由</TableHead><TableHead>操作人</TableHead><TableHead /></TableRow>
                 </TableHeader>
                 <TableBody>
                   {locks.map((l) => (
                     <TableRow key={`${l.kind}:${l.name}`}>
                       <TableCell><Badge variant="outline">{l.kind === 'agent' ? '智能体' : '技能'}</Badge></TableCell>
-                      <TableCell className="font-mono text-xs">{l.name}</TableCell>
+                      <TableCell className="font-mono text-xs" title={`目录名：${l.name}`}>{l.name}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{l.reason || '—'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{l.locked_by || '—'}</TableCell>
                       <TableCell className="text-right">

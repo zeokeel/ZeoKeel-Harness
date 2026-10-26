@@ -1,0 +1,84 @@
+{
+  "id": "2026-10-26-channel-brand-asset-bytes",
+  "status": "verified",
+  "intent": {
+    "zh": "公开仓 2026-10-21 换了品牌几何，而私有渠道仓里公共渠道（official/beta）的素材仍是旧几何的字节；既有渠道包判据只看字段与形状，发布链把旧 logo 原样带进门户、管理端与客户端且门禁全绿。需要一条字节级的 fail-loud 判据，让「渠道仓副本没跟上品牌变更」在构建期就红。",
+    "en": "The public repo switched brand geometry on 2026-10-21 while the private channels repo still shipped the old bytes for the public channels (official/beta); every existing channel-package check only looked at fields and shapes, so the release pipeline carried the old logo into the portal, admin console and clients with all gates green. A byte-level fail-loud check must turn 'the channels repo copy did not follow the brand change' red at build time."
+  },
+  "modules": [
+    "scripts/lib/check-channel-json.mjs",
+    "scripts/lib/check-channel-json.test.mjs",
+    "scripts/verify-wasm-channels.mjs",
+    "scripts/verify-ci-scripts.mjs",
+    "scripts/check-root-guards.mjs"
+  ],
+  "acceptance": [
+    {
+      "criterion": "字节判据的回归用例全过（4/4）：旧字节 logo 的公共渠道目录让校验器非 0 退出并点名 assets.logo（声明与未声明两条路径），真源逐字节副本 exit 0，品牌渠道任意 logo 字节 exit 0；旧状态（HEAD 版校验器）下第一条用例必红",
+      "evidence": "test",
+      "command": "node --test scripts/lib/check-channel-json.test.mjs"
+    },
+    {
+      "criterion": "同一条用例被根门禁真的执行：verify-wasm-channels 第 7 节 PASS、整体 exit 0、`CHANNELS-SKIP-COUNT 1`，其余各节保持 PASS",
+      "evidence": "guard",
+      "command": "node scripts/verify-wasm-channels.mjs"
+    },
+    {
+      "criterion": "受影响夹具全部修好且仍有判别力：verify-ci-scripts exit 0（0 项断言失败），素材脚本扫描用例与官方模板用例均通过；其脚本摘要已按 `sha256sum` 同步到 check-root-guards 的登记表（digest 对拍由 verify-check-workspaces 复算）",
+      "evidence": "guard",
+      "command": "node scripts/verify-ci-scripts.mjs"
+    },
+    {
+      "criterion": "登记表摘要与工作树字节一致（C-6 复算 + 独立第二登记表），无悬空/不一致条目",
+      "evidence": "guard",
+      "command": "node scripts/verify-check-workspaces.mjs"
+    },
+    {
+      "criterion": "根脚本类型面仍绿（新增测试文件与改动的夹具都在 allowJs+checkJs 面内，无 unused/类型错误）",
+      "evidence": "guard",
+      "command": "corepack yarn typecheck:scripts"
+    },
+    {
+      "criterion": "变更记录本身合规（id 与文件名一致、verified 的每条 acceptance.command 都有对应 verification）",
+      "evidence": "guard",
+      "command": "node scripts/check-change-intent.mjs"
+    },
+    {
+      "criterion": "整表根守卫仍全绿：20 个根守卫 20 通过、0 失败、0 告警，VERDICT PASS（含本次改夹具的 check:ci-scripts 与跑本判据的 check:wasm-client-only）",
+      "evidence": "guard",
+      "command": "node scripts/check-root-guards.mjs"
+    }
+  ],
+  "risk": "1) 公共渠道若仍带旧字节素材，下一次客户端/镜像打包 job 会直接红（这正是判据目的），需在私有渠道仓里用 brands/official/* 原样覆盖；2) `assets.logo_dark` 按角色映射到 brands/official/logo-dark.svg：若公共渠道把它指向 logo.svg（白天几何），同样会红 —— 修法是把真源的 logo-dark.svg 放进渠道目录并改成指向它。这不是误伤而是公开渠道品牌必须逐字节同源的直接推论；3) 改动触及 check:ci-scripts（夹具改用品牌渠道、官方模板夹具补 logo-dark.svg）与 check-root-guards 的摘要登记：两者是「改判据=改结论」要求同批更新的对象，必须在**同一个提交**里落地；4) `check-install-integrity`（install 期判据本体完整性）在**未提交**的脏树上会如实报「工作树 ≠ HEAD」（本次 3 条：本记录的 3 个判据脚本），提交后恢复；它是装在任何 yarn 命令之前的前置校验，因此提交后要重跑一次；5) 判据只覆盖品牌几何（logo / logo_dark / favicon / app-icon），不覆盖 assistedMessages.yml 等文案类素材；品牌渠道完全不受约束（客户品牌自由）。",
+  "rollback": "回退 scripts/lib/check-channel-json.mjs 的品牌素材字节段、scripts/verify-wasm-channels.mjs 的第 7 节与覆盖说明、删除 scripts/lib/check-channel-json.test.mjs；再把 scripts/verify-ci-scripts.mjs 的两处夹具改动与 scripts/check-root-guards.mjs 的摘要行回退。无迁移、无 flag、无运行期影响。",
+  "verification": [
+    {
+      "command": "node --test scripts/lib/check-channel-json.test.mjs",
+      "result": "exit 0；tests 4 / pass 4 / fail 0（duration ~208ms）。旧状态反证：`git show HEAD:scripts/lib/check-channel-json.mjs` 跑旧字节夹具 exit 0（本用例会红），修复后同夹具 exit 1 并打印 `assets.logo(渠道目录里的副本必须与品牌真源 brands/official/logo.svg 逐字节相同…)`"
+    },
+    {
+      "command": "node scripts/verify-wasm-channels.mjs",
+      "result": "exit 0；第 7 节 `PASS 公共渠道品牌素材字节判据的回归用例通过（scripts/lib/check-channel-json.test.mjs，exit=0）`，`===== 全部通过 ✅ =====`，`CHANNELS-SKIP-COUNT 1`；第 3/4/5 节（dry-run 渠道集、app_origin_scheme 负例、保留 scheme 对拍）保持 PASS"
+    },
+    {
+      "command": "node scripts/verify-ci-scripts.mjs",
+      "result": "exit 0；由修复前的「3 项断言失败」→ 全绿（SVG 扫描用例改走品牌渠道、官方模板夹具补 logo-dark.svg 后仍逐条断言，扩展名免检牌/实体误判/模板缺键三类语义不变）"
+    },
+    {
+      "command": "node scripts/verify-check-workspaces.mjs",
+      "result": "exit 0；OK（断言 521 条 / 合成树场景 30 / 自检 13/13），C-6 守卫脚本 sha256 与登记表对拍通过（verify-ci-scripts.mjs 新摘要 0e55a3ff… 已同步）"
+    },
+    {
+      "command": "corepack yarn typecheck:scripts",
+      "result": "exit 0，无输出（tsc -p tsconfig.scripts.json；新增 scripts/lib/check-channel-json.test.mjs 与改动的 verify-ci-scripts.mjs 都在面内）"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs",
+      "result": "exit 0；8 条变更记录全部合规（_template.json 同判）"
+    },
+    {
+      "command": "node scripts/check-root-guards.mjs",
+      "result": "exit 0；`20 个根守卫：20 通过、0 失败、0 告警(advisory)，总耗时 63.1s`、`check-root-guards: VERDICT PASS guards=20`（含 check:ci-scripts 63.0s；脏树上 check-install-integrity 的 3 条「工作树 ≠ HEAD」属提交前预期，提交后归零）"
+    }
+  ]
+}

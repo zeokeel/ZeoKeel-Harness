@@ -27,6 +27,10 @@
  *      公开 Actions 日志 —— 这是本仓硬纪律）。
  *   5. `--channels-repo <dir>`（可选）：对真实私有渠道仓检出跑一次正式 tag dry-run。
  *      不给则显式打印 SKIP（本脚本在公开仓里不持有渠道仓，也不联网）。
+ *   6. 公共渠道品牌素材的**字节**判据（`scripts/lib/check-channel-json.test.mjs`，由本
+ *      脚本当子进程跑）：2026-10-21 公开仓换品牌几何后，渠道仓里 official/beta 的副本
+ *      仍是旧字节，而既有判据只看字段/形状 ⇒ 旧 logo 一路进到门户/管理端/客户端。
+ *      用例覆盖"旧字节被拦下 / 真源副本放行 / 品牌渠道不误伤"三种形态。
  *
  * **跳过必须以可解析形式回报父脚本**（2026-09-23 三轮审计 W-6②）：
  * 本脚本在退出前**总是**打印两行报告协议给 `scripts/verify-wasm-client-only.sh` 解析 ——
@@ -53,6 +57,9 @@ const CHANNELS_SCRIPT = join(ROOT, 'scripts', 'ci-channels.sh')
  *  冻结 scheme 正则与保留名单现在住在这里，扫描面必须跟着走 —— 否则本门禁会
  *  "找不到符号"而静默失去意义（组 7 的红就是它）。 */
 const CHANNEL_VALIDATOR = join(ROOT, 'scripts', 'lib', 'check-channel-json.mjs')
+/** 公共渠道品牌素材字节判据的回归用例（`node:test`；本仓没有根级脚本测试框架，
+ *  所以由本门禁当子进程调用 —— 判据只存在于本地手动入口里等于没有判据）。 */
+const CHANNEL_BRAND_TEST = join(ROOT, 'scripts', 'lib', 'check-channel-json.test.mjs')
 const DESIGN_DOC = join(ROOT, 'docs', 'planning', '2026-09-19-wasm-client-only-design.md')
 const UPSTREAM_JSON = join(ROOT, 'upstream.json')
 
@@ -510,6 +517,20 @@ section('6. 真实渠道仓 dry-run（可选；未给目录时显式 SKIP，不�
       `真实渠道仓正式 tag dry-run 通过（exit=${result.status}；渠道集 ${result.selected.length} 个）`)
     if (result.status !== 0) console.error(result.stderr.trimEnd())
   }
+}
+
+// ---------------------------------------------------------------------------
+section('7. 公共渠道品牌素材字节判据（回归用例：旧 logo 事故的形态）')
+{
+  // 2026-10-26 生产事故的门禁化：公开仓换了品牌几何，渠道仓里 official/beta 的素材
+  // 仍是旧字节，而既有判据只看字段/形状 ⇒ 门户、管理端、客户端全用旧 mark 且门禁皆绿。
+  // 用例本体在独立文件里（`node --test scripts/lib/check-channel-json.test.mjs` 可单跑），
+  // 这里只负责让每一位 `yarn check` 都真的跑它一次。
+  const result = spawnSync(process.execPath, ['--test', CHANNEL_BRAND_TEST], { cwd: ROOT, encoding: 'utf8' })
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+  check(result.status === 0,
+    `公共渠道品牌素材字节判据的回归用例通过（${REL(CHANNEL_BRAND_TEST)}，exit=${String(result.status)}）`)
+  if (result.status !== 0) console.error(output.trimEnd())
 }
 
 for (const dir of scratch) rmSync(dir, { recursive: true, force: true })

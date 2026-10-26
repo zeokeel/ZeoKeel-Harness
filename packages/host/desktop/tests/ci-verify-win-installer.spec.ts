@@ -6,7 +6,7 @@
  * 静默通过或被别的 exe 顶替。
  */
 import { describe, expect, it } from 'vitest'
-import { findOfficialInstaller, OFFICIAL_STAGING_DIR } from '../scripts/ci-verify-win-installer.mjs'
+import { findOfficialInstaller, findStagedInstaller, OFFICIAL_STAGING_DIR } from '../scripts/ci-verify-win-installer.mjs'
 
 describe('CI 安装器门禁入口', () => {
   it('默认 staging 目录是 client-assets/official', () => {
@@ -26,5 +26,17 @@ describe('CI 安装器门禁入口', () => {
   it('没有任何 Setup 产物时明确失败（绝不静默通过）', () => {
     expect(() => findOfficialInstaller('client-assets/official', () => ['notes.txt']))
       .toThrow(/no official installer/u)
+  })
+
+  it('预发布只构建单一渠道时，从唯一的 client-assets/<channel> 目录挑安装包', () => {
+    // v2.10.0-beta.1 的 channel_set=beta：client-assets 下没有 official，只有 beta。
+    const found = findStagedInstaller('client-assets', (dir: string) =>
+      dir === 'client-assets' ? ['beta'] : ['ZeoKeel-Harness-test-Setup.exe'])
+    expect(found.replace(/\\/gu, '/')).toBe('client-assets/beta/ZeoKeel-Harness-test-Setup.exe')
+  })
+
+  it('多个渠道但缺 official 时明确失败，不猜目录', () => {
+    expect(() => findStagedInstaller('client-assets', () => ['beta', 'brand-a']))
+      .toThrow(/expected client-assets\/official or exactly one/u)
   })
 })

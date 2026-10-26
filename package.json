@@ -1,6 +1,6 @@
 {
   "name": "zeokeel-harness",
-  "version": "2.9.1",
+  "version": "2.10.0-beta.1",
   "private": true,
   "description": "ZeoKeel Harness product workspace",
   "license": "MIT",
@@ -101,6 +101,8 @@
     "check:no-real-domains": "node scripts/check-no-real-domains.mjs",
     "check:guard-parser-integrity": "node scripts/check-guard-parser-integrity.mjs",
     "check:scripts-types": "node scripts/check-scripts-types.mjs",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "check:change-intent": "node scripts/check-change-intent.mjs",
     "check:ci-parity": "node scripts/check-ci-parity.mjs",
     "prebuild": "yarn workspace dsh-plugin-desktop prebuild",
     "check": "node scripts/check-workspaces.mjs",
@@ -126,7 +128,9 @@
     "version:check": "node scripts/version.mjs check"
   },
   "devDependencies": {
+    "@swc/core": "1.16.20",
     "@types/node": "^22.20.0",
+    "dependency-cruiser": "18.7.0",
     "typescript": "7.0.2",
     "yaml": "^2.9.0"
   }

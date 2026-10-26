@@ -73,13 +73,13 @@ describe('R15C-W-02 Capabilities：切状态页 GET 失败后，上一页的行�
 
     expect(await screen.findByText('待审技能R15')).toBeInTheDocument()
     // 对照：正常路径下「删除」确实可点（不是被权限挡掉的）。
-    expect(screen.getAllByRole('button', { name: '删除' }).length).toBe(1)
+    expect(screen.getAllByRole('button', { name: '删除版本' }).length).toBe(1)
 
-    await userEvent.setup().click(screen.getByRole('tab', { name: /已拒绝/ }))
+    await userEvent.setup().click(screen.getByRole('tab', { name: /未通过/ }))
     await waitFor(() => expect(screen.getByText(/查询失败/)).toBeInTheDocument())
 
     expect(screen.queryByText('待审技能R15')).toBeNull()
-    expect(screen.queryAllByRole('button', { name: '删除' }).length).toBe(0)
+    expect(screen.queryAllByRole('button', { name: '删除版本' }).length).toBe(0)
     // 失败不是空态。
     expect(screen.queryByText('暂无待处理能力')).toBeNull()
     expect(screen.getByText('审批列表未读取成功')).toBeInTheDocument()

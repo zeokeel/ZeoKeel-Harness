@@ -212,6 +212,23 @@ async function clickLabel(cdp, label, waitMs = 2500) {
 }
 
 /**
+ * 点分段 tab（能力中心 4 分段带计数，textContent 会是「已安装 3」，
+ * 不能用 clickLabel 的逐字相等判据）。
+ */
+async function clickTab(cdp, label, waitMs = 800) {
+  const r = await evalSafe(cdp, `(() => {
+    const wanted = ${JSON.stringify(label)}
+    const tabs = [...document.querySelectorAll('[role="tab"]')].filter(b => b.offsetParent)
+    const el = tabs.find(b => (b.textContent ?? '').includes(wanted))
+    if (el === undefined) return 'NOT_FOUND'
+    el.click()
+    return 'CLICKED'
+  })()`)
+  await wait(waitMs)
+  return r
+}
+
+/**
  * 「可见」判据（字符串形式，嵌进页面表达式里用）。
  *
  * **不要用 `offsetParent`**：`position:fixed` 的元素（账户浮层、设置/工作区模态、
@@ -757,12 +774,14 @@ async function main() {
     reportStep(`${item.label}面板含预期内容`, text.includes(item.marker), `marker=${item.marker}`)
     await screenshot(cdp, item.shot)
 
-    // 能力中心额外两条：①未安装的平台内置技能必须出现在「市场」而不是「我的」
-    // （2026-09-20 用户报的现象）；②卡片描述固定两行，全文进详情弹层。
+    // 能力中心额外两条：①未安装的平台内置技能必须出现在「市场」而不是「已安装」
+    // （2026-09-20 用户报的现象）；②卡片描述固定两行，全文进详情视图。
     if (item.id === 'capability') {
-      const mineText = await bodyText(cdp)
-      reportStep('未安装的内置技能不出现在「我的」', !mineText.includes('应用构建（WASM 应用）'), 'tab=mine')
-      await clickLabel(cdp, '市场', 3000)
+      // 2026-10-26：默认分段改为「全部」；先切到「已安装」再断言。
+      const installedClick = await clickTab(cdp, '已安装')
+      const installedText = await bodyText(cdp)
+      reportStep('未安装的内置技能不出现在「已安装」', installedClick === 'CLICKED' && !installedText.includes('应用构建（WASM 应用）'), `tab=installed click=${installedClick}`)
+      await clickTab(cdp, '市场')
       await wait(700)
       const marketText = await bodyText(cdp)
       reportStep('未安装的内置技能出现在「市场」', marketText.includes('应用构建（WASM 应用）'), 'tab=market')
@@ -784,7 +803,7 @@ async function main() {
         const text = box.textContent || ''
         return text.includes('分轮次访谈需求') && text.includes('应用构建')
       })()`, 5000, 200)
-      reportStep('详情弹层显示描述全文', dialog === true, 'detail-dialog')
+      reportStep('详情视图显示描述全文', dialog === true, 'detail-view')
       await screenshot(cdp, '04d-capability-detail')
       await evalSafe(cdp, `(() => { const b=[...document.querySelectorAll('[data-role="capability-detail"] button')].find(x=>(x.textContent||'').includes('✕')); if (b) b.click(); return !!b })()`).catch(() => {})
       await wait(500)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { request, ADMIN_API } from '../api'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -16,9 +16,22 @@ import { GrantDialog } from '../components/grant-dialog'
 import { ArchivePreviewDialog, ArchivePreviewData } from '../components/archive-preview-dialog'
 import { Download, UserCog, Bot, Upload, Lock } from 'lucide-react'
 import { agentRequest, grantsBase, previewFileBase } from '../lib/capability-endpoints'
+import {
+  dedupeLatestByName, delistConfirmText, displayNameOf as agentDisplayName, formatCount,
+  SOURCE_LABEL, versionText,
+} from '../lib/capability-display'
+import {
+  hasPermission, PERM_CAP_READ, PERM_CAP_WRITE, PERM_MARKET_READ, PERM_MARKET_WRITE,
+} from '../lib/rbac'
 
 interface AgentRow {
   name: string
+  /**
+   * 展示名(2026-10-26 D 系列显示修复):服务端 `agentJSON` 下发。回退链
+   * apps.title → 展示版本 title → name;卡片主标题与弹窗标题都用它。
+   */
+  display_name?: string
+  /** 兼容旧服务端的别名(服务端已把 display_name 回退结果同步写到该键)。 */
   title?: string
   version?: string
   description?: string
@@ -86,6 +99,7 @@ function isOrg(row: { channel?: 'market' | 'org' }): boolean {
  */
 export default function Agents() {
   const [agents, setAgents] = useState<AgentRow[]>([])
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [opError, setOpError] = useState('')
@@ -94,6 +108,7 @@ export default function Agents() {
   // 上架登记
   const [createOpen, setCreateOpen] = useState(false)
   const [createName, setCreateName] = useState('')
+  const [createTitle, setCreateTitle] = useState('')
   const [createDesc, setCreateDesc] = useState('')
   const [createErr, setCreateErr] = useState('')
   // 上传版本
@@ -104,8 +119,9 @@ export default function Agents() {
   const [uploadErr, setUploadErr] = useState('')
   // 锁定管理(2026-09-04 从审批页迁入市场页)
   const [lockOpen, setLockOpen] = useState(false)
-  // 编辑描述
+  // 编辑描述 / 展示名
   const [editAgent, setEditAgent] = useState<AgentRow | null>(null)
+  const [editTitle, setEditTitle] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editErr, setEditErr] = useState('')
   // 预览 / 授权 / 归属
@@ -118,26 +134,40 @@ export default function Agents() {
   interface GrantDept { id: number; name: string; parent_id: number }
   const [transferAgent, setTransferAgent] = useState<AgentRow | null>(null)
 
+  /**
+   * 权限门(F-48,2026-10-26):与 Marketplace.tsx 同一口径 —— 读分
+   * market:read / capability:read,写分 market:write / capability:write,
+   * 按**该行实际端点**申报的权限点渲染入口。
+   */
+  const canMarketRead = hasPermission(PERM_MARKET_READ)
+  const canCapRead = hasPermission(PERM_CAP_READ)
+  const canMarketWrite = hasPermission(PERM_MARKET_WRITE)
+  const canCapWrite = hasPermission(PERM_CAP_WRITE)
+
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       // 市场列表按行 channel 选命名空间(市场命名空间;组织行见 action 分支)。
       const listReq = agentRequest('list', { channel: 'market', name: '' })!
+      // F-48:只请求角色真能读的那一侧,不发必然 403 的请求。
       const [d, approvals] = await Promise.all([
-        request(listReq.url),
-        request(`${ADMIN_API}/capabilities/approvals?status=approved&type=agent`).catch(() => ({ approvals: [] })),
+        canMarketRead ? request(listReq.url) : Promise.resolve({ agents: [] }),
+        canCapRead
+          ? request(`${ADMIN_API}/capabilities/approvals?status=approved&type=agent`).catch(() => ({ approvals: [] }))
+          : Promise.resolve({ approvals: [] }),
       ])
       const merged: AgentRow[] = (d.agents ?? []).map(toMarketAgent)
-      for (const row of (approvals.approvals ?? []) as {
+      for (const row of dedupeLatestByName((approvals.approvals ?? []) as {
         name: string; version: string; display_name: string; description: string
         author: string; owner?: string; enabled?: boolean; downloads?: number
         official?: boolean; quality?: string
-      }[]) {
+      }[])) {
         // 归属取服务端下发的 owner(apps.owner),**不是** author(本行上传者);
         // 上下架状态透传服务端值,缺省按"未知即未上架"(绝不回落 true)。
         merged.push({
-          name: row.name, title: row.display_name || row.name, version: row.version,
+          name: row.name, display_name: row.display_name,
+          title: row.display_name || row.name, version: row.version,
           description: row.description, author: row.author, owner: row.owner ?? '',
           enabled: row.enabled === true,
           downloads: row.downloads ?? 0, official: row.official, quality: row.quality, channel: 'org',
@@ -149,7 +179,8 @@ export default function Agents() {
         if (!!a.official !== !!b.official) return a.official ? -1 : 1
         if (!!(a.quality === 'featured') !== !!(b.quality === 'featured')) return a.quality === 'featured' ? -1 : 1
         if (score(a) !== score(b)) return score(b) - score(a)
-        return a.name.localeCompare(b.name)
+        // P3 D-12：按展示名排序（目录名只在展示名相同时兜底）。
+        return agentDisplayName(a).localeCompare(agentDisplayName(b), 'zh-CN') || a.name.localeCompare(b.name)
       })
       setAgents(merged)
     } catch (err: any) {
@@ -157,7 +188,7 @@ export default function Agents() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [canMarketRead, canCapRead])
 
   useEffect(() => {
     void load()
@@ -175,10 +206,15 @@ export default function Agents() {
       if (req === null) { setCreateErr('当前命名空间不支持新建智能体'); return }
       await request(req.url, {
         method: req.method,
-        body: JSON.stringify({ name: createName.trim(), description: createDesc.trim() }),
+        body: JSON.stringify({
+          name: createName.trim(),
+          title: createTitle.trim(),
+          description: createDesc.trim(),
+        }),
       })
       setCreateOpen(false)
       setCreateName('')
+      setCreateTitle('')
       setCreateDesc('')
       await load()
     } catch (err: any) {
@@ -246,6 +282,8 @@ export default function Agents() {
     const action = enabled ? 'enable' : 'disable'
     const req = agentRequest(action, a)
     if (req === null) { setOpError(`${enabled ? '上架' : '下架'}失败:该来源不支持此操作`); return }
+    // 下架确认(F-21/F-49):与技能页同一份文案 —— 可恢复 ≠ 删除。
+    if (!enabled && !window.confirm(delistConfirmText(agentDisplayName(a)))) return
     const key = `${action}-${a.name}`
     setBusy(key)
     setOpError('')
@@ -268,7 +306,7 @@ export default function Agents() {
     try {
       await request(req.url, {
         method: req.method,
-        body: JSON.stringify({ description: editDesc }),
+        body: JSON.stringify({ title: editTitle.trim(), description: editDesc }),
       })
       setEditAgent(null)
       await load()
@@ -279,6 +317,32 @@ export default function Agents() {
     }
   }
 
+  /** F-02：释放只有身份、没有版本的智能体空壳名称（服务端守卫同技能）。 */
+  const releaseShell = async (a: AgentRow): Promise<void> => {
+    if (busy !== null) return
+    if (!window.confirm(`释放空壳「${agentDisplayName(a)}」的名称？\n\n该名称下没有任何版本，释放后可重新登记；官方归属或已有版本会被服务端拒绝。`)) return
+    setBusy(`release-${a.name}`)
+    setOpError('')
+    try {
+      await request(`${ADMIN_API}/apps/agent/${encodeURIComponent(a.name)}`, { method: 'DELETE' })
+      await load()
+    } catch (err: any) {
+      setOpError(`释放名称失败：${err.message}`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /** P3 D-12：管理端搜索按展示名/目录名/描述，与卡片标题口径一致。 */
+  const visibleAgents = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('zh-CN')
+    if (q === '') return agents
+    return agents.filter((a) =>
+      agentDisplayName(a).toLocaleLowerCase('zh-CN').includes(q)
+      || a.name.toLocaleLowerCase('zh-CN').includes(q)
+      || (a.description ?? '').toLocaleLowerCase('zh-CN').includes(q))
+  }, [agents, query])
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -286,12 +350,17 @@ export default function Agents() {
         desc="官方智能体(蓝标) / 员工上传(审批后);授权制可见、归属约束续传"
         actions={
           <>
-            <Button size="sm" variant="outline" onClick={() => setLockOpen(true)}>
-              <Lock className="h-3.5 w-3.5" /> 锁定管理
-            </Button>
-            <Button size="sm" onClick={() => { setCreateOpen(true); setCreateErr('') }}>
-              <Upload className="h-3.5 w-3.5" /> 上架智能体
-            </Button>
+            {/* F-48:锁定写面 / 登记分别需要 capability:write / market:write。 */}
+            {canCapWrite && (
+              <Button size="sm" variant="outline" onClick={() => setLockOpen(true)}>
+                <Lock className="h-3.5 w-3.5" /> 锁定管理
+              </Button>
+            )}
+            {canMarketWrite && (
+              <Button size="sm" onClick={() => { setCreateOpen(true); setCreateErr(''); setCreateTitle('') }}>
+                <Upload className="h-3.5 w-3.5" /> 上架智能体
+              </Button>
+            )}
           </>
         }
       />
@@ -300,6 +369,15 @@ export default function Agents() {
         <CardHeader>
           <CardTitle>智能体(Agent)</CardTitle>
           <CardDescription>与技能同规则:归档直存数据库、包内 preset.yml 携带版本/描述/作者/分类、发布即已审核</CardDescription>
+          <div className="flex justify-end pt-2">
+            <Input
+              value={query}
+              onChange={(e) => { setQuery(e.target.value) }}
+              placeholder="搜索展示名 / 目录名 / 描述"
+              aria-label="搜索智能体"
+              className="h-8 w-56"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {error ? (
@@ -313,7 +391,12 @@ export default function Agents() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {agents.map((a) => (
+              {visibleAgents.length === 0 && (
+                <div className="col-span-full">
+                  <EmptyState title="没有匹配的智能体" desc={`没有展示名/目录名/描述匹配「${query.trim()}」的智能体`} />
+                </div>
+              )}
+              {visibleAgents.map((a) => (
                 <div key={a.name} className="group flex flex-col rounded-lg border bg-card p-4 transition-all duration-200 hover:border-[#1E40AF]/40 hover:shadow-md">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -321,14 +404,20 @@ export default function Agents() {
                         <Bot className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold">{a.title || a.name}</div>
-                        <div className="text-[11px] text-muted-foreground">{a.version ? `v${a.version}` : '尚未发布版本'} · {a.name}</div>
+                        {/* 主标题 = 展示名;目录名只在两者不同时作副标题,避免重复。 */}
+                        <div className="truncate text-sm font-semibold" title={a.name}>{agentDisplayName(a)}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {versionText(a.version)}
+                          {agentDisplayName(a) !== a.name && <span className="ml-1.5 font-mono">{a.name}</span>}
+                        </div>
                       </div>
                     </div>
                     <span className="flex items-center gap-1.5">
                       {a.official && <Badge className="bg-[#1E40AF] text-white hover:bg-[#1E40AF]">官方</Badge>}
                       {a.quality === 'featured' && <Badge variant="secondary">精选</Badge>}
-                      {a.channel === 'org' && <Badge variant="outline">员工上传</Badge>}
+                      {a.channel === 'org' && (
+                        <Badge variant="outline" title="员工上传、审批通过后进入组织共享库">{SOURCE_LABEL.org}</Badge>
+                      )}
                       {a.enabled ? <Badge variant="success">上架</Badge> : <Badge variant="outline">已下架</Badge>}
                     </span>
                   </div>
@@ -337,8 +426,8 @@ export default function Agents() {
                     <UserCog className="h-3 w-3 shrink-0" /><span className="truncate">归属 {a.official ? '官方' : (a.owner || '未指定')}</span>
                   </div>
                   <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
-                    {a.quality && a.quality !== '' && <Badge variant="secondary" className="px-1 py-0 text-[10px]">{a.quality}</Badge>}
-                    <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />下载 {a.downloads ?? 0}</span>
+                    {/* 精选徽章已在标题行渲染一次(F-54:同一状态不重复两颗)。 */}
+                    <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />下载 {formatCount(a.downloads)}</span>
                   </div>
                   {/* 组织共享行仍没有 元数据编辑 端点(服务端确实不存在)⇒ 该入口对
                       org 行禁用并说明原因,绝不回落市场命名空间(必然 404)。
@@ -356,31 +445,58 @@ export default function Agents() {
                       const uploadBlocked = a.enabled === false
                       return (
                         <>
-                          <Button
-                            variant="outline"
-                            disabled={previewReq === null}
-                            title={previewReq === null ? ORG_LIMITS.hint : undefined}
-                            onClick={() => void openPreview(a)}
-                          >预览</Button>
-                          <span title={uploadBlocked ? DELISTED_UPLOAD_HINT : undefined}>
+                          {/* F-48:按该行实际端点的权限点渲染入口(缺权限 ⇒ 不出现)。 */}
+                          {(isOrg(a) ? canCapRead : canMarketRead) && (
                             <Button
                               variant="outline"
-                              disabled={busy !== null || uploadReq === null || uploadBlocked}
-                              title={uploadBlocked ? DELISTED_UPLOAD_HINT : uploadReq === null ? UPLOAD_UNAVAILABLE : undefined}
-                              onClick={() => { setUploadAgent(a); setUploadVersion(''); setUploadFile(null); setUploadErr('') }}
-                            >上传新版</Button>
-                          </span>
-                          <Button
-                            variant="outline"
-                            disabled={editReq === null}
-                            title={editReq === null ? ORG_LIMITS.edit : undefined}
-                            onClick={() => { setEditAgent(a); setEditDesc(a.description ?? ''); setEditErr('') }}
-                          >编辑</Button>
-                          <Button variant="outline" onClick={() => setTransferAgent(a)} title="转移归属(负责人)">归属</Button>
-                          <Button variant="outline" onClick={() => setGrantAgent(a)}>授权</Button>
-                          {a.enabled
+                              disabled={previewReq === null}
+                              title={previewReq === null ? ORG_LIMITS.hint : undefined}
+                              onClick={() => void openPreview(a)}
+                            >预览</Button>
+                          )}
+                          {canCapWrite && (
+                            <span title={uploadBlocked ? DELISTED_UPLOAD_HINT : undefined}>
+                              <Button
+                                variant="outline"
+                                disabled={busy !== null || uploadReq === null || uploadBlocked}
+                                title={uploadBlocked ? DELISTED_UPLOAD_HINT : uploadReq === null ? UPLOAD_UNAVAILABLE : undefined}
+                                onClick={() => { setUploadAgent(a); setUploadVersion(''); setUploadFile(null); setUploadErr('') }}
+                              >上传新版</Button>
+                            </span>
+                          )}
+                          {canCapWrite && (!a.version || a.version === '') && (
+                            <Button
+                              variant="destructive"
+                              disabled={busy !== null}
+                              title="该智能体只有身份、没有任何版本；释放名称后可重新登记（有版本时不能释放）"
+                              onClick={() => { void releaseShell(a) }}
+                            >{busy === `release-${a.name}` ? '释放中…' : '释放名称'}</Button>
+                          )}
+                          {canMarketWrite && (
+                            <Button
+                              variant="outline"
+                              disabled={editReq === null}
+                              title={editReq === null ? ORG_LIMITS.edit : undefined}
+                              onClick={() => {
+                                setEditAgent(a)
+                                setEditDesc(a.description ?? '')
+                                // 展示名回填:当前展示名等于目录名时留空,避免把 slug
+                                // 当成"人工展示名"提交(空值服务端保持既有展示名)。
+                                const current = a.display_name?.trim() || a.title?.trim() || ''
+                                setEditTitle(current === a.name ? '' : current)
+                                setEditErr('')
+                              }}
+                            >编辑</Button>
+                          )}
+                          {canCapWrite && (
+                            <Button variant="outline" onClick={() => setTransferAgent(a)} title="转移归属(负责人)">归属</Button>
+                          )}
+                          {(isOrg(a) ? canCapWrite : canMarketWrite) && (
+                            <Button variant="outline" onClick={() => setGrantAgent(a)}>授权</Button>
+                          )}
+                          {(isOrg(a) ? canCapWrite : canMarketWrite) && (a.enabled
                             ? <Button variant="destructive" disabled={busy !== null} onClick={() => void setEnabled(a, false)}>{busy === `disable-${a.name}` ? '下架中…' : '下架'}</Button>
-                            : <Button variant="outline" disabled={busy !== null} onClick={() => void setEnabled(a, true)}>{busy === `enable-${a.name}` ? '上架中…' : '重新上架'}</Button>}
+                            : <Button variant="outline" disabled={busy !== null} onClick={() => void setEnabled(a, true)}>{busy === `enable-${a.name}` ? '上架中…' : '重新上架'}</Button>)}
                         </>
                       )
                     })()}
@@ -389,7 +505,11 @@ export default function Agents() {
               ))}
               {agents.length === 0 && (
                 <div className="col-span-full">
-                  <EmptyState icon={<Bot className="h-5 w-5 text-muted-foreground" />} title="暂无智能体" desc="点击「上架智能体」登记并上传归档包" />
+                  <EmptyState
+                    icon={<Bot className="h-5 w-5 text-muted-foreground" />}
+                    title="暂无智能体"
+                    desc={canMarketWrite ? '点击「上架智能体」登记并上传归档包' : '由管理员上架智能体后显示在这里'}
+                  />
                 </div>
               )}
             </div>
@@ -410,6 +530,11 @@ export default function Agents() {
               <Input id="agent-name" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="如 code-review-bot" />
             </div>
             <div className="space-y-1">
+              <Label htmlFor="agent-title">展示名(可选)</Label>
+              <Input id="agent-title" value={createTitle} onChange={(e) => setCreateTitle(e.target.value)} placeholder={createName || '留空则显示名称(目录名)'} />
+              <p className="text-xs text-muted-foreground">上传归档后以包内 preset.yml 的 title 为准。</p>
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="agent-desc">描述(展示文案)</Label>
               <Textarea id="agent-desc" rows={3} value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} />
             </div>
@@ -423,7 +548,7 @@ export default function Agents() {
       <Dialog open={!!uploadAgent} onOpenChange={(open) => { if (!open) setUploadAgent(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>上传新版 · {uploadAgent?.name}</DialogTitle>
+            <DialogTitle>上传新版 · {uploadAgent ? agentDisplayName(uploadAgent) : ''}</DialogTitle>
             <DialogDescription>
               {uploadAgent?.channel === 'org'
                 ? '组织共享智能体:归档包要求顶层 agent.cordis.yml + preset.yml;版本以包内 preset.yml 为准,管理员代传即发布(已通过审核)'
@@ -452,14 +577,19 @@ export default function Agents() {
         </DialogContent>
       </Dialog>
 
-      {/* 编辑描述弹窗 */}
+      {/* 编辑展示名/描述弹窗 */}
       <Dialog open={!!editAgent} onOpenChange={(open) => { if (!open) setEditAgent(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑智能体 · {editAgent?.name}</DialogTitle>
+            <DialogTitle>编辑智能体 · {editAgent ? agentDisplayName(editAgent) : ''}</DialogTitle>
             <DialogDescription>仅展示文案;版本/内容以归档包为准,归属经「归属」转移</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="agent-edit-title">展示名</Label>
+              <Input id="agent-edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder={editAgent?.name || '留空则显示名称(目录名)'} />
+              <p className="text-xs text-muted-foreground">卡片标题;留空保持既有展示名(不会把英文目录名写成展示名)。</p>
+            </div>
             <div className="space-y-1">
               <Label htmlFor="agent-edit-desc">描述</Label>
               <Textarea id="agent-edit-desc" rows={4} value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
@@ -499,7 +629,7 @@ export default function Agents() {
           open={!!transferAgent}
           kind="agent"
           name={transferAgent.name}
-          displayName={transferAgent.title || transferAgent.name}
+          displayName={transferAgent ? agentDisplayName(transferAgent) : undefined}
           currentOwner={transferAgent.owner}
           onClose={() => setTransferAgent(null)}
           onSaved={() => { setTransferAgent(null); void load() }}

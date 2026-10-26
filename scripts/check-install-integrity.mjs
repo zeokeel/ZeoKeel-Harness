@@ -362,6 +362,11 @@ export const EXECUTION_FACE_REGISTRY = [
   // vitest worker / Makefile 的 TEST_PARALLEL·GO_BUILD_P）都从它取数 —— 改写它 = 改写
   // "这台机器开几路并发"这一结论，且不会再有任何判据看得出偏差（除了本文件的工作树↔HEAD 对拍）。
   'scripts/build-capacity.mjs',
+  // 2026-10-26：两条新根守卫（第 19/20 条，形状族 `scripts/*.mjs` 本来就会枚举到它们）。
+  // 显式登记的理由与其它守卫相同：它们是**决定红绿**的执行体 —— 被 install 期改写后
+  // "工作树 == HEAD"这条对拍与 `--restore` 的覆盖集都必须看得见。
+  'scripts/check-architecture.mjs',
+  'scripts/check-change-intent.mjs',
   'scripts/check-doc-claims.mjs',
   // FIX-48⑤ 的两个新执行体（本地收尾清单 + 从 ci.yml 逐字抽出的 docs-only 分类器矩阵）：
   // 它们自己也是"判据执行体"—— 改写 `ci-parity-classifier.mjs` 就等于改写分类器的判定矩阵。
@@ -603,6 +608,10 @@ export function makefilePaths(headPaths) {
  */
 export const EXECUTION_POINT_REGISTRY = [
   'community/fabric/scripts/verify-docs.mjs',
+  // 2026-10-26（F-12 跨层能力生命周期 E2E）：新用例脚本按 `integration-tests/**` 的扩展名集合
+  // 派生（守卫的 `INTEGRATION_SCANNED_EXTENSIONS` 含 `.py`）⇒ 它属于"被执行且决定判定、
+  // 但不在形状族目录里"的那一半，必须登记（否则派生却未登记 ⇒ 红）。
+  'integration-tests/capability-lifecycle.py',
   'integration-tests/contractkit.py',
   'integration-tests/dex/config.yaml',
   'integration-tests/dex/dex-sso-test.py',

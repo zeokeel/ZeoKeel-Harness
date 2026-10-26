@@ -10,12 +10,13 @@
 | `dex/` | Dex SSO 集成测试（docker 起 Dex → 服务端配 OIDC → 验证登录流） |
 | `openldap/` | OpenLDAP 集成测试（docker 起 LDAP → 服务端配 LDAP → 验证登录/RBAC/渠道内容） |
 | `electron-shots/` | 真实 Electron + Xvfb + CDP 截图验证（客户端登录页/品牌/权限）。判据本体在 `electron-shots/assertions.mjs`（运行期与门禁消费同一张表），`--self-test` 逐条判据跑正例 + 负例 |
-| `contractkit.py` | **契约判据通道**：判据求值（`judge`）+ 失败计数（`Reporter`）+ 两个自证入口。两个 `.py` 与门禁消费同一份实现 —— 判定与计数不允许在各脚本里各写一份（那样"运行期还按不按判据判"就没有单一入口可查） |
+| `capability-lifecycle.py` | **跨层能力生命周期 E2E**（F-12，真 server + 真 wire）：员工上传 → 管理员审批 → 第二账号安装/更新（`GET` 归档）。10 条判据 / 22 条夹具；需要员工A、员工B、管理员三个真实账号（见下方「能力生命周期用例」） |
+| `contractkit.py` | **契约判据通道**：判据求值（`judge`）+ 失败计数（`Reporter`）+ 两个自证入口。三个 `.py` 与门禁消费同一份实现 —— 判定与计数不允许在各脚本里各写一份（那样"运行期还按不按判据判"就没有单一入口可查） |
 | `run-all.sh` | 一键跑全部（服务端地址取 `SERVER_BASE`，默认 `http://127.0.0.1:8091`；逐项收集结果） |
 
 ## 判据纪律（2026-09-23 第十三轮审计 F-01，P0）
 
-两个 `.py` 与 `electron-shots` **遵守同一套纪律**（此前只有 `electron-shots` 一条腿有）：
+三个 `.py`（`dex` / `ldap` / `capability-lifecycle`）与 `electron-shots` **遵守同一套纪律**（此前只有 `electron-shots` 一条腿有）：
 
 1. **判据表是唯一真源**：每条契约判据落成 `CRITERIA` 里的一条 `{id, name, evaluate}`；
    运行期**只按 id** 经 `contractkit.Reporter.report()` 求值，不在运行期代码里散写判据。
@@ -50,7 +51,7 @@
   「有失败 ⇒ 1；否则一项都没跑起来 ⇒ **77**；否则 0」——**"什么都没验证"绝不报 PASS**。
 - `--self-test` 是判据自检（每条判据都配负例，证明它有判别力），**不需要**任何服务端/Docker，
   也是门禁实际执行的那条路径。
-- 三个用例脚本都遵守同一张表。`electron-shots.mjs` 在启动应用**之前**依次探测
+- 四个用例脚本都遵守同一张表（dex / ldap / capability-lifecycle / electron-shots）。`electron-shots.mjs` 在启动应用**之前**依次探测
   「打包产物 → X 显示 → 服务端 `/healthz`」，任一缺失即 `SKIP(77)` 并打印原因与处置；
   只有三项都在才会真跑（此时断言失败才是 `1`）。
 
@@ -62,7 +63,7 @@
 `INTEGRATION_ENTRIES` 里登记角色（登记了却不在 / 在却没登记都红），`run-all.sh` 的
 `run "…" <runner> <路径>` 行与登记表里带 `aggregateName` 的条目**逐条逐字对拍（含顺序）**
 —— 两个 `.py` 从聚合层摘线此前**零判据**（第十三轮 F-02/F-03）；
-③ 跑两个契约脚本的 `--self-test`（判据本体自证）与 `--self-check`（判定通道自证），
+③ 跑三个契约脚本的 `--self-test`（判据本体自证）与 `--self-check`（判定通道自证），
 并用 `--dump-criteria` 做**判据 id 精确集合 + 逐 id 正/负例条数**对账；
 ④ 静态判据：每条判据 id 都必须有"以该 id 字面量为首参"的调用点、被调方逐字是
 `reporter.report`、观测非空（`{}` = 没把观测传进来）；**且该调用点在运行期必须可达**
@@ -84,7 +85,7 @@ provider 未配置必须 SKIP 且不得报 PASS；**Location 的两种形态各�
 与其 **SKIP 契约**（`--app <不存在>` ⇒ 77 且不打印 PASS）；
 ⑧ 跑 `electron-shots/assertions.mjs --self-test` 并把**判据表**三层钉住：判据 id 集合与登记
 值精确相等、每条判据都有正例 + 负例夹具且夹具总数不低于下限、运行期脚本逐条**可达**地引用每个 id；
-⑨ 跑一次聚合层 `run-all.sh`（三项全 SKIP 的输入）断言 `77` + `RESULT: SKIP`；
+⑨ 跑一次聚合层 `run-all.sh`（全部用例全 SKIP 的输入）断言 `77` + `RESULT: SKIP`；
 ⑩ **引用面扩展名对账**（第十四轮 B-04）：本守卫引用的每个**落盘**的 `integration-tests/**`
 路径，扩展名必须落在扫描面（`.py`/`.mjs`/`.sh`/`.yaml`/`.yml`）内、或在
 `INTEGRATION_REFERENCE_SCOPE_REGISTRY` 里逐条登记为非判据面 —— 否则红。
@@ -107,13 +108,26 @@ provider 未配置必须 SKIP 且不得报 PASS；**Location 的两种形态各�
 - Docker（Dex `ghcr.io/dexidp/dex` 监听 127.0.0.1:5556、OpenLDAP `osixia/openldap:1.5.0` 监听 127.0.0.1:1389）
 - 已在 `http://127.0.0.1:8091` 运行的服务端，且已配好 OIDC（Dex）与 LDAP（服务端自身需要 PostgreSQL，脚本不直接连库）
 - Electron 桌面包已构建（`packages/host/desktop/dist/`，`electron-shots` 需要 `dist/linux-unpacked/`）与 Xvfb `:99`
-- `python3`（两个 Python 脚本；`check:integration-tests` 也需要它，缺 python3 时门禁**判失败**而不是静默跳过）
+- `python3`（三个 Python 脚本；`check:integration-tests` 也需要它，缺 python3 时门禁**判失败**而不是静默跳过）
 
 > 环境变量：`SERVER_BASE`（`run-all.sh`）与命令行参数（`--server` / `--shots` / `--app` / `--display`）；
 > `ELECTRON_SHOTS_APP` 覆盖 `electron-shots` 的打包产物路径（CI 用），`DISPLAY` 指定 X 显示。
 > Python 脚本只接受服务端地址位置参数，另可选读 `DEX_BASE`（断言 IdP origin）、
 > `DEX_DEEP_LINK_SCHEME`（断言深链 scheme）、`DEX_EXPECTED_USER`（期望账号）。
 > **不读** `PG_DSN` / `PG_DSN_TEST`。
+
+### 能力生命周期用例（cross-layer E2E）
+
+`python3 capability-lifecycle.py [server] --employee-user … --second-user … --admin-user …`
+需要**三个真实账号**（员工A 非管理员 / 员工B 第二账号 / 本地管理员 `capability:write`）：
+缺参数、登录失败或管理员开了 MFA（本用例不做第二步登录）⇒ **SKIP(77)**，绝不打印 PASS。
+
+环境变量：`CAPABILITY_E2E_EMPLOYEE_USER/PASSWORD`、`CAPABILITY_E2E_SECOND_USER/PASSWORD`、
+`CAPABILITY_E2E_ADMIN_USER/PASSWORD`（命令行优先）。
+
+**状态副作用**：真服务端上会创建一个 `cap-e2e-<run-id>` 组织共享技能（1.0.0 + 2.0.0 两个
+approved 版本）并给员工B 建一条用户级授权；`approved` 版本按设计**不可删除**（F-01），
+所以脚本跑完会打印**下架**清理指引，请用**专用测试部署**跑它，不要对着生产跑。
 
 ## 运行
 

@@ -660,6 +660,17 @@ const PERM_ARG_POSITIVE_FIXTURES: PermArgPositiveFixture[] = [
   { rel: 'pages/Audit.tsx', arg: 'PERM_AUDIT_RETENTION_WRITE', testFile: 'pages/Audit.test.tsx', testName: 'super_admin 仍然可编辑并可保存(不误伤)', kind: 'behavior' },
   { rel: 'pages/GatewayFiles.tsx', arg: 'PERM_GATEWAY_WRITE', testFile: 'pages/GatewayFiles.test.tsx', testName: '写面收敛：持有 gateway:write 时删除/清理入口可见', kind: 'behavior' },
   { rel: 'pages/SystemConfig.tsx', arg: 'PERM_CONFIG_WRITE', testFile: 'pages/SystemConfig.test.tsx', testName: '持有 config:write 时保存按钮可用（正向夹具）', kind: 'behavior' },
+
+  { rel: 'pages/Marketplace.tsx', arg: 'PERM_MARKET_READ', testFile: 'pages/Marketplace.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
+  { rel: 'pages/Marketplace.tsx', arg: 'PERM_CAP_READ', testFile: 'pages/Marketplace.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
+  { rel: 'pages/Marketplace.tsx', arg: 'PERM_MARKET_WRITE', testFile: 'pages/Marketplace.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
+  { rel: 'pages/Marketplace.tsx', arg: 'PERM_CAP_WRITE', testFile: 'pages/Marketplace.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
+  { rel: 'pages/Agents.tsx', arg: 'PERM_MARKET_READ', testFile: 'pages/Agents.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
+  { rel: 'pages/Agents.tsx', arg: 'PERM_CAP_READ', testFile: 'pages/Agents.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
+  { rel: 'pages/Agents.tsx', arg: 'PERM_MARKET_WRITE', testFile: 'pages/Agents.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
+  { rel: 'pages/Agents.tsx', arg: 'PERM_CAP_WRITE', testFile: 'pages/Agents.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
+  { rel: 'pages/Capabilities.tsx', arg: 'PERM_CAP_READ', testFile: 'pages/Capabilities.test.tsx', testName: 'F-48 正向夹具:持有 capability:write 时审批写入口可见', kind: 'behavior' },
+  { rel: 'pages/Capabilities.tsx', arg: 'PERM_CAP_WRITE', testFile: 'pages/Capabilities.test.tsx', testName: 'F-48 正向夹具:持有 capability:write 时审批写入口可见', kind: 'behavior' },
 ]
 
 /**

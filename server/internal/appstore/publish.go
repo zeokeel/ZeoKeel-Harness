@@ -34,6 +34,13 @@ const (
 	CodeAppDelisted = "APP_DELISTED"
 	// CodePublishBusy:同名发布排队超时(抢锁预算用尽),请调用方重试。
 	CodePublishBusy = "PUBLISH_BUSY"
+	// CodePublishTimeout:进入了落库事务、但整个事务超出墙钟预算(publishTxBudget)。
+	//
+	// F-46(能力中心审计 2026-10-26,P3):修前这种超时也回 PUBLISH_BUSY
+	// 「同名内容正在发布,排队超时」—— 文案指向**另一个原因**(抢锁排队),管理员
+	// 会去等队列,而真正的问题是本次发布的归档落库太慢/DB 抖动。两个原因必须
+	// 两个码:调用方才能决定「等一会再试」还是「查归档大小/DB」。
+	CodePublishTimeout = "PUBLISH_TIMEOUT"
 )
 
 // 发布串行化的抢锁参数(F2-N2):总预算 + 退避间隔。等待者不占连接,
@@ -116,6 +123,24 @@ type Result struct {
 
 // ErrOfficialLocked 官方内容锁定(0059): 非管理员发布官方 App 被拒。
 var ErrOfficialLocked = errors.New("OFFICIAL_LOCKED")
+
+// classifyTxErr 把**事务内**的 DB 错误分类（F-46）。
+//
+// 为什么要分：`publishTxBudget`（60s）同时约束「等池里放出连接」与「拿到事务后的
+// 一整段读写」。事务中途 ctx 到期时,底层返回 context.DeadlineExceeded,修前一律
+// 映射成 500 INTERNAL「查询失败」(或与外层抢锁超时混成 PUBLISH_BUSY),调用方无法
+// 分辨「同名排队」与「本次发布自身超时」。现在:
+//
+//	· ctx 到期/取消 ⇒ 503 PUBLISH_TIMEOUT(本次发布超时,可原样重试);
+//	· 其余 ⇒ 500 INTERNAL(真实服务器错误)。
+func classifyTxErr(ctx context.Context, err error) error {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || ctx.Err() != nil {
+		return newErr(http.StatusServiceUnavailable, CodePublishTimeout,
+			"发布处理超时(:%s),与同名排队无关:请重试(反复出现请检查归档大小/数据库负载)",
+			publishTxBudget)
+	}
+	return newErr(http.StatusInternalServerError, "INTERNAL", "查询失败")
+}
 
 // Publish 执行一次发布:锁定检查 → 版本语义 → 落库。
 //
@@ -249,7 +274,7 @@ func Publish(db *sql.DB, req PublishRequest) (*Result, error) {
 	// 造出不可见版本。
 	dist, derr := serverstore.AppDistributionOn(tx, req.Kind, req.AppID)
 	if derr != nil {
-		return nil, newErr(http.StatusInternalServerError, "INTERNAL", "查询失败")
+		return nil, classifyTxErr(ctx, derr)
 	}
 	if !dist.Writable() {
 		return nil, newErr(http.StatusConflict, CodeAppDelisted,
@@ -277,7 +302,7 @@ func Publish(db *sql.DB, req PublishRequest) (*Result, error) {
 
 	history, err := serverstore.ListReleasesOn(tx, req.Kind, req.AppID)
 	if err != nil {
-		return nil, newErr(http.StatusInternalServerError, "INTERNAL", "查询失败")
+		return nil, classifyTxErr(ctx, err)
 	}
 	newest := ""
 	for _, h := range history {
@@ -308,7 +333,7 @@ func Publish(db *sql.DB, req PublishRequest) (*Result, error) {
 	if !req.AdminPublish && req.PendingCap > 0 {
 		n, err := serverstore.PendingReleaseCountOn(tx, req.Publisher)
 		if err != nil {
-			return nil, newErr(http.StatusInternalServerError, "INTERNAL", "查询失败")
+			return nil, classifyTxErr(ctx, err)
 		}
 		if n >= req.PendingCap {
 			return nil, newErr(http.StatusTooManyRequests, CodePendingLimit,

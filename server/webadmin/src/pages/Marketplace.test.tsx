@@ -1,11 +1,12 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Marketplace, { DELISTED_UPLOAD_HINT } from './Marketplace'
 import { request } from '../api'
+import { setCurrentAdmin } from '../lib/rbac'
 
 const mockRequest = vi.mocked(request)
-const confirmSpy = vi.fn(() => true)
+const confirmSpy = vi.fn((_message?: string) => true)
 
 const SKILLS = [
   { id: 1, name: 'data-extract', version: '1.0.0', description: '数据提取', author: 'seed', enabled: true },
@@ -475,4 +476,174 @@ describe('Marketplace 商城页 · 下架行不提供必然失败的上传入口
     expect(within(orgCard('data-extract')).getByRole('button', { name: '上传新版' })).toBeEnabled()
   })
 
+})
+
+// ---------------------------------------------------------------------------
+// D 系列显示修复(2026-10-26):管理端此前整页显示英文目录名
+//
+// 三个数据源一起缺:服务端 skillJSON 没发 display_name/quality/source,Skill
+// 接口没声明 display_name,卡片主标题硬编码 name。下面钉住展示名的**唯一来源**
+// (display_name)与两个徽章的数据源(quality/source),避免回退。
+// ---------------------------------------------------------------------------
+describe('Marketplace 商城页 · 展示名与徽章(D 系列)', () => {
+  const DISPLAY_SKILLS = [
+    {
+      id: 1, name: 'data-extract', display_name: '数据提取', version: '1.0.0',
+      description: '提取', author: 'seed', enabled: true, quality: 'featured', source: 'upload',
+    },
+    {
+      // 展示名与目录名相同 ⇒ 副标题不得再重复一遍 slug。
+      id: 2, name: 'legacy', display_name: 'legacy', version: '0.9.0',
+      description: '旧版', author: 'seed', enabled: true,
+    },
+  ]
+
+  function mockDisplaySkills() {
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/departments') return { departments: DEPTS }
+      if (path === '/api/server/admin/skills') return { skills: DISPLAY_SKILLS }
+      return {}
+    })
+  }
+
+  it('卡片主标题用 display_name,目录名作副标题;精选/上传包徽章按 quality/source 渲染', async () => {
+    mockDisplaySkills()
+    render(<Marketplace />)
+    expect(await screen.findByText('数据提取')).toBeInTheDocument()
+    const cardEl = screen.getByText('数据提取').closest<HTMLElement>('[class*="group"]')!
+    // 目录名降为副标题(动作仍按 name 寻址),中文名在主标题。
+    expect(cardEl.textContent).toContain('data-extract')
+    expect(cardEl.textContent).toContain('精选')
+    expect(cardEl.textContent).toContain('上传包')
+    // display_name === name 时只渲染一次(不再出现「legacy / legacy」)。
+    expect(screen.getAllByText('legacy')).toHaveLength(1)
+  })
+
+  it('下架确认与转移归属弹窗都用展示名(不是 slug)', async () => {
+    mockDisplaySkills()
+    render(<Marketplace />)
+    await screen.findByText('数据提取')
+    // 转移归属弹窗正文:将「<展示名>」的维护权转移…
+    fireEvent.click(within(orgCard('数据提取')).getByRole('button', { name: '归属' }))
+    let dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('将「数据提取」')
+    fireEvent.click(within(dialog).getByRole('button', { name: '取消' }))
+    // 下架确认文案用展示名。
+    confirmSpy.mockClear()
+    fireEvent.click(within(orgCard('数据提取')).getByRole('button', { name: '下架' }))
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('数据提取'))
+    })
+  })
+
+  it('组织审批行归并保留 display_name(不再退化成目录名)', async () => {
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/departments') return { departments: DEPTS }
+      if (path === '/api/server/admin/skills') return { skills: [] }
+      if (path === '/api/server/admin/capabilities/approvals?status=approved&type=skill') {
+        return { approvals: [ORG_ROWS[0]!] }
+      }
+      return {}
+    })
+    render(<Marketplace />)
+    // 修复前 org 行归并时丢掉 display_name ⇒ 卡片主标题只能显示 codeql。
+    expect(await screen.findByText('CodeQL 审计')).toBeInTheDocument()
+    const cardEl = screen.getByText('CodeQL 审计').closest<HTMLElement>('[class*="group"]')!
+    expect(cardEl.textContent).toContain('codeql')
+  })
+
+  it('编辑弹窗回填并在 PUT 中带 title(可编辑展示名)', async () => {
+    mockDisplaySkills()
+    render(<Marketplace />)
+    await screen.findByText('数据提取')
+    fireEvent.click(within(orgCard('数据提取')).getByRole('button', { name: '编辑' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    const input = dialog.getByLabelText('展示名')
+    expect((input as HTMLInputElement).value).toBe('数据提取')
+    fireEvent.change(input, { target: { value: '数据抽取' } })
+    fireEvent.click(dialog.getByRole('button', { name: '保存修改' }))
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/server/admin/skills/data-extract',
+        expect.objectContaining({ method: 'PUT', body: expect.stringContaining('"title":"数据抽取"') }),
+      )
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F-48 / F-21 / F-53（2026-10-26）：权限门、上下架确认文案、残留 Git 文案
+//
+// 能力中心四页此前**零** hasPermission：只读账号看到的每个写按钮点下去都必然 403。
+// 这里钉住「持权时可见（正向夹具）」与「只读时既不显示按钮、也不发写请求」两侧，
+// 并锁住下架确认必须写明可恢复（≠ 删除）。
+// ---------------------------------------------------------------------------
+afterEach(() => setCurrentAdmin(null))
+
+describe('Marketplace 商城页 · 权限门与文案（F-48 / F-21 / F-53）', () => {
+  it('F-48 正向夹具:持有 market:write/capability:write 时写入口可见', async () => {
+    setCurrentAdmin({
+      role: 'super_admin',
+      permissions: ['market:read', 'market:write', 'capability:read', 'capability:write'],
+    })
+    render(<Marketplace />)
+    await screen.findByText('data-extract')
+    // 页头写入口（登记=market:write、锁定=capability:write）
+    expect(screen.getByRole('button', { name: '上架技能' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '锁定管理' })).toBeInTheDocument()
+    // 行内写入口（市场行）
+    const cardEl = within(orgCard('data-extract'))
+    for (const name of ['预览', '规范化', '编辑', '上传新版', '归属', '授权', '下架']) {
+      expect(cardEl.getByRole('button', { name }), `缺少写入口：${name}`).toBeInTheDocument()
+    }
+  })
+
+  it('F-48 只读:没有写权限时不显示写按钮,也不发写请求', async () => {
+    setCurrentAdmin({ role: 'super_admin', permissions: ['market:read', 'capability:read'] })
+    render(<Marketplace />)
+    await screen.findByText('data-extract')
+    expect(screen.queryByRole('button', { name: '上架技能' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '锁定管理' })).toBeNull()
+    const cardEl = within(orgCard('data-extract'))
+    expect(cardEl.queryByRole('button', { name: '编辑' })).toBeNull()
+    expect(cardEl.queryByRole('button', { name: '下架' })).toBeNull()
+    expect(cardEl.queryByRole('button', { name: '归属' })).toBeNull()
+    expect(cardEl.queryByRole('button', { name: '授权' })).toBeNull()
+    // 只读动作（预览）仍可用。
+    expect(cardEl.getByRole('button', { name: '预览' })).toBeInTheDocument()
+    // 页面加载期间不得发出任何写请求。
+    for (const call of mockRequest.mock.calls) {
+      const init = call[1] as RequestInit | undefined
+      expect(init?.method ?? 'GET').toBe('GET')
+    }
+  })
+
+  it('F-21 下架确认:写明可恢复、不是删除', async () => {
+    render(<Marketplace />)
+    await screen.findByText('data-extract')
+    confirmSpy.mockClear()
+    fireEvent.click(within(orgCard('data-extract')).getByRole('button', { name: '下架' }))
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('可恢复'))
+    })
+    const text = (confirmSpy.mock.calls[0]![0] as string)
+    expect(text).toContain('下架不是删除')
+    expect(text).toContain('重新上架')
+  })
+
+  it('F-53 界面上不再出现「Git 源」文案(git 模式已删除)', async () => {
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/departments') return { departments: [] }
+      if (path === '/api/server/admin/skills') return { skills: [] }
+      return {}
+    })
+    render(<Marketplace />)
+    // 空态文案不得再指向 Git 源。
+    expect(await screen.findByText('暂无技能')).toBeInTheDocument()
+    expect(screen.queryByText(/Git 源/)).toBeNull()
+    // 新建弹窗的说明同样不得再提 Git 源。
+    fireEvent.click(screen.getByRole('button', { name: '上架技能' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(dialog.queryByText(/Git 源/)).toBeNull()
+  })
 })

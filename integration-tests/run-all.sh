@@ -31,6 +31,7 @@ run() {
 run "1. Dex SSO 流程测试" python3 dex/dex-sso-test.py "$SERVER_BASE"
 run "2. LDAP + RBAC + 渠道集成测试" python3 openldap/ldap-rbac-brand-test.py "$SERVER_BASE"
 run "3. Electron 截图验证(需打包 app)" node electron-shots/electron-shots.mjs --server "$SERVER_BASE"
+run "4. 能力生命周期（上传→审批→安装/更新）" python3 capability-lifecycle.py "$SERVER_BASE"
 
 echo "========== 汇总 =========="
 printf '%s\n' "${results[@]}"

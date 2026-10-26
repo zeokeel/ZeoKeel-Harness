@@ -1,0 +1,21 @@
+{
+  "id": "YYYY-MM-DD-kebab-slug",
+  "status": "proposed",
+  "intent": {
+    "zh": "为什么改（一句话，写动机与现状差距，不写实现方案）",
+    "en": "Why this change exists, in one sentence."
+  },
+  "modules": [
+    "packages/host/<pkg>/src/<file>.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "可证伪的完成标准（跑什么、看到什么、算通过）",
+      "evidence": "test",
+      "command": "corepack yarn workspace <pkg> vitest run tests/<x>.spec.ts"
+    }
+  ],
+  "risk": "失败时的爆炸半径：数据/安全/回滚难度",
+  "rollback": "怎么安全回退：flag / 迁移 / 脚本 / 手动步骤",
+  "verification": []
+}

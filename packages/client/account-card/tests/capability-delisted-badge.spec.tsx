@@ -10,6 +10,11 @@
  * 才能打红。本文件就是那条真挂载判据：真 `createRoot + act` 挂载真
  * `CapabilityCenterPanel`，喂真形状的 `?source=local` 载荷，断言 DOM。
  *
+ * 2026-10-26（能力中心现代化重构）：设计定案把**大段状态说明**从卡片移到详情子视图
+ * （卡片只留最多两个 Chip + 小状态点；见设计第 2 条）。所以「说明段」这条判据改为
+ * **真点开「详情」**后在详情子视图里断言（仍是真挂载 + 真交互，不是源码字符串），
+ * 文案与判据强度不变；「徽章真的渲染」「没有上传按钮」「负向对照」三条原样保留。
+ *
  * ## 为什么这条判据住在 `@zeokeel/dsh-account-card` 而不在面板的归属包
  *
  * 面板的归属包（2026-10-13 起是 `@zeokeel/dsh-capability-center`，此前是 enterprise）
@@ -144,6 +149,18 @@ function cardOf(name: string): HTMLElement {
   return card
 }
 
+/** 点开某张卡的「详情」子视图（真点击 + act；返回详情容器）。 */
+async function openDetailOf(name: string): Promise<HTMLElement> {
+  const card = cardOf(name)
+  const button = [...card.querySelectorAll('button')]
+    .find(element => (element.textContent ?? '').trim() === t('capability.detail'))
+  if (button === undefined) throw new Error(`没有在 ${name} 的卡片里找到「详情」按钮`)
+  await act(async () => { button.click() })
+  const detail = container.querySelector<HTMLElement>('[data-role="capability-detail"]')
+  if (detail === null) throw new Error('详情子视图没有打开（面板没有切到整页子视图）')
+  return detail
+}
+
 /** 卡片里"文本恰好等于某串"的叶子元素（= 徽章那种小型状态胶囊）。 */
 function leafTexts(scope: HTMLElement, text: string): HTMLElement[] {
   return [...scope.querySelectorAll<HTMLElement>('*')]
@@ -154,23 +171,25 @@ const buttonTexts = (scope: HTMLElement): string[] =>
   [...scope.querySelectorAll('button')].map(button => (button.textContent ?? '').trim())
 
 describe('R5-B-1 已下架徽章的真挂载判据（B-N2）', () => {
-  it('下架行：卡片里真的渲染出「已下架」徽章 + 说明段，且没有「上传」按钮', async () => {
+  it('下架行：卡片真渲染「已下架」徽章 + 无「上传」；说明段在详情子视图里', async () => {
     await mountPanel()
     const card = cardOf('delisted-skill')
     // ① 徽章：叶子元素文本**恰好**是字典里的「已下架」。
-    //    删掉 JSX 里的 `{delistedBadge}`（定义与 `t('capability.delisted')` 原样保留）
+    //    删掉卡片里的 chips 渲染（定义与 `t('capability.delisted')` 原样保留）
     //    之后这里必然 0 命中 —— 这正是修复方源码字符串判据漏掉的形态。
     const badge = leafTexts(card, t('capability.delisted'))
       .filter(element => element.getAttribute('data-role') === null)
     expect(badge.length).toBeGreaterThan(0)
-    // ② 说明段（为什么 + 还能做什么）与徽章同源，也必须真的在 DOM 里。
-    const reason = card.querySelector('[data-role="card-delisted-reason"]')
-    expect(reason).not.toBeNull()
-    expect(reason?.textContent).toBe(t('capability.delistedHint'))
-    // ③ 动作不得再伪造「上传」：本机这一份可达的动作是「卸载」。
+    // ② 动作不得再伪造「上传」：本机这一份可达的动作是「卸载」。
     expect(buttonTexts(card)).toContain(t('capability.uninstall'))
     expect(buttonTexts(card)).not.toContain(t('capability.upload'))
     expect(buttonTexts(card)).not.toContain(t('capability.install'))
+    // ③ 说明段（为什么 + 还能做什么）在**详情子视图**里（2026-10-26 设计：
+    //    卡片只留结论，大段状态说明进详情）；仍然必须是真 DOM、真点击。
+    const detail = await openDetailOf('delisted-skill')
+    const reason = detail.querySelector('[data-role="card-delisted-reason"]')
+    expect(reason).not.toBeNull()
+    expect(reason?.textContent).toBe(t('capability.delistedHint'))
   })
 
   it('未下架的本机行：不出徽章、不出说明段，照旧给「上传」（负向对照，判据不恒红）', async () => {
@@ -180,6 +199,9 @@ describe('R5-B-1 已下架徽章的真挂载判据（B-N2）', () => {
       .filter(element => element.getAttribute('data-role') === null)).toHaveLength(0)
     expect(card.querySelector('[data-role="card-delisted-reason"]')).toBeNull()
     expect(buttonTexts(card)).toContain(t('capability.upload'))
+    // 详情里同样不得出现下架说明（否则「下架」这一态在负向对照上也会假报）。
+    const detail = await openDetailOf('live-skill')
+    expect(detail.querySelector('[data-role="card-delisted-reason"]')).toBeNull()
   })
 
   it('两条行都在同一份 DOM 里（载荷真的被面板消费 —— 不是空面板碰巧没报错）', async () => {
@@ -207,5 +229,8 @@ describe('R5-B-1 已下架徽章的真挂载判据（B-N2）', () => {
     expect(buttonTexts(card)).not.toContain(t('capability.uninstall'))
     // 落回「上传」：那是一个**无副作用**的动作（服务端会以名称占用拒掉）。
     expect(buttonTexts(card)).toContain(t('capability.upload'))
+    // 详情里也不得把"证明不了归属"说成"已下架"（R6-B-1 的判据不因视图改变）。
+    const detail = await openDetailOf('other-account-skill')
+    expect(detail.querySelector('[data-role="card-delisted-reason"]')).toBeNull()
   })
 })

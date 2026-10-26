@@ -257,6 +257,7 @@ var appIDCallSites = []struct {
 	{"internal/skillmanifest/manifest.go", "Parse", "写侧闸门：包内 name（上传/审核/内置技能自检共用）"},
 	{"internal/skillmanifest/normalize.go", "NormalizeSkillMD", "写侧闸门：管理端规范化重打包（产出新版本）"},
 	{"internal/appstore/admin.go", "transferOwner", "写（既有行）：归属转移 —— 只冻结，不影响读面"},
+	{"internal/appstore/admin.go", "deleteApp", "写侧闸门：空壳释放名称（无版本/非官方才可删，释放后同名可重新登记）"},
 	{"internal/sharedskills/routes.go", "removeLock", "写（既有行）：解除锁记录 —— 只冻结，不影响读面"},
 	{"internal/skillseed/skillseed.go", "loadSkill", "随包内置技能的自举校验（内容随包；实测零命中）"},
 }

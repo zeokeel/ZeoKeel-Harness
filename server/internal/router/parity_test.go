@@ -151,6 +151,7 @@ var productionOnlyAdminRoutes = map[string]string{
 	"GET " + NamespaceServer + "/admin/concurrency":                    "按模型并发状态：同一镜像组之外的只读端点",
 	"GET " + NamespaceServer + "/admin/users/:id/balance/ledger":       "余额流水对账：serverauth 镜像不建 AdminAuth 组",
 	"PUT " + NamespaceServer + "/admin/apps/:kind/:app_id/owner":       "归属转移：appstore 只有 Handlers（无镜像函数）",
+	"DELETE " + NamespaceServer + "/admin/apps/:kind/:app_id":          "空壳释放：appstore 只有 Handlers（无镜像函数；F-02）",
 	"GET " + NamespaceServer + "/admin/skills/builtin":                 "平台内置技能只读面：skillseed 只有 Handlers",
 	"GET " + NamespaceServer + "/admin/portal":                         "门户配置读：portal 只有 Handlers",
 	"PUT " + NamespaceServer + "/admin/portal":                         "门户配置写（同上）",

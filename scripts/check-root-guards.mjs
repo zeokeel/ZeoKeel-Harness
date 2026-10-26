@@ -199,7 +199,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   ['check:inventories', { script: 'node scripts/verify-inventories.mjs', argvTail: [], digest: '39528c7984ee7baf0cad92faaa3b421f7f64e4d08b524d63417e896abb57267d' }],
   ['check:theme-tokens', { script: 'node scripts/check-theme-tokens.mjs', argvTail: [], digest: '44ce265f1905428a9de8d5d841d3487c8f0c287ba4685fa55ad9d8f0ecfea358' }],
   ['check:glitchtip', { script: 'node scripts/verify-glitchtip-ops-check.mjs', argvTail: [], digest: 'cddf0b335eec7fc01ba889c78e3bbffb8ea9ded6b2317e2f0ada0a1e4262e169' }],
-  ['check:check-workspaces', { script: 'node scripts/verify-check-workspaces.mjs', argvTail: [], digest: '1a764b3c7b757dd3676ae12100b44b3ded3cf56278988156deace91d1a5b0a15' }],
+  ['check:check-workspaces', { script: 'node scripts/verify-check-workspaces.mjs', argvTail: [], digest: '9981d2830ea77afb3a61b8fb822bfad18af8cadf1a688e29be0900a2490bf4a8' }],
   ['check:no-leftover-mutants', { script: 'node scripts/check-no-leftover-mutants.mjs', argvTail: [], digest: 'c1a84c22a47bea2c1368bfba32f33b20feca66deb30abcbbc0eb40318f807285' }],
   ['check:migration-range', { script: 'node scripts/check-migration-range.mjs', argvTail: [], digest: 'b764a0a1f02289ebed7627560a29b2305eda0199fd96844ffba6cd6eeedc90b1' }],
   ['check:doc-claims', { script: 'node scripts/check-doc-claims.mjs', argvTail: [], digest: 'e2fcf535a987fe29ffc7c24183ce22323982289b681f779b01aedecfa5806cbc' }],
@@ -208,11 +208,20 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // FIX-48③ 起：本脚本 run-id 化（证据目录 `temp/wasm-client-only/runs/<run-id>/`），
   // 摘要在同一个 PR 里同步（可评审的 diff）。
   ['check:wasm-client-only', { script: 'bash scripts/verify-wasm-client-only.sh', argvTail: ['--portable'], digest: 'e666a0c6caa588af64985ac0ccb4f4174d7e4266722b050d032abe322350241f' }],
-  ['check:integration-tests', { script: 'node scripts/check-integration-tests.mjs', argvTail: [], digest: '69ce146a0ecb5fcf6b76f71478de14b27af631fa4ef793a70c70f1c4c98db607' }],
+  // 2026-10-26（F-12）：`check-integration-tests.mjs` 新增第三条契约用例（能力生命周期 E2E）
+  // 的登记面（CONTRACT_TESTS/CONTRACT_CRITERIA/INTEGRATION_ENTRIES/SKIP 原因码/聚合层对拍）
+  // ⇒ 守卫脚本内容变了，摘要按本表上方的纪律在同一改动里同步（取值 = `--print-digests` 现算）。
+  ['check:integration-tests', { script: 'node scripts/check-integration-tests.mjs', argvTail: [], digest: '50ff0ed7a2275a5eacb4079b7077a7b2e36115ffdced03e5489bd3f81caab108' }],
   // 2026-10-25：根脚本的类型面（`allowJs + checkJs + noUnused*`，TS 7）。它是第 18 条根守卫 ——
   // 判据本体是 `scripts/check-scripts-types.mjs`（调 `tsc -p tsconfig.scripts.json`），
   // 所以它的内容摘要同样进这张表：改写它 = 改写"根脚本类型面"这个结论。
   ['check:scripts-types', { script: 'node scripts/check-scripts-types.mjs', argvTail: [], digest: '6ebd25af0e58c762d4c215887470e5ea1ee0374f36302da01626219df0e7e660' }],
+  // 2026-10-26：两条新根守卫（第 19/20 条）。判据本体分别是
+  // `scripts/check-architecture.mjs`（TS 架构规则：dependency-cruiser 8 条 + 5 条存量基线）
+  // 与 `scripts/check-change-intent.mjs`（`changes/*.json` 的字段契约）。摘要按本表上方的
+  // 纪律在同一个改动里同步（取值来自 `--print-digests` 的复算结果 —— 本地非严格面读工作树字节）。
+  ['check:architecture', { script: 'node scripts/check-architecture.mjs', argvTail: [], digest: '87cfcc4addfbcb8a5b7ec8d7135988217eecc81db3529c8ca4c01073d57714a2' }],
+  ['check:change-intent', { script: 'node scripts/check-change-intent.mjs', argvTail: [], digest: '46372abfbe641a8e720677c37bcfc2c7d96127ca943bcc78453dcf374412d318' }],
   // 守卫脚本**内容**的判据（第十轮审计 C-06/C-17）。它的判据面里同时包含:
   //   · 本表每条 `digest` ↔ 该守卫脚本的 sha256(内容替换/符号链接替换都红);
   //   · 门禁自己依赖的解析器(`node_modules/yaml`)的**文件集** sha256 ↔ 登记值。
@@ -231,7 +240,14 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // （同一份 `sha256sum` 口径）。
   // 2026-10-14（渠道缺省 + 渠道清单工具）：install-integrity 再补登
   // `scripts/channel-modules.mjs` ⇒ 本摘要同步。
-  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: '8d6f34eaf003ef4de2a5c4bbd6909087c8ccf7c3732d1f0043ac9a5755625b66' }],
+  // 2026-10-26：install-integrity 的 `EXECUTION_FACE_REGISTRY` 补登两条新根守卫
+  // （`scripts/check-architecture.mjs` / `scripts/check-change-intent.mjs`），本文件的内嵌
+  // install-integrity 摘要随之更新 ⇒ 本判据脚本自身的内容也变了，摘要同步进 diff
+  // （取值 = 工作树那份：`sha256sum scripts/check-guard-parser-integrity.mjs`）。
+  // 2026-10-26（F-12）：install-integrity 补登 `integration-tests/capability-lifecycle.py`
+  // ⇒ 本文件内嵌的 install-integrity 摘要更新 ⇒ 本判据脚本自身内容再变，摘要同步
+  // （取值 = 工作树那份：`sha256sum scripts/check-guard-parser-integrity.mjs`）。
+  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: '83454406be691a0d34d7f19f3639f46d8aa45a0b96c516fce40d8f6dd1dc4844' }],
 ])
 
 /**

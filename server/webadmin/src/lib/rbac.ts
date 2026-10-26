@@ -36,6 +36,14 @@ export const PERM_GATEWAY_READ = 'gateway:read'
 export const PERM_GATEWAY_WRITE = 'gateway:write'
 export const PERM_USAGE_READ = 'usage:read'
 export const PERM_MARKET_READ = 'market:read'
+/**
+ * 市场写面（F-48，2026-10-26）：技能/智能体市场页的登记、编辑、上下架、授权
+ * （服务端 `internal/router/optional_skills_on.go` 的 `/skills|/agents` 写路由申报
+ * 的是 `market:write`）。**注意不是全部市场动作**：上传新版归档与规范化申报的是
+ * `capability:write`，「转移归属」「释放空壳」也走 `capability:write` —— 按钮的权限门
+ * 必须与它实际请求的端点一致，否则只读账号会看到"点下去必然 403"的假入口。
+ */
+export const PERM_MARKET_WRITE = 'market:write'
 export const PERM_CAP_READ = 'capability:read'
 /** 能力中心写面(审批/上下架/归属转移等处置动作;应用中心复用同一点,见 §13)。 */
 export const PERM_CAP_WRITE = 'capability:write'

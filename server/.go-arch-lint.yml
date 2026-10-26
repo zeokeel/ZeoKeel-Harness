@@ -1,0 +1,527 @@
+# Go 架构判据（go-arch-lint v1.19.0，schema version 3）。
+#
+# 形态 = **基线即配置**：下面的 components/deps 就是 `server/cmd` + `server/internal`
+# 的**当前真实包级 import 图**，机械生成（go/parser 只读 import 声明，不评估 build tag），
+# 不是理想分层。首次运行必须 exit 0；判据只拦**新增**边。
+# 规则、收紧流程与 mutation 自证见 docs/agent/architecture.md §3。
+#
+# 维护方式 = **增量**，不要整份重写：
+#   - arch-go 报 `File ... not attached to any component` ⇒ 新增了包目录，补一个 component
+#     （`in:` 是目录精确匹配，父目录不覆盖子目录；命名 = 目录去掉 internal/、/ 换 -）；
+#   - arch-go 报 `Component X shouldn't depend on ...` ⇒ 要么改代码，要么按 §3 的
+#     "新增一条边 = 改配置 + 评审" 在 deps.X.mayDependOn 里登记；
+#   - 修掉一条不该有的依赖后立刻删对应行（配置本身就是回归判据）。
+#
+# 为什么 allow.deepScan=false：deepScan 会跑 go/packages 做"方法调用/依赖注入"级分析，
+#   需要可写的 build cache 与完整模块下载，且会引入与声明式 import 图不一致的告警；
+#   本判据只判包级 import 方向，所以关掉它（纯 go/parser + ImportsOnly）。
+# 为什么 allow.depOnAnyVendor=true：本判据只管项目内分层，第三方依赖方向不在范围内。
+#
+version: 3
+workdir: .
+
+allow:
+  depOnAnyVendor: true
+  deepScan: false
+
+excludeFiles:
+  # 测试文件的 import 不进判据（基线只冻结生产构建的包级边）。
+  # 代价：把测试 import 也算进来会多出 87 条存量边，其中 4 个测试侧 SCC
+  # （docs/agent/architecture.md §3）；要连测试侧一起拦是另一次评审。
+  - "^.*_test\\.go$"
+
+exclude:
+  # 只有 testdata/ 与几个不参与 server 构建的目录里有 .go 文件：
+  # testdata 是 WASM 夹具/被编译进来的 guest 源码，不是 server 的包；
+  # demoapps（WASM 演示应用）、scripts（mock-upstream）、skills（示例）、temp（本地缓存）同理。
+  - temp
+  - demoapps
+  - scripts
+  - skills
+  - internal/wasmapp/**/testdata
+
+components:
+  agentshare:
+    in: internal/agentshare
+  appstore:
+    in: internal/appstore
+  archiveutil:
+    in: internal/archiveutil
+  auditchain:
+    in: internal/auditchain
+  auditretention:
+    in: internal/auditretention
+  balance:
+    in: internal/balance
+  bootstrap:
+    in: internal/bootstrap
+  capabilities:
+    in: internal/capabilities
+  channel:
+    in: internal/channel
+  clientrelease:
+    in: internal/clientrelease
+  cmd:
+    in: cmd/**
+  connectors:
+    in: internal/connectors
+  deployconfig:
+    in: internal/deployconfig
+  features:
+    in: internal/features
+  limits:
+    in: internal/limits
+  llmgateway:
+    in: internal/llmgateway
+  llmgateway-channels:
+    in: internal/llmgateway/channels
+  marketplace:
+    in: internal/marketplace
+  portal:
+    in: internal/portal
+  reports:
+    in: internal/reports
+  router:
+    in: internal/router
+  serverauth:
+    in: internal/serverauth
+  serverstore:
+    in: internal/serverstore
+  sharedskills:
+    in: internal/sharedskills
+  skillmanifest:
+    in: internal/skillmanifest
+  skillseed:
+    in: internal/skillseed
+  telemetry:
+    in: internal/telemetry
+  tokenretention:
+    in: internal/tokenretention
+  updatecheck:
+    in: internal/updatecheck
+  usageretention:
+    in: internal/usageretention
+  util:
+    in: internal/util
+  wasmapp-abi:
+    in: internal/wasmapp/abi
+  wasmapp-api:
+    in: internal/wasmapp/api
+  wasmapp-appcfg:
+    in: internal/wasmapp/appcfg
+  wasmapp-appdb:
+    in: internal/wasmapp/appdb
+  wasmapp-apperr:
+    in: internal/wasmapp/apperr
+  wasmapp-applimits:
+    in: internal/wasmapp/applimits
+  wasmapp-appproof:
+    in: internal/wasmapp/appproof
+  wasmapp-appseed:
+    in: internal/wasmapp/appseed
+  wasmapp-appserver:
+    in: internal/wasmapp/appserver
+  wasmapp-assets:
+    in: internal/wasmapp/assets
+  wasmapp-cachetrust:
+    in: internal/wasmapp/cachetrust
+  wasmapp-capapi:
+    in: internal/wasmapp/capapi
+  wasmapp-compile:
+    in: internal/wasmapp/compile
+  wasmapp-diag:
+    in: internal/wasmapp/diag
+  wasmapp-edge:
+    in: internal/wasmapp/edge
+  wasmapp-events:
+    in: internal/wasmapp/events
+  wasmapp-hostcap:
+    in: internal/wasmapp/hostcap
+  wasmapp-lifecycle:
+    in: internal/wasmapp/lifecycle
+  wasmapp-logbuf:
+    in: internal/wasmapp/logbuf
+  wasmapp-memprofile:
+    in: internal/wasmapp/memprofile
+  wasmapp-opens:
+    in: internal/wasmapp/opens
+  wasmapp-queue:
+    in: internal/wasmapp/queue
+  wasmapp-readyz:
+    in: internal/wasmapp/readyz
+  wasmapp-refapp:
+    in: internal/wasmapp/refapp
+  wasmapp-refapp-sockprobe:
+    in: internal/wasmapp/refapp/sockprobe
+  wasmapp-refapp-stdprobe:
+    in: internal/wasmapp/refapp/stdprobe
+  wasmapp-refapp-wasiprobe:
+    in: internal/wasmapp/refapp/wasiprobe
+  wasmapp-registry:
+    in: internal/wasmapp/registry
+  wasmapp-retirement:
+    in: internal/wasmapp/retirement
+  wasmapp-runtime:
+    in: internal/wasmapp/runtime
+  wasmapp-upload:
+    in: internal/wasmapp/upload
+  wasmapp-wasmmod:
+    in: internal/wasmapp/wasmmod
+  webadmin:
+    in: webadmin
+
+deps:
+  # cmd 是唯一顶层装配者：允许依赖任意项目包（main 的职责就是接线）。
+  cmd:
+    anyProjectDeps: true
+
+  agentshare:
+    mayDependOn:
+      - appstore
+      - archiveutil
+      - serverauth
+      - serverstore
+      - sharedskills
+      - skillmanifest
+      - util
+
+  appstore:
+    mayDependOn:
+      - serverauth
+      - serverstore
+      - skillmanifest
+
+  auditchain:
+    mayDependOn:
+      - serverstore
+
+  auditretention:
+    mayDependOn:
+      - serverstore
+
+  balance:
+    mayDependOn:
+      - serverstore
+
+  bootstrap:
+    mayDependOn:
+      - llmgateway
+      - serverauth
+      - serverstore
+
+  capabilities:
+    mayDependOn:
+      - marketplace
+      - serverauth
+      - serverstore
+      - util
+
+  connectors:
+    mayDependOn:
+      - serverauth
+      - serverstore
+
+  deployconfig:
+    mayDependOn:
+      - serverstore
+
+  llmgateway:
+    mayDependOn:
+      - deployconfig
+      - llmgateway-channels
+      - serverauth
+      - serverstore
+      - util
+
+  llmgateway-channels:
+    mayDependOn:
+      - util
+
+  marketplace:
+    mayDependOn:
+      - agentshare
+      - appstore
+      - archiveutil
+      - serverauth
+      - serverstore
+      - sharedskills
+      - skillmanifest
+      - util
+
+  portal:
+    mayDependOn:
+      - serverauth
+      - serverstore
+
+  reports:
+    mayDependOn:
+      - serverauth
+      - serverstore
+
+  router:
+    mayDependOn:
+      - agentshare
+      - appstore
+      - bootstrap
+      - capabilities
+      - channel
+      - clientrelease
+      - connectors
+      - llmgateway
+      - marketplace
+      - portal
+      - reports
+      - serverauth
+      - sharedskills
+      - skillseed
+      - telemetry
+      - wasmapp-api
+      - wasmapp-registry
+
+  serverauth:
+    mayDependOn:
+      - channel
+      - clientrelease
+      - deployconfig
+      - serverstore
+      - updatecheck
+      - util
+
+  serverstore:
+    mayDependOn:
+      - skillmanifest
+      - util
+
+  sharedskills:
+    mayDependOn:
+      - appstore
+      - archiveutil
+      - serverauth
+      - serverstore
+      - skillmanifest
+      - util
+
+  skillmanifest:
+    mayDependOn:
+      - archiveutil
+      - limits
+      - util
+
+  skillseed:
+    mayDependOn:
+      - archiveutil
+      - serverauth
+      - skillmanifest
+
+  telemetry:
+    mayDependOn:
+      - deployconfig
+      - serverauth
+      - serverstore
+
+  tokenretention:
+    mayDependOn:
+      - serverstore
+
+  updatecheck:
+    mayDependOn:
+      - util
+
+  usageretention:
+    mayDependOn:
+      - serverstore
+
+  wasmapp-abi:
+    mayDependOn:
+      - limits
+
+  wasmapp-api:
+    mayDependOn:
+      - appstore
+      - limits
+      - serverauth
+      - serverstore
+      - util
+      - wasmapp-abi
+      - wasmapp-appcfg
+      - wasmapp-appdb
+      - wasmapp-apperr
+      - wasmapp-applimits
+      - wasmapp-appproof
+      - wasmapp-appserver
+      - wasmapp-assets
+      - wasmapp-capapi
+      - wasmapp-compile
+      - wasmapp-diag
+      - wasmapp-edge
+      - wasmapp-events
+      - wasmapp-hostcap
+      - wasmapp-lifecycle
+      - wasmapp-memprofile
+      - wasmapp-queue
+      - wasmapp-readyz
+      - wasmapp-registry
+      - wasmapp-runtime
+      - wasmapp-upload
+      - wasmapp-wasmmod
+
+  wasmapp-appcfg:
+    mayDependOn:
+      - limits
+      - wasmapp-abi
+      - wasmapp-apperr
+
+  wasmapp-appdb:
+    mayDependOn:
+      - limits
+      - wasmapp-abi
+      - wasmapp-apperr
+      - wasmapp-capapi
+
+  wasmapp-applimits:
+    mayDependOn:
+      - limits
+      - wasmapp-apperr
+      - wasmapp-memprofile
+      - wasmapp-readyz
+
+  wasmapp-appproof:
+    mayDependOn:
+      - clientrelease
+      - wasmapp-edge
+
+  wasmapp-appseed:
+    mayDependOn:
+      - serverstore
+      - wasmapp-appcfg
+      - wasmapp-registry
+
+  wasmapp-appserver:
+    mayDependOn:
+      - limits
+      - serverstore
+      - wasmapp-abi
+      - wasmapp-appcfg
+      - wasmapp-appdb
+      - wasmapp-apperr
+      - wasmapp-applimits
+      - wasmapp-assets
+      - wasmapp-capapi
+      - wasmapp-compile
+      - wasmapp-edge
+      - wasmapp-events
+      - wasmapp-hostcap
+      - wasmapp-logbuf
+      - wasmapp-memprofile
+      - wasmapp-queue
+      - wasmapp-registry
+      - wasmapp-runtime
+      - wasmapp-wasmmod
+
+  wasmapp-assets:
+    mayDependOn:
+      - limits
+      - wasmapp-apperr
+
+  wasmapp-capapi:
+    mayDependOn:
+      - wasmapp-abi
+
+  wasmapp-compile:
+    mayDependOn:
+      - limits
+      - wasmapp-apperr
+      - wasmapp-cachetrust
+      - wasmapp-wasmmod
+
+  wasmapp-diag:
+    mayDependOn:
+      - limits
+      - wasmapp-abi
+      - wasmapp-apperr
+      - wasmapp-applimits
+
+  wasmapp-edge:
+    mayDependOn:
+      - limits
+      - wasmapp-apperr
+
+  wasmapp-events:
+    mayDependOn:
+      - limits
+      - wasmapp-capapi
+
+  wasmapp-hostcap:
+    mayDependOn:
+      - limits
+      - wasmapp-abi
+      - wasmapp-apperr
+      - wasmapp-assets
+      - wasmapp-capapi
+
+  wasmapp-lifecycle:
+    mayDependOn:
+      - limits
+      - serverstore
+      - wasmapp-appcfg
+      - wasmapp-appdb
+      - wasmapp-registry
+
+  wasmapp-logbuf:
+    mayDependOn:
+      - limits
+      - util
+
+  wasmapp-memprofile:
+    mayDependOn:
+      - limits
+
+  wasmapp-opens:
+    mayDependOn:
+      - serverstore
+
+  wasmapp-queue:
+    mayDependOn:
+      - limits
+      - wasmapp-apperr
+
+  wasmapp-readyz:
+    mayDependOn:
+      - limits
+      - wasmapp-apperr
+      - wasmapp-queue
+
+  wasmapp-refapp:
+    mayDependOn:
+      - wasmapp-abi
+
+  wasmapp-registry:
+    mayDependOn:
+      - limits
+      - util
+      - wasmapp-apperr
+
+  wasmapp-retirement:
+    mayDependOn:
+      - serverstore
+      - wasmapp-lifecycle
+
+  wasmapp-runtime:
+    mayDependOn:
+      - limits
+      - wasmapp-abi
+      - wasmapp-apperr
+      - wasmapp-cachetrust
+      - wasmapp-capapi
+
+  wasmapp-upload:
+    mayDependOn:
+      - limits
+      - wasmapp-apperr
+      - wasmapp-registry
+
+  wasmapp-wasmmod:
+    mayDependOn:
+      - limits
+      - wasmapp-apperr
+      - wasmapp-assets

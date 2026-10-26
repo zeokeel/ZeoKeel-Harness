@@ -9,10 +9,15 @@ import { PageHeader } from '../components/page-header'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Textarea } from '../components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { Download, FileText, RefreshCw, Share2, ShieldCheck, Sparkles, TriangleAlert, UserCog } from 'lucide-react'
+import { Download, FileText, RefreshCw, Share2, ShieldCheck, Sparkles, UserCog } from 'lucide-react'
 import { GrantDialog } from '../components/grant-dialog'
 import { ArchivePreviewDialog, ArchivePreviewData } from '../components/archive-preview-dialog'
 import { TransferOwnerDialog } from '../components/transfer-owner-dialog'
+import {
+  delistConfirmText, displayNameOf, formatCount, SERVER_TIME_TITLE, serverTimeText,
+  SOURCE_LABEL, STATUS_LABEL,
+} from '../lib/capability-display'
+import { hasPermission, PERM_CAP_READ, PERM_CAP_WRITE } from '../lib/rbac'
 
 /**
  * 能力中心·统一审批(决策 2026-08-25 Phase 3,2026-09 恢复):共享技能与
@@ -41,7 +46,14 @@ interface ApprovalRow {
   /** 授权基路径(name-only,授权是资源级,同名多版本共享);非 base_path。 */
   grants_base: string
   preview_path: string
+  /**
+   * **历史字段**（F-51，2026-10-26）：迁移 0053 后一个 `(kind, app_id)` 只能属于
+   * 一个渠道，「市场/组织同名冲突」结构上不再可能，服务端恒下发 false。字段保留
+   * 只为不破坏旧响应契约；UI 不再渲染「名称冲突」徽章（渲染出来也永远不出现）。
+   */
   conflict?: boolean
+  /** 官方属性（0059，App 级）：服务端 `ApprovalRow.official` 已下发，接上蓝标/归属语义。 */
+  official?: boolean
   /** 上下架状态（App 级，2026-09-15；智能体行 2026-09-17 起同样下发）。 */
   enabled?: boolean
   /**
@@ -72,22 +84,28 @@ interface Dept {
   name: string
 }
 
+/**
+ * 预览弹层的重挂 key(2026-10-26 D 系列显示修复)。
+ *
+ * 必须先算 `(display_name || name)` 再拼 `@version`:写成
+ * `display_name || name + '@' + version` 时 `+` 的优先级高于 `||`,展示名非空
+ * 的行 key 会**丢掉版本段** —— 同一展示名的不同版本预览不再区分,弹层状态
+ * (选中文件/滚动位置)会串到另一行。导出为纯函数以便判据直接钉住。
+ */
+export function previewKeyOf(row: { display_name?: string; name: string; version: string }): string {
+  return (row.display_name || row.name) + '@' + row.version
+}
+
+/** 状态徽章文案取自 `capability-display.STATUS_LABEL`（与客户端 locales 对齐，F-50）。 */
 const STATUS_META: Record<ApprovalRow['status'], { label: string; variant: 'secondary' | 'success' | 'destructive' }> = {
-  pending: { label: '待审核', variant: 'secondary' },
-  approved: { label: '已通过', variant: 'success' },
-  rejected: { label: '已拒绝', variant: 'destructive' },
+  pending: { label: STATUS_LABEL.pending, variant: 'secondary' },
+  approved: { label: STATUS_LABEL.approved, variant: 'success' },
+  rejected: { label: STATUS_LABEL.rejected, variant: 'destructive' },
 }
 
 const KIND_META: Record<ApprovalRow['kind'], { label: string; icon: typeof Sparkles }> = {
   skill: { label: '技能', icon: Sparkles },
   agent: { label: '智能体', icon: Share2 },
-}
-
-function fmtTime(iso: string): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-CN', { hour12: false })
 }
 
 /**
@@ -166,6 +184,15 @@ export default function Capabilities() {
   // 归属转移(2026-09-02):管理员可修改技能/智能体负责人。
   const [transferRow, setTransferRow] = useState<ApprovalRow | null>(null)
 
+  /**
+   * 权限门(F-48,2026-10-26):审批队列的**读**是 `capability:read`（服务端
+   * `/capabilities/approvals` 的申报），**所有处置动作**（通过/拒绝/删除版本/
+   * 质量/上下架/归属转移/授权）都是 `capability:write`。只读角色不显示写按钮、
+   * 也不发必然 403 的写请求；super_admin 权限集包含两者，行为不变。
+   */
+  const canRead = hasPermission(PERM_CAP_READ)
+  const canWrite = hasPermission(PERM_CAP_WRITE)
+
   useEffect(() => {
     request(`${ADMIN_API}/departments`)
       .then((data) => { setDepartments(data.departments ?? []) })
@@ -201,19 +228,25 @@ export default function Capabilities() {
   }, [])
 
   // tab/type 变化都触发重拉(服务端过滤);计数用独立的全状态数据。
-  useEffect(() => { void load(tab, typeFilter) }, [load, tab, typeFilter])
+  // F-48:没有 capability:read 时不发必然 403 的请求。
+  useEffect(() => { if (canRead) void load(tab, typeFilter) }, [canRead, load, tab, typeFilter])
 
   // tab 徽章计数:status=all 全量(与当前 tab/type 无关——计数反映每种
   // 状态的真实总量;type 筛选时同样按 type 拉全状态)。
-  useEffect(() => {
-    let cancelled = false
+  // P2 F-23：动作成功后必须显式刷新；此前 effect 只依赖 typeFilter，表变了而
+  // 徽章停在旧值（表空却显示「待审核(1)」）。
+  const refreshCounts = useCallback(async (): Promise<void> => {
     const qs = new URLSearchParams({ status: 'all' })
     if (typeFilter !== 'all') qs.set('type', typeFilter)
-    void request<{ approvals: ApprovalRow[] }>(`${ADMIN_API}/capabilities/approvals?${qs}`)
-      .then((data) => { if (!cancelled) setCountRows(data.approvals ?? []) })
-      .catch(() => { /* 徽章保持上次值,不阻塞列表 */ })
-    return () => { cancelled = true }
+    try {
+      const data = await request<{ approvals: ApprovalRow[] }>(`${ADMIN_API}/capabilities/approvals?${qs}`)
+      setCountRows(data.approvals ?? [])
+    } catch {
+      // 徽章保持上次值，不阻塞列表。
+    }
   }, [typeFilter])
+
+  useEffect(() => { if (canRead) void refreshCounts() }, [canRead, refreshCounts])
 
   const shown = allRows
 
@@ -239,6 +272,7 @@ export default function Capabilities() {
       setConfirm(null)
       setReason('')
       await load(tab, typeFilter)
+      await refreshCounts()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -254,11 +288,17 @@ export default function Capabilities() {
    */
   const setEnabled = async (row: ApprovalRow, enabled: boolean) => {
     if (busy) return
+    // 上下架确认(F-49:三页口径统一):下架 = 停止分发、可恢复,不是删除。
+    const name = `${displayNameOf(row)}@${row.version}`
+    if (!window.confirm(enabled
+      ? `重新上架「${name}」？恢复后该 App 的全部授权用户可见可下载（下架仍可再次执行）。`
+      : delistConfirmText(name))) return
     setBusy(row.name + row.version + 'enabled')
     setError('')
     try {
       await request(`${row.grants_base}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) })
       await load(tab, typeFilter)
+      await refreshCounts()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -273,6 +313,7 @@ export default function Capabilities() {
     try {
       await request(`${row.base_path}/quality`, { method: 'PUT', body: JSON.stringify({ quality }) })
       await load(tab, typeFilter)
+      await refreshCounts()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -281,7 +322,10 @@ export default function Capabilities() {
   }
 
   const openPreview = async (row: ApprovalRow) => {
-    setPreviewKey(row.display_name || row.name + '@' + row.version)
+    // P2 F-22：拒绝时服务端已清空归档，预览必 404；入口不应出现，这里再兜一层。
+    if (row.status === 'rejected') return
+    // 预览 key 由 previewKeyOf 一处产出(优先级 bug 的回归判据见该函数注释)。
+    setPreviewKey(previewKeyOf(row))
     setPreviewRow(row)
     setPreview(null)
     setError('')
@@ -303,19 +347,31 @@ export default function Capabilities() {
     rejected: countRows.filter(r => r.status === 'rejected').length,
   }
 
+  // F-48:没有 capability:read 时给确定态（不发请求、不渲染任何操作）。
+  if (!canRead) {
+    return (
+      <EmptyState
+        icon={<Share2 className="h-6 w-6" />}
+        title="没有审批查看权限"
+        desc="需要 capability:read；联系超级管理员授予后再查看审批队列。"
+      />
+    )
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="审批"
-        desc="技能/智能体的新版本统一审批队列(组织共享 + 市场):通过→授权可见;官方归属与锁定管理在对应市场页"
+        desc="技能/智能体的新版本统一审批队列（组织共享 + 市场）：通过后按授权可见可安装；上下架/质量/官方归属在市场页或本页对应动作"
       />
       {/* 状态 tab + 类型筛选 */}
       <div className="flex items-center justify-between gap-2">
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
-            <TabsTrigger value="pending">待审核（{counts.pending}）</TabsTrigger>
-            <TabsTrigger value="approved">已通过（{counts.approved}）</TabsTrigger>
-            <TabsTrigger value="rejected">已拒绝（{counts.rejected}）</TabsTrigger>
+            {/* F-50:状态文案与客户端 locales 对齐（审核中/已共享/未通过）。 */}
+            <TabsTrigger value="pending">{STATUS_LABEL.pending}（{counts.pending}）</TabsTrigger>
+            <TabsTrigger value="approved">{STATUS_LABEL.approved}（{counts.approved}）</TabsTrigger>
+            <TabsTrigger value="rejected">{STATUS_LABEL.rejected}（{counts.rejected}）</TabsTrigger>
             <TabsTrigger value="all">全部（{counts.all}）</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -330,6 +386,12 @@ export default function Capabilities() {
           </Button>
         </div>
       </div>
+
+      {/* F-24(产品待定):服务端审批队列只并入 market 的**待审**版本,市场已共享/未通过
+          的历史版本没有列表端点。这里明确说清去哪看,不让管理员以为「全部」缺了一半。 */}
+      <p className="text-xs text-muted-foreground">
+        市场渠道只并入待审版本；已共享 / 未通过的市场版本请到「技能 / 智能体」页查看。
+      </p>
 
       {/* 横幅：**读取失败与动作失败都显示原文**（否则读取失败的具体原因只剩
           「…未读取成功」一句，运维拿不到 500 里的细节）。与 Departments.tsx 同口径。 */}
@@ -353,8 +415,8 @@ export default function Capabilities() {
                 <TableHead>来源</TableHead>
                 <TableHead>名称 / 标题</TableHead>
                 <TableHead>版本</TableHead>
-                <TableHead>作者</TableHead>
-                <TableHead>归属</TableHead>
+                <TableHead title="上传者（release.publisher）；与归属人可不同">作者（上传者）</TableHead>
+                <TableHead title="负责人（apps.owner），决定谁能续传新版本">归属（负责人）</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>质量</TableHead>
                 <TableHead>下载/调用</TableHead>
@@ -387,18 +449,20 @@ export default function Capabilities() {
                       <Badge variant="outline"><KindIcon className="mr-1 h-3 w-3" />{kindMeta.label}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{isMarket ? '市场' : '组织'}</Badge>
+                      <Badge variant="secondary" title="市场 = 管理端直上架；组织 = 员工上传、审批通过后进入共享库">
+                        {isMarket ? SOURCE_LABEL.market : SOURCE_LABEL.org}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="whitespace-nowrap font-medium">
-                        {row.display_name || row.name}
-                        {row.conflict && (
-                          <Badge variant="destructive" className="ml-2" title="与市场技能同名,通过会被 409 阻断,请先处理市场技能">
-                            <TriangleAlert className="mr-1 h-3 w-3" />名称冲突
-                          </Badge>
-                        )}
+                        {displayNameOf(row)}
+                        {/* F-51:`conflict` 在迁移 0053 之后恒 false(服务端保留字段只为
+                            响应兼容),这里不再渲染永远不出现的「名称冲突」徽章。 */}
                       </div>
-                      <div className="text-xs text-muted-foreground">{row.name}</div>
+                      {/* 目录名只在展示名不同时作副标题,避免同一串名称出现两次。 */}
+                      {displayNameOf(row) !== row.name && (
+                        <div className="text-xs text-muted-foreground">{row.name}</div>
+                      )}
                       {/* market 待审行的影响面说明(仅 market):组织行通过 = 该版本对
                           授权用户可见,市场行通过 = **替换分发版本**,同样对全部授权
                           用户生效。 */}
@@ -409,9 +473,12 @@ export default function Capabilities() {
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">{row.version}</TableCell>
-                    <TableCell>{row.author}</TableCell>
+                    <TableCell>{row.author || '—'}</TableCell>
                     <TableCell title="归属人(谁能续传新版本;与作者可不同)">
-                      {row.owner || '—'}
+                      {/* F-51:官方 App 的归属语义是「官方」(owner 恒空),接上蓝标而不是显示 —。 */}
+                      {row.official
+                        ? <Badge className="bg-[#1E40AF] text-white hover:bg-[#1E40AF]">官方</Badge>
+                        : (row.owner || '—')}
                     </TableCell>
                     <TableCell>
                       <Badge variant={meta.variant}>{meta.label}</Badge>
@@ -423,55 +490,69 @@ export default function Capabilities() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {/* 质量标记只有组织命名空间有版本级端点(`PUT …/:version/quality`)⇒
-                          market 行不渲染 Select(市场行的精选/官方在市场页的 App 级入口)。 */}
+                      {/* F-25:质量标记只有组织命名空间有版本级端点(`PUT …/:version/quality`)。
+                          市场渠道服务端**没有** quality 端点 ⇒ 不渲染 Select（不造假入口），
+                          只给一句为什么；组织行在无 capability:write 时也只读展示。 */}
                       {row.status === 'approved' && !isMarket ? (
-                        <Select
-                          value={row.quality || 'none'}
-                          onValueChange={(v) => { void setQuality(row, v === 'none' ? '' : 'featured') }}
-                          disabled={isBusy}
-                        >
-                          <SelectTrigger className="h-7 w-24 text-xs">
-                            <SelectValue placeholder="无" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">无</SelectItem>
-                            <SelectItem value="featured">精选</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        canWrite ? (
+                          <Select
+                            value={row.quality || 'none'}
+                            onValueChange={(v) => { void setQuality(row, v === 'none' ? '' : 'featured') }}
+                            disabled={isBusy}
+                          >
+                            <SelectTrigger className="h-7 w-24 text-xs">
+                              <SelectValue placeholder="无" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">无</SelectItem>
+                              <SelectItem value="featured">精选</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">{row.quality === 'featured' ? '精选' : '—'}</span>
+                        )
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title={isMarket ? '市场渠道没有质量设置端点（服务端未提供 /quality），精选由组织行维护' : undefined}
+                        >—</span>
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      下载 {row.downloads ?? 0}{row.kind === 'skill' ? ` / 调用 ${row.calls ?? 0}` : ''}
+                      下载 {formatCount(row.downloads)}{row.kind === 'skill' ? ` / 调用 ${formatCount(row.calls)}` : ''}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{fmtTime(row.created_at)}</TableCell>
+                    <TableCell className="text-muted-foreground" title={SERVER_TIME_TITLE}>{serverTimeText(row.created_at)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => { void openPreview(row) }} title="查看内容预览">
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm"
-                          onClick={() => { window.open(`${row.base_path}/archive`, '_blank') }}
-                          title="下载归档核查" aria-label="下载归档核查">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" disabled={isBusy}
-                          onClick={() => { setTransferRow(row) }}
-                          title="转移归属(负责人)" aria-label="转移归属(负责人)">
-                          <UserCog className="h-4 w-4" />
-                        </Button>
+                        {row.status !== 'rejected' && (
+                          <>
+                            <Button variant="ghost" size="sm" onClick={() => { void openPreview(row) }} title="查看内容预览">
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm"
+                              onClick={() => { window.open(`${row.base_path}/archive`, '_blank') }}
+                              title="下载归档核查" aria-label="下载归档核查">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        {canWrite && (
+                          <Button variant="ghost" size="sm" disabled={isBusy}
+                            onClick={() => { setTransferRow(row) }}
+                            title="转移归属(负责人)" aria-label="转移归属(负责人)">
+                            <UserCog className="h-4 w-4" />
+                          </Button>
+                        )}
                         {/* 以下四个动作**只有组织命名空间有端点**(授权 / 上下架 /
                             质量 / 删除),market 行一律不渲染 —— 渲染出来点下去必然 404。
                             市场行的上下架/删除在市场页(`/skills|agents/:name[/version]`),
                             本页只承担"审"。 */}
-                        {!isMarket && row.status === 'approved' && (
+                        {canWrite && !isMarket && row.status === 'approved' && (
                           <Button size="sm" variant="outline" disabled={isBusy} onClick={() => { setGrantName(row.name); setGrantBase(row.grants_base) }} title="授权" aria-label="授权">
                             <ShieldCheck className="h-4 w-4" />
                           </Button>
                         )}
-                        {!isMarket && row.status === 'approved' && (
+                        {canWrite && !isMarket && row.status === 'approved' && (
                           row.enabled === false ? (
                             <Button size="sm" variant="outline" disabled={isBusy}
                               onClick={() => { void setEnabled(row, true) }}
@@ -486,7 +567,7 @@ export default function Capabilities() {
                             </Button>
                           )
                         )}
-                        {row.status !== 'approved' && (
+                        {canWrite && row.status !== 'approved' && (
                           // 已下架的待审行：「通过」置灰（点下去必然 409 APP_DELISTED），
                           // 说明挂在**外层 span** 上 —— 禁用按钮不派发鼠标事件，浏览器
                           // 不会显示它自己的 title（R6-B P2）。市场行的修复入口在
@@ -504,11 +585,12 @@ export default function Capabilities() {
                             烧毁)。要停服务用「下架」(可逆)。服务端在 DAO 层同样拒绝
                             并回 409 APPROVED_NOT_REJECTABLE,这里只是不让入口出现。
                             市场待审版本**也**必须能拒绝,否则坏版本只能靠通过来清场。 */}
-                        {row.status === 'pending' && (
+                        {canWrite && row.status === 'pending' && (
                           <Button size="sm" variant="outline" disabled={isBusy} onClick={() => { setReason(''); setConfirm(row); setConfirmKind('reject') }}>拒绝</Button>
                         )}
-                        {!isMarket && (
-                          <Button size="sm" variant="destructive" disabled={isBusy} onClick={() => { setConfirm(row); setConfirmKind('delete') }}>删除</Button>
+                        {/* F-21:按钮文案写明是「删除版本」——与「下架」(可恢复)区分。 */}
+                        {canWrite && !isMarket && row.status !== 'approved' && (
+                          <Button size="sm" variant="destructive" disabled={isBusy} onClick={() => { setConfirm(row); setConfirmKind('delete') }}>删除版本</Button>
                         )}
                       </div>
                     </TableCell>
@@ -536,9 +618,9 @@ export default function Capabilities() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {confirm && confirmKind === 'approve' && `确定通过「${confirm.display_name || confirm.name}@${confirm.version}」吗？`}
-              {confirm && confirmKind === 'reject' && `确定拒绝「${confirm.display_name || confirm.name}@${confirm.version}」吗？`}
-              {confirm && confirmKind === 'delete' && `确定删除「${confirm.display_name || confirm.name}@${confirm.version}」吗？`}
+              {confirm && confirmKind === 'approve' && `确定通过「${displayNameOf(confirm)}@${confirm.version}」吗？`}
+              {confirm && confirmKind === 'reject' && `确定拒绝「${displayNameOf(confirm)}@${confirm.version}」吗？`}
+              {confirm && confirmKind === 'delete' && `确定删除版本「${displayNameOf(confirm)}@${confirm.version}」吗？`}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
@@ -548,7 +630,7 @@ export default function Capabilities() {
               ? '通过后该版本立即替换市场分发版本，对该应用的全部授权用户生效。'
               : '通过后该版本将按授权可见可安装。')}
             {confirmKind === 'reject' && '拒绝后仅上传者可见；该版本的归档字节会被释放且不可恢复。如需停止服务请改用「下架」（可恢复）。请填写理由，上传者可见。'}
-            {confirmKind === 'delete' && '删除后记录与归档将被移除,不可恢复。'}
+            {confirmKind === 'delete' && '删除版本 = 不可恢复：该版本的记录与归档字节会被移除，版本号永久占位、不能复用。如果只是想停止分发，请改用「下架」（可恢复）。'}
           </p>
           {confirmKind === 'reject' && (
             <Textarea
@@ -590,7 +672,7 @@ export default function Capabilities() {
         open={transferRow !== null}
         kind={transferRow?.kind ?? 'skill'}
         name={transferRow?.name ?? ''}
-        displayName={transferRow?.display_name}
+        displayName={transferRow ? displayNameOf(transferRow) : undefined}
         currentOwner={transferRow?.owner ?? ''}
         onClose={() => { setTransferRow(null) }}
         onSaved={() => { void load(tab, typeFilter) }}

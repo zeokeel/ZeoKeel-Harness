@@ -30,7 +30,9 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	g := r.Group(base, serverauth.AdminAuth(db))
 	serverauth.AdminRoute(g, "GET", "/skills", serverauth.PermMarketRead, func(c *gin.Context) { listSkillsAdmin(c, db) })
 	serverauth.AdminRoute(g, "POST", "/skills", serverauth.PermMarketWrite, func(c *gin.Context) { createSkillAdmin(c, db) })
-	serverauth.AdminRoute(g, "POST", "/skills/:name/archive", serverauth.PermMarketWrite, func(c *gin.Context) { uploadSkillArchiveAdmin(c, db, cacheDir) })
+	// F-05:直发即 approved,与审批同权(capability:write);生产路由唯一真源在
+	// internal/router,本函数是测试镜像,必须逐条同权。
+	serverauth.AdminRoute(g, "POST", "/skills/:name/archive", serverauth.PermCapabilityWrite, func(c *gin.Context) { uploadSkillArchiveAdmin(c, db, cacheDir) })
 	serverauth.AdminRoute(g, "PUT", "/skills/:name", serverauth.PermMarketWrite, func(c *gin.Context) { updateSkillAdmin(c, db, cacheDir) })
 	serverauth.AdminRoute(g, "DELETE", "/skills/:name", serverauth.PermMarketWrite, func(c *gin.Context) { deleteSkillAdmin(c, db) })
 	// 重新上架(审计 A5-M1: 下架不可逆曾导致误下架无法恢复)
@@ -42,7 +44,7 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	// 此前只有 POST …/archive(上传新版),市场行的那个链接必 404。
 	serverauth.AdminRoute(g, "GET", "/skills/:name/archive", serverauth.PermMarketRead, func(c *gin.Context) { downloadSkillArchiveAdmin(c, db) })
 	// 存量规范化(决策 2026-09-01 §八):产出符合发布契约的新版本(patch+1)。
-	serverauth.AdminRoute(g, "POST", "/skills/:name/normalize", serverauth.PermMarketWrite, func(c *gin.Context) { normalizeSkillAdmin(c, db, cacheDir) })
+	serverauth.AdminRoute(g, "POST", "/skills/:name/normalize", serverauth.PermCapabilityWrite, func(c *gin.Context) { normalizeSkillAdmin(c, db, cacheDir) })
 	// 授权管理(严格默认:未授权不可见/不可下载)
 	serverauth.AdminRoute(g, "GET", "/skills/:name/grants", serverauth.PermMarketRead, func(c *gin.Context) { listSkillGrants(c, db) })
 	serverauth.AdminRoute(g, "PUT", "/skills/:name/grants", serverauth.PermMarketWrite, func(c *gin.Context) { replaceSkillGrants(c, db) })
@@ -51,7 +53,12 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	// 市场智能体(G4):与市场技能同构(与 router 包镜像)。
 	serverauth.AdminRoute(g, "GET", "/agents", serverauth.PermMarketRead, func(c *gin.Context) { listAgentsAdmin(c, db) })
 	serverauth.AdminRoute(g, "POST", "/agents", serverauth.PermMarketWrite, func(c *gin.Context) { createAgentAdmin(c, db) })
-	serverauth.AdminRoute(g, "POST", "/agents/:name/archive", serverauth.PermMarketWrite, func(c *gin.Context) { uploadAgentArchiveAdmin(c, db) })
+	// F-05(2026-10-26,镜像漂移补齐):管理员直发 = 落库即 approved = 审批同权 ⇒
+	// `capability:write`。生产路由(internal/router/optional_skills_on.go)早已改,
+	// 本镜像此前仍是 market:write —— 镜像树是权限用例的观测面(能力中心/管理端用例
+	// 都用它建树),漂移会让测试证明的授权结论与生产**相反**。判据在 router 包:
+	// TestAdminRouteMirrorPermissionParity(逐条比对两侧 (method,path)→perm)。
+	serverauth.AdminRoute(g, "POST", "/agents/:name/archive", serverauth.PermCapabilityWrite, func(c *gin.Context) { uploadAgentArchiveAdmin(c, db) })
 	serverauth.AdminRoute(g, "PUT", "/agents/:name", serverauth.PermMarketWrite, func(c *gin.Context) { updateAgentAdmin(c, db) })
 	serverauth.AdminRoute(g, "DELETE", "/agents/:name", serverauth.PermMarketWrite, func(c *gin.Context) { deleteAgentAdmin(c, db) })
 	serverauth.AdminRoute(g, "POST", "/agents/:name/enable", serverauth.PermMarketWrite, func(c *gin.Context) { enableAgentAdmin(c, db) })
@@ -232,7 +239,10 @@ func listSkillsAdmin(c *gin.Context, db *sql.DB) {
 }
 
 type skillReq struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// Title 是展示名(2026-10-26 D 系列显示修复):管理端可显式改中文展示名。
+	// 为空保持既有 apps.title(再空回落 name),绝不写 owner。
+	Title       string `json:"title"`
 	Version     string `json:"version"`
 	Description string `json:"description"`
 	Author      string `json:"author"`
@@ -255,7 +265,7 @@ func createSkillAdmin(c *gin.Context, db *sql.DB) {
 	// 0052:git 源模式已移除——创建只登记名称与元数据,内容一律由
 	// POST /skills/:name/archive 上传(归档是唯一入口,发布期集中严格校验)。
 	s := &serverstore.Skill{Name: req.Name, Version: req.Version, Description: req.Description,
-		Author: req.Author, Enabled: 1}
+		Author: req.Author, DisplayName: strings.TrimSpace(req.Title), Enabled: 1}
 	if _, err := serverstore.AddSkill(db, s); err != nil {
 		if errors.Is(err, serverstore.ErrDuplicate) {
 			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "技能已存在")
@@ -264,7 +274,12 @@ func createSkillAdmin(c *gin.Context, db *sql.DB) {
 		if errors.Is(err, serverstore.ErrConflict) {
 			// 决策 2026-08-25:市场与组织合并为「市场」后,同名技能跨源互斥。
 			// 共享库已存在同名技能(任意状态)时拒绝上架,要求管理员先处理共享库行。
-			serverauth.WriteError(c, http.StatusConflict, "CONFLICT", "名称与组织共享库技能冲突,请先在共享库处理同名技能")
+			// F-42（2026-10-26）：四个"同名冲突"出口统一成一个码
+			// `NAME_TAKEN`（与 appstore.Publish 一致）。修前这里回 `CONFLICT`
+			// 而发布内核回 `NAME_TAKEN`，调用方要按"哪一个入口"分流才能识别
+			// 同一件事；webadmin 不按该码分支（已核），因此只统一码不动文案。
+			serverauth.WriteError(c, http.StatusConflict, appstore.CodeNameTaken,
+				"名称与组织共享库技能冲突,请先在共享库处理同名技能")
 			return
 		}
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "创建失败")
@@ -367,7 +382,12 @@ func uploadSkillArchiveAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "发布失败")
 		return
 	}
-	_ = serverstore.SetSkillDisplayName(db, name, man.Title)
+	// 展示名回写:只认包内(trim 后)非空的 title。空 title 必须**保持既有**
+	// apps.title(直接写空串会把管理员改好的中文展示名清掉,下一次渲染只剩
+	// 英文目录名 —— 2026-10-26 D 系列显示修复)。
+	if title := strings.TrimSpace(man.Title); title != "" {
+		_ = serverstore.SetSkillDisplayName(db, name, title)
+	}
 	// 上传模式不再依赖磁盘缓存:清掉旧 clone/包,避免误读。
 	invalidateSkillCache(cacheDir, name)
 	_ = serverstore.AuditLog(db, adminUsername(c), "skill_update",
@@ -420,6 +440,13 @@ func updateSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 	}
 	if req.Description != "" {
 		s.Description = req.Description
+	}
+	// 展示名(2026-10-26 D 系列显示修复):显式 title 优先;为空保持既有展示名
+	// (appToSkill 已把「apps.title → 展示版本 title → name」的回退做在投影层),
+	// UpdateSkillMeta 再对空值回落 name 并 trim。owner 不在此列 —— 它只走
+	// 「转移归属」的唯一合规入口。
+	if title := strings.TrimSpace(req.Title); title != "" {
+		s.DisplayName = title
 	}
 	// UpdateSkillMeta 只写展示列(title/description/enabled),不碰 owner ——
 	// 让"元数据 PUT 无意中改写归属"在 DAO 层结构上不可能(唯一真源在 DAO)。
@@ -665,7 +692,10 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 	// 内容相同、版本号递增的噪音版本)。
 	if curEntries, curMD, cerr := sharedskills.ListArchiveContents(raw); cerr == nil {
 		if m0, perr := skillmanifest.Parse(curEntries, curMD, s.Name); perr == nil && m0.Version == s.Version {
-			_ = serverstore.SetSkillDisplayName(db, s.Name, m0.Title)
+			// 空包内 title 不清空既有展示名(与上传/更新同一口径)。
+			if title := strings.TrimSpace(m0.Title); title != "" {
+				_ = serverstore.SetSkillDisplayName(db, s.Name, title)
+			}
 			c.JSON(http.StatusOK, gin.H{
 				"ok": true, "version": s.Version, "checksum": s.Checksum,
 				"changes": []string{}, "already_compliant": true,
@@ -690,6 +720,16 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 	}
 	// 规范化产出的是新版本:版本号必须体现在包内(包内即真相)。
 	normalized = forceVersion(normalized, nextVersion)
+	// F-03(能力中心审计 2026-10-26):规范化必须服从**发布内核的硬规则** ——
+	// 此前它绕过内核直接 `ReplaceSkillArchive` → CreateRelease(approved),既不判
+	// 版本递增/同版本,也不判 changelog、下架冻结与官方/能力锁 ⇒ 规范化成了
+	// 一条后门发布路径。现在落库改走 appstore.Publish(AdminPublish=true),由
+	// 内核原子判定;本函数只负责把包改造成合规形态。
+	//
+	// changelog(非首个版本必填)不能凭空编造语义内容,但规范化**确实**发生了
+	// 可列出的改动,因此把 changes 作为真实的更新说明写进 frontmatter;包内
+	// 已有非空 changelog 时保持原值(作者写的说明优先)。
+	normalized = ensureChangelogField(normalized, normalizeChangelog(changes))
 	files["SKILL.md"] = []byte(normalized)
 	// 溯源目录是客户端本地产物,不应存在于归档中。
 	for path := range files {
@@ -713,7 +753,8 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		return
 	}
 	// 自检:规范化产物必须通过与上传同一套严格校验,否则不入库。
-	if _, perr := skillmanifest.Parse(entries, md, s.Name); perr != nil {
+	man, perr := skillmanifest.Parse(entries, md, s.Name)
+	if perr != nil {
 		var me *skillmanifest.Error
 		if errors.As(perr, &me) {
 			serverauth.WriteError(c, skillmanifest.StatusFor(me.Code), me.Code,
@@ -723,17 +764,100 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "规范化后仍不合规")
 		return
 	}
-	if err := serverstore.ReplaceSkillArchive(db, s.Name, nextVersion, checksum, rebuilt); err != nil {
+	// F-03:发布内核是唯一的落库入口 —— 版本递增/同版本、changelog、下架冻结、
+	// 官方锁、能力锁、跨渠道同名互斥全部在 Publish 里原子判定(AdminPublish=true
+	// 表示这次写入是管理员裁决:发布即 approved)。
+	res, perr := appstore.Publish(db, appstore.PublishRequest{
+		Kind:            serverstore.AppKindSkill,
+		AppID:           s.Name,
+		Channel:         serverstore.AppChannelMarket,
+		Archive:         rebuilt,
+		Publisher:       adminUsername(c),
+		AdminPublish:    true,
+		DeclaredVersion: nextVersion,
+		Manifest:        appstore.FromSkillManifest(man),
+		Checksum:        checksum,
+	})
+	if perr != nil {
+		var ae *appstore.Error
+		if errors.As(perr, &ae) {
+			serverauth.WriteError(c, ae.Status, ae.Code, ae.Message)
+			return
+		}
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
 		return
 	}
-	if m2, perr2 := skillmanifest.Parse(entries, md, s.Name); perr2 == nil {
-		_ = serverstore.SetSkillDisplayName(db, s.Name, m2.Title)
+	if title := strings.TrimSpace(man.Title); title != "" {
+		// 空包内 title 不清空既有展示名(与上传/更新同一口径);非空时 Publish
+		// 已把投影切到本版,这里只是幂等的显式回写(与 upload 路径同形)。
+		_ = serverstore.SetSkillDisplayName(db, s.Name, title)
 	}
 	invalidateSkillCache(cacheDir, s.Name)
 	_ = serverstore.AuditLog(db, adminUsername(c), "skill_normalize",
-		s.Name+" v"+s.Version+" → v"+nextVersion+" ("+strings.Join(changes, "; ")+")")
-	c.JSON(http.StatusOK, gin.H{"ok": true, "version": nextVersion, "checksum": checksum, "changes": changes})
+		s.Name+" v"+s.Version+" → v"+res.Version+" ("+strings.Join(changes, "; ")+")")
+	c.JSON(http.StatusOK, gin.H{"ok": true, "version": res.Version, "checksum": checksum, "changes": changes})
+}
+
+// normalizeChangelog 把规范化改动清单渲染成符合 MaxChangelogRunes 的更新说明。
+//
+// 规范化只在**确实有改动**时走到发布内核(已合规的包在上面的幂等分支提前
+// 返回),所以这段文字描述的是真实发生的事,不是编造的用户语义内容。
+func normalizeChangelog(changes []string) string {
+	if len(changes) == 0 {
+		return "规范化:补齐发布契约要求的字段"
+	}
+	out := "自动规范化:" + strings.Join(changes, ";")
+	if runes := []rune(out); len(runes) > skillmanifest.MaxChangelogRunes {
+		out = string(runes[:skillmanifest.MaxChangelogRunes-1]) + "…"
+	}
+	return out
+}
+
+// ensureChangelogField 保证规范化产物带有**非空** changelog 字段。
+//
+// F-03:changelog 是发布内核的硬规则(非首个版本必填),规范化不得绕过它,
+// 也不该因为存量包没有 changelog 就整条路径失败 —— 用本次规范化的真实改动
+// 清单补齐。包内已有非空 changelog 时保持原值(作者写的说明是内容,不是噪音)。
+func ensureChangelogField(skillMD, changelog string) string {
+	lines := strings.Split(skillMD, "\n")
+	// 只在 frontmatter 区域内改:首行必须是 `---`,结束行是下一条 `---`。
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return skillMD
+	}
+	end := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			end = i
+			break
+		}
+	}
+	if end < 0 {
+		return skillMD
+	}
+	for i := 1; i < end; i++ {
+		if !strings.HasPrefix(lines[i], "changelog:") {
+			continue
+		}
+		if strings.TrimSpace(strings.TrimPrefix(lines[i], "changelog:")) != "" {
+			return skillMD // 已有非空 changelog:保持作者原文
+		}
+		// 空 changelog 行:直接替换(避免同一字段出现两次)。
+		lines[i] = "changelog: " + yamlSingleQuoted(changelog)
+		return strings.Join(lines, "\n")
+	}
+	out := make([]string, 0, len(lines)+1)
+	out = append(out, lines[:end]...)
+	out = append(out, "changelog: "+yamlSingleQuoted(changelog))
+	out = append(out, lines[end:]...)
+	return strings.Join(out, "\n")
+}
+
+// yamlSingleQuoted 把任意文本渲染成 YAML 单引号标量(单引号转义规则:” 表示 ')。
+//
+// 不引号包裹时,中文冒号/括号/连字符都可能被 YAML 解析成结构;双引号标量的
+// 转义集又不完全等价 JSON。单引号标量只认 ” 一种转义,最稳。
+func yamlSingleQuoted(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 // forceVersion 保证 frontmatter 的 version 与入库版本一致(规范化时旧包可能

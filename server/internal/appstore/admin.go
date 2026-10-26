@@ -22,11 +22,82 @@ import (
 type Handlers struct {
 	// 归属转移(2026-09-02):PUT /apps/:kind/:app_id/owner
 	TransferOwner gin.HandlerFunc
+	// 空壳释放(F-02,2026-10-26):DELETE /apps/:kind/:app_id
+	DeleteApp gin.HandlerFunc
 }
 
 // NewHandlers 返回管理面 handler 集合(db 注入)。
 func NewHandlers(db *sql.DB) *Handlers {
-	return &Handlers{TransferOwner: transferOwner(db)}
+	return &Handlers{TransferOwner: transferOwner(db), DeleteApp: deleteApp(db)}
+}
+
+// 空壳硬删被拒时的**对外**错误码(409)。与 serverstore 的 sentinel 一一对应:
+// 调用方(webadmin)按 code 渲染"先下架/先处理版本"的指路文案,不要靠消息文本。
+const (
+	// CodeAppHasReleases:仍有版本 ⇒ 不是空壳,请先删除版本或下架。
+	CodeAppHasReleases = "APP_HAS_RELEASES"
+	// CodeAppOfficial:官方归属 ⇒ 不可释放名称。
+	CodeAppOfficial = "APP_OFFICIAL"
+)
+
+// deleteApp 硬删一个**空壳** App(释放被占用的名称)。F-02(能力中心审计
+// 2026-10-26)。
+//
+// 为什么需要它:管理端「新建」只登记名称(POST /skills、POST /agents),内容
+// 另一步上传。打错名字/放弃创建后,这一行既没有版本也没有删除入口,而名称
+// 跨渠道互斥(市场占名同时挡组织同名)—— 唯一出路是改库。
+//
+// 安全边界(全部由 serverstore.DeleteEmptyApp 在事务内一次判定):
+//   - 没有未软删版本(有 pending/approved ⇒ 409 APP_HAS_RELEASES,指路下架/删版本);
+//   - 非官方归属(否则 409 APP_OFFICIAL);
+//   - kind ∈ {skill, agent}(WASM 应用有独立 purge 生命周期,不走本入口)。
+//
+// 硬删 = 释放名称:apps 行删除(app_releases 墓碑随 CASCADE 清除)、app_grants
+// 一并清理;审计 app_delete 留痕(按 app_id 归档,便于之后追查"这个名字是谁释放的")。
+func deleteApp(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		kind := c.Param("kind")
+		appID := c.Param("app_id")
+		if kind != serverstore.AppKindSkill && kind != serverstore.AppKindAgent {
+			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION",
+				"类型不合法:只能是 skill 或 agent(WASM 应用请在应用管理里卸载)")
+			return
+		}
+		if !skillmanifest.IsAppID(appID) {
+			serverauth.WriteError(c, http.StatusBadRequest, skillmanifest.CodeInvalidAppID,
+				"名称不合法:必须是小写 kebab-case(如 my-skill)")
+			return
+		}
+		err := serverstore.DeleteEmptyApp(db, kind, appID)
+		switch {
+		case err == nil:
+		case errors.Is(err, serverstore.ErrNotFound):
+			serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "能力不存在")
+			return
+		case errors.Is(err, serverstore.ErrAppHasReleases):
+			serverauth.WriteError(c, http.StatusConflict, CodeAppHasReleases,
+				"该能力已有版本,不能按空壳删除:要停止提供请先下架(可恢复),要彻底移除请先删除各版本")
+			return
+		case errors.Is(err, serverstore.ErrAppOfficial):
+			serverauth.WriteError(c, http.StatusConflict, CodeAppOfficial,
+				"官方归属的能力不能删除:请先把归属转给具体负责人")
+			return
+		case errors.Is(err, serverstore.ErrValidation):
+			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "类型不合法")
+			return
+		default:
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "删除失败")
+			return
+		}
+		admin := serverauth.AdminUser(c)
+		actor := ""
+		if admin != nil {
+			actor = admin.Username
+		}
+		_ = serverstore.AuditLogApp(db, appID, actor, "app_delete",
+			kind+":"+appID+" 硬删除空壳应用(释放名称)")
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	}
 }
 
 // TransferOwnerAuditDetail 归属转移审计明细(稳定格式,webadmin 直接可读)。
@@ -36,6 +107,34 @@ func TransferOwnerAuditDetail(kind, appID, title, from, to string) string {
 		detail += " 「" + title + "」"
 	}
 	return detail + " 归属 " + from + " → " + to
+}
+
+// withPublishLockForOwner 在**与发布内核相同的咨询锁**下开一个事务，返回该事务。
+//
+// F-15(能力中心审计 2026-10-26,P2)：`appstore.Publish` 在持锁事务内读
+// `apps.owner` 决定「谁能续传新版本」，而归属转移修前是一条锁外单语句 UPDATE。
+// 两者交错时旧归属人可以在转移提交前通过检查、提交后落库 —— 归属语义被绕过。
+// 现在转移先取同一把锁（`publishLockKey` 的 hashtextextended 64 位键），
+// 与 Publish 互斥；锁内重读 apps 行，读到的一定是对方提交后的状态。
+//
+// 为什么用**阻塞式** `pg_advisory_xact_lock` 而不是 Publish 的 try+退避：
+// 归属转移是低频管理动作（人工点一次），没有同名风暴的池耗尽风险；阻塞等待
+// 期间连接被占用但只有一个，且最长等到 Publish 的 60s 事务预算。
+//
+// 失败语义：取锁/事务失败 ⇒ 已写 500 并返回 ok=false，调用方直接 return。
+func withPublishLockForOwner(c *gin.Context, db *sql.DB, kind, appID string) (*sql.Tx, bool) {
+	tx, err := db.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+		return nil, false
+	}
+	if _, err := tx.ExecContext(c.Request.Context(),
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, publishLockKey(kind, appID)); err != nil {
+		_ = tx.Rollback()
+		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+		return nil, false
+	}
+	return tx, true
 }
 
 // transferOwner 归属转移:管理员把某个 App 的归属人改为其他存在用户。
@@ -98,7 +197,26 @@ func transferOwner(db *sql.DB) gin.HandlerFunc {
 				c.JSON(http.StatusOK, gin.H{"ok": true, "official": true})
 				return
 			}
-			if err := serverstore.SetAppOfficial(db, kind, appID, true, ""); err != nil {
+			// F-15：归属写与发布内核串行（同一把发布咨询锁 + 同一事务）。
+			appOnLock, ok := withPublishLockForOwner(c, db, kind, appID)
+			if !ok {
+				return
+			}
+			// 锁内**重读**：上面那次 GetApp 是锁外的,可能已经过时(审计的
+			// from 与新归属判据必须取自锁内状态,否则记错旧归属人)。
+			appLocked, gerr := serverstore.GetAppOn(appOnLock, kind, appID)
+			if gerr != nil {
+				_ = appOnLock.Rollback()
+				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+				return
+			}
+			app = appLocked
+			if err := serverstore.SetAppOfficialOn(appOnLock, kind, appID, true, ""); err != nil {
+				_ = appOnLock.Rollback()
+				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
+				return
+			}
+			if err := appOnLock.Commit(); err != nil {
 				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
 				return
 			}
@@ -125,7 +243,24 @@ func transferOwner(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusOK, gin.H{"ok": true, "owner": req.Owner})
 			return
 		}
-		if err := serverstore.SetAppOfficial(db, kind, appID, false, req.Owner); err != nil {
+		// F-15：同上 —— 锁内重读 + 同事务写，杜绝「旧归属人替新归属人发版」。
+		appOnLock, ok := withPublishLockForOwner(c, db, kind, appID)
+		if !ok {
+			return
+		}
+		appLocked, gerr := serverstore.GetAppOn(appOnLock, kind, appID)
+		if gerr != nil {
+			_ = appOnLock.Rollback()
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+			return
+		}
+		app = appLocked
+		if err := serverstore.SetAppOfficialOn(appOnLock, kind, appID, false, req.Owner); err != nil {
+			_ = appOnLock.Rollback()
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
+			return
+		}
+		if err := appOnLock.Commit(); err != nil {
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
 			return
 		}

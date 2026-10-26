@@ -161,6 +161,17 @@ const GUARDS = [
   // 判据面 = 约 7 万行根脚本的类型 + 死代码）。Electron 渲染进程探针 `scripts/wasm/probes/**`
   // 显式不在面内（理由见 tsconfig.scripts.json）。
   { name: 'check:scripts-types', args: ['run', 'check:scripts-types'], path: '根脚本类型面（tsconfig.scripts.json：allowJs + checkJs + noUnused*）' },
+  // 2026-10-26：`.dependency-cruiser.cjs`（8 条架构规则）+ `.dependency-cruiser-known-violations.json`
+  // （5 条存量基线）此前只有一个**手动**入口 `make -f Makefile.agent arch-ts` —— 没人跑就等于没有：
+  // "顺手加的一条 import"可以静默破掉包内 client↔host 分面、vendor 叶子、community 脚手架这些硬约束。
+  // 这条守卫用仓内 dependency-cruiser 跑同一组参数（与 Makefile.agent 的 `arch-ts` 逐字一致），
+  // 判据缺失/规则文件缺失一律退出码 2（fail-closed）。基线只能缩不能放。
+  { name: 'check:architecture', args: ['run', 'check:architecture'], path: 'TS 架构规则（.dependency-cruiser.cjs 8 条 + 基线 5 条存量循环）' },
+  // 2026-10-26：`changes/README.md` 的字段规则（id/status/intent/modules/accepted⇒acceptance、
+  // verified⇒verification）此前只有**文字**、没有判据 —— "跳过验收标准就动手"既不会红也不会被发现。
+  // 这条守卫把 README 的契约变成机器判据（坏 JSON/未知 status/未知 evidence 逐条 exit 1，
+  // `changes/` 目录缺失 exit 2）。它让 `changes/` 的记录真的"有人看着"。
+  { name: 'check:change-intent', args: ['run', 'check:change-intent'], path: '变更记录（changes/*.json 的字段契约：id/status/intent/modules/acceptance/verification）' },
 ]
 
 /**

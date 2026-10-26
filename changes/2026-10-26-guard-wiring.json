@@ -1,0 +1,91 @@
+{
+  "id": "2026-10-26-guard-wiring",
+  "status": "verified",
+  "intent": {
+    "zh": "把架构与变更验收从手动入口接成真正的根门禁：新增第 19 条 check:architecture（TS 依赖方向）与第 20 条 check:change-intent（changes/ 契约），并产出 Go 侧基线即配置的 server/.go-arch-lint.yml。",
+    "en": "Turn architecture and change-acceptance checks into real root gates: add gate #19 check:architecture (TS dependency direction) and #20 check:change-intent (changes/ contract), and ship a baseline-as-config server/.go-arch-lint.yml for Go."
+  },
+  "modules": [
+    "scripts/check-architecture.mjs",
+    "scripts/check-change-intent.mjs",
+    "package.json",
+    "scripts/check-workspaces.mjs",
+    "scripts/check-root-guards.mjs",
+    "scripts/verify-check-workspaces.mjs",
+    "scripts/check-install-integrity.mjs",
+    "scripts/check-guard-parser-integrity.mjs",
+    "server/.go-arch-lint.yml",
+    "Makefile.agent",
+    "AGENTS.md",
+    "docs/agent/README.md",
+    "docs/agent/toolchain.md",
+    "docs/agent/architecture.md",
+    "docs/agent/workflow.md",
+    "docs/agent/testing.md",
+    "site/src/content/docs/plugin-development.md"
+  ],
+  "acceptance": [
+    {
+      "criterion": "两条新守卫出现在编排器表里且可执行：--list 显示 20 条 guards、17 个包；check-root-guards 整体 20/20 通过",
+      "evidence": "guard",
+      "command": "node scripts/check-workspaces.mjs --list && node scripts/check-root-guards.mjs"
+    },
+    {
+      "criterion": "注册表互相一致、摘要正确：verify-check-workspaces 与 check-guard-parser-integrity 均 exit 0（含第二份独立登记表与 digest 对拍）",
+      "evidence": "guard",
+      "command": "node scripts/verify-check-workspaces.mjs && node scripts/check-guard-parser-integrity.mjs"
+    },
+    {
+      "criterion": "TS 架构判据可被打坏：干净树 exit 0；注入 client 面引用 host 面后 exit 非 0 且点名 client-face-no-host-face；删除后恢复 0",
+      "evidence": "probe",
+      "command": "node scripts/check-architecture.mjs"
+    },
+    {
+      "criterion": "changes/ 契约可被执行：现有记录 exit 0；删 acceptance / verified 缺 verification / 非法 evidence 均 exit 1",
+      "evidence": "guard",
+      "command": "node scripts/check-change-intent.mjs"
+    },
+    {
+      "criterion": "Go 基线即配置生效：arch-go exit 0；新增一条未登记跨包 import 后 exit 非 0 且点名；删除配置中一条已有边后 exit 非 0",
+      "evidence": "guard",
+      "command": "make -f Makefile.agent arch-go"
+    },
+    {
+      "criterion": "根脚本类型面覆盖两个新脚本（checkJs），无 @ts-nocheck",
+      "evidence": "guard",
+      "command": "node scripts/check-scripts-types.mjs"
+    }
+  ],
+  "risk": "改判据面：新增两条根守卫会让 yarn check 变慢（architecture 约 6–13s）且任何未登记依赖违规/坏变更记录会直接挡门禁。已知 follow-up（不在本轮扩面）：(1) Go 判据只有手动入口，未进 CI；(2) .dependency-cruiser.cjs / .go-arch-lint.yml 等\"决定红绿\"的配置尚未进 install-integrity 派生面（改它不会让 install 期判据看见）；(3) 「根守卫条数/任务数」目前没有机器判据（check-doc-claims 的 14 项真源里没有它），本次已在 testing.md 漂移过一次，建议后续把 `check-workspaces --list` 的 guards/packages 计数登记进 doc-claims。已接受的 P3（不阻塞）：基线元素 schema 损坏时诊断会指向架构代码而非基线；段内 `..` 诊断重复同意例句。",
+  "rollback": "从 GUARDS/package.json/三张登记表移除两条守卫，删除两个新脚本与 Go 配置、Makefile.agent 的 arch-go 改动；docs 计数回退到 18/35。",
+  "verification": [
+    {
+      "command": "node scripts/check-workspaces.mjs --list && node scripts/check-root-guards.mjs",
+      "result": "exit 0；guards 20 条 / 包 17 个；根守卫 20/20 通过、0 失败，52.6s（check:architecture 8.2s，check:change-intent 0.1s）；提交后 corepack yarn check 37/37 通过、总 311.0s"
+    },
+    {
+      "command": "node scripts/verify-check-workspaces.mjs && node scripts/check-guard-parser-integrity.mjs",
+      "result": "exit 0；verify 521 断言 / 合成树 30 / 自检 13/13；20 条守卫摘要与登记值一致（1.8s）"
+    },
+    {
+      "command": "node scripts/check-architecture.mjs",
+      "result": "exit 0；OK (1255 modules, 5 known violations ignored, 0 stale baseline entries)，6.1–6.3s；注入 client→host 探针 exit 1 且点名 client-face-no-host-face，删除后恢复 0；基线写坏 exit 2；死条目 exit 1；超时 exit 2"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs",
+      "result": "exit 0；OK — 2 条变更记录全部合规（_template.json 同判）；--selftest 30 断言 exit 0；三类原反例 + 段内 .. / 绝对路径 / 模板腐烂均 exit 1；BOM 合法记录 exit 0；~36ms"
+    },
+    {
+      "command": "make -f Makefile.agent arch-go",
+      "result": "exit 0；OK - No warnings found（64 组件 / 198 条允许边，1.7–3.9s）；新增未登记边 exit 1 并点名；删已有边 exit 1；二进制/配置缺失 exit 2"
+    },
+    {
+      "command": "node scripts/check-scripts-types.mjs",
+      "result": "exit 0；两个新脚本均被 tsconfig.scripts 的 checkJs 覆盖（tsc --listFiles 确认），无 @ts-nocheck"
+    },
+    {
+      "command": "node scripts/check-install-integrity.mjs",
+      "result": "exit 0（提交后）；VERDICT PASS judge-bodies=217 execution-points=112 manifests=22 head=97426f5be949；执行体全集 196 = 形状族 119 + 推导 112（manifest scripts 22），五张登记表双向对拍通过"
+    }
+  ]
+}

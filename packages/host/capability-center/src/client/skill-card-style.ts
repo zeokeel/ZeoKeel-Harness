@@ -28,6 +28,23 @@ const SKILL_CARD_CSS = `
   outline: 2px solid var(--dsw-alias-brand-primary);
   outline-offset: 2px;
 }
+
+/* 加载骨架（2026-10-26）：6 张卡片形状的占位，替代一句「加载中…」。
+   颜色只走 alias token；prefers-reduced-motion 下关掉动画。 */
+@keyframes zeokeel-capability-shimmer {
+  0% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+  100% { opacity: 0.55; }
+}
+.zeokeel-capability-skeleton-block {
+  display: block;
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: 6px;
+  animation: zeokeel-capability-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .zeokeel-capability-skeleton-block { animation: none; }
+}
 `
 
 /**

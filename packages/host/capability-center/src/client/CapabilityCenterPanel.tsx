@@ -10,32 +10,38 @@ import {
   PanelButton,
   PanelPage,
   SegmentedControl,
+  TONE_COLOR,
   icons,
+  type PanelTone,
 } from '@zeokeel/dsh-panel-surface/client'
-import { t } from './locales.ts'
+import { t, type CapabilityKey } from './locales.ts'
 import { compareVersions } from './version-compare.ts'
 import { builtinCardsForTab, planBuiltinCards, useBuiltinSkills, type BuiltinCard } from './BuiltinSkillsStrip.tsx'
 
 /**
  * 能力中心（Capability Hub）——技能商城 / 共享技能 / 共享 Agent 的归一入口。
  *
- * 信息架构：一个入口 + 两个维度（来源 × 类型）。
- * - 来源分区：我的（本地创作 + 上传状态）/ 市场（授权制商城；组织共享库的条目也归在这里，
- *   卡片上用「组织」来源徽章区分——决策 2026-08-25 已把市场/组织合并为一个页签）
- * - 类型筛选：全部 / 技能 / 智能体
+ * ## 信息架构（2026-10-26 现代化重构）
+ *
+ * 4 个分段：**全部 / 已安装 / 我上传 / 市场**；工具条 = 分段 + 类型 chips +
+ * 搜索 + 排序（最近更新 / 名称 / 下载）+ 网格/列表视图 + 结果计数（全部在
+ * `PanelPage` 的 toolbar 内）。
+ *
+ *  - 「已安装」= 磁盘上真的有这一份（`installed` 由磁盘 provenance 判定）；
+ *  - 「我上传」= 作者面：服务端 `?source=own` 的行（含 pending/rejected/下架，
+ *    **没有本机副本也在**）∪ 本机草稿。这是盘点 F-08 的修法；
+ *  - 「市场」= 目录行（市场 + 组织合并，`source !== 'local'`）。
+ *
+ * 卡片只留：标题（`displayName`，回退 `name`）+ slug 副标题 + 最多两个 Chip +
+ * 固定两行描述 + 「版本 · 作者」meta + 一个 primary 动作 + 一个 ghost「详情」。
+ * 长状态说明（下架/转交/拒因/审核提示/覆盖后果）**只在详情子视图**里展开——
+ * 详情是面板内的整页子视图（`view` 状态），不再是遮住一切的弹层；
+ * `CapabilityDetailDialog` 作为兼容导出保留。
+ *
+ * ## 其它硬约定
  *
  * 复合键：卡片 key 与操作一律用 `{kind}:{name}`——技能名与 preset id 允许同名
- * （如 codeql），合并后必须复合键避免串卡。
- *
- * 与旧面板的关键差异（决策文档 §五 Phase 1）：
- * - 卡片唯一位置：已安装条目只在来源分区渲染，本地创作只在「我的」；
- * - 多版本归并：同名（kind+name）归并一张卡，展示最高 approved 版本，
- *   历史版本点开可安装（降级/指定版本）；
- * - hasUpdate 修复：approved 最高版本 > 已装版本才提示更新（semver 比较）；
- * - 共享技能补齐卸载（旧面板只有安装/更新，无卸载入口）；
- * - 分区独立错误态：一个端点失败仅对应分区显示重试，其余照常；
- * - 同名冲突确认：安装前检测磁盘/installed 同名 → 弹「覆盖确认」（纯客户端交互）；
- * - 30s 静默轮询 + Tab focus trap（取旧 Agent 面板的更完善实现）。
+ * （如 codeql），归并后必须复合键避免串卡；多个版本经 `mergeItems` 归并成一张卡。
  *
  * ⚠️ 安装端点**不带 `?force=1`**（R2-SK-5）：宿主按 pathname 分发、从不读这个参数，
  * 重装/更新靠安装器的"整树替换"语义；留一个宿主不读的参数面只会让人以为它能强制刷新。
@@ -67,8 +73,23 @@ interface CapabilityItem {
   score?: number | undefined
   downloads?: number | undefined
   calls?: number | undefined
-  /** 该名全部 approved 版本（历史版本展开用；不含当前版本则单元素）。 */
+  /**
+   * 该名**全部 approved 版本**（升序；历史版本展开/「更新到 vX」用）。
+   *
+   * ⚠️ 2026-10-26（F-33）：这里**只**放 approved 版本。旧实现把每一行的
+   * `version`（含本机草稿、pending 版本）都塞进来，于是未审核的版本被当成
+   * "可安装的批准集"（详情里的版本列表 / `hasUpdateFor` 的基准都会读到它）。
+   * 本机那一份的版本另见 {@link localVersion}，两个事实分开表达。
+   */
   versions: string[]
+  /**
+   * 本机那一份的版本（磁盘 provenance / 本机草稿），**不是**批准版本。
+   *
+   * 与 {@link version} 的关系：`version` 是"卡片上展示的版本"（最高 approved，
+   * 没有 approved 时回落到 pending/本地）；这一格永远只回答"本机装的是哪一版"。
+   * 只在本机行存在时下发。
+   */
+  localVersion?: string | undefined
   /** 已安装（磁盘存在同名目录，且并非本机创作）。 */
   installed: boolean
   /** 已装版本（hasUpdate 比较基准；本地创作时为其版本）。 */
@@ -159,11 +180,31 @@ interface CapabilityItem {
    * 上架"的知识，把未下发读成"上架"就是拿未知当可用（R5-B-1 的纪律）。
    */
   enabled?: boolean | undefined
+  /**
+   * 「最近更新」排序用的时间戳（ISO 字符串）。
+   *
+   * 来源：本机行由宿主按技能/预设目录的 mtime 下发；目录行目前没有该字段（服务端
+   * DTO 不带 `updated_at`），`sortItems` 在缺省时按版本号降序兜底 —— 不编造时间。
+   */
+  updatedAt?: string | undefined
+  /** 变更说明（服务端 DTO 目前不下发；`changelog` 有值时详情才渲染那一段）。 */
+  changelog?: string | undefined
+  /**
+   * 面板取数时打的**来源分区标记**（`applySectionRows` 用它替换「上一次 own 分区」
+   * 的行；服务端载荷没有这个字段，渲染层也不读它）。
+   */
+  section?: 'mine' | 'market' | 'own' | undefined
 }
 
-/** 来源分区 tab(决策 2026-08-25:市场/组织合并为「市场」——仅 我的/市场)。 */
-type SourceTab = 'mine' | 'market'
-type TypeFilter = 'all' | CapabilityKind
+/** 面板信息架构的四个分段（2026-10-26 重构：全部 / 已安装 / 我上传 / 市场）。 */
+export type SourceTab = 'all' | 'installed' | 'own' | 'market'
+/** 类型筛选（全部 / 技能 / 智能体）。 */
+export type TypeFilter = 'all' | CapabilityKind
+/** 排序键（最近更新 / 名称 / 下载）。 */
+export type SortKey = 'updated' | 'name' | 'downloads'
+/** 视图模式（网格 / 列表）。 */
+export type ViewMode = 'grid' | 'list'
+
 
 /** 顶部 Tab 条：来源分区 + 类型筛选。 */
 /**
@@ -277,33 +318,112 @@ export function hasUpdateFor(item: CapabilityItem): boolean {
 }
 
 /**
- * 「哪个 tab 显示哪些条目」的唯一实现（2026-09-15 抽出，行为不变）。
+ * 「哪个分段显示哪些条目」的**唯一实现**。
  *
- * 决策 2026-08-25：**卡片唯一位置** —— 本地创作只在「我的」，来源条目（市场/组织）
- * 只在「市场」；已安装的来源条目同时出现在「我的」（便于卸载/更新）。
- * 这条规则是"作者上传完在「我的」看不到安装按钮"的原因（本地卡只管上传），
- * 抽出来是为了让回归用例能钉住它，而不是让后来者以为是 bug 随手改掉。
+ * 2026-10-26 信息架构重构后四个分段是 `all / installed / own / market`：
+ *  - `market`：目录行（市场 + 组织合并结果，`source !== 'local'`）—— 与旧「市场」一致；
+ *  - `installed`：磁盘上真的有这一份（`installed === true`）；
+ *  - `own`：**我上传**的内容 —— 归属人自己的目录行（服务端 `?source=own`，含
+ *    pending/rejected，**没有本机副本也在**）∪ 本机草稿（`source === 'local'` 且
+ *    没有商店溯源）。判据见 {@link isOwnUploadItem}；
+ *  - `all`：全部（三个来源的并集，卡片去重交给 `mergeItems`）。
+ *
+ * **兼容面**：旧调用 `itemsForTab(rows, 'mine')` 仍是 2026-08-25 定案的语义
+ * （本机创作 + 已安装的来源条目），既有回归用例逐字不动。新 UI 不再使用 `'mine'`。
+ * @param items - 行（可以尚未归并）。
+ * @param tab - 分段（含兼容的旧 `'mine'`）。
+ * @returns 该分段可见的行（保持输入顺序）。
  */
-export function itemsForTab<T extends { source?: string, installed?: boolean }>(items: readonly T[], tab: 'mine' | 'market'): T[] {
-  return tab === 'market'
-    ? items.filter(i => i.source !== 'local')
-    : items.filter(i => i.source === 'local' || i.installed === true)
+export function itemsForTab<T extends {
+  source?: string | undefined
+  installed?: boolean | undefined
+  isOwner?: boolean | undefined
+  originChannel?: string | undefined
+  uploadStatus?: string | undefined
+}>(
+  items: readonly T[],
+  tab: SourceTab | 'mine',
+): T[] {
+  if (tab === 'market') return items.filter(i => i.source !== 'local')
+  if (tab === 'all') return [...items]
+  if (tab === 'installed') return items.filter(i => i.installed === true)
+  if (tab === 'own') return items.filter(i => isOwnUploadItem(i))
+  return items.filter(i => i.source === 'local' || i.installed === true)
 }
 
-/** 取数分区：市场（市场+组织合并结果）与我的。 */
-export type SectionKey = 'mine' | 'market'
+/**
+ * 这一行算不算「我上传」（`own` 分段的判据，**唯一实现**）。
+ *
+ * 两档来源（2026-10-26 F-08）：
+ *  1. **目录里的作者行**：服务端 `?source=own` 下发的行 `is_owner: true` —— 它包含
+ *     pending / rejected / 已下架，**不要求本机有副本**。这是"作者看不到自己的待审
+ *     行"的修法：旧实现只请求 market/local，own 仅用于匹配本机行的状态；
+ *  2. **本机草稿**：`source === 'local'` 且没有商店溯源（不是从目录装进来的）——
+ *     用户写好还没上传的那一份；它没有 `is_owner`（服务端还不知道它）。
+ *
+ * 注意 `installedOrigin === 'store'` 的本机行**不算**我上传（那是从别人那里装来的，
+ * 属于「已安装」）。`uploadStatus` 有值的本机行算（作者自己上传过的记录还在）。
+ * @param item - 一行（归并前后均可）。
+ * @returns 出现在「我上传」分段 ⇒ true。
+ */
+export function isOwnUploadItem(item: {
+  source?: string | undefined
+  isOwner?: boolean | undefined
+  originChannel?: string | undefined
+  uploadStatus?: string | undefined
+}): boolean {
+  if (item.isOwner === true) return true
+  if (item.source !== 'local') return false
+  return item.originChannel === undefined || item.uploadStatus !== undefined
+}
+
+/**
+ * 按分段/类型/搜索排序后的列表（**唯一排序实现**）。
+ *
+ * `updated`（最近更新）的口径：有 `updatedAt` 的行按时间降序；缺时间戳的行按版本号
+ * 降序兜底（服务端 DTO 不带时间，**不编造**）—— 同档再按展示名。`name` / `downloads`
+ * 与旧实现保持同一批字段，只是把"来源分区固定排序"换成用户可选排序。
+ * @param items - 已过滤的行。
+ * @param sort - 排序键。
+ * @returns 新数组（不改输入）。
+ */
+export function sortItems(items: readonly CapabilityItem[], sort: SortKey): CapabilityItem[] {
+  const title = (item: CapabilityItem): string => item.displayName !== '' ? item.displayName : item.name
+  return [...items].sort((a, b) => {
+    if (sort === 'downloads') {
+      const byDownloads = (b.downloads ?? 0) - (a.downloads ?? 0)
+      if (byDownloads !== 0) return byDownloads
+      return title(a).localeCompare(title(b)) || a.name.localeCompare(b.name)
+    }
+    if (sort === 'name') return title(a).localeCompare(title(b)) || a.name.localeCompare(b.name)
+    // updated：时间戳优先，缺省按版本号（"最近更新的版本"是唯一端到端可比的事实）。
+    if (a.updatedAt !== undefined || b.updatedAt !== undefined) {
+      const at = a.updatedAt ?? ''
+      const bt = b.updatedAt ?? ''
+      if (at !== bt) return at < bt ? 1 : -1
+    }
+    const byVersion = compareVersions(b.version, a.version)
+    if (byVersion !== 0) return byVersion
+    return title(a).localeCompare(title(b)) || a.name.localeCompare(b.name)
+  })
+}
+
+
+/** 取数分区：市场（市场+组织合并结果）/ 本机（已装 + 本地创作）/ 我上传（own）。 */
+export type SectionKey = 'mine' | 'market' | 'own'
 
 /**
  * 一次分区取数回来后如何并进现有列表（**唯一实现**）。
  *
  * 决策 2026-08-25：「市场」tab 承载 market+org 合并结果 —— 加载 market 时清除
  * 两源旧条目；「我的」只清 local（其余保留：`?source=local` 的载荷里同时带
- * 商店已装行与本机行）。
+ * 商店已装行与本机行）。2026-10-26 追加 `own`（我上传）分区：它只清**上一次 own
+ * 取数**打上 `section: 'own'` 标记的行，不碰市场/本机行 —— own 行与市场行同名时
+ * 由 `mergeItems` 归并，而不是互相覆盖。
  *
- * 抽成纯函数是为了让「两种到达顺序」可被单测直接驱动（独立复审 2026-09-23 N1）：
- * 本包没有 jsdom/渲染测试面，而这条归约是两次并发取数唯一的合流点 —— 它在
- * `setItems` 的 updater 里时，谁也没法在没有 React 的情况下复现 market-first /
- * mine-first 两种到达顺序。
+ * 抽成纯函数是为了让「多种到达顺序」可被单测直接驱动（独立复审 2026-09-23 N1）：
+ * 本包没有 jsdom/渲染测试面，而这条归约是多次并发取数唯一的合流点 —— 它在
+ * `setItems` 的 updater 里时，谁也没法在没有 React 的情况下复现各分区先后到达。
  * @param prev - 当前列表。
  * @param key - 回来的那个分区。
  * @param rows - 该分区的行。
@@ -314,11 +434,16 @@ export function applySectionRows(
   key: SectionKey,
   rows: readonly CapabilityItem[],
 ): CapabilityItem[] {
+  if (key === 'own') {
+    const tagged = rows.map(row => ({ ...row, section: 'own' as const }))
+    return [...prev.filter(i => i.section !== 'own'), ...tagged]
+  }
   const drop = key === 'market'
-    ? (i: CapabilityItem) => i.source !== 'local'
+    ? (i: CapabilityItem) => i.source !== 'local' && i.section !== 'own'
     : (i: CapabilityItem) => i.source === 'local'
   return [...prev.filter(i => !drop(i)), ...rows]
 }
+
 
 /** 单测用：按（kind, source）解析安装端点。
  * 市场技能只存在于服务端 skills/marketplace 表,必须走 /api/zeokeel/skills 代理
@@ -339,8 +464,29 @@ export function installEndpoint(item: CapabilityItem, version: string): string {
       : `/api/zeokeel/shared-skills/${encodeURIComponent(item.name)}/${encodeURIComponent(version)}/install`
   } else {
     base = `/api/zeokeel/agent-presets/${encodeURIComponent(item.name)}/install`
+    // F-30（2026-10-26 盘点）：员工面 `/agent-presets/:name/archive` **两个渠道都服务**
+    // （市场智能体与组织共享智能体共用这一条安装通路），宿主判不出"刚才装的是哪条渠道"。
+    // 面板手里有这一格（目录行的 source）⇒ 显式带过去，宿主据此写 provenance。
+    // 不带它时市场智能体会在「我的」里显示成「组织」（旧宿主/旧客户端的默认行为仍是 org）。
+    const hint = installChannelHint(item)
+    if (hint !== undefined) base = `${base}?channel=${hint}`
   }
   return base
+}
+
+/**
+ * 智能体安装的**渠道提示**（F-30；`undefined` = 不带该参数，宿主按历史行为记 `org`）。
+ *
+ * 只对智能体有意义：技能的两条安装通路按端点就分开了渠道（marketplace 归档 =
+ * 市场，shared-skills = 组织），只有智能体共用一个归档端点，宿主自己判不出。
+ * @param item - 能力中心的一行（只要有 kind/source）。
+ * @returns `'market'` / `'org'` / undefined（本地行不该走安装，不带提示）。
+ */
+export function installChannelHint(item: Pick<CapabilityItem, 'kind' | 'source'>): 'market' | 'org' | undefined {
+  if (item.kind !== 'agent') return undefined
+  if (item.source === 'market') return 'market'
+  if (item.source === 'org') return 'org'
+  return undefined
 }
 
 /**
@@ -870,8 +1016,14 @@ export function nameTakenError(displayName: string): string {
  * `/api/zeokeel/agent-presets/upload`）会**透传服务端原始状态码**，而 409 同时是
  * `NAME_TAKEN` / `VERSION_*` / `CONFLICT` / `ARCHIVE_CLEARED` / `APP_DELISTED`
  * 的码 —— 按 409 一律说「名称已被占用」会把「已下架冻结」说成重名（本仓踩过同形的坑）。
- * 因此只有 `APP_DELISTED` 走专用文案；**其它任何码都逐字沿用本函数引入前的行为**
- * （服务端 message 优先，缺省回落 `HTTP <status>`），不被这条分支吞掉。
+ * 映射面（2026-10-26 F-32 扩到版本/内容类拒绝）：
+ *  - `APP_DELISTED` ⇒ 下架冻结（R5-B-1 的既有专用文案）；
+ *  - `VERSION_NOT_INCREASING` / `VERSION_NOT_NEWER` / `VERSION_EXISTS` /
+ *    `VERSION_INVALID` / `CONTENT_UNCHANGED` ⇒ 本地化的"怎么修"（这几类是发布
+ *    内核的稳定码，服务端原文是中文/英文混杂的实现消息，直接给用户看等于没解释）；
+ *  - **其它任何码**逐字沿用本函数引入前的行为（服务端 message 优先，缺省回落
+ *    `HTTP <status>`），不被映射表吞掉（`NAME_TAKEN` 的服务端原文带名字，比通用
+ *    文案更有用；`PENDING_LIMIT` 同理 —— 既有回归逐字钉住这两条）。
  *
  * 抽成纯函数的理由与 {@link nameTakenError} 相同：文案取自模块级 `t()`，只有
  * "切语言后跟着变"的断言才有判别力，且"其它码不被吞"需要能被直接打坏。
@@ -882,6 +1034,12 @@ export function uploadFailureText(
   failure: { code?: string | undefined; message?: string | undefined; status: number },
 ): string {
   if (failure.code === 'APP_DELISTED') return t('capability.delistedFrozen')
+  // 版本/内容类拒绝：稳定码 → 本地化的"为什么 + 怎么修"（F-32）。
+  if (failure.code === 'VERSION_NOT_INCREASING') return t('capability.versionNotIncreasing')
+  if (failure.code === 'VERSION_NOT_NEWER') return t('capability.versionNotNewer')
+  if (failure.code === 'VERSION_EXISTS') return t('capability.versionExists')
+  if (failure.code === 'VERSION_INVALID') return t('capability.versionInvalid')
+  if (failure.code === 'CONTENT_UNCHANGED') return t('capability.contentUnchanged')
   if (failure.message !== undefined && failure.message !== '') return failure.message
   return `HTTP ${String(failure.status)}`
 }
@@ -941,7 +1099,9 @@ function maxOf(ordered: readonly CapabilityItem[], read: (item: CapabilityItem) 
  *
  * 其余口径保持 2026-08-25 决策：展示行来源市场优先；`displayName`/`description`
  * 取「较新」（版本高者优先）的非空值，避免市场行用与 name 同值的标题盖掉组织行的
- * 中文标题；`version` 展示最高 approved 版本（与来源无关的版本事实）。
+ * 中文标题；`version` 展示最高 approved 版本（没有 approved 时回落 pending/本机
+ * 版本以便作者面看得见），`versions` **只含 approved**，本机版本单列
+ * `localVersion`（F-33：未审核的版本不得混进批准集）。
  * @param items - 各来源的行（同一条可来自多个载荷）。
  * @returns 每个（kind, name）一行，按 `kind:name` 升序（面板随后自行排序）。
  */
@@ -973,14 +1133,31 @@ function mergeItemGroup(rows: readonly CapabilityItem[]): CapabilityItem {
   /** 本机那一行（磁盘事实的唯一来源）；没有本机行时为 undefined。 */
   const local = rows.find(row => row.source === 'local')
 
-  const all = new Set<string>()
+  // 批准集 = 服务端下发的 `versions`（契约上就是 approved 集合）∪ 本批里
+  // **status === 'approved'** 的那些行的 `version`。
+  //
+  // F-33（2026-10-26）：旧实现把**所有**行的 `version`（本机草稿 / pending /
+  // rejected）都并进同一个集合，再按 `status==='approved'` 过滤出"展示版本" ——
+  // 过滤只影响 `version` 的选择，`versions` 本身仍然混进了未批版本，于是详情里的
+  // "版本列表"与 `hasUpdateFor` 的基准都可能读到一个从未批准过的号。
+  const approvedSet = new Set<string>()
   for (const row of rows) {
-    for (const version of row.versions) all.add(version)
-    if (row.version !== '') all.add(row.version)
+    for (const version of row.versions) approvedSet.add(version)
+    if (row.status === 'approved' && row.version !== '') approvedSet.add(row.version)
   }
-  const versions = [...all].sort(compareVersions)
-  const approved = versions.filter(v => rows.some(row => row.version === v && row.status === 'approved'))
-  const version = approved[approved.length - 1] ?? versions[versions.length - 1] ?? byAuthority[0]!.version
+  const versions = [...approvedSet].sort(compareVersions)
+  /** 本机那一份的版本（磁盘事实；与批准集**分开**表达，见 {@link CapabilityItem.localVersion}）。 */
+  const localVersion = local !== undefined && local.version !== '' ? local.version : undefined
+  /** 作者面正在审/被拒的版本（有 approved 时只用于兜底展示，不进批准集）。 */
+  const pendingVersions = rows
+    .filter(row => row.status === 'pending' || row.status === 'rejected')
+    .map(row => row.version)
+    .filter(version => version !== '')
+    .sort(compareVersions)
+  const version = versions[versions.length - 1]
+    ?? pendingVersions[pendingVersions.length - 1]
+    ?? localVersion
+    ?? byAuthority[0]!.version
   const name = byAuthority[0]!.name
   const displayName = pickByAuthority(byFreshness, row => row.displayName, v => v !== '' && v !== name)
     ?? pickByAuthority(byFreshness, row => row.displayName, v => v !== '')
@@ -1006,6 +1183,7 @@ function mergeItemGroup(rows: readonly CapabilityItem[]): CapabilityItem {
     author: pickByAuthority(byAuthority, row => row.author, v => v !== '') ?? '',
     version,
     versions,
+    localVersion,
     // 磁盘上真有这一份（本机行由扫盘得到）⇒ 已安装。
     installed: rows.some(row => row.installed === true || row.source === 'local'),
     installedVersion: pickByAuthority(byAuthority, row => row.installedVersion, () => true),
@@ -1057,18 +1235,433 @@ function mergeItemGroup(rows: readonly CapabilityItem[]): CapabilityItem {
     downloads: maxOf(rows, row => row.downloads),
     calls: maxOf(rows, row => row.calls),
     score: maxOf(rows, row => row.score),
+    // 时间戳是"这一份内容最近动过"的事实：归并取**最新的一个**（ISO 字符串可直接
+    // 按字典序比较），没有就留 undefined（排序层按版本号兜底，不编造时间）。
+    updatedAt: (() => {
+      const stamps = rows.map(row => row.updatedAt).filter((v): v is string => v !== undefined && v !== '')
+      return stamps.length === 0 ? undefined : stamps.reduce((best, v) => (v > best ? v : best))
+    })(),
+    changelog: pickByAuthority(byFreshness, row => row.changelog, v => v !== ''),
   }
 }
 
 /**
- * 详情弹层的目标：普通条目（能力中心聚合面的行）或内置技能入口卡。
+ * 详情子视图的目标：普通条目（能力中心聚合面的行）或内置技能入口卡。
  *
- * 两者都进同一个弹层 —— 用户看到的差异只是"徽章不同、动作不同"，弹层形状与
- * 交互不该因此分叉。
+ * 两者进同一个视图 —— 用户看到的差异只是"徽章不同、动作不同"，形状与交互不分叉。
+ * 2026-10-26 重构：详情从**弹层**改成面板内的**整页子视图**（`view` 状态切换），
+ * 理由与原弹层相同（卡片里的描述必须定高），但不再遮住工具栏/侧栏、也不再需要
+ * 焦点陷阱与 Esc 让位。`CapabilityDetailDialog` 仍导出，供既有外部引用兼容。
  */
 type DetailTarget =
   | { kind: 'item', item: CapabilityItem }
   | { kind: 'builtin', card: BuiltinCard }
+
+/** 加载态骨架卡数量（设计定案：6 张；加载中不再渲染一句「加载中…」）。 */
+export const SKELETON_COUNT = 6
+
+/**
+ * 骨架卡的稳定 key（纯函数，单测直接打它 —— 数量是设计定案，不是随手写的常量）。
+ * @param count - 张数（缺省 {@link SKELETON_COUNT}）。
+ * @returns `capability-skeleton-0…n-1`。
+ */
+export function skeletonKeys(count: number = SKELETON_COUNT): string[] {
+  return Array.from({ length: Math.max(0, Math.trunc(count)) }, (_, index) => `capability-skeleton-${String(index)}`)
+}
+
+/** 工具条里的排序下拉（颜色/边框只走 `--dsw-*` token）。 */
+const SORT_SELECT: React.CSSProperties = {
+  height: 30,
+  padding: '0 8px',
+  borderRadius: 9,
+  border: '1px solid var(--dsw-alias-border-l2)',
+  background: 'var(--dsw-alias-bg-layer-1, transparent)',
+  color: 'var(--dsw-alias-label-primary)',
+  fontFamily: 'inherit',
+  fontSize: 12,
+  outline: 'none',
+}
+
+/** 标题下的 slug（副标题，弱化一档）。 */
+const SLUG: React.CSSProperties = {
+  margin: 0,
+  fontSize: 11,
+  lineHeight: '15px',
+  color: 'var(--dsw-alias-label-caption)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+/** 卡片底部 meta 行（版本 · 作者 + 右侧小状态点）。 */
+const META_ROW: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  minWidth: 0,
+  marginTop: 'auto',
+}
+
+/** 一个小状态点 + 短文案（卡片里"其余状态"的唯一呈现形式）。 */
+const DOT_ROW: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }
+const DOT: React.CSSProperties = { width: 6, height: 6, borderRadius: 3, flex: 'none' }
+const DOT_TEXT: React.CSSProperties = {
+  fontSize: 11,
+  lineHeight: '16px',
+  color: 'var(--dsw-alias-label-caption)',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+/** 列表视图的一行（与网格卡共用同一套判定与动作）。 */
+const LIST_ROW: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '9px 12px',
+  borderRadius: 12,
+  minWidth: 0,
+}
+const LIST_DESC: React.CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  lineHeight: '17px',
+  color: 'var(--dsw-alias-label-secondary)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+/** 详情里的小节标题。 */
+const LABEL_SM: React.CSSProperties = { fontSize: 12, color: 'var(--dsw-alias-label-caption)' }
+
+/** 状态说明段落（详情专用；卡片里不再放长段落）。 */
+const HINT_TEXT: React.CSSProperties = {
+  margin: '4px 0 0',
+  fontSize: 12,
+  lineHeight: '19px',
+  color: 'var(--dsw-alias-label-secondary)',
+  whiteSpace: 'pre-wrap',
+}
+
+/** 一张卡的 Chip 规格（最多两个，见 {@link cardChips}）。 */
+export interface CardChipSpec {
+  key: CapabilityKey
+  tone: PanelTone
+  plain?: boolean | undefined
+}
+
+/**
+ * 卡片里"状态/来源"那一枚 Chip 该显示什么（**唯一实现**）。
+ *
+ * 优先级：下架 > 已转交 > 审核中 > 未通过 > （我上传分区）已共享 / 未上传。
+ * 其余状态一律不进 Chip（卡片最多两个 Chip），由 {@link cardStatusDots} 的小状态点
+ * + 短文案表达；长说明只在详情里（2026-10-26 设计：卡片不放大段状态段落）。
+ * @param item - 归并后的行。
+ * @param tab - 所在分段（`own` 分区要显示"已共享/未上传"这类提交状态）。
+ * @param tabIsMineSource - 来源徽章的口径（市场分区用目录口径，其余用本机口径）。
+ * @returns 状态 Chip；没有状态可报时返回 null。
+ */
+export function cardStatusChip(item: CapabilityItem, tab: SourceTab | 'mine'): CardChipSpec | null {
+  if (isDelistedItem(item)) return { key: 'capability.delisted', tone: 'neutral' }
+  if (isTransferredItem(item)) return { key: 'capability.transferred', tone: 'warn' }
+  if (item.status === 'pending') return { key: 'capability.pending', tone: 'warn' }
+  if (item.status === 'rejected') return { key: 'capability.rejected', tone: 'danger' }
+  if (tab === 'own') {
+    if (item.status === 'approved' || item.uploadStatus === 'approved') return { key: 'capability.approved', tone: 'success' }
+    if (item.source === 'local') return { key: 'capability.draftNotUploaded', tone: 'neutral' }
+  }
+  return null
+}
+
+/**
+ * 一张卡的 Chip 清单（**最多两个**：官方 + 一个状态/来源）。
+ *
+ * 设计定案（2026-10-26）：卡面只留两枚 Chip，避免同一张卡上出现「技能/市场/官方/
+ * 精选/已安装/已下架/已转交/已本地修改」这种一面墙的胶囊（旧实现的现场）。类型由
+ * 图标色调与详情表达，不占 Chip。
+ * @param item - 归并后的行。
+ * @param tab - 所在分段。
+ * @returns 0–2 枚 Chip 的规格。
+ */
+export function cardChips(item: CapabilityItem, tab: SourceTab | 'mine'): CardChipSpec[] {
+  const chips: CardChipSpec[] = []
+  if (item.official === true) chips.push({ key: 'capability.official', tone: 'brand' })
+  const status = cardStatusChip(item, tab)
+  if (status !== null) {
+    chips.push(status)
+  } else if (chips.length === 0) {
+    // 没有官方、也没有状态 ⇒ 用来源徽章（六选一的口径由既有纯函数决定）。
+    chips.push({ key: capabilitySourceBadgeKey(item, tab === 'market' ? 'market' : 'mine'), tone: 'neutral', plain: true })
+  }
+  return chips.slice(0, 2)
+}
+
+/**
+ * 卡面上的"小状态点 + 短文案"（最多两个）—— 其余状态都归到这里。
+ *
+ * 与 {@link cardChips} 的分工：Chip 表达"这张卡现在处于什么业务态"（官方/审核/下架），
+ * 状态点表达"本机这一份有什么值得注意的事实"（已本地修改 / 来自另一台服务端 /
+ * 符号链接 / 已安装）。两者都只给结论，解释在详情里。
+ * @param item - 归并后的行。
+ * @param tab - 所在分段（`installed` 分区里"已安装"是隐含的，不再重复报）。
+ * @returns 0–2 个小状态点。
+ */
+export function cardStatusDots(item: CapabilityItem, tab: SourceTab | 'mine'): CardChipSpec[] {
+  const dots: CardChipSpec[] = []
+  if (item.dirty === true) dots.push({ key: 'capability.dirty', tone: 'warn' })
+  if (item.originServer !== undefined) dots.push({ key: 'capability.originOtherServer', tone: 'warn' })
+  if (item.originSymlink === true) dots.push({ key: 'capability.originSymlink', tone: 'neutral' })
+  if (item.installed === true && tab !== 'installed' && tab !== 'own') dots.push({ key: 'capability.installed', tone: 'success' })
+  return dots.slice(0, 2)
+}
+
+/**
+ * 分段的计数（SegmentedControl 的数字角标；**唯一实现**）。
+ * @param items - 已归并的行（同 kind:name 只算一次）。
+ * @returns 四个分段各自可见的行数。
+ */
+export function tabCounts(items: readonly CapabilityItem[]): Record<SourceTab, number> {
+  return {
+    all: itemsForTab(items, 'all').length,
+    installed: itemsForTab(items, 'installed').length,
+    own: itemsForTab(items, 'own').length,
+    market: itemsForTab(items, 'market').length,
+  }
+}
+
+/**
+ * 分段角标 = catalog 行 + 会在网格里额外出现的「安装」入口卡（F-54 显示修复）。
+ *
+ * update 卡与本机已装技能同名，`planSectionCards` 会去重成一张，因此**不计入**；
+ * 只有 install 卡（本机没有的）会让网格多出一张卡。计数不含搜索/类型筛选，
+ * 角标表达的是该分段总量。
+ */
+export function tabCountsWithBuiltin(
+  items: readonly CapabilityItem[],
+  builtinCards: readonly { action: 'install' | 'update' }[],
+): Record<SourceTab, number> {
+  const base = tabCounts(items)
+  const installs = builtinCards.filter(card => card.action === 'install').length
+  return { ...base, all: base.all + installs, market: base.market + installs }
+}
+
+/** 结果计数 = 当前网格的 catalog 卡 + 额外内置入口卡（与角标同一口径）。 */
+export function resultCountWithBuiltin(itemCount: number, builtinCount: number): number {
+  return itemCount + builtinCount
+}
+
+/**
+ * 页脚/详情里的动作判定（`planCardAction` + 分段口径的收窄，**唯一入口**）。
+ *
+ * 只加一条分段语义（2026-10-26）：在「我上传」里，**没有本机副本的 pending/rejected
+ * 行**不给「安装」按钮 —— 服务端不会分发未通过/已驳回的版本，给按钮就是假入口；
+ * 这一格只报状态（`review`）。其余动作逐字沿用 {@link planCardAction}。
+ * @param item - 归并后的行。
+ * @param tab - 所在分段。
+ * @returns 页脚动作。
+ */
+export function planCardActionForTab(item: CapabilityItem, tab: SourceTab | 'mine'): CardActionPlan {
+  const plan = planCardAction(item)
+  // 未通过/待审的版本**不会**被服务端分发 ⇒ 没有本机副本时「安装」必然失败。
+  // 「我上传」与「全部」都会渲染作者面（own）的行，所以两处都要收窄；「市场」不渲染
+  // 这类行（服务端目录面不列未通过版本），判据保持 planCardAction 原样。
+  const showsAuthorRows = tab === 'own' || tab === 'all'
+  if (showsAuthorRows && plan.kind === 'install' && (item.status === 'pending' || item.status === 'rejected')) {
+    return { kind: 'review', status: item.status }
+  }
+  return plan
+}
+
+/** 详情子视图的 props（C-03：按钮必须同时吃 own-key busy 与站级 blocked）。 */
+export interface CapabilityDetailViewProps {
+  target: DetailTarget
+  /** 本视图目标自己的动作在飞。 */
+  busy: boolean
+  /** 站级闸（另有动作在飞）——`install()` 对它静默 return，所以必须禁用并说明。 */
+  blocked: boolean
+  /** 宿主下发的只读事实（auditor）：不渲染任何写入口。 */
+  readOnly: boolean
+  /** 分段（Chip/来源口径与列表一致）。 */
+  tab: SourceTab
+  /** 页脚动作（由面板按同一套 `planCardActionForTab` 渲染后传入）。 */
+  actions: React.ReactNode
+  /** 页脚上方的瞬时提示（例如卸载覆盖确认的后果说明）；无则 null。 */
+  notice?: React.ReactNode | undefined
+  onInstallVersion: (version: string) => void
+  onBack: () => void
+  onClose: () => void
+}
+
+/** 渲染一枚 Chip（规格来自 {@link cardChips} / {@link cardStatusDots}）。 */
+function renderChipSpec(spec: CardChipSpec): React.ReactNode {
+  return <Chip key={spec.key} tone={spec.tone} plain={spec.plain}>{t(spec.key)}</Chip>
+}
+
+/** 渲染一个小状态点 + 短文案。 */
+function renderStatusDot(spec: CardChipSpec, index: number): React.ReactNode {
+  return (
+    <span key={`${spec.key}:${String(index)}`} style={DOT_ROW} title={t(spec.key)}>
+      <span style={{ ...DOT, background: TONE_COLOR[spec.tone] }} aria-hidden="true" />
+      <span style={DOT_TEXT}>{t(spec.key)}</span>
+    </span>
+  )
+}
+
+/**
+ * 详情（面板内整页子视图）。
+ *
+ * 内容顺序：标题/来源 → 状态说明 → 描述/更新说明 → 版本列表 → 动作。状态说明在这里
+ * 才展开（下架/转交/拒因/审核提示/本地修改/另一台服务端/符号链接），卡片上只留 Chip
+ * 与小状态点。
+ * @param props - 目标、忙碌/站级闸、分段、动作节点与回调。
+ */
+export function CapabilityDetailView({
+  target,
+  busy,
+  blocked,
+  readOnly,
+  tab,
+  actions,
+  notice,
+  onInstallVersion,
+  onBack,
+  onClose,
+}: CapabilityDetailViewProps): JSX.Element {
+  const skill = target.kind === 'builtin' ? target.card.skill : undefined
+  const item = target.kind === 'item' ? target.item : undefined
+  const title = skill !== undefined
+    ? (skill.title !== undefined && skill.title !== '' ? skill.title : skill.name)
+    : (item!.displayName !== '' ? item!.displayName : item!.name)
+  const name = skill !== undefined ? skill.name : item!.name
+  const description = skill !== undefined ? (skill.description ?? '') : item!.description
+  const author = skill !== undefined ? (skill.author ?? '') : item!.author
+  const version = skill !== undefined ? skill.version : item!.version
+  const chips = item === undefined ? [] : cardChips(item, tab)
+  const dots = item === undefined ? [] : cardStatusDots(item, tab)
+  const kindKey: CapabilityKey = (skill !== undefined || item!.kind === 'skill') ? 'capability.typeSkill' : 'capability.typeAgent'
+  // 只读账号不渲染"按版本安装"入口（写面必然 403）。
+  const versions = item !== undefined && !readOnly && versionInstallSupported(item) ? item.versions : []
+  const marketLatestOnly = item !== undefined && item.kind === 'skill' && item.source === 'market'
+  const rejected = item !== undefined && item.status === 'rejected'
+  const delisted = item !== undefined && isDelistedItem(item)
+  const transferred = item !== undefined && isTransferredItem(item)
+  return (
+    <div data-role="capability-detail" data-key={skill !== undefined ? `builtin:${name}` : `${item!.kind}:${name}`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <PanelButton variant="secondary" size="sm" icon={<icons.IconBack size={14} />} onClick={onBack}>
+          {t('capability.detailBack')}
+        </PanelButton>
+        <span style={{ flex: 1 }} />
+        <PanelButton variant="ghost" size="sm" aria-label={t('capability.close')} onClick={onClose}>{'✕'}</PanelButton>
+      </div>
+      <Card style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '16px 18px', borderRadius: 16 }} className="zeokeel-skill-card">
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <IconTile size={42} radius={13} tone={item === undefined ? 'brand' : item.kind === 'skill' ? 'brand' : 'neutral'} label={title.charAt(0)} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <p style={{ ...NAME, fontSize: 16, whiteSpace: 'normal' }}>{title}</p>
+              {chips.map(renderChipSpec)}
+              {item !== undefined && item.quality === 'featured' && <Chip tone="warn">{t('capability.featured')}</Chip>}
+            </div>
+            <p style={{ ...SLUG, marginTop: 2 }} title={name}>{name}</p>
+            <p style={{ ...META, marginTop: 2 }}>
+              {`v${version}${author !== '' ? ` · ${author}` : ''}`}
+              {' · '}
+              {t(kindKey)}
+              {item !== undefined ? ` · ${t('capability.detailSource')}: ${t(capabilitySourceBadgeKey(item, tab === 'market' || tab === 'own' ? 'market' : 'mine'))}` : ''}
+            </p>
+          </div>
+        </div>
+        {dots.length > 0 && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{dots.map(renderStatusDot)}</div>
+        )}
+        {(rejected || delisted || transferred || (item !== undefined && showsMarketReviewHint(item))
+          || (item !== undefined && item.dirty === true)
+          || (item !== undefined && item.originServer !== undefined)
+          || (item !== undefined && item.originSymlink === true)
+          || (item !== undefined && item.official === true)) && (
+          <div data-role="capability-detail-status">
+            <div style={LABEL_SM}>{t('capability.detailStatus')}</div>
+            {delisted && (
+              // 徽章在标题行（cardChips），这一段只放整句说明 —— 卡片的 Chip 与小状态点
+              // 只给结论，完整"为什么 + 还能做什么"在这里（2026-10-26 设计）。
+              <p style={HINT_TEXT} data-role="card-delisted-reason">{t('capability.delistedHint')}</p>
+            )}
+            {transferred && (
+              <p style={HINT_TEXT} data-role="card-transferred-reason">{t('capability.transferredHint')}</p>
+            )}
+            {rejected && (
+              <p style={{ ...HINT_TEXT, color: 'var(--dsw-alias-state-error-primary)' }} data-role="detail-rejected-reason">
+                {t('capability.rejectReason', { reason: item!.reason ?? '' })}
+              </p>
+            )}
+            {item !== undefined && showsMarketReviewHint(item) && (
+              <p style={HINT_TEXT} data-role="card-market-review-hint">{t('capability.marketReviewHint')}</p>
+            )}
+            {item !== undefined && item.dirty === true && (
+              <p style={HINT_TEXT} data-role="detail-dirty-hint">{t('capability.dirtyHint')}</p>
+            )}
+            {item !== undefined && item.originServer !== undefined && (
+              <p style={HINT_TEXT} data-role="detail-origin-server-hint">{t('capability.originOtherServerHint')}</p>
+            )}
+            {item !== undefined && item.originSymlink === true && (
+              <p style={HINT_TEXT} data-role="detail-symlink-hint">{t('capability.originSymlinkHint')}</p>
+            )}
+            {item !== undefined && item.official === true && (
+              <p style={HINT_TEXT} data-role="detail-official-hint">{t('capability.officialHint')}</p>
+            )}
+            {item !== undefined && item.runtimeName !== undefined && item.runtimeName !== '' && item.runtimeName !== item.name && (
+              <p style={HINT_TEXT} data-role="detail-runtime-name">
+                {t('capability.runtimeName')}: {item.runtimeName} — {t('capability.runtimeNameHint')}
+              </p>
+            )}
+          </div>
+        )}
+        <div>
+          <div style={LABEL_SM}>{t('capability.detailDescription')}</div>
+          <p style={{ ...DESC, whiteSpace: 'pre-wrap', marginTop: 4 }} data-role="detail-description">
+            {description === '' ? t('capability.detailNoDescription') : description}
+          </p>
+        </div>
+        {item !== undefined && item.changelog !== undefined && item.changelog !== '' && (
+          <div>
+            <div style={LABEL_SM}>{t('capability.detailChangelog')}</div>
+            <p style={{ ...DESC, whiteSpace: 'pre-wrap', marginTop: 4 }} data-role="detail-changelog">{item.changelog}</p>
+          </div>
+        )}
+        {versions.length > 0 && (
+          <div>
+            <div style={LABEL_SM}>{t('capability.detailVersions')}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+              {versions.map(versionEntry => (
+                <PanelButton
+                  key={versionEntry}
+                  variant={versionEntry === item!.version ? 'primary' : 'secondary'}
+                  size="sm"
+                  // C-03：own-key busy 与站级闸都要禁用（`install()` 对后者静默 return）。
+                  disabled={busy || blocked}
+                  title={blocked && !busy ? t('capability.busyHint') : undefined}
+                  onClick={() => { onInstallVersion(versionEntry) }}
+                >
+                  v{versionEntry}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )}
+        {versions.length === 0 && marketLatestOnly && (
+          <p style={HINT_TEXT} data-role="market-latest-only">{t('capability.marketLatestOnly')}</p>
+        )}
+        {notice === undefined ? null : notice}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10, borderTop: '1px solid var(--dsw-alias-border-l1)' }}>
+          {actions}
+        </div>
+      </Card>
+    </div>
+  )
+}
 
 /** 弹层骨架的几何（颜色由 `.zeokeel-card` / 共享按钮类负责）。 */
 const DIALOG_MASK: React.CSSProperties = {
@@ -1087,108 +1680,51 @@ const DIALOG_BOX: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   width: 'min(640px, 100%)',
-  // `box-sizing: border-box`：没有它时 `max-height` 只约束内容盒，弹层实际能长到
-  // 78vh + 上下 padding 36px（2026-09-21 审计）。滚动链本身是有界的，这条只是把上限收紧。
   boxSizing: 'border-box',
   maxHeight: 'min(78vh, 720px)',
   borderRadius: 18,
   padding: '18px 20px',
   boxShadow: 'var(--dsw-shadow-lv3)',
-  // 弹层容器是**程序化聚焦**的（给读屏一个上下文锚点），不是用户 Tab 过来的 ——
-  // 保留 Chromium 的默认焦点环会在弹层外圈画一道很重的黑框（截图实测）。
   outline: 'none',
 }
 
 /**
- * 描述全文 + 历史版本的详情弹层。
+ * 详情弹层（**兼容导出**）。
  *
- * 存在的理由只有一条：**卡片里的描述必须定高**。把全文做成就地展开会把网格整行
- * 撑高，相邻卡片出现大片空白（用户报的"描述超长"）；弹层里则可以随便长，还能
- * 顺带放下历史版本与状态说明。
- *
- * 交互：Esc 关闭、点遮罩关闭、初始焦点落进弹层。**Esc 必须由弹层自己处理** ——
- * 面板是整页不是模态，装载器的 Esc 在检测到 `[role=dialog][aria-modal=true]`
- * 时会让位（"面板里开着真模态时 Esc 归模态"）。
- * @param props - 目标、忙碌态、站级闸、按版本安装回调与关闭回调。
+ * 2026-10-26 起面板不再使用弹层 —— 详情是 {@link CapabilityDetailView} 的整页子视图。
+ * 本导出保留是因为它是对外 API（`CapabilityCenterPanel` 模块的既有 export）：删掉会
+ * 让外部引用在编译期断掉。行为保持原样（Esc / 遮罩关闭 / 焦点环），只是不再是产品路径。
  */
 export function CapabilityDetailDialog({ target, busy, blocked, onInstallVersion, onClose }: {
   target: DetailTarget
+  /** 本弹层目标自己的动作在飞。 */
   busy: boolean
-  /**
-   * 站级闸（另有动作在飞）。审计 C-03：`install()` 第一行对"有动作在飞"是**静默
-   * return**，而弹层里的按版本按钮此前只收到 own-key 的 `busy` ⇒ 别的卡片在安装时
-   * 这两个按钮仍是启用态，点下去不发请求、不改状态、不报错 = **死按钮**。
-   * 闸门必须与"点下去会被吞掉"的条件同源，并且以**禁用 + 说明**呈现。
-   */
+  /** 站级闸（另有动作在飞）：`install()` 会静默 return，按钮必须禁用并说明。 */
   blocked: boolean
   onInstallVersion: (version: string) => void
   onClose: () => void
 }): JSX.Element {
   const boxRef = useRef<HTMLDivElement | null>(null)
-  /**
-   * `onClose` 是父组件里的内联箭头函数 ⇒ 每次父渲染都是新引用。把它固定进 ref，
-   * 下面两个 effect 才能是**只挂载一次**的：否则每 30s 轮询/每次 busy 翻转都会重跑
-   * （重跑会做两件坏事：把焦点从用户正在操作的版本按钮上抢回弹层、卸载时把焦点还原到
-   * 已经被替换掉的"上一个活动元素"即弹层自己）。
-   */
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
-  const previousFocusRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
-    // 记下"打开弹层的那个元素"，并在卸载时把焦点还回去。
-    const previous = document.activeElement
-    previousFocusRef.current = previous instanceof HTMLElement ? previous : null
     boxRef.current?.focus()
-    return () => {
-      const target = previousFocusRef.current
-      if (target !== null && target.isConnected) target.focus()
-    }
-  }, [])
-  useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        // 不让这次 Esc 冒到面板装载器（那里会"返回聊天"）。
-        event.stopPropagation()
-        onCloseRef.current()
-        return
-      }
-      // Tab 环（2026-09-21 审计）：弹层声明了 `aria-modal=true`，但遮罩后面的侧边栏/
-      // 面板控件仍然可聚焦 —— Tab 会把焦点带到看不见的地方，回车能激活看不见的按钮。
-      if (event.key !== 'Tab') return
-      const box = boxRef.current
-      if (box === null) return
-      const focusables = [...box.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-      if (focusables.length === 0) return
-      const first = focusables[0]!
-      const last = focusables[focusables.length - 1]!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      onCloseRef.current()
     }
     window.addEventListener('keydown', onKey)
     return () => { window.removeEventListener('keydown', onKey) }
   }, [])
-
   const skill = target.kind === 'builtin' ? target.card.skill : undefined
   const item = target.kind === 'item' ? target.item : undefined
   const title = skill !== undefined
     ? (skill.title !== undefined && skill.title !== '' ? skill.title : skill.name)
-    : (item!.displayName || item!.name)
+    : (item!.displayName !== '' ? item!.displayName : item!.name)
   const description = skill !== undefined ? (skill.description ?? '') : item!.description
-  const meta = skill !== undefined
-    ? `v${skill.version}${skill.author !== undefined && skill.author !== '' ? ` · ${skill.author}` : ''}`
-    : `v${item!.version}${item!.author !== '' ? ` · ${item!.author}` : ''}`
-  // 「按版本安装」只在端点**真的接受版本**时出现（审计 A11）：市场技能/智能体的
-  // 端点不带版本，点了「v1」装到的还是最新版，界面却按 v1 记账 ⇒ 常驻「更新到 vX」。
   const versions = item !== undefined && versionInstallSupported(item) ? item.versions : []
-  /** 市场技能只能装最新版：把这件事写在弹层里，而不是给一排假按钮。 */
-  const marketLatestOnly = item !== undefined && item.kind === 'skill' && item.source === 'market'
-
   return (
     <div
       style={DIALOG_MASK}
@@ -1205,35 +1741,30 @@ export function CapabilityDetailDialog({ target, busy, blocked, onInstallVersion
         data-role="capability-detail"
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <IconTile size={38} radius={12} tone="brand" label={(skill?.name ?? item!.name).charAt(0)} />
+          <IconTile size={38} radius={12} tone="brand" label={title.charAt(0)} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={NAME_WRAP}>
               <p style={{ ...NAME, whiteSpace: 'normal' }}>{title}</p>
               {skill !== undefined && <Chip tone="neutral" plain>{t('capability.builtinBadge')}</Chip>}
             </div>
-            <p style={META}>{meta}</p>
+            <p style={META}>{skill !== undefined ? `v${skill.version}` : `v${item!.version}`}</p>
           </div>
           <PanelButton variant="ghost" size="sm" aria-label={t('capability.close')} onClick={onClose}>{'✕'}</PanelButton>
         </div>
         <div className="zeokeel-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 12 }}>
-          <div style={{ ...LABEL_SM }}>{t('capability.detailDescription')}</div>
+          <div style={LABEL_SM}>{t('capability.detailDescription')}</div>
           <p style={{ ...DESC, whiteSpace: 'pre-wrap', marginTop: 4 }} data-role="detail-description">
             {description === '' ? t('capability.detailNoDescription') : description}
           </p>
-          {marketLatestOnly && (
-            <p style={{ ...META, marginTop: 12 }} data-role="market-latest-only">{t('capability.marketLatestOnly')}</p>
-          )}
           {versions.length > 1 && (
             <div style={{ marginTop: 14 }}>
-              <div style={{ ...LABEL_SM }}>{t('capability.viewVersions', { count: String(versions.length) })}</div>
+              <div style={LABEL_SM}>{t('capability.viewVersions', { count: String(versions.length) })}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                 {versions.map(version => (
                   <PanelButton
                     key={version}
                     variant={version === item!.version ? 'primary' : 'secondary'}
                     size="sm"
-                    // `busy` = 本弹层目标自己的动作在飞；`blocked` = 站级闸（另有动作在飞）。
-                    // 两者都要禁用：`install()` 对后者是静默 return（审计 C-03）。
                     disabled={busy || blocked}
                     title={blocked && !busy ? t('capability.busyHint') : undefined}
                     onClick={() => { onInstallVersion(version) }}
@@ -1250,10 +1781,7 @@ export function CapabilityDetailDialog({ target, busy, blocked, onInstallVersion
   )
 }
 
-/** 弹层里的小节标题。 */
-const LABEL_SM: React.CSSProperties = { fontSize: 12, color: 'var(--dsw-alias-label-caption)' }
-
-/** 待用户确认的一发安装（普通条目卡与内置技能卡共用）。 */
+/** 待用户确认的一发安装（普通条目卡、内置技能卡与详情视图共用）。 */
 interface PendingInstall {
   /** `{kind}:{name}` 或 `builtin:{name}`（与 action.key 同口径）。 */
   key: string
@@ -1271,13 +1799,29 @@ interface PendingInstall {
    *  - `store`：商店来源、内容未改、只是换渠道 ⇒ 通用覆盖措辞。
    */
   reason?: OverwriteConfirmReason | undefined
-  /** 用户在详情弹层里点选的版本（内置卡没有这一项）。 */
+  /** 用户在详情视图里点选的版本（内置卡没有这一项）。 */
   version?: string | undefined
   /** 用户确认后真正执行的那一发（`overwrite` = 把 `?overwrite=1` 交给宿主）。 */
   run: (overwrite: boolean) => Promise<void>
 }
 
-/** 每个（来源,类型）的加载状态（分区独立错误态）。 */
+/**
+ * 待确认的一次上传（F-32）：预检拿到的"将发布版本"先给作者看一眼。
+ *
+ * `version` = 包内元数据里的版本（SKILL.md frontmatter / preset.yml），是**即将提交**
+ * 的那一版；`run` 是确认后真正发的那一发（把同一个版本带给宿主，避免两次打包之间
+ * 文件被改动导致"给我看的版本"和"实际发布的版本"不一致）。
+ */
+interface PendingUpload {
+  /** `{kind}:{name}`（与 action.key 同口径）。 */
+  key: string
+  /** 展示名（服务端目录名，不是 displayName）。 */
+  name: string
+  version?: string | undefined
+  run: () => Promise<void>
+}
+
+/** 每个分区的加载状态（分区独立错误态）。 */
 type SectionStatus = 'idle' | 'loading' | 'ok' | 'error'
 interface SectionState {
   status: SectionStatus
@@ -1289,15 +1833,91 @@ interface ActionState {
   kind: 'installing' | 'uninstalling' | 'uploading' | 'done-install' | 'done-uninstall' | 'done-upload' | 'failed'
   error?: string | undefined
   name?: string | undefined
+  /** 上传成功回执里的版本（F-32：让作者对上"我发的是哪一版"）。 */
+  version?: string | undefined
 }
 
+/** 本机写面错误信封里能取到的稳定字段（扁平 `{error,code}` 与嵌套 `{error:{code}}` 两种形状）。 */
+export function readFailureEnvelope(data: unknown): { code?: string | undefined; message?: string | undefined } {
+  if (typeof data !== 'object' || data === null) return {}
+  const flat = data as { error?: unknown; code?: unknown }
+  const nested = typeof flat.error === 'object' && flat.error !== null
+    ? flat.error as { code?: unknown; message?: unknown }
+    : undefined
+  const code = typeof flat.code === 'string' && flat.code !== ''
+    ? flat.code
+    : typeof nested?.code === 'string' && nested.code !== '' ? nested.code : undefined
+  const message = typeof flat.error === 'string' && flat.error !== ''
+    ? flat.error
+    : typeof nested?.message === 'string' && nested.message !== '' ? nested.message : undefined
+  return {
+    ...code === undefined ? {} : { code },
+    ...message === undefined ? {} : { message },
+  }
+}
+
+/**
+ * 上传前确认条的文案与按钮标签（F-32，**唯一实现**）。
+ *
+ * 版本来自包内元数据（本地预检读出来的那一份）；读不到时**不编造**，文案改成
+ * "包内未写版本号"并说明服务端会按 1.0.0 处理（多数情况下会被发布内核拒绝）。
+ * @param preview - 预检回执（包名 + 版本）。
+ * @returns 确认条正文与主按钮标签（都随当前语言）。
+ */
+export function uploadPreviewText(
+  preview: { name: string; version?: string | undefined },
+): { text: string, action: string } {
+  if (preview.version !== undefined && preview.version !== '') {
+    return {
+      text: t('capability.uploadVersionConfirm', { name: preview.name, version: preview.version }),
+      action: t('capability.uploadPublish', { version: preview.version }),
+    }
+  }
+  return { text: t('capability.uploadVersionUnknown', { name: preview.name }), action: t('capability.upload') }
+}
+
+/**
+ * 一次分区取数的载荷：行 + 宿主的**只读**事实（auditor）。
+ *
+ * `auditor` 由宿主按 fence 的 `writeGuard()` 算（唯一实现），面板只用它**收口渲染**
+ * （F-54：auditor 的安装/上传/卸载按钮此前照样显示，点了必然 403）。缺省 = 不是
+ * auditor（旧宿主不下发该字段 ⇒ 行为不变）。
+ */
+interface CapabilityPayload {
+  items: CapabilityItem[]
+  auditor?: boolean | undefined
+}
+
+/** 一次只读取数（三个分区共用；错误信息带状态码，便于分区错误态显示）。 */
+async function fetchCapabilityPayload(source: 'market' | 'local' | 'own'): Promise<CapabilityPayload> {
+  const res = await fetch(`/api/zeokeel/capabilities?source=${source}`)
+  if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
+  const data = (await res.json()) as { items?: CapabilityItem[]; auditor?: unknown }
+  return {
+    items: data.items ?? [],
+    ...data.auditor === true ? { auditor: true } : {},
+  }
+}
+
+/**
+ * 能力中心面板（2026-10-26 现代化重构）。
+ *
+ * 信息架构：4 个分段（全部 / 已安装 / 我上传 / 市场）× 类型筛选 × 搜索 × 排序 ×
+ * 网格/列表视图；工具条全部收在 `PanelPage` 的 toolbar 里。卡片只留"标题 + slug +
+ * 最多两个 Chip + 两行描述 + 版本/作者 + 主动作 + 详情"，长状态说明进详情子视图。
+ * 取数是三分区（market / local / own）并发、各自独立错误态；own 是新增的
+ * "我上传"通道（作者面，含 pending/rejected，无本机副本也可见）。
+ * @param props - 面板出口（键返回到会话区由装载器负责）。
+ */
 export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<SourceTab>('mine')
+  const [tab, setTab] = useState<SourceTab>('all')
   const [filter, setFilter] = useState<TypeFilter>('all')
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<SortKey>('updated')
+  const [view, setView] = useState<ViewMode>('grid')
   // 平台内置技能：与普通技能**同一张卡片、同一个网格**（2026-09-18 用户口径：
   // "这里渲染应该是一个普通技能，而不是这种置顶的"）。
-  // 已安装的那些**不在这里渲染** —— 它们本来就在「我的」列表里（本机技能库扫描
+  // 已安装的那些**不在这里渲染** —— 它们本来就在本机列表里（本机技能库扫描
   // 出来的普通卡片，带「平台内置」来源徽章）；重复渲染会让同一个技能出现两张卡。
   // 装成功后刷新分区，让普通卡片立刻出现、这张"安装入口"卡片同时消失。
   const builtin = useBuiltinSkills(() => { loadAllRef.current?.() })
@@ -1309,7 +1929,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
    * 覆盖确认：待用户确认的那一发安装。
    *
    * 存"意图"（而不是只存一个 key）有三个理由（审计 A15/A11/A2）：
-   *  ①确认条要重放**同一发**安装，包括详情弹层里点的那一个版本（旧实现只存 key，
+   *  ①确认条要重放**同一发**安装，包括详情视图里点的那一个版本（旧实现只存 key，
    *    确认后会退回 item.version）；
    *  ②措辞要按本机那一份的来源分档（用户自制 vs 商店）；
    *  ③**两个安装入口共用同一条确认条**：普通条目卡与内置技能入口卡（`run` 闭包
@@ -1319,19 +1939,27 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
   const [installConfirm, setInstallConfirm] = useState<PendingInstall | null>(null)
   /** 卸载确认 key（{kind}:{name}）。 */
   const [uninstallConfirmKey, setUninstallConfirmKey] = useState<string | null>(null)
-  /**
-   * 正在看详情的那张卡；null = 关闭。
-   *
-   * 描述全文与历史版本都收在弹层里，**卡片本身高度恒定**（就地展开会把整行栅格
-   * 一起撑高，2026-09-20 用户口径："能力中心里描述超长"）。
-   */
+  /** 正在看详情的卡；null = 列表视图（详情改为面板内整页子视图，2026-10-26）。 */
   const [detail, setDetail] = useState<DetailTarget | null>(null)
+  /**
+   * 宿主下发的**只读**事实（auditor 账号）。`false` = 正常账号 / 旧宿主没下发。
+   *
+   * F-54：写按钮（安装/上传/卸载）此前对 auditor 照样渲染，点下去必然是宿主 403；
+   * 现在按这一格收口渲染（判定本身仍在宿主，面板只是不再展示必然失败的入口）。
+   */
+  const [readOnly, setReadOnly] = useState(false)
+  /**
+   * 待确认的一次上传（F-32）：预检拿到的"将发布版本"先给作者看一眼。
+   *
+   * `run` 是真正提交的那一发（带预检得到的版本）；用户在确认条上点「发布 vX」后才发。
+   */
+  const [uploadConfirm, setUploadConfirm] = useState<PendingUpload | null>(null)
   const loadSeqRef = useRef(0)
   /**
    * 站内是否有动作在飞（安装/卸载/上传）。
    *
-   * `install()` / `uninstall()` / `upload()` 的第一行都是"有动作在飞就 return"，但按钮此前
-   * 只按**自己这张卡**的 key 置灰 ⇒ 慢安装期间其它卡片的按钮外观仍是可点的启用态，
+   * `install()` / `uninstall()` / `upload()` 的第一行都是"有动作在飞就 return"，但按钮
+   * 只按**自己这张卡**的 key 置灰时，慢安装期间其它卡片的按钮外观仍是可点的启用态，
    * 点下去被静默吞掉（用户以为按钮坏了，2026-09-21 审计）。现在其它卡片一起置灰。
    */
   const inFlight = action !== null && (action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading')
@@ -1351,13 +1979,14 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     setSections(prev => ({ ...prev, [key]: { status: prev[key]?.status ?? 'idle', error: prev[key]?.error ?? '', ...state } }))
   }
 
-  const loadSection = async (key: SectionKey, fetcher: () => Promise<CapabilityItem[]>): Promise<void> => {
+  const loadSection = async (key: SectionKey, fetcher: () => Promise<CapabilityPayload>): Promise<void> => {
     const seq = loadSeqRef.current
     setSection(key, { status: 'loading', error: '' })
     try {
-      const rows = await fetcher()
+      const payload = await fetcher()
       if (seq !== loadSeqRef.current) return
-      setItems(prev => applySectionRows(prev, key, rows))
+      setItems(prev => applySectionRows(prev, key, payload.items))
+      if (payload.auditor !== undefined) setReadOnly(payload.auditor)
       setSection(key, { status: 'ok' })
     } catch (cause) {
       if (seq !== loadSeqRef.current) return
@@ -1367,10 +1996,10 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
       // `HTTP <status>`（服务端业务信封原文优先），带上它：可见文案走带占位符的那条
       // 字典键（用户仍读到本地化的"加载失败"，机器可读的部分跟在后面），同时打一条
       // 可检索的 warn 供诊断包取用。
-      const detail = cause instanceof Error ? cause.message : ''
-      if (detail !== '') {
-        console.warn(`[capability] loading the ${key} section failed: ${detail}`)
-        setSection(key, { status: 'error', error: t('capability.loadErrorDetail', { error: detail }) })
+      const detailText = cause instanceof Error ? cause.message : ''
+      if (detailText !== '') {
+        console.warn(`[capability] loading the ${key} section failed: ${detailText}`)
+        setSection(key, { status: 'error', error: t('capability.loadErrorDetail', { error: detailText }) })
         return
       }
       setSection(key, { status: 'error', error: t('capability.loadError') })
@@ -1379,20 +2008,12 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
 
   const loadAll = (): void => {
     ++loadSeqRef.current
-    // 决策 2026-08-25:市场/组织合并为「市场」——?source=market 由服务端
-    // 合并返回(市场+组织,各自 source 徽章保留);「我的」仍走 local。
-    // loading 由两个分区各自的状态驱动（renderSection 按 tab 显示对应分区
-    // 的 loading/错误/空态）；此处不再翻转全局 loading。
-    void loadSection('market', async () => {
-      const res = await fetch('/api/zeokeel/capabilities?source=market')
-      if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
-      return (await res.json() as { items?: CapabilityItem[] }).items ?? []
-    })
-    void loadSection('mine', async () => {
-      const res = await fetch('/api/zeokeel/capabilities?source=local')
-      if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
-      return (await res.json() as { items?: CapabilityItem[] }).items ?? []
-    })
+    // 三分区并发（各自独立错误态）：market = 市场+组织合并；local = 本机（已装 + 自制）；
+    // own = 我上传（作者面，含 pending/rejected —— 盘点 F-08 的修法）。
+    // loading 由分区状态驱动（renderSection 按 tab 显示骨架/错误/空态）。
+    void loadSection('market', () => fetchCapabilityPayload('market'))
+    void loadSection('mine', () => fetchCapabilityPayload('local'))
+    void loadSection('own', () => fetchCapabilityPayload('own'))
   }
 
   useEffect(() => {
@@ -1400,36 +2021,33 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Esc / 初始焦点 / 焦点陷阱**都不在这里做**（2026-09-21 删除）。
-  //
-  // 这里原来有一段 window 级 keydown：`Escape ⇒ onClose()` + 一个 Tab 焦点陷阱。
-  // 真机实测它有两个问题：
-  //   ① 详情弹层打开时按 Esc：弹层自己也在 window 上注册了 Esc（并且 stopPropagation），
-  //      但**同一个 target 上的监听器不会被 stopPropagation 拦住**（那要
-  //      stopImmediatePropagation），而面板这段注册更早 ⇒ 先执行 onClose()，
-  //      结果是"关弹层"变成"整页被踢回会话区"。
-  //   ② 焦点陷阱的 `panelRef` 从未挂到任何元素上（全文件只有声明与读取），
-  //      所以陷阱与 `panelRef.current?.focus()` 都是死代码；而整页面板的键盘语义本来
-  //      就不该把 Tab 圈死（侧边栏是同一个可键盘到达的面板出口）。
+  // Esc / 初始焦点 / 焦点陷阱**都不在这里做**（2026-09-21 删除；详情不再占用窗口键盘）。
   //
   // 现在的唯一权威是装载器 `@zeokeel/dsh-panel-surface`：它在 document 上处理 Esc
   // （检测到 `[role=dialog][aria-modal=true]` 时让给内层模态），并在激活时把焦点移到
-  // 面板容器上。弹层自己负责它那一层的 Esc（见 CapabilityDetailDialog）。
+  // 面板容器上。详情是面板内子视图，Esc 语义仍是"返回聊天"（与其它面板一致）。
 
-  // 30s 静默轮询:市场(合并)审批状态/质量变化后台刷新。
+  // 30s 静默轮询：审批状态会在**服务端**变化（管理员通过/驳回），而本机没有任何
+  // 触发点 —— 盘点 F-11 的现场是「审核中」粘滞到重挂载。轮询 market（目录变化）与
+  // own（作者面状态变化），**不轮询 local**（要扫盘 + 算内容哈希，代价高且磁盘事实
+  // 只会在本机动作后变化，那些动作已经各自触发 loadAll）。
   useEffect(() => {
     const timer = setInterval(() => {
       const seq = loadSeqRef.current
-      void fetch('/api/zeokeel/capabilities?source=market').then(async (res) => {
-        if (!res.ok) return
-        const data = await res.json() as { items?: CapabilityItem[] }
-        if (seq !== loadSeqRef.current) return
-        // 与 loadSection 同一条归约（唯一实现），不在这里另写一份 filter。
-        setItems(prev => applySectionRows(prev, 'market', data.items ?? []))
-        // 后台刷新成功即退出先前 error 态——否则首次加载失败后,错误提示与
-        // 重试按钮会遮住已刷新的数据(2026-09-01 深挖)。
-        setSection('market', { status: 'ok', error: '' })
-      }).catch(() => {})
+      const refresh = async (key: SectionKey, source: 'market' | 'own'): Promise<void> => {
+        try {
+          const payload = await fetchCapabilityPayload(source)
+          if (seq !== loadSeqRef.current) return
+          // 与 loadSection 同一条归约（唯一实现），不在这里另写一份 filter。
+          setItems(prev => applySectionRows(prev, key, payload.items))
+          if (payload.auditor !== undefined) setReadOnly(payload.auditor)
+          // 后台刷新成功即退出先前 error 态——否则首次加载失败后,错误提示与
+          // 重试按钮会遮住已刷新的数据(2026-09-01 深挖)。
+          setSection(key, { status: 'ok', error: '' })
+        } catch { /* 静默轮询失败不打扰用户；下一次再试 */ }
+      }
+      void refresh('market', 'market')
+      void refresh('own', 'own')
     }, 30000)
     return () => { clearInterval(timer) }
   }, [])
@@ -1447,16 +2065,40 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     try {
       const url = installRequestUrl(item, opts)
       const res = await fetch(url, { method: 'POST' })
-      // 宿主说"目标是本机内容，需要确认"（面板缓存的来源过期 / 多窗口竞争）⇒
-      // 回到确认条，而不是把一条 409 当成失败丢给用户。
+      // 409 的语义只有一种会进确认条：**目标是本机内容**（`LOCAL_CONTENT`，宿主在缺
+      // `?overwrite=1` 时拒绝覆盖）。其它 409（APP_DELISTED / NAME_TAKEN / VERSION_*…）
+      // 是业务拒绝，进确认条只会让用户反复点同一发注定失败的请求（盘点 F-10）。
       if (res.status === 409) {
-        setAction(null)
-        setInstallConfirm({
-          key, name: item.name, localConflict: true,
-          ...opts?.version === undefined ? {} : { version: opts.version },
-          run: async (overwrite) => { await performInstall(item, { ...opts, overwrite }) },
-        })
-        return
+        const data = await res.json().catch(() => ({})) as { error?: unknown; code?: unknown }
+        // 错误信封有两种形状：本机路由是扁平的 `{ error, code }`，透传上游时可能是
+        // `{ error: { code, message } }`。两种都读，读不到才算"旧宿主"。
+        const nestedCode = typeof data.error === 'object' && data.error !== null
+          ? (data.error as { code?: unknown }).code
+          : undefined
+        const code = typeof data.code === 'string'
+          ? data.code
+          : typeof nestedCode === 'string' ? nestedCode : ''
+        // 空 code = 旧宿主（它的 409 只有 LOCAL_CONTENT 一种语义），按既有行为回确认条。
+        if (code === '' || code === 'LOCAL_CONTENT') {
+          setAction(null)
+          setInstallConfirm({
+            key, name: item.name, localConflict: true,
+            reason: needsOverwriteConfirm(item) ? overwriteConfirmReason(item) : 'store',
+            ...opts?.version === undefined ? {} : { version: opts.version },
+            run: async (overwrite) => { await performInstall(item, { ...opts, overwrite }) },
+          })
+          return
+        }
+        const message = typeof data.error === 'string'
+          ? data.error
+          : typeof data.error === 'object' && data.error !== null
+            ? (data.error as { message?: unknown }).message
+            : undefined
+        throw new Error(uploadFailureText({
+          ...code === '' ? {} : { code },
+          ...typeof message === 'string' && message !== '' ? { message } : {},
+          status: res.status,
+        }))
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -1475,6 +2117,9 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
         : i)))
       setAction({ key, kind: 'done-install', name: item.name })
       if (appliedVersion === undefined) loadAll()
+      // 安装成功 ⇒ 三个分区都刷新一次（own 的审核态、market 的下载量、本机版本），
+      // 避免"装完卡片还是旧状态"（盘点 F-09/F-11 的同族）。
+      loadAll()
     } catch (cause) {
       setAction({ key, kind: 'failed', error: cause instanceof Error ? cause.message : undefined, name: item.name })
     }
@@ -1558,334 +2203,238 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
         const data = await res.json().catch(() => ({}))
         throw new Error((data as { error?: string }).error ?? `HTTP ${String(res.status)}`)
       }
-      setItems(prev => prev.map(i => (i.kind === item.kind && i.name === item.name ? { ...i, installed: false, installedVersion: undefined, installedOrigin: undefined } : i)))
+      // 卸载后**立即从列表里去掉本机那一份**（盘点 F-07：只翻 installed=false 会被
+      // mergeItems 的"存在本机行即已安装"顶回来）。目录行保留（它仍然在市场里，
+      // 只是回到「安装」态）；本机行整行移除。随后 loadAll 用磁盘事实对账。
+      setItems(prev => prev
+        .filter(i => !(i.kind === item.kind && i.name === item.name && i.source === 'local'))
+        .map(i => (i.kind === item.kind && i.name === item.name
+          ? { ...i, installed: false, installedVersion: undefined, installedOrigin: undefined, dirty: undefined }
+          : i)))
       setAction({ key, kind: 'done-uninstall', name: item.name })
-    } catch (cause) {
-      setAction({ key, kind: 'failed', error: cause instanceof Error ? cause.message : undefined, name: item.name })
-    }
-  }
-
-  const upload = async (item: CapabilityItem): Promise<void> => {
-    // 只拦进行中的动作（与 install/uninstall 守卫一致）；done-*/failed 是
-    // 终态展示,不得阻断后续上传——此前 `action !== null` 会在动作终态后
-    // 永久锁死「我的」分区的上传/重新上传按钮。
-    if (action !== null && (action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading')) return
-    const key = `${item.kind}:${item.name}`
-    // 归属权预检(2026-09-02):同名同类型已在能力中心存在且非本人归属 →
-    // 不发送请求,直接提示「名称已被占用」。服务端仍是权威(他人待审行不可见,
-    // 预检可能漏网,由 409 NAME_TAKEN「名称已被占用」兜底)。
-    const clash = items.find(i => i.kind === item.kind && i.name === item.name && i.source !== 'local')
-    if (clash !== undefined && clash.isOwner !== true) {
-      setAction({
-        key, kind: 'failed',
-        error: nameTakenError(clash.displayName || clash.name),
-        name: item.name,
-      })
-      return
-    }
-    setAction({ key, kind: 'uploading' })
-    try {
-      const path = item.kind === 'skill' ? '/api/zeokeel/shared-skills/upload' : '/api/zeokeel/agent-presets/upload'
-      const res = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: item.name }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: unknown; code?: unknown }
-        // R5-B-1 的客户端尾巴：下架冻结（409 APP_DELISTED）说清"为什么没成 + 怎么解"，
-        // 而不是把服务端 message 原样（或 `HTTP 409`）丢给用户。判据**只看错误码**
-        // （409 同时是 NAME_TAKEN/VERSION_*/CONFLICT 的码），其它码逐字沿用原行为。
-        throw new Error(uploadFailureText({
-          ...typeof data.code === 'string' ? { code: data.code } : {},
-          ...typeof data.error === 'string' ? { message: data.error } : {},
-          status: res.status,
-        }))
-      }
-      setAction({ key, kind: 'done-upload', name: item.name })
+      // 刷新三个分区（本机删掉了、own 的状态、市场的可装态）——「审核中」不粘滞。
       loadAll()
     } catch (cause) {
       setAction({ key, kind: 'failed', error: cause instanceof Error ? cause.message : undefined, name: item.name })
     }
   }
 
-  const visibleByTab = useMemo(() => {
-    const base = itemsForTab(items, tab)
-    const merged = mergeItems(base)
-    // 搜索: name/displayName/description 关键词(大小写不敏感)。
+  /** 上传接口路径（技能与智能体各一条本机代理）。 */
+  const uploadPathOf = (item: CapabilityItem): string =>
+    item.kind === 'skill' ? '/api/zeokeel/shared-skills/upload' : '/api/zeokeel/agent-presets/upload'
+
+  /**
+   * 上传入口（**两段式**，F-32）：先本地预检拿到"将发布版本"，确认后才真正提交。
+   *
+   * 为什么必须先预检再确认：版本只能从包内元数据读（`SKILL.md` frontmatter /
+   * `preset.yml`），磁盘行上的 provenance 版本是**安装时**那一版，用户改过 frontmatter
+   * 之后就旧了；不预检就没有任何诚实的方式在按钮上写"将发布 vX"。预检同时把
+   * 打包/预检失败（缺字段、正文太短、不是 UTF-8…）提前到点击当口，且文案由宿主按
+   * 请求语言本地化。
+   * @param item - 能力中心的一行（本机草稿或已上架条目的本机副本）。
+   */
+  const upload = async (item: CapabilityItem): Promise<void> => {
+    // 只拦进行中的动作（与 install/uninstall 守卫一致）；done-*/failed 是
+    // 终态展示,不得阻断后续上传——此前 `action !== null` 会在动作终态后
+    // 永久锁死上传/重新上传按钮。
+    if (action !== null && (action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading')) return
+    // 只读账号（auditor）不发起写请求：宿主一定会 403，这里连预检都不打。
+    if (readOnly) return
+    const key = `${item.kind}:${item.name}`
+    // 归属权预检(2026-09-02):同名同类型已在能力中心存在且**明确不是**本人归属 →
+    // 不发送请求,直接提示「名称已被占用」。服务端仍是权威(他人待审行不可见,
+    // 预检可能漏网,由 409 NAME_TAKEN「名称已被占用」兜底)。
+    //
+    // ⚠️ 判据是 `=== false` 而不是 `!== true`（盘点 F-29）：未下发 `is_owner`
+    // （旧服务端 / 裁剪载荷）**不等于**"不是我的" —— 按 `!== true` 拦会把作者自己的
+    // 上传入口挡掉，而服务端本来会接收这一发。
+    const clash = items.find(i => i.kind === item.kind && i.name === item.name && i.source !== 'local')
+    if (clash !== undefined && clash.isOwner === false) {
+      setAction({
+        key, kind: 'failed',
+        error: nameTakenError(clash.displayName !== '' ? clash.displayName : clash.name),
+        name: item.name,
+      })
+      return
+    }
+    setAction({ key, kind: 'uploading' })
+    try {
+      const res = await fetch(`${uploadPathOf(item)}?preview=1`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: item.name }),
+      })
+      if (!res.ok) {
+        const envelope = readFailureEnvelope(await res.json().catch(() => ({})))
+        throw new Error(uploadFailureText({ ...envelope, status: res.status }))
+      }
+      const data = await res.json().catch(() => ({})) as { preview?: { name?: unknown; version?: unknown } }
+      const previewName = typeof data.preview?.name === 'string' && data.preview.name !== '' ? data.preview.name : item.name
+      const version = typeof data.preview?.version === 'string' && data.preview.version !== '' ? data.preview.version : undefined
+      setAction(null)
+      setUploadConfirm({
+        key, name: previewName,
+        ...version === undefined ? {} : { version },
+        run: async () => { await submitUpload(item, previewName, version) },
+      })
+    } catch (cause) {
+      setAction({ key, kind: 'failed', error: cause instanceof Error ? cause.message : undefined, name: item.name })
+    }
+  }
+
+  /**
+   * 真正提交的那一发上传（用户在确认条上点过「发布 vX」之后）。
+   *
+   * 版本随请求一起带给宿主（技能面宿主真的读它并覆盖包内版本，智能体面宿主把它
+   * 随归档转给网关）—— 两次打包之间若文件被改动，提交的仍是**用户确认过的那一版**。
+   * @param item - 能力中心的一行。
+   * @param name - 预检回执里的包名（与目录名可能不同：技能目录名 vs SKILL.md name）。
+   * @param version - 预检回执里的版本。
+   */
+  const submitUpload = async (item: CapabilityItem, name: string, version: string | undefined): Promise<void> => {
+    const key = `${item.kind}:${item.name}`
+    setUploadConfirm(null)
+    setAction({ key, kind: 'uploading' })
+    try {
+      const res = await fetch(uploadPathOf(item), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: item.name, ...version === undefined ? {} : { version } }),
+      })
+      if (!res.ok) {
+        const envelope = readFailureEnvelope(await res.json().catch(() => ({})))
+        // R5-B-1 + F-32：下架冻结 / 版本类 / 内容未变更都走 uploadFailureText 的
+        // 本地化映射（判据**只看错误码**，409 同时是多个码共用的状态）。
+        throw new Error(uploadFailureText({ ...envelope, status: res.status }))
+      }
+      setAction({ key, kind: 'done-upload', name, ...version === undefined ? {} : { version } })
+      // 上传成功 ⇒ 刷新全部分区：**own** 会出现/更新这条的 pending 行（「我上传」与
+      // 卡片上的状态徽章都靠它），否则用户会看到"传完了但界面还是未上传"（F-08/F-11）。
+      loadAll()
+    } catch (cause) {
+      setAction({ key, kind: 'failed', error: cause instanceof Error ? cause.message : undefined, name: item.name })
+    }
+  }
+
+  /** 已归并的全量行（卡片去重的唯一位置；计数/详情/分段都从它派生）。 */
+  const mergedAll = useMemo(() => mergeItems(items), [items])
+
+  /**
+   * 当前分段可见的行：分段 → 搜索 → 类型 → 排序。搜索口径与内置技能一致
+   * （name/displayName/description，大小写不敏感）。
+   */
+  const visible = useMemo(() => {
+    const base = itemsForTab(mergedAll, tab)
     const q = search.trim().toLowerCase()
-    const searched = q === '' ? merged : merged.filter(i =>
+    const searched = q === '' ? base : base.filter(i =>
       (i.name ?? '').toLowerCase().includes(q)
       || (i.displayName ?? '').toLowerCase().includes(q)
       || (i.description ?? '').toLowerCase().includes(q),
     )
     const kindFiltered = filter === 'all' ? searched : searched.filter(i => i.kind === filter)
-    // 0059 排序定案: 市场 = 官方→精选→score 降序;「我的」= 已安装(score 降序→名称),
-    // 自制组在后(名称升序)。
-    const sortScore = (a: CapabilityItem, b: CapabilityItem): number => (b.score ?? 0) - (a.score ?? 0)
-    if (tab === 'market') {
-      return [...kindFiltered].sort((a, b) => {
-        if (!!a.official !== !!b.official) return a.official ? -1 : 1
-        const af = a.quality === 'featured'; const bf = b.quality === 'featured'
-        if (af !== bf) return af ? -1 : 1
-        if (sortScore(a, b) !== 0) return sortScore(a, b)
-        return a.name.localeCompare(b.name)
-      })
-    }
-    return [...kindFiltered].sort((a, b) => {
-      const aLocal = a.source === 'local'; const bLocal = b.source === 'local'
-      if (aLocal !== bLocal) return aLocal ? 1 : -1
-      return aLocal ? a.name.localeCompare(b.name) : (sortScore(a, b) !== 0 ? sortScore(a, b) : a.name.localeCompare(b.name))
-    })
-  }, [items, tab, filter, search])
+    return sortItems(kindFiltered, sort)
+  }, [mergedAll, tab, filter, search, sort])
 
   // 让内置技能的"安装成功"回调拿到最新的 loadAll（hook 在 loadAll 之前调用）。
   loadAllRef.current = loadAll
 
-  const sectionStatus = (key: 'mine' | 'market'): SectionState => sections[key] ?? { status: 'idle', error: '' }
-
-  const isMineSection = tab === 'mine'
+  const sectionStatus = (key: SectionKey): SectionState => sections[key] ?? { status: 'idle', error: '' }
   /** 本机技能库已有的技能名（含已安装的平台内置技能）—— 用来避免重复渲染。 */
   const localSkillNames = useMemo(
-    () => new Set(items.filter(i => i.kind === 'skill' && i.source === 'local').map(i => i.name)),
-    [items],
+    () => new Set(mergedAll.filter(i => i.kind === 'skill' && i.source === 'local').map(i => i.name)),
+    [mergedAll],
   )
-  const renderBadges = (item: CapabilityItem): React.ReactNode => {
-    const statusBadge = item.status === 'pending' ? <Chip tone="warn">{t('capability.pending')}</Chip>
-      : item.status === 'rejected' ? <Chip tone="danger">{t('capability.rejected')}</Chip>
-        : item.installed ? <Chip tone="success">{t('capability.installed')}</Chip> : null
-    const officialBadge = item.official === true ? <Chip tone="brand">{t('capability.official')}</Chip> : null
-    const qualityBadge = item.quality === 'featured' ? <Chip tone="warn">{t('capability.featured')}</Chip> : null
-    /**
-     * 「已下架」徽章（R5-B-1）：形态照**应用中心**那一套（`AppCenterPanel` 的
-     * `appCenter.disabled` 中性胶囊 + 卡片置灰 + 说明文字），不另创一套。
-     */
-    const delistedBadge = isDelistedItem(item) ? <Chip tone="neutral" plain>{t('capability.delisted')}</Chip> : null
-    /** 「已转交」徽章（R5-B-2）：归属已不在自己名下（服务端 `is_owner:false`）。 */
-    const transferredBadge = isTransferredItem(item) ? <Chip tone="warn">{t('capability.transferred')}</Chip> : null
-    /**
-     * 「来源」徽章**只出一个**（选键的唯一实现在 {@link capabilitySourceBadgeKey}）。
-     */
-    const sourceBadge = <Chip tone="neutral" plain>{t(capabilitySourceBadgeKey(item, isMineSection ? 'mine' : 'market'))}</Chip>
-    return (
-      <>
-        <Chip tone={item.kind === 'skill' ? 'brand' : 'neutral'}>
-          {item.kind === 'skill' ? t('capability.typeSkill') : t('capability.typeAgent')}
-        </Chip>
-        {sourceBadge}
-        {officialBadge}
-        {qualityBadge}
-        {statusBadge}
-        {delistedBadge}
-        {transferredBadge}
-        {item.source === 'local' && item.originChannel !== undefined && item.originChannel !== 'builtin' && (
-          <Chip tone="neutral" plain>{`v${item.version}`}</Chip>
-        )}
-        {item.dirty === true && <Chip tone="warn">{t('capability.dirty')}</Chip>}
-        {item.originServer !== undefined && <Chip tone="warn">{t('capability.originOtherServer')}</Chip>}
-      </>
-    )
-  }
 
   /**
-   * 内置技能卡 → 与普通技能同构的卡片（同一套 CARD / 标题行 / 徽章 / 页脚按钮）。
+   * 内置技能也会以卡片出现在网格里，所以分段计数/结果计数不能只数 catalog 行：
+   * 修前「市场」角标是 0、网格里却有一张可安装的平台内置卡（E2E 截图可见）。
    *
-   * 判定全部由 `planBuiltinCards` 做完（含"已装且清单更新 ⇒ 出更新卡"，R1-pm-8）：
-   * 这里只按它给出的 `action` / `state` / `endpoint` 渲染，不再自己算一遍
-   * ——两处各判一次就会出现"卡片渲染了但没有按钮"这种死代码。
+   * 计数用**不带搜索/类型筛选**的全量计划（与用户当前输入无关，角标表达总量）；
+   * 已安装且同版本的内置技能本机已有卡片，planBuiltinCards 不会出卡；update 卡
+   * 与本机卡同名，按 planSectionCards 的去重口径不重复计数，只有 install 卡计入。
    */
-  const renderBuiltinCard = (card: BuiltinCard): React.ReactNode => {
-    const skill = card.skill
-    const key = `builtin:${skill.name}`
-    const label = card.action === 'update'
-      ? t('capability.updateTo', { version: skill.version })
-      : t('capability.builtinInstall')
-    const title = skill.title !== undefined && skill.title !== '' ? skill.title : skill.name
-    return (
-      <Card key={key} interactive style={CARD} className="zeokeel-skill-card">
-        <div style={TITLE_ROW}>
-          <IconTile size={38} radius={12} tone="brand" label={skill.name.charAt(0)} />
-          <div style={NAME_COL}>
-            <div style={NAME_WRAP}>
-              <p style={{ ...NAME }} title={title}>{title}</p>
-              <Chip tone="neutral" plain>{t('capability.builtinBadge')}</Chip>
-              <Chip tone="brand">{t('capability.filterSkill')}</Chip>
-            </div>
-            <p style={META}>{skill.author !== undefined && skill.author !== '' ? `v${skill.version} · ${skill.author}` : `v${skill.version}`}</p>
-          </div>
-        </div>
-        {skill.description !== undefined && skill.description !== '' && (
-          <p style={DESC_CLAMP} title={skill.description} data-role="card-description">{skill.description}</p>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          <PanelButton
-            variant="ghost"
-            size="sm"
-            icon={<icons.IconInfo size={13} />}
-            onClick={() => { setDetail({ kind: 'builtin', card }) }}
-          >
-            {t('capability.detail')}
-          </PanelButton>
-        </div>
-        <div style={CARD_FOOT}>
-          {card.state === 'busy' ? (
-            <PanelButton variant="primary" size="md" block disabled>{label}</PanelButton>
-          ) : card.state === 'failed' && card.failure !== null ? (
-            <>
-              <span style={{ ...META, flex: 1, color: 'var(--dsw-alias-state-error-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={card.failure}>
-                {card.failure}
-              </span>
-              <PanelButton variant="primary" size="md" disabled={inFlight} onClick={() => { activateBuiltinCard(card) }}>
-                {t('capability.builtinRetry')}
-              </PanelButton>
-            </>
-          ) : (
-            <PanelButton variant="primary" size="md" block disabled={inFlight} onClick={() => { activateBuiltinCard(card) }}>{label}</PanelButton>
-          )}
-        </div>
-      </Card>
-    )
-  }
+  const builtinPlannedAll = useMemo(() => planBuiltinCards({
+    rows: builtin.rows,
+    installedNames: new Set([...builtin.installed, ...localSkillNames]),
+    installedVersions: builtin.versions,
+    query: '',
+    kindFilter: 'all',
+    busy: builtin.busy,
+    failed: builtin.failed,
+  }), [builtin.rows, builtin.installed, builtin.versions, builtin.busy, builtin.failed, localSkillNames])
 
-  /**
-   * 「卸载」按钮区（两段式确认）。商店已装行与"本机内置（builtin/plugin）"行共用。
-   * 本机自制内容那一档用 danger 文案与「仍要删除」按钮（审计 A3）。
-   */
-  const renderUninstall = (item: CapabilityItem, key: string, busy: boolean, blocked: boolean): React.ReactNode => {
-    if (uninstallConfirmKey !== key) {
-      return <PanelButton variant="secondary" size="md" block disabled={blocked} onClick={() => { void uninstall(item) }}>{t('capability.uninstall')}</PanelButton>
-    }
+  /** 四个分段的角标计数（catalog 行 + 市场里额外出现的 install 入口卡）。 */
+  const counts = useMemo(
+    () => tabCountsWithBuiltin(mergedAll, builtinPlannedAll),
+    [mergedAll, builtinPlannedAll],
+  )
+
+  /** 当前网格会额外渲染的 install 入口卡（已在本机目录里的同名技能不重复计数）。 */
+  const visibleBuiltinCount = useMemo(() => {
+    if (tab === 'own') return 0
+    const cards = tab === 'market'
+      ? builtinCardsForTab(builtinPlannedAll, 'market')
+      : tab === 'installed'
+        ? builtinCardsForTab(builtinPlannedAll, 'mine')
+        : builtinPlannedAll
+    const names = new Set(mergedAll.map(item => `${item.kind}:${item.name}`))
+    return cards.filter(card => !names.has(`skill:${card.skill.name}`)).length
+  }, [tab, mergedAll, builtinPlannedAll])
+
+  /** 各分段"决定页面骨架"的分区（own 分区还要本机分区补草稿）。 */
+  const primarySectionsFor = (which: SourceTab): SectionKey[] =>
+    which === 'market' ? ['market'] : which === 'installed' ? ['mine'] : which === 'own' ? ['own', 'mine'] : ['market', 'mine']
+
+  /** 骨架卡（6 张；加载态不说话，直接给卡片形状）。 */
+  const renderSkeleton = (): React.ReactNode => (
+    <>
+      {skeletonKeys().map(key => (
+        <Card key={key} style={{ padding: '12px 14px', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 8 }} data-role="capability-skeleton">
+          <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span className="zeokeel-capability-skeleton-block" style={{ width: 32, height: 32, borderRadius: 9, flex: 'none' }} />
+            <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+              <span className="zeokeel-capability-skeleton-block" style={{ width: '38%', height: 12 }} />
+              <span className="zeokeel-capability-skeleton-block" style={{ width: '68%', height: 10 }} />
+            </span>
+          </span>
+          <span className="zeokeel-capability-skeleton-block" style={{ width: '88%', height: 10 }} />
+          <span style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 8 }}>
+            <span className="zeokeel-capability-skeleton-block" style={{ width: 92, height: 24, borderRadius: 8 }} />
+            <span className="zeokeel-capability-skeleton-block" style={{ width: 60, height: 24, borderRadius: 8 }} />
+          </span>
+        </Card>
+      ))}
+    </>
+  )
+
+  /** 空态（唯一实现）：标题按分段/筛选分档，主操作是"去市场"/"查看已安装"/"清除筛选"。 */
+  const renderEmpty = (title: string): React.ReactNode => {
+    const emptyAction = (filter !== 'all' || search.trim() !== '')
+      ? <PanelButton variant="secondary" size="md" onClick={() => { setFilter('all'); setSearch('') }}>{t('capability.clearFilters')}</PanelButton>
+      : tab === 'market'
+        ? <PanelButton variant="secondary" size="md" onClick={() => { setTab('installed') }}>{t('capability.goInstalled')}</PanelButton>
+        : tab === 'own'
+          // 「我上传」为空时没有可上传对象（上传入口在本机草稿卡上）：给“查看全部”
+          // 让作者先找到本机内容，而不是跳到与自己无关的市场。
+          ? <PanelButton variant="primary" size="md" onClick={() => { setTab('all') }}>{t('capability.goAll')}</PanelButton>
+          : <PanelButton variant="primary" size="md" onClick={() => { setTab('market') }}>{t('capability.goMarket')}</PanelButton>
     return (
-      <div style={{ display: 'flex', gap: 8, width: '100%' }}>
-        <PanelButton variant="danger" size="md" style={{ flex: 1 }} disabled={blocked} onClick={() => { void uninstall(item) }}>
-          {busy && action?.kind === 'uninstalling'
-            ? t('capability.uninstalling')
-            : needsOverwriteConfirm(item) ? t('capability.deleteLocal') : t('capability.confirmUninstall')}
-        </PanelButton>
-        <PanelButton variant="secondary" size="md" style={{ flex: 1 }} disabled={busy} onClick={() => { setUninstallConfirmKey(null) }}>{t('capability.cancel')}</PanelButton>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <EmptyState icon={<icons.IconCapability size={22} />} tone="neutral" title={title} action={emptyAction} />
       </div>
     )
   }
 
-  const renderCard = (item: CapabilityItem): React.ReactNode => {
-    const key = `${item.kind}:${item.name}`
-    const busy = action?.key === key && (action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading')
-    // 别的卡片正在装/卸/上传时，本卡片的按钮必须**置灰**：`install()`/`uninstall()`/`upload()`
-    // 第一行是 `action 在飞就 return`，此前按钮外观仍是可点的启用态 ⇒ 慢安装期间其它卡片
-    // 表现为"死按钮"（点了没反应、也没有任何提示，2026-09-21 审计）。
-    const blocked = busy || inFlight
-    const title = item.displayName || item.name
-    const isLocal = item.source === 'local'
-    // 页脚动作的唯一判定（A6/N1）：本机内置（builtin/plugin）行与商店行都不在这里各判一次。
-    const plan = planCardAction(item)
-    /**
-     * 两态说明（R5-B-1 / R5-B-2）都在这里取一次 —— 徽章、置灰、说明文字必须同源，
-     * 否则会出现"卡片说已下架、按钮却是上传"的自相矛盾（正是这两条 finding 的形态）。
-     */
-    const delisted = isDelistedItem(item)
-    const transferred = isTransferredItem(item)
-    return (
-      <Card key={key} interactive muted={item.status === 'rejected' || delisted} style={CARD} className="zeokeel-skill-card">
-        <div style={TITLE_ROW}>
-          <IconTile size={38} radius={12} tone={item.kind === 'skill' ? 'brand' : 'neutral'} label={item.name.charAt(0)} />
-          <div style={NAME_COL}>
-            <div style={NAME_WRAP}>
-              <p style={{ ...NAME }} title={title}>{title}</p>
-              {renderBadges(item)}
-            </div>
-            <p style={META}>
-              {item.author !== '' ? `v${item.version} · ${item.author}` : `v${item.version}`}
-              {/* 运行时名与应用 ID 不一致时显式提示：模型里要 @ 的是运行时名，
-                  此前用户只能装完才发现（如 workspace-cli → dws）。 */}
-              {item.runtimeName !== undefined && item.runtimeName !== '' && item.runtimeName !== item.name
-                ? ` · ${t('capability.runtimeName')}: ${item.runtimeName}`
-                : ''}
-            </p>
-          </div>
-        </div>
-        {item.description !== '' && (
-          <p style={DESC_CLAMP} title={item.description} data-role="card-description">{item.description}</p>
-        )}
-        {item.status === 'rejected' && item.reason !== undefined && item.reason !== '' && (
-          <p style={{ ...META, color: 'var(--dsw-alias-state-error-primary)', whiteSpace: 'pre-wrap' }}>{t('capability.rejectReason', { reason: item.reason })}</p>
-        )}
-        {/* 状态说明（R5-B-1 / R5-B-2）：徽章只给结论，这一行走的是"为什么 + 还能做什么"。
-            应用中心同款位置（`appCenter.publishNewDisabled` 也是卡片里的说明段）。 */}
-        {(delisted || transferred) && (
-          <p
-            style={{ ...META, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}
-            data-role={transferred ? 'card-transferred-reason' : 'card-delisted-reason'}
-          >
-            {transferred ? t('capability.transferredHint') : t('capability.delistedHint')}
-          </p>
-        )}
-        {/* task-4：市场渠道的**新版本要管理员审核后生效** —— 归属人点「上传新版」之前
-            必须知道这一发不会立刻上线（否则会以为上传失败/已生效）。只在这一格真的给出
-            上传动作时出现（判定见 showsMarketReviewHint，与页脚动作同源）。 */}
-        {showsMarketReviewHint(item) && (
-          <p
-            style={{ ...META, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}
-            data-role="card-market-review-hint"
-          >
-            {t('capability.marketReviewHint')}
-          </p>
-        )}
-        {uninstallConfirmKey === key && needsOverwriteConfirm(item) && (
-          <p style={{ ...META, color: 'var(--dsw-alias-state-error-primary)', whiteSpace: 'pre-wrap' }} data-role="local-remove-warning">
-            {/* 两档成因走两句话（R4-B-3）：本机自制 vs 商店装来但被你改过 ——
-                后者说成"本机自制技能"是错的，会让用户以为这份不是从能力中心装的。 */}
-            {overwriteConfirmReason(item) === 'dirty'
-              ? t('capability.confirmUninstallDirty', { name: item.name })
-              : t('capability.confirmUninstallLocal', { name: item.name })}
-          </p>
-        )}
-        <div style={CARD_FOOT}>
-          {/* 页脚动作由 planCardAction 唯一决定（A6/N1）；这里只做按钮映射。 */}
-          {plan.kind === 'uninstall' ? renderUninstall(item, key, busy, blocked)
-            : plan.kind === 'update' ? (
-              // 更新按钮**不传 force**（审计 A15）：走 install() 自己的来源判定 ——
-              // 商店那一份直接更新，本机自制同名内容则先出确认条。
-              <PanelButton variant="primary" size="md" block disabled={blocked || item.official} title={item.official ? t('capability.officialLocked') : undefined} onClick={() => { void install(item) }}>
-                {t('capability.updateTo', { version: plan.version })}
-              </PanelButton>
-            )
-              : plan.kind === 'reupload'
-                ? <PanelButton variant="secondary" size="md" block disabled={blocked} onClick={() => { void upload(item) }}>{t('capability.reupload')}</PanelButton>
-                : plan.kind === 'review'
-                  ? <span style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><Chip tone={plan.status === 'pending' ? 'warn' : 'success'}>{plan.status === 'pending' ? t('capability.awaitingReview') : t('capability.approved')}</Chip></span>
-                  // 已转交（R5-B-2）：这一格**没有**可达动作 —— 上传会被服务端 409 挡下，
-                  // 所以给状态胶囊而不是假按钮（形态与「等待审核」那一档一致）。
-                  : plan.kind === 'transferred'
-                    ? <span style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><Chip tone="warn">{t('capability.transferred')}</Chip></span>
-                    // 已下架且本机没有可卸的一份（R5-B-1）：同样只报状态。
-                    : plan.kind === 'delisted'
-                      ? <span style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><Chip tone="neutral" plain>{t('capability.delisted')}</Chip></span>
-                      // 符号链接形态（R17B-01）：`packSkill` 有意拒收（避免把链接目标里的
-                      // 库外文件打进上传包）⇒ 上传按钮点了必然失败，这一格只标事实。
-                      : plan.kind === 'linked'
-                        ? <span style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><Chip tone="neutral" plain>{t('capability.originSymlink')}</Chip></span>
-                      : plan.kind === 'upload'
-                      ? <PanelButton variant="primary" size="md" block disabled={blocked} onClick={() => { void upload(item) }}>{t(uploadActionLabelKey(item))}</PanelButton>
-                      : <PanelButton variant="primary" size="md" block disabled={blocked} onClick={() => { void install(item) }}>{t('capability.install')}</PanelButton>}
-        </div>
-        {/* 历史版本、描述全文都收在详情弹层里（就地展开会把整行栅格撑高）。 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          <PanelButton variant="ghost" size="sm" icon={<icons.IconInfo size={13} />} onClick={() => { setDetail({ kind: 'item', item }) }}>
-            {t('capability.detail')}
-          </PanelButton>
-          {!isLocal && item.versions.length > 1 && (
-            <span style={{ ...META, margin: 0 }}>{t('capability.viewVersions', { count: String(item.versions.length) })}</span>
-          )}
-        </div>
-      </Card>
-    )
-  }
-
-  const renderEmpty = (text: string): React.ReactNode => (
-    <div style={{ gridColumn: '1 / -1' }}>
-      <EmptyState icon={<icons.IconCapability size={22} />} tone="neutral" title={text} />
-    </div>
-  )
+  /** 分段空态的标题（筛选/搜索生效时统一说"该类型暂无内容"）。 */
+  const emptyTitle = (filter !== 'all' || search.trim() !== '')
+    ? t('capability.emptyFilter')
+    : tab === 'installed'
+      ? t('capability.emptyInstalled')
+      : tab === 'own'
+        ? t('capability.emptyOwn')
+        : tab === 'market'
+          ? t('capability.emptyMarket')
+          : t('capability.emptyAll')
 
   /**
    * 内置技能清单读失败的提示条（判定见 {@link builtinLoadNotice}）：`null` ⇒ 不渲染。
@@ -1908,14 +2457,30 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     </div>
   )
 
-  const renderSection = (key: 'mine' | 'market', emptyText: string): React.ReactNode => {
-    const st = sectionStatus(key)
-    // idle = 尚未发起加载(初始态),与 loading 同样显示 spinner;
-    // error = 错误态 + 重试;ok/loading = 列表或继续等待(可见 byId 更新)。
-    if (st.status === 'idle' || st.status === 'loading') {
-      return <div style={{ gridColumn: '1 / -1' }}><EmptyState icon={<icons.IconRefresh size={22} />} title={t('capability.loading')} /></div>
-    }
-    if (st.status === 'error') {
+  /**
+   * 当前分段的分区渲染：骨架（加载）/ 错误（分区独立）/ 内置卡 + 条目卡，或空态。
+   *
+   * 内置技能按**动作**分流（2026-09-20 用户口径）：`install`（本机没装）⇒ 市场口径、
+   * `update`（本机已装且有新版）⇒ 已安装口径；「全部」两者都出，「我上传」不出
+   * （内置技能不是用户上传的内容）。出卡口径仍由 `planBuiltinCards` 决定。
+   */
+  const renderSection = (which: SourceTab): React.ReactNode => {
+    const primary = primarySectionsFor(which)
+    const settled = primary.every((key) => {
+      const st = sectionStatus(key)
+      return st.status === 'ok' || st.status === 'error'
+    })
+    if (!settled && items.length === 0) return renderSkeleton()
+    // 分区错误态：先看本分区的主取数源（「我上传」优先 own、其余优先 market/mine）。
+    // 错误与重试都**只影响本分区**，其余分区照常（R16B-26 之后的既有口径）。
+    // 「全部」是三个来源的并集：只有**全部主取数源都失败**才把整页换成错误态，
+    // 否则会把一侧可用的数据（例如本机已装）一起藏掉 —— 那正是"分区独立错误态"要避免的。
+    const errored = primary.filter(key => sectionStatus(key).status === 'error')
+    const errorKey = which === 'all'
+      ? (primary.length > 0 && errored.length === primary.length ? errored[0] : undefined)
+      : errored[0]
+    const st = errorKey === undefined ? undefined : sectionStatus(errorKey)
+    if (st !== undefined && st.status === 'error') {
       return (
         <div style={{ gridColumn: '1 / -1' }}>
           <EmptyState
@@ -1927,22 +2492,9 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
         </div>
       )
     }
-    const rows = visibleByTab
-    /**
-     * 内置技能按**动作**分派到两个分区（2026-09-20 用户口径：「默认没安装的应该在
-     * 市场里看到，而不是在『我的』里」）：
-     *   - **`install`（本机还没装）⇒ 「市场」**：它的语义与市场条目一样 ——
-     *     "平台提供了、你可以装"，不属于"我的东西"；
-     *   - **`update`（本机已装、清单有新版）⇒ 「我的」**：本机确实有这一份，
-     *     只是要升级，属于"我的"里的动作。
-     *
-     * 出卡口径（含"已装且清单同版本 ⇒ 不出卡"）全在 `planBuiltinCards` 里；这里只按
-     * 它给出的 `action` 分流，不再自己判定一次（两处各判一次就会出现"某张卡两个
-     * 分区都不出"或"两张同名卡"）。
-     */
-    const builtinCards = builtinCardsForTab(planBuiltinCards({
+    const builtinAll = planBuiltinCards({
       rows: builtin.rows,
-      // 两个事实源取并集：服务端下发的 installed[] + 面板「我的」列表里的本地技能名。
+      // 两个事实源取并集：服务端下发的 installed[] + 面板列表里的本地技能名。
       installedNames: new Set([...builtin.installed, ...localSkillNames]),
       // 本机已装版本（provenance 的安装时版本）——"已装且更旧"就靠它与清单版本对比。
       installedVersions: builtin.versions,
@@ -1950,26 +2502,423 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
       kindFilter: filter,
       busy: builtin.busy,
       failed: builtin.failed,
-    }), key)
-    const cards = planSectionCards({ rows, builtinCards })
+    })
+    const builtinCards = which === 'own'
+      ? []
+      : which === 'market'
+        ? builtinCardsForTab(builtinAll, 'market')
+        : which === 'installed'
+          ? builtinCardsForTab(builtinAll, 'mine')
+          : builtinAll
+    const cards = planSectionCards({ rows: visible, builtinCards })
     // 内置清单读失败 ⇒ 这一条**必须**出现：列表为空时它就是分区内容（否则空分区里
     // 错误与"什么都没有"同形），列表非空时挂在卡片前面（提示这份列表不完整）。
     if (cards.length === 0) {
-      return builtinErrorStrip ?? renderEmpty(filter === 'all' ? emptyText : t('capability.emptyFilter'))
+      return builtinErrorStrip ?? renderEmpty(emptyTitle)
     }
-    // 内置技能排在前面（数量少且是平台自带），其余按既有排序；同名技能的重复卡
+    // 内置技能排在前面（数量少且是平台自带），其余按用户选择的排序；同名技能的重复卡
     // 已在 planSectionCards 里去掉（R2-SK-6）——这里只做渲染，不再自己拼数组。
     return (
       <>
         {builtinErrorStrip}
-        {cards.map(card => (card.type === 'builtin' ? renderBuiltinCard(card.card) : renderCard(card.item)))}
+        {cards.map(card => (card.type === 'builtin'
+          ? (view === 'grid' ? renderBuiltinCard(card.card) : renderBuiltinRow(card.card))
+          : (view === 'grid' ? renderCard(card.item) : renderListRow(card.item))))}
       </>
     )
   }
 
-  // 分区状态驱动内容;全局 loading 已移除(旧实现 setLoading(true) 后同步置
-  // false,React 批处理下 spinner 不可见且掩盖分区错误)。
-  const content = renderSection(tab === 'market' ? 'market' : 'mine', tab === 'market' ? t('capability.emptyMarket') : t('capability.emptyMine'))
+  /**
+   * 详情目标的**实时解析**（盘点 F-54：弹层里的快照会过期）。列表刷新后按
+   * `kind:name` 重新取那一行；行没了（例如刚被卸载/删除）就保留最后一次快照，
+   * 让用户还能看到"它已经不在了"的动作结果。
+   */
+  const resolvedDetail = useMemo(() => {
+    if (detail === null) return null
+    if (detail.kind === 'builtin') return detail
+    const fresh = mergedAll.find(i => i.kind === detail.item.kind && i.name === detail.item.name)
+    return fresh === undefined ? detail : { kind: 'item' as const, item: fresh }
+  }, [detail, mergedAll])
+
+  /**
+   * 页脚动作的**唯一渲染入口**（网格卡、列表行、详情共用）。
+   *
+   * 判定全部来自 {@link planCardActionForTab}（A6/N1）：这里只做按钮映射。更新按钮
+   * **不再因 official 置灰**（盘点 F-09：官方内容有新版时永远升不上去）；上传/卸载
+   * 仍按归属/来源判定（`planCardAction` 的输出不变）。
+   * @param item - 行。
+   * @param plan - 该行在当前分段下的动作。
+   * @param busy - 本行自己的动作在飞。
+   * @param blocked - 站级闸（另有动作在飞）。
+   * @param size - 按钮尺寸（网格 md / 列表 sm / 详情 md）。
+   */
+  const renderCardAction = (
+    item: CapabilityItem,
+    plan: CardActionPlan,
+    busy: boolean,
+    blocked: boolean,
+    size: 'sm' | 'md' = 'md',
+  ): React.ReactNode => {
+    const key = `${item.kind}:${item.name}`
+    // 只读账号（auditor）：宿主对所有写面回 403（§4.5 双保险），渲染"能点但必然失败"
+    // 的按钮是假入口（F-54）—— 这一格只报只读事实，详情按钮仍然可用。
+    if (readOnly) return <Chip tone="neutral" plain>{t('capability.readOnlyBadge')}</Chip>
+    return (
+      plan.kind === 'uninstall' ? renderUninstall(item, key, busy, blocked, size)
+        : plan.kind === 'update' ? (
+          <PanelButton variant="primary" size={size} disabled={blocked} onClick={() => { void install(item) }}>
+            {t('capability.updateTo', { version: plan.version })}
+          </PanelButton>
+        )
+          : plan.kind === 'reupload'
+            ? <PanelButton variant="secondary" size={size} disabled={blocked} onClick={() => { void upload(item) }}>{t('capability.reupload')}</PanelButton>
+            : plan.kind === 'review'
+              ? <Chip tone={plan.status === 'pending' ? 'warn' : plan.status === 'rejected' ? 'danger' : 'success'}>
+                {plan.status === 'pending' ? t('capability.awaitingReview') : plan.status === 'rejected' ? t('capability.rejected') : t('capability.approved')}
+              </Chip>
+              // 已转交（R5-B-2）：这一格**没有**可达动作 —— 上传会被服务端 409 挡下，
+              // 所以给状态胶囊而不是假按钮（形态与「等待审核」那一档一致）。
+              : plan.kind === 'transferred'
+                ? <Chip tone="warn">{t('capability.transferred')}</Chip>
+                // 已下架且本机没有可卸的一份（R5-B-1）：同样只报状态。
+                : plan.kind === 'delisted'
+                  ? <Chip tone="neutral" plain>{t('capability.delisted')}</Chip>
+                  // 符号链接形态（R17B-01）：`packSkill` 有意拒收 ⇒ 这一格只标事实。
+                  : plan.kind === 'linked'
+                    ? <Chip tone="neutral" plain>{t('capability.originSymlink')}</Chip>
+                    : plan.kind === 'upload'
+                      ? <PanelButton variant="primary" size={size} disabled={blocked} onClick={() => { void upload(item) }}>{t(uploadActionLabelKey(item))}</PanelButton>
+                      : <PanelButton variant="primary" size={size} disabled={blocked} onClick={() => { void install(item) }}>{t('capability.install')}</PanelButton>
+    )
+  }
+
+  /**
+   * 「卸载」按钮区（两段式确认）。已装目录行与"本机内置（builtin/plugin）"行共用。
+   * 本机自制内容那一档用 danger 文案（审计 A3）。
+   */
+  const renderUninstall = (item: CapabilityItem, key: string, busy: boolean, blocked: boolean, size: 'sm' | 'md'): React.ReactNode => {
+    if (uninstallConfirmKey !== key) {
+      return <PanelButton variant="secondary" size={size} disabled={blocked} onClick={() => { void uninstall(item) }}>{t('capability.uninstall')}</PanelButton>
+    }
+    return (
+      <span style={{ display: 'flex', gap: 6 }}>
+        <PanelButton variant="danger" size={size} disabled={blocked} onClick={() => { void uninstall(item) }}>
+          {busy && action?.kind === 'uninstalling'
+            ? t('capability.uninstalling')
+            : needsOverwriteConfirm(item) ? t('capability.deleteLocal') : t('capability.confirmUninstall')}
+        </PanelButton>
+        <PanelButton variant="secondary" size={size} disabled={busy} onClick={() => { setUninstallConfirmKey(null) }}>{t('capability.cancel')}</PanelButton>
+      </span>
+    )
+  }
+
+  /** 详情按钮（ghost 图标 + 文案；E2E 按「详情」文案点击）。 */
+  const renderDetailButton = (target: DetailTarget, title: string): React.ReactNode => (
+    <PanelButton
+      variant="ghost"
+      size="sm"
+      icon={<icons.IconInfo size={13} />}
+      aria-label={`${t('capability.detail')} ${title}`}
+      onClick={() => { setDetail(target); setInstallConfirm(null); setUninstallConfirmKey(null); setUploadConfirm(null) }}
+    >
+      {t('capability.detail')}
+    </PanelButton>
+  )
+
+  /**
+   * 卸载覆盖确认的后果说明（两档措辞的唯一入口，R4-B-3 / R19B-07）。
+   *
+   * 只在用户点了「卸载」、确认按钮已换成「仍要删除/确认卸载」时出现 —— 这是**瞬时
+   * 交互提示**，不是卡片常驻状态段落（设计：卡面只留短状态，长说明进详情）。
+   * 两档：本机自制 vs 商店来源但被本地改过；文案全部在字典里（面板无第二份硬编码）。
+   */
+  const renderUninstallWarning = (item: CapabilityItem): React.ReactNode => (
+    <p style={{ ...HINT_TEXT, color: 'var(--dsw-alias-state-error-primary)' }} data-role="local-remove-warning">
+      {overwriteConfirmReason(item) === 'dirty'
+        ? t('capability.confirmUninstallDirty', { name: item.name })
+        : t('capability.confirmUninstallLocal', { name: item.name })}
+    </p>
+  )
+
+  /** 网格卡（普通条目）。 */
+  const renderCard = (item: CapabilityItem): React.ReactNode => {
+    const key = `${item.kind}:${item.name}`
+    const busy = action?.key === key && (action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading')
+    // 别的卡片正在装/卸/上传时，本卡片的按钮必须**置灰**：`install()`/`uninstall()`/
+    // `upload()` 第一行是 `action 在飞就 return`，此前按钮外观仍是可点的启用态 ⇒ 慢
+    // 安装期间其它卡片表现为"死按钮"（2026-09-21 审计）。
+    const blocked = busy || inFlight
+    const title = item.displayName !== '' ? item.displayName : item.name
+    const plan = planCardActionForTab(item, tab)
+    const delisted = isDelistedItem(item)
+    return (
+      <Card
+        key={key}
+        interactive
+        muted={item.status === 'rejected' || delisted}
+        style={CARD}
+        className="zeokeel-skill-card"
+        data-role="capability-card"
+        data-key={key}
+        data-kind={item.kind}
+        data-source={item.source}
+      >
+        <div style={TITLE_ROW}>
+          <IconTile size={36} radius={11} tone={item.kind === 'skill' ? 'brand' : 'neutral'} label={title.charAt(0)} />
+          <div style={NAME_COL}>
+            <div style={NAME_WRAP}>
+              <p style={NAME} title={title}>{title}</p>
+              {cardChips(item, tab).map(renderChipSpec)}
+            </div>
+            {title !== item.name && <p style={SLUG} title={item.name}>{item.name}</p>}
+          </div>
+        </div>
+        {item.description !== '' && (
+          <p style={DESC_CLAMP} title={item.description} data-role="card-description">{item.description}</p>
+        )}
+        {uninstallConfirmKey === key && needsOverwriteConfirm(item) && renderUninstallWarning(item)}
+        <div style={META_ROW}>
+          <span style={META}>{item.author !== '' ? `v${item.version} · ${item.author}` : `v${item.version}`}</span>
+          <span style={{ flex: 1 }} />
+          {cardStatusDots(item, tab).map(renderStatusDot)}
+        </div>
+        <div style={CARD_FOOT}>
+          {renderCardAction(item, plan, busy, blocked)}
+          {renderDetailButton({ kind: 'item', item }, title)}
+        </div>
+      </Card>
+    )
+  }
+
+  /** 列表行（紧凑；与网格卡共用同一套判定与动作）。 */
+  const renderListRow = (item: CapabilityItem): React.ReactNode => {
+    const key = `${item.kind}:${item.name}`
+    const busy = action?.key === key && (action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading')
+    const blocked = busy || inFlight
+    const title = item.displayName !== '' ? item.displayName : item.name
+    const plan = planCardActionForTab(item, tab)
+    return (
+      <Card
+        key={key}
+        interactive
+        muted={item.status === 'rejected' || isDelistedItem(item)}
+        style={LIST_ROW}
+        className="zeokeel-skill-card"
+        data-role="capability-row"
+        data-key={key}
+        data-kind={item.kind}
+        data-source={item.source}
+      >
+        <IconTile size={28} radius={8} tone={item.kind === 'skill' ? 'brand' : 'neutral'} label={title.charAt(0)} />
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <p style={{ ...NAME, fontSize: 13 }} title={title}>{title}</p>
+            <span style={{ ...SLUG, flex: 'none' }} title={item.name}>{item.name}</span>
+            {cardChips(item, tab).map(renderChipSpec)}
+          </span>
+          <p style={LIST_DESC} title={item.description} data-role="card-description">
+            {item.description !== '' ? item.description : (item.runtimeName !== undefined ? `${t('capability.runtimeName')}: ${item.runtimeName}` : '')}
+          </p>
+        </span>
+        <span style={{ flex: 'none', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {cardStatusDots(item, tab).map(renderStatusDot)}
+        </span>
+        <span style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center' }}>
+          {renderCardAction(item, plan, busy, blocked, 'sm')}
+          {renderDetailButton({ kind: 'item', item }, title)}
+        </span>
+      </Card>
+    )
+  }
+
+  /** 内置技能卡（网格）：与普通技能同构（同一套 CARD / 标题行 / 徽章 / 页脚按钮）。 */
+  const renderBuiltinCard = (card: BuiltinCard): React.ReactNode => {
+    const skill = card.skill
+    const key = `builtin:${skill.name}`
+    const title = skill.title !== undefined && skill.title !== '' ? skill.title : skill.name
+    const label = card.action === 'update'
+      ? t('capability.updateTo', { version: skill.version })
+      : t('capability.builtinInstall')
+    const busy = builtin.busy === skill.name
+    return (
+      <Card key={key} interactive style={CARD} className="zeokeel-skill-card"
+        data-role="capability-card" data-key={key} data-kind="skill" data-source="builtin">
+        <div style={TITLE_ROW}>
+          <IconTile size={36} radius={11} tone="brand" label={title.charAt(0)} />
+          <div style={NAME_COL}>
+            <div style={NAME_WRAP}>
+              <p style={NAME} title={title}>{title}</p>
+              <Chip tone="neutral" plain>{t('capability.builtinBadge')}</Chip>
+            </div>
+            <p style={SLUG}>{`v${skill.version}`}</p>
+          </div>
+        </div>
+        {skill.description !== undefined && skill.description !== '' && (
+          <p style={DESC_CLAMP} title={skill.description} data-role="card-description">{skill.description}</p>
+        )}
+        <div style={CARD_FOOT}>
+          {readOnly ? <Chip tone="neutral" plain>{t('capability.readOnlyBadge')}</Chip> : card.state === 'failed' && card.failure !== null ? (
+            <>
+              <span style={{ ...META, flex: 1, color: 'var(--dsw-alias-state-error-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={card.failure}>
+                {card.failure}
+              </span>
+              <PanelButton variant="primary" size="md" disabled={inFlight} onClick={() => { activateBuiltinCard(card) }}>
+                {t('capability.builtinRetry')}
+              </PanelButton>
+            </>
+          ) : (
+            <PanelButton variant="primary" size="md" disabled={inFlight || busy} onClick={() => { activateBuiltinCard(card) }}>{label}</PanelButton>
+          )}
+          {renderDetailButton({ kind: 'builtin', card }, title)}
+        </div>
+      </Card>
+    )
+  }
+
+  /** 内置技能行（列表视图）。 */
+  const renderBuiltinRow = (card: BuiltinCard): React.ReactNode => {
+    const skill = card.skill
+    const key = `builtin:${skill.name}`
+    const title = skill.title !== undefined && skill.title !== '' ? skill.title : skill.name
+    const label = card.action === 'update'
+      ? t('capability.updateTo', { version: skill.version })
+      : t('capability.builtinInstall')
+    return (
+      <Card key={key} interactive style={LIST_ROW} className="zeokeel-skill-card"
+        data-role="capability-row" data-key={key} data-kind="skill" data-source="builtin">
+        <IconTile size={28} radius={8} tone="brand" label={title.charAt(0)} />
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <p style={{ ...NAME, fontSize: 13 }} title={title}>{title}</p>
+            <span style={{ ...SLUG, flex: 'none' }} title={skill.name}>{skill.name}</span>
+            <Chip tone="neutral" plain>{t('capability.builtinBadge')}</Chip>
+          </span>
+          <p style={LIST_DESC} title={skill.description ?? ''} data-role="card-description">
+            {skill.description ?? `v${skill.version}`}
+          </p>
+        </span>
+        <span style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center' }}>
+          {readOnly
+            ? <Chip tone="neutral" plain>{t('capability.readOnlyBadge')}</Chip>
+            : (
+              <PanelButton variant="primary" size="sm" disabled={inFlight || builtin.busy === skill.name} onClick={() => { activateBuiltinCard(card) }}>
+                {label}
+              </PanelButton>
+            )}
+          {renderDetailButton({ kind: 'builtin', card }, title)}
+        </span>
+      </Card>
+    )
+  }
+
+  /** 详情子视图（面板内整页；不再用弹层）。 */
+  const renderDetail = (target: DetailTarget): React.ReactNode => {
+    const busyKey = target.kind === 'builtin' ? `builtin:${target.card.skill.name}` : `${target.item.kind}:${target.item.name}`
+    const busy = action?.key === busyKey && inFlight
+    let actions: React.ReactNode
+    let notice: React.ReactNode
+    if (target.kind === 'item') {
+      actions = renderCardAction(target.item, planCardActionForTab(target.item, tab), busy, inFlight)
+      notice = uninstallConfirmKey === `${target.item.kind}:${target.item.name}` && needsOverwriteConfirm(target.item)
+        ? renderUninstallWarning(target.item)
+        : undefined
+    } else {
+      const card = target.card
+      const label = card.action === 'update'
+        ? t('capability.updateTo', { version: card.skill.version })
+        : t('capability.builtinInstall')
+      actions = readOnly
+        ? <Chip tone="neutral" plain>{t('capability.readOnlyBadge')}</Chip>
+        : (
+          <PanelButton variant="primary" size="md" disabled={inFlight || builtin.busy === card.skill.name} onClick={() => { activateBuiltinCard(card) }}>
+            {label}
+          </PanelButton>
+        )
+      notice = undefined
+    }
+    return (
+      <CapabilityDetailView
+        target={target}
+        busy={busy}
+        blocked={inFlight}
+        readOnly={readOnly}
+        tab={tab}
+        actions={actions}
+        notice={notice}
+        onInstallVersion={version => {
+          if (target.kind !== 'item') return
+          // 不传 overwrite：本机自制同名时先出确认条（审计 A15）；版本随意图一起
+          // 存进确认条，确认后重放的还是这一个版本（A11）。
+          void install(target.item, { version })
+        }}
+        onBack={() => { setDetail(null) }}
+        onClose={() => { setDetail(null) }}
+      />
+    )
+  }
+
+  /**
+   * 覆盖确认条（唯一放行点；列表与详情两个视图共用）。
+   *
+   * 「两个视图共用」是必须的：详情里点历史版本安装时也可能撞上本机同名内容
+   * （审计 A15），只把确认条放进列表视图会让那一发静默停在待确认态。
+   */
+  const renderConfirmStrip = (): React.ReactNode => installConfirm === null ? null : (
+    <Card style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <icons.IconAlert size={15} style={{ color: 'var(--dsw-alias-state-warn-label)' }} />
+      <span style={{ flex: 1, minWidth: 200, fontSize: 13 }}>
+        {confirmStripText(installConfirm)}
+      </span>
+      <PanelButton variant="primary" size="sm" onClick={() => {
+        const pending = installConfirm
+        setInstallConfirm(null)
+        // 重放的是**同一发**安装（含用户在详情视图里点选的版本，审计 A11），
+        // 并且只有这里才把 `?overwrite=1` 交给宿主（用户确认过的唯一凭据）。
+        void pending.run(true)
+      }}>{confirmStripAction(installConfirm)}</PanelButton>
+      <PanelButton variant="secondary" size="sm" onClick={() => { setInstallConfirm(null) }}>{t('capability.cancel')}</PanelButton>
+    </Card>
+  )
+
+  /**
+   * 上传前的确认条（F-32）：把本地预检读到的**将发布版本**先给作者看一眼。
+   *
+   * 列表与详情共用（详情里也能上传），与安装的覆盖确认条同位置、同交互模型：
+   * 只有这里点「发布 vX」才会发真正的那一发（`pending.run()`）。
+   */
+  const renderUploadConfirmStrip = (): React.ReactNode => {
+    if (uploadConfirm === null) return null
+    const copy = uploadPreviewText(uploadConfirm)
+    return (
+      <Card style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-role="upload-version-confirm">
+        <icons.IconInfo size={15} style={{ color: 'var(--dsw-alias-state-business-primary)' }} />
+        <span style={{ flex: 1, minWidth: 220, fontSize: 13 }}>{copy.text}</span>
+        <PanelButton variant="primary" size="sm" data-action="upload-confirm" onClick={() => {
+          const pending = uploadConfirm
+          setUploadConfirm(null)
+          void pending.run()
+        }}>{copy.action}</PanelButton>
+        <PanelButton variant="secondary" size="sm" onClick={() => { setUploadConfirm(null) }}>{t('capability.cancel')}</PanelButton>
+      </Card>
+    )
+  }
+
+  /** 动作结果条（终态；与确认条同位置，出现时滚进视口）。 */
+  const renderResultStrip = (): React.ReactNode => action === null || action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading' ? null : (
+    <Card style={{ padding: '9px 14px', borderRadius: 12, marginBottom: 12, fontSize: 13, color: action.kind === 'failed' ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-state-success-primary)' }}>
+      {action.kind === 'done-install'
+        ? t('capability.installedName', { name: action.name ?? '' })
+        : action.kind === 'done-uninstall'
+          ? t('capability.uninstalledName', { name: action.name ?? '' })
+          : action.kind === 'done-upload'
+            ? action.version !== undefined && action.version !== ''
+              ? t('capability.uploadedVersionName', { name: action.name ?? '', version: action.version })
+              : t('capability.uploadedName', { name: action.name ?? '' })
+            : t('capability.failed', { error: action.error ?? '' })}
+    </Card>
+  )
+
+  const content = renderSection(tab)
 
   return (
     <div className="zeokeel-capability" data-role="capability-page">
@@ -1980,20 +2929,25 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
         backLabel={t('capability.backToChat')}
         onClose={onClose}
         width={1180}
-        toolbar={(
+        actions={(
+          <PanelButton variant="secondary" size="sm" icon={<icons.IconRefresh size={13} />} aria-label={t('capability.refresh')} title={t('capability.refresh')} onClick={() => { loadAll() }} />
+        )}
+        toolbar={resolvedDetail === null ? (
           <div style={PANEL_TOOLBAR}>
             <SegmentedControl
               ariaLabel={t('capability.title')}
               value={tab}
               options={[
-                { value: 'mine' as const, label: t('capability.tabMine') },
-                { value: 'market' as const, label: t('capability.tabMarket') },
+                { value: 'all' as const, label: t('capability.tabAll'), count: counts.all },
+                { value: 'installed' as const, label: t('capability.tabInstalled'), count: counts.installed },
+                { value: 'own' as const, label: t('capability.tabOwn'), count: counts.own },
+                { value: 'market' as const, label: t('capability.tabMarket'), count: counts.market },
               ]}
               onChange={next => {
                 setTab(next)
-                setFilter('all')
                 setInstallConfirm(null)
                 setUninstallConfirmKey(null)
+                setUploadConfirm(null)
               }}
             />
             <span style={{ display: 'flex', gap: 4 }}>
@@ -2003,6 +2957,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
                   type="button"
                   className="zeokeel-chipbtn"
                   data-active={filter === f ? 'true' : 'false'}
+                  data-role={`capability-type-${f}`}
                   style={FILTER}
                   onClick={() => { setFilter(f) }}
                 >
@@ -2019,57 +2974,61 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
               aria-label={t('capability.searchPlaceholder')}
               style={PANEL_SEARCH}
             />
-          </div>
-        )}
-      >
-        {/* 结果条/确认条挂在滚动区顶部，出现时滚进视口（见 noticeRef 的注释）。 */}
-        <div ref={noticeRef}>
-        {installConfirm !== null && (
-          <Card style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <icons.IconAlert size={15} style={{ color: 'var(--dsw-alias-state-warn-label)' }} />
-            <span style={{ flex: 1, minWidth: 200, fontSize: 13 }}>
-              {confirmStripText(installConfirm)}
+            <select
+              value={sort}
+              aria-label={t('capability.sortLabel')}
+              title={t('capability.sortLabel')}
+              onChange={event => { setSort(event.target.value as SortKey) }}
+              style={SORT_SELECT}
+            >
+              <option value="updated">{t('capability.sortUpdated')}</option>
+              <option value="name">{t('capability.sortName')}</option>
+              <option value="downloads">{t('capability.sortDownloads')}</option>
+            </select>
+            <span style={{ display: 'flex', gap: 4 }} role="group" aria-label={t('capability.viewGrid')}>
+              <PanelButton
+                variant={view === 'grid' ? 'secondary' : 'ghost'}
+                size="sm"
+                aria-label={t('capability.viewGrid')}
+                aria-pressed={view === 'grid'}
+                onClick={() => { setView('grid') }}
+              >
+                <span aria-hidden="true">{'▦'}</span>
+              </PanelButton>
+              <PanelButton
+                variant={view === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                aria-label={t('capability.viewList')}
+                aria-pressed={view === 'list'}
+                onClick={() => { setView('list') }}
+              >
+                <span aria-hidden="true">{'☰'}</span>
+              </PanelButton>
             </span>
-            <PanelButton variant="primary" size="sm" onClick={() => {
-              const pending = installConfirm
-              setInstallConfirm(null)
-              // 重放的是**同一发**安装（含用户在详情弹层里点选的版本，审计 A11），
-              // 并且只有这里才把 `?overwrite=1` 交给宿主（用户确认过的唯一凭据）。
-              void pending.run(true)
-            }}>{confirmStripAction(installConfirm)}</PanelButton>
-            <PanelButton variant="secondary" size="sm" onClick={() => { setInstallConfirm(null) }}>{t('capability.cancel')}</PanelButton>
+            {readOnly && <Chip tone="warn" title={t('capability.readOnlyHint')}>{t('capability.readOnlyBadge')}</Chip>}
+            <span style={{ ...META, margin: 0 }} data-role="capability-result-count">
+              {t('capability.resultCount', { count: String(resultCountWithBuiltin(visible.length, visibleBuiltinCount)) })}
+            </span>
+          </div>
+        ) : undefined}
+      >
+        {readOnly && (
+          <Card style={{ padding: '8px 14px', borderRadius: 12, marginBottom: 12, fontSize: 12, color: 'var(--dsw-alias-label-secondary)' }} data-role="capability-readonly">
+            <Chip tone="warn">{t('capability.readOnlyBadge')}</Chip>
+            {' '}
+            {t('capability.readOnlyHint')}
           </Card>
         )}
-        {action !== null && action.kind !== 'installing' && action.kind !== 'uninstalling' && action.kind !== 'uploading' && (
-          <Card style={{ padding: '9px 14px', borderRadius: 12, marginBottom: 12, fontSize: 13, color: action.kind === 'failed' ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-state-success-primary)' }}>
-            {action.kind === 'done-install'
-              ? t('capability.installedName', { name: action.name ?? '' })
-              : action.kind === 'done-uninstall'
-                ? t('capability.uninstalledName', { name: action.name ?? '' })
-                : action.kind === 'done-upload'
-                  ? t('capability.uploadedName', { name: action.name ?? '' })
-                  : t('capability.failed', { error: action.error ?? '' })}
-          </Card>
+        {resolvedDetail !== null ? (<div ref={noticeRef}>{renderConfirmStrip()}{renderUploadConfirmStrip()}{renderResultStrip()}{renderDetail(resolvedDetail)}</div>) : (
+          <>
+            {/* 结果条/确认条挂在滚动区顶部，出现时滚进视口（见 noticeRef 的注释）。 */}
+            <div ref={noticeRef}>{renderConfirmStrip()}{renderUploadConfirmStrip()}{renderResultStrip()}</div>
+            {view === 'grid'
+              ? <div style={PANEL_GRID} data-role="capability-grid">{content}</div>
+              : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-role="capability-list">{content}</div>}
+          </>
         )}
-        </div>
-        <div style={PANEL_GRID} data-role="capability-grid">{content}</div>
       </PanelPage>
-      {detail !== null && (
-        <CapabilityDetailDialog
-          target={detail}
-          busy={action?.key === (detail.kind === 'item' ? `${detail.item.kind}:${detail.item.name}` : `builtin:${detail.card.skill.name}`)}
-          // 站级闸：`install()` 对"有动作在飞"静默 return，弹层按钮必须与它同源禁用
-          //（审计 C-03）。详情本身仍可打开 —— 看详情不该被别的动作禁止。
-          blocked={inFlight}
-          onInstallVersion={version => {
-            if (detail.kind !== 'item') return
-            // 不传 overwrite：本机自制同名时先出确认条（审计 A15）；版本随意图一起
-            // 存进确认条，确认后重放的还是这一个版本（A11）。
-            void install(detail.item, { version })
-          }}
-          onClose={() => { setDetail(null) }}
-        />
-      )}
     </div>
   )
 }

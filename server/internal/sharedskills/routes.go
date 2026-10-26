@@ -40,8 +40,7 @@ const (
 	MaxBodyBytes      = 24 << 20
 )
 
-// pendingCap is the per-author cap on rows awaiting review.
-const pendingCap = 10
+// 待审配额取 serverstore 的唯一真源（F-47：此前与 agentshare 各写一份 10）。
 
 // maxDescriptionLen bounds display metadata (both surfaces).
 const maxDescriptionLen = 500
@@ -345,6 +344,16 @@ func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "请求体格式错误")
 			return
 		}
+		// F-41（能力中心审计 2026-10-26，P3）：请求体里的 `version` 与智能体侧
+		// 同口径 —— **只做形状校验，版本以包内 SKILL.md 为准**（包内即真相）。
+		// 修前技能侧完全不校验该字段（智能体侧校验后忽略），同一份客户端在两个
+		// 上传面得到不同待遇：`{"version":"garbage"}` 在技能侧静默成功、在智能体侧
+		// 400。现在两面都校验形状、都以包内版本为准（旧客户端硬编码 1.0.0 仍可用）。
+		if req.Version != "" && !skillmanifest.IsVersion(req.Version) {
+			serverauth.WriteError(c, http.StatusBadRequest, skillmanifest.CodeInvalidVersion,
+				"版本号不合法:必须是 x.y.z(可带 -rc.1 预发布后缀)")
+			return
+		}
 		if !skillmanifest.IsAppID(req.Name) {
 			serverauth.WriteError(c, http.StatusBadRequest, skillmanifest.CodeInvalidAppID,
 				"技能名不合法:必须是小写 kebab-case(如 my-skill),且与 SKILL.md 的 name 一致")
@@ -379,7 +388,7 @@ func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 			Channel:    "",
 			Archive:    parsed.raw,
 			Publisher:  u.Username,
-			PendingCap: pendingCap,
+			PendingCap: serverstore.MaxPendingPerAuthor,
 			Manifest:   parsed.manifest,
 			Checksum:   parsed.checksum,
 		})
@@ -485,8 +494,9 @@ func listAll(db *sql.DB) gin.HandlerFunc {
 func decide(db *sql.DB, status serverstore.SharedSkillStatus, auditAction string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name, version := c.Param("name"), c.Param("version")
-		row, err := serverstore.GetSharedSkill(db, name, version)
-		if err != nil {
+		// 只用于「版本不存在 ⇒ 404」的顺序路径判定;状态迁移/冻结/投影全部交给
+		// 下面的 ReviewPending(唯一实现,见 F-13)。
+		if _, err := serverstore.GetSharedSkill(db, name, version); err != nil {
 			if errors.Is(err, serverstore.ErrNotFound) {
 				serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "技能不存在")
 				return
@@ -513,119 +523,103 @@ func decide(db *sql.DB, status serverstore.SharedSkillStatus, auditAction string
 				return
 			}
 		}
-		// 决策 2026-08-25:审核通过前检测跨源同名——市场技能表已有同名技能
-		// 时,approve 拒绝(409),要求管理员先处理市场技能或驳回该共享技能。
-		if status == serverstore.SharedSkillApproved {
-			conflict, err := serverstore.SkillNameExists(db, name)
-			if err != nil {
-				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
-				return
-			}
-			if conflict {
-				serverauth.WriteError(c, http.StatusConflict, "CONFLICT", "名称与市场技能冲突,请先处理市场技能或驳回该共享技能")
-				return
-			}
-		}
-		// agentshare-3:共享库只审核组织渠道行。放在跨源冲突检测之后,让
-		// 「approve 一个市场同名行」保持原有的 409 CONFLICT 语义(两者都是
-		// 拒绝,只是码不同);reject 没有冲突检测,直接由这里 404。
+		// agentshare-3 / F-16(能力中心审计 2026-10-26,P2):渠道守卫必须**先于**
+		// 一切存在性判定。
+		//
+		// 修前这里先跑 `serverstore.SkillNameExists`(市场渠道同名 ⇒ 409
+		// CONFLICT),再跑渠道守卫(非组织行 ⇒ 404)。于是同一个
+		// `POST /shared-skills/:name/:version/approve` 对「市场渠道存在该名字」
+		// 回 409、对「该名字根本不存在」回 404 —— 管理员(或任何有
+		// capability:write 的角色)可以据此**枚举市场行的存在性**,而同端口的
+		// reject 恒 404,两个动作对同一输入给出不同答案。
+		//
+		// 现在:渠道守卫在前 ⇒ 市场行与不存在逐字节同形 404(与 reject 同形,
+		// 不泄露渠道)。原有的跨源同名冲突检测随之不可达并删除 —— 同名不可能
+		// 并存:apps 以 (kind, app_id) 唯一,组织行存在时市场行不可能存在,
+		// 反之亦然(F-45 同时删掉了唯一调用点 SkillNameExists)。
 		if !requireOrgSkill(c, db, name) {
 			return
 		}
-		// 下架冻结(第五轮审计 R5-B-1,2026-09-23):下架(apps.enabled=0)期间
-		// **不得把待审版本置为 approved** —— 否则会产出「已批准但任何人(含
-		// 作者)在员工面都看不见」的版本,管理员在审批队列里点一次「通过」,
-		// 使用侧毫无变化。
+		// F-13(能力中心审计 2026-10-26,P2):审核落定的**唯一实现**是
+		// `serverstore.ReviewPending` —— 状态迁移 + 下架冻结(approve 的 UPDATE 里
+		// 原子要求 `apps.enabled = 1`,F-14)+ 拒绝即释放归档 + apps 展示投影重算,
+		// 一次调用全部完成。
 		//
-		// 判据唯一实现在 serverstore.Distribution.Writable()(见
-		// serverstore/distribution.go 的语义权威),与发布内核(appstore.Publish)
-		// 共用:上传与审批在同一时刻对同一状态给出同一答案。**只挡 approve**:
-		// reject 不是分发动作(拒绝一个待审版本不会让任何内容生效),下架期间
-		// 仍应允许管理员清理队列。
+		// 修前本函数手写这一整段(与 agentshare 的两处审核面各写一份),三份实现的
+		// 漂移面正是 F-13 记的账:一面记得重算投影、另一面忘记;一面把下架冻结做成
+		// check-then-act、另一面写进 WHERE。现在技能/智能体/市场三面只调这一个函数,
+		// 与 `docs/agent/architecture.md` §3 的"唯一实现"纪律同形。
 		//
-		// 出口是管理员显式重新上架(PUT …/:name/enabled,带审计),不是审批时
-		// 自动上架 —— 后者会让一位管理员静默撤销另一位管理员的下架动作。
-		if status == serverstore.SharedSkillApproved {
-			dist, derr := serverstore.AppDistribution(db, serverstore.AppKindSkill, name)
-			if derr != nil {
-				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
-				return
-			}
-			if !dist.Writable() {
+		// 保留在本函数里的只有**渠道相关的**前置判定(组织行守卫、拒绝理由校验):
+		// 它们判的是"这次请求有没有资格落到那一行",三种渠道各不相同,ReviewPending
+		// 的契约明确不包含它。
+		//
+		// 错误映射与 ReviewPending 的文档逐条对应:
+		//   ErrNotFound ⇒ 404(版本不存在/已软删)
+		//   ErrAppDelisted ⇒ 409 APP_DELISTED(approve 打到已下架 App)
+		//   ErrReleaseArchiveCleared ⇒ 409 ARCHIVE_CLEARED(拒绝过,归档已释放)
+		//   ErrReleaseApprovedNotRejectable ⇒ 409(拒绝正在服务的版本 = 销毁归档)
+		//   其余 ⇒ 500(投影重算失败也是这一类:状态已落库,请管理员重试,幂等)
+		if err := serverstore.ReviewPending(db, serverstore.AppKindSkill, name, version,
+			status == serverstore.SharedSkillApproved, reason); err != nil {
+			switch {
+			case errors.Is(err, serverstore.ErrNotFound):
+				serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "技能不存在")
+			case errors.Is(err, serverstore.ErrAppDelisted):
 				serverauth.WriteError(c, http.StatusConflict, appstore.CodeAppDelisted,
 					"该技能已下架，无法通过审核：请先重新上架再审核")
-				return
-			}
-		}
-		// F2-N3 / N-4 / ID-01(2026-09-23):与 agentshare 侧同一条不变量 ——
-		// 审核通过意味着版本对员工可见可安装,必须有归档字节;而**审核拒绝
-		// 只能作用于尚未生效的待审版本** —— approved 版本可能正在服务、也可能
-		// 是唯一可回滚的历史版本,对它执行拒绝会在同一条 UPDATE 里永久释放
-		// 归档字节并烧掉版本号(不可恢复)。
-		//
-		// 那条前置条件的**唯一实现**在 DAO(serverstore.SetReleaseStatusForReview
-		// 的 `AND status <> 'approved'`),本函数不再自己判一遍状态位:三份
-		// check-then-act 守卫正是 ID-01 的根因(只有 WASM 面写了那一份)。
-		// 下面这个「归档为空」的预检只是**顺序路径**的友好 409 文案,并发下的
-		// 真正防线是 DAO 的条件 UPDATE(见 apps.go)。
-		// 拒绝不再单独调用 DeleteSharedSkillArchive:拒绝与释放归档已经在
-		// 同一条 UPDATE 里完成(否则「置 rejected」与「清 archive」之间仍有
-		// 一个可被并发 approve 穿过的窗口)。
-		if status == serverstore.SharedSkillApproved && len(row.Archive) == 0 {
-			serverauth.WriteError(c, http.StatusConflict, "ARCHIVE_CLEARED",
-				"该版本归档已在拒绝时清理,无法再通过审核(拒绝即释放存储):请让作者上传新版本")
-			return
-		}
-		if err := serverstore.SetReleaseStatusForReview(db, serverstore.AppKindSkill, name, version, string(status), reason); err != nil {
-			if errors.Is(err, serverstore.ErrReleaseArchiveCleared) {
+			case errors.Is(err, serverstore.ErrReleaseArchiveCleared):
 				serverauth.WriteError(c, http.StatusConflict, "ARCHIVE_CLEARED",
 					"该版本归档已在拒绝时清理,无法再通过审核(拒绝即释放存储):请让作者上传新版本")
-				return
-			}
-			// ID-01:拒绝一个已通过审核的版本 = 销毁正在服务的归档字节,必须
-			// 409 并指路(下架可逆)。文案取自 serverstore 的共享常量,与
-			// agentshare / wasmapp 三面逐字一致。
-			if errors.Is(err, serverstore.ErrReleaseApprovedNotRejectable) {
+			case errors.Is(err, serverstore.ErrReleaseApprovedNotRejectable):
 				serverauth.WriteError(c, http.StatusConflict, serverstore.CodeReleaseNotRejectable,
 					serverstore.MsgReleaseNotRejectable+"。"+serverstore.HintReleaseNotRejectable)
-				return
+			default:
+				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "更新失败")
 			}
-			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "更新失败")
 			return
 		}
-		// 审核落定之后把 apps 行的**展示投影**重算为"最新 approved 版本"
-		// (审计 2026-09-23 G-P2-3):approve 让新版本生效 ⇒ 投影切到它;
-		// reject 让被拒版本永不生效 ⇒ 投影恢复成仍在生效的那一版。漏掉这一步
-		// 会让"待审时被刻意冻结的投影"永远停在旧值/脏值上(WASM 面早就有
-		// recomputeProjection,本面从未接)。实现与理由见
-		// serverstore.RecomputeAppProjection(app_releases 是三面共用的真相表)。
-		//
-		// 失败语义:状态已经落库,只是投影没跟上 —— 这不是"审核失败"而是平台侧
-		// 写入故障,如实回 500 请管理员重试(重试会再次走到这里,幂等)。
-		if _, perr := serverstore.RecomputeAppProjection(db, serverstore.AppKindSkill, name); perr != nil {
-			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL",
-				"审核结果已落库,但技能投影更新失败(请重试一次)")
-			return
-		}
-		_ = serverstore.AuditLog(db, adminUsername(c), auditAction, name+"@"+version)
+		// F-44(2026-10-26):审核审计带 app_id —— 审计日志的 app 维度可检索,与 WASM 面
+		// 同口径(AuditLogApp 会校验/归一化 app_id 再入链)。
+		_ = serverstore.AuditLogApp(db, name, adminUsername(c), auditAction, name+"@"+version)
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
+
+// remove 删除一个**尚未生效**的版本(pending/rejected)。
+//
+// F-01(能力中心 P0,2026-10-26):已通过审核的版本**不可删除** —— 删除会在
+// 同一条 UPDATE 里把 archive 置 NULL(不可恢复),正在服务的版本立刻无法安装,
+// 而 apps 投影仍停在旧标题上。判定唯一实现在 serverstore.DeleteReleaseUnlessApproved
+// (SQL 谓词 `status <> 'approved'`),此处只做错误码映射;要停止提供请用下架
+// (PUT …/:name/enabled,可逆)。
+//
+// 删除后重算投影:apps 行是目录对全员下发的投影(app_releases 才是真相),
+// 任何版本增减都让"投影 = 最高 approved 版本"这条不变量重新成立一次。虽然
+// pending/rejected 本就不参与投影,这里仍显式重算 —— 与 decide/approve 同一
+// 收尾纪律(缺了它,历史上被写脏的投影行没有任何自愈路径)。
 func remove(db *sql.DB, cacheDir string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name, version := c.Param("name"), c.Param("version")
 		if !requireOrgSkill(c, db, name) {
 			return
 		}
-		if err := serverstore.DeleteSharedSkill(db, name, version); err != nil {
+		if err := serverstore.DeleteSharedSkillVersion(db, name, version); err != nil {
 			if errors.Is(err, serverstore.ErrNotFound) {
 				serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "技能不存在")
+				return
+			}
+			// F-01:approved 版本不可删除(409 + 明确错误码 + 指路可逆动作)。
+			if errors.Is(err, serverstore.ErrReleaseApprovedNotDeletable) {
+				serverauth.WriteError(c, http.StatusConflict, serverstore.CodeReleaseNotDeletable,
+					serverstore.MsgReleaseNotDeletable+"。"+serverstore.HintReleaseNotDeletable)
 				return
 			}
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "删除失败")
 			return
 		}
-		_ = serverstore.DeleteSharedSkillArchive(db, name, version)
+		// 归档已在上面那条软删 UPDATE 里随 deleted_at 一起置 NULL(原子),
+		// 不再补第二条 UPDATE —— 两条语句之间正是被并发 approve 穿过的窗口。
 		// 授权清理:授权按 name 生效(同名多版本共享),因此只有该 name 下
 		// **已无其它未删版本**时才清空——P2-10:此前删一个历史版本即静默
 		// 撤销全员对剩余版本的访问。计数失败时保守跳过(不误撤销)。
@@ -639,7 +633,14 @@ func remove(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		if safe != "" && util.SafePathSegment(name) && util.SafePathSegment(version) {
 			_ = os.Remove(filepath.Join(cacheDir, safe))
 		}
-		_ = serverstore.AuditLog(db, adminUsername(c), "shared_skill_delete", name+"@"+version)
+		// 投影重算失败不回滚删除(已经落库),如实回 500 请管理员重试:
+		// 重试会再次走到这里,幂等。
+		if _, perr := serverstore.RecomputeAppProjection(db, serverstore.AppKindSkill, name); perr != nil {
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL",
+				"版本已删除,但技能投影更新失败(请重试一次)")
+			return
+		}
+		_ = serverstore.AuditLogApp(db, name, adminUsername(c), "shared_skill_delete", name+"@"+version)
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
@@ -739,7 +740,7 @@ func setQuality(db *sql.DB) gin.HandlerFunc {
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "更新失败")
 			return
 		}
-		_ = serverstore.AuditLog(db, adminUsername(c), "shared_skill_qualify", name+"@"+version+"="+req.Quality)
+		_ = serverstore.AuditLogApp(db, name, adminUsername(c), "shared_skill_qualify", name+"@"+version+"="+req.Quality)
 		c.JSON(http.StatusOK, gin.H{"ok": true, "quality": req.Quality})
 	}
 }

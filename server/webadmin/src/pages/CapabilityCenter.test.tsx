@@ -44,7 +44,7 @@ beforeEach(() => {
     return {}
   })
   // 页面按 permissions 收敛(体验层):给足读权限,免得用例被"没有权限"分支短路。
-  setCurrentAdmin({ role: 'super_admin', permissions: ['market:read', 'capability:read', 'capability:write'] })
+  setCurrentAdmin({ role: 'super_admin', permissions: ['market:read', 'market:write', 'capability:read', 'capability:write'] })
 })
 
 function renderPage(initialEntry = '/capabilities') {

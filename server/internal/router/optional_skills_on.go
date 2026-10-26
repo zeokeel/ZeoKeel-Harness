@@ -149,7 +149,11 @@ func registerMarketAdminRoutes(authed *gin.RouterGroup, d Deps) {
 	}
 	serverauth.AdminRoute(authed, "GET", "/skills", serverauth.PermMarketRead, d.Market.ListSkillsAdmin)
 	serverauth.AdminRoute(authed, "POST", "/skills", serverauth.PermMarketWrite, d.Market.CreateSkillAdmin)
-	serverauth.AdminRoute(authed, "POST", "/skills/:name/archive", serverauth.PermMarketWrite, d.Market.UploadSkillArchiveAdmin)
+	// F-05(能力中心审计 2026-10-26,P1):管理员直发/规范化内容**发布即 approved**,
+	// 与审批队列(POST …/:version/approve)是同一条审核门,必须同权。
+	// 此前这里挂 market:write(运营),形成「能直发、不能审批」的权限反转；
+	// 现在统一为 capability:write,由 serverauth 的角色表保证 super_admin 不变。
+	serverauth.AdminRoute(authed, "POST", "/skills/:name/archive", serverauth.PermCapabilityWrite, d.Market.UploadSkillArchiveAdmin)
 	serverauth.AdminRoute(authed, "PUT", "/skills/:name", serverauth.PermMarketWrite, d.Market.UpdateSkillAdmin)
 	serverauth.AdminRoute(authed, "DELETE", "/skills/:name", serverauth.PermMarketWrite, d.Market.DeleteSkillAdmin)
 	serverauth.AdminRoute(authed, "POST", "/skills/:name/enable", serverauth.PermMarketWrite, d.Market.EnableSkillAdmin)
@@ -161,7 +165,8 @@ func registerMarketAdminRoutes(authed *gin.RouterGroup, d Deps) {
 	// /agent-presets/:name/:version/archive。权限与同命名空间既有下载面一致
 	// (GET /skills/:name/file、/agents/:name/file 都是 market:read)。
 	serverauth.AdminRoute(authed, "GET", "/skills/:name/archive", serverauth.PermMarketRead, d.Market.DownloadSkillArchiveAdmin)
-	serverauth.AdminRoute(authed, "POST", "/skills/:name/normalize", serverauth.PermMarketWrite, d.Market.NormalizeSkillAdmin)
+	// normalize 同样落库为 approved(AdminPublish=true) ⇒ 与 archive 同权。
+	serverauth.AdminRoute(authed, "POST", "/skills/:name/normalize", serverauth.PermCapabilityWrite, d.Market.NormalizeSkillAdmin)
 	// 市场智能体管理(G4 2026-09-04):与市场技能同构。
 	//
 	// 渠道边界(A-8,2026-09-23 第三轮审计):这一片是**市场命名空间**,只服务
@@ -173,7 +178,7 @@ func registerMarketAdminRoutes(authed *gin.RouterGroup, d Deps) {
 	// 由 `TestAgentAdminRoutesAreMarketOnlyOrRegistered` 与运行时路由表双向对拍。
 	serverauth.AdminRoute(authed, "GET", "/agents", serverauth.PermMarketRead, d.Market.ListAgentsAdmin)
 	serverauth.AdminRoute(authed, "POST", "/agents", serverauth.PermMarketWrite, d.Market.CreateAgentAdmin)
-	serverauth.AdminRoute(authed, "POST", "/agents/:name/archive", serverauth.PermMarketWrite, d.Market.UploadAgentArchiveAdmin)
+	serverauth.AdminRoute(authed, "POST", "/agents/:name/archive", serverauth.PermCapabilityWrite, d.Market.UploadAgentArchiveAdmin)
 	serverauth.AdminRoute(authed, "PUT", "/agents/:name", serverauth.PermMarketWrite, d.Market.UpdateAgentAdmin)
 	serverauth.AdminRoute(authed, "DELETE", "/agents/:name", serverauth.PermMarketWrite, d.Market.DeleteAgentAdmin)
 	serverauth.AdminRoute(authed, "POST", "/agents/:name/enable", serverauth.PermMarketWrite, d.Market.EnableAgentAdmin)

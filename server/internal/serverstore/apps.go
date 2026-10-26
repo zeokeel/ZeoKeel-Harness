@@ -179,15 +179,22 @@ func RecomputeAppProjection(db *sql.DB, kind, appID string) (string, error) {
 		return "", err
 	}
 	var version, title, description string
-	err = tx.QueryRow(`SELECT version, title, description FROM app_releases
-		WHERE kind = ? AND app_id = ? AND status = ? AND deleted_at IS NULL
-		ORDER BY id DESC LIMIT 1`, kind, appID, ReleaseStatusApproved).
-		Scan(&version, &title, &description)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
+	// F-04(2026-10-26):投影必须与**交付**同一口径 —— 生效版本 = 版本号最大的
+	// approved 版本,由 PickCurrentRelease 唯一判定。此前这里写的是
+	// `ORDER BY id DESC LIMIT 1`:版本号乱序批准时(先批准 v2.0.0、后批准补发的
+	// v1.9.0),投影取 id 更大的 v1.9.0 而下载面取 semver 最大的 v2.0.0 ——
+	// 目录标题/描述与员工实际装到的内容分叉,且没有自愈路径。
+	//
+	// 取数走 ListReleasesOn/PickCurrentRelease(与 currentRelease 同一实现),
+	// 不在这里重写第二条比较规则:两份判据就是下一次漂移的落点。
+	releases, lerr := ListReleasesOn(tx, kind, appID)
+	if lerr != nil {
+		return "", lerr
+	}
+	if best := PickCurrentRelease(releases); best != nil {
+		version, title, description = best.Version, best.Title, best.Description
+	} else {
 		version, title, description = "", appID, ""
-	case err != nil:
-		return "", err
 	}
 	if _, err := tx.Exec(`UPDATE apps SET title = ?, description = ?, updated_at = `+NowExpr()+`
 		WHERE kind = ? AND app_id = ? AND (title <> ? OR description <> ?)`,
@@ -198,6 +205,79 @@ func RecomputeAppProjection(db *sql.DB, kind, appID string) (string, error) {
 		return "", err
 	}
 	return version, nil
+}
+
+// 硬删「空壳 App」的错误语义(F-02,能力中心审计 2026-10-26)。
+//
+// 背景:管理端「新建」只登记 App 身份(POST /skills、POST /agents),
+// 内容另一步上传;打错名字/放弃后,**没有任何路径**能把这一行删掉 ——
+// 名称被永久占用且跨渠道互斥(市场占名同时挡组织同名),只能改库。
+//
+// 安全边界(产品语义,不是调用方礼貌):只有**从未生效**的空壳才可以硬删 ——
+// 存在任何未软删版本(含 pending/approved)时必须先正常处理(下架/删除版本),
+// 官方归属的内容不允许释放(蓝标内容的身份归平台,删掉等于静默下架)。
+var (
+	// ErrAppHasReleases:该 App 仍有未软删版本 ⇒ 不是空壳。
+	ErrAppHasReleases = errors.New("app still has releases")
+	// ErrAppOfficial:官方归属的 App 不可硬删。
+	ErrAppOfficial = errors.New("official app cannot be deleted")
+)
+
+// DeleteEmptyApp 硬删一个**空壳** App(释放被占用的名称),并清理其授权。
+//
+// 允许条件(全部满足):kind ∈ {skill, agent};App 存在;没有未软删版本;
+// 非官方归属。任何一条不满足都返回 sentinel(调用方映射 404/409/400)。
+//
+// 事务内 `SELECT ... FOR UPDATE` 锁住 apps 行后再数版本:与发布内核的
+// 「占名 + 建版本」在同一事务里完成不同,这里的读-删必须原子 —— 否则
+// "判定为空壳"与"另一路径刚好发布了首版"会交错,把刚发布的内容连行删掉。
+//
+// 为什么连同软删版本墓碑一起消失:app_releases 对 apps 有 `ON DELETE CASCADE`,
+// 软删行的 archive 早已置 NULL、且不在任何读面出现;硬删释放名称时按唯一
+// 约束连墓碑一起清掉(版本号因此可被同名新 App 重新使用 —— 这正是"释放名称"
+// 的产品含义,被软删版本的版本号不再有意义)。仍需要历史时用审计日志追溯。
+func DeleteEmptyApp(db *sql.DB, kind, appID string) error {
+	if kind != AppKindSkill && kind != AppKindAgent {
+		// WASM 应用有独立的生命周期(purge 两阶段 + 数据清理),不走本入口。
+		return ErrValidation
+	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // Commit 之后是 no-op
+	var official int
+	err = tx.QueryRow(`SELECT official FROM apps WHERE kind = ? AND app_id = ? FOR UPDATE`,
+		kind, appID).Scan(&official)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var active int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM app_releases
+		WHERE kind = ? AND app_id = ? AND deleted_at IS NULL`, kind, appID).Scan(&active); err != nil {
+		return err
+	}
+	if active > 0 {
+		return ErrAppHasReleases
+	}
+	if official == 1 {
+		return ErrAppOfficial
+	}
+	// 授权按 (kind, app_id) 存活;名称释放后旧授权不得"复活"到同名新内容上。
+	if _, err := tx.Exec(`DELETE FROM app_grants WHERE kind = ? AND app_id = ?`, kind, appID); err != nil {
+		return err
+	}
+	res, err := tx.Exec(`DELETE FROM apps WHERE kind = ? AND app_id = ?`, kind, appID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit()
 }
 
 // upsertApp 是 UpsertApp 的 executor 版本(可传入 *sql.Tx,供原子发布复用)。
@@ -375,6 +455,26 @@ func SetAppOfficial(db *sql.DB, kind, appID string, official bool, owner string)
 		return fmt.Errorf("%w: 官方归属必须 owner 为空(official=1 ∧ owner 非空 是禁止状态)", ErrValidation)
 	}
 	_, err := db.Exec(`UPDATE apps SET official = ?, owner = ?, updated_at = `+NowExpr()+`
+		WHERE kind = ? AND app_id = ?`, boolToInt(official), owner, kind, appID)
+	return err
+}
+
+// SetAppOfficialOn 是 SetAppOfficial 的 executor 版本(可在 *sql.Tx 上执行)。
+//
+// F-15(能力中心审计 2026-10-26,P2):归属转移(transferOwner)与发布内核
+// (appstore.Publish)是一对 check-then-act 竞争者 —— Publish 在**持发布锁的事务
+// 内**读 owner 决定「谁能续传」,而 transferOwner 修前是一条**锁外**的单语句
+// UPDATE。两者交错时,旧归属人可以在转移提交前那一刻通过 owner 检查、在提交后
+// 落库,于是「新归属人已被指定,但旧归属人替新归属人发了一版」。
+//
+// 修法:transferOwner 在同一个事务里先取**与 Publish 相同的**发布咨询锁
+// (appstore.publishLockKey)、锁内重读 apps 行、再调用本函数写,最后提交。
+// 锁与写同事务 ⇒ 提交即释放,连接需求恒为 1(与 beginPublishTx 同一条纪律)。
+func SetAppOfficialOn(ex Queryer, kind, appID string, official bool, owner string) error {
+	if official && owner != "" {
+		return fmt.Errorf("%w: 官方归属必须 owner 为空(official=1 ∧ owner 非空 是禁止状态)", ErrValidation)
+	}
+	_, err := ex.Exec(`UPDATE apps SET official = ?, owner = ?, updated_at = `+NowExpr()+`
 		WHERE kind = ? AND app_id = ?`, boolToInt(official), owner, kind, appID)
 	return err
 }
@@ -597,6 +697,37 @@ const (
 	HintReleaseNotRejectable = "审核拒绝只针对待审版本;要停止服务请用「下架」(可恢复),要换内容请让作者发布新版本(版本号永久占位,不能复用)"
 )
 
+// ErrReleaseApprovedNotDeletable 表示目标版本**已通过审核**,因此不允许走
+// 「版本删除」这条路径(F-01,能力中心 P0)。
+//
+// 与 ErrReleaseApprovedNotRejectable 同一条产品语义,但破坏面更直接:删除
+// (= 软删 + `archive = NULL`)**不可恢复地**销毁正在对全员服务的归档字节,
+// 并让该版本立刻从分发面消失;而 `apps` 投影行仍是旧标题 —— 目录与内容
+// 分叉且没有任何自愈路径。管理员想要的"停止提供"是**另一个可逆动作**:
+// 下架(apps.enabled=0)。
+//
+// **这是全仓唯一的判定实现**:sharedskills / agentshare 的版本删除 handler
+// 都依赖本 sentinel,不再各自读一遍状态位。
+var ErrReleaseApprovedNotDeletable = errors.New("release already approved and cannot be deleted")
+
+// 版本删除被拒时的**对外**文案(409)。两面共用同一份,避免同一个事实两种说法。
+const (
+	// CodeReleaseNotDeletable 是 409 信封的 error.code。
+	CodeReleaseNotDeletable = "RELEASE_APPROVED_NOT_DELETABLE"
+	// MsgReleaseNotDeletable 说明删除的破坏性后果(不可恢复)。
+	MsgReleaseNotDeletable = "该版本已通过审核,不能删除:" +
+		"删除会永久清空该版本的归档字节(不可恢复),正在使用的员工将无法下载或安装"
+	// HintReleaseNotDeletable 指向可逆的替代动作。
+	HintReleaseNotDeletable = "只有待审/被拒版本可以删除;要停止提供请用「下架」(可恢复),要换内容请发布新版本(版本号永久占位,不能复用)"
+)
+
+// ReleaseDeletable 是「该版本能否被删除」的**唯一 Go 判定**。
+//
+// SQL 侧的同一判定是 DeleteReleaseUnlessApproved 的 `AND status <> 'approved'`
+// —— 那一份才是并发下的真正防线;本函数只供需要在调用前给出友好提示的调用方
+// 使用,两边必须同时成立(与 ReleaseRejectable 的纪律同形)。
+func ReleaseDeletable(status string) bool { return status != ReleaseStatusApproved }
+
 // ReleaseRejectable 是「该版本能否被审核拒绝」的**唯一 Go 判定**。
 //
 // SQL 侧的同一判定是 SetReleaseStatusForReview 的 `AND status <> 'approved'`
@@ -669,15 +800,44 @@ func SetReleaseStatus(db *sql.DB, kind, appID, version, status, reason string) e
 // 的坏行,也产不出"已生效版本的字节被销毁"。这条不变量只能写在 WHERE 里:
 // 调用方先读后写(check-then-act)在并发下必被绕过。
 func SetReleaseStatusForReview(db *sql.DB, kind, appID, version, status, reason string) error {
+	return setReleaseStatusForReview(db, kind, appID, version, status, reason, false)
+}
+
+// SetReleaseStatusForReviewIfWritable 是技能/智能体审核路径用的变体:approve 时
+// 在**同一条 UPDATE** 里额外要求 `apps.enabled = 1`(F-14,能力中心审计
+// 2026-10-26,P1)。
+//
+// 修前:所有审核路径都是「先读 Distribution.Writable() 判下架 → 再调
+// SetReleaseStatusForReview」的 check-then-act。两次读之间管理员按下「下架」时,
+// approve 仍然通过 ⇒ 产出「已批准但任何人(含作者)都看不见」的版本 —— 正是
+// 下架冻结要消除的形态(R5-B-1)。并发下唯一可靠的落点是 UPDATE 的 WHERE:
+// 下架 UPDATE 与 approve UPDATE 会争同一条 apps 行的行锁,后到者在 EPQ 里
+// 重新求值含 `a.enabled = 1` 的子查询,于是要么先下架(approve 0 行 ⇒
+// ErrAppDelisted),要么先批准(下架随后生效,内容可见性由 enabled 决定)。
+//
+// 为什么不做成 SetReleaseStatusForReview 的默认行为:WASM 应用共用这张表但
+// 走自己的部署/撤回生命周期(它的「不可分发」是 unpublish/withdraw 而不是
+// `apps.enabled` 冻结),对它加 enabled 谓词会改变既有语义;技能/智能体两面
+// 显式选这个变体,差异只在这里可见。
+func SetReleaseStatusForReviewIfWritable(db *sql.DB, kind, appID, version, status, reason string) error {
+	return setReleaseStatusForReview(db, kind, appID, version, status, reason, true)
+}
+
+func setReleaseStatusForReview(db *sql.DB, kind, appID, version, status, reason string, requireWritable bool) error {
 	switch status {
 	case ReleaseStatusApproved:
+		// F-14:下架冻结的原子前置条件(只有技能/智能体审核路径要求)。
+		writableClause := ""
+		if requireWritable {
+			writableClause = "\n\t\t\t    AND a.enabled = 1"
+		}
 		res, err := db.Exec(`UPDATE app_releases SET status = ?, reason = '',
 			updated_at = `+NowExpr()+`
 			WHERE kind = ? AND app_id = ? AND version = ? AND deleted_at IS NULL
 			  AND (archive IS NOT NULL OR status <> 'rejected')
 			  AND EXISTS (SELECT 1 FROM apps a
 			              WHERE a.kind = app_releases.kind AND a.app_id = app_releases.app_id
-			                AND a.deleted_at IS NULL)`,
+			                AND a.deleted_at IS NULL`+writableClause+`)`,
 			status, kind, appID, version)
 		if err != nil {
 			return err
@@ -690,6 +850,19 @@ func SetReleaseStatusForReview(db *sql.DB, kind, appID, version, status, reason 
 			}
 			if !exists {
 				return ErrNotFound
+			}
+			if requireWritable {
+				// 0 行时先看是不是「下架冻结」挡下的:它比「归档已释放」更可操作
+				// (重新上架即可重试),也是 F-14 修复要暴露的那条语义。
+				var enabled int
+				serr := db.QueryRow(`SELECT enabled FROM apps WHERE kind = ? AND app_id = ?`,
+					kind, appID).Scan(&enabled)
+				if serr == nil && enabled == 0 {
+					return ErrAppDelisted
+				}
+				if serr != nil && !errors.Is(serr, sql.ErrNoRows) {
+					return serr
+				}
 			}
 			return ErrReleaseArchiveCleared
 		}
@@ -724,8 +897,48 @@ func SetReleaseStatusForReview(db *sql.DB, kind, appID, version, status, reason 
 	}
 }
 
+// 质量标记的合法取值（F-39 / F-47，能力中心审计 2026-10-26）。
+//
+// 语义权威：” = 无标记；official = 官方；featured = 精选（0037 引入，二者互斥）。
+// 迁移 0090 给 `app_releases.quality` 补了同一条 CHECK（NOT VALID：存量不回溯，
+// 新写入立即受约束）；Go 侧的唯一写入口是 SetReleaseQuality，两边必须同时成立
+// —— SQL 是并发下的最后防线，Go 侧负责给出可读的 ErrValidation 而不是让调用方
+// 收到一个数据库约束错误。
+const (
+	// QualityNone 无质量标记。
+	QualityNone = ""
+	// QualityOfficial 官方标记。
+	QualityOfficial = "official"
+	// QualityFeatured 精选标记。
+	QualityFeatured = "featured"
+)
+
+// MaxPendingPerAuthor 是**每个作者**待审版本数上限（审核队列防洪）。
+//
+// F-47（能力中心审计 2026-10-26，P3）：这个数字修前在 sharedskills 与 agentshare
+// 各写一份 `const pendingCap = 10`。两处一旦不同，同一个员工在「技能」与「智能体」
+// 两个面就会看到不同的待审上限，而运营文档写的是同一个数。现在唯一真源在这里，
+// 两个上传入口都引用它。
+const MaxPendingPerAuthor = 10
+
+// ValidReleaseQuality 是质量标记取值域的**唯一 Go 判定**（与迁移 0090 的 CHECK 同域）。
+func ValidReleaseQuality(q string) bool {
+	switch q {
+	case QualityNone, QualityOfficial, QualityFeatured:
+		return true
+	}
+	return false
+}
+
 // SetReleaseQuality 质量标记(”|official|featured),仅 approved 版本可设置。
+//
+// F-39：修前这里**不校验** quality，任何字符串都能落库（投影回填/数据修复脚本
+// 也走这个入口），而管理端徽章判定是 `== featured` / `== official` —— 脏值会
+// 静默不出徽章。现在取值域在 Go 侧（本函数）与 SQL 侧（0090 的 CHECK）各判一次。
 func SetReleaseQuality(db *sql.DB, kind, appID, version, quality string) error {
+	if !ValidReleaseQuality(quality) {
+		return ErrValidation
+	}
 	res, err := db.Exec(`UPDATE app_releases SET quality = ?, updated_at = `+NowExpr()+`
 		WHERE kind = ? AND app_id = ? AND version = ? AND status = 'approved'`,
 		quality, kind, appID, version)
@@ -739,6 +952,10 @@ func SetReleaseQuality(db *sql.DB, kind, appID, version, quality string) error {
 }
 
 // SoftDeleteRelease 软删一个版本:内容不再可用,但版本号永久占位不可复用。
+//
+// 这是**通用原语**(播种/数据修复用),不包含产品不变量:它同样会删掉
+// approved 版本并清空归档。产品的「删除版本」入口必须走
+// DeleteReleaseUnlessApproved(F-01:P0 已通过版本删除 = 不可恢复的数据销毁)。
 func SoftDeleteRelease(db *sql.DB, kind, appID, version string) error {
 	res, err := db.Exec(`UPDATE app_releases SET deleted_at = `+NowExpr()+`, archive = NULL,
 		updated_at = `+NowExpr()+` WHERE kind = ? AND app_id = ? AND version = ? AND deleted_at IS NULL`,
@@ -750,6 +967,46 @@ func SoftDeleteRelease(db *sql.DB, kind, appID, version string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// DeleteReleaseUnlessApproved 软删一个**尚未生效**的版本(pending/rejected)。
+//
+// 产品不变量(能力中心 F-01,2026-10-26):已通过审核的版本不可删除 ——
+// 它可能正在对全员服务,也可能是唯一可回滚的历史版本;删除与释放归档在同一
+// 条 UPDATE 里完成(PG BYTEA 置 NULL,没有回收站),对 approved 版本执行它
+// 等于不可恢复地销毁内容,还让 apps 投影停在一个已经没有内容的标题上。
+//
+// 判定写在 UPDATE 的 WHERE 里(`status <> 'approved'`),并发下的真正防线
+// 是这条原子语句,不是调用方的 check-then-act;0 行时再解释原因(与
+// SetReleaseStatusForReview 的 rejected 分支同一纪律)。
+func DeleteReleaseUnlessApproved(db *sql.DB, kind, appID, version string) error {
+	res, err := db.Exec(`UPDATE app_releases
+		SET deleted_at = `+NowExpr()+`, archive = NULL, size = 0, updated_at = `+NowExpr()+`
+		WHERE kind = ? AND app_id = ? AND version = ? AND deleted_at IS NULL AND status <> ?`,
+		kind, appID, version, ReleaseStatusApproved)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+	// 0 行:行不存在/已被并发删除(404),或行已 approved(409)。
+	// 这条解释性查询不构成 check-then-act —— 前置条件已由上面的 WHERE 保证。
+	var status string
+	err = db.QueryRow(`SELECT status FROM app_releases
+		WHERE kind = ? AND app_id = ? AND version = ? AND deleted_at IS NULL`,
+		kind, appID, version).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if status == ReleaseStatusApproved {
+		return ErrReleaseApprovedNotDeletable
+	}
+	// 状态位既非 approved 却仍 0 行:并发删除已经把它软删了,与不存在同义。
+	return ErrNotFound
 }
 
 // IncrementReleaseDownload 下载计数(best effort)。

@@ -608,6 +608,10 @@ export function makefilePaths(headPaths) {
  */
 export const EXECUTION_POINT_REGISTRY = [
   'community/fabric/scripts/verify-docs.mjs',
+  // 2026-10-26（F-12 跨层能力生命周期 E2E）：新用例脚本按 `integration-tests/**` 的扩展名集合
+  // 派生（守卫的 `INTEGRATION_SCANNED_EXTENSIONS` 含 `.py`）⇒ 它属于"被执行且决定判定、
+  // 但不在形状族目录里"的那一半，必须登记（否则派生却未登记 ⇒ 红）。
+  'integration-tests/capability-lifecycle.py',
   'integration-tests/contractkit.py',
   'integration-tests/dex/config.yaml',
   'integration-tests/dex/dex-sso-test.py',

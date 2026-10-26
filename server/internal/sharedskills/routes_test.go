@@ -570,9 +570,11 @@ func TestCrossSourceConflictUploadApprove(t *testing.T) {
 	if w2.Code != http.StatusCreated {
 		t.Fatalf("fresh upload = %d (%s)", w2.Code, w2.Body.String())
 	}
-	// admin 上架同名的市场技能会被双向互斥阻断(409,前面 serverstore 测试已
-	// 覆盖);approve 前的冲突检测是深度防御——模拟竞态:绕过 DAO 直接 SQL
-	// 插入市场同名行(等价于上架发生在共享技能上传之后)。
+	// F-16(能力中心审计 2026-10-26,P2):这里的旧断言是「approve 撞上市场同名
+	// ⇒ 409 CONFLICT」。那正是**存在性泄漏**:同一端口的 reject 对同样的输入回
+	// 404,而 approve 用 409 告诉调用方「市场里存在这个名字」。修后渠道守卫在
+	// 一切存在性判定之前 ⇒ 市场渠道的名字与「不存在」逐字节同形 404(见
+	// routes_f16_no_existence_leak_test.go 的三态同形判据)。
 	if _, err := db.Exec(`INSERT INTO apps (kind, app_id, title, description, owner, channel, enabled)
 		VALUES ('skill', 'fresh-open', 'fresh-open', '', 'boss', 'market', 1) ON CONFLICT (kind, app_id) DO UPDATE SET channel = 'market'`); err != nil {
 		t.Fatalf("raw market seed: %v", err)
@@ -583,8 +585,12 @@ func TestCrossSourceConflictUploadApprove(t *testing.T) {
 		reqA.Header.Set(k, v)
 	}
 	r.ServeHTTP(wA, reqA)
-	if wA.Code != http.StatusConflict {
-		t.Fatalf("approve conflict = %d, want 409 (%s)", wA.Code, wA.Body.String())
+	if wA.Code != http.StatusNotFound {
+		t.Fatalf("approve 市场同名 = %d, want 404（F-16：不得用 409 泄露市场行存在性）(%s)",
+			wA.Code, wA.Body.String())
+	}
+	if strings.Contains(wA.Body.String(), "CONFLICT") {
+		t.Fatalf("approve 响应仍带 CONFLICT 码(F-16): %s", wA.Body.String())
 	}
 }
 

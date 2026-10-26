@@ -295,6 +295,28 @@ export interface HostLocalRouteFence {
   clearSessionIfCurrent(token: string): void
 }
 
+/**
+ * 智能体安装请求里的**渠道提示**（`?channel=market|org`）→ provenance 渠道。
+ *
+ * 现场（F-30，2026-10-26 能力中心盘点）：员工面 `/api/client/v2/agent-presets/:name/archive`
+ * **两个渠道都服务**（市场智能体与组织共享智能体共用这一条安装通路），宿主却把
+ * `channel` 写死成 `'org'` ⇒ 从市场装来的智能体在「我的」里永远显示「组织」，来源徽章、
+ * 下架/撤回判断跟着错位。
+ *
+ * 渠道是**包外事实**：归档响应头只有版本/校验和，没有渠道；服务端也不在员工面行上
+ * 告诉安装器"你刚才走的是哪条渠道的归档"。面板手里有这一格（目录行的 `source`），
+ * 所以由它显式带过来 —— 与 `?overwrite=1` / `?ownership=unknown` 同一条既有模式：
+ * **面板给宿主单独判不出的那个事实，宿主仍是权威**（只认白名单字面值）。
+ *
+ * ⚠️ 它只影响 provenance（"这一份是从哪来的"），**不参与**任何信任边界判断：未知/
+ * 伪造的取值一律回落 `'org'`（历史行为），不会因为带错渠道而绕过覆盖确认或权限。
+ * @param raw - query 里的 `channel` 字面值（可以缺省）。
+ * @returns `'market'` / `'org'`（缺省与非法值都是 `'org'`，即修复前的行为）。
+ */
+export function resolveInstallChannel(raw: string | null | undefined): 'market' | 'org' {
+  return raw === 'market' ? 'market' : 'org'
+}
+
 /** 本模块交给 `ctx.webServer.register` 的一条路由（方法分发在 handler 内）。 */
 export interface SkillRoute {
   kind: 'prefix'
@@ -780,8 +802,23 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             try { body = JSON.parse(raw.toString('utf8')) } catch { return json(res, 400, { error: 'bad json' }) }
             const name = typeof body.name === 'string' ? body.name.trim() : ''
             if (name === '') return json(res, 400, { error: 'missing name' })
+            // 发布预检（F-32）：与技能面同一条 `?preview=1` 契约，只打包 + 读包内
+            // preset.yml，不出网。版本同样来自包内（`skillmanifest.ParseAgent` 必填
+            // `version`，且服务端以包内为准），所以这里展示的就是即将提交的那一版。
+            const preview = new URL(req.url ?? '/', 'http://localhost').searchParams.get('preview') === '1'
             try {
               const packed = await packPreset(presetsDir, name)
+              if (preview) {
+                return json(res, 200, {
+                  ok: true,
+                  preview: {
+                    name: packed.name,
+                    ...packed.version === undefined ? {} : { version: packed.version },
+                    ...packed.displayName === undefined ? {} : { displayName: packed.displayName },
+                    ...packed.description === undefined ? {} : { description: packed.description },
+                  },
+                })
+              }
               const gateway = await fetchJSON(s.serverURL, '/api/client/v2/agent-presets', {
                 token: s.token,
                 locale: hostLocale(req),
@@ -793,6 +830,8 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
                   // (not the directory id).
                   ...packed.displayName === undefined ? {} : { display_name: packed.displayName },
                   ...packed.description === undefined ? {} : { description: packed.description },
+                  // 版本以包内 preset.yml 为准；带上只是让请求自描述（旧服务端也接受）。
+                  ...packed.version === undefined ? {} : { version: packed.version },
                   archive: packed.archive.toString('base64'),
                 },
                 timeoutMs: 30000,
@@ -843,6 +882,9 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             } catch (cause) {
               return json(res, 400, { error: cause instanceof Error ? cause.message : 'invalid name' })
             }
+            // 渠道提示（F-30）：员工面归档端点两渠道都服务，宿主判不出渠道 ⇒ 由面板
+            // 带 `?channel=market|org`（只影响 provenance 徽章，见 resolveInstallChannel）。
+            const installChannel = resolveInstallChannel(new URL(req.url ?? '/', 'http://localhost').searchParams.get('channel'))
             try {
               const upstream = await gatewayFetch(
                 `${normalizeServerURL(s.serverURL)}/api/client/v2/agent-presets/${encodeURIComponent(name)}/archive`,
@@ -862,7 +904,8 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
               await installPresetArchive({
                 name, archive: content, checksum, presetsDir,
                 // 溯源(D6):与技能同构,记录版本/渠道/来源服务端。
-                version: presetVersion, channel: 'org', server: s.serverURL,
+                // 渠道由面板按目录行来源带过来（F-30：市场智能体此前恒记成 org）。
+                version: presetVersion, channel: installChannel, server: s.serverURL,
                 // 覆盖确认（审计 2026-09-23 N2）：与技能同一条 `?overwrite=1` 契约。
                 overwrite,
               })
@@ -1008,8 +1051,30 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             // 看到 1.0.0,「版本必须递增/不可复用」在链路上无从判断。
             const version = typeof body.version === 'string' && body.version.trim() !== '' ? body.version.trim() : undefined
             if (name === '') return json(res, 400, { error: 'missing name' })
+            /**
+             * 发布预检（F-32，2026-10-26）：`?preview=1` 只打包 + 跑本地预检，**不出网**。
+             *
+             * 面板据此在上传**之前**显示"将发布的版本"（版本只能从包内 SKILL.md 读，
+             * 磁盘行里的 provenance 版本是安装时那一版，用户改过 frontmatter 后就旧了），
+             * 并把预检失败（缺字段/正文太短/不是 UTF-8…）在点下按钮的当口就说出来。
+             * 它和服务端仍是同一条契约（服务端权威）：preview 成功不代表服务端一定收，
+             * `VERSION_*` / `CONTENT_UNCHANGED` 这类**需要服务端状态**的判定仍在真正上传
+             * 时才能得出（面板按错误码本地化，见 uploadFailureText）。
+             */
+            const preview = new URL(req.url ?? '/', 'http://localhost').searchParams.get('preview') === '1'
             try {
               const packed = await packSkill(skillsDir, name, version, hostLocale(req))
+              if (preview) {
+                return json(res, 200, {
+                  ok: true,
+                  preview: {
+                    name: packed.name,
+                    version: packed.version,
+                    ...packed.displayName === undefined ? {} : { displayName: packed.displayName },
+                    ...packed.description === undefined ? {} : { description: packed.description },
+                  },
+                })
+              }
               const gateway = await fetchJSON(s.serverURL, '/api/client/v2/shared-skills', {
                 token: s.token,
                 locale: hostLocale(req),
@@ -1091,6 +1156,9 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
                 checksum,
                 skillsDir,
                 version: ver,
+                // 组织共享库（`/shared-skills`）是**组织渠道专属**命名空间：市场技能走
+                // `/marketplace/skills/.../archive` 那条通路（上面 channel: 'market'）。
+                // 所以这里的 'org' 不是 F-30 那类写死错误，保持不变。
                 channel: 'org',
                 server: s.serverURL,
                 // 覆盖本机同名自制内容必须由面板显式确认（审计 A2）。
@@ -1196,6 +1264,15 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
           if (source !== 'market' && source !== 'org' && source !== 'local' && source !== 'own') {
             return json(res, 400, { error: 'invalid source' })
           }
+          /**
+           * 审计员的**只读**事实（F-54，2026-10-26 盘点：auditor 的写按钮不隐藏）。
+           *
+           * 判定只有一份实现（fence 的 `writeGuard`，与写面 403 同源），能力中心只负责
+           * 把结论告诉面板：auditor 的员工面登录本来就被服务端拒绝，但边界一旦放开，
+           * 面板不该继续显示"点了必然 403"的安装/上传/卸载按钮。它**不是**权限判据 ——
+           * 写面仍由 fence 拦（这里只影响渲染）。
+           */
+          const readOnly = !writeGuard()
           try {
             const skillsDir = resolveSkillsDir()
             const presetsDir = resolvePresetsDir()
@@ -1428,9 +1505,9 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
                   // 它按磁盘事实补 installed / installedVersion / installedOrigin，
                   // 并透出 is_owner（R4-B-14）与官方字段（0059）。
                   .map(i => mapCatalogRow(i))
-                return json(res, 200, { items: [...storeInstalled, ...localRows] })
+                return json(res, 200, { items: [...storeInstalled, ...localRows], auditor: readOnly })
               }
-              return json(res, 200, { items: localRows })
+              return json(res, 200, { items: localRows, auditor: readOnly })
             }
 
             // 「我上传」分区（2026-10-26，盘点 F-08）：服务端 author-own 视图原样下发。
@@ -1440,7 +1517,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             // 自己在队列里的位置、为什么被拒）。磁盘事实只用来补 installed 相关字段，
             // 让"本机还留着一份"与"已装可更新"这两件事在同一个卡片上成立。
             if (source === 'own') {
-              return json(res, 200, { items: items.map(i => mapCatalogRow(i)) })
+              return json(res, 200, { items: items.map(i => mapCatalogRow(i)), auditor: readOnly })
             }
 
             // 已装版本:best-effort。技能 = provenance/.install-version →
@@ -1448,7 +1525,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
             // (preset.yml 无 version 字段,故无 frontmatter 兜底)。客户端
             // `hasUpdateFor()` 依赖这里的 installedVersion:undefined ⇒ 恒 false。
             const enriched = items.map(i => mapCatalogRow(i))
-            json(res, 200, { items: enriched })
+            json(res, 200, { items: enriched, auditor: readOnly })
           } catch (cause) {
             if (cause instanceof AuthError && cause.kind === 'auth_expired') {
               // R22-V1-N3：只清"发起这次请求时的那一个会话"（迟到 401 不得清掉新登录）。

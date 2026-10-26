@@ -1,11 +1,12 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Marketplace, { DELISTED_UPLOAD_HINT } from './Marketplace'
 import { request } from '../api'
+import { setCurrentAdmin } from '../lib/rbac'
 
 const mockRequest = vi.mocked(request)
-const confirmSpy = vi.fn(() => true)
+const confirmSpy = vi.fn((_message?: string) => true)
 
 const SKILLS = [
   { id: 1, name: 'data-extract', version: '1.0.0', description: '数据提取', author: 'seed', enabled: true },
@@ -567,5 +568,82 @@ describe('Marketplace 商城页 · 展示名与徽章(D 系列)', () => {
         expect.objectContaining({ method: 'PUT', body: expect.stringContaining('"title":"数据抽取"') }),
       )
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F-48 / F-21 / F-53（2026-10-26）：权限门、上下架确认文案、残留 Git 文案
+//
+// 能力中心四页此前**零** hasPermission：只读账号看到的每个写按钮点下去都必然 403。
+// 这里钉住「持权时可见（正向夹具）」与「只读时既不显示按钮、也不发写请求」两侧，
+// 并锁住下架确认必须写明可恢复（≠ 删除）。
+// ---------------------------------------------------------------------------
+afterEach(() => setCurrentAdmin(null))
+
+describe('Marketplace 商城页 · 权限门与文案（F-48 / F-21 / F-53）', () => {
+  it('F-48 正向夹具:持有 market:write/capability:write 时写入口可见', async () => {
+    setCurrentAdmin({
+      role: 'super_admin',
+      permissions: ['market:read', 'market:write', 'capability:read', 'capability:write'],
+    })
+    render(<Marketplace />)
+    await screen.findByText('data-extract')
+    // 页头写入口（登记=market:write、锁定=capability:write）
+    expect(screen.getByRole('button', { name: '上架技能' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '锁定管理' })).toBeInTheDocument()
+    // 行内写入口（市场行）
+    const cardEl = within(orgCard('data-extract'))
+    for (const name of ['预览', '规范化', '编辑', '上传新版', '归属', '授权', '下架']) {
+      expect(cardEl.getByRole('button', { name }), `缺少写入口：${name}`).toBeInTheDocument()
+    }
+  })
+
+  it('F-48 只读:没有写权限时不显示写按钮,也不发写请求', async () => {
+    setCurrentAdmin({ role: 'super_admin', permissions: ['market:read', 'capability:read'] })
+    render(<Marketplace />)
+    await screen.findByText('data-extract')
+    expect(screen.queryByRole('button', { name: '上架技能' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '锁定管理' })).toBeNull()
+    const cardEl = within(orgCard('data-extract'))
+    expect(cardEl.queryByRole('button', { name: '编辑' })).toBeNull()
+    expect(cardEl.queryByRole('button', { name: '下架' })).toBeNull()
+    expect(cardEl.queryByRole('button', { name: '归属' })).toBeNull()
+    expect(cardEl.queryByRole('button', { name: '授权' })).toBeNull()
+    // 只读动作（预览）仍可用。
+    expect(cardEl.getByRole('button', { name: '预览' })).toBeInTheDocument()
+    // 页面加载期间不得发出任何写请求。
+    for (const call of mockRequest.mock.calls) {
+      const init = call[1] as RequestInit | undefined
+      expect(init?.method ?? 'GET').toBe('GET')
+    }
+  })
+
+  it('F-21 下架确认:写明可恢复、不是删除', async () => {
+    render(<Marketplace />)
+    await screen.findByText('data-extract')
+    confirmSpy.mockClear()
+    fireEvent.click(within(orgCard('data-extract')).getByRole('button', { name: '下架' }))
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('可恢复'))
+    })
+    const text = (confirmSpy.mock.calls[0]![0] as string)
+    expect(text).toContain('下架不是删除')
+    expect(text).toContain('重新上架')
+  })
+
+  it('F-53 界面上不再出现「Git 源」文案(git 模式已删除)', async () => {
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/departments') return { departments: [] }
+      if (path === '/api/server/admin/skills') return { skills: [] }
+      return {}
+    })
+    render(<Marketplace />)
+    // 空态文案不得再指向 Git 源。
+    expect(await screen.findByText('暂无技能')).toBeInTheDocument()
+    expect(screen.queryByText(/Git 源/)).toBeNull()
+    // 新建弹窗的说明同样不得再提 Git 源。
+    fireEvent.click(screen.getByRole('button', { name: '上架技能' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(dialog.queryByText(/Git 源/)).toBeNull()
   })
 })

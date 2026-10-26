@@ -109,6 +109,34 @@ func TransferOwnerAuditDetail(kind, appID, title, from, to string) string {
 	return detail + " 归属 " + from + " → " + to
 }
 
+// withPublishLockForOwner 在**与发布内核相同的咨询锁**下开一个事务，返回该事务。
+//
+// F-15(能力中心审计 2026-10-26,P2)：`appstore.Publish` 在持锁事务内读
+// `apps.owner` 决定「谁能续传新版本」，而归属转移修前是一条锁外单语句 UPDATE。
+// 两者交错时旧归属人可以在转移提交前通过检查、提交后落库 —— 归属语义被绕过。
+// 现在转移先取同一把锁（`publishLockKey` 的 hashtextextended 64 位键），
+// 与 Publish 互斥；锁内重读 apps 行，读到的一定是对方提交后的状态。
+//
+// 为什么用**阻塞式** `pg_advisory_xact_lock` 而不是 Publish 的 try+退避：
+// 归属转移是低频管理动作（人工点一次），没有同名风暴的池耗尽风险；阻塞等待
+// 期间连接被占用但只有一个，且最长等到 Publish 的 60s 事务预算。
+//
+// 失败语义：取锁/事务失败 ⇒ 已写 500 并返回 ok=false，调用方直接 return。
+func withPublishLockForOwner(c *gin.Context, db *sql.DB, kind, appID string) (*sql.Tx, bool) {
+	tx, err := db.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+		return nil, false
+	}
+	if _, err := tx.ExecContext(c.Request.Context(),
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, publishLockKey(kind, appID)); err != nil {
+		_ = tx.Rollback()
+		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+		return nil, false
+	}
+	return tx, true
+}
+
 // transferOwner 归属转移:管理员把某个 App 的归属人改为其他存在用户。
 // 归属只约束「谁能续传新版本」;转移后旧归属者的发布请求即 404,新归属者
 // 获得续传权(版本语义规则不受影响)。审计 app_owner_transfer 留痕新旧值。
@@ -169,7 +197,26 @@ func transferOwner(db *sql.DB) gin.HandlerFunc {
 				c.JSON(http.StatusOK, gin.H{"ok": true, "official": true})
 				return
 			}
-			if err := serverstore.SetAppOfficial(db, kind, appID, true, ""); err != nil {
+			// F-15：归属写与发布内核串行（同一把发布咨询锁 + 同一事务）。
+			appOnLock, ok := withPublishLockForOwner(c, db, kind, appID)
+			if !ok {
+				return
+			}
+			// 锁内**重读**：上面那次 GetApp 是锁外的,可能已经过时(审计的
+			// from 与新归属判据必须取自锁内状态,否则记错旧归属人)。
+			appLocked, gerr := serverstore.GetAppOn(appOnLock, kind, appID)
+			if gerr != nil {
+				_ = appOnLock.Rollback()
+				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+				return
+			}
+			app = appLocked
+			if err := serverstore.SetAppOfficialOn(appOnLock, kind, appID, true, ""); err != nil {
+				_ = appOnLock.Rollback()
+				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
+				return
+			}
+			if err := appOnLock.Commit(); err != nil {
 				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
 				return
 			}
@@ -196,7 +243,24 @@ func transferOwner(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusOK, gin.H{"ok": true, "owner": req.Owner})
 			return
 		}
-		if err := serverstore.SetAppOfficial(db, kind, appID, false, req.Owner); err != nil {
+		// F-15：同上 —— 锁内重读 + 同事务写，杜绝「旧归属人替新归属人发版」。
+		appOnLock, ok := withPublishLockForOwner(c, db, kind, appID)
+		if !ok {
+			return
+		}
+		appLocked, gerr := serverstore.GetAppOn(appOnLock, kind, appID)
+		if gerr != nil {
+			_ = appOnLock.Rollback()
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
+			return
+		}
+		app = appLocked
+		if err := serverstore.SetAppOfficialOn(appOnLock, kind, appID, false, req.Owner); err != nil {
+			_ = appOnLock.Rollback()
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
+			return
+		}
+		if err := appOnLock.Commit(); err != nil {
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
 			return
 		}

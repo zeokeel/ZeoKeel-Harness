@@ -490,6 +490,12 @@
       "file": "0089_wasm_call_events_version.sql",
       "bytes": 930,
       "sha256": "b34762ec41a3683d6833410a8506295320358d174eb239ac59ddf130a33764f2"
+    },
+    {
+      "version": "0090",
+      "file": "0090_app_grants_grantee_index_and_quality_check.sql",
+      "bytes": 2264,
+      "sha256": "8edd8c6066ecdea8294325b46a942ae88a93a0550e958c6f718deefbbfda7bf8"
     }
   ]
 }

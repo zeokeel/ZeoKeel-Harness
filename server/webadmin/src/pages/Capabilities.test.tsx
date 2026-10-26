@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { request } from '../api'
+import { setCurrentAdmin } from '../lib/rbac'
 import Capabilities, {
   DELISTED_PENDING_HINT,
   DELISTED_PENDING_MARKET_HINT,
@@ -42,6 +43,8 @@ const USERS = [
 ]
 
 beforeEach(() => {
+  // F-49：审批页的上下架现在有确认弹层（与技能/智能体页同一口径）。
+  window.confirm = vi.fn(() => true) as any
   mockRequest.mockReset()
   mockRequest.mockImplementation(async (path: string) => {
     if (path.startsWith('/api/server/admin/users')) return { users: USERS, total: USERS.length }
@@ -59,6 +62,10 @@ beforeEach(() => {
     return {}
   })
 })
+
+// 权限快照是模块级状态：本文件新增的权限门用例会显式 setCurrentAdmin，
+// 必须复位，否则会污染同文件后续用例（照 usage-center.test.tsx 的口径）。
+afterEach(() => setCurrentAdmin(null))
 
 describe('Capabilities 能力中心(统一审批)', () => {
   it('默认请求 pending 全类型并渲染技能+智能体', async () => {
@@ -138,7 +145,7 @@ describe('Capabilities 能力中心(统一审批)', () => {
     })
     render(<Capabilities />)
     // 默认 tab=pending,切到「已通过」触发 status=approved 请求。
-    await u.click(screen.getByRole('tab', { name: '已通过（0）' }))
+    await u.click(screen.getByRole('tab', { name: '已共享（0）' }))
     await screen.findByText('CodeQL 审计')
     // 质量 Select(已无「官方」选项——官方语义移交归属官方)
     const qualitySelect = screen.getAllByRole('combobox').find((el) => el.textContent?.includes('精选') || el.textContent?.includes('无'))
@@ -158,7 +165,7 @@ describe('Capabilities 能力中心(统一审批)', () => {
       return {}
     })
     render(<Capabilities />)
-    await u.click(screen.getByRole('tab', { name: '已通过（0）' }))
+    await u.click(screen.getByRole('tab', { name: '已共享（0）' }))
     await screen.findByText('CodeQL 审计')
 
     // 已上架 → 给「下架」；已下架 → 给「上架」+ 徽标。
@@ -205,7 +212,7 @@ describe('Capabilities 能力中心(统一审批)', () => {
       return {}
     })
     render(<Capabilities />)
-    await u.click(screen.getByRole('tab', { name: '已通过（0）' }))
+    await u.click(screen.getByRole('tab', { name: '已共享（0）' }))
     await screen.findByText('CodeQL 审计')
 
     await u.click(screen.getByRole('button', { name: '下架' }))
@@ -225,7 +232,7 @@ describe('Capabilities 能力中心(统一审批)', () => {
       return {}
     })
     render(<Capabilities />)
-    await u.click(screen.getByRole('tab', { name: '已通过（0）' }))
+    await u.click(screen.getByRole('tab', { name: '已共享（0）' }))
     await screen.findByText('PPT 生成')
     // 修复前按钮被 `row.kind === 'skill'` 挡住:智能体行没有任何上下架入口。
     await u.click(screen.getByRole('button', { name: '下架' }))
@@ -285,7 +292,7 @@ describe('Capabilities 能力中心(统一审批)', () => {
       return {}
     })
     render(<Capabilities />)
-    await u.click(screen.getByRole('tab', { name: '已通过（0）' }))
+    await u.click(screen.getByRole('tab', { name: '已共享（0）' }))
     await screen.findByText('CodeQL 审计')
     expect(screen.queryByText('拒绝')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '下架' })).toBeInTheDocument()
@@ -445,7 +452,7 @@ describe('市场待审版本(queued market rows)', () => {
     expect(screen.getByTitle('转移归属(负责人)')).toBeInTheDocument()
     // 市场命名空间没有 删除 / 质量 / 版本级上下架 / 授权 端点 ⇒ 这些入口不渲染
     // (渲染出来点下去必然 404)。这与「org 行行为完全不变」不冲突:org 行仍全有。
-    expect(screen.queryByRole('button', { name: '删除' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '删除版本' })).toBeNull()
     expect(screen.queryByRole('button', { name: '下架' })).toBeNull()
     expect(screen.queryByRole('button', { name: '重新上架' })).toBeNull()
     expect(screen.queryByTitle('授权')).toBeNull()
@@ -521,10 +528,10 @@ describe('市场待审版本(queued market rows)', () => {
     })
     render(<Capabilities />)
     const u = userEvent.setup()
-    await u.click(screen.getByRole('tab', { name: '已通过（0）' }))
+    await u.click(screen.getByRole('tab', { name: '已共享（0）' }))
     await screen.findByText('CodeQL 审计')
     // 已通过版本删除会清空归档且不可恢复；服务端 409，UI 不渲染入口。
-    expect(screen.queryByRole('button', { name: '删除' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '删除版本' })).toBeNull()
     expect(screen.getByRole('button', { name: '下架' })).toBeInTheDocument()
     expect(screen.getByTitle('授权')).toBeInTheDocument()
   })
@@ -539,7 +546,7 @@ describe('市场待审版本(queued market rows)', () => {
     })
     const u = userEvent.setup()
     render(<Capabilities />)
-    await u.click(screen.getByRole('tab', { name: /已拒绝/ }))
+    await u.click(screen.getByRole('tab', { name: /未通过/ }))
     await screen.findByText('CodeQL 审计')
     expect(screen.queryByTitle('查看内容预览')).toBeNull()
     expect(screen.queryByTitle('下载归档核查')).toBeNull()
@@ -581,5 +588,94 @@ describe('审批列表 · 展示名(D 系列)', () => {
     fireEvent.click((await screen.findAllByTitle('转移归属(负责人)'))[0]!)
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('将「CodeQL 审计」')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F-48 / F-21 / F-24 / F-50 / F-51（2026-10-26）
+//
+// 审批页此前零权限门（只读账号看到必 403 的按钮）、「删除」与「下架」文案不分、
+// official 未接、状态/来源术语与客户端两套叫法、market 历史缺口无任何说明。
+// ---------------------------------------------------------------------------
+describe('Capabilities 审批页 · 权限门/术语/归属（F-48 / F-21 / F-24 / F-50 / F-51）', () => {
+  function mockRowsOnly(rows: unknown[]): void {
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/server/admin/capabilities/approvals')) return { approvals: rows }
+      if (path === '/api/server/admin/departments') return { departments: [] }
+      if (path === '/api/server/admin/capability-locks') return { locks: [] }
+      return {}
+    })
+  }
+
+  it('F-48 正向夹具:持有 capability:write 时审批写入口可见', async () => {
+    setCurrentAdmin({ role: 'super_admin', permissions: ['capability:read', 'capability:write'] })
+    render(<Capabilities />)
+    await screen.findByText('CodeQL 审计')
+    // 待审行：通过 / 拒绝 / 删除版本 / 转移归属。
+    expect(screen.getAllByRole('button', { name: '通过' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: '拒绝' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: '删除版本' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByTitle('转移归属(负责人)').length).toBeGreaterThan(0)
+  })
+
+  it('F-48 只读:没有 capability:write 时不渲染写入口(读仍可用)', async () => {
+    setCurrentAdmin({ role: 'super_admin', permissions: ['capability:read'] })
+    render(<Capabilities />)
+    await screen.findByText('CodeQL 审计')
+    expect(screen.queryAllByRole('button', { name: '通过' })).toHaveLength(0)
+    expect(screen.queryAllByRole('button', { name: '拒绝' })).toHaveLength(0)
+    expect(screen.queryAllByRole('button', { name: '删除版本' })).toHaveLength(0)
+    expect(screen.queryAllByTitle('转移归属(负责人)')).toHaveLength(0)
+    // 只读入口保留，管理员仍能核查内容。
+    expect(screen.getAllByTitle('查看内容预览').length).toBeGreaterThan(0)
+  })
+
+  it('F-48 无 capability:read:不发审批请求,给确定态', async () => {
+    setCurrentAdmin({ role: 'super_admin', permissions: ['market:read'] })
+    render(<Capabilities />)
+    expect(await screen.findByText('没有审批查看权限')).toBeInTheDocument()
+    expect(
+      mockRequest.mock.calls.some((c) => String(c[0]).includes('/capabilities/approvals')),
+    ).toBe(false)
+  })
+
+  it('F-51 official 行:归属列显示「官方」徽标(owner 恒为空也不显示 —)', async () => {
+    const officialRow = { ...SKILL_ROWS[0]!, owner: '', official: true }
+    mockRowsOnly([officialRow])
+    render(<Capabilities />)
+    await screen.findByText('CodeQL 审计')
+    expect(screen.getByText('官方')).toBeInTheDocument()
+    // 恒 false 的历史 conflict 字段不再渲染「名称冲突」。
+    expect(screen.queryByText('名称冲突')).toBeNull()
+  })
+
+  it('F-21 删除版本:标题写明「删除版本」，确认文案与下架(可恢复)区分', async () => {
+    render(<Capabilities />)
+    await screen.findByText('CodeQL 审计')
+    fireEvent.click(screen.getAllByRole('button', { name: '删除版本' })[0]!)
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('确定删除版本')
+    expect(dialog).toHaveTextContent('不可恢复')
+    expect(dialog).toHaveTextContent('下架')
+    expect(dialog).toHaveTextContent('可恢复')
+  })
+
+  it('F-50 术语:状态 Tab/徽章与客户端对齐（审核中/已共享/未通过），来源用市场/组织', async () => {
+    render(<Capabilities />)
+    await screen.findByText('CodeQL 审计')
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: '审核中（2）' })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('tab', { name: /已共享/ })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /未通过/ })).toBeInTheDocument()
+    expect(screen.getAllByText('审核中').length).toBeGreaterThan(0)
+    // 默认 mock 的两行都没有 channel ⇒ 组织。
+    expect(screen.getAllByText('组织').length).toBeGreaterThan(0)
+  })
+
+  it('F-24「全部」标注市场历史去向(服务端不提供市场审批历史,前端不造假)', async () => {
+    render(<Capabilities />)
+    await screen.findByText('CodeQL 审计')
+    expect(screen.getByText(/市场渠道只并入待审版本/)).toBeInTheDocument()
   })
 })

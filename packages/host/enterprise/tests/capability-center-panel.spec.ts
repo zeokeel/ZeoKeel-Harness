@@ -7,6 +7,7 @@ import {
   capabilitySourceBadgeKey,
   compareVersions,
   hasUpdateFor,
+  installChannelHint,
   installEndpoint,
   installNeedsConfirm,
   installRequestUrl,
@@ -21,6 +22,7 @@ import {
   overwriteConfirmReason,
   planCardAction,
   planCardActionForTab,
+  readFailureEnvelope,
   planSectionCards,
   skeletonKeys,
   sortItems,
@@ -29,6 +31,8 @@ import {
   uninstallEndpoint,
   uninstallRequestUrl,
   uploadActionLabelKey,
+  uploadFailureText,
+  uploadPreviewText,
   versionInstallSupported,
   withOverwrite,
   confirmStripAction,
@@ -114,8 +118,11 @@ describe('installEndpoint / uninstallEndpoint (来源路由 bug 回归)', () => 
   })
 
   it('agent install/uninstall route via /api/zeokeel/agent-presets', () => {
+    // F-30：员工面 agent 归档端点两渠道都服务，安装时把目录行来源作为 `?channel=` 提示
+    // 带过去（只影响 provenance；卸载不需要它）。
     const agent: CapabilityItem = { ...base, kind: 'agent', name: 'creative-writer', source: 'org' }
-    expect(installEndpoint(agent, '1.0.0')).toBe('/api/zeokeel/agent-presets/creative-writer/install')
+    expect(installEndpoint(agent, '1.0.0')).toBe('/api/zeokeel/agent-presets/creative-writer/install?channel=org')
+    expect(installEndpoint({ ...agent, source: 'market' }, '1.0.0')).toBe('/api/zeokeel/agent-presets/creative-writer/install?channel=market')
     expect(uninstallEndpoint(agent, '1.0.0')).toBe('/api/zeokeel/agent-presets/creative-writer/uninstall')
   })
 
@@ -543,15 +550,16 @@ describe('覆盖标记只由"用户已确认"产生（withOverwrite，A2/A3 两�
       description: '', author: '', versions: ['1.0.0', '2.0.0'], installed: true,
       installedVersion: '1.0.0', installedOrigin: 'store',
     }
-    // 商店来源：面板「更新智能体」直接发请求（不带标记）；宿主允许商店来源覆盖。
+    // 商店来源：面板「更新智能体」直接发请求（不带覆盖标记）；宿主允许商店来源覆盖。
+    // F-30：安装 URL 带 `?channel=` 提示（渠道由目录行的 source 决定）。
     expect(planCardAction(agent)).toEqual({ kind: 'update', version: '2.0.0' })
     expect(installNeedsConfirm(agent)).toBe(false)
-    expect(installRequestUrl(agent)).toBe('/api/zeokeel/agent-presets/creative-writer/install')
+    expect(installRequestUrl(agent)).toBe('/api/zeokeel/agent-presets/creative-writer/install?channel=org')
     // 本机自制同名：先出确认条，确认后才把标记交给宿主（否则宿主 409 LOCAL_CONTENT）。
     const local: CapabilityItem = { ...agent, installedOrigin: 'local' }
     expect(installNeedsConfirm(local)).toBe(true)
-    expect(installRequestUrl(local)).toBe('/api/zeokeel/agent-presets/creative-writer/install')
-    expect(installRequestUrl(local, { overwrite: true })).toBe('/api/zeokeel/agent-presets/creative-writer/install?overwrite=1')
+    expect(installRequestUrl(local)).toBe('/api/zeokeel/agent-presets/creative-writer/install?channel=org')
+    expect(installRequestUrl(local, { overwrite: true })).toBe('/api/zeokeel/agent-presets/creative-writer/install?channel=org&overwrite=1')
   })
 })
 
@@ -1209,8 +1217,156 @@ describe('渲染接线（源码级）：现代化设计 + F-07/F-09/F-10/F-11', 
   })
 
   it('F-08/F-11 「我上传」走 own 通道，且轮询会刷新 own（审核态不粘滞）', () => {
-    expect(source).toContain("fetchCapabilityRows('own')")
+    expect(source).toContain("fetchCapabilityPayload('own')")
     expect(source).toContain("loadSection('own'")
     expect(source).toMatch(/refresh\('own', 'own'\)/u)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2026-10-26 Wave2（F-30 / F-32 / F-33 / F-54）—— 跨包契约面
+// ---------------------------------------------------------------------------
+//
+// 本包（enterprise）保留**跨包契约**用例：宿主路由与面板纯函数必须一起对。
+// 归属包 `@zeokeel/dsh-capability-center/tests/capability-core.spec.ts` +
+// `capability-host-routes.spec.ts` 已有同判据的直接用例（F-38），两份都跑、不互相替代。
+
+describe('F-30 智能体渠道提示（跨包契约）', () => {
+  it('installChannelHint/installEndpoint：市场与组织分渠道，技能端点不受影响', () => {
+    const agent: CapabilityItem = {
+      kind: 'agent', source: 'market', name: 'writer', displayName: 'writer',
+      version: '1.0.0', description: '', author: '', versions: ['1.0.0'], installed: false,
+    }
+    expect(installChannelHint(agent)).toBe('market')
+    expect(installEndpoint(agent, '1.0.0')).toBe('/api/zeokeel/agent-presets/writer/install?channel=market')
+    expect(installEndpoint({ ...agent, source: 'org' }, '1.0.0')).toBe('/api/zeokeel/agent-presets/writer/install?channel=org')
+    expect(installChannelHint({ ...agent, source: 'local' })).toBeUndefined()
+    expect(installEndpoint({ ...agent, kind: 'skill', source: 'market' }, '1.0.0')).toBe('/api/zeokeel/skills/writer/install')
+  })
+
+  it('面板安装智能体会带渠道提示，并与覆盖标记正确串联（宿主按同一 URL 解析两个参数）', () => {
+    const agent: CapabilityItem = {
+      kind: 'agent', source: 'market', name: 'writer', displayName: 'writer',
+      version: '1.0.0', description: '', author: '', versions: ['1.0.0'],
+      installed: true, installedVersion: '1.0.0', installedOrigin: 'local',
+    }
+    expect(installRequestUrl(agent)).toBe('/api/zeokeel/agent-presets/writer/install?channel=market')
+    expect(installRequestUrl(agent, { overwrite: true }))
+      .toBe('/api/zeokeel/agent-presets/writer/install?channel=market&overwrite=1')
+  })
+})
+
+describe('F-33 mergeItems：批准集与本地版本分离（跨包契约）', () => {
+  const catalog: CapabilityItem = {
+    kind: 'skill', source: 'market', name: 'mine', displayName: 'mine', version: '1.2.0',
+    description: '', author: 'me', status: 'approved', versions: ['1.0.0', '1.2.0'],
+    installed: true, installedVersion: '1.0.0', installedOrigin: 'store', isOwner: true,
+  }
+  const local: CapabilityItem = {
+    kind: 'skill', source: 'local', name: 'mine', displayName: 'mine', version: '1.3.0-rc1',
+    description: '', author: '', versions: [], isLocal: true, installedOrigin: 'store',
+    originChannel: 'market', localOwnership: 'mine',
+  }
+
+  it('本机草稿版本不进 versions；展示版本仍是最高 approved；localVersion 单列', () => {
+    const merged = mergeItems([catalog, local])
+    expect(merged).toHaveLength(1)
+    expect(merged[0]!.versions).toEqual(['1.0.0', '1.2.0'])
+    expect(merged[0]!.version).toBe('1.2.0')
+    expect(merged[0]!.localVersion).toBe('1.3.0-rc1')
+    // 更新判据只读批准集（否则会把本地草稿当成"可升级目标"）。
+    expect(hasUpdateFor(merged[0]!)).toBe(true)
+    expect(planCardAction(merged[0]!)).toEqual({ kind: 'upload' })
+  })
+
+  it('只有本机行（从未上架）时 versions 为空、version 回落本机版本', () => {
+    const merged = mergeItems([{ ...local, name: 'draft-only', displayName: 'draft-only' }])
+    expect(merged[0]!.versions).toEqual([])
+    expect(merged[0]!.version).toBe('1.3.0-rc1')
+    expect(merged[0]!.localVersion).toBe('1.3.0-rc1')
+  })
+})
+
+describe('F-32 上传前显示将发布版本 + 版本类失败本地化（跨包契约）', () => {
+  it('uploadPreviewText：正文与按钮都带版本；缺版本时如实说明', () => {
+    const known = uploadPreviewText({ name: 'codeql', version: '2.0.0' })
+    expect(known.text).toBe(t('capability.uploadVersionConfirm', { name: 'codeql', version: '2.0.0' }))
+    expect(known.action).toBe(t('capability.uploadPublish', { version: '2.0.0' }))
+    setActiveLocale('en')
+    expect(uploadPreviewText({ name: 'codeql', version: '2.0.0' }).text).not.toMatch(/[\u4e00-\u9fff]/u)
+    setActiveLocale('zh')
+    const unknown = uploadPreviewText({ name: 'codeql' })
+    expect(unknown.text).toBe(zh['capability.uploadVersionUnknown'].replace('{name}', 'codeql'))
+    expect(unknown.action).toBe(t('capability.upload'))
+  })
+
+  it('VERSION_* / CONTENT_UNCHANGED ⇒ 本地化「怎么修」，不再甩服务端实现消息', () => {
+    const mapping = [
+      ['VERSION_NOT_INCREASING', 'capability.versionNotIncreasing'],
+      ['VERSION_NOT_NEWER', 'capability.versionNotNewer'],
+      ['VERSION_EXISTS', 'capability.versionExists'],
+      ['VERSION_INVALID', 'capability.versionInvalid'],
+      ['CONTENT_UNCHANGED', 'capability.contentUnchanged'],
+    ] as const
+    for (const [code, key] of mapping) {
+      expect(uploadFailureText({ code, message: 'server english internals', status: 409 }), code).toBe(zh[key])
+      expect(zh[key]).not.toContain(code)
+    }
+    setActiveLocale('en')
+    for (const [code, key] of mapping) {
+      expect(uploadFailureText({ code, status: 409 }), code).toBe(en[key])
+      expect(en[key]).not.toMatch(/[\u4e00-\u9fff]/u)
+    }
+  })
+
+  it('readFailureEnvelope 读得动扁平与嵌套两种信封（面板按 code 分档的前提）', () => {
+    expect(readFailureEnvelope({ error: 'x', code: 'VERSION_EXISTS' })).toEqual({ code: 'VERSION_EXISTS', message: 'x' })
+    expect(readFailureEnvelope({ error: { code: 'CONTENT_UNCHANGED', message: '同内容' } }))
+      .toEqual({ code: 'CONTENT_UNCHANGED', message: '同内容' })
+  })
+
+  it('接线：上传先打预检、确认条带版本、提交带版本（源码级；本包无渲染面）', () => {
+    const source = readFileSync(fileURLToPath(new URL('../../capability-center/src/client/CapabilityCenterPanel.tsx', import.meta.url)), 'utf8')
+    // 预检那一发。
+    expect(source).toContain("`${uploadPathOf(item)}?preview=1`")
+    // 确认条（列表与详情共用；data-role 供探针定位）。
+    expect(source).toContain('data-role="upload-version-confirm"')
+    expect(source).toContain('renderUploadConfirmStrip()')
+    // 确认后才真正提交，且把预检得到的版本带给宿主。
+    expect(source).toContain('const submitUpload = async (item: CapabilityItem, name: string, version: string | undefined): Promise<void> => {')
+    expect(source).toContain('body: JSON.stringify({ name: item.name, ...version === undefined ? {} : { version } })')
+    // 两条失败分支都走本地化映射（预检 + 提交）。
+    const mapped = source.match(/throw new Error\(uploadFailureText\(\{ \.\.\.envelope, status: res\.status \}\)\)/gu) ?? []
+    expect(mapped).toHaveLength(2)
+  })
+})
+
+describe('F-54 auditor 只读：面板按宿主下发的只读事实收口（跨包契约）', () => {
+  const source = readFileSync(fileURLToPath(new URL('../../capability-center/src/client/CapabilityCenterPanel.tsx', import.meta.url)), 'utf8')
+
+  it('只读事实从目录回执读入（auditor 字段），不自己猜角色', () => {
+    expect(source).toContain('auditor?: boolean | undefined')
+    expect(source).toContain('if (payload.auditor !== undefined) setReadOnly(payload.auditor)')
+    expect(source).toContain('if (readOnly) return <Chip tone="neutral" plain>{t(\'capability.readOnlyBadge\')}</Chip>')
+  })
+
+  it('只读时隐藏写入口（安装/上传/卸载/内置安装/按版本安装）并说明原因', () => {
+    // 通用动作入口：只读直接给状态胶囊。
+    expect(source).toContain("if (readOnly) return <Chip tone=\"neutral\" plain>{t('capability.readOnlyBadge')}</Chip>")
+    // 内置卡的安装按钮与详情里的版本列表同样收口。
+    expect(source).toContain('readOnly ? <Chip tone="neutral" plain>{t(\'capability.readOnlyBadge\')}</Chip>')
+    expect(source).toContain('!readOnly && versionInstallSupported(item)')
+    // 顶部提示（列表与详情都在滚动区上方）。
+    expect(source).toContain('data-role="capability-readonly"')
+    expect(source).toContain("t('capability.readOnlyHint')")
+    // 只读账号连预检请求都不打。
+    expect(source).toContain('if (readOnly) return')
+  })
+
+  it('文案走字典（中英各一条）', () => {
+    expect(zh['capability.readOnlyBadge']).toBe('只读')
+    expect(zh['capability.readOnlyHint']).toContain('审计员')
+    expect(en['capability.readOnlyBadge']).not.toBe('')
+    expect(en['capability.readOnlyHint']).toMatch(/auditor|read-only/i)
   })
 })

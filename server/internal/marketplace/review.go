@@ -149,7 +149,7 @@ func reviewMarketPending(c *gin.Context, db *sql.DB, kind string, approve bool,
 	if approve {
 		action = approveAudit
 	}
-	_ = serverstore.AuditLog(db, adminUsername(c), action, name+"@"+version)
+	_ = serverstore.AuditLogApp(db, name, adminUsername(c), action, name+"@"+version)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -404,11 +404,25 @@ func writeAgentArchivePreview(c *gin.Context, rel *serverstore.Release) {
 
 // writeAgentArchiveFileContent 在给定智能体归档上产出"逐文件查看"的响应
 // （name 级与版本级共用；键名 `too_large` 是跨端契约，别改回驼峰）。
+//
+// F-40（能力中心审计 2026-10-26，P3）：修前这里与技能侧（`fileContentSkillAdmin`
+// → `archiveFilePathParam` + `writeSkillArchiveFileContent`）四条口径全不一致：
+//  1. `?path` **不做 NormalizePath** —— `./a/../b`、绝对路径、`..` 前缀都直接
+//     送进提取器（技能侧统一 NormalizePath 后 400）；
+//  2. 空 `?path` 不 400，而是拿空串去提取，落到「文件不存在」404（文案误导：
+//     管理员以为自己路径打错，其实是没带参数）；
+//  3. 提取器报错 ⇒ 500 INTERNAL「读取失败」，而技能侧是 **422 ARCHIVE_INVALID
+//     「归档解析失败」**（同一个坏归档在两个 kind 上给出两个不同状态码）。
+//
+// 现在逐条对齐技能侧：共用 `archiveFilePathParam`（400 两种文案）与 422 映射。
 func writeAgentArchiveFileContent(c *gin.Context, rel *serverstore.Release) {
-	filePath := c.Query("path")
-	content, size, found, binary, tooLarge, err := agentshare.ExtractFileContent(rel.Archive, filePath)
+	norm, ok := archiveFilePathParam(c)
+	if !ok {
+		return
+	}
+	content, size, found, binary, tooLarge, err := agentshare.ExtractFileContent(rel.Archive, norm)
 	if err != nil {
-		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "读取失败")
+		serverauth.WriteError(c, http.StatusUnprocessableEntity, "ARCHIVE_INVALID", "归档解析失败")
 		return
 	}
 	if !found {

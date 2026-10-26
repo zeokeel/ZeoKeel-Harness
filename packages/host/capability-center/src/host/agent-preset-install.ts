@@ -72,6 +72,15 @@ export const MAX_PRESET_META_LEN = 500
 interface PresetMeta {
   name?: string | undefined
   description?: string | undefined
+  /**
+   * 发布版本（`preset.yml` 的 `version`）。
+   *
+   * 服务端 `skillmanifest.ParseAgent` 要求这个字段**必填**，并且「包内即真相」：
+   * 员工上传请求里的 `version` 只做形状校验，真正落库的是包内这一份。能力中心的
+   * 上传预检（`?preview=1`）要显示"将发布的版本"就必须读它 —— 此前这里只读
+   * name/description，上传前一格版本信息，用户只能传完才知道发的是哪个版本（F-32）。
+   */
+  version?: string | undefined
 }
 
 /** Validate a preset id for use as a single directory segment. */
@@ -119,6 +128,7 @@ async function readPresetMeta(dir: string): Promise<PresetMeta> {
   return {
     ...pick(record.name) === undefined ? {} : { name: pick(record.name) },
     ...pick(record.description) === undefined ? {} : { description: pick(record.description) },
+    ...pick(record.version) === undefined ? {} : { version: pick(record.version) },
   }
 }
 
@@ -130,6 +140,8 @@ export interface PresetPackResult {
   displayName?: string | undefined
   /** One-sentence description from preset.yml. */
   description?: string | undefined
+  /** 发布版本：preset.yml 的 `version`（「包内即真相」，服务端也用它落库）。 */
+  version?: string | undefined
   /** sha256 hex of the packed archive (reported to the gateway). */
   checksum: string
   /** The packed zip bytes. */
@@ -175,6 +187,7 @@ export async function packPreset(presetsDir: string, name: string): Promise<Pres
     name,
     ...meta.name === undefined ? {} : { displayName: meta.name.slice(0, MAX_PRESET_META_LEN) },
     ...meta.description === undefined ? {} : { description: meta.description.slice(0, MAX_PRESET_META_LEN) },
+    ...meta.version === undefined ? {} : { version: meta.version },
     checksum,
     archive,
   }

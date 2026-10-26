@@ -211,7 +211,7 @@ var marketAgentRoutePolicy = map[string]agentRouteChannelRule{
 	"POST /api/server/admin/agents": {
 		Policy: policyCrossChannelNameExclusion,
 		Why: "必须先看同名 org 行才能回「名称与组织共享库智能体冲突」的 409（跨源同名互斥，" +
-			"与技能侧 SkillNameExists 同语义）；加守卫会把它降级成 404「智能体不存在」，" +
+			"与技能侧 AddSkill 的跨渠道同名互斥同语义）；加守卫会把它降级成 404「智能体不存在」，" +
 			"管理员会以为自己名字打错了",
 	},
 	"POST /api/server/admin/agents/:name/archive": {

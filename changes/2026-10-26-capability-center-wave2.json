@@ -1,0 +1,140 @@
+{
+  "id": "2026-10-26-capability-center-wave2",
+  "status": "verified",
+  "intent": {
+    "zh": "关闭能力中心 Wave2：跨层 E2E（F-12）、审核三面收敛（F-13）、归属转移/发布锁（F-15）、存在性泄漏（F-16）、授权索引与 quality CHECK（F-18/F-39）、审核路径校验（F-40）、客户端渠道/版本预检/草稿版本/纯函数判据（F-30/F-32/F-33/F-38）、管理端删除文案/权限门/术语/官方标记（F-21/F-48/F-50/F-51/F-53），并同步迁移区间文档。",
+    "en": "Close capability-center Wave2: cross-layer E2E (F-12), unified review implementation (F-13), owner-transfer/publish lock (F-15), existence leak (F-16), grant index and quality CHECK (F-18/F-39), review path validation (F-40), client channel/version preflight/draft version/core tests (F-30/F-32/F-33/F-38), admin delete copy/permission gates/terminology/official badge (F-21/F-48/F-50/F-51/F-53), plus migration-range docs."
+  },
+  "modules": [
+    "integration-tests/capability-lifecycle.py",
+    "integration-tests/README.md",
+    "integration-tests/run-all.sh",
+    "scripts/check-integration-tests.mjs",
+    "scripts/check-install-integrity.mjs",
+    "scripts/check-guard-parser-integrity.mjs",
+    "scripts/check-root-guards.mjs",
+    "server/internal/agentshare/routes.go",
+    "server/internal/agentshare/routes_test.go",
+    "server/internal/agentshare/routes_r7_audit_test.go",
+    "server/internal/appstore/admin.go",
+    "server/internal/appstore/publish.go",
+    "server/internal/capabilities/capabilities.go",
+    "server/internal/capabilities/capabilities_test.go",
+    "server/internal/marketplace/admin.go",
+    "server/internal/marketplace/agent_api.go",
+    "server/internal/marketplace/channel.go",
+    "server/internal/marketplace/review.go",
+    "server/internal/serverstore/apps.go",
+    "server/internal/serverstore/skills.go",
+    "server/internal/serverstore/migrations-pg/0090_app_grants_grantee_index_and_quality_check.sql",
+    "server/internal/serverstore/migrations-checksums.json",
+    "server/internal/sharedskills/routes.go",
+    "server/internal/sharedskills/routes_test.go",
+    "server/internal/router/router.go",
+    "server/internal/router/optional_skills_on.go",
+    "server/internal/router/parity_test.go",
+    "server/internal/serverauth/rbac_test.go",
+    "packages/host/capability-center/src/client/CapabilityCenterPanel.tsx",
+    "packages/host/capability-center/src/client/locales.ts",
+    "packages/host/capability-center/src/host/skill-routes.ts",
+    "packages/host/capability-center/src/host/agent-preset-install.ts",
+    "packages/host/capability-center/tests/capability-core.spec.ts",
+    "packages/host/capability-center/tests/capability-host-routes.spec.ts",
+    "packages/host/enterprise/tests/capability-center-panel.spec.ts",
+    "server/webadmin/src/lib/rbac.ts",
+    "server/webadmin/src/lib/capability-display.ts",
+    "server/webadmin/src/lib/capability-display.test.ts",
+    "server/webadmin/src/pages/Marketplace.tsx",
+    "server/webadmin/src/pages/Agents.tsx",
+    "server/webadmin/src/pages/Capabilities.tsx",
+    "server/webadmin/src/pages/BuiltinSkills.tsx",
+    "server/AGENTS.md",
+    "server/README.md",
+    "server/docs/06-database.md",
+    "server/docs/08-development.md",
+    "site/src/content/docs/architecture.md",
+    "site/src/content/docs/deployment/compose.md",
+    "site/src/content/docs/deployment/upgrade.md",
+    "site/src/content/docs/en/architecture.md",
+    "site/src/content/docs/en/deployment/compose.md",
+    "site/src/content/docs/en/deployment/upgrade.md"
+  ],
+  "acceptance": [
+    {
+      "criterion": "服务端受影响包（sharedskills/agentshare/marketplace/appstore/router/capabilities）测试通过",
+      "evidence": "test",
+      "command": "cd server && GOCACHE=$PWD/temp/gocache GOMODCACHE=$PWD/temp/gomod GOPATH=$PWD/temp/gopath go test ./internal/sharedskills/... ./internal/agentshare/... ./internal/marketplace/... ./internal/appstore/... ./internal/router/... ./internal/capabilities/... -count=1"
+    },
+    {
+      "criterion": "serverstore 全量通过（F-01/F-04/F-14/F-18/F-39 回归）",
+      "evidence": "test",
+      "command": "cd server && GOCACHE=$PWD/temp/gocache GOMODCACHE=$PWD/temp/gomod GOPATH=$PWD/temp/gopath go test ./internal/serverstore/... -count=1"
+    },
+    {
+      "criterion": "客户端能力中心（含新纯函数/路由判据）与 enterprise 跨包契约通过",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-capability-center check && corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/capability-center-panel.spec.ts tests/capability-catalog-proxy.spec.ts"
+    },
+    {
+      "criterion": "webadmin 类型检查与全量测试通过",
+      "evidence": "test",
+      "command": "cd server/webadmin && npx tsc --noEmit && npx vitest run"
+    },
+    {
+      "criterion": "集成测试守卫与能力生命周期自检通过（F-12）",
+      "evidence": "guard",
+      "command": "node scripts/check-integration-tests.mjs && python3 integration-tests/capability-lifecycle.py --self-test"
+    },
+    {
+      "criterion": "迁移区间与迁移校验和一致（0090）",
+      "evidence": "guard",
+      "command": "node scripts/check-migration-range.mjs"
+    },
+    {
+      "criterion": "全仓 37 个任务全绿",
+      "evidence": "guard",
+      "command": "corepack yarn check"
+    },
+    {
+      "criterion": "主题 token 守卫通过",
+      "evidence": "guard",
+      "command": "node scripts/check-theme-tokens.mjs"
+    }
+  ],
+  "risk": "触碰审核/发布/归属/迁移：F-13 统一审核错误映射，F-15 转移归属与发布共用 advisory 锁，F-18/F-39 新迁移（索引 NOT VALID CHECK），F-30 客户端 agent 安装新增 channel 参数（默认 org 兼容），F-32 上传从一键变预检+确认（产品语义不变）。回滚：恢复至 9380922f09。",
+  "rollback": "git checkout 9380922f09 -- integration-tests scripts/check-integration-tests.mjs scripts/check-install-integrity.mjs scripts/check-guard-parser-integrity.mjs scripts/check-root-guards.mjs server packages/host/capability-center packages/host/enterprise/tests/capability-center-panel.spec.ts site/src/content/docs server/docs",
+  "verification": [
+    {
+      "command": "cd server && GOCACHE=$PWD/temp/gocache GOMODCACHE=$PWD/temp/gomod GOPATH=$PWD/temp/gopath go test ./internal/sharedskills/... ./internal/agentshare/... ./internal/marketplace/... ./internal/appstore/... ./internal/router/... ./internal/capabilities/... -count=1",
+      "result": "exit 0；sharedskills/agentshare/marketplace/appstore/router/capabilities 全部 ok"
+    },
+    {
+      "command": "cd server && GOCACHE=$PWD/temp/gocache GOMODCACHE=$PWD/temp/gomod GOPATH=$PWD/temp/gopath go test ./internal/serverstore/... -count=1",
+      "result": "exit 0；serverstore 428.1s ok"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-capability-center check && corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/capability-center-panel.spec.ts tests/capability-catalog-proxy.spec.ts",
+      "result": "exit 0；能力中心 5 files/87 tests；enterprise 126 tests"
+    },
+    {
+      "command": "cd server/webadmin && npx tsc --noEmit && npx vitest run",
+      "result": "exit 0；62 files/1024 tests"
+    },
+    {
+      "command": "node scripts/check-integration-tests.mjs && python3 integration-tests/capability-lifecycle.py --self-test",
+      "result": "exit 0；守卫 14 层全绿；self-test 22/22，capability 判据 10 条/夹具 22 条"
+    },
+    {
+      "command": "node scripts/check-migration-range.mjs",
+      "result": "exit 0；0001–0090 一致，82 个迁移 checksum 一致"
+    },
+    {
+      "command": "corepack yarn check",
+      "result": "exit 0；计划 37/实跑 37，37 通过、0 失败、0 跳过，344.1s"
+    },
+    {
+      "command": "node scripts/check-theme-tokens.mjs",
+      "result": "exit 0；974 文件 0 提示 0 阻断"
+    }
+  ]
+}

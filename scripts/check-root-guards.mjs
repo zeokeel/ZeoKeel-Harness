@@ -208,7 +208,10 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // FIX-48③ 起：本脚本 run-id 化（证据目录 `temp/wasm-client-only/runs/<run-id>/`），
   // 摘要在同一个 PR 里同步（可评审的 diff）。
   ['check:wasm-client-only', { script: 'bash scripts/verify-wasm-client-only.sh', argvTail: ['--portable'], digest: 'e666a0c6caa588af64985ac0ccb4f4174d7e4266722b050d032abe322350241f' }],
-  ['check:integration-tests', { script: 'node scripts/check-integration-tests.mjs', argvTail: [], digest: '69ce146a0ecb5fcf6b76f71478de14b27af631fa4ef793a70c70f1c4c98db607' }],
+  // 2026-10-26（F-12）：`check-integration-tests.mjs` 新增第三条契约用例（能力生命周期 E2E）
+  // 的登记面（CONTRACT_TESTS/CONTRACT_CRITERIA/INTEGRATION_ENTRIES/SKIP 原因码/聚合层对拍）
+  // ⇒ 守卫脚本内容变了，摘要按本表上方的纪律在同一改动里同步（取值 = `--print-digests` 现算）。
+  ['check:integration-tests', { script: 'node scripts/check-integration-tests.mjs', argvTail: [], digest: '50ff0ed7a2275a5eacb4079b7077a7b2e36115ffdced03e5489bd3f81caab108' }],
   // 2026-10-25：根脚本的类型面（`allowJs + checkJs + noUnused*`，TS 7）。它是第 18 条根守卫 ——
   // 判据本体是 `scripts/check-scripts-types.mjs`（调 `tsc -p tsconfig.scripts.json`），
   // 所以它的内容摘要同样进这张表：改写它 = 改写"根脚本类型面"这个结论。
@@ -241,7 +244,10 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // （`scripts/check-architecture.mjs` / `scripts/check-change-intent.mjs`），本文件的内嵌
   // install-integrity 摘要随之更新 ⇒ 本判据脚本自身的内容也变了，摘要同步进 diff
   // （取值 = 工作树那份：`sha256sum scripts/check-guard-parser-integrity.mjs`）。
-  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: '7bcad4d19cf88be9ec948274a221d5182f8fdfc4e53fc826298a00c1c2e5b422' }],
+  // 2026-10-26（F-12）：install-integrity 补登 `integration-tests/capability-lifecycle.py`
+  // ⇒ 本文件内嵌的 install-integrity 摘要更新 ⇒ 本判据脚本自身内容再变，摘要同步
+  // （取值 = 工作树那份：`sha256sum scripts/check-guard-parser-integrity.mjs`）。
+  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: '83454406be691a0d34d7f19f3639f46d8aa45a0b96c516fce40d8f6dd1dc4844' }],
 ])
 
 /**

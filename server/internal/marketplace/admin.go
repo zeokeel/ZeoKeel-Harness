@@ -53,7 +53,12 @@ func RegisterAdminRoutes(r *gin.Engine, db *sql.DB, cacheDir string) {
 	// 市场智能体(G4):与市场技能同构(与 router 包镜像)。
 	serverauth.AdminRoute(g, "GET", "/agents", serverauth.PermMarketRead, func(c *gin.Context) { listAgentsAdmin(c, db) })
 	serverauth.AdminRoute(g, "POST", "/agents", serverauth.PermMarketWrite, func(c *gin.Context) { createAgentAdmin(c, db) })
-	serverauth.AdminRoute(g, "POST", "/agents/:name/archive", serverauth.PermMarketWrite, func(c *gin.Context) { uploadAgentArchiveAdmin(c, db) })
+	// F-05(2026-10-26,镜像漂移补齐):管理员直发 = 落库即 approved = 审批同权 ⇒
+	// `capability:write`。生产路由(internal/router/optional_skills_on.go)早已改,
+	// 本镜像此前仍是 market:write —— 镜像树是权限用例的观测面(能力中心/管理端用例
+	// 都用它建树),漂移会让测试证明的授权结论与生产**相反**。判据在 router 包:
+	// TestAdminRouteMirrorPermissionParity(逐条比对两侧 (method,path)→perm)。
+	serverauth.AdminRoute(g, "POST", "/agents/:name/archive", serverauth.PermCapabilityWrite, func(c *gin.Context) { uploadAgentArchiveAdmin(c, db) })
 	serverauth.AdminRoute(g, "PUT", "/agents/:name", serverauth.PermMarketWrite, func(c *gin.Context) { updateAgentAdmin(c, db) })
 	serverauth.AdminRoute(g, "DELETE", "/agents/:name", serverauth.PermMarketWrite, func(c *gin.Context) { deleteAgentAdmin(c, db) })
 	serverauth.AdminRoute(g, "POST", "/agents/:name/enable", serverauth.PermMarketWrite, func(c *gin.Context) { enableAgentAdmin(c, db) })
@@ -269,7 +274,12 @@ func createSkillAdmin(c *gin.Context, db *sql.DB) {
 		if errors.Is(err, serverstore.ErrConflict) {
 			// 决策 2026-08-25:市场与组织合并为「市场」后,同名技能跨源互斥。
 			// 共享库已存在同名技能(任意状态)时拒绝上架,要求管理员先处理共享库行。
-			serverauth.WriteError(c, http.StatusConflict, "CONFLICT", "名称与组织共享库技能冲突,请先在共享库处理同名技能")
+			// F-42（2026-10-26）：四个"同名冲突"出口统一成一个码
+			// `NAME_TAKEN`（与 appstore.Publish 一致）。修前这里回 `CONFLICT`
+			// 而发布内核回 `NAME_TAKEN`，调用方要按"哪一个入口"分流才能识别
+			// 同一件事；webadmin 不按该码分支（已核），因此只统一码不动文案。
+			serverauth.WriteError(c, http.StatusConflict, appstore.CodeNameTaken,
+				"名称与组织共享库技能冲突,请先在共享库处理同名技能")
 			return
 		}
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "创建失败")

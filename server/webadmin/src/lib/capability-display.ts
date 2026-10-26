@@ -13,6 +13,47 @@ export function displayNameOf(row: { display_name?: string; title?: string; name
 }
 
 /**
+ * 来源徽章文案（F-50，2026-10-26）：与客户端 `capability.sourceOrg/sourceMarket/
+ * sourceBuiltin` 逐字对齐。管理端此前把 org 行叫「员工上传」、审批表里叫「组织」，
+ * 同一概念两种叫法；客户端用的是「组织」。
+ */
+export const SOURCE_LABEL = {
+  market: '市场',
+  org: '组织',
+  builtin: '平台内置',
+} as const
+
+/**
+ * 审核状态文案（F-50）：与客户端 `capability.pending/approved/rejected`
+ * （审核中 / 已共享 / 未通过）对齐。**只改展示文案，不改服务端枚举**
+ * （DTO 里仍是 pending/approved/rejected）。
+ */
+export const STATUS_LABEL = {
+  pending: '审核中',
+  approved: '已共享',
+  rejected: '未通过',
+} as const
+
+/** 内置技能来源显示：服务端 `source` 是稳定枚举 `builtin`，展示为客户端的「平台内置」。 */
+export function builtinSourceLabel(source: string | undefined): string {
+  const value = source?.trim() ?? ''
+  if (value === '') return ''
+  if (value === 'builtin') return SOURCE_LABEL.builtin
+  return value
+}
+
+/**
+ * 下架确认文案（F-21，2026-10-26）：三个管理页共用一份，并与
+ * 「删除版本」（不可恢复）/「释放名称」（仅空壳）明确区分 —— 下架只是**停止分发**，
+ * 内容和版本都在，随时可以重新上架。
+ */
+export function delistConfirmText(displayName: string): string {
+  return `下架「${displayName}」？\n\n`
+    + '下架 = 停止分发（可恢复）：员工目录不可见、不可下载，内容与版本保留；随时可「重新上架」恢复。\n'
+    + '下架不是删除：删除版本不可恢复（归档字节释放、版本号永久占位），只有空壳才能「释放名称」。'
+}
+
+/**
  * 版本显示：没有版本时统一文案。此前技能页写「—」、智能体页写「尚未发布版本」、
  * 审批页直接空，同一状态三种表达。
  */

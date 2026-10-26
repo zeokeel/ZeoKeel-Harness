@@ -68,7 +68,7 @@ describe('R16A-18 Capabilities：动作失败不得被渲染成"审批列表未�
 
     // 前置：读到行 + 行内「删除」可点。
     expect(await screen.findByText('待审技能R16A')).toBeInTheDocument()
-    const del = screen.getAllByRole('button', { name: '删除' })
+    const del = screen.getAllByRole('button', { name: '删除版本' })
     expect(del.length).toBe(1)
 
     const user = userEvent.setup()
@@ -88,7 +88,7 @@ describe('R16A-18 Capabilities：动作失败不得被渲染成"审批列表未�
     await user.click(screen.getByRole('button', { name: '取消' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     // 关掉对话框后：行内「删除」仍在（表格照常渲染，不是空态、不是失败态）。
-    expect(screen.getAllByRole('button', { name: '删除' }).length).toBe(1)
+    expect(screen.getAllByRole('button', { name: '删除版本' }).length).toBe(1)
     expect(screen.queryByText('审批列表未读取成功')).toBeNull()
     expect(screen.queryByText('暂无待处理能力')).toBeNull()
   })
@@ -108,7 +108,7 @@ describe('R16A-18 Capabilities：动作失败不得被渲染成"审批列表未�
     expect(await screen.findByText('待审技能R16A')).toBeInTheDocument()
 
     // 切 tab ⇒ 触发重拉（第二次 GET 失败）。
-    await userEvent.setup().click(screen.getByRole('tab', { name: /已拒绝/ }))
+    await userEvent.setup().click(screen.getByRole('tab', { name: /未通过/ }))
     await waitFor(() => expect(screen.getByText('审批列表未读取成功')).toBeInTheDocument())
     expect(screen.queryByText('待审技能R16A')).toBeNull()
     expect(screen.queryByText('暂无待处理能力')).toBeNull()

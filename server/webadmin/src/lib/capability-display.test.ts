@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { compareVersions, dedupeLatestByName, displayNameOf, formatCount, serverTimeText, versionText } from './capability-display'
+import {
+  builtinSourceLabel,
+  compareVersions,
+  dedupeLatestByName,
+  delistConfirmText,
+  displayNameOf,
+  formatCount,
+  serverTimeText,
+  SOURCE_LABEL,
+  STATUS_LABEL,
+  versionText,
+} from './capability-display'
 
 /**
  * P3 显示变量收口（2026-10-26）：三个管理页共用同一套回退/格式规则，
@@ -45,5 +56,43 @@ describe('capability-display', () => {
     expect(serverTimeText('')).toBe('—')
     expect(serverTimeText('not-a-date')).toBe('not-a-date')
     expect(serverTimeText('2026-10-26 10:00:00')).not.toBe('')
+  })
+})
+
+/**
+ * F-21 / F-50（2026-10-26）：术语与确认文案的**唯一真源**。
+ *
+ * - 来源/状态文案必须与客户端 locales 逐字对齐（组织/市场/平台内置；
+ *   审核中/已共享/未通过），否则同一状态在员工端与管理端两种叫法；
+ * - 下架确认必须写明「可恢复、不是删除」，与「删除版本」「释放名称」区分开。
+ */
+describe('capability-display · 术语与确认文案（F-21 / F-50）', () => {
+  it('来源文案与客户端对齐：组织 / 市场 / 平台内置', () => {
+    expect(SOURCE_LABEL.org).toBe('组织')
+    expect(SOURCE_LABEL.market).toBe('市场')
+    expect(SOURCE_LABEL.builtin).toBe('平台内置')
+  })
+
+  it('状态文案与客户端对齐：审核中 / 已共享 / 未通过（不改服务端枚举）', () => {
+    expect(STATUS_LABEL.pending).toBe('审核中')
+    expect(STATUS_LABEL.approved).toBe('已共享')
+    expect(STATUS_LABEL.rejected).toBe('未通过')
+  })
+
+  it('内置来源：枚举 builtin 显示为「平台内置」，未知值原样兜底', () => {
+    expect(builtinSourceLabel('builtin')).toBe('平台内置')
+    expect(builtinSourceLabel('')).toBe('')
+    expect(builtinSourceLabel(undefined)).toBe('')
+    expect(builtinSourceLabel('image')).toBe('image')
+  })
+
+  it('下架确认：写明可恢复、不是删除，并指向删除版本/释放名称的边界', () => {
+    const text = delistConfirmText('数据提取')
+    expect(text).toContain('下架「数据提取」')
+    expect(text).toContain('可恢复')
+    expect(text).toContain('重新上架')
+    expect(text).toContain('下架不是删除')
+    expect(text).toContain('删除版本不可恢复')
+    expect(text).toContain('释放名称')
   })
 })

@@ -23,9 +23,8 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/util"
 )
 
-// pendingCap is the per-author cap on rows awaiting review: an employee may
-// not flood the review queue; resubmitting a rejected name is always allowed.
-const pendingCap = 10
+// 待审配额取 serverstore 的唯一真源（F-47：此前与 sharedskills 各写一份 10）。
+// 员工不得用待审行淹没审核队列；重新提交被拒名字始终允许。
 
 // maxReasonLen bounds the admin's rejection reason shown to the author.
 const maxReasonLen = 500
@@ -465,7 +464,7 @@ func upload(db *sql.DB, cacheDir string) gin.HandlerFunc {
 			Channel:    "",
 			Archive:    parsed.raw,
 			Publisher:  u.Username,
-			PendingCap: pendingCap,
+			PendingCap: serverstore.MaxPendingPerAuthor,
 			Manifest:   parsed.manifest,
 			Checksum:   parsed.checksum,
 		})
@@ -592,41 +591,21 @@ func decide(db *sql.DB, status serverstore.AgentPresetStatus, auditAction string
 		if !decideBody(c, status) {
 			return
 		}
-		// 下架冻结(第五轮审计 R5-B-1,跨泳道补齐 2026-09-23):下架(apps.enabled=0)
-		// 期间**不得**把待审版本置为 approved —— 否则会产出「已批准但任何人(含
-		// 作者)在员工面都看不见」的版本,管理员在审批队列里点一次「通过」,使用侧
-		// 毫无变化(与 sharedskills.decide 同一类缺陷的孪生)。闸门唯一实现在
-		// approveWritable,见其注释。**只挡 approve**:reject 不是分发动作,下架
-		// 期间仍应允许管理员清理队列。
-		if status == serverstore.AgentPresetApproved && !approveWritable(c, db, p.Name) {
-			return
-		}
-		// F2-N3 / N-4:拒绝已经释放了该版本的归档字节,再把它置成 approved
-		// 只会得到「员工看得见、下载 500」的坏行。这里的预检只为了让**顺序**
-		// 复现(误拒后点通过)拿到友好的 409 文案;真正的不变量由 DAO 的
-		// 条件 UPDATE 保证(见 approveNeedsArchive 与 SetReleaseStatus)。
+		// F-13(能力中心审计 2026-10-26,P2):审核落定的**唯一实现**是
+		// `serverstore.ReviewPending`(状态迁移 + 下架冻结 + 拒绝即释放归档 +
+		// apps 投影重算)。修前本函数与 sharedskills/agentshare 的另两处审核面
+		// 各写一份,漂移面就是 F-13 记的账;现在三面只调这一个函数。
 		//
-		// 反方向(拒绝一个已 approved 的版本)同样由 DAO 挡下并返回
-		// ErrReleaseApprovedNotRejectable(ID-01),这里**不再**复制那份判定 ——
-		// 三条审核面各写一份守卫正是 ID-01 的根因。
-		if !approveNeedsArchive(c, db, status, p.Name, p.Version) {
-			return
-		}
-		// F-14(2026-10-26):下架冻结写进 UPDATE 的 WHERE(IfWritable 变体)。
-		if err := serverstore.SetReleaseStatusForReviewIfWritable(db, serverstore.AppKindAgent, p.Name, p.Version, string(status), reasonOf(c)); err != nil {
+		// 保留在本函数里的只有渠道/参数前置判定(渠道守卫、拒绝理由校验)——
+		// "这次请求有没有资格落到那一行"是渠道相关的,不在 ReviewPending 契约内。
+		// 错误映射见 writeDecideError(与 409/404 语义逐条对应)。
+		if err := serverstore.ReviewPending(db, serverstore.AppKindAgent, p.Name, p.Version,
+			status == serverstore.AgentPresetApproved, reasonOf(c)); err != nil {
 			writeDecideError(c, err)
 			return
 		}
-		// 审核落定后重算 apps 行的展示投影(审计 2026-09-23 G-P2-3):
-		// approve 切到新生效版本、reject 恢复到仍生效的那一版。见
-		// serverstore.RecomputeAppProjection 的注释(与 sharedskills/WASM 同形)。
-		if _, perr := serverstore.RecomputeAppProjection(db, serverstore.AppKindAgent, p.Name); perr != nil {
-			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL",
-				"审核结果已落库,但智能体投影更新失败(请重试一次)")
-			return
-		}
-		_ = serverstore.AuditLog(db, adminUsername(c), auditAction, p.Name+"@"+p.Version)
-		c.JSON(http.StatusOK, gin.H{"ok": true})
+		// F-44(2026-10-26):审核审计带 app_id(审计日志的 app 维度可检索)。
+		_ = serverstore.AuditLogApp(db, p.Name, adminUsername(c), auditAction, p.Name+"@"+p.Version)
 	}
 }
 
@@ -654,28 +633,14 @@ func decideVersioned(db *sql.DB, status serverstore.AgentPresetStatus, auditActi
 		if !decideBody(c, status) {
 			return
 		}
-		// 下架冻结:与 decide 同闸门(唯一实现在 approveWritable)。
-		if status == serverstore.AgentPresetApproved && !approveWritable(c, db, name) {
-			return
-		}
-		// F2-N3 / N-4:与 decide 同守卫 —— 没有归档字节的版本不能置为 approved
-		// (预检给友好文案,DAO 的条件 UPDATE 才是并发下的真正防线)。
-		if !approveNeedsArchive(c, db, status, name, version) {
-			return
-		}
-		if err := serverstore.SetReleaseStatusForReviewIfWritable(db, serverstore.AppKindAgent, name, version, string(status), reasonOf(c)); err != nil {
+		// F-13:与 decide 同一条唯一实现(见上)。
+		if err := serverstore.ReviewPending(db, serverstore.AppKindAgent, name, version,
+			status == serverstore.AgentPresetApproved, reasonOf(c)); err != nil {
 			writeDecideError(c, err)
 			return
 		}
-		// 审核落定后重算 apps 行的展示投影(与 decide 同一步,见
-		// serverstore.RecomputeAppProjection)。
-		if _, perr := serverstore.RecomputeAppProjection(db, serverstore.AppKindAgent, name); perr != nil {
-			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL",
-				"审核结果已落库,但智能体投影更新失败(请重试一次)")
-			return
-		}
-		_ = serverstore.AuditLog(db, adminUsername(c), auditAction, name+"@"+version)
-		c.JSON(http.StatusOK, gin.H{"ok": true})
+		// F-44:审核审计带 app_id。
+		_ = serverstore.AuditLogApp(db, name, adminUsername(c), auditAction, name+"@"+version)
 	}
 }
 
@@ -716,73 +681,6 @@ func reasonOf(c *gin.Context) string {
 	return ""
 }
 
-// approveNeedsArchive 是「通过审核」不变量的**顺序路径**守卫(F2-N3):
-// 审核通过意味着这个版本要对员工可见、可安装,因此必须有归档字节。拒绝会
-// 在 DAO 里把归档一并释放(agentshare-5 的存储上界),而 webadmin 对
-// rejected 行同样渲染「通过」按钮 —— 没有这道守卫时,误拒后改判通过会得到
-// status=approved + archive_bytes=0 的坏行:员工清单可见(授权仍在)、
-// 下载 500「归档数据缺失」、管理员预览 404。
-//
-// N-4(2026-09-13):这个「先读归档长度、再写状态」的判定**不能**是唯一防线
-// ——它是 check-then-act,两个管理员并发 approve/reject 时(实测 12 轮里
-// 6~7 轮)会交错出坏行。这里只负责给出友好的 409 文案(顺序误拒后点通过,
-// 用户看到的仍是 ARCHIVE_CLEARED 而不是 500);**并发下的真正防线是
-// serverstore.SetReleaseStatus 的条件 UPDATE**(approved 与 archive 非空
-// 在同一条语句里判定),写入失败时调用方经 writeDecideError 回同一个 409。
-//
-// 注意必须按版本取一份**带归档**的行来判断:审核清单走的 ListReleases 用
-// releaseListColumns(不含 archive blob,清单查询不加载全部归档),拿它判断
-// 会把刚上传的 pending 行误判成「没有归档」而挡住正常审核。
-//
-// 返回 false 表示已写出错误响应,调用方必须直接返回。
-func approveNeedsArchive(c *gin.Context, db *sql.DB, status serverstore.AgentPresetStatus, name, version string) bool {
-	if status != serverstore.AgentPresetApproved {
-		return true
-	}
-	row, err := serverstore.GetAgentPresetByVersion(db, name, version)
-	if err != nil {
-		if errors.Is(err, serverstore.ErrNotFound) {
-			serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "预设不存在")
-			return false
-		}
-		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
-		return false
-	}
-	if len(row.Archive) > 0 {
-		return true
-	}
-	serverauth.WriteError(c, http.StatusConflict, "ARCHIVE_CLEARED",
-		"该版本归档已在拒绝时清理,无法再通过审核(拒绝即释放存储):请让作者上传新版本")
-	return false
-}
-
-// approveWritable 是审核面的**下架冻结闸门**(第五轮审计 R5-B-1,跨泳道补齐
-// 2026-09-23):下架(apps.enabled=0)期间不得把待审版本置为 approved。
-//
-// 判据唯一实现在 serverstore.Distribution.Writable()(见 serverstore/distribution.go
-// 的语义权威),与发布内核(appstore.Publish,三条上传路径共用)以及技能侧的
-// sharedskills.decide 共用:上传与审批在同一时刻对同一状态给出同一答案。放行只会
-// 产出「已批准但任何人(含作者)在员工面都看不见」的版本 —— 管理员点一次「通过」,
-// 使用侧毫无变化(旧缺陷)。
-//
-// 出口是管理员**显式重新上架**(PUT …/:name/enabled,带审计),不是审批时自动上架
-// —— 后者会让一位管理员静默撤销另一位管理员的下架动作。
-//
-// 返回 false 表示已写出错误响应(409 APP_DELISTED / 500 INTERNAL),调用方必须直接返回。
-func approveWritable(c *gin.Context, db *sql.DB, name string) bool {
-	dist, err := serverstore.AppDistribution(db, serverstore.AppKindAgent, name)
-	if err != nil {
-		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
-		return false
-	}
-	if dist.Writable() {
-		return true
-	}
-	serverauth.WriteError(c, http.StatusConflict, appstore.CodeAppDelisted,
-		"该智能体已下架，无法通过审核：请先重新上架再审核")
-	return false
-}
-
 // writeDecideError 把审核写入的错误映射成稳定的 HTTP 语义。两条关键:
 //
 //   - N-4:两个管理员并发 approve/reject 时,后来者可能在 DAO 的条件 UPDATE
@@ -812,24 +710,78 @@ func writeDecideError(c *gin.Context, err error) {
 	}
 }
 
-// softDeleteAllPresetVersions 在**一条语句**里软删该 name 的全部未软删
-// 版本,返回被删行数。name 级删除的契约就是「删全版本」(统一存储前是
-// DELETE ... WHERE name=?),而 DAO 只有按版本软删:逐行调用一旦中途失败
-// 就会留下「半删除」僵尸 approved 行(`DeleteAgentPreset` 只删最高 approved
-// 一行),员工自视图与下载各自看到不同结论(agentshare-1)。单条 UPDATE
-// 天然原子:全删或全不删。
-func softDeleteAllPresetVersions(db *sql.DB, name string) (int64, error) {
-	res, err := db.Exec(`UPDATE app_releases SET deleted_at = `+serverstore.NowExpr()+`, archive = NULL,
-		updated_at = `+serverstore.NowExpr()+`
-		WHERE kind = ? AND app_id = ? AND deleted_at IS NULL`, serverstore.AppKindAgent, name)
+// softDeleteAllPresetVersions 软删该 name 的全部**未生效**版本，返回被删的版本号。
+//
+// name 级删除的契约是「删全版本」(统一存储前是 DELETE ... WHERE name=?),而 DAO
+// 只有按版本软删;逐行调用一旦中途失败就会留下「半删除」僵尸行(agentshare-1)。
+// 所以它在**一个事务 + 行锁**里做两件事:先锁住该 name 的全部活版本行、断言其中
+// 没有 approved,再一条 UPDATE 全删。锁与 `SetReleaseStatusForReview` 的 approve
+// UPDATE 争同一批行 ⇒ 「读到全是 pending」与「删除」之间不可能被并发 approve 穿过。
+//
+// F-01 残留(能力中心审计 2026-10-26,P0):修前这里**无条件**删全部版本并
+// `archive = NULL` —— approved 版本(正在对全员服务、可能唯一可回滚的历史版本)也
+// 被永久销毁,且不返回 409、不重算投影。现在 approved 存在 ⇒ 返回
+// serverstore.ErrReleaseApprovedNotDeletable,调用方映射成与版本级删除逐字相同的
+// 409 RELEASE_APPROVED_NOT_DELETABLE(要停止提供请用下架,要删先按版本删未生效行)。
+func softDeleteAllPresetVersions(db *sql.DB, name string) ([]string, error) {
+	tx, err := db.Begin()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return res.RowsAffected()
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.Query(`SELECT version, status FROM app_releases
+		WHERE kind = ? AND app_id = ? AND deleted_at IS NULL FOR UPDATE`,
+		serverstore.AppKindAgent, name)
+	if err != nil {
+		return nil, err
+	}
+	versions := make([]string, 0, 4)
+	approved := make([]string, 0, 1)
+	for rows.Next() {
+		var version, status string
+		if err := rows.Scan(&version, &status); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		versions = append(versions, version)
+		if !serverstore.ReleaseDeletable(status) {
+			approved = append(approved, version)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if len(approved) > 0 {
+		// 不回滚也能退出(defer 会回滚),但显式说明语义:一行都不动。
+		return nil, serverstore.ErrReleaseApprovedNotDeletable
+	}
+	if len(versions) == 0 {
+		return nil, serverstore.ErrNotFound
+	}
+	if _, err := tx.Exec(`UPDATE app_releases SET deleted_at = `+serverstore.NowExpr()+`,
+		archive = NULL, updated_at = `+serverstore.NowExpr()+`
+		WHERE kind = ? AND app_id = ? AND deleted_at IS NULL AND status <> ?`,
+		serverstore.AppKindAgent, name, serverstore.ReleaseStatusApproved); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return versions, nil
 }
 
 // remove deletes ALL rows of a name plus every archive file of that name
 // (审计 2026-08-25 D-1:旧实现只删 1.0.0,遗留其它版本孤儿归档)。
+//
+// F-01 残留(能力中心审计 2026-10-26,P0):name 级删除同样不得销毁已生效版本 ——
+// 有 approved ⇒ 409 RELEASE_APPROVED_NOT_DELETABLE(与版本级删除逐字同码同文案),
+// 内容/归档/投影一字不动;只有全 pending/rejected 时才真删,删后**重算投影**
+// (脏投影行因此有自愈路径),审计带 app_id(F-44)。
 func remove(db *sql.DB, cacheDir string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Param("name")
@@ -841,28 +793,19 @@ func remove(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		if !requireOrgAgent(c, db, name) {
 			return
 		}
-		rows, err := serverstore.ListAgentPresets(db, "")
-		if err != nil {
-			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
-			return
-		}
-		versions := make([]string, 0, 4)
-		for _, p := range rows {
-			if p.Name == name {
-				versions = append(versions, p.Version)
-			}
-		}
-		if len(versions) == 0 {
-			serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "预设不存在")
-			return
-		}
-		deleted, derr := softDeleteAllPresetVersions(db, name)
+		versions, derr := softDeleteAllPresetVersions(db, name)
 		if derr != nil {
+			switch {
+			case errors.Is(derr, serverstore.ErrReleaseApprovedNotDeletable):
+				// F-01:已生效版本不可删除(409 + 明确错误码 + 指路可逆动作)。
+				serverauth.WriteError(c, http.StatusConflict, serverstore.CodeReleaseNotDeletable,
+					serverstore.MsgReleaseNotDeletable+"。"+serverstore.HintReleaseNotDeletable)
+				return
+			case errors.Is(derr, serverstore.ErrNotFound):
+				serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "预设不存在")
+				return
+			}
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "删除失败")
-			return
-		}
-		if deleted == 0 {
-			serverauth.WriteError(c, http.StatusNotFound, "NOT_FOUND", "预设不存在")
 			return
 		}
 		// Best-effort archive cleanup:DB 归档列已由软删清空,这里只清磁盘
@@ -872,7 +815,15 @@ func remove(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		}
 		// 硬删全部行后清理该 name 的全部授权(资源级联;旧授权不复活重建资源)。
 		_ = serverstore.DeleteSharedResourceGrants(db, serverstore.SharedPresetGrantTable, name)
-		_ = serverstore.AuditLog(db, adminUsername(c), "agent_preset_delete", name)
+		// F-01 残留:删除是投影的又一条写路径 —— 不重算会让 apps 行停在已删版本的
+		// 标题上(目录与内容分叉且无自愈)。
+		if _, perr := serverstore.RecomputeAppProjection(db, serverstore.AppKindAgent, name); perr != nil {
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL",
+				"预设已删除,但投影更新失败(请重试一次)")
+			return
+		}
+		// F-44:审核/删除审计带 app_id(审计日志的 app 维度可检索),与 WASM 面同口径。
+		_ = serverstore.AuditLogApp(db, name, adminUsername(c), "agent_preset_delete", name)
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
@@ -920,7 +871,7 @@ func removeVersioned(db *sql.DB, cacheDir string) gin.HandlerFunc {
 				"版本已删除,但预设投影更新失败(请重试一次)")
 			return
 		}
-		_ = serverstore.AuditLog(db, adminUsername(c), "agent_preset_delete", name+"@"+version)
+		_ = serverstore.AuditLogApp(db, name, adminUsername(c), "agent_preset_delete", name+"@"+version)
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
@@ -1068,7 +1019,7 @@ func setPresetQuality(db *sql.DB) gin.HandlerFunc {
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "更新失败")
 			return
 		}
-		_ = serverstore.AuditLog(db, adminUsername(c), "agent_preset_qualify", name+"@"+version+"="+req.Quality)
+		_ = serverstore.AuditLogApp(db, name, adminUsername(c), "agent_preset_qualify", name+"@"+version+"="+req.Quality)
 		c.JSON(http.StatusOK, gin.H{"ok": true, "quality": req.Quality})
 	}
 }

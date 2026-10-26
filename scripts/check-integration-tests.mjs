@@ -272,6 +272,9 @@ function reportsResultPass(output) {
 const CONTRACT_TESTS = [
   { id: 'dex', path: 'integration-tests/dex/dex-sso-test.py', minCases: 33 },
   { id: 'ldap', path: 'integration-tests/openldap/ldap-rbac-brand-test.py', minCases: 35 },
+  // F-12（2026-10-26 能力中心盘点）：跨层能力生命周期 E2E —— 员工上传 → 管理员审批 →
+  // 第二账号安装/更新（真 server + 真 wire，GET 归档）。判据表见 CAPABILITY_EXPECTED_CRITERIA。
+  { id: 'capability', path: 'integration-tests/capability-lifecycle.py', minCases: 22 },
 ]
 
 /**
@@ -308,10 +311,26 @@ const LDAP_EXPECTED_CRITERIA = [
   { id: 'portal-download-section', positive: 1, negative: 2 },
 ]
 
-/** 逐用例的判据登记表（唯一真源：上面两张表）。 */
+// 能力生命周期（cross-layer E2E）。10 条判据、22 条夹具（`--dump-criteria` 的精确值）。
+// 增删判据/夹具必须同步这里：只用"总数下限"当棘轮时删除是隐形的（第十三轮 F-04）。
+const CAPABILITY_EXPECTED_CRITERIA = [
+  { id: 'upload-created', positive: 1, negative: 1 },
+  { id: 'pending-approval-queued', positive: 1, negative: 1 },
+  { id: 'pending-not-visible', positive: 1, negative: 1 },
+  { id: 'approve-committed', positive: 1, negative: 1 },
+  { id: 'visibility-requires-grant', positive: 1, negative: 1 },
+  { id: 'grant-visible', positive: 1, negative: 1 },
+  { id: 'archive-install', positive: 1, negative: 2 },
+  { id: 'archive-bytes-equal-upload', positive: 1, negative: 1 },
+  { id: 'update-version', positive: 1, negative: 2 },
+  { id: 'legacy-version-still-served', positive: 1, negative: 1 },
+]
+
+/** 逐用例的判据登记表（唯一真源：上面几张表）。 */
 const CONTRACT_CRITERIA = new Map([
   [CONTRACT_TESTS[0].id, DEX_EXPECTED_CRITERIA],
   [CONTRACT_TESTS[1].id, LDAP_EXPECTED_CRITERIA],
+  [CONTRACT_TESTS[2].id, CAPABILITY_EXPECTED_CRITERIA],
 ])
 
 /**
@@ -503,6 +522,27 @@ const INTEGRATION_ENTRIES = [
       "missing-server @ skip('missing-server', `服务端 ${SERVER}/healthz 不可达/非 200（${detail}）`, '起服务端或用 --server 指向正确的地址')",
     ],
   },
+  // F-12（2026-10-26）：跨层能力生命周期 E2E —— 员工上传 → 管理员审批 → 第二账号安装/更新。
+  // 真 server + 真 wire（无假网关场景：它测的是**跨层状态机**，不是登录协议；自证由
+  // --self-test / --self-check / 逐条判据变异 + 真实运行承担）。
+  {
+    path: 'integration-tests/capability-lifecycle.py',
+    role: 'contract-test',
+    runner: 'python3',
+    aggregatePath: 'capability-lifecycle.py',
+    aggregateName: '4. 能力生命周期（上传→审批→安装/更新）',
+    minJudgments: CAPABILITY_EXPECTED_CRITERIA.length,
+    skipOutlet: 'skip',
+    skipReasons: ['missing-server', 'missing-credentials'],
+    // SKIP 出口调用点清单（门禁按 `<原因码> @ <归一化代码行>` 做双向多重集对账）。
+    skipCallSites: [
+      "missing-credentials @ return skip('missing-credentials', '缺这些账号参数/环境变量：' + ', '.join(f'{label}(账号/密码)' for label in missing) + ' —— 本用例需要员工A/员工B/管理员三个真实账号')",
+      "missing-credentials @ return skip('missing-credentials', f'员工A 登录失败（status={employee_login.status}）—— ' '账号/密码不对，或该服务端未启用 local 登录')",
+      "missing-credentials @ return skip('missing-credentials', f'员工B（第二个账号）登录失败（status={second_login.status}）—— 账号/密码不对')",
+      "missing-credentials @ return skip('missing-credentials', f'管理员登录未拿到会话（status={admin_login.status}' f'{\", mfa_required=True（本用例不做第二步登录）\" if mfa else \"\"}）—— ' '需要本地管理员账号（capability:write）')",
+      "missing-server @ return skip('missing-server', f'{server}/healthz 不可达/非 200（status={health.status}）—— 服务端没起来')",
+    ],
+  },
 ]
 
 /**
@@ -521,6 +561,8 @@ const SKIP_REASON_CODES = new Map([
   ['missing-provider', '服务端没配置本用例要求的 IdP / LDAP provider'],
   ['missing-app', '缺打包产物（Electron app 目录不存在）'],
   ['missing-display', '没有可用的 X 显示（DISPLAY 与 X socket 都不可用）'],
+  // 能力生命周期 E2E：需要员工A / 员工B / 管理员三个真实账号（缺参数/登录失败/MFA 未做第二步）。
+  ['missing-credentials', '缺测试账号（参数或 CAPABILITY_E2E_* 环境变量）/ 登录失败 / 管理员开了 MFA'],
 ])
 
 /** 能提供"机器可读判定清单"的角色 —— 只有它们可以接进聚合层。 */
@@ -530,7 +572,8 @@ const JUDGMENT_BEARING_ROLES = new Set(['contract-test', 'judged-runner'])
  * 新增一条腿**不能**靠"多一条恒 SKIP 的接线"把总量撑住，删判据也不能把总量压下去。
  */
 const GROUP_MIN_JUDGMENTS = DEX_EXPECTED_CRITERIA.length
-  + LDAP_EXPECTED_CRITERIA.length + ELECTRON_SHOTS_EXPECTED_ASSERTIONS.length
+  + LDAP_EXPECTED_CRITERIA.length + CAPABILITY_EXPECTED_CRITERIA.length
+  + ELECTRON_SHOTS_EXPECTED_ASSERTIONS.length
 
 /**
  * 语法/判据面扫描的扩展名（`INTEGRATION_ENTRIES` 必须覆盖它们全部）。
@@ -2281,7 +2324,7 @@ for (const file of mjsFiles) {
 // 1d. 聚合层 run-all.sh：一项都没跑起来 ⇒ 77，且绝不报 PASS（六处形态⑥）
 //
 // 真机端到端（Docker + 真实服务端 + Xvfb）不在 CI；这里断言的是**聚合契约**：
-// 三个脚本全 SKIP 时，run-all.sh 必须以 77 收尾并打印 RESULT: SKIP ——
+// 全部用例全 SKIP 时，run-all.sh 必须以 77 收尾并打印 RESULT: SKIP ——
 // "什么都没验证"绝不能被下游当成 PASS。
 // ---------------------------------------------------------------------------
 
@@ -2303,14 +2346,14 @@ for (const file of mjsFiles) {
   const detail = output.trim().split('\n').slice(-4).join(' / ')
   coverageWitness.aggregateSkipExit = aggregate.status
   // **判决观测**（R19A-03）：原始事实 = 实跑退出码 + 输出里有没有 RESULT: SKIP/PASS。
-  recordLayerVerdict('聚合层三项全 SKIP ⇒ 77 且不报 PASS', {
+  recordLayerVerdict('聚合层全项 SKIP ⇒ 77 且不报 PASS', {
     check: 'aggregate-skip', status: aggregate.status,
     reportedSkip: output.includes('RESULT: SKIP'), reportedPass: reportsResultPass(output),
   })
-  check(witnessed('aggregate-77', aggregate.status === 77), `形态⑥: 三项全 SKIP 时 run-all.sh 必须 exit 77（实际 ${aggregate.status}）：${detail}`)
+  check(witnessed('aggregate-77', aggregate.status === 77), `形态⑥: 全部用例全 SKIP 时 run-all.sh 必须 exit 77（实际 ${aggregate.status}）：${detail}`)
   check(output.includes('RESULT: SKIP'), `形态⑥: 聚合层必须打印 RESULT: SKIP，实际 ${detail}`)
   check(!reportsResultPass(output), `形态⑥: 一项都没跑起来时不得打印 RESULT: PASS（任何空白/大小写拼写），实际 ${detail}`)
-  note('聚合层：三项全 SKIP ⇒ exit 77 / RESULT: SKIP ✓')
+  note('聚合层：全部用例全 SKIP ⇒ exit 77 / RESULT: SKIP ✓')
 
   // ---- 形态⑥自证（FIX-47④b）：**非规范拼写**的 PASS 声明必须被咬住 ----------
   // 为什么要在**副本**上再造一个聚合层：上一条 `!reportsResultPass(output)` 依赖
@@ -2326,6 +2369,7 @@ for (const file of mjsFiles) {
     writeFileSync(join(mutantRoot, 'dex', 'dex-sso-test.py'), 'import sys\nsys.exit(77)\n')
     writeFileSync(join(mutantRoot, 'openldap', 'ldap-rbac-brand-test.py'), 'import sys\nsys.exit(77)\n')
     writeFileSync(join(mutantRoot, 'electron-shots', 'electron-shots.mjs'), 'process.exit(77)\n')
+    writeFileSync(join(mutantRoot, 'capability-lifecycle.py'), 'import sys\nsys.exit(77)\n')
     const skipLine = '  echo "RESULT: SKIP(一项都没跑起来:${skipped} 项因环境缺失跳过)"'
     const original = readFileSync(join(ROOT, 'integration-tests', 'run-all.sh'), 'utf8')
     check(original.includes(skipLine),
@@ -9552,7 +9596,7 @@ const LAYER_VERDICT_RULES = new Map([
     // `negative-control` 那一条**必须**有违规（"这一层真的会红"的正向证据）；真跑的场景相反。
     judge: o => (o.check === 'negative-control' ? o.violations.length > 0 : o.violations.length === 0),
   }],
-  ['聚合层三项全 SKIP ⇒ 77 且不报 PASS', {
+  ['聚合层全项 SKIP ⇒ 77 且不报 PASS', {
     min: () => 1,
     judge: o => o.status === 77 && o.reportedSkip === true && o.reportedPass === false,
   }],
@@ -9633,7 +9677,7 @@ const COVERED_LAYER_LABELS = [
   '契约端到端变异',
   'electron-shots',
   '假网关场景',
-  '聚合层三项全 SKIP ⇒ 77 且不报 PASS',
+  '聚合层全项 SKIP ⇒ 77 且不报 PASS',
   '端到端覆盖面 ↔ CI 执行面：',
 ]
 const COVERED_LAYERS = [
@@ -9650,7 +9694,7 @@ const COVERED_LAYERS = [
   `契约端到端变异（${coverageWitness.contractMutations} 条判据逐条掏成恒真、judge 恒真 / 只改计票侧 / 运行期通道换恒真包装 —— 全部必须变红）`,
   `electron-shots（${coverageWitness.electronShotsAssertions} 条判据：接线 + SKIP(77) 契约 + 判据表自检 + 判定通道自检 + 4 条判定通道变异）`,
   `假网关场景（${SCENARIOS.length} 条：正例必须绿 / 变异必须红 / 环境缺失必须 SKIP 且不得报 PASS）`,
-  `聚合层三项全 SKIP ⇒ 77 且不报 PASS（实测 exit ${coverageWitness.aggregateSkipExit}）`,
+  `聚合层全项 SKIP ⇒ 77 且不报 PASS（实测 exit ${coverageWitness.aggregateSkipExit}）`,
   `端到端覆盖面 ↔ CI 执行面：文本面命中 ${E2E_CI_TEXT_HITS_DECLARED} 处、`
     + `执行面闭包（workflow \`run:\` 命令位 → 本地复合 action → manifest scripts 别名 → 仓内包装脚本/`
     + `\`spawn\`·\`exec\` 目标）真实接线 ${E2E_CI_REAL_SURFACE_FILES_DECLARED} 处（均为登记值，变了即红）；`
@@ -9696,7 +9740,7 @@ for (const [id, expected, witness] of [
   ['契约判定通道自证', '合同脚本 --self-check 经运行期通道求值的夹具总数 > 0', coverageWitness.contractSelfCheckFixtures > 0],
   ['契约端到端变异', '真的跑过的逐条判据变异数 > 0', coverageWitness.contractMutations > 0],
   ['electron-shots', '判据表的判据条数 ≥ 1', coverageWitness.electronShotsAssertions >= 1],
-  ['聚合层三项全 SKIP ⇒ 77 且不报 PASS', '聚合层实跑退出码 = 77', coverageWitness.aggregateSkipExit === 77],
+  ['聚合层全项 SKIP ⇒ 77 且不报 PASS', '聚合层实跑退出码 = 77', coverageWitness.aggregateSkipExit === 77],
 ]) {
   if (witness) continue
   process.stderr.write(`\ncheck-integration-tests: 覆盖层「${id}」没有**执行见证**（${expected}）——\n`
@@ -10012,7 +10056,7 @@ const REQUIRED_JUDGMENT_SITES = [
   { layer: '契约端到端变异', id: 'criteria-tautology', needle: "check(witnessed('criteria-tautology', mutant.status !== 0),\n      `形态⑧: 变异 \\`criteria-tautology" },
   { layer: 'electron-shots', id: 'runtime-mutation', needle: "check(witnessed('runtime-mutation', mutantRun.status !== 0)," },
   { layer: '假网关场景', id: 'scenario-violations', needle: "if (!witnessed('scenario-violations', violations.length === 0)) {\n      for (const violation of violations) fail(" },
-  { layer: '聚合层三项全 SKIP ⇒ 77 且不报 PASS', id: 'aggregate-77', needle: "check(witnessed('aggregate-77', aggregate.status === 77)," },
+  { layer: '聚合层全项 SKIP ⇒ 77 且不报 PASS', id: 'aggregate-77', needle: "check(witnessed('aggregate-77', aggregate.status === 77)," },
   { layer: '端到端覆盖面 ↔ CI 执行面：', id: 'real-surface', needle: "check(witnessed('real-surface', classified.real.length === E2E_CI_REAL_SURFACE_FILES_DECLARED)," },
   // **R23 FIX-22**：三条新登记点 —— 每条都是「上一层判据自己的判据」（掏空它必然可见）。
   { layer: '端到端覆盖面 ↔ CI 执行面：', id: 'runtime-write-detector', needle: "  check(witnessed('runtime-write-detector'," },

@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { hasPermission, PERM_CAP_READ } from '../lib/rbac'
 /** 服务端错误信封的 message + details.field + hints 统一渲染(P1-6,见 lib/api-error.ts)。 */
 import { errorText } from '../lib/api-error'
+import { builtinSourceLabel } from '../lib/capability-display'
 import { AlertTriangle, Boxes, FolderOpen, PackageCheck, RefreshCw } from 'lucide-react'
 
 /**
@@ -238,7 +239,10 @@ export default function BuiltinSkills() {
                     <TableCell>
                       <div className="flex items-center gap-2 font-medium">
                         {s.title || s.name}
-                        {s.source && <Badge variant="outline" className="px-1 py-0 text-[10px]">来源：{s.source}</Badge>}
+                        {/* F-53:服务端 source 是稳定枚举 `builtin`(英文);展示为客户端的「平台内置」。 */}
+                        {s.source && (
+                          <Badge variant="outline" className="px-1 py-0 text-[10px]">来源：{builtinSourceLabel(s.source)}</Badge>
+                        )}
                       </div>
                       <div className="font-mono text-xs text-muted-foreground">{s.name}</div>
                       {s.description && (

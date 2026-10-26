@@ -135,34 +135,12 @@ func TestMergeVersionsOwnNonApproved(t *testing.T) {
 	}
 }
 
-func TestMergeMarketFirstSortsVersions(t *testing.T) {
-	// B5(2026-09-01):同名 market 行 [1.0.0,2.0.0] 与 org 行 [1.5.0] 折叠后,
-	// versions 必须升序 [1.0.0,1.5.0,2.0.0](append 顺序会得到 1.0.0,2.0.0,1.5.0)。
-	items := []CapabilityItem{
-		{Kind: KindSkill, Source: SourceMarket, Name: "hub", Version: "2.0.0", Status: "approved", Versions: []string{"1.0.0", "2.0.0"}},
-		{Kind: KindSkill, Source: SourceOrg, Name: "hub", Version: "1.5.0", Status: "approved", Versions: []string{"1.5.0"}},
-	}
-	merged := mergeMarketFirst(items)
-	if len(merged) != 1 {
-		t.Fatalf("len=%d, want 1", len(merged))
-	}
-	m := merged[0]
-	if m.Source != SourceMarket {
-		t.Fatalf("source=%s, want market first", m.Source)
-	}
-	want := []string{"1.0.0", "1.5.0", "2.0.0"}
-	if len(m.Versions) != len(want) {
-		t.Fatalf("versions=%v, want %v", m.Versions, want)
-	}
-	for i := range want {
-		if m.Versions[i] != want[i] {
-			t.Fatalf("versions=%v, want %v (ascending)", m.Versions, want)
-		}
-	}
-	if m.Version != "2.0.0" {
-		t.Fatalf("current version=%s, want 2.0.0 (market highest)", m.Version)
-	}
-}
+// 旧 TestMergeMarketFirstSortsVersions 随 mergeMarketFirst 一起删除（F-45，
+// 能力中心审计 2026-10-26）：同名折叠的前提是「市场行与组织行同名并存」，而
+// apps 以 (kind, app_id) 唯一 ⇒ 同一 kind 下名字全局唯一，两条渠道不可能同时
+// 持有同一个名字（listCapabilities 的 market 列表与 org 列表各按 channel 过滤）。
+// 折叠分支因此不可达，`sortVersions`/`appendUnique*` 三个 helper 也只剩它一个
+// 调用方 —— 一并删除，而不是留一段"看起来在用"的死代码养一条测它的用例。
 
 func TestListCapabilitiesVisibility(t *testing.T) {
 	r, db, _, userTokens := setupRouter(t)
@@ -463,28 +441,9 @@ func TestCapabilitiesMarketMerge(t *testing.T) {
 	}
 }
 
-// TestMergeMarketFirst 直接验证同名折叠(防御性):市场行优先、组织版本并入。
-func TestMergeMarketFirst(t *testing.T) {
-	items := []CapabilityItem{
-		{Kind: KindSkill, Source: SourceMarket, Name: "dup", Version: "1.0.0", Status: "approved"},
-		{Kind: KindSkill, Source: SourceOrg, Name: "dup", Version: "2.0.0", Status: "approved"},
-		{Kind: KindSkill, Source: SourceOrg, Name: "only-org", Version: "1.0.0", Status: "approved"},
-	}
-	out := mergeMarketFirst(items)
-	if len(out) != 2 {
-		t.Fatalf("merged len=%d, want 2", len(out))
-	}
-	for _, it := range out {
-		if it.Name == "dup" {
-			if it.Source != SourceMarket {
-				t.Fatalf("dup source=%s, want market", it.Source)
-			}
-			if len(it.Versions) < 2 {
-				t.Fatalf("dup versions=%v, want org merged", it.Versions)
-			}
-		}
-	}
-}
+// TestMergeMarketFirst 随 mergeMarketFirst 一起删除（F-45，2026-10-26）：
+// 同名折叠的前提（市场行与组织行同名并存）在 apps 以 (kind, app_id) 唯一之后
+// 不可达。保留一条"测死代码"的用例只会让人以为这条语义还在服务。
 
 // TestCapabilitiesOfficialScore 0059: 聚合面 official/downloads/calls/score 字段与排序。
 func TestCapabilitiesOfficialScore(t *testing.T) {

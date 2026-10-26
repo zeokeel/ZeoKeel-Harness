@@ -142,18 +142,6 @@ func appToSkill(a App, r *Release) Skill {
 	return out
 }
 
-// SkillNameExists 市场命名占用检查。
-func SkillNameExists(db *sql.DB, name string) (bool, error) {
-	a, err := GetApp(db, AppKindSkill, name)
-	if errors.Is(err, ErrNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return a.Channel == AppChannelMarket, nil
-}
-
 // AddSkill 登记一个市场 App(可带首个版本的归档)。跨渠道同名互斥。
 func AddSkill(db *sql.DB, s *Skill) (int64, error) {
 	if existing, err := GetApp(db, AppKindSkill, s.Name); err == nil {

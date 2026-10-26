@@ -268,7 +268,7 @@ docker compose up -d
 docker compose ps        # expect zeokeel-caddy / zeokeel-server / zeokeel-postgres all Up
 ```
 
-The first start runs every database migration (currently `0001–0089`) and creates the usage
+The first start runs every database migration (currently `0001–0090`) and creates the usage
 partitions; it **can take 1–2 minutes**. `up -d` returning does not mean the service is ready — the
 health check is mandatory:
 

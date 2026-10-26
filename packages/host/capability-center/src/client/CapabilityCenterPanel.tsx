@@ -73,8 +73,23 @@ interface CapabilityItem {
   score?: number | undefined
   downloads?: number | undefined
   calls?: number | undefined
-  /** 该名全部 approved 版本（历史版本展开用；不含当前版本则单元素）。 */
+  /**
+   * 该名**全部 approved 版本**（升序；历史版本展开/「更新到 vX」用）。
+   *
+   * ⚠️ 2026-10-26（F-33）：这里**只**放 approved 版本。旧实现把每一行的
+   * `version`（含本机草稿、pending 版本）都塞进来，于是未审核的版本被当成
+   * "可安装的批准集"（详情里的版本列表 / `hasUpdateFor` 的基准都会读到它）。
+   * 本机那一份的版本另见 {@link localVersion}，两个事实分开表达。
+   */
   versions: string[]
+  /**
+   * 本机那一份的版本（磁盘 provenance / 本机草稿），**不是**批准版本。
+   *
+   * 与 {@link version} 的关系：`version` 是"卡片上展示的版本"（最高 approved，
+   * 没有 approved 时回落到 pending/本地）；这一格永远只回答"本机装的是哪一版"。
+   * 只在本机行存在时下发。
+   */
+  localVersion?: string | undefined
   /** 已安装（磁盘存在同名目录，且并非本机创作）。 */
   installed: boolean
   /** 已装版本（hasUpdate 比较基准；本地创作时为其版本）。 */
@@ -449,8 +464,29 @@ export function installEndpoint(item: CapabilityItem, version: string): string {
       : `/api/zeokeel/shared-skills/${encodeURIComponent(item.name)}/${encodeURIComponent(version)}/install`
   } else {
     base = `/api/zeokeel/agent-presets/${encodeURIComponent(item.name)}/install`
+    // F-30（2026-10-26 盘点）：员工面 `/agent-presets/:name/archive` **两个渠道都服务**
+    // （市场智能体与组织共享智能体共用这一条安装通路），宿主判不出"刚才装的是哪条渠道"。
+    // 面板手里有这一格（目录行的 source）⇒ 显式带过去，宿主据此写 provenance。
+    // 不带它时市场智能体会在「我的」里显示成「组织」（旧宿主/旧客户端的默认行为仍是 org）。
+    const hint = installChannelHint(item)
+    if (hint !== undefined) base = `${base}?channel=${hint}`
   }
   return base
+}
+
+/**
+ * 智能体安装的**渠道提示**（F-30；`undefined` = 不带该参数，宿主按历史行为记 `org`）。
+ *
+ * 只对智能体有意义：技能的两条安装通路按端点就分开了渠道（marketplace 归档 =
+ * 市场，shared-skills = 组织），只有智能体共用一个归档端点，宿主自己判不出。
+ * @param item - 能力中心的一行（只要有 kind/source）。
+ * @returns `'market'` / `'org'` / undefined（本地行不该走安装，不带提示）。
+ */
+export function installChannelHint(item: Pick<CapabilityItem, 'kind' | 'source'>): 'market' | 'org' | undefined {
+  if (item.kind !== 'agent') return undefined
+  if (item.source === 'market') return 'market'
+  if (item.source === 'org') return 'org'
+  return undefined
 }
 
 /**
@@ -980,8 +1016,14 @@ export function nameTakenError(displayName: string): string {
  * `/api/zeokeel/agent-presets/upload`）会**透传服务端原始状态码**，而 409 同时是
  * `NAME_TAKEN` / `VERSION_*` / `CONFLICT` / `ARCHIVE_CLEARED` / `APP_DELISTED`
  * 的码 —— 按 409 一律说「名称已被占用」会把「已下架冻结」说成重名（本仓踩过同形的坑）。
- * 因此只有 `APP_DELISTED` 走专用文案；**其它任何码都逐字沿用本函数引入前的行为**
- * （服务端 message 优先，缺省回落 `HTTP <status>`），不被这条分支吞掉。
+ * 映射面（2026-10-26 F-32 扩到版本/内容类拒绝）：
+ *  - `APP_DELISTED` ⇒ 下架冻结（R5-B-1 的既有专用文案）；
+ *  - `VERSION_NOT_INCREASING` / `VERSION_NOT_NEWER` / `VERSION_EXISTS` /
+ *    `VERSION_INVALID` / `CONTENT_UNCHANGED` ⇒ 本地化的"怎么修"（这几类是发布
+ *    内核的稳定码，服务端原文是中文/英文混杂的实现消息，直接给用户看等于没解释）；
+ *  - **其它任何码**逐字沿用本函数引入前的行为（服务端 message 优先，缺省回落
+ *    `HTTP <status>`），不被映射表吞掉（`NAME_TAKEN` 的服务端原文带名字，比通用
+ *    文案更有用；`PENDING_LIMIT` 同理 —— 既有回归逐字钉住这两条）。
  *
  * 抽成纯函数的理由与 {@link nameTakenError} 相同：文案取自模块级 `t()`，只有
  * "切语言后跟着变"的断言才有判别力，且"其它码不被吞"需要能被直接打坏。
@@ -992,6 +1034,12 @@ export function uploadFailureText(
   failure: { code?: string | undefined; message?: string | undefined; status: number },
 ): string {
   if (failure.code === 'APP_DELISTED') return t('capability.delistedFrozen')
+  // 版本/内容类拒绝：稳定码 → 本地化的"为什么 + 怎么修"（F-32）。
+  if (failure.code === 'VERSION_NOT_INCREASING') return t('capability.versionNotIncreasing')
+  if (failure.code === 'VERSION_NOT_NEWER') return t('capability.versionNotNewer')
+  if (failure.code === 'VERSION_EXISTS') return t('capability.versionExists')
+  if (failure.code === 'VERSION_INVALID') return t('capability.versionInvalid')
+  if (failure.code === 'CONTENT_UNCHANGED') return t('capability.contentUnchanged')
   if (failure.message !== undefined && failure.message !== '') return failure.message
   return `HTTP ${String(failure.status)}`
 }
@@ -1051,7 +1099,9 @@ function maxOf(ordered: readonly CapabilityItem[], read: (item: CapabilityItem) 
  *
  * 其余口径保持 2026-08-25 决策：展示行来源市场优先；`displayName`/`description`
  * 取「较新」（版本高者优先）的非空值，避免市场行用与 name 同值的标题盖掉组织行的
- * 中文标题；`version` 展示最高 approved 版本（与来源无关的版本事实）。
+ * 中文标题；`version` 展示最高 approved 版本（没有 approved 时回落 pending/本机
+ * 版本以便作者面看得见），`versions` **只含 approved**，本机版本单列
+ * `localVersion`（F-33：未审核的版本不得混进批准集）。
  * @param items - 各来源的行（同一条可来自多个载荷）。
  * @returns 每个（kind, name）一行，按 `kind:name` 升序（面板随后自行排序）。
  */
@@ -1083,14 +1133,31 @@ function mergeItemGroup(rows: readonly CapabilityItem[]): CapabilityItem {
   /** 本机那一行（磁盘事实的唯一来源）；没有本机行时为 undefined。 */
   const local = rows.find(row => row.source === 'local')
 
-  const all = new Set<string>()
+  // 批准集 = 服务端下发的 `versions`（契约上就是 approved 集合）∪ 本批里
+  // **status === 'approved'** 的那些行的 `version`。
+  //
+  // F-33（2026-10-26）：旧实现把**所有**行的 `version`（本机草稿 / pending /
+  // rejected）都并进同一个集合，再按 `status==='approved'` 过滤出"展示版本" ——
+  // 过滤只影响 `version` 的选择，`versions` 本身仍然混进了未批版本，于是详情里的
+  // "版本列表"与 `hasUpdateFor` 的基准都可能读到一个从未批准过的号。
+  const approvedSet = new Set<string>()
   for (const row of rows) {
-    for (const version of row.versions) all.add(version)
-    if (row.version !== '') all.add(row.version)
+    for (const version of row.versions) approvedSet.add(version)
+    if (row.status === 'approved' && row.version !== '') approvedSet.add(row.version)
   }
-  const versions = [...all].sort(compareVersions)
-  const approved = versions.filter(v => rows.some(row => row.version === v && row.status === 'approved'))
-  const version = approved[approved.length - 1] ?? versions[versions.length - 1] ?? byAuthority[0]!.version
+  const versions = [...approvedSet].sort(compareVersions)
+  /** 本机那一份的版本（磁盘事实；与批准集**分开**表达，见 {@link CapabilityItem.localVersion}）。 */
+  const localVersion = local !== undefined && local.version !== '' ? local.version : undefined
+  /** 作者面正在审/被拒的版本（有 approved 时只用于兜底展示，不进批准集）。 */
+  const pendingVersions = rows
+    .filter(row => row.status === 'pending' || row.status === 'rejected')
+    .map(row => row.version)
+    .filter(version => version !== '')
+    .sort(compareVersions)
+  const version = versions[versions.length - 1]
+    ?? pendingVersions[pendingVersions.length - 1]
+    ?? localVersion
+    ?? byAuthority[0]!.version
   const name = byAuthority[0]!.name
   const displayName = pickByAuthority(byFreshness, row => row.displayName, v => v !== '' && v !== name)
     ?? pickByAuthority(byFreshness, row => row.displayName, v => v !== '')
@@ -1116,6 +1183,7 @@ function mergeItemGroup(rows: readonly CapabilityItem[]): CapabilityItem {
     author: pickByAuthority(byAuthority, row => row.author, v => v !== '') ?? '',
     version,
     versions,
+    localVersion,
     // 磁盘上真有这一份（本机行由扫盘得到）⇒ 已安装。
     installed: rows.some(row => row.installed === true || row.source === 'local'),
     installedVersion: pickByAuthority(byAuthority, row => row.installedVersion, () => true),
@@ -1392,6 +1460,8 @@ export interface CapabilityDetailViewProps {
   busy: boolean
   /** 站级闸（另有动作在飞）——`install()` 对它静默 return，所以必须禁用并说明。 */
   blocked: boolean
+  /** 宿主下发的只读事实（auditor）：不渲染任何写入口。 */
+  readOnly: boolean
   /** 分段（Chip/来源口径与列表一致）。 */
   tab: SourceTab
   /** 页脚动作（由面板按同一套 `planCardActionForTab` 渲染后传入）。 */
@@ -1430,6 +1500,7 @@ export function CapabilityDetailView({
   target,
   busy,
   blocked,
+  readOnly,
   tab,
   actions,
   notice,
@@ -1449,7 +1520,8 @@ export function CapabilityDetailView({
   const chips = item === undefined ? [] : cardChips(item, tab)
   const dots = item === undefined ? [] : cardStatusDots(item, tab)
   const kindKey: CapabilityKey = (skill !== undefined || item!.kind === 'skill') ? 'capability.typeSkill' : 'capability.typeAgent'
-  const versions = item !== undefined && versionInstallSupported(item) ? item.versions : []
+  // 只读账号不渲染"按版本安装"入口（写面必然 403）。
+  const versions = item !== undefined && !readOnly && versionInstallSupported(item) ? item.versions : []
   const marketLatestOnly = item !== undefined && item.kind === 'skill' && item.source === 'market'
   const rejected = item !== undefined && item.status === 'rejected'
   const delisted = item !== undefined && isDelistedItem(item)
@@ -1712,6 +1784,22 @@ interface PendingInstall {
   run: (overwrite: boolean) => Promise<void>
 }
 
+/**
+ * 待确认的一次上传（F-32）：预检拿到的"将发布版本"先给作者看一眼。
+ *
+ * `version` = 包内元数据里的版本（SKILL.md frontmatter / preset.yml），是**即将提交**
+ * 的那一版；`run` 是确认后真正发的那一发（把同一个版本带给宿主，避免两次打包之间
+ * 文件被改动导致"给我看的版本"和"实际发布的版本"不一致）。
+ */
+interface PendingUpload {
+  /** `{kind}:{name}`（与 action.key 同口径）。 */
+  key: string
+  /** 展示名（服务端目录名，不是 displayName）。 */
+  name: string
+  version?: string | undefined
+  run: () => Promise<void>
+}
+
 /** 每个分区的加载状态（分区独立错误态）。 */
 type SectionStatus = 'idle' | 'loading' | 'ok' | 'error'
 interface SectionState {
@@ -1724,13 +1812,70 @@ interface ActionState {
   kind: 'installing' | 'uninstalling' | 'uploading' | 'done-install' | 'done-uninstall' | 'done-upload' | 'failed'
   error?: string | undefined
   name?: string | undefined
+  /** 上传成功回执里的版本（F-32：让作者对上"我发的是哪一版"）。 */
+  version?: string | undefined
+}
+
+/** 本机写面错误信封里能取到的稳定字段（扁平 `{error,code}` 与嵌套 `{error:{code}}` 两种形状）。 */
+export function readFailureEnvelope(data: unknown): { code?: string | undefined; message?: string | undefined } {
+  if (typeof data !== 'object' || data === null) return {}
+  const flat = data as { error?: unknown; code?: unknown }
+  const nested = typeof flat.error === 'object' && flat.error !== null
+    ? flat.error as { code?: unknown; message?: unknown }
+    : undefined
+  const code = typeof flat.code === 'string' && flat.code !== ''
+    ? flat.code
+    : typeof nested?.code === 'string' && nested.code !== '' ? nested.code : undefined
+  const message = typeof flat.error === 'string' && flat.error !== ''
+    ? flat.error
+    : typeof nested?.message === 'string' && nested.message !== '' ? nested.message : undefined
+  return {
+    ...code === undefined ? {} : { code },
+    ...message === undefined ? {} : { message },
+  }
+}
+
+/**
+ * 上传前确认条的文案与按钮标签（F-32，**唯一实现**）。
+ *
+ * 版本来自包内元数据（本地预检读出来的那一份）；读不到时**不编造**，文案改成
+ * "包内未写版本号"并说明服务端会按 1.0.0 处理（多数情况下会被发布内核拒绝）。
+ * @param preview - 预检回执（包名 + 版本）。
+ * @returns 确认条正文与主按钮标签（都随当前语言）。
+ */
+export function uploadPreviewText(
+  preview: { name: string; version?: string | undefined },
+): { text: string, action: string } {
+  if (preview.version !== undefined && preview.version !== '') {
+    return {
+      text: t('capability.uploadVersionConfirm', { name: preview.name, version: preview.version }),
+      action: t('capability.uploadPublish', { version: preview.version }),
+    }
+  }
+  return { text: t('capability.uploadVersionUnknown', { name: preview.name }), action: t('capability.upload') }
+}
+
+/**
+ * 一次分区取数的载荷：行 + 宿主的**只读**事实（auditor）。
+ *
+ * `auditor` 由宿主按 fence 的 `writeGuard()` 算（唯一实现），面板只用它**收口渲染**
+ * （F-54：auditor 的安装/上传/卸载按钮此前照样显示，点了必然 403）。缺省 = 不是
+ * auditor（旧宿主不下发该字段 ⇒ 行为不变）。
+ */
+interface CapabilityPayload {
+  items: CapabilityItem[]
+  auditor?: boolean | undefined
 }
 
 /** 一次只读取数（三个分区共用；错误信息带状态码，便于分区错误态显示）。 */
-async function fetchCapabilityRows(source: 'market' | 'local' | 'own'): Promise<CapabilityItem[]> {
+async function fetchCapabilityPayload(source: 'market' | 'local' | 'own'): Promise<CapabilityPayload> {
   const res = await fetch(`/api/zeokeel/capabilities?source=${source}`)
   if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
-  return ((await res.json()) as { items?: CapabilityItem[] }).items ?? []
+  const data = (await res.json()) as { items?: CapabilityItem[]; auditor?: unknown }
+  return {
+    items: data.items ?? [],
+    ...data.auditor === true ? { auditor: true } : {},
+  }
 }
 
 /**
@@ -1775,6 +1920,19 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
   const [uninstallConfirmKey, setUninstallConfirmKey] = useState<string | null>(null)
   /** 正在看详情的卡；null = 列表视图（详情改为面板内整页子视图，2026-10-26）。 */
   const [detail, setDetail] = useState<DetailTarget | null>(null)
+  /**
+   * 宿主下发的**只读**事实（auditor 账号）。`false` = 正常账号 / 旧宿主没下发。
+   *
+   * F-54：写按钮（安装/上传/卸载）此前对 auditor 照样渲染，点下去必然是宿主 403；
+   * 现在按这一格收口渲染（判定本身仍在宿主，面板只是不再展示必然失败的入口）。
+   */
+  const [readOnly, setReadOnly] = useState(false)
+  /**
+   * 待确认的一次上传（F-32）：预检拿到的"将发布版本"先给作者看一眼。
+   *
+   * `run` 是真正提交的那一发（带预检得到的版本）；用户在确认条上点「发布 vX」后才发。
+   */
+  const [uploadConfirm, setUploadConfirm] = useState<PendingUpload | null>(null)
   const loadSeqRef = useRef(0)
   /**
    * 站内是否有动作在飞（安装/卸载/上传）。
@@ -1800,13 +1958,14 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     setSections(prev => ({ ...prev, [key]: { status: prev[key]?.status ?? 'idle', error: prev[key]?.error ?? '', ...state } }))
   }
 
-  const loadSection = async (key: SectionKey, fetcher: () => Promise<CapabilityItem[]>): Promise<void> => {
+  const loadSection = async (key: SectionKey, fetcher: () => Promise<CapabilityPayload>): Promise<void> => {
     const seq = loadSeqRef.current
     setSection(key, { status: 'loading', error: '' })
     try {
-      const rows = await fetcher()
+      const payload = await fetcher()
       if (seq !== loadSeqRef.current) return
-      setItems(prev => applySectionRows(prev, key, rows))
+      setItems(prev => applySectionRows(prev, key, payload.items))
+      if (payload.auditor !== undefined) setReadOnly(payload.auditor)
       setSection(key, { status: 'ok' })
     } catch (cause) {
       if (seq !== loadSeqRef.current) return
@@ -1831,9 +1990,9 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     // 三分区并发（各自独立错误态）：market = 市场+组织合并；local = 本机（已装 + 自制）；
     // own = 我上传（作者面，含 pending/rejected —— 盘点 F-08 的修法）。
     // loading 由分区状态驱动（renderSection 按 tab 显示骨架/错误/空态）。
-    void loadSection('market', () => fetchCapabilityRows('market'))
-    void loadSection('mine', () => fetchCapabilityRows('local'))
-    void loadSection('own', () => fetchCapabilityRows('own'))
+    void loadSection('market', () => fetchCapabilityPayload('market'))
+    void loadSection('mine', () => fetchCapabilityPayload('local'))
+    void loadSection('own', () => fetchCapabilityPayload('own'))
   }
 
   useEffect(() => {
@@ -1856,10 +2015,11 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
       const seq = loadSeqRef.current
       const refresh = async (key: SectionKey, source: 'market' | 'own'): Promise<void> => {
         try {
-          const rows = await fetchCapabilityRows(source)
+          const payload = await fetchCapabilityPayload(source)
           if (seq !== loadSeqRef.current) return
           // 与 loadSection 同一条归约（唯一实现），不在这里另写一份 filter。
-          setItems(prev => applySectionRows(prev, key, rows))
+          setItems(prev => applySectionRows(prev, key, payload.items))
+          if (payload.auditor !== undefined) setReadOnly(payload.auditor)
           // 后台刷新成功即退出先前 error 态——否则首次加载失败后,错误提示与
           // 重试按钮会遮住已刷新的数据(2026-09-01 深挖)。
           setSection(key, { status: 'ok', error: '' })
@@ -2038,11 +2198,27 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
+  /** 上传接口路径（技能与智能体各一条本机代理）。 */
+  const uploadPathOf = (item: CapabilityItem): string =>
+    item.kind === 'skill' ? '/api/zeokeel/shared-skills/upload' : '/api/zeokeel/agent-presets/upload'
+
+  /**
+   * 上传入口（**两段式**，F-32）：先本地预检拿到"将发布版本"，确认后才真正提交。
+   *
+   * 为什么必须先预检再确认：版本只能从包内元数据读（`SKILL.md` frontmatter /
+   * `preset.yml`），磁盘行上的 provenance 版本是**安装时**那一版，用户改过 frontmatter
+   * 之后就旧了；不预检就没有任何诚实的方式在按钮上写"将发布 vX"。预检同时把
+   * 打包/预检失败（缺字段、正文太短、不是 UTF-8…）提前到点击当口，且文案由宿主按
+   * 请求语言本地化。
+   * @param item - 能力中心的一行（本机草稿或已上架条目的本机副本）。
+   */
   const upload = async (item: CapabilityItem): Promise<void> => {
     // 只拦进行中的动作（与 install/uninstall 守卫一致）；done-*/failed 是
     // 终态展示,不得阻断后续上传——此前 `action !== null` 会在动作终态后
     // 永久锁死上传/重新上传按钮。
     if (action !== null && (action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading')) return
+    // 只读账号（auditor）不发起写请求：宿主一定会 403，这里连预检都不打。
+    if (readOnly) return
     const key = `${item.kind}:${item.name}`
     // 归属权预检(2026-09-02):同名同类型已在能力中心存在且**明确不是**本人归属 →
     // 不发送请求,直接提示「名称已被占用」。服务端仍是权威(他人待审行不可见,
@@ -2062,24 +2238,55 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     }
     setAction({ key, kind: 'uploading' })
     try {
-      const path = item.kind === 'skill' ? '/api/zeokeel/shared-skills/upload' : '/api/zeokeel/agent-presets/upload'
-      const res = await fetch(path, {
+      const res = await fetch(`${uploadPathOf(item)}?preview=1`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: item.name }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: unknown; code?: unknown }
-        // R5-B-1 的客户端尾巴：下架冻结（409 APP_DELISTED）说清"为什么没成 + 怎么解"，
-        // 而不是把服务端 message 原样（或 `HTTP 409`）丢给用户。判据**只看错误码**
-        // （409 同时是 NAME_TAKEN/VERSION_*/CONFLICT 的码），其它码逐字沿用原行为。
-        throw new Error(uploadFailureText({
-          ...typeof data.code === 'string' ? { code: data.code } : {},
-          ...typeof data.error === 'string' ? { message: data.error } : {},
-          status: res.status,
-        }))
+        const envelope = readFailureEnvelope(await res.json().catch(() => ({})))
+        throw new Error(uploadFailureText({ ...envelope, status: res.status }))
       }
-      setAction({ key, kind: 'done-upload', name: item.name })
+      const data = await res.json().catch(() => ({})) as { preview?: { name?: unknown; version?: unknown } }
+      const previewName = typeof data.preview?.name === 'string' && data.preview.name !== '' ? data.preview.name : item.name
+      const version = typeof data.preview?.version === 'string' && data.preview.version !== '' ? data.preview.version : undefined
+      setAction(null)
+      setUploadConfirm({
+        key, name: previewName,
+        ...version === undefined ? {} : { version },
+        run: async () => { await submitUpload(item, previewName, version) },
+      })
+    } catch (cause) {
+      setAction({ key, kind: 'failed', error: cause instanceof Error ? cause.message : undefined, name: item.name })
+    }
+  }
+
+  /**
+   * 真正提交的那一发上传（用户在确认条上点过「发布 vX」之后）。
+   *
+   * 版本随请求一起带给宿主（技能面宿主真的读它并覆盖包内版本，智能体面宿主把它
+   * 随归档转给网关）—— 两次打包之间若文件被改动，提交的仍是**用户确认过的那一版**。
+   * @param item - 能力中心的一行。
+   * @param name - 预检回执里的包名（与目录名可能不同：技能目录名 vs SKILL.md name）。
+   * @param version - 预检回执里的版本。
+   */
+  const submitUpload = async (item: CapabilityItem, name: string, version: string | undefined): Promise<void> => {
+    const key = `${item.kind}:${item.name}`
+    setUploadConfirm(null)
+    setAction({ key, kind: 'uploading' })
+    try {
+      const res = await fetch(uploadPathOf(item), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: item.name, ...version === undefined ? {} : { version } }),
+      })
+      if (!res.ok) {
+        const envelope = readFailureEnvelope(await res.json().catch(() => ({})))
+        // R5-B-1 + F-32：下架冻结 / 版本类 / 内容未变更都走 uploadFailureText 的
+        // 本地化映射（判据**只看错误码**，409 同时是多个码共用的状态）。
+        throw new Error(uploadFailureText({ ...envelope, status: res.status }))
+      }
+      setAction({ key, kind: 'done-upload', name, ...version === undefined ? {} : { version } })
       // 上传成功 ⇒ 刷新全部分区：**own** 会出现/更新这条的 pending 行（「我上传」与
       // 卡片上的状态徽章都靠它），否则用户会看到"传完了但界面还是未上传"（F-08/F-11）。
       loadAll()
@@ -2299,6 +2506,9 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     size: 'sm' | 'md' = 'md',
   ): React.ReactNode => {
     const key = `${item.kind}:${item.name}`
+    // 只读账号（auditor）：宿主对所有写面回 403（§4.5 双保险），渲染"能点但必然失败"
+    // 的按钮是假入口（F-54）—— 这一格只报只读事实，详情按钮仍然可用。
+    if (readOnly) return <Chip tone="neutral" plain>{t('capability.readOnlyBadge')}</Chip>
     return (
       plan.kind === 'uninstall' ? renderUninstall(item, key, busy, blocked, size)
         : plan.kind === 'update' ? (
@@ -2355,7 +2565,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
       size="sm"
       icon={<icons.IconInfo size={13} />}
       aria-label={`${t('capability.detail')} ${title}`}
-      onClick={() => { setDetail(target); setInstallConfirm(null); setUninstallConfirmKey(null) }}
+      onClick={() => { setDetail(target); setInstallConfirm(null); setUninstallConfirmKey(null); setUploadConfirm(null) }}
     >
       {t('capability.detail')}
     </PanelButton>
@@ -2493,7 +2703,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
           <p style={DESC_CLAMP} title={skill.description} data-role="card-description">{skill.description}</p>
         )}
         <div style={CARD_FOOT}>
-          {card.state === 'failed' && card.failure !== null ? (
+          {readOnly ? <Chip tone="neutral" plain>{t('capability.readOnlyBadge')}</Chip> : card.state === 'failed' && card.failure !== null ? (
             <>
               <span style={{ ...META, flex: 1, color: 'var(--dsw-alias-state-error-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={card.failure}>
                 {card.failure}
@@ -2534,9 +2744,13 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
           </p>
         </span>
         <span style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center' }}>
-          <PanelButton variant="primary" size="sm" disabled={inFlight || builtin.busy === skill.name} onClick={() => { activateBuiltinCard(card) }}>
-            {label}
-          </PanelButton>
+          {readOnly
+            ? <Chip tone="neutral" plain>{t('capability.readOnlyBadge')}</Chip>
+            : (
+              <PanelButton variant="primary" size="sm" disabled={inFlight || builtin.busy === skill.name} onClick={() => { activateBuiltinCard(card) }}>
+                {label}
+              </PanelButton>
+            )}
           {renderDetailButton({ kind: 'builtin', card }, title)}
         </span>
       </Card>
@@ -2559,11 +2773,13 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
       const label = card.action === 'update'
         ? t('capability.updateTo', { version: card.skill.version })
         : t('capability.builtinInstall')
-      actions = (
-        <PanelButton variant="primary" size="md" disabled={inFlight || builtin.busy === card.skill.name} onClick={() => { activateBuiltinCard(card) }}>
-          {label}
-        </PanelButton>
-      )
+      actions = readOnly
+        ? <Chip tone="neutral" plain>{t('capability.readOnlyBadge')}</Chip>
+        : (
+          <PanelButton variant="primary" size="md" disabled={inFlight || builtin.busy === card.skill.name} onClick={() => { activateBuiltinCard(card) }}>
+            {label}
+          </PanelButton>
+        )
       notice = undefined
     }
     return (
@@ -2571,6 +2787,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
         target={target}
         busy={busy}
         blocked={inFlight}
+        readOnly={readOnly}
         tab={tab}
         actions={actions}
         notice={notice}
@@ -2609,6 +2826,29 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
     </Card>
   )
 
+  /**
+   * 上传前的确认条（F-32）：把本地预检读到的**将发布版本**先给作者看一眼。
+   *
+   * 列表与详情共用（详情里也能上传），与安装的覆盖确认条同位置、同交互模型：
+   * 只有这里点「发布 vX」才会发真正的那一发（`pending.run()`）。
+   */
+  const renderUploadConfirmStrip = (): React.ReactNode => {
+    if (uploadConfirm === null) return null
+    const copy = uploadPreviewText(uploadConfirm)
+    return (
+      <Card style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-role="upload-version-confirm">
+        <icons.IconInfo size={15} style={{ color: 'var(--dsw-alias-state-business-primary)' }} />
+        <span style={{ flex: 1, minWidth: 220, fontSize: 13 }}>{copy.text}</span>
+        <PanelButton variant="primary" size="sm" data-action="upload-confirm" onClick={() => {
+          const pending = uploadConfirm
+          setUploadConfirm(null)
+          void pending.run()
+        }}>{copy.action}</PanelButton>
+        <PanelButton variant="secondary" size="sm" onClick={() => { setUploadConfirm(null) }}>{t('capability.cancel')}</PanelButton>
+      </Card>
+    )
+  }
+
   /** 动作结果条（终态；与确认条同位置，出现时滚进视口）。 */
   const renderResultStrip = (): React.ReactNode => action === null || action.kind === 'installing' || action.kind === 'uninstalling' || action.kind === 'uploading' ? null : (
     <Card style={{ padding: '9px 14px', borderRadius: 12, marginBottom: 12, fontSize: 13, color: action.kind === 'failed' ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-state-success-primary)' }}>
@@ -2617,7 +2857,9 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
         : action.kind === 'done-uninstall'
           ? t('capability.uninstalledName', { name: action.name ?? '' })
           : action.kind === 'done-upload'
-            ? t('capability.uploadedName', { name: action.name ?? '' })
+            ? action.version !== undefined && action.version !== ''
+              ? t('capability.uploadedVersionName', { name: action.name ?? '', version: action.version })
+              : t('capability.uploadedName', { name: action.name ?? '' })
             : t('capability.failed', { error: action.error ?? '' })}
     </Card>
   )
@@ -2651,6 +2893,7 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
                 setTab(next)
                 setInstallConfirm(null)
                 setUninstallConfirmKey(null)
+                setUploadConfirm(null)
               }}
             />
             <span style={{ display: 'flex', gap: 4 }}>
@@ -2708,16 +2951,24 @@ export function CapabilityCenterPanel({ onClose }: { onClose: () => void }) {
                 <span aria-hidden="true">{'☰'}</span>
               </PanelButton>
             </span>
+            {readOnly && <Chip tone="warn" title={t('capability.readOnlyHint')}>{t('capability.readOnlyBadge')}</Chip>}
             <span style={{ ...META, margin: 0 }} data-role="capability-result-count">
               {t('capability.resultCount', { count: String(visible.length) })}
             </span>
           </div>
         ) : undefined}
       >
-        {resolvedDetail !== null ? (<div ref={noticeRef}>{renderConfirmStrip()}{renderResultStrip()}{renderDetail(resolvedDetail)}</div>) : (
+        {readOnly && (
+          <Card style={{ padding: '8px 14px', borderRadius: 12, marginBottom: 12, fontSize: 12, color: 'var(--dsw-alias-label-secondary)' }} data-role="capability-readonly">
+            <Chip tone="warn">{t('capability.readOnlyBadge')}</Chip>
+            {' '}
+            {t('capability.readOnlyHint')}
+          </Card>
+        )}
+        {resolvedDetail !== null ? (<div ref={noticeRef}>{renderConfirmStrip()}{renderUploadConfirmStrip()}{renderResultStrip()}{renderDetail(resolvedDetail)}</div>) : (
           <>
             {/* 结果条/确认条挂在滚动区顶部，出现时滚进视口（见 noticeRef 的注释）。 */}
-            <div ref={noticeRef}>{renderConfirmStrip()}{renderResultStrip()}</div>
+            <div ref={noticeRef}>{renderConfirmStrip()}{renderUploadConfirmStrip()}{renderResultStrip()}</div>
             {view === 'grid'
               ? <div style={PANEL_GRID} data-role="capability-grid">{content}</div>
               : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-role="capability-list">{content}</div>}

@@ -457,7 +457,7 @@ func TestPendingCap(t *testing.T) {
 		r.ServeHTTP(w, req)
 		return w.Code
 	}
-	for i := 0; i < pendingCap; i++ {
+	for i := 0; i < serverstore.MaxPendingPerAuthor; i++ {
 		if got := post(fmt.Sprintf("cap-%d", i)); got != 201 {
 			t.Fatalf("upload %d = %d", i, got)
 		}

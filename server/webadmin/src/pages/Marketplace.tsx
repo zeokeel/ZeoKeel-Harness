@@ -15,7 +15,12 @@ import { CapabilityLockPanel } from '../components/capability-lock-panel'
 import { GrantDialog } from '../components/grant-dialog'
 import { Store, Download, Package, Activity, UserCog } from 'lucide-react'
 import { grantsBase, previewFileBase, skillRequest } from '../lib/capability-endpoints'
-import { dedupeLatestByName, displayNameOf, formatCount, versionText } from '../lib/capability-display'
+import {
+  dedupeLatestByName, delistConfirmText, displayNameOf, formatCount, SOURCE_LABEL, versionText,
+} from '../lib/capability-display'
+import {
+  hasPermission, PERM_CAP_READ, PERM_CAP_WRITE, PERM_MARKET_READ, PERM_MARKET_WRITE,
+} from '../lib/rbac'
 
 interface Skill {
   id: number
@@ -43,7 +48,7 @@ interface Skill {
    */
   owner: string
   enabled: boolean
-  /** 0040: 'git' | 'upload' — upload 模式归档存 DB。 */
+  /** 0052:归档是唯一内容入口 ⇒ 有展示版本即 'upload'(旧 'git' 取值随 git 模式下线)。 */
   source?: string
   downloads: number
   calls: number
@@ -164,15 +169,33 @@ export default function Marketplace() {
   // P1-6: 提交中操作标识(双击守卫 + 按钮禁用/loading)。null = 空闲,值为操作 key。
   const [busy, setBusy] = useState<string | null>(null)
 
+  /**
+   * 权限门(F-48,2026-10-26):能力中心四页此前**零** hasPermission —— 只读账号
+   * 看到的每个写按钮点下去都必然 403。这里按**实际端点申报的权限点**分四档:
+   *   - market:read     市场列表/市场行预览
+   *   - capability:read 组织行(审批归并)/组织行预览/锁定面板
+   *   - market:write    市场行的登记/编辑/上下架/授权
+   *   - capability:write 上传新版/规范化/归属转移/释放空壳/锁定写面
+   * hasPermission 在服务端未下发 permissions 时**默认放行**(与 nav 同口径),
+   * 服务端 RequirePermission 仍是唯一护栏。
+   */
+  const canMarketRead = hasPermission(PERM_MARKET_READ)
+  const canCapRead = hasPermission(PERM_CAP_READ)
+  const canMarketWrite = hasPermission(PERM_MARKET_WRITE)
+  const canCapWrite = hasPermission(PERM_CAP_WRITE)
+
   const loadSkills = useCallback(async () => {
     setSkillsLoading(true)
     setSkillsError('')
     try {
       // 市场列表按行 channel 选命名空间(市场命名空间;组织行的动作见 action 分支)。
       const listReq = skillRequest('list', { channel: 'market', name: '' })!
+      // F-48:角色只有其中一种读权限时,不要白打另一发必然 403 的请求。
       const [s, approvals] = await Promise.all([
-        request(listReq.url),
-        request(`${ADMIN_API}/capabilities/approvals?status=approved&type=skill`).catch(() => ({ approvals: [] })),
+        canMarketRead ? request(listReq.url) : Promise.resolve({ skills: [] }),
+        canCapRead
+          ? request(`${ADMIN_API}/capabilities/approvals?status=approved&type=skill`).catch(() => ({ approvals: [] }))
+          : Promise.resolve({ approvals: [] }),
       ])
       const merged: Skill[] = (s.skills ?? []).map(toMarketSkill)
       for (const row of dedupeLatestByName((approvals.approvals ?? []) as {
@@ -207,7 +230,7 @@ export default function Marketplace() {
     } finally {
       setSkillsLoading(false)
     }
-  }, [])
+  }, [canMarketRead, canCapRead])
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -317,7 +340,8 @@ export default function Marketplace() {
     const action = enabled ? 'enable' : 'disable'
     const req = skillRequest(action, s)
     if (req === null) { setOpError(`${enabled ? '上架' : '下架'}失败:该来源不支持此操作`); return }
-    if (!enabled && !window.confirm(`下架技能「${displayNameOf(s)}」?员工建议清单将不再展示(可重新上架)。`)) return
+    // 下架确认与「删除版本」「释放名称」区分(F-21):下架只停分发、可恢复。
+    if (!enabled && !window.confirm(delistConfirmText(displayNameOf(s)))) return
     setOpError('')
     setBusy(`${action}-skill-${s.name}`)
     try {
@@ -452,8 +476,9 @@ export default function Marketplace() {
               aria-label="搜索技能"
               className="h-8 w-56"
             />
-            <Button size="sm" variant="outline" onClick={() => setLockOpen(true)}>锁定管理</Button>
-            <Button size="sm" onClick={openCreateSkill}>上架技能</Button>
+            {/* F-48:锁定写面与登记分别需要 capability:write / market:write。 */}
+            {canCapWrite && <Button size="sm" variant="outline" onClick={() => setLockOpen(true)}>锁定管理</Button>}
+            {canMarketWrite && <Button size="sm" onClick={openCreateSkill}>上架技能</Button>}
           </div>
         </CardHeader>
         <CardContent>
@@ -497,7 +522,9 @@ export default function Marketplace() {
                     <span className="flex items-center gap-1.5">
                       {s.official && <Badge className="bg-[#1E40AF] text-white hover:bg-[#1E40AF]">官方</Badge>}
                       {s.quality === 'featured' && <Badge variant="secondary">精选</Badge>}
-                      {s.channel === 'org' && <Badge variant="outline">员工上传</Badge>}
+                      {s.channel === 'org' && (
+                        <Badge variant="outline" title="员工上传、审批通过后进入组织共享库">{SOURCE_LABEL.org}</Badge>
+                      )}
                       {s.enabled ? <Badge variant="success">上架</Badge> : <Badge variant="outline">已下架</Badge>}
                     </span>
                   </div>
@@ -529,47 +556,61 @@ export default function Marketplace() {
                       const uploadBlocked = s.enabled === false
                       return (
                         <>
-                          <Button
-                            variant="outline"
-                            disabled={previewReq === null}
-                            title={previewReq === null ? ORG_LIMITS.hint : undefined}
-                            onClick={() => void openPreview(s)}
-                          >预览</Button>
-                          <Button
-                            variant="outline"
-                            disabled={busy !== null || normalizeReq === null}
-                            title={normalizeReq === null ? ORG_LIMITS.normalize : undefined}
-                            onClick={() => void normalize(s)}
-                          >
-                            {busy === `normalize-${s.name}` ? '规范化中…' : '规范化'}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            disabled={editReq === null}
-                            title={editReq === null ? ORG_LIMITS.edit : undefined}
-                            onClick={() => openEditSkill(s)}
-                          >编辑</Button>
-                          <span title={uploadBlocked ? DELISTED_UPLOAD_HINT : undefined}>
+                          {/* F-48:只渲染**该行端点真的接受**的权限对应的入口；
+                              缺权限时整颗按钮不出现(而不是留给服务端 403)。 */}
+                          {(isOrg(s) ? canCapRead : canMarketRead) && (
                             <Button
                               variant="outline"
-                              disabled={uploadReq === null || uploadBlocked}
-                              title={uploadBlocked ? DELISTED_UPLOAD_HINT : uploadReq === null ? UPLOAD_UNAVAILABLE : undefined}
-                              onClick={() => openReplace(s)}
-                            >上传新版</Button>
-                          </span>
-                          {s.version === '' && (
+                              disabled={previewReq === null}
+                              title={previewReq === null ? ORG_LIMITS.hint : undefined}
+                              onClick={() => void openPreview(s)}
+                            >预览</Button>
+                          )}
+                          {canCapWrite && (
+                            <Button
+                              variant="outline"
+                              disabled={busy !== null || normalizeReq === null}
+                              title={normalizeReq === null ? ORG_LIMITS.normalize : undefined}
+                              onClick={() => void normalize(s)}
+                            >
+                              {busy === `normalize-${s.name}` ? '规范化中…' : '规范化'}
+                            </Button>
+                          )}
+                          {canMarketWrite && (
+                            <Button
+                              variant="outline"
+                              disabled={editReq === null}
+                              title={editReq === null ? ORG_LIMITS.edit : undefined}
+                              onClick={() => openEditSkill(s)}
+                            >编辑</Button>
+                          )}
+                          {canCapWrite && (
+                            <span title={uploadBlocked ? DELISTED_UPLOAD_HINT : undefined}>
+                              <Button
+                                variant="outline"
+                                disabled={uploadReq === null || uploadBlocked}
+                                title={uploadBlocked ? DELISTED_UPLOAD_HINT : uploadReq === null ? UPLOAD_UNAVAILABLE : undefined}
+                                onClick={() => openReplace(s)}
+                              >上传新版</Button>
+                            </span>
+                          )}
+                          {canCapWrite && s.version === '' && (
                             <Button
                               variant="destructive"
                               disabled={busy !== null}
-                              title="该能力只有身份、没有任何版本；释放名称后可重新登记"
+                              title="该能力只有身份、没有任何版本；释放名称后可重新登记（有版本时不能释放）"
                               onClick={() => { void releaseShell(s) }}
                             >{busy === `release-${s.name}` ? '释放中…' : '释放名称'}</Button>
                           )}
-                          <Button variant="outline" onClick={() => setTransferSkill(s)} title="转移归属(负责人)">归属</Button>
-                          <Button variant="outline" onClick={() => setGrantDialog(s)}>授权</Button>
-                          {s.enabled
+                          {canCapWrite && (
+                            <Button variant="outline" onClick={() => setTransferSkill(s)} title="转移归属(负责人)">归属</Button>
+                          )}
+                          {(isOrg(s) ? canCapWrite : canMarketWrite) && (
+                            <Button variant="outline" onClick={() => setGrantDialog(s)}>授权</Button>
+                          )}
+                          {(isOrg(s) ? canCapWrite : canMarketWrite) && (s.enabled
                             ? <Button variant="destructive" disabled={busy !== null} onClick={() => void setSkillEnabled(s, false)}>{busy === `disable-skill-${s.name}` ? '下架中…' : '下架'}</Button>
-                            : <Button variant="outline" disabled={busy !== null} onClick={() => void setSkillEnabled(s, true)}>{busy === `enable-skill-${s.name}` ? '上架中…' : '重新上架'}</Button>}
+                            : <Button variant="outline" disabled={busy !== null} onClick={() => void setSkillEnabled(s, true)}>{busy === `enable-skill-${s.name}` ? '上架中…' : '重新上架'}</Button>)}
                         </>
                       )
                     })()}
@@ -581,7 +622,7 @@ export default function Marketplace() {
                   <EmptyState
                     icon={<Store className="h-5 w-5 text-muted-foreground" />}
                     title="暂无技能"
-                    desc="点击「上架技能」上传压缩包或从 Git 源接入第一个技能"
+                    desc={canMarketWrite ? '点击「上架技能」上传第一个技能压缩包' : '由管理员上架技能后显示在这里'}
                   />
                 </div>
               )}
@@ -595,7 +636,7 @@ export default function Marketplace() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{skillEdit ? `编辑技能 ${displayNameOf(skillEdit)}` : '上架技能'}</DialogTitle>
-            <DialogDescription>两种模式:压缩包上传(推荐,归档直存数据库)或 Git 源</DialogDescription>
+            <DialogDescription>压缩包上传(归档直存数据库;包内 SKILL.md 是唯一内容来源)</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">

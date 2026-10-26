@@ -207,41 +207,66 @@ func TestSharedSurfaceIgnoresMarketChannelAgents(t *testing.T) {
 	}
 }
 
-// agentshare-1:name 级删除的契约是「删该 name 的全部版本」,不能只软删
+// agentshare-1:name 级删除的契约是「删该 name 的全部**可删**版本」——不能只软删
 // 最高 approved 而把其它版本留成僵尸 approved 行。
+//
+// 2026-10-26(F-01 残留):name 级删除同样不得销毁已生效版本 —— 只要该 name 下
+// 存在 approved 版本,整次删除 409 RELEASE_APPROVED_NOT_DELETABLE,一行都不动
+// (与版本级删除同码同文案);全部是 pending/rejected 时仍按 agentshare-1 全删。
 func TestNameLevelDeleteSoftDeletesEveryVersion(t *testing.T) {
 	r, db, adminHdr, userHdr, _ := setup(t)
 	defer db.Close()
 
-	upload := func(version string) {
+	upload := func(name, version string, approve bool) {
 		meta := presetMeta("多版本", version)
 		if version != "1.0.0" {
 			meta += "changelog: 第二个版本。\n"
 		}
 		archive := makeArchive(t, map[string]string{"agent.cordis.yml": testComposition, "preset.yml": meta})
-		if code, body := userDo(t, r, userHdr, "POST", "/api/client/v2/agent-presets", uploadBody("multi", "", "", archive)); code != http.StatusCreated {
-			t.Fatalf("upload %s = %d %s", version, code, body)
+		if code, body := userDo(t, r, userHdr, "POST", "/api/client/v2/agent-presets", uploadBody(name, "", "", archive)); code != http.StatusCreated {
+			t.Fatalf("upload %s@%s = %d %s", name, version, code, body)
 		}
-		if code, body := adminDo(t, r, adminHdr, "POST", "/api/server/admin/agent-presets/multi/"+version+"/approve", ""); code != http.StatusOK {
-			t.Fatalf("approve %s = %d %s", version, code, body)
+		if approve {
+			if code, body := adminDo(t, r, adminHdr, "POST", "/api/server/admin/agent-presets/"+name+"/"+version+"/approve", ""); code != http.StatusOK {
+				t.Fatalf("approve %s@%s = %d %s", name, version, code, body)
+			}
 		}
 	}
-	upload("1.0.0")
-	upload("2.0.0")
 
-	if code, body := adminDo(t, r, adminHdr, "DELETE", "/api/server/admin/agent-presets/multi", ""); code != http.StatusOK {
-		t.Fatalf("name-level delete = %d %s", code, body)
+	// ① 有 approved 版本 ⇒ 409,内容/归档一字不动(F-01 name 级)。
+	upload("multi", "1.0.0", true)
+	upload("multi", "2.0.0", true)
+	code, body := adminDo(t, r, adminHdr, "DELETE", "/api/server/admin/agent-presets/multi", "")
+	if code != http.StatusConflict {
+		t.Fatalf("name-level delete(含 approved) = %d %s, want 409", code, body)
+	}
+	live, err := serverstore.ListReleases(db, serverstore.AppKindAgent, "multi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range live {
+		full, gerr := serverstore.GetRelease(db, serverstore.AppKindAgent, "multi", rel.Version)
+		if gerr != nil || rel.DeletedAt != nil || len(full.Archive) == 0 || rel.Status != serverstore.ReleaseStatusApproved {
+			t.Fatalf("被拒的 name 级删除破坏了版本 %s: %+v err=%v", rel.Version, rel, gerr)
+		}
+	}
+
+	// ② 全部 pending ⇒ 仍按 agentshare-1 的契约全删(不得留僵尸行)。
+	upload("multi-pending", "1.0.0", false)
+	upload("multi-pending", "2.0.0", false)
+	if code, body := adminDo(t, r, adminHdr, "DELETE", "/api/server/admin/agent-presets/multi-pending", ""); code != http.StatusOK {
+		t.Fatalf("name-level delete(全 pending) = %d %s, want 200", code, body)
 	}
 	rows, err := serverstore.ListAgentPresets(db, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range rows {
-		if p.Name == "multi" {
+		if p.Name == "multi-pending" {
 			t.Fatalf("name-level delete left a live version behind: %+v", p)
 		}
 	}
-	all, err := serverstore.ListReleases(db, serverstore.AppKindAgent, "multi")
+	all, err := serverstore.ListReleases(db, serverstore.AppKindAgent, "multi-pending")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,8 +277,9 @@ func TestNameLevelDeleteSoftDeletesEveryVersion(t *testing.T) {
 		if rel.DeletedAt == nil {
 			t.Fatalf("version %s survived the name-level delete (deleted_at IS NULL)", rel.Version)
 		}
-		if len(rel.Archive) != 0 {
-			t.Fatalf("version %s kept its archive after delete", rel.Version)
+		full, gerr := serverstore.GetRelease(db, serverstore.AppKindAgent, "multi-pending", rel.Version)
+		if gerr != nil || len(full.Archive) != 0 {
+			t.Fatalf("version %s kept its archive after delete (err=%v)", rel.Version, gerr)
 		}
 	}
 }

@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import Agents, { DELISTED_UPLOAD_HINT } from './Agents'
 import { request } from '../api'
+import { setCurrentAdmin } from '../lib/rbac'
 
 const mockRequest = vi.mocked(request)
-const confirmSpy = vi.fn(() => true)
+const confirmSpy = vi.fn((_message?: string) => true)
 
 const DEPTS = [{ id: 1, name: '研发部', parent_id: 0 }]
 
@@ -304,5 +305,63 @@ describe('Agents 智能体市场页 · 展示名(D 系列)', () => {
         expect.objectContaining({ method: 'PUT', body: expect.stringContaining('"title":"演示文稿生成器"') }),
       )
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F-48 / F-21 / F-49 / F-50（2026-10-26）：权限门、下架确认、来源术语
+// ---------------------------------------------------------------------------
+afterEach(() => setCurrentAdmin(null))
+
+describe('Agents 智能体市场页 · 权限门与文案（F-48 / F-21 / F-49 / F-50）', () => {
+  it('F-48 正向夹具:持有 market:write/capability:write 时写入口可见', async () => {
+    setCurrentAdmin({
+      role: 'super_admin',
+      permissions: ['market:read', 'market:write', 'capability:read', 'capability:write'],
+    })
+    render(<Agents />)
+    await screen.findByText('PPT 生成')
+    expect(screen.getByRole('button', { name: '上架智能体' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '锁定管理' })).toBeInTheDocument()
+    const cardEl = within(card('PPT 生成'))
+    for (const name of ['预览', '上传新版', '编辑', '归属', '授权', '下架']) {
+      expect(cardEl.getByRole('button', { name }), `缺少写入口：${name}`).toBeInTheDocument()
+    }
+  })
+
+  it('F-48 只读:没有写权限时不显示写按钮,也不发写请求', async () => {
+    setCurrentAdmin({ role: 'super_admin', permissions: ['market:read', 'capability:read'] })
+    render(<Agents />)
+    await screen.findByText('PPT 生成')
+    expect(screen.queryByRole('button', { name: '上架智能体' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '锁定管理' })).toBeNull()
+    const cardEl = within(card('PPT 生成'))
+    expect(cardEl.queryByRole('button', { name: '编辑' })).toBeNull()
+    expect(cardEl.queryByRole('button', { name: '下架' })).toBeNull()
+    expect(cardEl.queryByRole('button', { name: '归属' })).toBeNull()
+    expect(cardEl.getByRole('button', { name: '预览' })).toBeInTheDocument()
+    for (const call of mockRequest.mock.calls) {
+      const init = call[1] as RequestInit | undefined
+      expect(init?.method ?? 'GET').toBe('GET')
+    }
+  })
+
+  it('F-21/F-49 下架确认:与技能页同一份「可恢复」文案', async () => {
+    render(<Agents />)
+    await screen.findByText('PPT 生成')
+    confirmSpy.mockClear()
+    fireEvent.click(within(card('PPT 生成')).getByRole('button', { name: '下架' }))
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('可恢复'))
+    })
+    expect(confirmSpy.mock.calls[0]![0] as string).toContain('下架不是删除')
+  })
+
+  it('F-50 来源术语:org 行的徽章与客户端一致，叫「组织」而不是「员工上传」', async () => {
+    render(<Agents />)
+    await screen.findByText('代码评审')
+    const orgCardEl = within(card('代码评审'))
+    expect(orgCardEl.getByText('组织')).toBeInTheDocument()
+    expect(orgCardEl.queryByText('员工上传')).toBeNull()
   })
 })

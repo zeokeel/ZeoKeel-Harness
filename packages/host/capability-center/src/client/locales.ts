@@ -102,6 +102,22 @@ export const zh = {
   // 商店行（已上架的条目）发新版本（task-4）：与本机行的「上传共享」是**同一个**
   // `upload()`，区别只在语义 —— 前者首次共享，后者给已上架条目发新版。
   'capability.uploadNew': '上传新版',
+  // F-32（2026-10-26 盘点）：上传前必须让作者看到**将要发布的那一版**。
+  // 版本只能从包内元数据读（SKILL.md / preset.yml），所以先打一发本地预检再确认。
+  'capability.uploadVersionConfirm': '即将发布「{name}」v{version}（版本取自包内元数据）。提交后进入审核队列。',
+  'capability.uploadVersionUnknown': '即将发布「{name}」（包内未写版本号，服务端会按 1.0.0 处理并可能拒绝）。',
+  'capability.uploadPublish': '发布 v{version}',
+  // 上传成功的回执带版本：作者要能把"我发的是哪一版"对上审核队列里的那一行。
+  'capability.uploadedVersionName': '已上传「{name}」v{version}，等待审核',
+  // 版本/内容类拒绝的本地文案（按稳定错误码映射，见 uploadFailureText）。
+  'capability.versionNotIncreasing': '新版本号必须大于线上最新已发布版本：请先提高包内版本号再上传。',
+  'capability.versionNotNewer': '版本号没有比线上已发布的版本更大：请提高版本号后重试。',
+  'capability.versionExists': '这个版本号已被占用（版本号不可复用）：请换一个更高的版本号。',
+  'capability.versionInvalid': '版本号格式不合法：请写成 x.y.z（可带 -rc.1 这类预发布后缀）。',
+  'capability.contentUnchanged': '内容与已提交的某个版本完全相同：请先改动内容或提高版本号再上传。',
+  // F-54：auditor（只读审计员）的写按钮不隐藏 —— 面板按宿主下发的只读事实收口。
+  'capability.readOnlyBadge': '只读',
+  'capability.readOnlyHint': '当前账号是审计员（只读）：可以浏览能力中心，但不能安装、上传或卸载。',
   // 市场渠道的新版本需管理员审核后生效（task-4）：只在「市场商店行 + 归属人 + 已装」
   // 那一格出现，避免用户以为上传完就立刻上线。
   'capability.marketReviewHint': '市场技能的新版本需管理员审核后生效。',
@@ -231,6 +247,20 @@ export const en: Record<keyof typeof zh, string> = {
   'capability.upload': 'Upload',
   // Store rows publish a new version through the same `upload()`; only the wording differs.
   'capability.uploadNew': 'Upload new version',
+  // F-32: show the version that is about to be published BEFORE uploading.
+  'capability.uploadVersionConfirm': 'About to publish "{name}" v{version} (version taken from the package metadata). It enters the review queue after submission.',
+  'capability.uploadVersionUnknown': 'About to publish "{name}" (no version in the package metadata; the server treats it as 1.0.0 and may reject it).',
+  'capability.uploadPublish': 'Publish v{version}',
+  'capability.uploadedVersionName': 'Uploaded "{name}" v{version}; awaiting review',
+  // Version/content refusals, mapped from stable codes (see uploadFailureText).
+  'capability.versionNotIncreasing': 'The new version must be greater than the latest published version: raise the version in the package metadata and upload again.',
+  'capability.versionNotNewer': 'The version is not greater than the published one: raise the version and retry.',
+  'capability.versionExists': 'That version number is already taken (versions cannot be reused): use a higher version.',
+  'capability.versionInvalid': 'Invalid version format: use x.y.z (an -rc.1 style prerelease suffix is allowed).',
+  'capability.contentUnchanged': 'The content is identical to a version already submitted: change the content or raise the version before uploading.',
+  // F-54: an auditor (read-only) account must not see write buttons.
+  'capability.readOnlyBadge': 'Read-only',
+  'capability.readOnlyHint': 'This account is an auditor (read-only): you can browse the Capability Hub but cannot install, upload or uninstall.',
   // Marketplace versions take effect only after an administrator reviews them.
   'capability.marketReviewHint': 'New versions of marketplace skills take effect only after an administrator reviews them.',
   'capability.reupload': 'Re-upload',

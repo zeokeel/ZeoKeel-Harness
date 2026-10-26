@@ -94,7 +94,9 @@ func createAgentAdmin(c *gin.Context, db *sql.DB) {
 	// 与市场技能同语义:组织共享库已存在同名(任意状态)时跨源互斥。
 	if existing, err := serverstore.GetApp(db, serverstore.AppKindAgent, req.Name); err == nil {
 		if existing.Channel == serverstore.AppChannelOrg {
-			serverauth.WriteError(c, http.StatusConflict, "CONFLICT", "名称与组织共享库智能体冲突,请先在共享库处理同名智能体")
+			// F-42：与技能侧/发布内核统一成 NAME_TAKEN（同一件事只有一个码）。
+			serverauth.WriteError(c, http.StatusConflict, appstore.CodeNameTaken,
+				"名称与组织共享库智能体冲突,请先在共享库处理同名智能体")
 			return
 		}
 		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "智能体已存在")

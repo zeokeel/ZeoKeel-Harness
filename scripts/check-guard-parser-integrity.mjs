@@ -400,7 +400,10 @@ const REGISTERED_INSTALL_INTEGRITY_BODIES = [
     // 2026-10-26：`EXECUTION_FACE_REGISTRY` 补登两条新根守卫（第 19/20 条：
     // `scripts/check-architecture.mjs` / `scripts/check-change-intent.mjs`）⇒ 本件内容变了，
     // 摘要按同一条口径同步（**登记值取工作树**：`--print-digests` 在未提交时打印的是 HEAD 那份）。
-    sha256: 'db12f35ffd3146ddfbfa543c11487226dde0e64bd4fee500ae9c3816358a8668',
+    // 2026-10-26（F-12 跨层能力生命周期 E2E）：`EXECUTION_POINT_REGISTRY` 补登
+    // `integration-tests/capability-lifecycle.py`（守卫的扩展名集合把 `integration-tests/**/*.py`
+    // 派生成执行点）⇒ 本件内容再次变化，摘要按同一条口径同步。
+    sha256: 'eb5b0d27fe97361bca4e6a6cb48affa557e4ce6077fdaaaa1c7a5f9186a874ee',
     methods: [
       'judge-body-bytes-equal-head',
       'yarnrc-forbidden-keys',

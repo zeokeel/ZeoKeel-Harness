@@ -459,6 +459,26 @@ func SetAppOfficial(db *sql.DB, kind, appID string, official bool, owner string)
 	return err
 }
 
+// SetAppOfficialOn 是 SetAppOfficial 的 executor 版本(可在 *sql.Tx 上执行)。
+//
+// F-15(能力中心审计 2026-10-26,P2):归属转移(transferOwner)与发布内核
+// (appstore.Publish)是一对 check-then-act 竞争者 —— Publish 在**持发布锁的事务
+// 内**读 owner 决定「谁能续传」,而 transferOwner 修前是一条**锁外**的单语句
+// UPDATE。两者交错时,旧归属人可以在转移提交前那一刻通过 owner 检查、在提交后
+// 落库,于是「新归属人已被指定,但旧归属人替新归属人发了一版」。
+//
+// 修法:transferOwner 在同一个事务里先取**与 Publish 相同的**发布咨询锁
+// (appstore.publishLockKey)、锁内重读 apps 行、再调用本函数写,最后提交。
+// 锁与写同事务 ⇒ 提交即释放,连接需求恒为 1(与 beginPublishTx 同一条纪律)。
+func SetAppOfficialOn(ex Queryer, kind, appID string, official bool, owner string) error {
+	if official && owner != "" {
+		return fmt.Errorf("%w: 官方归属必须 owner 为空(official=1 ∧ owner 非空 是禁止状态)", ErrValidation)
+	}
+	_, err := ex.Exec(`UPDATE apps SET official = ?, owner = ?, updated_at = `+NowExpr()+`
+		WHERE kind = ? AND app_id = ?`, boolToInt(official), owner, kind, appID)
+	return err
+}
+
 // AppOfficialMap 返回某 kind 全部 App 的官方属性(名→bool),聚合面/列表用。
 func AppOfficialMap(db *sql.DB, kind string) (map[string]bool, error) {
 	rows, err := db.Query(`SELECT app_id, official FROM apps WHERE kind = ?`, kind)
@@ -877,8 +897,48 @@ func setReleaseStatusForReview(db *sql.DB, kind, appID, version, status, reason 
 	}
 }
 
+// 质量标记的合法取值（F-39 / F-47，能力中心审计 2026-10-26）。
+//
+// 语义权威：” = 无标记；official = 官方；featured = 精选（0037 引入，二者互斥）。
+// 迁移 0090 给 `app_releases.quality` 补了同一条 CHECK（NOT VALID：存量不回溯，
+// 新写入立即受约束）；Go 侧的唯一写入口是 SetReleaseQuality，两边必须同时成立
+// —— SQL 是并发下的最后防线，Go 侧负责给出可读的 ErrValidation 而不是让调用方
+// 收到一个数据库约束错误。
+const (
+	// QualityNone 无质量标记。
+	QualityNone = ""
+	// QualityOfficial 官方标记。
+	QualityOfficial = "official"
+	// QualityFeatured 精选标记。
+	QualityFeatured = "featured"
+)
+
+// MaxPendingPerAuthor 是**每个作者**待审版本数上限（审核队列防洪）。
+//
+// F-47（能力中心审计 2026-10-26，P3）：这个数字修前在 sharedskills 与 agentshare
+// 各写一份 `const pendingCap = 10`。两处一旦不同，同一个员工在「技能」与「智能体」
+// 两个面就会看到不同的待审上限，而运营文档写的是同一个数。现在唯一真源在这里，
+// 两个上传入口都引用它。
+const MaxPendingPerAuthor = 10
+
+// ValidReleaseQuality 是质量标记取值域的**唯一 Go 判定**（与迁移 0090 的 CHECK 同域）。
+func ValidReleaseQuality(q string) bool {
+	switch q {
+	case QualityNone, QualityOfficial, QualityFeatured:
+		return true
+	}
+	return false
+}
+
 // SetReleaseQuality 质量标记(”|official|featured),仅 approved 版本可设置。
+//
+// F-39：修前这里**不校验** quality，任何字符串都能落库（投影回填/数据修复脚本
+// 也走这个入口），而管理端徽章判定是 `== featured` / `== official` —— 脏值会
+// 静默不出徽章。现在取值域在 Go 侧（本函数）与 SQL 侧（0090 的 CHECK）各判一次。
 func SetReleaseQuality(db *sql.DB, kind, appID, version, quality string) error {
+	if !ValidReleaseQuality(quality) {
+		return ErrValidation
+	}
 	res, err := db.Exec(`UPDATE app_releases SET quality = ?, updated_at = `+NowExpr()+`
 		WHERE kind = ? AND app_id = ? AND version = ? AND status = 'approved'`,
 		quality, kind, appID, version)

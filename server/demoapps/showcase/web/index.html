@@ -21,17 +21,18 @@
 
   <header class="topbar">
     <div class="brand">
-      <!-- 品牌 mark：几何与仓库品牌真源 brands/official/logo.svg 一致（圆角方块 + 一对花括号 + 连接线 + 两个节点圆） -->
-      <svg class="mark" viewBox="0 0 1254 1254" aria-hidden="true" focusable="false">
-        <rect x="0" y="0" width="1254" height="1254" rx="180" fill="var(--mark-tile)"/>
-        <g transform="translate(627 627) scale(1.25) translate(-627 -627)">
-          <path d="M 334 409 C 300 409 273 431 273 466 V 548 C 273 582 254 607 220 620 C 254 633 273 658 273 692 V 775 C 273 810 300 843 334 843" fill="none" stroke="var(--mark-ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M 920 409 C 954 409 981 431 981 466 V 548 C 981 582 1000 607 1034 620 C 1000 633 981 658 981 692 V 775 C 981 810 954 843 920 843" fill="none" stroke="var(--mark-ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
-          <line x1="435" y1="627" x2="817" y2="627" stroke="var(--mark-ink)" stroke-width="20" stroke-linecap="round"/>
-          <circle cx="435" cy="627" r="65" fill="var(--mark-ink)"/>
-          <circle cx="817" cy="627" r="65" fill="var(--mark-ink)"/>
-        </g>
-      </svg>
+      <!-- 品牌标识：几何唯一真源 = 仓库根 brands/official/logo.svg（白天）与
+           logo-dark.svg（夜间）。这两份文件是**逐字节副本**（web/static/brand-day.svg
+           与 brand-night.svg），随应用资源一起打包；/static/* 由宿主直出，不需要
+           任何外链。浅色界面用白天版（白底 + 全彩 mark），深色界面用夜间版
+           （黑底 + 同一 mark）—— 与门户页、管理后台、客户端同一套双色对。
+           **不要在这里手绘几何**：旧版是手抄的"括号 + 节点圆"mark，公开仓换品牌
+           后就漂成了第二份真源（2026-10-26 事故）。判据见
+           server/demoapps/showcase/brand_test.go（与真源逐字节对拍）。 -->
+      <span class="mark" aria-hidden="true">
+        <img class="mark-day" src="/static/brand-day.svg" alt="">
+        <img class="mark-night" src="/static/brand-night.svg" alt="">
+      </span>
       <span class="brandText">
         <strong>能力全集</strong>
         <span class="brandSub">应用平台 · 一页跑完</span>

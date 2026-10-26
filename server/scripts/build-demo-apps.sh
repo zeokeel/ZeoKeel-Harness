@@ -59,11 +59,23 @@ for app in "${APPS[@]}"; do
   echo "→ 编译 $app（wasm32-wasip1，-tags=$GO_TAGS）"
   ( cd "$SERVER" && GOOS=wasip1 GOARCH=wasm go build $GO_TAG_FLAG -trimpath -ldflags "-s -w" -o "$raw" "./demoapps/$app" )
 
-  echo "→ 打包前端资源 $app"
-  node "$PACK" --in "$raw" --out "$packed.$$" \
-    "$src/web/index.html=index.html" \
-    "$src/web/app.css=static/app.css" \
+  # 随包素材清单：默认三件；showcase 额外带**品牌双色对**（web/static/brand-day.svg
+  # 与 brand-night.svg = 品牌真源 brands/official/logo.svg / logo-dark.svg 的逐字节
+  # 副本）。这份清单必须与 Dockerfile 里 pack-assets.mjs 的调用逐项一致 —— 少一处
+  # 就是"本地预览有品牌、镜像里没有"（brand_test.go 会对拍这条接线）。
+  pack_args=(
+    "$src/web/index.html=index.html"
+    "$src/web/app.css=static/app.css"
     "$src/web/app.js=static/app.js"
+  )
+  if [ "$app" = "showcase" ]; then
+    pack_args+=(
+      "$src/web/static/brand-day.svg=static/brand-day.svg"
+      "$src/web/static/brand-night.svg=static/brand-night.svg"
+    )
+  fi
+  echo "→ 打包前端资源 $app"
+  node "$PACK" --in "$raw" --out "$packed.$$" "${pack_args[@]}"
   mv "$packed.$$" "$packed"
   echo "✓ $packed"
 done

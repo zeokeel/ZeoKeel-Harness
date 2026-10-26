@@ -12,6 +12,7 @@ import {
   installRequestUrl,
   isDelistedItem,
   itemsForTab,
+  isOwnUploadItem,
   latestApprovedVersionByName,
   localRemoveEndpoint,
   mergeItems,
@@ -19,7 +20,11 @@ import {
   needsOverwriteConfirm,
   overwriteConfirmReason,
   planCardAction,
+  planCardActionForTab,
   planSectionCards,
+  skeletonKeys,
+  sortItems,
+  tabCounts,
   showsMarketReviewHint,
   uninstallEndpoint,
   uninstallRequestUrl,
@@ -30,6 +35,10 @@ import {
   confirmStripText,
   type CapabilityItem,
   type SectionCard,
+  cardChips,
+  cardStatusDots,
+  cardStatusChip,
+  CapabilityDetailDialog,
 } from '../../capability-center/src/client/CapabilityCenterPanel.tsx'
 import { builtinCardsForTab, builtinSkillsInstallOutcome, planBuiltinCards } from '../../capability-center/src/client/BuiltinSkillsStrip.tsx'
 import { en, setActiveLocale, t, zh } from '../../capability-center/src/client/locales.ts'
@@ -616,13 +625,18 @@ describe('A2/A3/A11/A15 接线判据（源码级）', () => {
   })
 
   it('确认条是唯一的"用户已确认"出口，重放的是同一发安装', () => {
-    const strip = /\{installConfirm !== null && \(([\s\S]*?)\n        \)\}/u.exec(source)
+    // 2026-10-26 起确认条由 `renderConfirmStrip()` 产出（列表视图与详情整页视图**共用**
+    // 同一个出口 —— 详情里的历史版本安装也会撞上本机同名内容）。
+    const strip = /const renderConfirmStrip = \(\): React\.ReactNode => installConfirm === null \? null : \(([\s\S]*?)\n  \)/u.exec(source)
     expect(strip, '确认条必须存在').not.toBeNull()
     // 唯一的放行点：点「覆盖安装 / 仍要覆盖」才 run(true)（= 才带 ?overwrite=1）。
     expect(strip![1]).toContain('void pending.run(true)')
     // 措辞按档位分派（R4-B-3 起有三档：自制 / 已本地修改 / 换渠道），走同一对纯函数。
     expect(strip![1]).toContain('{confirmStripText(installConfirm)}')
     expect(strip![1]).toContain('{confirmStripAction(installConfirm)}')
+    // 两个视图都必须渲染它（否则详情里的确认停在不可见状态）。
+    const usages = source.match(/\{renderConfirmStrip\(\)\}/gu) ?? []
+    expect(usages.length).toBeGreaterThanOrEqual(2)
     // 真正发请求的 performInstall 经 installRequestUrl（唯一 URL 拼装入口）。
     const perform = /const performInstall = async \([\s\S]*?\n  \}/u.exec(source)
     expect(perform, 'performInstall 必须存在').not.toBeNull()
@@ -976,5 +990,227 @@ describe('task-4 商店行 + 归属人 + 已安装 ⇒ 「上传新版」', () =
     expect(zh['capability.marketReviewHint']).toContain('管理员审核')
     expect(en['capability.uploadNew'].trim()).not.toBe('')
     expect(en['capability.marketReviewHint']).toContain('review')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2026-10-26 能力中心现代化重构（盘点 F-07/F-08/F-09/F-10/F-11 + 设计定案）
+// ---------------------------------------------------------------------------
+//
+// 本组把**新判据**钉在纯函数上（本包没有 jsdom）：四分段归属、我上传的证据链、
+// 排序、卡片最多两个 Chip、其余状态只做小状态点、页脚动作的分段收窄、6 张骨架卡。
+// 渲染接线用源码级断言（与同文件既有 A2/A3/A11/A15 组同一形态），因为"卡片里有没有
+// 大段状态说明""官方更新按钮还禁不禁用"这类退化只有读渲染层才抓得到。
+
+describe('四分段与"我上传"证据链（F-08）', () => {
+  const rows = [
+    { kind: 'skill' as const, name: 'draft', source: 'local', installed: false, originChannel: undefined as string | undefined },
+    { kind: 'skill' as const, name: 'installed-store', source: 'org', installed: true, originChannel: undefined as string | undefined },
+    { kind: 'skill' as const, name: 'market-only', source: 'market', installed: false, originChannel: undefined as string | undefined },
+    { kind: 'skill' as const, name: 'my-pending', source: 'market', installed: false, isOwner: true },
+  ]
+
+  it('all = 全部；installed 只看磁盘；market 排除本机行', () => {
+    expect(itemsForTab(rows, 'all').map(i => i.name).sort()).toEqual(['draft', 'installed-store', 'market-only', 'my-pending'])
+    expect(itemsForTab(rows, 'installed').map(i => i.name)).toEqual(['installed-store'])
+    expect(itemsForTab(rows, 'market').map(i => i.name).sort()).toEqual(['installed-store', 'market-only', 'my-pending'])
+  })
+
+  it('own = 作者面（isOwner:true 即使没有本机副本）+ 本机草稿；商店装来的本机行不算', () => {
+    expect(itemsForTab(rows, 'own').map(i => i.name).sort()).toEqual(['draft', 'my-pending'])
+    // 旧调用面（'mine'）逐字保留：本机创作 + 已安装来源条目。
+    expect(itemsForTab(rows, 'mine').map(i => i.name).sort()).toEqual(['draft', 'installed-store'])
+  })
+
+  it('isOwnUploadItem：作者行 / 草稿 命中；商店来源的本机行与目录行不命中', () => {
+    expect(isOwnUploadItem({ source: 'market', isOwner: true })).toBe(true)
+    expect(isOwnUploadItem({ source: 'local' })).toBe(true)
+    expect(isOwnUploadItem({ source: 'local', originChannel: 'market' })).toBe(false)
+    // 上传记录还在的本机行仍算（作者自己传过）
+    expect(isOwnUploadItem({ source: 'local', originChannel: 'market', uploadStatus: 'rejected' })).toBe(true)
+    expect(isOwnUploadItem({ source: 'market', isOwner: false })).toBe(false)
+  })
+
+  it('tabCounts 按分段的可见行数计数（同 kind:name 只算一次）', () => {
+    const merged = mergeItems([
+      { kind: 'skill', source: 'market', name: 'x', version: '1.0.0', displayName: '', description: '', author: '', versions: ['1.0.0'], status: 'approved' },
+      { kind: 'skill', source: 'local', name: 'x', version: '1.0.0', displayName: '', description: '', author: '', versions: [], isLocal: true },
+    ])
+    const counts = tabCounts(merged)
+    expect(counts.all).toBe(1)
+    expect(counts.installed).toBe(1) // 存在本机行 ⇒ 已装
+    expect(counts.market).toBe(1)
+  })
+})
+
+describe('排序 / 视图 / 骨架（设计定案）', () => {
+  const base = (name: string, version: string, extra: Partial<CapabilityItem> = {}): CapabilityItem => ({
+    kind: 'skill', source: 'market', name, displayName: name, version, description: '', author: '',
+    versions: [version], status: 'approved', installed: false, ...extra,
+  })
+
+  it('downloads 降序；name 升序；updated 时间戳优先、缺省按版本降序兜底', () => {
+    const items = [
+      base('b', '1.0.0', { downloads: 5 }),
+      base('a', '2.0.0', { downloads: 50 }),
+      base('c', '1.5.0', { updatedAt: '2026-10-26T00:00:00.000Z' }),
+    ]
+    expect(sortItems(items, 'downloads').map(i => i.name)).toEqual(['a', 'b', 'c'])
+    expect(sortItems(items, 'name').map(i => i.name)).toEqual(['a', 'b', 'c'])
+    // updated：有 updatedAt 的行排最前；其余按版本号降序（不编造时间）。
+    expect(sortItems(items, 'updated').map(i => i.name)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('骨架是 6 张卡（不是一句「加载中…」）', () => {
+    expect(skeletonKeys()).toHaveLength(6)
+    expect(skeletonKeys(0)).toEqual([])
+    expect(skeletonKeys()).toEqual(skeletonKeys())
+  })
+})
+
+describe('卡片信息密度（最多两个 Chip + 小状态点）', () => {
+  const base: CapabilityItem = {
+    kind: 'skill', source: 'market', name: 'x', displayName: 'X 技能', version: '1.0.0',
+    description: 'd', author: 'a', versions: ['1.0.0'], status: 'approved', installed: true,
+    installedOrigin: 'store', downloads: 0,
+  }
+
+  it('官方 + 状态：恰好两个；官方在最前', () => {
+    const chips = cardChips({ ...base, official: true, status: 'pending' }, 'all')
+    expect(chips).toHaveLength(2)
+    expect(chips[0]!.key).toBe('capability.official')
+    expect(chips[1]!.key).toBe('capability.pending')
+  })
+
+  it('没有官方/状态时用来源徽章；任何情况都不超过两个', () => {
+    const chips = cardChips({ ...base, originChannel: 'org', dirty: true, originServer: 'other', originSymlink: true }, 'installed')
+    expect(chips).toHaveLength(1)
+    expect(chips[0]!.key).toBe('capability.sourceOrg')
+    for (const tab of ['all', 'installed', 'own', 'market'] as const) {
+      expect(cardChips({ ...base, official: true, delisted: true }, tab).length).toBeLessThanOrEqual(2)
+    }
+  })
+
+  it('「我上传」里 approved 显示「已共享」，草稿显示「未上传」', () => {
+    expect(cardStatusChip({ ...base, status: 'approved' }, 'own')?.key).toBe('capability.approved')
+    expect(cardStatusChip({ ...base, source: 'local', status: undefined, uploadStatus: undefined }, 'own')?.key).toBe('capability.draftNotUploaded')
+    // 下架优先于一切状态（作者面必须看到管控结果）。
+    expect(cardStatusChip({ ...base, delisted: true }, 'own')?.key).toBe('capability.delisted')
+  })
+
+  it('其余状态只做小状态点（最多两个），已安装分段不重复报"已安装"', () => {
+    const dots = cardStatusDots({ ...base, dirty: true, originServer: 'other', originSymlink: true }, 'all')
+    expect(dots).toHaveLength(2)
+    expect(dots.map(d => d.key)).toEqual(['capability.dirty', 'capability.originOtherServer'])
+    expect(cardStatusDots(base, 'installed').map(d => d.key)).toEqual([])
+    expect(cardStatusDots(base, 'all').map(d => d.key)).toContain('capability.installed')
+  })
+})
+
+describe('页脚动作的分段收窄（我上传里未通过的版本不给假「安装」）', () => {
+  const pending: CapabilityItem = {
+    kind: 'skill', source: 'market', name: 'new-skill', displayName: '新技能', version: '1.0.0',
+    description: '', author: '', versions: ['1.0.0'], status: 'pending', installed: false, isOwner: true,
+  }
+  it('pending/rejected 且无本机副本 ⇒ 只报状态；其它分段照旧给「安装」', () => {
+    expect(planCardActionForTab(pending, 'own')).toEqual({ kind: 'review', status: 'pending' })
+    expect(planCardActionForTab({ ...pending, status: 'rejected' }, 'own')).toEqual({ kind: 'review', status: 'rejected' })
+    // 「全部」同样渲染作者面行（own 分区）⇒ 也不能给注定失败的「安装」。
+    expect(planCardActionForTab(pending, 'all')).toEqual({ kind: 'review', status: 'pending' })
+    expect(planCardActionForTab({ ...pending, status: 'rejected' }, 'all')).toEqual({ kind: 'review', status: 'rejected' })
+    // 「市场」不渲染未通过版本（服务端目录面不列），判据保持 planCardAction 原样。
+    expect(planCardActionForTab(pending, 'market')).toEqual({ kind: 'install' })
+  })
+  it('其它动作逐字沿用 planCardAction（不因分段改变）', () => {
+    const installed: CapabilityItem = { ...pending, status: 'approved', installed: true, installedVersion: '1.0.0', installedOrigin: 'store' }
+    expect(planCardActionForTab(installed, 'own')).toEqual(planCardAction(installed))
+    expect(planCardActionForTab(installed, 'installed')).toEqual(planCardAction(installed))
+  })
+})
+
+describe('渲染接线（源码级）：现代化设计 + F-07/F-09/F-10/F-11', () => {
+  const source = readFileSync(fileURLToPath(new URL('../../capability-center/src/client/CapabilityCenterPanel.tsx', import.meta.url)), 'utf8')
+
+  it('默认分段是「全部」，四个分段的文案键都在工具条里', () => {
+    expect(source).toContain("useState<SourceTab>('all')")
+    for (const key of ['capability.tabAll', 'capability.tabInstalled', 'capability.tabOwn', 'capability.tabMarket']) {
+      expect(source, key).toContain(`t('${key}')`)
+    }
+    // 工具条 = PanelPage 的 toolbar（不是内容区顶部的手写一行）。
+    expect(source).toMatch(/toolbar=\{resolvedDetail === null \? \(/u)
+  })
+
+  it('排序（最近更新/名称/下载）、视图切换（网格/列表）、结果计数都在工具条里', () => {
+    for (const key of ['capability.sortUpdated', 'capability.sortName', 'capability.sortDownloads', 'capability.viewGrid', 'capability.viewList', 'capability.resultCount']) {
+      // 带参数的键（resultCount）在调用点后面还有 `, { … }`，所以只钉 `t('key'` 前缀。
+      expect(source, key).toContain(`t('${key}'`)
+    }
+    expect(source).toContain('setSort(')
+    expect(source).toContain('setView(')
+    expect(source).toContain('data-role="capability-result-count"')
+  })
+
+  it('加载态是 6 张骨架卡：不再有「加载中…」一句', () => {
+    expect(source).toContain('renderSkeleton()')
+    expect(source).toContain('skeletonKeys()')
+    expect(source).not.toContain("t('capability.loading')")
+  })
+
+  it('卡片里不再放大段状态说明（下架/转交/审核提示只在详情视图）', () => {
+    const card = /const renderCard = \(item: CapabilityItem\): React\.ReactNode => \{([\s\S]*?)\n  \}/u.exec(source)
+    expect(card, 'renderCard 必须存在').not.toBeNull()
+    for (const key of ['capability.delistedHint', 'capability.transferredHint', 'capability.marketReviewHint']) {
+      expect(card![1], `卡片里不得出现 ${key}`).not.toContain(key)
+    }
+    // 详情里必须有（否则状态说明整个消失）。
+    expect(source).toContain('data-role="card-delisted-reason"')
+    expect(source).toContain('data-role="card-transferred-reason"')
+    expect(source).toContain('data-role="card-market-review-hint"')
+    // 页脚只有「一个 primary 动作 + 一个 ghost 详情」：详情按钮是 ghost + 文案。
+    expect(card![1]).toContain('renderDetailButton(')
+    expect(source).toContain("variant=\"ghost\"")
+  })
+
+  it('卡片 key 稳定为 kind:name（多版本不产生重复卡）', () => {
+    expect(source).toContain('const key = `${item.kind}:${item.name}`')
+    expect(source).toContain('data-key={key}')
+    // 归并仍由 mergeItems 唯一负责（planSectionCards 去重内置卡）。
+    expect(source).toContain('mergeItems(items)')
+  })
+
+  it('详情是面板内整页子视图：面板不再渲染弹层，但兼容导出仍在', () => {
+    expect(source).not.toMatch(/<CapabilityDetailDialog/u)
+    expect(source).toContain('data-role="capability-detail"')
+    expect(source).toContain('onClick={() => { setDetail(')
+    expect(typeof CapabilityDetailDialog).toBe('function')
+  })
+
+  it('F-07 卸载成功后立即从列表移除并重载（不再只翻 installed 后回弹）', () => {
+    const uninstall = /const uninstall = async \([\s\S]*?\n  \}/u.exec(source)
+    expect(uninstall).not.toBeNull()
+    expect(uninstall![0]).toContain("i.source === 'local'")
+    expect(uninstall![0]).toContain('loadAll()')
+  })
+
+  it('F-09 官方行有新版时更新按钮不再被禁用', () => {
+    const update = /plan\.kind === 'update' \? \(([\s\S]*?): plan\.kind === 'reupload'/u.exec(source)
+    expect(update, '更新分支必须存在').not.toBeNull()
+    expect(update![1]).not.toContain('item.official')
+    expect(source).not.toContain("t('capability.officialLocked')")
+  })
+
+  it('F-10 409 只有 LOCAL_CONTENT 进确认条，其它 409 走错误文案', () => {
+    const perform = /const performInstall = async \([\s\S]*?\n  \}/u.exec(source)
+    expect(perform).not.toBeNull()
+    expect(perform![0]).toContain("code === '' || code === 'LOCAL_CONTENT'")
+    expect(perform![0]).toContain('uploadFailureText({')
+    // 确认条的措辞档位不能再默认成「本机自制」。
+    expect(perform![0]).toContain('needsOverwriteConfirm(item) ? overwriteConfirmReason(item) : \'store\'')
+  })
+
+  it('F-08/F-11 「我上传」走 own 通道，且轮询会刷新 own（审核态不粘滞）', () => {
+    expect(source).toContain("fetchCapabilityRows('own')")
+    expect(source).toContain("loadSection('own'")
+    expect(source).toMatch(/refresh\('own', 'own'\)/u)
   })
 })

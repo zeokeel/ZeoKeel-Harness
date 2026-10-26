@@ -6,6 +6,7 @@ import Capabilities, {
   DELISTED_PENDING_HINT,
   DELISTED_PENDING_MARKET_HINT,
   MARKET_PENDING_HINT,
+  previewKeyOf,
 } from './Capabilities'
 
 // 2026-09 恢复统一审批:能力中心承载共享技能+共享 Agent 审核(技能/智能体
@@ -525,5 +526,43 @@ describe('市场待审版本(queued market rows)', () => {
     expect(screen.getByRole('button', { name: '删除' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '下架' })).toBeInTheDocument()
     expect(screen.getByTitle('授权')).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// D 系列显示修复(2026-10-26):展示名优先级、预览 key、作者空值
+// ---------------------------------------------------------------------------
+describe('审批列表 · 展示名(D 系列)', () => {
+  it('previewKeyOf 先归并展示名再拼 @version(运算符优先级回归)', () => {
+    // 老写法 `display_name || name + '@' + version` 在这里会得到「数据提取 v2」,
+    // 丢掉版本段 ⇒ 同一展示名的不同版本预览无法区分。
+    expect(previewKeyOf({ display_name: '数据提取 v2', name: 'data-extract', version: '2.0.0' }))
+      .toBe('数据提取 v2@2.0.0')
+    expect(previewKeyOf({ name: 'data-extract', version: '2.0.0' })).toBe('data-extract@2.0.0')
+  })
+
+  it('作者为空显示 —;展示名与目录名相同时不重复渲染', async () => {
+    const sameNameRow = { ...SKILL_ROWS[0]!, author: '', display_name: 'codeql' }
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/capabilities/approvals?status=pending') return { approvals: [sameNameRow] }
+      if (path === '/api/server/admin/capabilities/approvals?status=all') return { approvals: [sameNameRow] }
+      if (path === '/api/server/admin/departments') return { departments: [] }
+      if (path === '/api/server/admin/capability-locks') return { locks: [] }
+      return {}
+    })
+    render(<Capabilities />)
+    await screen.findByText('codeql')
+    // display_name === name ⇒ 只渲染一次(名称格里不再重复一行 slug)。
+    expect(screen.getAllByText('codeql')).toHaveLength(1)
+    // 作者列空值显示破折号,而不是空白单元格。
+    expect(screen.getAllByText('—', { selector: 'td' })).toHaveLength(1)
+  })
+
+  it('转移归属弹窗用展示名(display_name)而不是 slug', async () => {
+    render(<Capabilities />)
+    await screen.findByText('CodeQL 审计')
+    fireEvent.click((await screen.findAllByTitle('转移归属(负责人)'))[0]!)
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('将「CodeQL 审计」')
   })
 })

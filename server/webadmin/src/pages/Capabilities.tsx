@@ -72,6 +72,29 @@ interface Dept {
   name: string
 }
 
+/**
+ * 审批行的展示名回退:display_name → name(2026-10-26 D 系列显示修复)。
+ *
+ * 展示名是卡片/弹窗标题的唯一来源;`name` 是英文目录名,只作副标题与寻址。
+ * 服务端已把 App 级 title 回退进 display_name(市场待审行常缺包内 title),
+ * 这里再兜一层兼容旧响应。
+ */
+function displayNameOf(row: { display_name?: string; name: string }): string {
+  return row.display_name?.trim() || row.name
+}
+
+/**
+ * 预览弹层的重挂 key(2026-10-26 D 系列显示修复)。
+ *
+ * 必须先算 `(display_name || name)` 再拼 `@version`:写成
+ * `display_name || name + '@' + version` 时 `+` 的优先级高于 `||`,展示名非空
+ * 的行 key 会**丢掉版本段** —— 同一展示名的不同版本预览不再区分,弹层状态
+ * (选中文件/滚动位置)会串到另一行。导出为纯函数以便判据直接钉住。
+ */
+export function previewKeyOf(row: { display_name?: string; name: string; version: string }): string {
+  return (row.display_name || row.name) + '@' + row.version
+}
+
 const STATUS_META: Record<ApprovalRow['status'], { label: string; variant: 'secondary' | 'success' | 'destructive' }> = {
   pending: { label: '待审核', variant: 'secondary' },
   approved: { label: '已通过', variant: 'success' },
@@ -281,7 +304,8 @@ export default function Capabilities() {
   }
 
   const openPreview = async (row: ApprovalRow) => {
-    setPreviewKey(row.display_name || row.name + '@' + row.version)
+    // 预览 key 由 previewKeyOf 一处产出(优先级 bug 的回归判据见该函数注释)。
+    setPreviewKey(previewKeyOf(row))
     setPreviewRow(row)
     setPreview(null)
     setError('')
@@ -391,14 +415,17 @@ export default function Capabilities() {
                     </TableCell>
                     <TableCell>
                       <div className="whitespace-nowrap font-medium">
-                        {row.display_name || row.name}
+                        {displayNameOf(row)}
                         {row.conflict && (
                           <Badge variant="destructive" className="ml-2" title="与市场技能同名,通过会被 409 阻断,请先处理市场技能">
                             <TriangleAlert className="mr-1 h-3 w-3" />名称冲突
                           </Badge>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground">{row.name}</div>
+                      {/* 目录名只在展示名不同时作副标题,避免同一串名称出现两次。 */}
+                      {displayNameOf(row) !== row.name && (
+                        <div className="text-xs text-muted-foreground">{row.name}</div>
+                      )}
                       {/* market 待审行的影响面说明(仅 market):组织行通过 = 该版本对
                           授权用户可见,市场行通过 = **替换分发版本**,同样对全部授权
                           用户生效。 */}
@@ -409,7 +436,7 @@ export default function Capabilities() {
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">{row.version}</TableCell>
-                    <TableCell>{row.author}</TableCell>
+                    <TableCell>{row.author || '—'}</TableCell>
                     <TableCell title="归属人(谁能续传新版本;与作者可不同)">
                       {row.owner || '—'}
                     </TableCell>
@@ -536,9 +563,9 @@ export default function Capabilities() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {confirm && confirmKind === 'approve' && `确定通过「${confirm.display_name || confirm.name}@${confirm.version}」吗？`}
-              {confirm && confirmKind === 'reject' && `确定拒绝「${confirm.display_name || confirm.name}@${confirm.version}」吗？`}
-              {confirm && confirmKind === 'delete' && `确定删除「${confirm.display_name || confirm.name}@${confirm.version}」吗？`}
+              {confirm && confirmKind === 'approve' && `确定通过「${displayNameOf(confirm)}@${confirm.version}」吗？`}
+              {confirm && confirmKind === 'reject' && `确定拒绝「${displayNameOf(confirm)}@${confirm.version}」吗？`}
+              {confirm && confirmKind === 'delete' && `确定删除「${displayNameOf(confirm)}@${confirm.version}」吗？`}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
@@ -590,7 +617,7 @@ export default function Capabilities() {
         open={transferRow !== null}
         kind={transferRow?.kind ?? 'skill'}
         name={transferRow?.name ?? ''}
-        displayName={transferRow?.display_name}
+        displayName={transferRow ? displayNameOf(transferRow) : undefined}
         currentOwner={transferRow?.owner ?? ''}
         onClose={() => { setTransferRow(null) }}
         onSaved={() => { void load(tab, typeFilter) }}

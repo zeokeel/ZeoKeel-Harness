@@ -20,7 +20,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { hostCopy, type HostLocale } from '@zeokeel/dsh-host-locale'
 import { ApiError, AuthError, fetchJSON, gatewayFetch, normalizeServerURL, PASSWORD_CHANGE_REQUIRED_CODE } from '@zeokeel/dsh-gateway-client/auth'
@@ -1188,7 +1188,12 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
           }
           const url = new URL(req.url ?? '/', 'http://localhost')
           const source = url.searchParams.get('source')
-          if (source !== 'market' && source !== 'org' && source !== 'local') {
+          // `own`（2026-10-26 能力中心盘点 F-08）：服务端 author-own 视图，
+          // **含 pending/rejected/delisted** 的任意状态行。面板用它补出「我上传」
+          // 分区里"没有本机副本也要看得见"的待审/驳回行；此前只把 own 当作
+          // `?source=local` 的匹配源，于是从未上传到本机（或已卸载）的行
+          // 在员工面**结构上不可见**，作者无法确认自己是否在队列里。
+          if (source !== 'market' && source !== 'org' && source !== 'local' && source !== 'own') {
             return json(res, 400, { error: 'invalid source' })
           }
           try {
@@ -1263,6 +1268,60 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
               presetOrigins.set(l.name, isStoreProvenance(await readProvenance(dir), l.name, s.serverURL) ? 'store' : 'local')
             }
 
+            // 「最近更新」排序的磁盘事实（面板排序键，不是业务判据）：本机目录 mtime。
+            // 目录行没有 timestamp（服务端 DTO 不带 updated_at），客户端按版本号降序兜底。
+            const localUpdatedAt = new Map<string, string>()
+            for (const r of localSkills) {
+              const mtime = await stat(join(skillsDir, r.name)).then(st => st.mtime.toISOString()).catch(() => undefined)
+              if (mtime !== undefined) localUpdatedAt.set(`skill:${r.name}`, mtime)
+            }
+            for (const l of localPresets) {
+              const mtime = await stat(join(presetsDir, l.name)).then(st => st.mtime.toISOString()).catch(() => undefined)
+              if (mtime !== undefined) localUpdatedAt.set(`agent:${l.name}`, mtime)
+            }
+
+            /**
+             * 目录行 → 面板视图模型（own / market / org 三个来源共用）。
+             *
+             * 抽出**唯一实现**的理由：own 与市场两条分支此前各写一遍字段映射，
+             * 新增 `own` 通道时只要有一处漏字段，就会出现"市场能看到名字、我上传
+             * 看不到"这种只在一侧复现的错（显示名映射 2026-09-01 就是这样漏的）。
+             * 所有字段都来自服务端行 + 磁盘事实，不在这里做任何推断。
+             * @param i - 服务端 `/api/client/v2/capabilities` 的一行。
+             * @returns 面板 `CapabilityItem` 形状的行。
+             */
+            const mapCatalogRow = (i: Record<string, unknown>): Record<string, unknown> => {
+              const kind = (i as { kind?: string }).kind ?? ''
+              const name = (i as { name?: string }).name ?? ''
+              const installed = kind === 'skill' ? installedSkills.has(name) : installedPresets.has(name)
+              return {
+                ...i,
+                // 渠道缺省按市场（旧服务端 own 面可能不带 source；面板的权威序
+                // 市场 > 组织 > 本机 需要这个字段有确定值）。
+                source: (i as { source?: string }).source ?? 'market',
+                // 服务端为 snake_case(display_name 等),客户端读驼峰
+                // displayName——统一在此映射,避免卡片标题恒等于 name、
+                // 搜索/归并失效(2026-09-01 深挖)。
+                displayName: (i as { displayName?: string }).displayName
+                  ?? (i as { display_name?: string }).display_name
+                  ?? i.name,
+                // 2026-09-02 归属权:is_owner 由服务端按 apps.owner 计算,
+                // 客户端上传预检依赖它(「我的」与「他人」同名区分)。
+                isOwner: (i as { is_owner?: boolean }).is_owner ?? false,
+                // 0059 官方机制:蓝标 + 市场排序评分(score 由服务端计算)。
+                official: (i as { official?: boolean }).official ?? false,
+                downloads: Number((i as { downloads?: number }).downloads ?? 0),
+                calls: Number((i as { calls?: number }).calls ?? 0),
+                score: Number((i as { score?: number }).score ?? 0),
+                installed,
+                installedVersion: installedVersionFor(kind, name, localSkillVersions, localPresetVersions),
+                // 来源（审计 A2/A3）：只对"本机真的装了"的行给，未装时 undefined。
+                installedOrigin: installed ? installedOriginFor(kind, name, skillOrigins, presetOrigins) : undefined,
+                ...localUpdatedAt.has(`${kind}:${name}`) ? { updatedAt: localUpdatedAt.get(`${kind}:${name}`) } : {},
+                hasUpdate: false, // 客户端按 versions 与 installedVersion 计算
+              }
+            }
+
             // 本地创作行(我的分区):磁盘上存在的技能/预设,带上传状态(若在
             // 服务端 catalog 里存在同名同 kind 的行,则取其 status——本机
             // 作者是自己的上传,服务端 ListVisible* 已含 author-own 任意状态)。
@@ -1277,6 +1336,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
                 runtimeName: l.displayName ?? l.name,
                 version: prov?.version !== undefined && prov.version !== '' ? prov.version : (l.version ?? '1.0.0'),
                 description: l.description ?? '', author: '',
+                updatedAt: localUpdatedAt.get(`skill:${l.name}`),
                 // 归属与本地改动(D6):面板据此显示「来自市场 · vX · 已本地修改」。
                 // R17B-04：`originServer` 只在"来源服务端 ≠ 当前会话服务端"时下发 ——
                 // 面板据此渲染「来自另一台服务端」徽章（判据比较在 isStoreProvenance /
@@ -1321,6 +1381,7 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
                 kind: 'agent', source: 'local', name: l.name, displayName: l.displayName ?? l.name,
                 version: prov?.version !== undefined && prov.version !== '' ? prov.version : '1.0.0',
                 description: l.description ?? '', author: '',
+                updatedAt: localUpdatedAt.get(`agent:${l.name}`),
                 ...prov === undefined ? {} : { originChannel: prov.channel, originAppId: prov.appId, dirty },
                 installedOrigin: presetOrigins.get(l.name) ?? 'local',
                 status: match !== undefined ? (match as { status?: string }).status : undefined,
@@ -1363,78 +1424,30 @@ export function createSkillRoutes(ctx: Context, fence: HostLocalRouteFence): Ski
                     const name = (i as { name?: string }).name ?? ''
                     return kind === 'skill' ? installedSkills.has(name) : installedPresets.has(name)
                   })
-                  .map((i) => ({
-                    ...i,
-                    source: (i as { source?: string }).source ?? 'market',
-                    displayName: ((i as { display_name?: string }).display_name ?? i.name) as string,
-                    installed: true,
-                    // 审计 2026-09-12 P1-6:`?source=local` 的商店行此前**不带**
-                    // installedVersion ⇒ 面板 hasUpdateFor 恒 false,「更新到 vX」
-                    // 对已装共享 Agent 永不出现(与 enriched 分支同源修复)。
-                    installedVersion: installedVersionFor(
-                      (i as { kind?: string }).kind ?? '',
-                      (i as { name?: string }).name ?? '',
-                      localSkillVersions,
-                      localPresetVersions,
-                    ),
-                    // 来源（审计 A2/A3）：与 enriched 分支同源（同一个 helper）。
-                    installedOrigin: installedOriginFor(
-                      (i as { kind?: string }).kind ?? '',
-                      (i as { name?: string }).name ?? '',
-                      skillOrigins,
-                      presetOrigins,
-                    ),
-                    // 2026-09-02 归属权 + 第四轮 R4-B-14：`is_owner` **必须**在这里也透出。
-                    // 面板的上传预检是 `clash.isOwner !== true ⇒ 直接提示「名称已被占用」、
-                    // 不发请求`（CapabilityCenterPanel 的 upload()），而它扫的是当前
-                    // `items`。市场分区取数失败/未回来时（applySectionRows 会丢掉旧的
-                    // 非本地行），「我的」里只剩这一份**没有 isOwner** 的商店行 ⇒ 作者上传
-                    // **自己的**技能被本地预检挡住。字段来自服务端
-                    // `capabilities.CapabilityItem.IsOwner`（json: is_owner），两边同源。
-                    isOwner: (i as { is_owner?: boolean }).is_owner ?? false,
-                    // 0059 官方字段透传(与 enriched 同构)。
-                    official: (i as { official?: boolean }).official ?? false,
-                    downloads: Number((i as { downloads?: number }).downloads ?? 0),
-                    calls: Number((i as { calls?: number }).calls ?? 0),
-                    score: Number((i as { score?: number }).score ?? 0),
-                  }))
+                  // 字段映射与 own / market / org 三个来源共用同一实现（mapCatalogRow），
+                  // 它按磁盘事实补 installed / installedVersion / installedOrigin，
+                  // 并透出 is_owner（R4-B-14）与官方字段（0059）。
+                  .map(i => mapCatalogRow(i))
                 return json(res, 200, { items: [...storeInstalled, ...localRows] })
               }
               return json(res, 200, { items: localRows })
+            }
+
+            // 「我上传」分区（2026-10-26，盘点 F-08）：服务端 author-own 视图原样下发。
+            //
+            // 与 `?source=local` 的关键差别：这里**不要求本机有副本** ——
+            // pending / rejected / 已驳回原因 / 下架行都要在员工面可见（作者要能确认
+            // 自己在队列里的位置、为什么被拒）。磁盘事实只用来补 installed 相关字段，
+            // 让"本机还留着一份"与"已装可更新"这两件事在同一个卡片上成立。
+            if (source === 'own') {
+              return json(res, 200, { items: items.map(i => mapCatalogRow(i)) })
             }
 
             // 已装版本:best-effort。技能 = provenance/.install-version →
             // SKILL.md frontmatter;共享 Agent = provenance/.install-version
             // (preset.yml 无 version 字段,故无 frontmatter 兜底)。客户端
             // `hasUpdateFor()` 依赖这里的 installedVersion:undefined ⇒ 恒 false。
-            const enriched = items.map(i => {
-              const kind = i.kind as string
-              const name = i.name as string
-              const installed = kind === 'skill' ? installedSkills.has(name) : installedPresets.has(name)
-              const installedVersion = installedVersionFor(kind, name, localSkillVersions, localPresetVersions)
-              return {
-                ...i,
-                // 服务端为 snake_case(display_name 等),客户端读驼峰
-                // displayName——统一在此映射,避免卡片标题恒等于 name、
-                // 搜索/归并失效(2026-09-01 深挖)。
-                displayName: (i as { display_name?: string; displayName?: string }).displayName
-                  ?? (i as { display_name?: string }).display_name
-                  ?? i.name,
-                // 2026-09-02 归属权:is_owner 由服务端按 apps.owner 计算,
-                // 客户端上传预检依赖它(「我的」与「他人」同名区分)。
-                isOwner: (i as { is_owner?: boolean }).is_owner ?? false,
-                // 0059 官方机制:蓝标 + 市场排序评分(score 由服务端计算)。
-                official: (i as { official?: boolean }).official ?? false,
-                downloads: Number((i as { downloads?: number }).downloads ?? 0),
-                calls: Number((i as { calls?: number }).calls ?? 0),
-                score: Number((i as { score?: number }).score ?? 0),
-                installed,
-                installedVersion,
-                // 来源（审计 A2/A3）：只对"本机真的装了"的行给，未装时 undefined。
-                installedOrigin: installed ? installedOriginFor(kind, name, skillOrigins, presetOrigins) : undefined,
-                hasUpdate: false, // 客户端按 versions 与 installedVersion 计算
-              }
-            })
+            const enriched = items.map(i => mapCatalogRow(i))
             json(res, 200, { items: enriched })
           } catch (cause) {
             if (cause instanceof AuthError && cause.kind === 'auth_expired') {

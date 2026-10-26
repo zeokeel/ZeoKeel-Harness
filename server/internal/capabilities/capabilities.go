@@ -188,10 +188,9 @@ func appendMarketAgent(out *[]CapabilityItem, a serverstore.App, versions map[st
 		return
 	}
 	versions[a.AppID] = append(versions[a.AppID], r.Version)
-	display := a.Title
-	if display == "" {
-		display = a.AppID
-	}
+	// 展示名回退:apps.title → 展示版本 title → app_id(与市场技能同一实现)。
+	release := r
+	display := serverstore.AppDisplayName(a, &release)
 	*out = append(*out, CapabilityItem{
 		Kind:        KindAgent,
 		Source:      SourceMarket,
@@ -354,18 +353,44 @@ func mergeVersions(items []CapabilityItem, versions map[string][]string) []Capab
 	return out
 }
 
-// appOwnerMap 一次性取某 (kind, channel) 全部 App 的归属映射(列表量级小,
-// 一次查询避免逐行 GetApp;2026-09-02 归属权:is_owner 供客户端预检)。
-func appOwnerMap(db *sql.DB, kind, channel string) map[string]string {
+// appMeta 是 App 级的归属人 + 展示名(审批队列一次查询覆盖两列)。
+type appMeta struct {
+	Owner string
+	Title string
+}
+
+// appMetaMap 一次性取某 (kind, channel) 全部 App 的归属与展示名映射(列表量级
+// 小,一次查询避免逐行 GetApp;2026-09-02 归属权:is_owner 供客户端预检)。
+//
+// 2026-10-26(D 系列显示修复):同时带出 apps.title,供审批队列在版本 title
+// 为空时回退 —— 否则市场待审行会以英文目录名当标题显示。查询失败返回空 map:
+// 这两列都只是展示兜底,不参与权限判定。
+func appMetaMap(db *sql.DB, kind, channel string) map[string]appMeta {
 	apps, err := serverstore.ListApps(db, kind, channel)
 	if err != nil {
-		return map[string]string{}
+		return map[string]appMeta{}
 	}
-	m := make(map[string]string, len(apps))
+	m := make(map[string]appMeta, len(apps))
 	for _, a := range apps {
-		m[a.AppID] = a.Owner
+		m[a.AppID] = appMeta{Owner: a.Owner, Title: a.Title}
 	}
 	return m
+}
+
+// displayNameOrAppTitle 回退链:行级展示名 → App 级 title → 空串(webadmin
+// 已把空值按 name 渲染)。
+//
+// 2026-10-26(D 系列显示修复):审批队列此前直接下发 release/shared 行的
+// display_name,包内 title 为空的行在管理端就退化成英文目录名;App 级 title
+// 是管理员能看到的展示名,应当在版本标题缺失时补上这层回退。
+func displayNameOrAppTitle(display, appID string, apps map[string]appMeta) string {
+	if d := strings.TrimSpace(display); d != "" {
+		return d
+	}
+	if t := strings.TrimSpace(apps[appID].Title); t != "" {
+		return t
+	}
+	return display
 }
 
 // listCapabilities 聚合市场(授权) + 组织(共享技能/共享 Agent)可见条目。
@@ -397,8 +422,8 @@ func listCapabilities(db *sql.DB, cacheDir string) gin.HandlerFunc {
 		// 分发状态与归属(App 级,2026-09-15 / 2026-09-23):**一次查询**同时给出
 		// owner 与 enabled —— 判据唯一实现在 serverstore/distribution.go 的语义
 		// 权威(下架只挡分发面;归属人自己的行仍可见;发布权与「我的」同源)。
-		// 此前这里是两份各自查询的 map(appOwnerMap + EnabledAppIDs),而且
-		// appOwnerMap 会**吞掉查询错误**返回空 map —— 空 map 会让「我的」分区
+		// 此前这里是两份各自查询的 map(App 元数据 + EnabledAppIDs),而且
+		// 那份 App 元数据查询会**吞掉查询错误**返回空 map —— 空 map 会让「我的」分区
 		// 恒空、is_owner 恒 false(与事实相反的员工可见视图)。这里与官方属性
 		// 同款:查询失败必须 500。
 		skillDists, err := serverstore.DistributionStates(db, serverstore.AppKindSkill)
@@ -788,7 +813,7 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 				return
 			}
 			// 归属映射(2026-09-02):owner 是 App 级,与版本无关,一次查询覆盖。
-			skillOwners := appOwnerMap(db, serverstore.AppKindSkill, "")
+			skillApps := appMetaMap(db, serverstore.AppKindSkill, "")
 			// 上下架状态 / 官方属性(App 级,2026-09-15):一次批量取;查询失败必须
 			// 返回 500 —— 吞掉后 map 为 nil,每条技能都会被标成 enabled=false,
 			// 运营看到与事实相反的「已下架」徽标。
@@ -812,10 +837,10 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 					Channel:     serverstore.AppChannelOrg,
 					Name:        s.Name,
 					Version:     s.Version,
-					DisplayName: s.DisplayName,
+					DisplayName: displayNameOrAppTitle(s.DisplayName, s.Name, skillApps),
 					Description: s.Description,
 					Author:      s.Author,
-					Owner:       skillOwners[s.Name],
+					Owner:       skillApps[s.Name].Owner,
 					Status:      string(s.Status),
 					Reason:      s.Reason,
 					Quality:     s.Quality,
@@ -863,10 +888,10 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 						Channel:     serverstore.AppChannelMarket,
 						Name:        r.AppID,
 						Version:     r.Version,
-						DisplayName: r.Title,
+						DisplayName: displayNameOrAppTitle(r.Title, r.AppID, skillApps),
 						Description: r.Description,
 						Author:      r.Publisher,
-						Owner:       skillOwners[r.AppID],
+						Owner:       skillApps[r.AppID].Owner,
 						Status:      string(r.Status),
 						Reason:      r.Reason,
 						Quality:     r.Quality,
@@ -888,7 +913,7 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 				serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
 				return
 			}
-			agentOwners := appOwnerMap(db, serverstore.AppKindAgent, "")
+			agentApps := appMetaMap(db, serverstore.AppKindAgent, "")
 			// 同 skills 分支：查询失败必须 500，不能吞。吞掉后 map 为 nil，
 			// 每条智能体都会被标成非官方（丢蓝标）——与事实相反的管理视图。
 			agentOfficials, err := serverstore.AppOfficialMap(db, serverstore.AppKindAgent)
@@ -911,10 +936,10 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 					Channel:     serverstore.AppChannelOrg,
 					Name:        p.Name,
 					Version:     p.Version,
-					DisplayName: p.DisplayName,
+					DisplayName: displayNameOrAppTitle(p.DisplayName, p.Name, agentApps),
 					Description: p.Description,
 					Author:      p.Author,
-					Owner:       agentOwners[p.Name],
+					Owner:       agentApps[p.Name].Owner,
 					Status:      string(p.Status),
 					Reason:      p.Reason,
 					Quality:     p.Quality,
@@ -948,10 +973,10 @@ func listApprovals(db *sql.DB, cacheDir string) gin.HandlerFunc {
 						Channel:     serverstore.AppChannelMarket,
 						Name:        r.AppID,
 						Version:     r.Version,
-						DisplayName: r.Title,
+						DisplayName: displayNameOrAppTitle(r.Title, r.AppID, agentApps),
 						Description: r.Description,
 						Author:      r.Publisher,
-						Owner:       agentOwners[r.AppID],
+						Owner:       agentApps[r.AppID].Owner,
 						Status:      string(r.Status),
 						Reason:      r.Reason,
 						Quality:     r.Quality,

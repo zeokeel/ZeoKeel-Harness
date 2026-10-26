@@ -232,7 +232,10 @@ func listSkillsAdmin(c *gin.Context, db *sql.DB) {
 }
 
 type skillReq struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// Title 是展示名(2026-10-26 D 系列显示修复):管理端可显式改中文展示名。
+	// 为空保持既有 apps.title(再空回落 name),绝不写 owner。
+	Title       string `json:"title"`
 	Version     string `json:"version"`
 	Description string `json:"description"`
 	Author      string `json:"author"`
@@ -255,7 +258,7 @@ func createSkillAdmin(c *gin.Context, db *sql.DB) {
 	// 0052:git 源模式已移除——创建只登记名称与元数据,内容一律由
 	// POST /skills/:name/archive 上传(归档是唯一入口,发布期集中严格校验)。
 	s := &serverstore.Skill{Name: req.Name, Version: req.Version, Description: req.Description,
-		Author: req.Author, Enabled: 1}
+		Author: req.Author, DisplayName: strings.TrimSpace(req.Title), Enabled: 1}
 	if _, err := serverstore.AddSkill(db, s); err != nil {
 		if errors.Is(err, serverstore.ErrDuplicate) {
 			serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "技能已存在")
@@ -367,7 +370,12 @@ func uploadSkillArchiveAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "发布失败")
 		return
 	}
-	_ = serverstore.SetSkillDisplayName(db, name, man.Title)
+	// 展示名回写:只认包内(trim 后)非空的 title。空 title 必须**保持既有**
+	// apps.title(直接写空串会把管理员改好的中文展示名清掉,下一次渲染只剩
+	// 英文目录名 —— 2026-10-26 D 系列显示修复)。
+	if title := strings.TrimSpace(man.Title); title != "" {
+		_ = serverstore.SetSkillDisplayName(db, name, title)
+	}
 	// 上传模式不再依赖磁盘缓存:清掉旧 clone/包,避免误读。
 	invalidateSkillCache(cacheDir, name)
 	_ = serverstore.AuditLog(db, adminUsername(c), "skill_update",
@@ -420,6 +428,13 @@ func updateSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 	}
 	if req.Description != "" {
 		s.Description = req.Description
+	}
+	// 展示名(2026-10-26 D 系列显示修复):显式 title 优先;为空保持既有展示名
+	// (appToSkill 已把「apps.title → 展示版本 title → name」的回退做在投影层),
+	// UpdateSkillMeta 再对空值回落 name 并 trim。owner 不在此列 —— 它只走
+	// 「转移归属」的唯一合规入口。
+	if title := strings.TrimSpace(req.Title); title != "" {
+		s.DisplayName = title
 	}
 	// UpdateSkillMeta 只写展示列(title/description/enabled),不碰 owner ——
 	// 让"元数据 PUT 无意中改写归属"在 DAO 层结构上不可能(唯一真源在 DAO)。
@@ -665,7 +680,10 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 	// 内容相同、版本号递增的噪音版本)。
 	if curEntries, curMD, cerr := sharedskills.ListArchiveContents(raw); cerr == nil {
 		if m0, perr := skillmanifest.Parse(curEntries, curMD, s.Name); perr == nil && m0.Version == s.Version {
-			_ = serverstore.SetSkillDisplayName(db, s.Name, m0.Title)
+			// 空包内 title 不清空既有展示名(与上传/更新同一口径)。
+			if title := strings.TrimSpace(m0.Title); title != "" {
+				_ = serverstore.SetSkillDisplayName(db, s.Name, title)
+			}
 			c.JSON(http.StatusOK, gin.H{
 				"ok": true, "version": s.Version, "checksum": s.Checksum,
 				"changes": []string{}, "already_compliant": true,
@@ -728,7 +746,10 @@ func normalizeSkillAdmin(c *gin.Context, db *sql.DB, cacheDir string) {
 		return
 	}
 	if m2, perr2 := skillmanifest.Parse(entries, md, s.Name); perr2 == nil {
-		_ = serverstore.SetSkillDisplayName(db, s.Name, m2.Title)
+		// 空包内 title 不清空既有展示名(与上传/更新同一口径)。
+		if title := strings.TrimSpace(m2.Title); title != "" {
+			_ = serverstore.SetSkillDisplayName(db, s.Name, title)
+		}
 	}
 	invalidateSkillCache(cacheDir, s.Name)
 	_ = serverstore.AuditLog(db, adminUsername(c), "skill_normalize",

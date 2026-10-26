@@ -1,0 +1,99 @@
+{
+  "id": "2026-10-26-capability-center-ui-display",
+  "status": "verified",
+  "intent": {
+    "zh": "能力中心客户端按现代设计重构（四分段、卡片密度、列表视图、整页详情、骨架/空态）并修掉盘点中的客户端功能问题；同时修管理端技能卡片显示英文目录名（display_name 投影缺失）与展示名不可编辑。",
+    "en": "Redesign the client capability center (four segments, denser cards, list view, in-panel detail, skeletons/empty states) and fix its client-side findings; also fix the admin's English-directory-name cards (missing display_name projection) and make display names editable."
+  },
+  "modules": [
+    "packages/host/capability-center/src/client/CapabilityCenterPanel.tsx",
+    "packages/host/capability-center/src/client/BuiltinSkillsStrip.tsx",
+    "packages/host/capability-center/src/client/locales.ts",
+    "packages/host/capability-center/src/client/skill-card-style.ts",
+    "packages/host/capability-center/src/host/skill-routes.ts",
+    "packages/host/enterprise/tests/capability-center-panel.spec.ts",
+    "packages/host/enterprise/tests/capability-catalog-proxy.spec.ts",
+    "packages/client/account-card/tests/capability-delisted-badge.spec.tsx",
+    "packages/host/desktop/scripts/e2e-client.mjs",
+    "server/internal/marketplace/skill_api.go",
+    "server/internal/marketplace/agent_api.go",
+    "server/internal/marketplace/admin.go",
+    "server/internal/serverstore/skills.go",
+    "server/internal/capabilities/capabilities.go",
+    "server/webadmin/src/pages/Marketplace.tsx",
+    "server/webadmin/src/pages/Agents.tsx",
+    "server/webadmin/src/pages/Capabilities.tsx"
+  ],
+  "acceptance": [
+    {
+      "criterion": "能力中心包 build+test 通过，locales 双语键对齐",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-capability-center check"
+    },
+    {
+      "criterion": "企业包能力中心面板与目录代理用例通过（含四分段/详情/own 通道）",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/capability-center-panel.spec.ts tests/capability-catalog-proxy.spec.ts"
+    },
+    {
+      "criterion": "account-card 真挂载用例通过（说明段移至详情后仍可断言）",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-account-card check"
+    },
+    {
+      "criterion": "管理端页面用例与类型检查通过（display_name/展示名编辑/preview key）",
+      "evidence": "test",
+      "command": "cd server/webadmin && npx tsc --noEmit && npx vitest run src/pages/Marketplace.test.tsx src/pages/Agents.test.tsx src/pages/Capabilities.test.tsx"
+    },
+    {
+      "criterion": "服务端 DTO/审批回退/展示名编辑相关 Go 包测试通过",
+      "evidence": "test",
+      "command": "cd server && GOCACHE=$PWD/temp/gocache GOMODCACHE=$PWD/temp/gomod go test ./internal/marketplace/... ./internal/capabilities/... ./internal/serverstore/... -count=1"
+    },
+    {
+      "criterion": "主题 token 守卫通过，客户端未引入硬编码颜色/新 UI 库",
+      "evidence": "guard",
+      "command": "node scripts/check-theme-tokens.mjs"
+    }
+  ],
+  "risk": "客户端面板渲染层重写（约 2000 行）但纯函数与动作端点未改；管理端只增 DTO 字段并新增可编辑 title，未改 owner 语义。回滚为恢复上述文件到 80c48abca3。",
+  "rollback": "git checkout 80c48abca3 -- packages/host/capability-center packages/host/enterprise/tests/capability-center-panel.spec.ts packages/host/enterprise/tests/capability-catalog-proxy.spec.ts packages/client/account-card/tests/capability-delisted-badge.spec.tsx packages/host/desktop/scripts/e2e-client.mjs server/internal/marketplace server/internal/serverstore/skills.go server/internal/capabilities server/webadmin/src/pages",
+  "verification": [
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-capability-center check",
+      "result": "exit 0；build 完成（client 201.85 kB / ESM 68.06 kB）；3 个 spec、41 tests 全通过"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/capability-center-panel.spec.ts tests/capability-catalog-proxy.spec.ts",
+      "result": "exit 0；2 个文件、115 tests 全通过（panel 100 / proxy 15）"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-account-card check",
+      "result": "exit 0；14 个文件、87 tests 全通过（含 capability-delisted-badge 4 tests）"
+    },
+    {
+      "command": "cd server/webadmin && npx tsc --noEmit && npx vitest run src/pages/Marketplace.test.tsx src/pages/Agents.test.tsx src/pages/Capabilities.test.tsx",
+      "result": "exit 0；tsc 无输出；3 个文件、67 tests 全通过"
+    },
+    {
+      "command": "cd server && GOCACHE=$PWD/temp/gocache GOMODCACHE=$PWD/temp/gomod go test ./internal/marketplace/... ./internal/capabilities/... ./internal/serverstore/... -count=1",
+      "result": "exit 0；marketplace 28.6s、capabilities 27.6s、serverstore 400.0s，全部 ok"
+    },
+    {
+      "command": "node scripts/check-theme-tokens.mjs",
+      "result": "exit 0；扫描 974 个源码文件、0 条提示、0 条阻断（上游 token 403 个）"
+    },
+    {
+      "command": "corepack yarn check",
+      "result": "exit 0；计划 37 / 实跑 37，37 通过、0 失败、0 跳过，总耗时 323.1s"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs && node scripts/check-no-real-domains.mjs",
+      "result": "exit 0；3 条变更记录合规；域名守卫零命中"
+    },
+    {
+      "command": "/root/.agents/skills/impeccable/scripts/impeccable detect --json <changed ui files>",
+      "result": "exit 0；detector 返回 []（0 条机械问题）"
+    }
+  ]
+}

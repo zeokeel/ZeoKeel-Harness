@@ -255,8 +255,18 @@ export function useBuiltinSkills(onInstalled?: () => void) {
       const res = await fetch(builtinInstallEndpoint(skill.name, overwrite), { method: 'POST' })
       const outcome = builtinSkillsInstallOutcome(res.status, res.ok)
       if (outcome === 'conflict') {
-        // 需要用户确认：不置失败态（确认条才是这一步的出口）。
-        return 'conflict'
+        // 409 只在 `LOCAL_CONTENT` 时是"需要用户确认"（宿主缺 `?overwrite=1` 拒绝覆盖
+        // 本机内容）。其它 409（APP_DELISTED / NAME_TAKEN / VERSION_*…）是业务拒绝 ——
+        // 进确认条只会让用户反复确认同一发注定失败的请求（盘点 F-10 的同形问题），
+        // 所以按失败处理并如实贴出服务端文案。旧宿主不带 `code`：维持既有行为。
+        const body = await res.json().catch(() => ({})) as { error?: unknown; code?: unknown }
+        const code = typeof body.code === 'string' ? body.code : ''
+        if (code === '' || code === 'LOCAL_CONTENT') {
+          // 需要用户确认：不置失败态（确认条才是这一步的出口）。
+          return 'conflict'
+        }
+        setFailed({ name: skill.name, message: typeof body.error === 'string' && body.error !== '' ? body.error : `HTTP ${String(res.status)}` })
+        return 'failed'
       }
       if (outcome === 'failed') {
         const data = await res.json().catch(() => ({})) as { error?: string }

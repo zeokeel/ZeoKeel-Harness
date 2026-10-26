@@ -19,6 +19,12 @@ import { agentRequest, grantsBase, previewFileBase } from '../lib/capability-end
 
 interface AgentRow {
   name: string
+  /**
+   * 展示名(2026-10-26 D 系列显示修复):服务端 `agentJSON` 下发。回退链
+   * apps.title → 展示版本 title → name;卡片主标题与弹窗标题都用它。
+   */
+  display_name?: string
+  /** 兼容旧服务端的别名(服务端已把 display_name 回退结果同步写到该键)。 */
   title?: string
   version?: string
   description?: string
@@ -43,6 +49,15 @@ interface AgentRow {
 /** 市场命名空间列表行 → 行模型(channel=market;归属见 AgentRow.owner 注释)。 */
 function toMarketAgent(raw: Omit<AgentRow, 'owner' | 'channel'>): AgentRow {
   return { ...raw, owner: raw.author ?? '', channel: 'market' }
+}
+
+/**
+ * 行的展示名回退:display_name → title(旧服务端/旧行) → name
+ * (2026-10-26 D 系列显示修复)。卡片标题与各弹窗标题统一走这里,
+ * 任何入口都不再把空串或英文目录名当标题。
+ */
+function agentDisplayName(row: { display_name?: string; title?: string; name: string }): string {
+  return row.display_name?.trim() || row.title?.trim() || row.name
 }
 
 /** 请求初始化(不传 body 时不带该键,保持既有调用形态)。 */
@@ -94,6 +109,7 @@ export default function Agents() {
   // 上架登记
   const [createOpen, setCreateOpen] = useState(false)
   const [createName, setCreateName] = useState('')
+  const [createTitle, setCreateTitle] = useState('')
   const [createDesc, setCreateDesc] = useState('')
   const [createErr, setCreateErr] = useState('')
   // 上传版本
@@ -104,8 +120,9 @@ export default function Agents() {
   const [uploadErr, setUploadErr] = useState('')
   // 锁定管理(2026-09-04 从审批页迁入市场页)
   const [lockOpen, setLockOpen] = useState(false)
-  // 编辑描述
+  // 编辑描述 / 展示名
   const [editAgent, setEditAgent] = useState<AgentRow | null>(null)
+  const [editTitle, setEditTitle] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editErr, setEditErr] = useState('')
   // 预览 / 授权 / 归属
@@ -137,7 +154,8 @@ export default function Agents() {
         // 归属取服务端下发的 owner(apps.owner),**不是** author(本行上传者);
         // 上下架状态透传服务端值,缺省按"未知即未上架"(绝不回落 true)。
         merged.push({
-          name: row.name, title: row.display_name || row.name, version: row.version,
+          name: row.name, display_name: row.display_name,
+          title: row.display_name || row.name, version: row.version,
           description: row.description, author: row.author, owner: row.owner ?? '',
           enabled: row.enabled === true,
           downloads: row.downloads ?? 0, official: row.official, quality: row.quality, channel: 'org',
@@ -175,10 +193,15 @@ export default function Agents() {
       if (req === null) { setCreateErr('当前命名空间不支持新建智能体'); return }
       await request(req.url, {
         method: req.method,
-        body: JSON.stringify({ name: createName.trim(), description: createDesc.trim() }),
+        body: JSON.stringify({
+          name: createName.trim(),
+          title: createTitle.trim(),
+          description: createDesc.trim(),
+        }),
       })
       setCreateOpen(false)
       setCreateName('')
+      setCreateTitle('')
       setCreateDesc('')
       await load()
     } catch (err: any) {
@@ -268,7 +291,7 @@ export default function Agents() {
     try {
       await request(req.url, {
         method: req.method,
-        body: JSON.stringify({ description: editDesc }),
+        body: JSON.stringify({ title: editTitle.trim(), description: editDesc }),
       })
       setEditAgent(null)
       await load()
@@ -289,7 +312,7 @@ export default function Agents() {
             <Button size="sm" variant="outline" onClick={() => setLockOpen(true)}>
               <Lock className="h-3.5 w-3.5" /> 锁定管理
             </Button>
-            <Button size="sm" onClick={() => { setCreateOpen(true); setCreateErr('') }}>
+            <Button size="sm" onClick={() => { setCreateOpen(true); setCreateErr(''); setCreateTitle('') }}>
               <Upload className="h-3.5 w-3.5" /> 上架智能体
             </Button>
           </>
@@ -321,8 +344,12 @@ export default function Agents() {
                         <Bot className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold">{a.title || a.name}</div>
-                        <div className="text-[11px] text-muted-foreground">{a.version ? `v${a.version}` : '尚未发布版本'} · {a.name}</div>
+                        {/* 主标题 = 展示名;目录名只在两者不同时作副标题,避免重复。 */}
+                        <div className="truncate text-sm font-semibold" title={a.name}>{agentDisplayName(a)}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {a.version ? `v${a.version}` : '尚未发布版本'}
+                          {agentDisplayName(a) !== a.name && <span className="ml-1.5 font-mono">{a.name}</span>}
+                        </div>
                       </div>
                     </div>
                     <span className="flex items-center gap-1.5">
@@ -374,7 +401,15 @@ export default function Agents() {
                             variant="outline"
                             disabled={editReq === null}
                             title={editReq === null ? ORG_LIMITS.edit : undefined}
-                            onClick={() => { setEditAgent(a); setEditDesc(a.description ?? ''); setEditErr('') }}
+                            onClick={() => {
+                              setEditAgent(a)
+                              setEditDesc(a.description ?? '')
+                              // 展示名回填:当前展示名等于目录名时留空,避免把 slug
+                              // 当成"人工展示名"提交(空值服务端保持既有展示名)。
+                              const current = a.display_name?.trim() || a.title?.trim() || ''
+                              setEditTitle(current === a.name ? '' : current)
+                              setEditErr('')
+                            }}
                           >编辑</Button>
                           <Button variant="outline" onClick={() => setTransferAgent(a)} title="转移归属(负责人)">归属</Button>
                           <Button variant="outline" onClick={() => setGrantAgent(a)}>授权</Button>
@@ -410,6 +445,11 @@ export default function Agents() {
               <Input id="agent-name" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="如 code-review-bot" />
             </div>
             <div className="space-y-1">
+              <Label htmlFor="agent-title">展示名(可选)</Label>
+              <Input id="agent-title" value={createTitle} onChange={(e) => setCreateTitle(e.target.value)} placeholder={createName || '留空则显示名称(目录名)'} />
+              <p className="text-xs text-muted-foreground">上传归档后以包内 preset.yml 的 title 为准。</p>
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="agent-desc">描述(展示文案)</Label>
               <Textarea id="agent-desc" rows={3} value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} />
             </div>
@@ -423,7 +463,7 @@ export default function Agents() {
       <Dialog open={!!uploadAgent} onOpenChange={(open) => { if (!open) setUploadAgent(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>上传新版 · {uploadAgent?.name}</DialogTitle>
+            <DialogTitle>上传新版 · {uploadAgent ? agentDisplayName(uploadAgent) : ''}</DialogTitle>
             <DialogDescription>
               {uploadAgent?.channel === 'org'
                 ? '组织共享智能体:归档包要求顶层 agent.cordis.yml + preset.yml;版本以包内 preset.yml 为准,管理员代传即发布(已通过审核)'
@@ -452,14 +492,19 @@ export default function Agents() {
         </DialogContent>
       </Dialog>
 
-      {/* 编辑描述弹窗 */}
+      {/* 编辑展示名/描述弹窗 */}
       <Dialog open={!!editAgent} onOpenChange={(open) => { if (!open) setEditAgent(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑智能体 · {editAgent?.name}</DialogTitle>
+            <DialogTitle>编辑智能体 · {editAgent ? agentDisplayName(editAgent) : ''}</DialogTitle>
             <DialogDescription>仅展示文案;版本/内容以归档包为准,归属经「归属」转移</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="agent-edit-title">展示名</Label>
+              <Input id="agent-edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder={editAgent?.name || '留空则显示名称(目录名)'} />
+              <p className="text-xs text-muted-foreground">卡片标题;留空保持既有展示名(不会把英文目录名写成展示名)。</p>
+            </div>
             <div className="space-y-1">
               <Label htmlFor="agent-edit-desc">描述</Label>
               <Textarea id="agent-edit-desc" rows={4} value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
@@ -499,7 +544,7 @@ export default function Agents() {
           open={!!transferAgent}
           kind="agent"
           name={transferAgent.name}
-          displayName={transferAgent.title || transferAgent.name}
+          displayName={transferAgent ? agentDisplayName(transferAgent) : undefined}
           currentOwner={transferAgent.owner}
           onClose={() => setTransferAgent(null)}
           onSaved={() => { setTransferAgent(null); void load() }}

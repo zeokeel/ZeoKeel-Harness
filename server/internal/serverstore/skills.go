@@ -3,6 +3,7 @@ package serverstore
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/skillmanifest"
@@ -28,9 +29,35 @@ type Skill struct {
 	Calls int64
 	// Official 官方属性(0059, App 级): 归属官方 = 蓝标 + 仅管理员可上传。
 	Official int
+	// Quality 精选标记(展示版本的 app_releases.quality:'' | 'featured' | 'official')。
+	// 2026-10-26(D 系列显示修复):此前投影漏了它,webadmin 的「精选」徽章恒不出现。
+	Quality string
+	// Source 内容来源(0052 起归档是唯一入口 ⇒ 有展示版本即 'upload';无版本为 '')。
+	// 2026-10-26:webadmin 的「上传包」徽章按 source === 'upload' 渲染。
+	Source string
+	// Channel 来源渠道(市场适配层固定 'market';与智能体 DTO 共用一份投影)。
+	Channel string
 	// DownloadedAt/updated overlay created/updated.
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// AppDisplayName 返回 App 的展示名回退链:apps.title → 展示版本 title → app_id。
+//
+// 为什么需要它(2026-10-26 D 系列显示修复):存量市场的 apps.title 可能为空
+// (旧 git 模式登记时不写 title),直接落 app_id 会让管理端卡片显示英文目录名。
+// 展示版本的 title 是同一份「包内即真相」的展示名,只在 App 层为空时回退;
+// 管理员改过的展示名始终优先(它是唯一可编辑的展示来源)。
+func AppDisplayName(a App, r *Release) string {
+	if title := strings.TrimSpace(a.Title); title != "" {
+		return title
+	}
+	if r != nil {
+		if title := strings.TrimSpace(r.Title); title != "" {
+			return title
+		}
+	}
+	return a.AppID
 }
 
 // ---------------------------------------------------------------------------
@@ -76,15 +103,22 @@ func currentRelease(db *sql.DB, kind, appID string, withArchive bool) (*Release,
 }
 
 // appToSkill 把 App + 展示版本投影成旧 Skill DTO。
+//
+// 展示名走 AppDisplayName 的回退链(apps.title → 展示版本 title → name):
+// 「管理端显示英文目录名」正是投影只取 apps.title、空值时无处回退造成的。
 func appToSkill(a App, r *Release) Skill {
 	out := Skill{
-		Name: a.AppID, DisplayName: a.Title, Description: a.Description,
-		Author: a.Owner, Enabled: a.Enabled, Official: a.Official,
+		Name: a.AppID, DisplayName: AppDisplayName(a, r), Description: a.Description,
+		Author: a.Owner, Enabled: a.Enabled, Official: a.Official, Channel: a.Channel,
 		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 	}
 	if r != nil {
 		out.ID, out.Version, out.Checksum = r.ID, r.Version, r.Checksum
 		out.Archive, out.Downloads, out.Calls = r.Archive, r.Downloads, r.Calls
+		out.Quality = r.Quality
+		// 0052:归档上传是唯一内容入口 ⇒ 有展示版本就等价于「上传包」
+		// (旧 source 字段的 'git' 取值随 git 模式一起下线)。
+		out.Source = "upload"
 		// 描述以 App 层为准(管理端元数据编辑写在 App 上);App 为空才回退版本描述。
 		if out.Description == "" {
 			out.Description = r.Description
@@ -180,7 +214,7 @@ func GetSkill(db *sql.DB, name string) (*Skill, error) {
 // `Skill.Author` 字段仍保留(读路径用它承接 `apps.owner`),但本函数**忽略**它;
 // 调用方若想改署名,应指向归属转移端点,而不是静默丢弃这个输入。
 func UpdateSkillMeta(db *sql.DB, s *Skill) error {
-	title := s.DisplayName
+	title := strings.TrimSpace(s.DisplayName)
 	if title == "" {
 		title = s.Name
 	}

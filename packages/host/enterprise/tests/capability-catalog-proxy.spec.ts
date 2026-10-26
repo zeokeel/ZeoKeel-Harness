@@ -23,8 +23,10 @@ import { applyFullComposition as apply } from './helpers/apply-full-composition.
 import type { Session } from '../src/server-connector/config.ts'
 import {
   isDelistedItem,
+  itemsForTab,
   mergeItems,
   planCardAction,
+  planCardActionForTab,
   type CapabilityItem,
 } from '../../capability-center/src/client/CapabilityCenterPanel.tsx'
 
@@ -359,5 +361,100 @@ describe('R5-B-1：作者行的下架标记透传（宿主 → 面板）', () =>
     stubOwnWithDelisted(h, false)
     const res = await h.call('/api/zeokeel/capabilities?source=local')
     expect(panelPlan(res.body.items as Array<Record<string, unknown>>)).toMatchObject({ kind: 'review', status: 'approved' })
+  })
+})
+
+/**
+ * 2026-10-26（能力中心盘点 F-08）：「我上传」必须有**不依赖本机副本**的数据通道。
+ *
+ * 缺陷形态：客户端只请求 `?source=market|local`，`?source=own` 只被当作
+ * `?source=local` 的匹配源。于是"上传后卸载了本机副本""在另一台机器上传"这两种
+ * 真实情况下，作者在员工面**结构上**看不到自己的 pending/rejected 行与拒因
+ * （管理端有，员工端没有）。
+ *
+ * 修法：宿主 `/api/zeokeel/capabilities` 放行 `source=own`（原样透传服务端同一视图，
+ * 按磁盘事实补 installed/installedVersion/installedOrigin），面板新增「我上传」分段。
+ * 本组从**真路由**（真 disk 扫描 + 真服务端载荷）一路钉到**面板纯函数**
+ * （`itemsForTab` → `planCardActionForTab`），任何一段单独绿都不算数。
+ */
+describe('2026-10-26「我上传」通道（source=own）', () => {
+  /** 服务端 own 视图：pending/rejected 行 + 一条本机也有副本的 approved 行。 */
+  const ownPayload = {
+    items: [
+      {
+        kind: 'skill', name: 'my-new-skill', version: '2.0.0', status: 'pending',
+        source: 'market', display_name: '我的新技能', is_owner: true, delisted: false, versions: [],
+      },
+      {
+        kind: 'skill', name: 'my-rejected', version: '1.0.0', status: 'rejected', reason: '正文太短',
+        source: 'org', display_name: '被拒技能', is_owner: true, delisted: false, versions: [],
+      },
+      {
+        kind: 'skill', name: 'codeql', version: '1.2.0', status: 'approved',
+        source: 'org', display_name: 'CodeQL 示例技能', is_owner: true, delisted: false,
+        versions: ['1.0.0', '1.2.0'],
+      },
+    ],
+  }
+
+  function stubOwn(h: { gateway: string[] }, payload: unknown, status = 200): void {
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {
+      h.gateway.push(String(url))
+      return new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
+    }))
+  }
+
+  it('?source=own 直连服务端 own，pending/rejected 行与拒因在没有本机副本时也返回', async () => {
+    const h = harness(SESSION)
+    stubOwn(h, ownPayload)
+    const res = await h.call('/api/zeokeel/capabilities?source=own')
+    expect(res.code).toBe(200)
+    // 透传的是服务端 own 视图（不是 local 的匹配那一发）。
+    expect(h.gateway.some(u => u.includes('/api/client/v2/capabilities?source=own'))).toBe(true)
+    const items = res.body.items as Array<Record<string, unknown>>
+    const pending = items.find(i => i.name === 'my-new-skill')
+    expect(pending, '没有本机副本的 pending 行必须出现').toBeDefined()
+    expect(pending).toMatchObject({ status: 'pending', displayName: '我的新技能', isOwner: true, installed: false })
+    const rejected = items.find(i => i.name === 'my-rejected')
+    expect(rejected).toMatchObject({ status: 'rejected', reason: '正文太短' })
+  })
+
+  it('本机真有副本的行由磁盘事实补 installed/installedVersion（同一张卡既能看状态也能更新）', async () => {
+    const h = harness(SESSION)
+    stubOwn(h, ownPayload)
+    const res = await h.call('/api/zeokeel/capabilities?source=own')
+    const items = res.body.items as Array<Record<string, unknown>>
+    const installed = items.find(i => i.name === 'codeql')
+    expect(installed?.installed).toBe(true)
+    // 磁盘 SKILL.md 的 version（fixture 1.0.0）——不是服务端下发的展示版本。
+    expect(installed?.installedVersion).toBe('1.0.0')
+  })
+
+  it('面板纯函数接起来：own 行进「我上传」，pending 只报状态（不给注定失败的「安装」）', async () => {
+    const h = harness(SESSION)
+    stubOwn(h, ownPayload)
+    const res = await h.call('/api/zeokeel/capabilities?source=own')
+    const rows = res.body.items as CapabilityItem[]
+    const merged = mergeItems(rows)
+    expect(itemsForTab(merged, 'own').map(i => i.name).sort()).toEqual(['codeql', 'my-new-skill', 'my-rejected'])
+    const pending = merged.find(i => i.name === 'my-new-skill')!
+    expect(planCardActionForTab(pending, 'own')).toEqual({ kind: 'review', status: 'pending' })
+    // 已装且目录有更高版本的归属人卡片仍是「上传新版」（task-4 口径不被分段改动）。
+    const codeql = merged.find(i => i.name === 'codeql')!
+    expect(planCardAction(codeql).kind).toBe('upload')
+  })
+
+  it('own 读失败 500 ⇒ 502 如实报错（不静默返回空「我上传」）', async () => {
+    const h = harness(SESSION)
+    stubOwn(h, { error: { code: 'INTERNAL', message: 'catalog unavailable' } }, 500)
+    const res = await h.call('/api/zeokeel/capabilities?source=own')
+    expect(res.code).toBe(502)
+    expect(String(res.body.error)).toContain('gateway error')
+  })
+
+  it('非法 source 仍然 400（放行 own 不放宽输入校验）', async () => {
+    const h = harness(SESSION)
+    stubOwn(h, ownPayload)
+    expect((await h.call('/api/zeokeel/capabilities?source=bogus')).code).toBe(400)
   })
 })

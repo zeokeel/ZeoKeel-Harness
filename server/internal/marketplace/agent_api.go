@@ -29,10 +29,16 @@ import (
 // ---------------------------------------------------------------------------
 
 // agentJSON 投影一个市场智能体(展示版本)。
+//
+// 2026-10-26(D 系列显示修复):补 `display_name`(回退链 apps.title → 展示版本
+// title → name),并让 `title` 作为**兼容别名**下发同一值 —— 旧 webadmin/客户端
+// 只读 title,直发空 title 会让卡片落回英文目录名。只增字段,不改既有键。
 func agentJSON(a serverstore.App, r *serverstore.Release) gin.H {
+	display := serverstore.AppDisplayName(a, r)
 	out := gin.H{
-		"name": a.AppID, "title": a.Title, "description": a.Description,
-		"author": a.Owner, "enabled": a.Enabled == 1,
+		"name": a.AppID, "display_name": display, "title": display,
+		"description": a.Description,
+		"author":      a.Owner, "enabled": a.Enabled == 1,
 		"official":   a.Official == 1,
 		"created_at": a.CreatedAt, "updated_at": a.UpdatedAt,
 	}
@@ -61,7 +67,10 @@ func listAgentsAdmin(c *gin.Context, db *sql.DB) {
 }
 
 type agentReq struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// Title 是展示名(2026-10-26 D 系列显示修复):管理端可显式改中文展示名。
+	// 为空保持既有 apps.title(再空回落 name),绝不写 owner。
+	Title       string `json:"title"`
 	Description string `json:"description"`
 	Author      string `json:"author"`
 }
@@ -98,15 +107,20 @@ func createAgentAdmin(c *gin.Context, db *sql.DB) {
 	if owner == "" {
 		owner = adminUsername(c)
 	}
+	// 展示名:显式 title → 登记名(此时还没有归档,包内 title 要等上传才可知)。
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = req.Name
+	}
 	if err := serverstore.UpsertApp(db, &serverstore.App{
-		Kind: serverstore.AppKindAgent, AppID: req.Name, Title: req.Name,
+		Kind: serverstore.AppKindAgent, AppID: req.Name, Title: title,
 		Description: req.Description, Owner: owner, Channel: serverstore.AppChannelMarket, Enabled: 1,
 	}); err != nil {
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "创建失败")
 		return
 	}
 	_ = serverstore.AuditLog(db, adminUsername(c), "agent_create", req.Name)
-	c.JSON(http.StatusOK, gin.H{"agent": gin.H{"name": req.Name, "author": owner}})
+	c.JSON(http.StatusOK, gin.H{"agent": gin.H{"name": req.Name, "title": title, "author": owner}})
 }
 
 // uploadAgentArchiveAdmin 上传/发布智能体版本:安全校验 → preset.yml 清单 →
@@ -197,7 +211,12 @@ func uploadAgentArchiveAdmin(c *gin.Context, db *sql.DB) {
 	//     账号写),包内 author 是**不可信输入** —— 用它回写会把官方 App 刻意
 	//     保留的空归属(蓝标语义)改写成个人,非官方 App 的描述也会被清空。
 	// 因此走只更新标题的 SetAppTitle,不碰 Description/Owner/Channel。
-	_ = serverstore.SetAppTitle(db, serverstore.AppKindAgent, name, man.Title)
+	// 展示名回写:只认包内(trim 后)非空的 title。空 title 必须**保持既有**
+	// apps.title —— 直接 SetAppTitle 空串会把管理员改好的中文展示名清掉,
+	// 下一次渲染就只剩英文目录名(2026-10-26 D 系列显示修复)。
+	if title := strings.TrimSpace(man.Title); title != "" {
+		_ = serverstore.SetAppTitle(db, serverstore.AppKindAgent, name, title)
+	}
 	_ = serverstore.AuditLog(db, adminUsername(c), "agent_update",
 		fmtAgentUploadAudit(name, res.Version, man.Title, checksum))
 	c.JSON(http.StatusOK, gin.H{"ok": true, "version": res.Version, "checksum": checksum})
@@ -244,9 +263,15 @@ func updateAgentAdmin(c *gin.Context, db *sql.DB) {
 		serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "查询失败")
 		return
 	}
-	title := req.Name
+	// 展示名(2026-10-26 D 系列显示修复):显式 title 优先;空则保持既有
+	// apps.title,再空回落 app_id。旧实现把请求体的 `name`(目录名)当 title
+	// 写回 —— 一次只改描述的 PUT 就会把中文展示名覆盖成英文目录名。
+	title := strings.TrimSpace(req.Title)
 	if title == "" {
-		title = a.Title
+		title = strings.TrimSpace(a.Title)
+	}
+	if title == "" {
+		title = name
 	}
 	desc := req.Description
 	if desc == "" {

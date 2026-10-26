@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -244,19 +245,39 @@ func serveSkillArchive(c *gin.Context, db *sql.DB, s *serverstore.Skill) {
 	c.Data(http.StatusOK, contentType, s.Archive)
 }
 
+// skillJSON 投影一个市场技能(管理端 + 员工面共用)。
+//
+// 2026-10-26(D 系列显示修复):此前只下发 `name`(英文目录名),管理端卡片
+// 只能拿它当标题 —— 中文展示名(包内 title / 管理端改的 apps.title)在整个
+// 管理面是**不可达**的。这里补上 display_name(回退链:显示名 → name)以及
+// quality/source/channel:webadmin 的「精选」「上传包」「来源」徽章都按这三个
+// 键渲染,漏发让它们恒不出现。只增字段,不改既有键(API 兼容)。
 func skillJSON(s serverstore.Skill) gin.H {
+	display := strings.TrimSpace(s.DisplayName)
+	if display == "" {
+		display = s.Name
+	}
+	// 渠道由投影层给出(appToSkill 承接 apps.channel);旧调用点缺省按市场收口。
+	channel := s.Channel
+	if channel == "" {
+		channel = serverstore.AppChannelMarket
+	}
 	return gin.H{
-		"id":          s.ID,
-		"name":        s.Name,
-		"version":     s.Version,
-		"description": s.Description,
-		"author":      s.Author,
-		"checksum":    s.Checksum,
-		"enabled":     s.Enabled == 1,
-		"downloads":   s.Downloads,
-		"calls":       s.Calls,
-		"official":    s.Official == 1,
-		"created_at":  s.CreatedAt,
-		"updated_at":  s.UpdatedAt,
+		"id":           s.ID,
+		"name":         s.Name,
+		"display_name": display,
+		"version":      s.Version,
+		"description":  s.Description,
+		"author":       s.Author,
+		"checksum":     s.Checksum,
+		"enabled":      s.Enabled == 1,
+		"official":     s.Official == 1,
+		"quality":      s.Quality,
+		"source":       s.Source,
+		"channel":      channel,
+		"downloads":    s.Downloads,
+		"calls":        s.Calls,
+		"created_at":   s.CreatedAt,
+		"updated_at":   s.UpdatedAt,
 	}
 }

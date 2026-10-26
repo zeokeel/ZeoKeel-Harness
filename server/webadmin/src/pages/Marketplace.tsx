@@ -19,6 +19,13 @@ import { grantsBase, previewFileBase, skillRequest } from '../lib/capability-end
 interface Skill {
   id: number
   name: string
+  /**
+   * 展示名(2026-10-26 D 系列显示修复):服务端 `skillJSON` 下发的展示名,
+   * 回退链 apps.title → 展示版本 title → name。**卡片主标题用它**,`name`
+   * (英文目录名)只作副标题与动作寻址 —— 此前主标题硬编码 name,管理端
+   * 整页显示英文目录名。
+   */
+  display_name?: string
   version: string
   description: string
   /**
@@ -59,6 +66,16 @@ function isOrg(row: { channel?: 'market' | 'org' }): boolean {
   return row.channel === 'org'
 }
 
+/**
+ * 行的展示名回退:display_name → name(2026-10-26 D 系列显示修复)。
+ *
+ * 服务端已做「apps.title → 展示版本 title → name」的回退,这里再兜一层是为了
+ * 兼容旧服务端/旧行(缺 display_name 键),保证任何入口都不把空串当标题。
+ */
+function displayNameOf(row: { display_name?: string; name: string }): string {
+  return row.display_name?.trim() || row.name
+}
+
 /** 市场命名空间列表行 → 行模型(channel=market;归属见 Skill.owner 注释)。 */
 function toMarketSkill(raw: Omit<Skill, 'owner' | 'channel'>): Skill {
   return { ...raw, owner: raw.author, channel: 'market' }
@@ -67,6 +84,8 @@ function toMarketSkill(raw: Omit<Skill, 'owner' | 'channel'>): Skill {
 // ---- 表单状态 ----
 const EMPTY_SKILL_FORM = {
   name: '',
+  // 展示名(可编辑,2026-10-26):空 = 沿用服务端回退链(展示版本 title / 目录名)。
+  title: '',
   version: '',
   description: '',
   author: '',
@@ -174,7 +193,8 @@ export default function Marketplace() {
         // 上下架状态同样透传服务端值,缺省按"未知即未上架"——绝不回落 true
         // (回落 true 会让已下架的 org 技能显示成「上架」,这正是现场缺陷之一)。
         merged.push({
-          id: 0, name: row.name, version: row.version, description: row.description,
+          id: 0, name: row.name, display_name: row.display_name, version: row.version,
+          description: row.description,
           author: row.author, owner: row.owner ?? '', enabled: row.enabled === true,
           downloads: row.downloads ?? 0, calls: row.calls ?? 0,
           official: row.official, quality: row.quality, channel: 'org',
@@ -229,6 +249,8 @@ export default function Marketplace() {
           method: req.method,
           body: JSON.stringify({
             name: skillEdit.name,
+            // 展示名(2026-10-26):空串 = 保持服务端既有展示名(服务端 trim 后忽略)。
+            title: skillForm.title.trim(),
             version: skillForm.version,
             description: skillForm.description,
             author: skillForm.author,
@@ -243,6 +265,7 @@ export default function Marketplace() {
           method: createReq.method,
           body: JSON.stringify({
             name,
+            title: skillForm.title.trim(),
             version: '',
             description: skillForm.description,
             author: skillForm.author,
@@ -281,7 +304,12 @@ export default function Marketplace() {
   function openEditSkill(s: Skill) {
     setDialogError('')
     setSkillEdit(s)
-    setSkillForm({ name: s.name, version: s.version, description: s.description, author: s.author, archiveFile: null })
+    // 展示名回填:当前展示名等于目录名时留空,避免把 slug 当成"人工展示名"提交。
+    const current = s.display_name?.trim() || ''
+    setSkillForm({
+      name: s.name, title: current === s.name ? '' : current, version: s.version,
+      description: s.description, author: s.author, archiveFile: null,
+    })
     setSkillDialog(true)
   }
 
@@ -296,7 +324,7 @@ export default function Marketplace() {
     const action = enabled ? 'enable' : 'disable'
     const req = skillRequest(action, s)
     if (req === null) { setOpError(`${enabled ? '上架' : '下架'}失败:该来源不支持此操作`); return }
-    if (!enabled && !window.confirm(`下架技能 ${s.name}?员工建议清单将不再展示(可重新上架)。`)) return
+    if (!enabled && !window.confirm(`下架技能「${displayNameOf(s)}」?员工建议清单将不再展示(可重新上架)。`)) return
     setOpError('')
     setBusy(`${action}-skill-${s.name}`)
     try {
@@ -422,9 +450,12 @@ export default function Marketplace() {
                         <Store className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold">{s.name}</div>
+                        {/* 主标题 = 展示名;目录名(name)降为副标题的等宽辅标,
+                            只在两者不同时显示,避免「中文名 + 同一串 slug」重复。 */}
+                        <div className="truncate text-sm font-semibold" title={s.name}>{displayNameOf(s)}</div>
                         <div className="text-[11px] text-muted-foreground">
                           {s.version ? `v${s.version}` : '—'}
+                          {displayNameOf(s) !== s.name && <span className="ml-1.5 font-mono">{s.name}</span>}
                           {s.source === 'upload' && <Badge variant="outline" className="ml-1.5 px-1 py-0 text-[10px]">上传包</Badge>}
                         </div>
                       </div>
@@ -521,7 +552,7 @@ export default function Marketplace() {
       <Dialog open={skillDialog} onOpenChange={(v) => { setSkillDialog(v); if (!v) { setSkillEdit(null); setSkillForm(EMPTY_SKILL_FORM) } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{skillEdit ? `编辑技能 ${skillEdit.name}` : '上架技能'}</DialogTitle>
+            <DialogTitle>{skillEdit ? `编辑技能 ${displayNameOf(skillEdit)}` : '上架技能'}</DialogTitle>
             <DialogDescription>两种模式:压缩包上传(推荐,归档直存数据库)或 Git 源</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -529,6 +560,11 @@ export default function Marketplace() {
               <Label htmlFor="skill-name">名称</Label>
               <Input id="skill-name" value={skillForm.name} disabled={!!skillEdit} onChange={(e) => setSkillForm({ ...skillForm, name: e.target.value })} />
               {skillEdit && <p className="text-xs text-muted-foreground">名称不可修改(唯一键);如需改名请下架后重新上架</p>}
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="skill-title">展示名</Label>
+              <Input id="skill-title" value={skillForm.title} placeholder={skillForm.name || '留空则显示名称(目录名)'} onChange={(e) => setSkillForm({ ...skillForm, title: e.target.value })} />
+              <p className="text-xs text-muted-foreground">管理端/员工端卡片的标题;留空则沿用包内 title 或名称(目录名)。</p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="skill-archive">压缩包(.zip,推荐)</Label>
@@ -593,7 +629,7 @@ export default function Marketplace() {
         open={transferSkill !== null}
         kind="skill"
         name={transferSkill?.name ?? ''}
-        displayName={transferSkill?.name}
+        displayName={transferSkill ? displayNameOf(transferSkill) : undefined}
         currentOwner={transferSkill?.owner ?? ''}
         onClose={() => { setTransferSkill(null) }}
         onSaved={() => { setTransferSkill(null); void loadSkills() }}
@@ -603,7 +639,7 @@ export default function Marketplace() {
       <Dialog open={replaceDialog !== null} onOpenChange={(v) => { if (!v) { setReplaceDialog(null); setDialogError('') } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>上传新版「{replaceDialog?.name}」</DialogTitle>
+            <DialogTitle>上传新版「{replaceDialog ? displayNameOf(replaceDialog) : ''}」</DialogTitle>
             <DialogDescription>
               {replaceDialog?.channel === 'org'
                 ? '组织共享技能:压缩包直存数据库;版本以包内 SKILL.md 为准,管理员代传即发布(已通过审核)'

@@ -11,12 +11,13 @@ const DEPTS = [{ id: 1, name: '研发部', parent_id: 0 }]
 /** 市场行:服务端 agentJSON 把 apps.owner 投影到 `author` 键。 */
 const MARKET_AGENTS = [
   {
-    id: 0, name: 'ppt-gen', title: 'PPT 生成', version: '1.0.0', description: '做 PPT',
-    author: 'seed', enabled: true, official: false, quality: '', downloads: 7,
+    id: 0, name: 'ppt-gen', display_name: 'PPT 生成', title: 'PPT 生成', version: '1.0.0',
+    description: '做 PPT', author: 'seed', enabled: true, official: false, quality: '', downloads: 7,
   },
   {
-    id: 0, name: 'retired-market', title: '已下架市场智能体', version: '0.5.0', description: '老包',
-    author: 'seed', enabled: false, official: false, quality: '', downloads: 0,
+    id: 0, name: 'retired-market', display_name: '已下架市场智能体', title: '已下架市场智能体',
+    version: '0.5.0', description: '老包', author: 'seed', enabled: false, official: false,
+    quality: '', downloads: 0,
   },
 ]
 
@@ -256,5 +257,52 @@ describe('Agents 智能体市场页 · org 行按 channel 走共享命名空间'
     // 候选列表走 Popover portal(在 dialog 子树之外),按整页查。
     const marker = await screen.findByText('当前归属')
     expect(marker.closest('[role="option"]')?.textContent).toContain('alice')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// D 系列显示修复(2026-10-26):展示名(display_name)是卡片与弹窗标题的唯一来源
+// ---------------------------------------------------------------------------
+describe('Agents 智能体市场页 · 展示名(D 系列)', () => {
+  it('卡片主标题用 display_name,目录名作副标题', async () => {
+    render(<Agents />)
+    await screen.findByText('PPT 生成')
+    const cardEl = card('PPT 生成')
+    expect(cardEl.textContent).toContain('ppt-gen') // 目录名降为副标题
+    // 展示名与目录名不同的行才渲染副标题;这里各出现一次。
+    expect(screen.getAllByText('PPT 生成')).toHaveLength(1)
+  })
+
+  it('转移归属弹窗用展示名而不是 slug', async () => {
+    render(<Agents />)
+    await screen.findByText('PPT 生成')
+    fireEvent.click(within(card('PPT 生成')).getByRole('button', { name: '归属' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('将「PPT 生成」')
+  })
+
+  it('上传新版弹窗标题用展示名', async () => {
+    render(<Agents />)
+    await screen.findByText('PPT 生成')
+    fireEvent.click(within(card('PPT 生成')).getByRole('button', { name: '上传新版' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('上传新版 · PPT 生成')
+  })
+
+  it('编辑弹窗回填展示名并随 PUT 提交 title(可编辑展示名)', async () => {
+    render(<Agents />)
+    await screen.findByText('PPT 生成')
+    fireEvent.click(within(card('PPT 生成')).getByRole('button', { name: '编辑' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    const input = dialog.getByLabelText('展示名')
+    expect((input as HTMLInputElement).value).toBe('PPT 生成')
+    fireEvent.change(input, { target: { value: '演示文稿生成器' } })
+    fireEvent.click(dialog.getByRole('button', { name: '保存' }))
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/server/admin/agents/ppt-gen',
+        expect.objectContaining({ method: 'PUT', body: expect.stringContaining('"title":"演示文稿生成器"') }),
+      )
+    })
   })
 })

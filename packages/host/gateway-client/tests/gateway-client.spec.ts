@@ -22,7 +22,7 @@
  *   - `assertServerURLAllowed` 放过 http 非回环 ⇒ 第 4 组红。
  */
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError, AuthError, assertServerURLAllowed, fetchJSON, isPasswordChangeRequired, normalizeServerURL, PASSWORD_CHANGE_REQUIRED_CODE } from '../src/auth.ts'
+import { ApiError, AuthError, assertServerURLAllowed, fetchJSON, isPasswordChangeRequired, loginWithToken, normalizeServerURL, PASSWORD_CHANGE_REQUIRED_CODE, sessionFromLoginPayload } from '../src/auth.ts'
 
 /** 换掉全局 fetch 并记下出站 URL（判据里没有任何真实出网）。 */
 function stubFetch(response: { status: number, body?: unknown, contentType?: string }): { urls: string[], headers: Array<Record<string, string>> } {
@@ -113,5 +113,61 @@ describe('assertServerURLAllowed：http 只放行回环', () => {
 
   it('不是 URL ⇒ AuthError(server_error)', () => {
     expect(() => { assertServerURLAllowed('not a url') }).toThrow(AuthError)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 扫码登录：Session 构造的唯一实现（2026-11-03）
+// ---------------------------------------------------------------------------
+
+/**
+ * 为什么在叶子包钉住：密码登录与扫码登录的 `done` 载荷是同一形状，`Session`
+ * 只能有**一处**构造。复制一份的典型失效是漏掉 `must_change_password` ——
+ * 管理员重置密码后服务端对每个业务接口回 403，而客户端已经把人放进了应用。
+ * 这里逐字段对拍，任何一侧少写一个字段都会红。
+ */
+describe('sessionFromLoginPayload / loginWithToken：Session 构造的唯一实现', () => {
+  it('扫码 done 载荷：token/user/must_change_password 全部落进 Session', () => {
+    const sess = loginWithToken(
+      'https://harness.example.com/',
+      'tok-once',
+      { username: 'zhangsan', role: 'user', source: 'external', password_changeable: false },
+      true,
+    )
+    expect(sess).toEqual({
+      serverURL: 'https://harness.example.com',
+      username: 'zhangsan',
+      token: 'tok-once',
+      role: 'user',
+      source: 'external',
+      passwordChangeable: false,
+      mustChangePassword: true,
+    })
+  })
+
+  it('显式账号（密码登录传用户输入）优先于载荷里回显的 username', () => {
+    const sess = sessionFromLoginPayload(
+      'https://harness.example.com',
+      { token: 'tok', user: { username: 'server-canonical', role: 'admin' } },
+      'typed-by-user',
+    )
+    expect(sess.username).toBe('typed-by-user')
+    expect(sess.role).toBe('admin')
+  })
+
+  it('载荷没有可选字段时不写 undefined（exactOptionalPropertyTypes 的运行时同口径）', () => {
+    const sess = loginWithToken('https://harness.example.com', 'tok', { username: 'alice' })
+    expect(Object.keys(sess).sort()).toEqual(['serverURL', 'token', 'username'])
+  })
+
+  it('缺 token / 缺 username ⇒ AuthError(server_error)，绝不构造半条会话', () => {
+    expect(() => loginWithToken('https://harness.example.com', '', { username: 'alice' }))
+      .toThrow(AuthError)
+    expect(() => loginWithToken('https://harness.example.com', 'tok', undefined))
+      .toThrow('missing username in response')
+    expect(() => sessionFromLoginPayload('https://harness.example.com', { token: 'tok', user: {} }))
+      .toThrow('missing username in response')
+    expect(() => sessionFromLoginPayload('https://harness.example.com', { user: { username: 'alice' } }))
+      .toThrow('missing token in response')
   })
 })

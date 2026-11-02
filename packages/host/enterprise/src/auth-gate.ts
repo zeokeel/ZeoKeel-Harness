@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import { ApiError, AuthError, assertServerURLAllowed, changePassword, fetchJSON, isPasswordChangeRequired, login, normalizeServerURL, PASSWORD_CHANGE_REQUIRED_ACTION, PASSWORD_CHANGE_REQUIRED_CODE } from './server-connector/auth.ts'
+import { ApiError, AuthError, assertServerURLAllowed, changePassword, fetchJSON, isPasswordChangeRequired, login, loginWithToken, normalizeServerURL, PASSWORD_CHANGE_REQUIRED_ACTION, PASSWORD_CHANGE_REQUIRED_CODE } from './server-connector/auth.ts'
 import { applyPinnedFingerprintsFromEnv, defaultTlsStorePath, installCertificateVerification } from './server-connector/tls.ts'
 import { browserSameOriginMarker, isLoopbackRequest } from './loopback.ts'
 import { clearBrowserLoginPending, noteBrowserLoginStarted, noteLoginPageWired, pendingBrowserLoginServer } from './deep-link.ts'
@@ -63,6 +63,20 @@ interface LoginCopy {
   badCredentials: string
   tooManyAttempts: string
   accountDisabled: string
+  /** 扫码登录的方式名（`/auth/methods` 里 `qr:true` 的 wecom/dingtalk）。 */
+  methodWecom: string
+  methodDingtalk: string
+  /** 含 `{method}` 占位符。 */
+  qrTitle: string
+  /** 含 `{method}` 占位符。 */
+  qrScanHint: string
+  qrPreparing: string
+  qrStartFailed: string
+  qrSignInFailed: string
+  qrExpired: string
+  qrRefresh: string
+  /** 含 `{seconds}` 占位符。 */
+  qrRemaining: string
 }
 
 const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
@@ -94,6 +108,16 @@ const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
     badCredentials: '账号或密码错误',
     tooManyAttempts: '登录尝试过于频繁，请稍后再试',
     accountDisabled: '账号已被禁用，请联系管理员',
+    methodWecom: '企业微信',
+    methodDingtalk: '钉钉',
+    qrTitle: '使用 {method} 扫码登录',
+    qrScanHint: '请使用 {method} 扫描二维码，并在手机上确认登录',
+    qrPreparing: '正在获取二维码…',
+    qrStartFailed: '无法获取登录二维码，请重试',
+    qrSignInFailed: '扫码登录失败，请重试',
+    qrExpired: '二维码已过期，请点击刷新',
+    qrRefresh: '刷新二维码',
+    qrRemaining: '{seconds} 秒后过期',
   },
   en: {
     titleSuffix: 'Sign in',
@@ -123,8 +147,48 @@ const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
     badCredentials: 'Incorrect username or password',
     tooManyAttempts: 'Too many sign-in attempts. Please try again later.',
     accountDisabled: 'This account has been disabled. Contact your administrator.',
+    methodWecom: 'WeCom',
+    methodDingtalk: 'DingTalk',
+    qrTitle: 'Scan with {method} to sign in',
+    qrScanHint: 'Open the {method} app, scan the code, and confirm on your phone',
+    qrPreparing: 'Getting a sign-in code…',
+    qrStartFailed: 'Could not get a sign-in code. Please try again.',
+    qrSignInFailed: 'Scan sign-in failed. Please try again.',
+    qrExpired: 'The code has expired. Please refresh it.',
+    qrRefresh: 'Refresh code',
+    qrRemaining: 'Expires in {seconds}s',
   },
 }
+
+/**
+ * 扫码登录支持的认证方式（服务端 `/api/client/v2/auth/<method>/qr/*`，设计文档 §4.2）。
+ *
+ * 必须是**编译期常量**，不能按 `/auth/methods` 的 `qr:true` 动态放行：这两个本机
+ * 路由会把 method 拼进宿主发出的服务端请求路径，让被控网关用一个自造的名字决定
+ * 路径是没有必要的信任扩张。新增扫码方式时在这里登记（并补 server-connector 的
+ * 契约用例）。
+ */
+const QR_LOGIN_METHODS: readonly string[] = ['wecom', 'dingtalk']
+
+/**
+ * 服务端二维码的**唯一**可接受形态（设计文档 §7）：PNG data URL。
+ *
+ * 登录页是认证前唯一的 HTML 面；接受 SVG/HTML data URL 就等于让被控网关把标记
+ * 塞进登录页。长度上限防渲染/内存放大（320px PNG 远小于此）。
+ */
+const QR_PNG_DATA_URL = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/
+const QR_PNG_MAX_LENGTH = 200_000
+
+/**
+ * 服务端 `flow_id` 的接受面（32 字节随机 hex；见设计文档 §4.5）。
+ *
+ * 它会被拼进转发请求的查询串（已 encodeURIComponent）；这里再按形状拦一次，
+ * 避免把畸形输入当成 flow_id 透传给上游。
+ */
+const QR_FLOW_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
+
+/** 未返回 `expires_in` / 非法值时的倒计时（服务端流程 TTL，设计文档 §4.5）。 */
+const QR_DEFAULT_EXPIRES_IN = 300
 
 /**
  * 把一份文案序列化成可安全内联进 `<script>` 的 JS 字面量。
@@ -210,6 +274,13 @@ export function renderLoginPage(locale: HostLocale): string {
   .method.active { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
   .method.disabled { opacity: 0.45; cursor: not-allowed; }
   .pw-fields .spacer { opacity: 0; }
+  /* 扫码登录（企业微信/钉钉）：二维码由服务端渲染成 PNG data URL，页面只放图片。
+     白底是二维码的可扫性要求（暗色页面上也必须保持），不是主题色。 */
+  .qr-card { margin: 2px 0 6px; }
+  .qr-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .qr-frame { width: 200px; height: 200px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: 10px; }
+  .qr-frame img { width: 200px; height: 200px; display: block; }
+  .qr-card button { margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -237,6 +308,14 @@ export function renderLoginPage(locale: HostLocale): string {
     </form>
     <button type="button" id="browser-btn" style="display:none">${c.browserSignIn}</button>
     <div class="hint" id="waiting" style="display:none">${c.waiting}</div>
+    <!-- 扫码登录卡片（wecom/dingtalk，即 /auth/methods 里 qr:true 的方式）：
+         标题/提示/二维码都由页面脚本按当前方式填，静态文本只有刷新按钮。 -->
+    <div id="qr-card" class="qr-card" style="display:none">
+      <div class="qr-title" id="qr-title"></div>
+      <div class="qr-frame" id="qr-frame"></div>
+      <div class="hint" id="qr-hint"></div>
+      <button type="button" id="qr-refresh" style="display:none">${c.qrRefresh}</button>
+    </div>
     <div class="err" id="err-step2"></div>
   </div>
 </div>
@@ -259,10 +338,29 @@ export function renderLoginPage(locale: HostLocale): string {
   var methodsBox = document.getElementById('methods')
   var waiting = document.getElementById('waiting')
   var brandArea = document.getElementById('brand-area')
+  var qrCard = document.getElementById('qr-card')
+  var qrFrame = document.getElementById('qr-frame')
+  var qrTitle = document.getElementById('qr-title')
+  var qrHint = document.getElementById('qr-hint')
+  var qrRefreshBtn = document.getElementById('qr-refresh')
   var currentMethod = 'local'
   var currentMethods = []
   var currentChannel = null
   var pollTimer = null
+  // 扫码登录（企业微信/钉钉）状态：flow_id 只在本页内存里，token 从不进入页面
+  // （宿主在 done 分支消费掉，见 /api/zeokeel/auth/qr/poll）。
+  var qrTimer = null
+  var qrTick = null
+  var qrFlowId = null
+  var qrMethod = null
+  var qrDeadline = 0
+  // 单飞：网络慢时 2s 定时器可能在上一次 poll 未返回前又触发；两个并发 poll 会在
+  // 终态上竞争（一个拿到 done、另一个拿到 404），页面可能把已经成功的登录显示成
+  // 过期。上一次没结束就不发下一次。
+  var qrPolling = false
+  // 每次换码/切换方式/返回 Step1 自增：迟到的 start/poll 响应按代号丢弃，
+  // 否则旧流程会在新二维码上更新状态、甚至把已经切走的页面刷掉。
+  var qrGeneration = 0
   // 去除服务端地址尾部一个或多个斜杠(兼容带/不带 / 的用户输入)。
   // 纯字符串实现,禁用带反斜杠的正则:正斜杠转义(如 replace(反斜杠+/+$))
   // 中的反斜杠会被本页所在的 TS 模板字面量求值吃掉,浏览器收到的脚本变成
@@ -420,7 +518,7 @@ export function renderLoginPage(locale: HostLocale): string {
       // 恶意/被劫持的网关控制;此前未转义直接拼进属性,可在本地登录页
       // origin 注入属性/事件处理器。label 同理(未知方式回退到 m.name)。
       var rawName = String(m.name == null ? '' : m.name)
-      var label = ({ local: T.methodLocal, ldap: 'LDAP', openid: 'OpenID', oidc: 'OIDC' })[rawName] || rawName
+      var label = ({ local: T.methodLocal, ldap: 'LDAP', openid: 'OpenID', oidc: 'OIDC', wecom: T.methodWecom, dingtalk: T.methodDingtalk })[rawName] || rawName
       var name = esc(rawName)
       var configured = m.configured !== false
       return '<button type="button" data-method="' + name + '" class="method' +
@@ -446,22 +544,217 @@ export function renderLoginPage(locale: HostLocale): string {
 
   function updateFields() {
     var isPassword = currentMethod === 'local' || currentMethod === 'ldap'
+    // 扫码方式（qr:true 的 wecom/dingtalk）不走浏览器跳转：选中后直接进二维码卡片，
+    // 不显示浏览器登录按钮与 waiting 文案（设计文档 §7）。
+    var isQr = !isPassword && isQrMethod(currentMethod)
     document.getElementById('username').style.display = isPassword ? '' : 'none'
     document.getElementById('password').style.display = isPassword ? '' : 'none'
     if (isPassword) document.getElementById('username').placeholder = currentMethod === 'ldap' ? T.ldapUsername : T.usernamePlaceholder
     document.getElementById('btn').style.display = isPassword ? '' : 'none'
     f2.style.display = isPassword ? '' : 'none'
-    browserBtn.style.display = isPassword ? 'none' : ''
+    browserBtn.style.display = isPassword || isQr ? 'none' : ''
     browserBtn.textContent = T.signInWith.replace('{method}',() => (methodLabel(currentMethod)))
     waiting.style.display = 'none'
+    if (isQr) {
+      enterQrLogin()
+    } else {
+      // 切到密码/浏览器方式（或返回 Step1）必须停止扫码轮询并复位，否则旧流程的
+      // 迟到响应会把页面刷走、或在新方式上显示二维码状态。
+      hideQrCard()
+    }
   }
 
   function methodLabel(name) {
-    return ({ local: T.methodLocal, ldap: 'LDAP', openid: 'OpenID', oidc: 'OIDC' })[name] || name
+    return ({ local: T.methodLocal, ldap: 'LDAP', openid: 'OpenID', oidc: 'OIDC', wecom: T.methodWecom, dingtalk: T.methodDingtalk })[name] || name
   }
 
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+
+  // ---- 企业微信 / 钉钉扫码登录（设计文档 §7） ----
+  // 页面跑在渲染进程，够不到宿主模块：start/poll 都打本地 HTTP 面，由宿主带持有性
+  // 证明转发。二维码只可能是宿主严格校验过的 PNG data URL；页面再复检一次，并且
+  // **任何服务端内容都不以标记形式进入页面**（唯一写入 innerHTML 的是 esc() 过的 img）。
+
+  function isQrMethod(name) {
+    var m = currentMethods.find(function (x) { return x.name === name })
+    return !!m && m.qr === true
+  }
+
+  // PNG data URL 的页面侧复检（宿主已校验，这里防"宿主漏判/传输被换"）。
+  // 用逐字符扫描而不是正则：本页模板历史上被带反斜杠的正则转义毁过整段脚本
+  // （见 trimServer 注释），二维码形态不值得再冒同族的风险。
+  function isPngDataURL(value) {
+    var prefix = 'data:image/png;base64,'
+    if (typeof value !== 'string' || value.length > 200000 || value.indexOf(prefix) !== 0) return false
+    if (value.length === prefix.length) return false
+    for (var i = prefix.length; i < value.length; i++) {
+      var c = value.charCodeAt(i)
+      var base64 = (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 43 || c === 47 || c === 61
+      if (!base64) return false
+    }
+    return true
+  }
+
+  // 只认宿主**透传**的终态 message（poll failed 的形状 {status:"failed",message}）。
+  // 宿主自己的错误信封是 {error:"gateway error: …"}，那是诊断文本而不是用户文案 ——
+  // 直接显示会把英文/内部细节漏到登录页，因此落回本地化文案。
+  function qrMessage(data) {
+    if (!data || typeof data.message !== 'string') return ''
+    return data.message
+  }
+
+  function stopQrTimers() {
+    if (qrTimer) { clearInterval(qrTimer); qrTimer = null }
+    if (qrTick) { clearInterval(qrTick); qrTick = null }
+  }
+
+  // 切换方式 / 返回 Step1 / 重新取码：停止轮询并复位扫码状态。
+  function hideQrCard() {
+    qrGeneration++
+    stopQrTimers()
+    qrFlowId = null
+    qrMethod = null
+    qrDeadline = 0
+    qrCard.style.display = 'none'
+    qrFrame.innerHTML = ''
+    qrTitle.textContent = ''
+    qrHint.textContent = ''
+    qrRefreshBtn.style.display = 'none'
+    err2.textContent = ''
+  }
+
+  function qrStatusText(method) {
+    // 提示语里用人读的方式名（企业微信/钉钉），不是 /auth/methods 的原始 name。
+    return T.qrScanHint.replace('{method}', function () { return methodLabel(method) })
+  }
+
+  // 过期：保留卡片、露出「刷新二维码」，并给出本地化提示。
+  function qrExpired() {
+    qrGeneration++
+    stopQrTimers()
+    qrFlowId = null
+    qrFrame.innerHTML = ''
+    qrHint.textContent = T.qrExpired
+    qrRefreshBtn.style.display = ''
+    err2.textContent = ''
+  }
+
+  // 失败（服务端终态 / 本地校验失败）：停轮询、露出刷新入口；message 为空时用本地化兜底。
+  function qrFailed(message) {
+    qrGeneration++
+    stopQrTimers()
+    qrFlowId = null
+    qrFrame.innerHTML = ''
+    qrHint.textContent = ''
+    err2.textContent = message || T.qrSignInFailed
+    qrRefreshBtn.style.display = ''
+  }
+
+  // 剩余秒数（服务端 expires_in 起算，纯本地倒计时；到 0 即按过期处理，
+  // 不等服务端下一次 poll —— 用户在过期二维码上干等是最差的形态）。
+  function startQrCountdown(generation, seconds) {
+    if (qrTick) clearInterval(qrTick)
+    qrDeadline = Date.now() + seconds * 1000
+    function render() {
+      if (generation !== qrGeneration) return
+      var left = Math.round((qrDeadline - Date.now()) / 1000)
+      if (left <= 0) { qrExpired(); return }
+      qrHint.textContent = qrStatusText(qrMethod) + ' ' + T.qrRemaining.replace('{seconds}', function () { return left })
+    }
+    render()
+    qrTick = setInterval(render, 1000)
+  }
+
+  function startQrPoll(generation) {
+    if (qrTimer) clearInterval(qrTimer)
+    qrPolling = false
+    qrTimer = setInterval(async function () {
+      if (generation !== qrGeneration || qrPolling) return
+      var server = trimServer(document.getElementById('server').value.trim())
+      var method = qrMethod
+      var flowId = qrFlowId
+      if (!server || !method || !flowId) return
+      qrPolling = true
+      try {
+        var r = await fetch('/api/zeokeel/auth/qr/poll?server=' + encodeURIComponent(server) +
+          '&method=' + encodeURIComponent(method) + '&flow_id=' + encodeURIComponent(flowId))
+        var d = await r.json().catch(function () { return null })
+        if (generation !== qrGeneration) return
+        if (!r.ok) {
+          // 404/410 = 流程已被消费/不存在（服务端已是终态）⇒ 按过期处理让用户刷新。
+          if (r.status === 404 || r.status === 410) qrExpired()
+          else qrFailed(qrMessage(d))
+          return
+        }
+        var status = d && d.status
+        if (status === 'done') {
+          // 成功：整页重载（与浏览器 SSO 深链回跳同一路径）。索引渲染按新会话给出
+          // 应用页或强制改密页，页面脚本不需要自己再分流。
+          qrGeneration++
+          stopQrTimers()
+          location.reload()
+          return
+        }
+        if (status === 'expired') { qrExpired(); return }
+        if (status === 'failed') { qrFailed(qrMessage(d)); return }
+        // pending：继续下一轮。
+      } catch (e) {
+        // 网络抖动不终止轮询：2s 后重试，由倒计时兜底过期。
+      } finally {
+        if (generation === qrGeneration) qrPolling = false
+      }
+    }, 2000)
+  }
+
+  async function startQr() {
+    var server = trimServer(document.getElementById('server').value.trim())
+    if (!server) { err2.textContent = T.needServerFirst; return }
+    var method = currentMethod
+    var generation = ++qrGeneration
+    qrMethod = method
+    qrFlowId = null
+    qrFrame.innerHTML = ''
+    qrTitle.textContent = T.qrTitle.replace('{method}', function () { return methodLabel(method) })
+    qrHint.textContent = T.qrPreparing
+    qrRefreshBtn.style.display = 'none'
+    err2.textContent = ''
+    qrCard.style.display = ''
+    try {
+      var res = await fetch('/api/zeokeel/auth/qr/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ server: server, method: method }),
+      })
+      var data = await res.json().catch(function () { return null })
+      if (generation !== qrGeneration) return
+      if (!res.ok || !data || typeof data.flow_id !== 'string' || data.flow_id === '' || !isPngDataURL(data.qr_png)) {
+        qrFailed(qrMessage(data) || T.qrStartFailed)
+        return
+      }
+      qrFlowId = data.flow_id
+      // 唯一允许进入 innerHTML 的服务端内容是这张已校验的 PNG data URL，且仍走
+      // esc()（既有属性转义纪律；服务端返回的 SVG/HTML 没有任何进入页面的路径）。
+      qrFrame.innerHTML = '<img class="qr-img" alt="QR" src="' + esc(data.qr_png) + '">'
+      var seconds = Math.floor(Number(data.expires_in))
+      if (!isFinite(seconds) || seconds <= 0) seconds = 300
+      startQrCountdown(generation, seconds)
+      startQrPoll(generation)
+    } catch (e) {
+      if (generation !== qrGeneration) return
+      qrFailed(T.qrStartFailed)
+    }
+  }
+
+  function enterQrLogin() {
+    // 同一种方式重复 updateFields（例如再点一次当前按钮）不重开流程。
+    if (qrMethod === currentMethod && qrFlowId !== null) { qrCard.style.display = ''; return }
+    hideQrCard()
+    qrTitle.textContent = T.qrTitle.replace('{method}', function () { return methodLabel(currentMethod) })
+    qrHint.textContent = T.qrPreparing
+    qrCard.style.display = ''
+    void startQr()
   }
 
   // 返回 Step1(内置了服务端地址的构建不渲染这个按钮,所以要判空 ——
@@ -474,6 +767,8 @@ export function renderLoginPage(locale: HostLocale): string {
     // 复位浏览器授权守卫(2026-09-01 深挖):返回 Step1 时若 OIDC 授权尚未
     // 完成,按钮 disabled 与轮询需复位,否则用户只能重启应用再登录。
     resetBrowserLogin()
+    // 扫码流程同样必须停掉：否则回到 Step1 后仍在轮询旧 flow_id。
+    hideQrCard()
   })
 
   /**** 轮询登录状态: 用户去浏览器授权, 深链回桌面后 setSession, 此处检测到即刷新 ****/
@@ -547,6 +842,13 @@ export function renderLoginPage(locale: HostLocale): string {
   }
 
   browserBtn.addEventListener('click', browserLogin)
+
+  // 「刷新二维码」：停掉旧流程（含倒计时/轮询）后重新 start，不复用旧 flow_id
+  //（服务端终态即失效）。
+  qrRefreshBtn.addEventListener('click', function () {
+    hideQrCard()
+    enterQrLogin()
+  })
 
   f2.addEventListener('submit', async function (e) {
     e.preventDefault()
@@ -1323,6 +1625,23 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   /**
+   * 扫码代理的失败应答（start/poll 共用）。
+   *
+   * 404（该方式未配置/已禁用）与 429（启动限流）对页面是**可区分、可行动**的信息：
+   * 前者提示方式不可用，后者提示稍后再试 —— 压成 502 后就只剩一句"网关错误"。
+   * 其余（服务端 5xx/网络失败）沿用 {@link gatewayError} 的 502 口径。
+   * @param res - 本地响应对象。
+   * @param cause - 网关调用抛出的错误。
+   */
+  const qrGatewayError = (res: ServerResponse, cause: unknown): void => {
+    if (cause instanceof ApiError && (cause.status === 404 || cause.status === 429)) {
+      json(res, cause.status, { error: cause.message, code: cause.code })
+      return
+    }
+    gatewayError(res, cause)
+  }
+
+  /**
    * 服务端要求先改密时的统一本地应答（R15B-02）。
    *
    * 三件事一起做，缺一条用户就被卡住：
@@ -1697,6 +2016,146 @@ export function apply(ctx: Context, config: Config): void {
           }
           noteBrowserLoginStarted(target)
           json(res, 200, { ok: true, pending: true })
+        },
+      }),
+
+      // 企业微信 / 钉钉扫码登录（设计文档 §7）。
+      //
+      // 为什么经宿主代理而不是让登录页直连服务端：
+      //  1) 页面跑在渲染进程，跨源请求会被 CORS / 会话 cookie 口径拦住；宿主已经
+      //     负责 TLS 校验、地址白名单（assertServerURLAllowed）与持有性证明；
+      //  2) 服务端 `done` 响应里的 token **只能由宿主消费**并落进会话 —— 绝不回给
+      //     页面（页面脚本可被注入；见登录页的 esc() 纪律）。所以 poll 在宿主里
+      //     `setSession`，只把 status 回给页面；
+      //  3) 二维码形态（PNG data URL）必须在宿主侧**严格**校验：登录页是认证前
+      //     唯一的 HTML 面，被控网关不得把 SVG/HTML 塞进来（设计文档 §7）。
+      //
+      // 围栏与 /api/zeokeel/auth/login 同口径：guard + proofOfPossession('required')。
+      // start 驱动宿主向服务端发起流程、poll 会改本机会话，都是会话变更类写面。
+      ctx.webServer.register({
+        kind: 'exact', path: '/api/zeokeel/auth/qr/start',
+        handler: async (req: IncomingMessage, res: ServerResponse) => {
+          if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
+          if (!guard(req, res)) return
+          if (!proofOfPossession(req, res, 'required')) return
+          const raw = await collectBody(req, 8 * 1024).catch(() => null)
+          if (raw === null) return json(res, 413, { error: 'body too large' })
+          let body: { server?: unknown; method?: unknown }
+          try { body = JSON.parse(raw.toString('utf8')) } catch { return json(res, 400, { error: 'bad json' }) }
+          if (typeof body.server !== 'string' || typeof body.method !== 'string') {
+            return json(res, 400, { error: 'missing fields' })
+          }
+          const server = body.server.trim()
+          const method = body.method.trim()
+          if (!QR_LOGIN_METHODS.includes(method)) return json(res, 400, { error: 'unsupported qr method' })
+          try {
+            assertServerURLAllowed(server)
+          } catch (error) {
+            return json(res, 400, { error: error instanceof Error ? error.message : 'unsafe server' })
+          }
+          try {
+            const data = await fetchJSON(server, `/api/client/v2/auth/${method}/qr/start`, {
+              method: 'POST', body: {}, locale: hostLocale(req),
+            })
+            const flowId: unknown = data?.flow_id
+            const qrPng: unknown = data?.qr_png
+            const expiresIn: unknown = data?.expires_in
+            // 严格校验：形状不对就 502，并**原样丢弃**服务端返回的任何其他内容
+            // （SVG/HTML/超长 blob 都没有进入登录页的路径）。
+            if (typeof flowId !== 'string' || !QR_FLOW_ID_PATTERN.test(flowId)) {
+              ctx.logger?.warn?.('zeokeel: refused a malformed QR start payload from the gateway (flow_id)')
+              return json(res, 502, { error: 'invalid qr payload from gateway' })
+            }
+            if (typeof qrPng !== 'string' || qrPng.length > QR_PNG_MAX_LENGTH || !QR_PNG_DATA_URL.test(qrPng)) {
+              ctx.logger?.warn?.('zeokeel: refused a malformed QR start payload from the gateway (qr_png)')
+              return json(res, 502, { error: 'invalid qr payload from gateway' })
+            }
+            const expiry = typeof expiresIn === 'number' && Number.isFinite(expiresIn) && expiresIn > 0
+              ? Math.min(Math.floor(expiresIn), 3600)
+              : QR_DEFAULT_EXPIRES_IN
+            json(res, 200, { flow_id: flowId, qr_png: qrPng, expires_in: expiry })
+          } catch (error) {
+            qrGatewayError(res, error)
+          }
+        },
+      }),
+
+      ctx.webServer.register({
+        kind: 'exact', path: '/api/zeokeel/auth/qr/poll',
+        handler: async (req: IncomingMessage, res: ServerResponse) => {
+          if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
+          if (!guard(req, res)) return
+          // poll 会 setSession（会话变更类）⇒ 与 login 同口径的持有性证明。
+          if (!proofOfPossession(req, res, 'required')) return
+          let serverParam = ''
+          let method = ''
+          let flowId = ''
+          try {
+            const q = new URL(req.url ?? '/', 'http://localhost').searchParams
+            serverParam = (q.get('server') ?? '').trim()
+            method = (q.get('method') ?? '').trim()
+            flowId = (q.get('flow_id') ?? '').trim()
+          } catch {
+            return json(res, 400, { error: 'bad query' })
+          }
+          if (!QR_LOGIN_METHODS.includes(method)) return json(res, 400, { error: 'unsupported qr method' })
+          if (!QR_FLOW_ID_PATTERN.test(flowId)) return json(res, 400, { error: 'bad flow id' })
+          try {
+            assertServerURLAllowed(serverParam)
+          } catch (error) {
+            return json(res, 400, { error: error instanceof Error ? error.message : 'unsafe server' })
+          }
+          try {
+            const data = await fetchJSON(
+              serverParam,
+              `/api/client/v2/auth/${method}/qr/poll?flow_id=${encodeURIComponent(flowId)}`,
+              { locale: hostLocale(req) },
+            )
+            const status: unknown = data?.status
+            if (status === 'pending') return json(res, 200, { status: 'pending' })
+            if (status === 'expired') return json(res, 200, { status: 'expired' })
+            if (status === 'failed') {
+              // 只透出可读 message（稳定 code 不参与页面分支，避免把服务端内部
+              // 细节当契约）；页面在 message 缺失时落回本地化文案。
+              const message = typeof data?.error?.message === 'string' ? data.error.message : ''
+              return json(res, 200, { status: 'failed', message })
+            }
+            if (status === 'done') {
+              // FIX-18 的扫码版本（与 /api/zeokeel/auth/login 同一判定）：已登录时
+              // **禁止静默换服务端**。扫码只从"未登录登录页"发起，但本机路由的威胁
+              // 模型与 login 完全相同 —— 伪造 Origin 的本机进程若拿到持有性证明，
+              // 这条分支就会把整个会话换到另一台服务端（员工后续对话与工具调用都
+              // 打到那台）。同一服务端换账号仍放行（改密/换人是合法动作）。
+              //
+              // 判定放在 done 之后、setSession 之前：token 已经随 done 到达本进程，
+              // 但这里**不落会话、不写日志、不进响应**，直接丢弃（服务端 TTL 回收）。
+              if (loginServerSwitchConflict(session(), serverParam)) {
+                ctx.logger?.warn?.('zeokeel: refused a server switch while signed in (qr poll); sign out first')
+                return json(res, 409, {
+                  error: 'already signed in to another server',
+                  hint: 'sign out before switching servers',
+                })
+              }
+              // token 只在这里被消费：绝不进返回体、日志或 URL（设计文档 §4.3）。
+              try {
+                const sess = loginWithToken(
+                  serverParam,
+                  data.token,
+                  data.user,
+                  data.must_change_password === true,
+                )
+                ctx.zeokeelSession.setSession(sess)
+              } catch (error) {
+                ctx.logger?.warn?.(`zeokeel: refused a malformed QR done payload from the gateway (${error instanceof Error ? error.message : String(error)})`)
+                return json(res, 502, { error: 'invalid qr payload from gateway' })
+              }
+              return json(res, 200, { status: 'done' })
+            }
+            ctx.logger?.warn?.('zeokeel: refused an unknown QR poll status from the gateway')
+            return json(res, 502, { error: 'invalid qr payload from gateway' })
+          } catch (error) {
+            qrGatewayError(res, error)
+          }
         },
       }),
 

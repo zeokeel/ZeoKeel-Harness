@@ -1,6 +1,6 @@
 # 企业微信 / 钉钉扫码登录（WebAdmin 配置 + 客户端扫码）
 
-状态：已定稿（实现中）｜分支：`feat/wecom-dingtalk-qr-login`｜变更记录：
+状态：已实现并验证（2026-11-03）｜分支：`feat/wecom-dingtalk-qr-login`｜变更记录：
 [`changes/2026-11-03-wecom-dingtalk-qr-login.json`](../../changes/2026-11-03-wecom-dingtalk-qr-login.json)
 
 ## 1. 背景与目标
@@ -245,3 +245,39 @@ https://login.dingtalk.com/oauth2/auth
 - **兼容**：`/auth/methods` 只**新增** `qr` 字段，旧客户端忽略；旧服务端不认新值，
   客户端按 `configured:false` 灰显。
 - **回滚**：代码层回滚本分支提交即可；数据层无迁移（settings 行可保留，禁用后不读取）。
+
+## 10. 实现结果与偏差（2026-11-03）
+
+验收全部通过（逐条命令与输出见变更记录的 `verification`）：
+
+- **服务端**：`go test ./internal/... ./cmd/... -count=1 -p 4` → 61 包 ok、0 FAIL / 0 SKIP；
+  `go test ./internal/serverauth/ -count=1` 107.6s 无回归；全路由扫描 121 条、未预期 5xx = 0。
+- **WebAdmin**：全量 62 files / 1032 tests 通过；`tsc --noEmit` 与 `npm run build` exit 0。
+- **客户端**：`auth-gate-qr-login.spec.ts` 32 条通过；enterprise 整包 107 files / 1244 passed
+  （需 `DSH_AGENTS_HOME` 指向干净技能根，避免本机已装技能污染两条无关用例）；typecheck/build exit 0。
+
+与本文档初稿的偏差（均已在代码注释登记）：
+
+1. **`ConfigureProviders` 签名不变**：扫码 provider 由 `NewConfiguredAPI` 直接 `RegisterQR`，
+   不改 `cmd/server` 装配接缝；启动注册有判据 `TestQRNewConfiguredAPIRegistersConfiguredProviders`。
+2. **新增 `GET /api/server/admin/server-info` 的 `qr.capacity_rejections`**：容量拒绝必须
+   "单独计数且有生产读者"，与 `oidc.capacity_rejections` 并排。
+3. **`authRedirectURLAllowed` 抽为唯一实现**（admin 保存与 provider 构建共用）；顺带修正
+   `http://[::1]:port` 回环判定（旧代码 `Hostname()` 去方括号后比较 `[::1]` 永远不匹配，
+   属错误拒绝合法回环，不是放宽外部地址）。
+4. **poll 兼作惰性清扫**：终态无人取走时由后续 poll/start 清扫，token 不会长期驻留；
+   本次请求仍按快照返回 `expired`。
+5. **`done.user` 用现有 `userJSON`**（设计示例字段的超集，含 username/role/source/
+   password_changeable），并带 `must_change_password`。
+6. **客户端 poll done 增加 `loginServerSwitchConflict` 409**（与 `/auth/login` 同口径），
+   防止已登录时扫码把会话静默切到另一台服务端；同服务端换账号仍放行。
+7. **二维码 PNG 正则用分号**：`^data:image/png;base64,…`（任务摘要里的逗号形态不匹配
+   真实 data URL，以服务端实现为准）。
+
+已知边界（认账）：
+
+- 回调为公开未认证端点，无独立 IP 限流：无有效 state 时不触发出站请求，有效 state 是
+  256-bit 单次凭据；若后续要更严可加 callback 桶。
+- 流程表是**进程内存**：多副本部署时 callback 与 poll 必须落到同一实例（当前部署形态为单
+  `server` 容器）；扩容到多副本前需要改为共享存储（Redis/PG）。
+- token 在进程内存最多驻留 5 分钟（客户端不轮询时），由 poll/start 惰性清扫。

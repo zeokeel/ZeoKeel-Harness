@@ -1,6 +1,6 @@
 {
   "id": "2026-11-03-wecom-dingtalk-qr-login",
-  "status": "accepted",
+  "status": "verified",
   "intent": {
     "zh": "员工客户端目前只有本地账号/LDAP/OIDC/OpenID 登录，缺少企业内最常见的企业微信与钉钉扫码；本变更让管理员在 WebAdmin 认证配置里录入应用凭据并启用，员工在客户端输入服务端地址后直接扫码登录。",
     "en": "The desktop client only supports local/LDAP/OIDC/OpenID sign-in today; add WeCom and DingTalk QR sign-in, configured from the WebAdmin auth page and consumed by the client login page after the server URL is entered."
@@ -20,17 +20,17 @@
     {
       "criterion": "服务端编译通过，且新增 provider/扫码流程用例全绿（有 PG 时含 start→callback→poll 端到端；无 PG 时 provider 与二维码单测必须真跑）",
       "evidence": "test",
-      "command": "cd server && go build ./... && go test ./internal/serverauth/ -run 'WeCom|DingTalk|QR' -count=1"
+      "command": "cd server && go build ./... && go test ./internal/serverauth/ -run 'WeCom|DingTalk|QR|AuthMethods' -count=1"
     },
     {
-      "criterion": "登录方式发现只新增字段不破坏既有契约：/api/client/v2/auth/methods 对 wecom/dingtalk 返回 qr:true、browser:false，且 router 契约测试不回归",
+      "criterion": "登录方式发现只新增字段不破坏既有契约：/api/client/v2/auth/methods 对 wecom/dingtalk 返回 qr:true、browser:false；router 契约测试与 cmd/server 全路由扫描（公开路由只需补登记）不回归",
       "evidence": "test",
-      "command": "cd server && go test ./internal/router/ ./internal/serverauth/ -count=1"
+      "command": "cd server && go test ./internal/router/ -count=1 && go test ./cmd/server/ -count=1"
     },
     {
-      "criterion": "WebAdmin 认证配置页渲染企业微信/钉钉两页、保存 payload 含新字段、secret 掩码语义不变，单测全绿且生产构建可产出 dist",
+      "criterion": "WebAdmin 认证配置页渲染企业微信/钉钉两页、保存 payload 含新字段、secret 掩码语义不变，全量单测（含 Audit 动作标签）全绿且生产构建可产出 dist",
       "evidence": "test",
-      "command": "cd server/webadmin && npx vitest run src/pages/Auth.test.tsx && npm run build"
+      "command": "cd server/webadmin && npx vitest run && npx tsc --noEmit && npm run build"
     },
     {
       "criterion": "客户端登录页按 qr:true 渲染扫码卡片、start/poll 接线正确、只接受 PNG data URL、成功后 setSession；回退实现时用例变红",
@@ -43,7 +43,40 @@
       "command": "node scripts/check-no-real-domains.mjs"
     }
   ],
-  "risk": "扫码回调是公开未认证端点；错误实现可能造成 token 泄漏（URL/日志）、state 重放、跨 provider 串用或在本地登录页注入被控服务端返回的 SVG/HTML。缓解：state/flow 单次使用、token 只经轮询一次性返回、回调兑换限时 + 出站护栏、客户端只接受 PNG data URL 并做长度/字符集校验、全链路审计。", 
+  "risk": "扫码回调是公开未认证端点；错误实现可能造成 token 泄漏（URL/日志）、state 重放、跨 provider 串用或在本地登录页注入被控服务端返回的 SVG/HTML。缓解：state/flow 单次使用、token 只经轮询一次性返回、回调兑换限时 + 出站护栏、客户端只接受 PNG data URL 并做长度/字符集校验、全链路审计。",
   "rollback": "管理端把 auth.enabled 中的 wecom/dingtalk 去掉并保存（热加载立即生效，无需重启）；代码回滚本分支提交即可。本变更无数据库迁移，settings 行保留不影响其它登录方式。",
-  "verification": []
+  "verification": [
+    {
+      "command": "cd server && go build ./... && go test ./internal/serverauth/ -run 'WeCom|DingTalk|QR|AuthMethods' -count=1",
+      "result": "exit 0：go build 通过；29 个 WeCom/DingTalk/QR/AuthMethods 用例 PASS（含真 PG 端到端，0 skip）"
+    },
+    {
+      "command": "cd server && go test ./internal/router/ -count=1 && go test ./cmd/server/ -count=1",
+      "result": "router 13 PASS；cmd/server 全路由扫描 121 条、未预期 5xx = 0（6 条新公开路由如实命中 404 JSON 信封）"
+    },
+    {
+      "command": "cd server/webadmin && npx vitest run && npx tsc --noEmit && npm run build",
+      "result": "webadmin 62 files / 1032 tests passed；tsc --noEmit exit 0；vite build exit 0"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts",
+      "result": "32 passed（页面接线 + 宿主路由 + PNG 严格校验 + done→setSession + 409 跨服务端拦截）"
+    },
+    {
+      "command": "node scripts/check-no-real-domains.mjs",
+      "result": "零命中 ✅（新增 weixin.qq.com 已登记理由；提交信息区间 0 命中）"
+    },
+    {
+      "command": "cd server && go test ./internal/serverauth/ -count=1",
+      "result": "ok 107.6s，整包无回归（服务端全量 61 包 go test ./internal/... ./cmd/... -p 4 亦为 exit 0、0 FAIL/0 SKIP）"
+    },
+    {
+      "command": "DSH_AGENTS_HOME=/tmp/qr-agents-clean corepack yarn workspace @zeokeel/dsh-enterprise vitest run",
+      "result": "107 files passed / 1 skipped；1244 passed / 1 skipped（该前缀仅隔离本机已安装技能对两条无关用例的污染）"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs && node scripts/check-guard-parser-integrity.mjs && node scripts/check-architecture.mjs",
+      "result": "变更记录合规；20 条守卫摘要一致；TS 架构 0 违规"
+    }
+  ]
 }

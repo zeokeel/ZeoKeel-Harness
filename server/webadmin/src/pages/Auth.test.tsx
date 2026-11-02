@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { request } from '../api'
@@ -27,6 +27,18 @@ const AUTH_SAMPLE = {
       redirect_url: 'https://zeokeel.example.com/api/auth/oidc/callback',
     },
     openid: { issuer: '', client_id: '', client_secret: '', redirect_url: '' },
+    // 2026-11-03 扫码登录:读面 secret 已存 = *** (掩码,只标记已设置,不回填)
+    wecom: {
+      corp_id: 'ww1234567890abcdef',
+      agent_id: '1000002',
+      secret: '***',
+      redirect_url: 'https://zeokeel.example.com/api/client/v2/auth/wecom/callback',
+    },
+    dingtalk: {
+      client_id: 'dingabcdef',
+      client_secret: '***',
+      redirect_url: 'https://zeokeel.example.com/api/client/v2/auth/dingtalk/callback',
+    },
   },
 }
 
@@ -36,6 +48,11 @@ beforeEach(() => {
     if (path === '/api/server/admin/auth') return AUTH_SAMPLE
     return {}
   })
+})
+
+afterEach(() => {
+  // 回调地址复制用例会替换 navigator(注入剪贴板);用例间必须还原。
+  vi.unstubAllGlobals()
 })
 
 describe('Auth 认证配置页(v3b Tab 重设计)', () => {
@@ -140,6 +157,150 @@ describe('Auth 认证配置页(v3b Tab 重设计)', () => {
   })
 
   // -------------------------------------------------------------------------
+  // 2026-11-03 企业微信/钉钉扫码登录(设计 §3/§6)
+  // -------------------------------------------------------------------------
+  it('企业微信/钉钉: 启用方式各多一个扫码开关(说明「扫码登录(仅客户端)」)', async () => {
+    render(<Auth />)
+    await screen.findByText('认证配置')
+    const wecom = screen.getByRole('checkbox', { name: /企业微信/ }) as HTMLInputElement
+    const dingtalk = screen.getByRole('checkbox', { name: /钉钉/ }) as HTMLInputElement
+    // 两套配置在 AUTH_SAMPLE 里齐全(secret 是服务端掩码 ***)⇒ 开关可用。
+    // 掩码只标记「已设置」, 不能让已配好的方式被判成「配置不完整」。
+    expect(wecom.disabled).toBe(false)
+    expect(dingtalk.disabled).toBe(false)
+    expect(screen.getAllByText('扫码登录(仅客户端)')).toHaveLength(2)
+  })
+
+  it('企业微信扫码页: 四字段 + 回调地址 + 「逐字一致」提示', async () => {
+    const user = userEvent.setup()
+    render(<Auth />)
+    await screen.findByText('认证配置')
+    await user.click(screen.getByRole('tab', { name: '企业微信扫码' }))
+
+    expect(screen.getByLabelText(/企业 ID/)).toHaveValue('ww1234567890abcdef')
+    expect(screen.getByLabelText(/自建应用 AgentId/)).toHaveValue('1000002')
+    expect(screen.getByLabelText(/自建应用 Secret/)).toHaveValue('')
+    expect(screen.getByLabelText(/回调地址\(Redirect URL\)/))
+      .toHaveValue('https://zeokeel.example.com/api/client/v2/auth/wecom/callback')
+
+    // 回调地址 = location.origin + /api/client/v2/auth/wecom/callback(复制给服务商后台登记)
+    const expected = `${window.location.origin}/api/client/v2/auth/wecom/callback`
+    expect(screen.getByText(expected)).toBeInTheDocument()
+    expect(screen.getByText(/请到服务商后台登记/)).toBeInTheDocument()
+    expect(screen.getByText(/值必须逐字一致/)).toBeInTheDocument()
+  })
+
+  it('钉钉扫码页: AppKey/AppSecret/回调地址', async () => {
+    const user = userEvent.setup()
+    render(<Auth />)
+    await screen.findByText('认证配置')
+    await user.click(screen.getByRole('tab', { name: '钉钉扫码' }))
+
+    expect(screen.getByLabelText(/AppKey/)).toHaveValue('dingabcdef')
+    expect(screen.getByLabelText(/AppSecret/)).toHaveValue('')
+    expect(screen.getByLabelText(/回调地址\(Redirect URL\)/))
+      .toHaveValue('https://zeokeel.example.com/api/client/v2/auth/dingtalk/callback')
+    expect(screen.getByText(`${window.location.origin}/api/client/v2/auth/dingtalk/callback`)).toBeInTheDocument()
+  })
+
+  it('回调地址复制: 写入剪贴板并回显「已复制」', async () => {
+    const user = userEvent.setup()
+    render(<Auth />)
+    await screen.findByText('认证配置')
+    await user.click(screen.getByRole('tab', { name: '企业微信扫码' }))
+
+    // copyText 先走异步剪贴板 API;jsdom 没有 → 显式注入(否则回落 execCommand 失败)。
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/api/client/v2/auth/wecom/callback`)
+    })
+    expect(await screen.findByText('已复制')).toBeInTheDocument()
+  })
+
+  it('掩码不回填 + 保存 payload 含 wecom/dingtalk(未改 secret 回传 *** 保持现值)', async () => {
+    const user = userEvent.setup()
+    render(<Auth />)
+    await screen.findByText('认证配置')
+
+    // 企业微信: 已存 secret 显示为空输入框(不回填 ***), 但有「已配置」徽标
+    await user.click(screen.getByRole('tab', { name: '企业微信扫码' }))
+    expect(screen.getByLabelText(/自建应用 Secret/)).toHaveValue('')
+    expect(screen.getByText('已配置')).toBeInTheDocument()
+
+    // 钉钉: 同一套掩码语义
+    await user.click(screen.getByRole('tab', { name: '钉钉扫码' }))
+    expect(screen.getByLabelText(/AppSecret/)).toHaveValue('')
+    expect(screen.getByText('已配置')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '保存认证配置' }))
+    await waitFor(() => {
+      const put = mockRequest.mock.calls.find((c) => c[1]?.method === 'PUT')
+      expect(put).toBeTruthy()
+      const body = JSON.parse(String(put![1]!.body))
+      // 未重新输入 secret ⇒ 提交 *** 保持现值(不是空串覆盖, 与 oidc/LDAP 同口径)
+      expect(body.wecom).toEqual({
+        corp_id: 'ww1234567890abcdef',
+        agent_id: '1000002',
+        secret: '***',
+        redirect_url: 'https://zeokeel.example.com/api/client/v2/auth/wecom/callback',
+      })
+      expect(body.dingtalk).toEqual({
+        client_id: 'dingabcdef',
+        client_secret: '***',
+        redirect_url: 'https://zeokeel.example.com/api/client/v2/auth/dingtalk/callback',
+      })
+    })
+  })
+
+  it('启用企业微信/钉钉: 保存的 enabled 追加两种方式', async () => {
+    render(<Auth />)
+    await screen.findByText('认证配置')
+    fireEvent.click(screen.getByRole('checkbox', { name: /企业微信/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /钉钉/ }))
+    fireEvent.click(screen.getByRole('button', { name: '保存认证配置' }))
+    await waitFor(() => {
+      const put = mockRequest.mock.calls.find((c) => c[1]?.method === 'PUT')
+      expect(put).toBeTruthy()
+      expect(JSON.parse(String(put![1]!.body)).enabled).toBe('local,ldap,oidc,wecom,dingtalk')
+    })
+  })
+
+  it('配置不齐: 企业微信开关禁用并提示「配置不完整」', async () => {
+    mockRequest.mockImplementation(async (path: string) => {
+      if (path === '/api/server/admin/auth') {
+        return {
+          auth: {
+            ...AUTH_SAMPLE.auth,
+            wecom: { corp_id: 'ww1234567890abcdef', agent_id: '', secret: '', redirect_url: '' },
+          },
+        }
+      }
+      return {}
+    })
+    render(<Auth />)
+    await screen.findByText('认证配置')
+    const wecom = screen.getByRole('checkbox', { name: /企业微信/ }) as HTMLInputElement
+    expect(wecom.disabled).toBe(true)
+    expect(wecom.closest('label')).toHaveTextContent('(配置不完整)')
+  })
+
+  it('清空已保存密钥: 保存提交空串(clearedSecrets 既有语义)', async () => {
+    const user = userEvent.setup()
+    render(<Auth />)
+    await screen.findByText('认证配置')
+    await user.click(screen.getByRole('tab', { name: '钉钉扫码' }))
+    fireEvent.click(screen.getByText('清空已保存密钥'))
+    fireEvent.click(screen.getByRole('button', { name: '保存认证配置' }))
+    await waitFor(() => {
+      const put = mockRequest.mock.calls.find((c) => c[1]?.method === 'PUT')
+      expect(put).toBeTruthy()
+      expect(JSON.parse(String(put![1]!.body)).dingtalk.client_secret).toBe('')
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // 2026-09-23 审计 WEB-2(P0):`GET /auth` 失败时的写面闸门。
   //
   // 原缺陷:`load()` 的 `finally { setLoading(false) }` 是整页**唯一**闸门 ⇒
@@ -184,6 +345,9 @@ describe('Auth 认证配置页(v3b Tab 重设计)', () => {
       // 未重新输入密码 ⇒ 回传 *** 保持现值(不是空串覆盖)。
       expect(body.ldap.bind_password).toBe('***')
       expect(body.oidc.client_secret).toBe('***')
+      // 扫码方式的 secret 同样只能回传 ***, 不能是空串(那是"清空")。
+      expect(body.wecom.secret).toBe('***')
+      expect(body.dingtalk.client_secret).toBe('***')
     })
   })
 })

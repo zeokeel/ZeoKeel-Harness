@@ -147,6 +147,9 @@ export const ACTION_LABEL: Record<string, string> = {
   // 不能混进 login_fail —— 否则一个 NAT 出口会把自己的配额拒绝当成攻击证据，
   // 二次封锁整个出口）。语义与 internal/serverauth/oidc.go 的写照点一致。
   oidc_flow_capacity: 'OIDC 流程容量拒绝',
+  // 2026-11-03 扫码登录（企业微信/钉钉）：在途流程表满 / 单来源配额满时的容量拒绝，
+  // 与上一条**同族**（`internal/serverauth/qr.go` 的 recordCapacity 写点，不是 login_fail）。
+  qr_flow_capacity: '扫码登录流程容量拒绝',
   password_change: '修改密码',
   admin_password_change: '修改管理员密码',
   admin_mfa_login: '管理员 MFA 登录',

@@ -136,6 +136,12 @@ const ALLOWED_DOMAINS = {
     'xiaoshouyi.com', 'feishu.cn', 'qq.com', 'dingtalk.com', 'glitchtip.com',
     'deepwiki.com', 'cloud.google.com', 'mcp.cloudflare.com', 'cloudflarestorage.com',
   ],
+  // 企业微信扫码登录的官方开放平台端点（服务端调用其公开 API：扫码授权页、成员身份读取）。
+  // `weixin.qq.com` 覆盖 `login.work.weixin.qq.com`（扫码页）与 `qyapi.weixin.qq.com`
+  // （gettoken/getuserinfo/user get）两个子域；属服务商公开基础设施，与任何客户或部署身份无关。
+  '企业微信官方开放平台': [
+    'weixin.qq.com',
+  ],
   // 模型权重分发（随包语音模型的官方源与公开镜像）。这两条是**上游 provider 自己的缺省源**
   // （上游 `speech-to-text-sensevoice` 包的 `src/config.ts` 里 `modelOrigins` 的缺省值），我们的
   // `packages/host/desktop/scripts/fetch-speech-model.mjs` 按同一份清单拉取；与任何客户/部署身份无关。

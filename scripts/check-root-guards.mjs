@@ -208,7 +208,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   ['check:no-leftover-mutants', { script: 'node scripts/check-no-leftover-mutants.mjs', argvTail: [], digest: 'c1a84c22a47bea2c1368bfba32f33b20feca66deb30abcbbc0eb40318f807285' }],
   ['check:migration-range', { script: 'node scripts/check-migration-range.mjs', argvTail: [], digest: 'b764a0a1f02289ebed7627560a29b2305eda0199fd96844ffba6cd6eeedc90b1' }],
   ['check:doc-claims', { script: 'node scripts/check-doc-claims.mjs', argvTail: [], digest: 'e2fcf535a987fe29ffc7c24183ce22323982289b681f779b01aedecfa5806cbc' }],
-  ['check:no-real-domains', { script: 'node scripts/check-no-real-domains.mjs', argvTail: [], digest: '36b915d697c3abcea2cf816bee8876fa666b8a6e4ae6142ee7b0b6689ef6f4ff' }],
+  ['check:no-real-domains', { script: 'node scripts/check-no-real-domains.mjs', argvTail: [], digest: '05f325d69aa2eb1f20c62a2bebc3d5816719e8e507c5b38be615972c56ebf048' }],
   // `--portable`：只跑便携子集（需要真 PG / 显示器的组归 server job 与 W6 三平台）。
   // FIX-48③ 起：本脚本 run-id 化（证据目录 `temp/wasm-client-only/runs/<run-id>/`），
   // 摘要在同一个 PR 里同步（可评审的 diff）。

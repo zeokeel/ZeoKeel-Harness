@@ -1,5 +1,7 @@
 package serverauth
 
+import "context"
+
 // UserInfo is the normalized identity returned by providers.
 type UserInfo struct {
 	Username    string
@@ -31,6 +33,23 @@ type UserInfo struct {
 type PasswordProvider interface {
 	Name() string
 	Authenticate(username, password string) (UserInfo, error)
+	Configure(cfg map[string]string) error
+}
+
+// QRProvider authenticates via a provider-hosted QR code scanned by a phone
+// (企业微信 / 钉钉).
+//
+// 与 BrowserProvider 的差异：没有浏览器重定向与 state cookie —— 二维码内容由
+// 服务端渲染成 PNG 交给客户端，手机扫码后服务商直接回调
+// `/api/client/v2/auth/<name>/callback`，服务端凭 state 找回内存流程并签发
+// token，桌面客户端轮询 poll 一次性取走（状态机见 qr.go）。
+type QRProvider interface {
+	Name() string
+	// AuthURL 返回**二维码内容**（服务商托管登录页 + redirect_uri + state）。
+	AuthURL(state string) (string, error)
+	// Exchange 用回调 code 兑换外部身份。ctx 由调用方限时（qrExchangeTimeout），
+	// 实现必须把它传给每一次出站请求。
+	Exchange(ctx context.Context, code string) (UserInfo, error)
 	Configure(cfg map[string]string) error
 }
 

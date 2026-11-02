@@ -1345,8 +1345,10 @@ func (a *AdminAPI) putAuditSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"retention_days": *req.RetentionDays})
 }
 
-// getAuthConfig 返回认证配置(脱敏):auth.mode / auth.enabled / ldap.* / oidc.* / openid.*。
-// 敏感值(bind_password / client_secret)以 "***" 掩码返回,write 时留空=不更换。
+// getAuthConfig 返回认证配置(脱敏):auth.mode / auth.enabled / ldap.* / oidc.* / openid.*
+// / wecom.* / dingtalk.*。
+// 敏感值(bind_password / client_secret / wecom.secret / dingtalk.client_secret)以
+// "***" 掩码返回,write 时传 "***" = 保持现值。
 func (a *AdminAPI) getAuthConfig(c *gin.Context) {
 	s, err := serverstore.GetAllSettings(a.DB)
 	if err != nil {
@@ -1386,6 +1388,19 @@ func (a *AdminAPI) getAuthConfig(c *gin.Context) {
 			"client_secret": mask(s["openid.client_secret"]),
 			"redirect_url":  s["openid.redirect_url"],
 		},
+		// 扫码登录（2026-11-03）：secret 已存则掩码；redirect_url 供 webadmin
+		// 直接展示并复制到服务商后台（值必须逐字一致）。
+		"wecom": gin.H{
+			"corp_id":      s["wecom.corp_id"],
+			"agent_id":     s["wecom.agent_id"],
+			"secret":       mask(s["wecom.secret"]),
+			"redirect_url": s["wecom.redirect_url"],
+		},
+		"dingtalk": gin.H{
+			"client_id":     s["dingtalk.client_id"],
+			"client_secret": mask(s["dingtalk.client_secret"]),
+			"redirect_url":  s["dingtalk.redirect_url"],
+		},
 	}})
 }
 
@@ -1424,6 +1439,19 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 			ClientSecret string `json:"client_secret"`
 			RedirectURL  string `json:"redirect_url"`
 		} `json:"openid"`
+		// 扫码登录(2026-11-03):企业微信自建应用 / 钉钉企业内部应用。
+		// secret 传 "***" = 保持现值;其余值(含空串)= 覆盖/清空。
+		WeCom struct {
+			CorpID      string `json:"corp_id"`
+			AgentID     string `json:"agent_id"`
+			Secret      string `json:"secret"`
+			RedirectURL string `json:"redirect_url"`
+		} `json:"wecom"`
+		DingTalk struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+			RedirectURL  string `json:"redirect_url"`
+		} `json:"dingtalk"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeError(c, http.StatusBadRequest, "VALIDATION", "请求体错误")
@@ -1461,9 +1489,9 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 			continue
 		}
 		switch p {
-		case "local", "ldap", "openid", "oidc":
+		case "local", "ldap", "openid", "oidc", "wecom", "dingtalk":
 		default:
-			writeError(c, http.StatusBadRequest, "VALIDATION", "auth.enabled 只能包含 local|ldap|openid|oidc")
+			writeError(c, http.StatusBadRequest, "VALIDATION", "auth.enabled 只能包含 local|ldap|openid|oidc|wecom|dingtalk")
 			return
 		}
 		if seen[p] {
@@ -1479,7 +1507,7 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 	// **重新接受本地密码**。空集合同时被当成"还没配置过"与"配置成什么都没有",
 	// 这两件事必须分开:HTTP 面显式拒绝空集合,运行期只对"从未配置过"保留兜底。
 	if len(seen) == 0 {
-		writeError(c, http.StatusBadRequest, "VALIDATION", "auth.enabled 至少需要一个提供方(local|ldap|openid|oidc)")
+		writeError(c, http.StatusBadRequest, "VALIDATION", "auth.enabled 至少需要一个提供方(local|ldap|openid|oidc|wecom|dingtalk)")
 		return
 	}
 	// min_password_length 校验必须在写库前(F14:不允许写一半再 400)。
@@ -1490,21 +1518,22 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 			return
 		}
 	}
-	// v3b redirect_url 安全(§1.5):浏览器跳转方式的 redirect_url 必须
+	// v3b redirect_url 安全(§1.5):浏览器跳转/扫码方式的 redirect_url 必须
 	// https(或 loopback http), 防 open redirect / 任意回调劫持。
-	validateRedirect := func(prefix, value string) bool {
+	// 判定与 provider 构建共用 authRedirectURLAllowed(唯一实现,见 qr.go)。
+	validateRedirect := func(value string) bool {
 		if strings.TrimSpace(value) == "" {
 			return true // 未配置允许(仅启用时校验必填)
 		}
-		u, err := url.Parse(strings.TrimSpace(value))
-		if err != nil {
-			return false
-		}
-		loopback := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "[::1]"
-		return u.Scheme == "https" || (u.Scheme == "http" && loopback)
+		return authRedirectURLAllowed(value)
 	}
-	for _, kv := range [][2]string{{"oidc", req.OIDC.RedirectURL}, {"openid", req.OpenID.RedirectURL}} {
-		if !validateRedirect(kv[0], kv[1]) {
+	for _, kv := range [][2]string{
+		{"oidc", req.OIDC.RedirectURL},
+		{"openid", req.OpenID.RedirectURL},
+		{"wecom", req.WeCom.RedirectURL},
+		{"dingtalk", req.DingTalk.RedirectURL},
+	} {
+		if !validateRedirect(kv[1]) {
 			writeError(c, http.StatusBadRequest, "VALIDATION", kv[0]+".redirect_url 必须是 https(或 http 回环)")
 			return
 		}
@@ -1551,6 +1580,24 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 		}
 		openIDSecret = sealed
 	}
+	// 扫码登录凭据:与上面三个 secret 同一套 AES-GCM("***" = 保持现值)。
+	weComSecret, dingTalkSecret := "", ""
+	if req.WeCom.Secret != MaskSecret {
+		sealed, err := encryptSettingSecret(req.WeCom.Secret)
+		if err != nil {
+			writeError(c, http.StatusInternalServerError, "INTERNAL", "密钥加密失败")
+			return
+		}
+		weComSecret = sealed
+	}
+	if req.DingTalk.ClientSecret != MaskSecret {
+		sealed, err := encryptSettingSecret(req.DingTalk.ClientSecret)
+		if err != nil {
+			writeError(c, http.StatusInternalServerError, "INTERNAL", "密钥加密失败")
+			return
+		}
+		dingTalkSecret = sealed
+	}
 	// F14(审计 2026-09-11):全部设置键在**同一事务**内落库,任一失败整体
 	// 回滚。此前 20+ 个 `_ = upsert(...)` 静默吞错,DB 抖动会留下半套配置
 	// (例如 client_secret 未落库而 enabled 已改)却返回"保存成功"。
@@ -1584,6 +1631,12 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 		{"openid.issuer", strings.TrimSpace(req.OpenID.Issuer)},
 		{"openid.client_id", strings.TrimSpace(req.OpenID.ClientID)},
 		{"openid.redirect_url", strings.TrimSpace(req.OpenID.RedirectURL)},
+		// 扫码登录(2026-11-03):一套配置 = 一个 corp / 一个应用。
+		{"wecom.corp_id", strings.TrimSpace(req.WeCom.CorpID)},
+		{"wecom.agent_id", strings.TrimSpace(req.WeCom.AgentID)},
+		{"wecom.redirect_url", strings.TrimSpace(req.WeCom.RedirectURL)},
+		{"dingtalk.client_id", strings.TrimSpace(req.DingTalk.ClientID)},
+		{"dingtalk.redirect_url", strings.TrimSpace(req.DingTalk.RedirectURL)},
 	}
 	if req.LDAP.BindPassword != MaskSecret {
 		pairs = append(pairs, [2]string{"ldap.bind_password", ldapSecret})
@@ -1593,6 +1646,12 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 	}
 	if req.OpenID.ClientSecret != MaskSecret {
 		pairs = append(pairs, [2]string{"openid.client_secret", openIDSecret})
+	}
+	if req.WeCom.Secret != MaskSecret {
+		pairs = append(pairs, [2]string{"wecom.secret", weComSecret})
+	}
+	if req.DingTalk.ClientSecret != MaskSecret {
+		pairs = append(pairs, [2]string{"dingtalk.client_secret", dingTalkSecret})
 	}
 	if req.HideLocal != nil {
 		pairs = append(pairs, [2]string{"auth.hide_local", strconv.FormatBool(*req.HideLocal)})
@@ -1641,6 +1700,15 @@ func (a *AdminAPI) setAuthConfig(c *gin.Context) {
 	}
 	if req.OpenID.Issuer != "" || req.OpenID.ClientID != "" || req.OpenID.RedirectURL != "" || req.OpenID.ClientSecret != MaskSecret && req.OpenID.ClientSecret != "" {
 		changed = append(changed, "openid.*")
+	}
+	// 扫码登录必须单独留痕:secret 掩码(= 未改)不产生条目;任一字段非空即视为
+	// 本方式被改动。全空 payload(清空)不产生条目 —— 与上面 ldap/oidc/openid
+	// 的既有口径一致。
+	if req.WeCom.CorpID != "" || req.WeCom.AgentID != "" || req.WeCom.RedirectURL != "" || req.WeCom.Secret != MaskSecret && req.WeCom.Secret != "" {
+		changed = append(changed, "wecom.*")
+	}
+	if req.DingTalk.ClientID != "" || req.DingTalk.RedirectURL != "" || req.DingTalk.ClientSecret != MaskSecret && req.DingTalk.ClientSecret != "" {
+		changed = append(changed, "dingtalk.*")
 	}
 	if req.HideLocal != nil {
 		changed = append(changed, "auth.hide_local")
@@ -1737,6 +1805,16 @@ func publicAuthMethods(c *gin.Context, db *sql.DB, available func(name string) b
 		// oidc/openid:browser 三件套齐全才可用
 		return s[prefix+".issuer"] != "" && s[prefix+".client_id"] != "" && s[prefix+".redirect_url"] != ""
 	}
+	// 扫码登录(2026-11-03):必填项齐全(与 webadmin 的 REQUIRED 一致)。
+	// secret 落库是密文,只判非空;这些判据只在"没有运行期视图"时使用。
+	weComConfigured := func() bool {
+		return s["wecom.corp_id"] != "" && s["wecom.agent_id"] != "" &&
+			s["wecom.secret"] != "" && s["wecom.redirect_url"] != ""
+	}
+	dingTalkConfigured := func() bool {
+		return s["dingtalk.client_id"] != "" && s["dingtalk.client_secret"] != "" &&
+			s["dingtalk.redirect_url"] != ""
+	}
 	enabledRaw := s["auth.enabled"]
 	var methods []string
 	if strings.TrimSpace(enabledRaw) != "" {
@@ -1783,6 +1861,10 @@ func publicAuthMethods(c *gin.Context, db *sql.DB, available func(name string) b
 					isConfigured = ldapConfigured()
 				case "oidc", "openid":
 					isConfigured = oidcConfigured(m)
+				case "wecom":
+					isConfigured = weComConfigured()
+				case "dingtalk":
+					isConfigured = dingTalkConfigured()
 				}
 			}
 		}
@@ -1792,7 +1874,10 @@ func publicAuthMethods(c *gin.Context, db *sql.DB, available func(name string) b
 			// v3b: browser = 浏览器跳转登录(openid/oidc); hidden 仅用于
 			// 客户端登录页隐藏本地入口(管理后台恒本地,不消费该标记)。
 			"browser": m == "openid" || m == "oidc",
-			"hidden":  m == "local" && hideLocal,
+			// 2026-11-03: qr = 客户端内二维码扫码登录(企业微信/钉钉),不是
+			// 浏览器跳转;旧客户端忽略该字段,新客户端据此渲染二维码卡片。
+			"qr":     m == "wecom" || m == "dingtalk",
+			"hidden": m == "local" && hideLocal,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"methods": out})

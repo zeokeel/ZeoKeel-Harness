@@ -258,6 +258,38 @@ var sweepPublicAPIRoutes = map[string]sweepExpect{
 		statuses: []int{400, 404}, classes: []string{sweepClassJSON},
 		why: "OpenID 回调（公开）；未配置 ⇒ 404 信封",
 	},
+	// --- 扫码登录（企业微信/钉钉，2026-11-03）：公开端点，未配置 ⇒ 404 信封 ---
+	//
+	// 扫码登录是"客户端内直接展示二维码"的登录方式，登录页在未登录时就要能
+	// 启动流程 ⇒ 三条都必须公开（不带 BearerAuth）。扫描时部署尚未配置扫码
+	// 方式，因此看到的是 404「该登录方式未配置或已禁用」；配置后 start 的
+	// 成功响应是 {flow_id, qr_png, expires_in}，poll/callback 的失败面仍是
+	// JSON 错误信封（callback 的**成功**页是唯一 text/html 产品面，见
+	// serverauth/qr.go，扫描打不到它）。
+	"POST /api/client/v2/auth/wecom/qr/start": {
+		statuses: []int{404, 429}, classes: []string{sweepClassJSON},
+		why: "企业微信扫码登录启动（公开）；未配置 ⇒ 404 信封，启动限流 ⇒ 429 信封",
+	},
+	"GET /api/client/v2/auth/wecom/qr/poll": {
+		statuses: []int{404}, classes: []string{sweepClassJSON},
+		why: "企业微信扫码轮询（公开）；未配置/未知 flow_id ⇒ 404 信封",
+	},
+	"GET /api/client/v2/auth/wecom/callback": {
+		statuses: []int{404}, classes: []string{sweepClassJSON},
+		why: "企业微信扫码回调（公开，手机浏览器落地）；未配置 ⇒ 404 信封",
+	},
+	"POST /api/client/v2/auth/dingtalk/qr/start": {
+		statuses: []int{404, 429}, classes: []string{sweepClassJSON},
+		why: "钉钉扫码登录启动（公开）；未配置 ⇒ 404 信封，启动限流 ⇒ 429 信封",
+	},
+	"GET /api/client/v2/auth/dingtalk/qr/poll": {
+		statuses: []int{404}, classes: []string{sweepClassJSON},
+		why: "钉钉扫码轮询（公开）；未配置/未知 flow_id ⇒ 404 信封",
+	},
+	"GET /api/client/v2/auth/dingtalk/callback": {
+		statuses: []int{404}, classes: []string{sweepClassJSON},
+		why: "钉钉扫码回调（公开，手机浏览器落地）；未配置 ⇒ 404 信封",
+	},
 	"GET /api/client/v2/channel": {
 		statuses: []int{200}, classes: []string{sweepClassJSON},
 		why: "渠道内容下发（登录页/门户共用，公开）",

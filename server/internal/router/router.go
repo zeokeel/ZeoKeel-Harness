@@ -225,6 +225,15 @@ func registerClientV2(cli *gin.RouterGroup, d Deps) {
 		ag.GET("/"+name+"/login", d.Auth.BrowserLogin(name))
 		ag.GET("/"+name+"/callback", d.Auth.BrowserCallback(name))
 	}
+	// 企业微信/钉钉扫码登录（2026-11-03）：固定注册两条方式各三条路由，
+	// provider 在**请求时**从运行期注册表动态解析（未配置/构建失败 ⇒ 404
+	// JSON 信封，不泄露配置细节）。callback 由手机浏览器落地，是本次变更
+	// 唯一的 text/html 产品面（成功页，见 serverauth/qr.go 的例外说明）。
+	for _, name := range []string{"wecom", "dingtalk"} {
+		ag.POST("/"+name+"/qr/start", d.Auth.QRStart(name))
+		ag.GET("/"+name+"/qr/poll", d.Auth.QRPoll(name))
+		ag.GET("/"+name+"/callback", d.Auth.QRCallback(name))
+	}
 
 	// 启动配置
 	cli.GET("/config/bootstrap", serverauth.BearerAuth(d.DB), d.Bootstrap.Bootstrap)

@@ -27,6 +27,16 @@ type ClientHandlers struct {
 	// 在请求时从当前配置读取);OIDC 快照仅保留给旧调用方。
 	BrowserLogin    func(name string) gin.HandlerFunc
 	BrowserCallback func(name string) gin.HandlerFunc
+	// 扫码登录(企业微信 wecom / 钉钉 dingtalk,2026-11-03):固定路由,
+	// provider 在**请求时**从当前配置解析 ⇒ 未配置/已禁用 = 404 JSON 信封,
+	// webadmin 保存后热生效(无需重启)。
+	//
+	//   QRStart    POST /auth/<name>/qr/start
+	//   QRPoll     GET  /auth/<name>/qr/poll?flow_id=
+	//   QRCallback GET  /auth/<name>/callback?code=&state=
+	QRStart    func(name string) gin.HandlerFunc
+	QRPoll     func(name string) gin.HandlerFunc
+	QRCallback func(name string) gin.HandlerFunc
 	// PublicMethods 是登录方式发现(公开、未登录可访问)。与管理端共用同一份
 	// 判定实现(publicAuthMethods),区别是这里带**运行期视图**(R24-X4-B2):
 	// `configured` 以本 API 实例的 provider 注册表为真源,settings 只决定
@@ -69,6 +79,9 @@ func (a *API) Handlers() *ClientHandlers {
 		OIDC:            oidc,
 		BrowserLogin:    a.browserLoginHandler,
 		BrowserCallback: a.browserCallbackHandler,
+		QRStart:         a.qrStartHandler,
+		QRPoll:          a.qrPollHandler,
+		QRCallback:      a.qrCallbackHandler,
 		PublicMethods:   a.publicMethodsHandler(),
 	}
 }

@@ -7,8 +7,13 @@ package serverauth
 // 所有出站请求都打到 httptest 假服务（apiBaseURL 是字段），不需要真外网。
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -31,12 +36,11 @@ func TestWeComProviderAuthURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse %q: %v", raw, err)
 	}
-	if u.Scheme != "https" || u.Host != "login.work.weixin.qq.com" || u.Path != "/wwlogin/sso/login" {
-		t.Fatalf("二维码 URL = %q, want https://login.work.weixin.qq.com/wwlogin/sso/login", raw)
+	if u.Scheme != "https" || u.Host != "open.work.weixin.qq.com" || u.Path != "/wwopen/sso/qrConnect" {
+		t.Fatalf("二维码 URL = %q, want https://open.work.weixin.qq.com/wwopen/sso/qrConnect", raw)
 	}
 	q := u.Query()
 	for key, want := range map[string]string{
-		"login_type":   "CorpApp",
 		"appid":        "ww-corp-1",
 		"agentid":      "100001",
 		"redirect_uri": "https://harness.example.com/api/client/v2/auth/wecom/callback",
@@ -45,6 +49,9 @@ func TestWeComProviderAuthURL(t *testing.T) {
 		if got := q.Get(key); got != want {
 			t.Fatalf("query %s = %q, want %q (URL=%s)", key, got, want, raw)
 		}
+	}
+	if got := q.Get("login_type"); got != "" {
+		t.Fatalf("qrConnect 不应带 login_type（登录页参数），got %q", got)
 	}
 	// redirect_uri 必须被 percent-encode（否则回调路径里的 `&`/`?` 会截断参数）。
 	if !strings.Contains(raw, "redirect_uri=https%3A%2F%2Fharness.example.com%2Fapi%2Fclient%2Fv2%2Fauth%2Fwecom%2Fcallback") {
@@ -59,7 +66,86 @@ func TestWeComProviderAuthURL(t *testing.T) {
 	}
 }
 
-// TestWeComExchangeMapping 断言 gettoken → getuserinfo → user/get 的完整映射。
+// TestWeComProviderQRImage 断言服务端从官方 qrConnect 页提取 qrImg key、
+// 下载官方图片并转成 PNG（2026-11-03 真机缺陷：不能把登录页 URL 当二维码）。
+func TestWeComProviderQRImage(t *testing.T) {
+	var gotState string
+	qrJPG := makeTestJPEG(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/wwopen/sso/qrConnect", func(w http.ResponseWriter, r *http.Request) {
+		gotState = r.URL.Query().Get("state")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, `<html><body><img class="qrcode" src="https://open.work.weixin.qq.com/wwopen/sso/qrImg?key=test-key-123"></body></html>`)
+	})
+	mux.HandleFunc("/wwopen/sso/qrImg", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("key"); got != "test-key-123" {
+			t.Errorf("qrImg key = %q", got)
+		}
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write(qrJPG)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	p := &WeComProvider{
+		corpID:      "ww-corp-1",
+		agentID:     "100001",
+		redirectURL: "https://harness.example.com/api/client/v2/auth/wecom/callback",
+		qrBaseURL:   srv.URL,
+		client:      srv.Client(),
+	}
+	pngBytes, err := p.QRImage(context.Background(), "state-img")
+	if err != nil {
+		t.Fatalf("QRImage: %v", err)
+	}
+	if !bytes.HasPrefix(pngBytes, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}) {
+		t.Fatalf("QRImage 返回的不是 PNG: % x", pngBytes[:minInt(len(pngBytes), 8)])
+	}
+	if gotState != "state-img" {
+		t.Fatalf("qrConnect state = %q", gotState)
+	}
+
+	// 页面里没有 qrImg key（例如服务商改版）必须报错，绝不能退化成把登录页
+	// URL 编成二维码（那正是二次扫码缺陷的来源）。
+	badMux := http.NewServeMux()
+	badMux.HandleFunc("/wwopen/sso/qrConnect", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `<html><body>no qr here</body></html>`)
+	})
+	badSrv := httptest.NewServer(badMux)
+	defer badSrv.Close()
+	p.qrBaseURL = badSrv.URL
+	p.client = badSrv.Client()
+	if _, err := p.QRImage(context.Background(), "state-bad"); err == nil {
+		t.Fatal("缺少 qrImg key 时 QRImage 应报错")
+	}
+}
+
+func makeTestJPEG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
+			c := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+			if (x/4+y/4)%2 == 0 {
+				c = color.RGBA{A: 255}
+			}
+			img.Set(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 80}); err != nil {
+		t.Fatalf("jpeg encode: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func TestWeComExchangeMapping(t *testing.T) {
 	var tokenQuery, userQuery, detailQuery url.Values
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

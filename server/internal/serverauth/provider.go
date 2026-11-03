@@ -54,12 +54,26 @@ type PasswordProvider interface {
 // token，桌面客户端轮询 poll 一次性取走（状态机见 qr.go）。
 type QRProvider interface {
 	Name() string
-	// AuthURL 返回**二维码内容**（服务商托管登录页 + redirect_uri + state）。
+	// AuthURL 返回服务商托管登录页（含 redirect_uri + state）。
+	//
+	// ⚠️ 不要把它的返回值直接编码成二维码：`login.work.weixin.qq.com/wwlogin/
+	// sso/login` 这类是**登录页**，扫出来的二维码会再打开一个需要二次扫码的
+	// 页面（2026-11-03 真机踩到）。能直接拿到官方二维码图片的 provider 必须
+	// 实现 QRImageProvider，由服务端返回图片；否则才退回把该 URL 编码成码。
 	AuthURL(state string) (string, error)
 	// Exchange 用回调 code 兑换外部身份。ctx 由调用方限时（qrExchangeTimeout），
 	// 实现必须把它传给每一次出站请求。
 	Exchange(ctx context.Context, code string) (UserInfo, error)
 	Configure(cfg map[string]string) error
+}
+
+// QRImageProvider 是可选能力：由服务端返回**服务商官方二维码图片**（PNG），
+// 而不是把登录页 URL 编码成二维码。
+//
+// 注册了此能力的 provider 在 qr/start 时优先走 QRImage；返回的字节必须是
+// 可解码的 PNG（调用方会再校验 PNG 签名与大小后才变成 data URL）。
+type QRImageProvider interface {
+	QRImage(ctx context.Context, state string) ([]byte, error)
 }
 
 // BrowserProvider authenticates via browser redirect flow (oidc).

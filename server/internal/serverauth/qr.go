@@ -29,6 +29,7 @@ package serverauth
 // 错误信封（serverauth.WriteError）。
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -339,6 +340,25 @@ func qrPNGDataURL(text string) (string, error) {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), nil
 }
 
+// qrPNGDataURLFromPNG 把服务商返回的 PNG 图片变成客户端能接受的 data URL。
+//
+// 客户端硬约束：`data:image/png;base64,` 前缀 + 总长 ≤200_000 字符（见
+// packages/host/enterprise/src/auth-gate.ts 的 isPngDataURL）。这里在服务端
+// 先把形状和体积钉死，坏图不会被转发给客户端。
+func qrPNGDataURLFromPNG(data []byte) (string, error) {
+	if len(data) == 0 {
+		return "", errors.New("qr: empty png")
+	}
+	if !bytes.HasPrefix(data, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}) {
+		return "", errors.New("qr: 服务商返回的不是 PNG")
+	}
+	encoded := base64.StdEncoding.EncodeToString(data)
+	if len(encoded) > 190_000 {
+		return "", errors.New("qr: png 过大")
+	}
+	return "data:image/png;base64," + encoded, nil
+}
+
 // ---------------------------------------------------------------------------
 // 出站 HTTP（服务商公开 API）
 // ---------------------------------------------------------------------------
@@ -509,7 +529,22 @@ func (a *API) qrStartHandler(name string) gin.HandlerFunc {
 			writeError(c, http.StatusInternalServerError, "INTERNAL", "二维码生成失败")
 			return
 		}
-		png, err := qrPNGDataURL(authURL)
+		var png string
+		if imgp, ok := p.(QRImageProvider); ok {
+			// 官方二维码图片：直接返回服务商图片（转 PNG），不要把登录页 URL
+			// 编码成二维码 —— 那会变成二次扫码（2026-11-03 真机缺陷）。
+			img, ierr := imgp.QRImage(c.Request.Context(), flow.state)
+			if ierr != nil {
+				a.qrFlows.discard(flow)
+				recordFailure()
+				_ = serverstore.AuditLog(a.DB, name, "login_fail", "start_provider_failed ip="+c.ClientIP())
+				writeError(c, http.StatusBadGateway, "QR_PROVIDER_UNAVAILABLE", "二维码生成失败:服务商暂不可用,请稍后重试")
+				return
+			}
+			png, err = qrPNGDataURLFromPNG(img)
+		} else {
+			png, err = qrPNGDataURL(authURL)
+		}
 		if err != nil {
 			a.qrFlows.discard(flow)
 			recordFailure()

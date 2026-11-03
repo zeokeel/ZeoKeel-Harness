@@ -1,0 +1,35 @@
+{
+  "id": "2026-11-03-wecom-qr-official-image",
+  "status": "implemented",
+  "intent": {
+    "zh": "企业微信扫码登录的二维码此前编码的是 login.work.weixin.qq.com 登录页 URL，真机扫码后会再打开一个需要二次扫码的页面；改为服务端抓取官方 qrConnect 页里的官方二维码图片并返回 PNG，让用户扫一次即可进入授权确认。",
+    "en": "The WeCom QR code encoded the hosted login-page URL, causing a second QR screen after scanning; fetch the official QR image from the qrConnect page and return it as PNG so one scan reaches consent."
+  },
+  "modules": [
+    "server/internal/serverauth/"
+  ],
+  "acceptance": [
+    {
+      "criterion": "企业微信 provider 的 AuthURL 指向 open.work.weixin.qq.com/wwopen/sso/qrConnect（不再带 login_type），QRImage 能从 qrConnect 页提取 qrImg?key、下载图片并转成 PNG；对应单测全绿",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth/ -run 'TestWeCom' -count=1"
+    },
+    {
+      "criterion": "扫码启动接口返回的 qr_png 是 PNG data URL（客户端 isPngDataURL 约束：PNG 前缀 + 长度上限），且不再把服务商登录页 URL 编码成二维码",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth/ -run 'TestQR|TestWeCom' -count=1"
+    },
+    {
+      "criterion": "真机扫码一次即可出现企业微信授权确认页，不再出现第二个二维码（客户端刷新二维码后人工验证）",
+      "evidence": "manual",
+      "command": "客户端进入企业微信扫码页 → 刷新二维码 → 企业微信扫一次 → 应直接出现授权确认/登录成功，不应再要求长按识别二维码"
+    },
+    {
+      "criterion": "仓库不含未登记的真实域名",
+      "evidence": "guard",
+      "command": "node scripts/check-no-real-domains.mjs"
+    }
+  ],
+  "risk": "qr/start 增加两次出站请求（qrConnect 页 + 官方图片），失败时返回 502 QR_PROVIDER_UNAVAILABLE，不再降级为把登录页 URL 编码成二维码（那会产生二次扫码缺陷）。出站仍走统一护栏 client（超时/重定向复检/体积上限）。",
+  "rollback": "回滚 server/internal/serverauth 的本次提交并重新部署；客户端无需改动（仍只接收 PNG data URL）。"
+}

@@ -2284,11 +2284,11 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 {
   // 棘轮：下限可以上调，**下调必须是一次显式评审**。这里把"不得低于 2"钉进判据
   // （改这条断言 = 一次可见的 diff），否则把它调到 1 就等于把闸门关掉。
-  // 2026-10-21 fork 改名（ZeoKeel）时从上游的 4 显式下调到 2：新私有渠道仓
-  // zeokeel/channels 当前只有 official + beta 两个渠道目录。
+  // 2026-10-21 fork 改名（ZeoKeel）时从上游的 4 显式下调到 2（当时只有 official + beta）；
+  // 2026-11-03 私有渠道仓新增一个品牌渠道后上调到 3（与 ci-channels.sh 同一次改动）。
   check(
     channelFloor() >= 2,
-    `MIN_EXPECTED_CHANNELS 是渠道目录数的棘轮下限，不得低于 2（本仓私有渠道仓 official+beta 的目录数下限）；实际 ${channelFloor()}`,
+    `MIN_EXPECTED_CHANNELS 是渠道目录数的棘轮下限，不得低于 2（历史下限；当前登记值见 scripts/ci-channels.sh，与私有渠道仓目录数同一次调整）；实际 ${channelFloor()}`,
   )
 
   const stableTag = { refName: 'v9.9.9', ref: 'refs/tags/v9.9.9' }
@@ -2319,8 +2319,8 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
 
   // ② **夹具/本地检出路径**（`CI_CHANNELS_SOURCE`）不得被下限提前中止
   //    （2026-09-24 集成回归）：本仓两个守卫（`scripts/verify-wasm-channels.mjs` 的组 7 与
-  //    本文件）都用这个模式跑合成夹具；本 fork 的夹具目录数（删掉一个后 1 个）小于
-  //    当前下限（2 个）。
+  //    本文件）都用这个模式跑合成夹具；本 fork 的夹具目录数（删掉一个后 = 下限 − 1）小于
+  //    当前登记的下限，正是要验的那一格。
   //    若在这里判红，**逐渠道字段校验就永远看不到自己的错误** —— 实测组 7 七条断言全红。
   //    豁免只给这个模式；生产（clone/pin）那一半由 ⑪ 用真 git 仓库验。
   {

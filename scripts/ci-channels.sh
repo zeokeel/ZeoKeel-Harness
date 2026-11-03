@@ -508,9 +508,9 @@ fi
 #      防止有人把它调到 1 把闸门关掉。
 #      2026-10-21 fork 改名（ZeoKeel）时从上游的 4 显式下调到 2：新私有渠道仓
 #      zeokeel/channels 当时只有 official + beta 两个渠道目录。
-#      2026-11-03 私有渠道仓新增一个品牌渠道包（manifest 同步登记）⇒ 同步上调到 3；
+#      2026-11-03 私有渠道仓恢复全部品牌渠道（manifest 同步登记为 4 个）⇒ 同步上调到 4；
 #      新增/下线渠道必须在本文件与私有仓 manifest 的**同一次评审**里一起改。
-MIN_EXPECTED_CHANNELS=3
+MIN_EXPECTED_CHANNELS=4
 if [ "$CHANNELS_FROM_REMOTE" -eq 1 ] && [ "${#FOUND[@]}" -gt "$MIN_EXPECTED_CHANNELS" ]; then
   echo "::warning::渠道仓里的渠道目录数(${#FOUND[@]})多于登记下限(${MIN_EXPECTED_CHANNELS})：新增渠道时请把 MIN_EXPECTED_CHANNELS 一起调高，否则将来少一个渠道不会被这条判据拦住(渠道名不打印)" >&2
 fi

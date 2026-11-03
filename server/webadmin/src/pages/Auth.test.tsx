@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { request } from '../api'
 import Auth from './Auth'
@@ -38,6 +38,16 @@ const AUTH_SAMPLE = {
       client_id: 'dingabcdef',
       client_secret: '***',
       redirect_url: 'https://zeokeel.example.com/api/client/v2/auth/dingtalk/callback',
+    },
+    // 2026-11-03 外部权限源(RBAC):默认关闭时不影响扫码；这里给一份已启用配置。
+    identity: {
+      enabled: true,
+      endpoint: 'https://rbac.example.com/internal/v1/identity/resolve',
+      token: '***',
+      methods: 'wecom,dingtalk',
+      timeout_ms: 3000,
+      sync_groups: true,
+      rbac_user_count: 0,
     },
   },
 }
@@ -348,6 +358,186 @@ describe('Auth 认证配置页(v3b Tab 重设计)', () => {
       // 扫码方式的 secret 同样只能回传 ***, 不能是空串(那是"清空")。
       expect(body.wecom.secret).toBe('***')
       expect(body.dingtalk.client_secret).toBe('***')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 2026-11-03 外部权限源(RBAC): 扫码后到 RBAC 解析 uid/状态/部门。
+  // 服务端契约见 task-5: GET/PUT /auth 的 identity 对象 + /auth/test type=identity。
+  // -------------------------------------------------------------------------
+  describe('外部权限源(RBAC)', () => {
+    it('渲染 identity 配置: 开关/endpoint/令牌掩码/适用方式/超时/同步组', async () => {
+      const user = userEvent.setup()
+      render(<Auth />)
+      await screen.findByText('认证配置')
+      await user.click(screen.getByRole('tab', { name: '外部权限源' }))
+      const panel = screen.getByTestId('identity-panel')
+
+      const enable = within(panel).getByRole('switch', { name: '启用外部权限源' })
+      expect(enable).toHaveAttribute('aria-checked', 'true')
+      expect(within(panel).getByLabelText(/解析接口/))
+        .toHaveValue('https://rbac.example.com/internal/v1/identity/resolve')
+      // 掩码不回填, 只显示「已配置」徽标
+      expect(within(panel).getByLabelText(/服务令牌/)).toHaveValue('')
+      expect(within(panel).getByText('已配置')).toBeInTheDocument()
+      expect(within(panel).getByRole('checkbox', { name: /企业微信/ })).toBeChecked()
+      expect(within(panel).getByRole('checkbox', { name: /钉钉/ })).toBeChecked()
+      expect(within(panel).getByLabelText(/超时/)).toHaveValue(3000)
+      expect(within(panel).getByRole('switch', { name: '用 RBAC 部门替换 ZeoKeel 组' }))
+        .toHaveAttribute('aria-checked', 'true')
+    })
+
+    it('保存 payload 含 identity(未改令牌回传 *** 保持现值)', async () => {
+      render(<Auth />)
+      await screen.findByText('认证配置')
+      fireEvent.click(screen.getByRole('button', { name: '保存认证配置' }))
+      await waitFor(() => {
+        const put = mockRequest.mock.calls.find((c) => c[1]?.method === 'PUT')
+        expect(put).toBeTruthy()
+        expect(JSON.parse(String(put![1]!.body)).identity).toEqual({
+          enabled: true,
+          endpoint: 'https://rbac.example.com/internal/v1/identity/resolve',
+          token: '***',
+          methods: 'wecom,dingtalk',
+          timeout_ms: 3000,
+          sync_groups: true,
+        })
+      })
+    })
+
+    it('清空已保存令牌: 关闭状态下保存提交空串(不把 *** 当新值)', async () => {
+      const user = userEvent.setup()
+      mockRequest.mockImplementation(async (path: string) => {
+        if (path === '/api/server/admin/auth') {
+          return { auth: { ...AUTH_SAMPLE.auth, identity: { ...AUTH_SAMPLE.auth.identity, enabled: false } } }
+        }
+        return {}
+      })
+      render(<Auth />)
+      await screen.findByText('认证配置')
+      await user.click(screen.getByRole('tab', { name: '外部权限源' }))
+      const panel = screen.getByTestId('identity-panel')
+      fireEvent.click(within(panel).getByText('清空已保存令牌'))
+      fireEvent.click(screen.getByRole('button', { name: '保存认证配置' }))
+      await waitFor(() => {
+        const put = mockRequest.mock.calls.find((c) => c[1]?.method === 'PUT')
+        expect(put).toBeTruthy()
+        expect(JSON.parse(String(put![1]!.body)).identity.token).toBe('')
+      })
+    })
+
+    it('启用但配置不完整: 保存被拒且不发 PUT', async () => {
+      mockRequest.mockImplementation(async (path: string) => {
+        if (path === '/api/server/admin/auth') {
+          return {
+            auth: {
+              ...AUTH_SAMPLE.auth,
+              identity: { ...AUTH_SAMPLE.auth.identity, endpoint: '', methods: '' },
+            },
+          }
+        }
+        return {}
+      })
+      render(<Auth />)
+      await screen.findByText('认证配置')
+      fireEvent.click(screen.getByRole('button', { name: '保存认证配置' }))
+      expect(await screen.findByText(/外部权限源\(RBAC\)配置不完整/)).toBeInTheDocument()
+      expect(mockRequest.mock.calls.some((c) => c[1]?.method === 'PUT')).toBe(false)
+    })
+
+    it('关闭保护: 已有 RBAC 用户时必须勾选确认, 保存带 confirm_disable', async () => {
+      const user = userEvent.setup()
+      mockRequest.mockImplementation(async (path: string) => {
+        if (path === '/api/server/admin/auth') {
+          return { auth: { ...AUTH_SAMPLE.auth, identity: { ...AUTH_SAMPLE.auth.identity, rbac_user_count: 3 } } }
+        }
+        return {}
+      })
+      render(<Auth />)
+      await screen.findByText('认证配置')
+      await user.click(screen.getByRole('tab', { name: '外部权限源' }))
+      const panel = screen.getByTestId('identity-panel')
+      fireEvent.click(within(panel).getByRole('switch', { name: '启用外部权限源' }))
+      expect(await within(panel).findByText(/仍有 3 个 RBAC 用户/)).toBeInTheDocument()
+
+      // 未确认 → 前端拒绝, 不发 PUT
+      fireEvent.click(screen.getByRole('button', { name: '保存认证配置' }))
+      expect(await screen.findByText(/请勾选「我确认关闭」/)).toBeInTheDocument()
+      expect(mockRequest.mock.calls.some((c) => c[1]?.method === 'PUT')).toBe(false)
+
+      // 勾选确认 → 保存带 confirm_disable:true
+      fireEvent.click(within(panel).getByRole('checkbox', { name: /我确认关闭/ }))
+      fireEvent.click(screen.getByRole('button', { name: '保存认证配置' }))
+      await waitFor(() => {
+        const put = mockRequest.mock.calls.find((c) => c[1]?.method === 'PUT')
+        expect(put).toBeTruthy()
+        const body = JSON.parse(String(put![1]!.body))
+        expect(body.identity.enabled).toBe(false)
+        expect(body.identity.confirm_disable).toBe(true)
+      })
+    })
+
+    it('测试解析: 调用 /auth/test(type=identity)并展示 uid/状态/部门', async () => {
+      const user = userEvent.setup()
+      mockRequest.mockImplementation(async (path: string) => {
+        if (path === '/api/server/admin/auth') return AUTH_SAMPLE
+        if (path === '/api/server/admin/auth/test') {
+          return { ok: true, uid: 'zhangsan', name: '张三', status: 1, departments: ['研发部', '平台组'] }
+        }
+        return {}
+      })
+      render(<Auth />)
+      await screen.findByText('认证配置')
+      await user.click(screen.getByRole('tab', { name: '外部权限源' }))
+      const panel = screen.getByTestId('identity-panel')
+      fireEvent.change(within(panel).getByLabelText(/渠道用户 ID/), { target: { value: 'zhangsan' } })
+      fireEvent.click(within(panel).getByRole('button', { name: '测试解析' }))
+      await waitFor(() => {
+        const call = mockRequest.mock.calls.find((c) => c[0] === '/api/server/admin/auth/test')
+        expect(call).toBeTruthy()
+        expect(JSON.parse(String(call![1]!.body))).toEqual({
+          type: 'identity',
+          provider: 'wecom',
+          provider_user_id: 'zhangsan',
+          union_id: '',
+          mobile: '',
+        })
+      })
+      expect(await within(panel).findByText(/uid:/)).toBeInTheDocument()
+      expect(within(panel).getByText(/张三/)).toBeInTheDocument()
+      expect(within(panel).getByText(/研发部、平台组/)).toBeInTheDocument()
+    })
+
+    it('测试解析: 未启用但已保存 endpoint/令牌时仍可测试（先测后启用）', async () => {
+      const user = userEvent.setup()
+      mockRequest.mockImplementation(async (path: string) => {
+        if (path === '/api/server/admin/auth') {
+          return { auth: { ...AUTH_SAMPLE.auth, identity: { ...AUTH_SAMPLE.auth.identity, enabled: false } } }
+        }
+        return {}
+      })
+      render(<Auth />)
+      await screen.findByText('认证配置')
+      await user.click(screen.getByRole('tab', { name: '外部权限源' }))
+      const panel = screen.getByTestId('identity-panel')
+      expect(within(panel).getByRole('button', { name: '测试解析' })).not.toBeDisabled()
+      expect(within(panel).queryByText(/请先填写 endpoint\/令牌并保存后再测试/)).toBeNull()
+    })
+
+    it('测试解析: 未保存令牌时禁用并提示先保存', async () => {
+      const user = userEvent.setup()
+      mockRequest.mockImplementation(async (path: string) => {
+        if (path === '/api/server/admin/auth') {
+          return { auth: { ...AUTH_SAMPLE.auth, identity: { ...AUTH_SAMPLE.auth.identity, token: '' } } }
+        }
+        return {}
+      })
+      render(<Auth />)
+      await screen.findByText('认证配置')
+      await user.click(screen.getByRole('tab', { name: '外部权限源' }))
+      const panel = screen.getByTestId('identity-panel')
+      expect(within(panel).getByRole('button', { name: '测试解析' })).toBeDisabled()
+      expect(within(panel).getByText(/请先填写 endpoint\/令牌并保存后再测试/)).toBeInTheDocument()
     })
   })
 })

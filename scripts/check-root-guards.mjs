@@ -195,7 +195,9 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // 2026-10-26（渠道品牌字节判据）：`check-channel-json.mjs` 新增"公共渠道素材必须是
   // brands/official/* 的逐字节副本"⇒ 本守卫的夹具跟着改（1. SVG 扫描用例改用品牌渠道、
   // 2. 官方模板夹具补 logo-dark.svg）⇒ 脚本内容变了，摘要按 `sha256sum` 复算同步。
-  ['check:ci-scripts', { script: 'node scripts/verify-ci-scripts.mjs', argvTail: [], digest: '0e55a3ffcf139ffbea934ba31251c6790935830ecd9c520e20af3e0911a67d54' }],
+  // 2026-11-03：渠道目录数下限 2→3（私有渠道仓新增品牌渠道包）改到本守卫的判据说明与
+  // 夹具注释 ⇒ 摘要按 `node scripts/check-guard-parser-integrity.mjs --print-digests` 复算同步。
+  ['check:ci-scripts', { script: 'node scripts/verify-ci-scripts.mjs', argvTail: [], digest: '045af277494478853e42ecf72efde0add2b77666080a5f0d22fcb8b6ed04070e' }],
   ['check:patch-resolutions', { script: 'node scripts/verify-patch-resolutions.mjs', argvTail: [], digest: '6dcde2281311235a57722608d91e6a1fa59734411ad65cda76ea2bdc43145c83' }],
   ['check:patch-pin', { script: 'node scripts/check-patch-pin.mjs', argvTail: [], digest: '032f939468b5e77f74b2cf8996a9115f45f9441787fbd4744223fc8b7f21a524' }],
   ['check:patches', { script: 'node scripts/verify-patches.mjs', argvTail: [], digest: 'f83e7255215c990a455ae8f0ba1fed01030f39b157b0c3f0cbb3e44dc00c9d67' }],

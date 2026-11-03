@@ -1,0 +1,46 @@
+{
+  "id": "2026-11-03-channel-ratchet",
+  "status": "verified",
+  "intent": {
+    "zh": "私有渠道仓新增一个品牌渠道包后，公开仓的渠道目录数棘轮仍停在 2：正式 tag 的「发一个版本 = 所有渠道都发布」失去下限保护，删掉/漏克隆一个渠道不会被任何判据发现（该渠道唯一分发面是更新服务器，客户侧零交付而流水线全绿）。需要把下限与私有仓 manifest 在同一次评审里对齐。",
+    "en": "The private channels repo gained one brand-channel package, but the public repo's channel-count ratchet still says 2: the stable-tag invariant 'one release = every channel shipped' loses its lower-bound guard, so a dropped or half-cloned channel directory would go unnoticed (its only distribution face is the update server, so the customer gets zero artifacts while the pipeline stays green). The floor and the private manifest must move in the same review."
+  },
+  "modules": [
+    "scripts/ci-channels.sh",
+    "scripts/verify-ci-scripts.mjs",
+    "changes/2026-11-03-channel-ratchet.json"
+  ],
+  "acceptance": [
+    {
+      "criterion": "棘轮下限与私有渠道仓目录数一致（3）：`ci-channels.sh` 声明 MIN_EXPECTED_CHANNELS=3，`verify-ci-scripts.mjs` 的夹具按 channelFloor() 生成（目录数=下限时正式 tag 通过、删一个渠道走生产 clone+pin 路径必须 fail-loud），整组判据 exit 0",
+      "evidence": "guard",
+      "command": "node scripts/verify-ci-scripts.mjs"
+    },
+    {
+      "criterion": "本记录自身通过 changes/ 契约判据（第 20 条根守卫的形状检查：status/acceptance/verification 齐全且 command 对得上）",
+      "evidence": "guard",
+      "command": "node scripts/check-change-intent.mjs"
+    },
+    {
+      "criterion": "改动不含任何渠道/客户身份（铁律 0）：公开仓域名/主机守卫零命中",
+      "evidence": "guard",
+      "command": "node scripts/check-no-real-domains.mjs"
+    }
+  ],
+  "risk": "下限高于私有仓实际目录数时，正式 tag 的渠道发现步骤会 fail-loud（刻意如此：宁可发不出去也不要静默少发一个渠道）；PR/预发 tag 只告警不阻断。",
+  "rollback": "把 MIN_EXPECTED_CHANNELS 调回 2 并在同一次评审里同步私有仓 channels.manifest.json（渠道下线本就必须是同一次改动）。",
+  "verification": [
+    {
+      "command": "node scripts/verify-ci-scripts.mjs",
+      "result": "exit 0；CI 脚本整组判据全绿，其中棘轮组：目录数=下限的正式 tag 通过且 --list 逐行等于选中集、删一个渠道走生产 clone+pin 形态 fail-loud、本地检出模式跳过下限判定但仍做逐渠道字段校验"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs",
+      "result": "exit 0；changes/ 下全部记录 + 模板合规（10 条记录，0 处不合规）"
+    },
+    {
+      "command": "node scripts/check-no-real-domains.mjs",
+      "result": "exit 0；零命中（扫描 3389 个文件，提交信息区间 0 条提交、0 命中）"
+    }
+  ]
+}

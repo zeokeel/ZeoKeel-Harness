@@ -1,0 +1,46 @@
+{
+  "id": "2026-11-03-rbac-identity-resolve",
+  "status": "accepted",
+  "intent": {
+    "zh": "定制客户的用户与权限在自研 RBAC 中；需要让员工继续用 ZeoKeel 客户端内企微/钉钉扫码登录，并由服务端向 RBAC 只读解析出 uid/状态/部门，以 RBAC uid 建档（默认关闭，不影响其他客户）。",
+    "en": "For a customer whose identities/permissions live in a self-hosted RBAC, let employees keep using in-client WeCom/DingTalk QR login while the ZeoKeel server resolves the RBAC uid/status/departments and provisions the local user by that uid (opt-in, no change for other customers)."
+  },
+  "modules": [
+    "server/internal/serverauth/",
+    "server/webadmin/src/pages/Auth.tsx",
+    "server/webadmin/src/pages/Auth.test.tsx",
+    "packages/host/enterprise/src/auth-gate.ts",
+    "packages/host/enterprise/tests/auth-gate-qr-login.spec.ts",
+    "docs/planning/2026-11-03-rbac-identity-resolve.md"
+  ],
+  "acceptance": [
+    {
+      "criterion": "服务端编译通过；外部身份解析在 enabled=false 时不发请求；enabled=true 时按 RBAC 契约映射 uid/status/departments，错误码映射正确，QR 端到端以 RBAC uid 建档并同步组",
+      "evidence": "test",
+      "command": "cd server && go build ./... && go test ./internal/serverauth/ -run 'Identity|QR|AuthConfig' -count=1"
+    },
+    {
+      "criterion": "管理端 GET/PUT /auth 的 identity 对象读写/掩码/关闭保护（409 IDENTITY_USERS_EXIST）与 /auth/test type=identity 均按契约工作",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth/ -run 'AuthConfig|Identity' -count=1"
+    },
+    {
+      "criterion": "WebAdmin 认证配置新增「外部权限源」页：字段渲染、保存 payload、token 掩码、启用校验、关闭保护、测试解析；全量 webadmin 测试与生产构建通过",
+      "evidence": "test",
+      "command": "cd server/webadmin && npx vitest run && npm run build"
+    },
+    {
+      "criterion": "客户端扫码失败按 RBAC 错误码本地化显示（zh/en），未知 code 回落服务端 message，现有扫码用例不回归",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts"
+    },
+    {
+      "criterion": "仓库不含未登记域名（RBAC/RBAC 示例只用 rbac.example.com 占位）",
+      "evidence": "guard",
+      "command": "node scripts/check-no-real-domains.mjs"
+    }
+  ],
+  "risk": "外部身份解析失败默认拒绝登录；若 RBAC 不可达会造成该部署的员工无法登录（本地超管仍可进 ZeoKeel 管理后台）。启用后 users.external_id 变为 rbac:<uid>，与启用前已建号的扫码用户不兼容，关闭开关也可能导致其无法登录；用关闭保护 + rebind 文档降低风险。",
+  "rollback": "管理端关闭 identity.external.enabled（已有 rbac 用户时需确认/先 rebind）；代码回滚本分支提交。无 DB 迁移，settings 行保留不影响其他登录方式。",
+  "verification": []
+}

@@ -553,7 +553,11 @@ func (a *API) qrStartHandler(name string) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"flow_id":    flow.id,
+			"flow_id": flow.id,
+			// qr_url 是服务商官方登录页（含 state）。客户端用 iframe 嵌入它，
+			// 让页面在手机确认后自己完成 redirect；仅靠 qr_png 图片时没有页面
+			// 轮询/跳转，手机会停在“登录成功”而不回调（2026-11-03 真机缺陷）。
+			"qr_url":     authURL,
 			"qr_png":     png,
 			"expires_in": int(qrFlowTTL.Seconds()),
 		})

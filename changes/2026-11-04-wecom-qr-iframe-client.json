@@ -1,0 +1,32 @@
+{
+  "id": "2026-11-04-wecom-qr-iframe-client",
+  "status": "implemented",
+  "intent": {
+    "zh": "企业微信 qrConnect 的二维码依赖“打开着的官方页面”在手机确认后完成跳转；客户端此前只显示服务端抠出的二维码图片，手机端确认后没有任何页面回调，导致客户端永远 pending。本变更让 /qr/start 返回官方页面 qr_url，客户端有合法 qr_url 时用 iframe 嵌入，由官方页面自己完成回调；图片仅作旧服务端兜底。",
+    "en": "WeCom qrConnect requires a live official page to complete the callback after phone confirmation; the client only rendered the extracted QR image, so no page redirected. Return the official qr_url from /qr/start and embed it in an iframe when valid, keeping the image as a fallback."
+  },
+  "modules": [
+    "server/internal/serverauth/qr.go",
+    "packages/host/enterprise/src/auth-gate.ts",
+    "packages/host/enterprise/tests/auth-gate-qr-login.spec.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "qr/start 返回 qr_url（服务商官方登录页，含 state），qr_png 仍保留给旧客户端；WeCom/QR 用例全绿",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth/ -run 'TestQR|TestWeCom' -count=1"
+    },
+    {
+      "criterion": "客户端登录页在 qr_url 合法时渲染 iframe（官方页面自己完成回调），qr_url 非法/缺失时回落 PNG；页面与宿主路由用例全绿且类型检查通过",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts && corepack yarn workspace @zeokeel/dsh-enterprise typecheck"
+    },
+    {
+      "criterion": "真机：新的 Windows 客户端扫码后点「登录」，应收到 /auth/wecom/callback、RBAC resolve 成功并按 rbac:<uid> 建号",
+      "evidence": "manual",
+      "command": "安装新客户端 → 企业微信扫码 → 点蓝色「登录」→ 客户端进入应用；服务端日志有 callback，users.external_source=rbac"
+    }
+  ],
+  "risk": "iframe 只能来自受信官方登录域（宿主与页面双向白名单）；qr_url 非法时回落旧 PNG，不改变既有行为。服务端多返回一个可选字段，旧客户端忽略。",
+  "rollback": "回滚本提交并重新部署服务端/客户端；旧客户端仍按 qr_png 使用（但无法完成企微登录，需保留旧版回滚风险说明）。"
+}

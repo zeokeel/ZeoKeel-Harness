@@ -64,6 +64,7 @@ const QR_FUNCTIONS = [
   'function methodLabel(name)',
   'function isQrMethod(name)',
   'function isPngDataURL(value)',
+  'function isAllowedQrFrameUrl(value)',
   'function qrMessage(data)',
   'function stopQrTimers()',
   'function hideQrCard()',
@@ -447,6 +448,36 @@ describe('登录页：扫码登录（企业微信/钉钉）', () => {
       expect(page.get('qr-refresh').style.display).toBe('')
       vi.unstubAllGlobals()
     }
+  })
+
+  it('start 返回合法 qr_url 时嵌 iframe（官方页面自己完成回调），非法则回落 PNG', async () => {
+    vi.useFakeTimers()
+    const qrUrl = 'https://open.work.weixin.qq.com/wwopen/sso/qrConnect?appid=ww-corp&agentid=100001&state=s'
+    const page = bootLoginPage({
+      methods: [WECOM],
+      method: 'wecom',
+      respond: (url) => url === '/api/zeokeel/auth/qr/start'
+        ? { status: 200, body: { flow_id: FLOW_ID, qr_png: PNG, qr_url: qrUrl, expires_in: 300 } }
+        : { status: 200, body: { status: 'pending' } },
+    })
+    page.updateFields()
+    await vi.advanceTimersByTimeAsync(0)
+    const frame = page.get('qr-frame').innerHTML
+    expect(frame).toContain('<iframe')
+    expect(frame).toContain('src="https://open.work.weixin.qq.com/')
+    expect(frame).toContain('qrConnect?')
+    expect(frame).not.toContain('<img')
+
+    const bad = bootLoginPage({
+      methods: [WECOM],
+      method: 'wecom',
+      respond: (url) => url === '/api/zeokeel/auth/qr/start'
+        ? { status: 200, body: { flow_id: FLOW_ID, qr_png: PNG, qr_url: 'https://evil.example/qr', expires_in: 300 } }
+        : { status: 200, body: { status: 'pending' } },
+    })
+    bad.updateFields()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(bad.get('qr-frame').innerHTML).toBe(`<img class="qr-img" alt="QR" src="${PNG}">`)
   })
 
   it('倒计时到 0 即本地判定过期（不等下一次 poll）', async () => {

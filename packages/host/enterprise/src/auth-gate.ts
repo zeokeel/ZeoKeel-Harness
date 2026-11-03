@@ -199,6 +199,31 @@ const QR_PNG_DATA_URL = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/
 const QR_PNG_MAX_LENGTH = 200_000
 
 /**
+ * 扫码登录页 iframe 的唯一允许来源（2026-11-04 真机修复）。
+ *
+ * `qrConnect` 的二维码必须由**打开着的官方页面**在手机确认后完成跳转；只把
+ * 图片抠给客户端时，手机确认后没有任何页面会回调（2026-11-04 真机踩到）。
+ * 这里把服务端返回的 `qr_url` 限定在官方登录域，避免被控网关借 iframe 注入
+ * 任意页面；页面脚本里还有一份同样的白名单复检。
+ */
+const QR_FRAME_URL_MAX_LENGTH = 4096
+const QR_FRAME_ALLOWED_HOSTS = new Set([
+  'open.work.weixin.qq.com',
+  'login.work.weixin.qq.com',
+  'login.dingtalk.com',
+])
+
+function isAllowedQrFrameUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > QR_FRAME_URL_MAX_LENGTH) return false
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:' && QR_FRAME_ALLOWED_HOSTS.has(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
  * 服务端 `flow_id` 的接受面（32 字节随机 hex；见设计文档 §4.5）。
  *
  * 它会被拼进转发请求的查询串（已 encodeURIComponent）；这里再按形状拦一次，
@@ -313,6 +338,9 @@ export function renderLoginPage(locale: HostLocale): string {
   .qr-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
   .qr-frame { width: 200px; height: 200px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: 10px; }
   .qr-frame img { width: 200px; height: 200px; display: block; }
+  /* 官方 qrConnect 页面需要比二维码图片更大的区域（含标题/提示/按钮）。 */
+  .qr-frame-embed { width: 320px; height: 380px; }
+  .qr-frame .qr-web { width: 320px; height: 380px; border: 0; border-radius: 10px; display: block; background: #ffffff; }
   .qr-card button { margin-top: 4px; }
 </style>
 </head>
@@ -630,6 +658,18 @@ export function renderLoginPage(locale: HostLocale): string {
     return true
   }
 
+  // 官方扫码页 iframe 的页面侧复检（宿主已校验；这里防宿主漏判/传输被换）。
+  // 白名单与宿主 QR_FRAME_ALLOWED_HOSTS 保持同一组域名。
+  function isAllowedQrFrameUrl(value) {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 4096) return false
+    var u
+    try { u = new URL(value) } catch (e) { return false }
+    if (u.protocol !== 'https:') return false
+    return u.hostname === 'open.work.weixin.qq.com' ||
+      u.hostname === 'login.work.weixin.qq.com' ||
+      u.hostname === 'login.dingtalk.com'
+  }
+
   // 只认宿主**透传**的终态 message / 白名单 code（poll failed 的形状
   // {status:"failed", message, code}）。宿主自己的错误信封是 {error:"gateway error: …"}，
   // 那是诊断文本而不是用户文案 —— 直接显示会把英文/内部细节漏到登录页，因此落回本地化文案。
@@ -778,9 +818,16 @@ export function renderLoginPage(locale: HostLocale): string {
         return
       }
       qrFlowId = data.flow_id
-      // 唯一允许进入 innerHTML 的服务端内容是这张已校验的 PNG data URL，且仍走
-      // esc()（既有属性转义纪律；服务端返回的 SVG/HTML 没有任何进入页面的路径）。
-      qrFrame.innerHTML = '<img class="qr-img" alt="QR" src="' + esc(data.qr_png) + '">'
+      // 优先嵌官方 qrConnect 页面：手机确认后由页面自己跳回调。没有合法
+      // qr_url 时才退回服务端图片（旧服务端/非官方域名）。
+      var qrUrl = isAllowedQrFrameUrl(data.qr_url) ? data.qr_url : ''
+      if (qrUrl) {
+        qrFrame.className = 'qr-frame qr-frame-embed'
+        qrFrame.innerHTML = '<iframe class="qr-web" title="QR" src="' + esc(qrUrl) + '"></iframe>'
+      } else {
+        qrFrame.className = 'qr-frame'
+        qrFrame.innerHTML = '<img class="qr-img" alt="QR" src="' + esc(data.qr_png) + '">'
+      }
       var seconds = Math.floor(Number(data.expires_in))
       if (!isFinite(seconds) || seconds <= 0) seconds = 300
       startQrCountdown(generation, seconds)
@@ -2103,6 +2150,7 @@ export function apply(ctx: Context, config: Config): void {
             })
             const flowId: unknown = data?.flow_id
             const qrPng: unknown = data?.qr_png
+            const qrUrl: unknown = data?.qr_url
             const expiresIn: unknown = data?.expires_in
             // 严格校验：形状不对就 502，并**原样丢弃**服务端返回的任何其他内容
             // （SVG/HTML/超长 blob 都没有进入登录页的路径）。
@@ -2117,7 +2165,12 @@ export function apply(ctx: Context, config: Config): void {
             const expiry = typeof expiresIn === 'number' && Number.isFinite(expiresIn) && expiresIn > 0
               ? Math.min(Math.floor(expiresIn), 3600)
               : QR_DEFAULT_EXPIRES_IN
-            json(res, 200, { flow_id: flowId, qr_png: qrPng, expires_in: expiry })
+            // qr_url 可选：合法才透传；非法时页面退回 PNG，不影响登录起流程。
+            if (isAllowedQrFrameUrl(qrUrl)) {
+              json(res, 200, { flow_id: flowId, qr_png: qrPng, qr_url: qrUrl, expires_in: expiry })
+            } else {
+              json(res, 200, { flow_id: flowId, qr_png: qrPng, expires_in: expiry })
+            }
           } catch (error) {
             qrGatewayError(res, error)
           }

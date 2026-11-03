@@ -330,6 +330,8 @@ const APPROVED_CSP_CAPABILITIES: Record<string, readonly string[]> = {
   'style-src': ["'self'", "'unsafe-inline'"],
   // 白标渠道的 logo/favicon 由客户自己的服务器下发 ⇒ 必须放行 http/https 图源。
   'img-src': ["'self'", 'data:', 'blob:', 'http:', 'https:'],
+  // 扫码 iframe 成功后要跳到当前登录服务端的 callback（运行时域名），放行 https frame。
+  'frame-src': ["'self'", 'https:'],
   'font-src': ["'self'", 'data:'],
   // 出站必须**显式**声明：少了它出站就受 default-src 支配，改一处会静默放开另一处。
   'connect-src': ["'self'", 'ws:', 'wss:', 'http:', 'https:'],
@@ -1979,6 +1981,16 @@ describe('主窗口导航闸门：三事件共用同一判据（B1-04）', () =>
       refuse(event)
       expect(event.preventDefault, `${url} 必须被拒（origin 判据含 scheme/主机/端口）`).toHaveBeenCalledTimes(1)
     }
+
+    // 扫码登录 iframe 成功后要跳到当前登录服务端的 https callback；只放行子 frame，
+    // 同一 URL 作为顶层导航仍必须被拒（否则窗口会被换成外站）。
+    const callback = 'https://login.example.com/api/client/v2/auth/wecom/callback?code=x'
+    const subframe = { url: callback, isMainFrame: false, preventDefault: vi.fn() }
+    refuse(subframe)
+    expect(subframe.preventDefault, '子 frame 的 https 回调必须放行').not.toHaveBeenCalled()
+    const topframe = { url: callback, isMainFrame: true, preventDefault: vi.fn() }
+    refuse(topframe)
+    expect(topframe.preventDefault, '同一 URL 的顶层导航必须被拒').toHaveBeenCalledTimes(1)
   })
 
   it('行为：mount 后三个事件都注册了**同一个**闭包，且每个都真的拒外源放同源', async () => {

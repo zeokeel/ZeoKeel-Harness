@@ -114,8 +114,11 @@ func (p *WeComProvider) httpClient() *http.Client {
 
 // AuthURL 返回企业微信官方扫码登录页（qrConnect）。
 //
-// 注意：该 URL 只用于“服务端去抓官方二维码图片”或人工在浏览器打开；
-// **不要**把它直接编码成客户端二维码（必须先经 QRImage 拿官方图片）。
+// 客户端会用 iframe 嵌入该页面。必须带 self_redirect=true：官方页在 iframe
+// 里默认走跨域 top.location 跳转（会被客户端的导航闸门拦掉），self_redirect
+// 让它在 iframe 内自己跳 redirect_uri，回调才能到达服务端。
+//
+// 注意：该 URL 不直接编码进二维码；二维码图片由 QRImage 从该页面提取。
 func (p *WeComProvider) AuthURL(state string) (string, error) {
 	if state == "" {
 		return "", errors.New("wecom: empty state")
@@ -128,6 +131,7 @@ func (p *WeComProvider) AuthURL(state string) (string, error) {
 	q.Set("agentid", p.agentID)
 	q.Set("redirect_uri", p.redirectURL)
 	q.Set("state", state)
+	q.Set("self_redirect", "true")
 	return p.qrBase() + "/wwopen/sso/qrConnect?" + q.Encode(), nil
 }
 

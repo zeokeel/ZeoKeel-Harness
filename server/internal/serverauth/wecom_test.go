@@ -41,10 +41,11 @@ func TestWeComProviderAuthURL(t *testing.T) {
 	}
 	q := u.Query()
 	for key, want := range map[string]string{
-		"appid":        "ww-corp-1",
-		"agentid":      "100001",
-		"redirect_uri": "https://harness.example.com/api/client/v2/auth/wecom/callback",
-		"state":        "state-abc",
+		"appid":         "ww-corp-1",
+		"agentid":       "100001",
+		"redirect_uri":  "https://harness.example.com/api/client/v2/auth/wecom/callback",
+		"state":         "state-abc",
+		"self_redirect": "true",
 	} {
 		if got := q.Get(key); got != want {
 			t.Fatalf("query %s = %q, want %q (URL=%s)", key, got, want, raw)

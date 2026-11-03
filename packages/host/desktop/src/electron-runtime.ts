@@ -127,6 +127,10 @@ const MAX_ZOOM_LEVEL = 4
  */
 export const APP_CONTENT_SECURITY_POLICY = [
   "default-src 'self' data: blob: ws:",
+  // 扫码登录页用 iframe 嵌服务商官方页面；页面成功后要跳到“当前登录服务端”
+  // 的 callback（域名运行时才知道），所以 frame-src 允许 https（登录页只创建
+  // 官方扫码 iframe，页面脚本本身受 script-src 约束）。
+  "frame-src 'self' https:",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
@@ -145,6 +149,8 @@ export interface NavigationAttempt {
   readonly url: string
   /** 阻止这次导航。 */
   preventDefault(): void
+  /** Electron 的 will-frame-navigate / will-redirect 会带；主框架为 true。 */
+  readonly isMainFrame?: boolean
 }
 
 /**
@@ -161,6 +167,16 @@ export interface NavigationAttempt {
  */
 export function refuseForeignNavigation(origin: string): (event: NavigationAttempt) => void {
   return (event) => {
+    // 扫码登录的 iframe 在手机确认后要跳到“当前登录服务端”的 callback（域名运行时
+    // 才知道）；只对**子 frame** 放行 https。顶层导航/顶层重定向仍严格拒绝，
+    // 因为主框架事件的 isMainFrame 不是 false；iframe 自身也由登录页 CSP 限定。
+    if (event.isMainFrame === false) {
+      try {
+        if (new URL(event.url).protocol === 'https:') return
+      } catch {
+        // 畸形 URL 继续走严格拒绝。
+      }
+    }
     let targetOrigin: string | undefined
     try {
       targetOrigin = new URL(event.url).origin
@@ -1257,6 +1273,12 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       callback: (response: { responseHeaders?: Record<string, string[]> }) => void,
     ): void => {
       const url = details.url
+      // 第三方 iframe（扫码登录的官方页面）必须保留它自己的 CSP；套用 App CSP
+      // 会把页面脚本/样式全部拦掉，表现为 iframe 区域一片空白。
+      if (details.resourceType === 'subFrame') {
+        callback({})
+        return
+      }
       try {
         const parsed = new URL(url)
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'file:') {

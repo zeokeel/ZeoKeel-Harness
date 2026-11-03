@@ -28,8 +28,8 @@ import { apply as applyAuthGate, renderLoginPage, type Config } from '../src/aut
 // ---------------------------------------------------------------------------
 
 /** 求值后的登录页内联脚本（真实模板，含运行时占位符替换）。 */
-function loginScript(): string {
-  const html = renderLoginPage('zh')
+function loginScript(locale: 'zh' | 'en' = 'zh'): string {
+  const html = renderLoginPage(locale)
     .replaceAll('__DEFAULT_SERVER__', '')
     .replaceAll('__DEFAULT_SERVER_MARK__', '')
     .replaceAll('__BACK_BUTTON__', '<button type="button" class="back" id="back-btn">← 修改服务端地址</button>')
@@ -69,7 +69,7 @@ const QR_FUNCTIONS = [
   'function hideQrCard()',
   'function qrStatusText(method)',
   'function qrExpired()',
-  'function qrFailed(message)',
+  'function qrFailed(message, code)',
   'function startQrCountdown(generation, seconds)',
   'function startQrPoll(generation)',
   'async function startQr()',
@@ -137,9 +137,11 @@ function bootLoginPage(options: {
   methods: unknown[]
   method?: string
   server?: string
+  /** 页面语言（默认 zh；en 用于验证失败文案按 code 本地化）。 */
+  locale?: 'zh' | 'en'
   respond: (url: string) => { status: number, body: unknown }
 }): PageHarness {
-  const script = loginScript()
+  const script = loginScript(options.locale ?? 'zh')
   // 自有断言：模板求值后的脚本必须仍是合法 JS（捕获 `\/` 之类转义破坏）。
   expect(() => { new Function(script) }).not.toThrow() // eslint-disable-line no-new-func
 
@@ -365,6 +367,64 @@ describe('登录页：扫码登录（企业微信/钉钉）', () => {
     expect(page.get('err-step2').textContent).toContain('账号已被禁用')
     expect(page.get('qr-refresh').style.display).toBe('')
     expect(page.location.reload).not.toHaveBeenCalled()
+  })
+
+  it('failed 带 RBAC 稳定 code 时按 code 显示本地化文案（zh/en 各一份，服务端中文不串台）', async () => {
+    const cases = [
+      ['IDENTITY_NOT_BOUND', '你的企业账号尚未在 RBAC 中绑定员工身份，请联系管理员',
+        'Your enterprise account is not linked to an employee identity in RBAC. Contact your administrator.'],
+      ['IDENTITY_DISABLED', '你的账号已在 RBAC 中停用，请联系管理员',
+        'Your account has been disabled in RBAC. Contact your administrator.'],
+      ['IDENTITY_AMBIGUOUS', '你的身份在 RBAC 中不唯一，请联系管理员处理',
+        'Your identity is ambiguous in RBAC. Contact your administrator.'],
+      ['IDENTITY_PROVIDER_UNAVAILABLE', '身份服务暂不可用，请稍后重试',
+        'The identity service is temporarily unavailable. Please try again later.'],
+      ['IDENTITY_CONFLICT', '该用户名已被本地账号占用，请联系管理员',
+        'This username is already taken by a local account. Contact your administrator.'],
+    ] as const
+    for (const [code, zh, en] of cases) {
+      for (const [locale, want] of [['zh', zh], ['en', en]] as const) {
+        vi.useFakeTimers()
+        const page = bootLoginPage({
+          methods: [WECOM],
+          method: 'wecom',
+          locale,
+          respond: (url) => url === '/api/zeokeel/auth/qr/start'
+            ? { status: 200, body: { flow_id: FLOW_ID, qr_png: PNG, expires_in: 300 } }
+            // 服务端 message 是中文；英文页面必须显示本地化文案而不是它。
+            : { status: 200, body: { status: 'failed', message: '服务端中文兜底', code } },
+        })
+        page.updateFields()
+        await vi.advanceTimersByTimeAsync(0)
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(page.get('err-step2').textContent, `${locale}/${code}`).toBe(want)
+        expect(page.get('qr-refresh').style.display).toBe('')
+        vi.unstubAllGlobals()
+      }
+    }
+  })
+
+  it('未知 / 缺失 code 回落 message；message 也缺失时回落默认文案', async () => {
+    for (const [code, message, want] of [
+      ['SOMETHING_ELSE', '服务端说明', '服务端说明'],
+      // 原型链上的键不能被当成合法 code（hasOwnProperty 守卫）。
+      ['toString', '服务端说明', '服务端说明'],
+      ['', '', '扫码登录失败，请重试'],
+    ] as const) {
+      vi.useFakeTimers()
+      const page = bootLoginPage({
+        methods: [WECOM],
+        method: 'wecom',
+        respond: (url) => url === '/api/zeokeel/auth/qr/start'
+          ? { status: 200, body: { flow_id: FLOW_ID, qr_png: PNG, expires_in: 300 } }
+          : { status: 200, body: { status: 'failed', message, code } },
+      })
+      page.updateFields()
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(page.get('err-step2').textContent, `code=${code}`).toBe(want)
+      vi.unstubAllGlobals()
+    }
   })
 
   it('轮询 expired 显示过期文案；服务端 404（已消费）按过期处理', async () => {
@@ -809,12 +869,28 @@ describe('宿主路由：/api/zeokeel/auth/qr/poll', () => {
     expect(h.setSession).not.toHaveBeenCalled()
   })
 
-  it('failed 只透出可读 message，不建会话', async () => {
+  it('failed 只透出可读 message 与白名单 code，不建会话', async () => {
     const h = hostHarness()
     stubGateway(() => ({ status: 200, body: { status: 'failed', error: { code: 'AUTH_FAILED', message: '账号已禁用' } } }))
     const { code, body } = await h.call('/api/zeokeel/auth/qr/poll', pollReq())
     expect(code).toBe(200)
-    expect(body).toEqual({ status: 'failed', message: '账号已禁用' })
+    // AUTH_FAILED 不在 RBAC 身份解析白名单内 ⇒ code 丢弃，只留 message。
+    expect(body).toEqual({ status: 'failed', message: '账号已禁用', code: '' })
+    expect(h.setSession).not.toHaveBeenCalled()
+  })
+
+  it('failed 透传白名单内的稳定 code；白名单外 / 非字符串一律丢弃', async () => {
+    const h = hostHarness()
+    stubGateway(() => ({ status: 200, body: { status: 'failed', error: { code: 'IDENTITY_NOT_BOUND', message: '未绑定员工身份' } } }))
+    const ok = await h.call('/api/zeokeel/auth/qr/poll', pollReq())
+    expect(ok.code).toBe(200)
+    expect(ok.body).toEqual({ status: 'failed', message: '未绑定员工身份', code: 'IDENTITY_NOT_BOUND' })
+
+    for (const rawCode of ['IDENTITY_NOPE', 'AUTH_FAILED', 123, null, { code: 'IDENTITY_DISABLED' }]) {
+      stubGateway(() => ({ status: 200, body: { status: 'failed', error: { code: rawCode, message: '兜底' } } }))
+      const { body } = await h.call('/api/zeokeel/auth/qr/poll', pollReq())
+      expect(body).toEqual({ status: 'failed', message: '兜底', code: '' })
+    }
     expect(h.setSession).not.toHaveBeenCalled()
   })
 

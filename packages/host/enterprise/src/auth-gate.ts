@@ -77,6 +77,15 @@ interface LoginCopy {
   qrRefresh: string
   /** 含 `{seconds}` 占位符。 */
   qrRemaining: string
+  /**
+   * RBAC 身份解析失败的**稳定 code** 对应文案（服务端 `qr/poll` 的 failed.code）。
+   * 服务端 message 固定中文，英文界面必须在页面侧按 code 本地化。
+   */
+  qrIdentityNotBound: string
+  qrIdentityDisabled: string
+  qrIdentityAmbiguous: string
+  qrIdentityProviderUnavailable: string
+  qrIdentityConflict: string
 }
 
 const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
@@ -118,6 +127,11 @@ const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
     qrExpired: '二维码已过期，请点击刷新',
     qrRefresh: '刷新二维码',
     qrRemaining: '{seconds} 秒后过期',
+    qrIdentityNotBound: '你的企业账号尚未在 RBAC 中绑定员工身份，请联系管理员',
+    qrIdentityDisabled: '你的账号已在 RBAC 中停用，请联系管理员',
+    qrIdentityAmbiguous: '你的身份在 RBAC 中不唯一，请联系管理员处理',
+    qrIdentityProviderUnavailable: '身份服务暂不可用，请稍后重试',
+    qrIdentityConflict: '该用户名已被本地账号占用，请联系管理员',
   },
   en: {
     titleSuffix: 'Sign in',
@@ -157,6 +171,11 @@ const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
     qrExpired: 'The code has expired. Please refresh it.',
     qrRefresh: 'Refresh code',
     qrRemaining: 'Expires in {seconds}s',
+    qrIdentityNotBound: 'Your enterprise account is not linked to an employee identity in RBAC. Contact your administrator.',
+    qrIdentityDisabled: 'Your account has been disabled in RBAC. Contact your administrator.',
+    qrIdentityAmbiguous: 'Your identity is ambiguous in RBAC. Contact your administrator.',
+    qrIdentityProviderUnavailable: 'The identity service is temporarily unavailable. Please try again later.',
+    qrIdentityConflict: 'This username is already taken by a local account. Contact your administrator.',
   },
 }
 
@@ -186,6 +205,20 @@ const QR_PNG_MAX_LENGTH = 200_000
  * 避免把畸形输入当成 flow_id 透传给上游。
  */
 const QR_FLOW_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
+
+/**
+ * 扫码失败时可以透传给页面的**稳定错误码**白名单（服务端 RBAC 身份解析失败）。
+ *
+ * 只放行这些 code：页面按它选择本地化文案；未知/非字符串一律丢弃，避免把服务端
+ * 内部细节变成页面分支，也避免被控网关借 code 让页面取到任意属性。
+ */
+const QR_FAILURE_CODES: readonly string[] = [
+  'IDENTITY_NOT_BOUND',
+  'IDENTITY_DISABLED',
+  'IDENTITY_AMBIGUOUS',
+  'IDENTITY_PROVIDER_UNAVAILABLE',
+  'IDENTITY_CONFLICT',
+]
 
 /** 未返回 `expires_in` / 非法值时的倒计时（服务端流程 TTL，设计文档 §4.5）。 */
 const QR_DEFAULT_EXPIRES_IN = 300
@@ -597,9 +630,9 @@ export function renderLoginPage(locale: HostLocale): string {
     return true
   }
 
-  // 只认宿主**透传**的终态 message（poll failed 的形状 {status:"failed",message}）。
-  // 宿主自己的错误信封是 {error:"gateway error: …"}，那是诊断文本而不是用户文案 ——
-  // 直接显示会把英文/内部细节漏到登录页，因此落回本地化文案。
+  // 只认宿主**透传**的终态 message / 白名单 code（poll failed 的形状
+  // {status:"failed", message, code}）。宿主自己的错误信封是 {error:"gateway error: …"}，
+  // 那是诊断文本而不是用户文案 —— 直接显示会把英文/内部细节漏到登录页，因此落回本地化文案。
   function qrMessage(data) {
     if (!data || typeof data.message !== 'string') return ''
     return data.message
@@ -641,14 +674,25 @@ export function renderLoginPage(locale: HostLocale): string {
     err2.textContent = ''
   }
 
-  // 失败（服务端终态 / 本地校验失败）：停轮询、露出刷新入口；message 为空时用本地化兜底。
-  function qrFailed(message) {
+  // 失败（服务端终态 / 本地校验失败）：停轮询、露出刷新入口。
+  // RBAC 解析失败带稳定 code 时优先用**本地化文案**（服务端 message 固定中文，
+  // 英文界面不能直接显示它）；未知 / 缺失 code 回落 message，再回落默认文案。
+  function qrFailed(message, code) {
+    // 唯一映射点：新增 code 只改这张表（不要散落 if）。
+    var copy = {
+      IDENTITY_NOT_BOUND: T.qrIdentityNotBound,
+      IDENTITY_DISABLED: T.qrIdentityDisabled,
+      IDENTITY_AMBIGUOUS: T.qrIdentityAmbiguous,
+      IDENTITY_PROVIDER_UNAVAILABLE: T.qrIdentityProviderUnavailable,
+      IDENTITY_CONFLICT: T.qrIdentityConflict,
+    }
+    var localized = (typeof code === 'string' && Object.prototype.hasOwnProperty.call(copy, code)) ? copy[code] : ''
     qrGeneration++
     stopQrTimers()
     qrFlowId = null
     qrFrame.innerHTML = ''
     qrHint.textContent = ''
-    err2.textContent = message || T.qrSignInFailed
+    err2.textContent = localized || message || T.qrSignInFailed
     qrRefreshBtn.style.display = ''
   }
 
@@ -685,7 +729,7 @@ export function renderLoginPage(locale: HostLocale): string {
         if (!r.ok) {
           // 404/410 = 流程已被消费/不存在（服务端已是终态）⇒ 按过期处理让用户刷新。
           if (r.status === 404 || r.status === 410) qrExpired()
-          else qrFailed(qrMessage(d))
+          else qrFailed(qrMessage(d), d && d.code)
           return
         }
         var status = d && d.status
@@ -698,7 +742,7 @@ export function renderLoginPage(locale: HostLocale): string {
           return
         }
         if (status === 'expired') { qrExpired(); return }
-        if (status === 'failed') { qrFailed(qrMessage(d)); return }
+        if (status === 'failed') { qrFailed(qrMessage(d), d && d.code); return }
         // pending：继续下一轮。
       } catch (e) {
         // 网络抖动不终止轮询：2s 后重试，由倒计时兜底过期。
@@ -730,7 +774,7 @@ export function renderLoginPage(locale: HostLocale): string {
       var data = await res.json().catch(function () { return null })
       if (generation !== qrGeneration) return
       if (!res.ok || !data || typeof data.flow_id !== 'string' || data.flow_id === '' || !isPngDataURL(data.qr_png)) {
-        qrFailed(qrMessage(data) || T.qrStartFailed)
+        qrFailed(qrMessage(data) || T.qrStartFailed, data && data.code)
         return
       }
       qrFlowId = data.flow_id
@@ -2115,10 +2159,12 @@ export function apply(ctx: Context, config: Config): void {
             if (status === 'pending') return json(res, 200, { status: 'pending' })
             if (status === 'expired') return json(res, 200, { status: 'expired' })
             if (status === 'failed') {
-              // 只透出可读 message（稳定 code 不参与页面分支，避免把服务端内部
-              // 细节当契约）；页面在 message 缺失时落回本地化文案。
+              // 稳定 code 仅在白名单内透传（页面按 code 本地化，服务端 message
+              // 固定中文、只作兜底）；白名单外一律丢弃，不让网关自造 code 进入页面。
               const message = typeof data?.error?.message === 'string' ? data.error.message : ''
-              return json(res, 200, { status: 'failed', message })
+              const rawCode: unknown = data?.error?.code
+              const code = typeof rawCode === 'string' && QR_FAILURE_CODES.includes(rawCode) ? rawCode : ''
+              return json(res, 200, { status: 'failed', message, code })
             }
             if (status === 'done') {
               // FIX-18 的扫码版本（与 /api/zeokeel/auth/login 同一判定）：已登录时

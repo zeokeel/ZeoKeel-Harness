@@ -2285,7 +2285,7 @@ function runChannels({ source, refName = '', ref, dest, list, env = {}, args = [
   // 棘轮：下限可以上调，**下调必须是一次显式评审**。这里把"不得低于 2"钉进判据
   // （改这条断言 = 一次可见的 diff），否则把它调到 1 就等于把闸门关掉。
   // 2026-10-21 fork 改名（ZeoKeel）时从上游的 4 显式下调到 2（当时只有 official + beta）；
-  // 2026-11-03 私有渠道仓新增一个品牌渠道后上调到 3（与 ci-channels.sh 同一次改动）。
+  // 2026-11-03 私有渠道仓补齐品牌渠道（2→3→4，按私有仓目录数）与 ci-channels.sh 同一次改动。
   check(
     channelFloor() >= 2,
     `MIN_EXPECTED_CHANNELS 是渠道目录数的棘轮下限，不得低于 2（历史下限；当前登记值见 scripts/ci-channels.sh，与私有渠道仓目录数同一次调整）；实际 ${channelFloor()}`,

@@ -2,8 +2,8 @@
   "id": "2026-11-03-channel-ratchet",
   "status": "verified",
   "intent": {
-    "zh": "私有渠道仓新增一个品牌渠道包后，公开仓的渠道目录数棘轮仍停在 2：正式 tag 的「发一个版本 = 所有渠道都发布」失去下限保护，删掉/漏克隆一个渠道不会被任何判据发现（该渠道唯一分发面是更新服务器，客户侧零交付而流水线全绿）。需要把下限与私有仓 manifest 在同一次评审里对齐。",
-    "en": "The private channels repo gained one brand-channel package, but the public repo's channel-count ratchet still says 2: the stable-tag invariant 'one release = every channel shipped' loses its lower-bound guard, so a dropped or half-cloned channel directory would go unnoticed (its only distribution face is the update server, so the customer gets zero artifacts while the pipeline stays green). The floor and the private manifest must move in the same review."
+    "zh": "私有渠道仓补齐品牌渠道后，公开仓的渠道目录数棘轮仍停在旧值：正式 tag 的「发一个版本 = 所有渠道都发布」失去下限保护，删掉/漏克隆一个渠道不会被任何判据发现（该渠道唯一分发面是更新服务器，客户侧零交付而流水线全绿）。需要把下限与私有仓 manifest 在同一次评审里对齐。",
+    "en": "The private channels repo restored the full brand-channel set, but the public repo's channel-count ratchet still says the old value: the stable-tag invariant 'one release = every channel shipped' loses its lower-bound guard, so a dropped or half-cloned channel directory would go unnoticed (its only distribution face is the update server, so the customer gets zero artifacts while the pipeline stays green). The floor and the private manifest must move in the same review."
   },
   "modules": [
     "scripts/ci-channels.sh",
@@ -12,7 +12,7 @@
   ],
   "acceptance": [
     {
-      "criterion": "棘轮下限与私有渠道仓目录数一致（3）：`ci-channels.sh` 声明 MIN_EXPECTED_CHANNELS=3，`verify-ci-scripts.mjs` 的夹具按 channelFloor() 生成（目录数=下限时正式 tag 通过、删一个渠道走生产 clone+pin 路径必须 fail-loud），整组判据 exit 0",
+      "criterion": "棘轮下限与私有渠道仓目录数一致（4）：`ci-channels.sh` 声明 MIN_EXPECTED_CHANNELS=4，`verify-ci-scripts.mjs` 的夹具按 channelFloor() 生成（目录数=下限时正式 tag 通过、删一个渠道走生产 clone+pin 路径必须 fail-loud），整组判据 exit 0",
       "evidence": "guard",
       "command": "node scripts/verify-ci-scripts.mjs"
     },

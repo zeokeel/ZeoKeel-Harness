@@ -1,6 +1,6 @@
 {
   "id": "2026-11-03-rbac-identity-resolve",
-  "status": "accepted",
+  "status": "verified",
   "intent": {
     "zh": "定制客户的用户与权限在自研 RBAC 中；需要让员工继续用 ZeoKeel 客户端内企微/钉钉扫码登录，并由服务端向 RBAC 只读解析出 uid/状态/部门，以 RBAC uid 建档（默认关闭，不影响其他客户）。",
     "en": "For a customer whose identities/permissions live in a self-hosted RBAC, let employees keep using in-client WeCom/DingTalk QR login while the ZeoKeel server resolves the RBAC uid/status/departments and provisions the local user by that uid (opt-in, no change for other customers)."
@@ -42,5 +42,38 @@
   ],
   "risk": "外部身份解析失败默认拒绝登录；若 RBAC 不可达会造成该部署的员工无法登录（本地超管仍可进 ZeoKeel 管理后台）。启用后 users.external_id 变为 rbac:<uid>，与启用前已建号的扫码用户不兼容，关闭开关也可能导致其无法登录；用关闭保护 + rebind 文档降低风险。",
   "rollback": "管理端关闭 identity.external.enabled（已有 rbac 用户时需确认/先 rebind）；代码回滚本分支提交。无 DB 迁移，settings 行保留不影响其他登录方式。",
-  "verification": []
+  "verification": [
+    {
+      "command": "cd server && go build ./... && go test ./internal/serverauth/ -run 'Identity|QR|AuthConfig' -count=1",
+      "result": "exit 0；29 个 Identity/QR/AuthConfig 用例 PASS（PG 无 skip），含 QR→RBAC resolve 端到端与错误映射"
+    },
+    {
+      "command": "cd server && go test ./internal/serverauth/ -run 'AuthConfig|Identity' -count=1",
+      "result": "ok；管理端 identity GET/PUT/关闭保护/test 端点用例通过"
+    },
+    {
+      "command": "cd server/webadmin && npx vitest run && npm run build",
+      "result": "webadmin 62 files / 1040 tests passed；tsc -b + vite build exit 0"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts",
+      "result": "35 passed（扫码失败按 code 本地化、白名单透传、未知 code 回落）"
+    },
+    {
+      "command": "node scripts/check-no-real-domains.mjs",
+      "result": "零命中 ✅（仓库仅 rbac.example.com 占位）"
+    },
+    {
+      "command": "cd server && go test ./internal/... ./cmd/... -count=1 -p 4",
+      "result": "exit 0：61 个包 ok，0 FAIL（首次并行跑遇到一次 cmd/server 并发读写导致的瞬时 build failed，干净重跑全绿）"
+    },
+    {
+      "command": "DSH_AGENTS_HOME=/tmp/qr-agents-clean corepack yarn workspace @zeokeel/dsh-enterprise vitest run",
+      "result": "107 files passed / 1 skipped；1247 passed / 1 skipped（该前缀仅隔离本机已装技能对两条无关用例的污染）"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs && node scripts/check-guard-parser-integrity.mjs",
+      "result": "变更记录合规；20 条守卫摘要一致"
+    }
+  ]
 }

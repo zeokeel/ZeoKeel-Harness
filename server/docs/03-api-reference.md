@@ -95,7 +95,9 @@
 | PUT | `/api/server/admin/connectors/:id/enabled` | 连接器上架/下架 |
 | DELETE | `/api/server/admin/connectors/:id` | 删除连接器 |
 | GET | `/api/server/admin/audit` | 审计日志分页 `?page=&size=&action=&username=`(默认保留 180 天,settings `audit.retention_days` 可配;0048 起哈希链) |
-| GET/PUT | `/api/server/admin/auth`、`POST /auth/test` | 认证配置(脱敏读/写/连接测试;LDAP 测试连接返回目录统计 `{ok, message, users, groups, sample[5]}`;密码传 `***`/空 = 用已保存值测试)。2026-11-03 起含扫码登录:`wecom{corp_id,agent_id,secret,redirect_url}`、`dingtalk{client_id,client_secret,redirect_url}`,secret 加密存储、读面掩码 `***`、写回 `***` = 保持现值;`auth.enabled` 合法值增加 `wecom`/`dingtalk` |
+| GET/PUT | `/api/server/admin/auth`、`POST /auth/test` | 认证配置(脱敏读/写/连接测试;LDAP 测试连接返回目录统计 `{ok, message, users, groups, sample[5]}`;密码传 `***`/空 = 用已保存值测试)。2026-11-03 起含扫码登录:`wecom{corp_id,agent_id,secret,redirect_url}`、`dingtalk{client_id,client_secret,redirect_url}`,secret 加密存储、读面掩码 `***`、写回 `***` = 保持现值;`auth.enabled` 合法值增加 `wecom`/`dingtalk`。同一响应增加 `identity{enabled,endpoint,token,methods,timeout_ms,sync_groups,rbac_user_count}`(默认关闭),PUT 的 `identity` 为可选对象;已有 RBAC 用户时关闭必须带 `confirm_disable=true`,否则 409 `IDENTITY_USERS_EXIST`;`POST /auth/test` 增加 `type:"identity"` 实测解析 |
+
+> **外部身份解析(RBAC,2026-11-03,默认关闭)**:启用 `identity.external.enabled=true` 后,企业微信/钉钉扫码在兑换出渠道身份(企微 userid / 钉钉 unionId)之后、`provisionUser` 之前,由服务端 `POST identity.external.endpoint`(RBAC 的 `/internal/v1/identity/resolve`,Bearer `identity.external.token`)换取 `{uid,name,email,mobile,status,departments}`。`status!=1`、404、409、服务不可用/超时均**拒绝登录**(fail-closed);成功以 `uid` 作为用户名与外部身份(`external_id="rbac:"+uid`),`sync_groups=true` 时用 `departments` 全量替换组。settings 键:`identity.external.{enabled,endpoint,token,methods,timeout_ms,sync_groups}`;token AES-GCM 加密存储、读面 `***`。调用失败审计 `login_fail`(detail 带 `identity_not_bound|identity_disabled|identity_ambiguous|identity_unavailable|identity_conflict ip=...`),不记录 token/手机号/响应内容。
 
 > **LDAP 目录自动同步(2026-09;启用方向 2026-09-23 收紧)**:LDAP 配置保存后立即触发一轮全量同步,此后服务端每 1 小时自动一轮。同步语义:目录存在的用户自动创建/更新(显示名/邮箱/组,组全量替换);目录已消失的外部用户自动停用 + 吊销全部 token;同名本地账号绝不被外部身份接管;空目录(0 用户)拒绝执行(防误停用全部外部用户)。
 >

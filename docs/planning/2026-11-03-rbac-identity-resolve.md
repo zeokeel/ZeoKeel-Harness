@@ -1,6 +1,6 @@
 # ZeoKeel 接入第三方 RBAC：外部身份解析（默认关闭）
 
-状态：实现中（2026-11-03）｜分支：`feat/rbac-identity-resolve`｜变更记录：
+状态：已实现并验证（2026-11-03）｜分支：`feat/rbac-identity-resolve`｜变更记录：
 [`changes/2026-11-03-rbac-identity-resolve.json`](../../changes/2026-11-03-rbac-identity-resolve.json)
 
 ## 1. 背景

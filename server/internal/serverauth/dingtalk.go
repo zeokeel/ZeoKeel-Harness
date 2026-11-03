@@ -146,7 +146,10 @@ func (p *DingTalkProvider) Exchange(ctx context.Context, code string) (UserInfo,
 		ExternalSource: p.Name(),
 		Source:         "external",
 		// 不查通讯录/部门 ⇒ 不接管组归属（设计 §5.2）。
-		GroupsPresent: false,
+		GroupsPresent:   false,
+		ProviderUserID:  "",
+		ProviderUnionID: me.UnionID,
+		Mobile:          strings.TrimSpace(me.Mobile),
 	}, nil
 }
 

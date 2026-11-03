@@ -789,6 +789,11 @@ func (a *API) provisionUser(ui UserInfo) (*serverstore.User, error) {
 	return provisionUser(a.DB, ui)
 }
 
+// errUsernameLocalAccount 表示外部身份试图接管同名本地账号（安全边界）。
+// 单独成哨兵：外部身份解析（identity.external.*）启用时，上层要把这条失败
+// 映射成对客户端可操作的 IDENTITY_CONFLICT，而不是笼统的「用户创建失败」。
+var errUsernameLocalAccount = errors.New("username belongs to a local account")
+
 // provisionUser creates a local users row for an external (ldap/oidc) identity
 // on first login, and syncs group membership. An external identity whose
 // username collides with an existing local account is rejected — it must never
@@ -831,7 +836,7 @@ func provisionUser(db *sql.DB, ui UserInfo) (*serverstore.User, error) {
 	}
 	// 防提权:外部身份不得接管本地账号行
 	if ui.Source == "external" && u.Source != "external" {
-		return nil, errors.New("username belongs to a local account")
+		return nil, errUsernameLocalAccount
 	}
 	// P2-9(审计 2026-09-13):外部身份必须绑定到 **IdP 主体**(OIDC sub /
 	// LDAP DN),而不是只按用户名 —— 否则两套 IdP 之间(或允许自选用户名的

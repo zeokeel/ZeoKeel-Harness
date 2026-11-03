@@ -27,6 +27,15 @@ type UserInfo struct {
 	Source string
 	// ExternalSource 是哪套 IdP(ldap/oidc/openid);仅 external 有值。
 	ExternalSource string
+	// ProviderUserID / ProviderUnionID / Mobile 是**渠道原生身份**，只在
+	// 外部身份解析（identity.external.*，RBAC 定制客户）里使用：
+	//   - 企微：ProviderUserID = userid；
+	//   - 钉钉：ProviderUnionID = unionId（userid 会变，unionId 稳定）；
+	//   - Mobile：服务商返回的手机号，仅用于 RBAC 侧的兜底匹配，不落 ZeoKeel 库。
+	// 其它登录方式留空，不改变既有语义。
+	ProviderUserID  string
+	ProviderUnionID string
+	Mobile          string
 }
 
 // PasswordProvider authenticates via username/password (local/ldap).

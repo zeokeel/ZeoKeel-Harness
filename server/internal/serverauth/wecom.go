@@ -156,12 +156,13 @@ func (p *WeComProvider) Exchange(ctx context.Context, code string) (UserInfo, er
 	detailQuery.Set("access_token", tok.AccessToken)
 	detailQuery.Set("userid", who.UserID)
 	var detail weComUserDetailResponse
-	name, email := "", ""
+	name, email, mobile := "", "", ""
 	if err := qrGetJSON(ctx, p.httpClient(),
 		p.apiBase()+"/cgi-bin/user/get?"+detailQuery.Encode(), "wecom user/get", &detail); err == nil &&
 		detail.ErrCode == 0 {
 		name = strings.TrimSpace(detail.Name)
 		email = strings.TrimSpace(detail.Email)
+		mobile = strings.TrimSpace(detail.Mobile)
 	}
 
 	return UserInfo{
@@ -173,7 +174,10 @@ func (p *WeComProvider) Exchange(ctx context.Context, code string) (UserInfo, er
 		ExternalSource: p.Name(),
 		Source:         "external",
 		// 不查通讯录/部门 ⇒ 不接管组归属（与 OIDC 缺省组声明同口径）。
-		GroupsPresent: false,
+		GroupsPresent:   false,
+		ProviderUserID:  who.UserID,
+		ProviderUnionID: "",
+		Mobile:          mobile,
 	}, nil
 }
 
@@ -193,6 +197,7 @@ type weComUserDetailResponse struct {
 	UserID  string `json:"userid"`
 	Name    string `json:"name"`
 	Email   string `json:"email"`
+	Mobile  string `json:"mobile"`
 	ErrCode int    `json:"errcode"`
 	ErrMsg  string `json:"errmsg"`
 }

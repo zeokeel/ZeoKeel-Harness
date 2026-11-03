@@ -594,10 +594,17 @@ func (a *API) qrCallbackHandler(name string) gin.HandlerFunc {
 			writeError(c, http.StatusBadRequest, "VALIDATION", "state 无效或已过期")
 			return
 		}
-		fail := func(status int, code, message string) {
+		failWith := func(status int, code, message, reason string) {
 			a.qrFlows.markFailed(flow, code, message)
-			_ = serverstore.AuditLog(a.DB, name, "login_fail", "ip="+c.ClientIP())
+			detail := "ip=" + c.ClientIP()
+			if reason != "" {
+				detail = reason + " " + detail
+			}
+			_ = serverstore.AuditLog(a.DB, name, "login_fail", detail)
 			writeError(c, status, code, message)
+		}
+		fail := func(status int, code, message string) {
+			failWith(status, code, message, "")
 		}
 		if code == "" {
 			fail(http.StatusBadRequest, "VALIDATION", "缺少 code 或 state")
@@ -610,12 +617,26 @@ func (a *API) qrCallbackHandler(name string) gin.HandlerFunc {
 			fail(http.StatusUnauthorized, "AUTH_FAILED", "扫码登录认证失败")
 			return
 		}
-		user, err := a.provisionUser(ui)
-		if errors.Is(err, serverstore.ErrIdentityConflict) {
-			fail(http.StatusUnauthorized, "AUTH_FAILED", "该用户名已绑定到其它身份源账号,请联系管理员")
+		// 外部身份解析（RBAC 定制客户，默认关闭）：未启用/未命中时是纯 no-op。
+		// 失败 fail-closed，且把稳定 code + 可读 message 交给流程，客户端 poll
+		// 拿到的是与手机端一致的结论。
+		ui, identErr := a.enrichExternalIdentity(ctx, name, ui)
+		if identErr != nil {
+			failWith(identErr.status, identErr.code, identErr.message, identErr.reason)
 			return
 		}
+		identityApplied := ui.ExternalSource == "rbac"
+		user, err := a.provisionUser(ui)
 		if err != nil {
+			if identityApplied && (errors.Is(err, serverstore.ErrIdentityConflict) || errors.Is(err, errUsernameLocalAccount)) {
+				failWith(http.StatusForbidden, "IDENTITY_CONFLICT",
+					"该用户名已被本地账号占用，请联系管理员", identityReasonConflict)
+				return
+			}
+			if errors.Is(err, serverstore.ErrIdentityConflict) {
+				fail(http.StatusUnauthorized, "AUTH_FAILED", "该用户名已绑定到其它身份源账号,请联系管理员")
+				return
+			}
 			fail(http.StatusInternalServerError, "INTERNAL", "用户创建失败")
 			return
 		}

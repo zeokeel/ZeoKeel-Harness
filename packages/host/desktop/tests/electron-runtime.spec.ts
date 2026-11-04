@@ -1942,6 +1942,27 @@ describe('崩溃回退：框架判据 + 串行化（B-01/B-03）', () => {
  * 三层判据：①纯函数行为；②挂载后**真注册进去的闭包**（同一引用 + 真的拒外源）；
  * ③源码 AST 接线（注释掉任一注册即"调用不存在"，换行/折行不影响）。
  */
+describe('钉钉扫码登录页默认 Tab（2026-11-04 UI 修复）', () => {
+  it('只对 login.dingtalk.com/oauth2 子 frame 注入：选中 QR Code Tab，不触达其他 frame', async () => {
+    const { preferDingTalkQrTab } = await import('../src/electron-runtime.ts')
+    const execute = vi.fn(async (_code: string, _userGesture?: boolean) => true)
+    const webContents = {
+      mainFrame: {
+        framesInSubtree: [
+          { url: 'https://login.dingtalk.com/oauth2/challenge.htm?client_id=x', executeJavaScript: execute },
+          { url: 'https://example.com/other', executeJavaScript: vi.fn(async () => true) },
+        ],
+      },
+    } as unknown as Electron.WebContents
+    preferDingTalkQrTab(webContents)
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(String(execute.mock.calls[0]?.[0])).toContain('QR Code')
+    expect(String(execute.mock.calls[0]?.[0])).toContain('aria-selected')
+    expect(execute.mock.calls[0]?.[1]).toBe(true)
+  })
+})
+
 describe('主窗口导航闸门：三事件共用同一判据（B1-04）', () => {
   const SHELL_ORIGIN = 'http://127.0.0.1:43120'
   const NAVIGATION_EVENTS = ['will-navigate', 'will-frame-navigate', 'will-redirect'] as const

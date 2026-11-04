@@ -341,6 +341,10 @@ export function renderLoginPage(locale: HostLocale): string {
   /* 官方 qrConnect 页面需要比二维码图片更大的区域（含标题/提示/按钮）。 */
   .qr-frame-embed { width: 320px; height: 380px; }
   .qr-frame .qr-web { width: 320px; height: 380px; border: 0; border-radius: 10px; display: block; background: #ffffff; }
+  /* 钉钉官方授权页比企微高（账号/扫码切换、品牌、二维码、保持登录等），
+     320x380 会触发内部滚动条并把二维码裁掉；单独给它更高的卡片。 */
+  .qr-frame-dingtalk { width: 380px; height: 600px; }
+  .qr-frame-dingtalk .qr-web { width: 380px; height: 600px; }
   .qr-card button { margin-top: 4px; }
 </style>
 </head>
@@ -822,7 +826,7 @@ export function renderLoginPage(locale: HostLocale): string {
       // qr_url 时才退回服务端图片（旧服务端/非官方域名）。
       var qrUrl = isAllowedQrFrameUrl(data.qr_url) ? data.qr_url : ''
       if (qrUrl) {
-        qrFrame.className = 'qr-frame qr-frame-embed'
+        qrFrame.className = 'qr-frame qr-frame-embed' + (method === 'dingtalk' ? ' qr-frame-dingtalk' : '')
         qrFrame.innerHTML = '<iframe class="qr-web" title="QR" src="' + esc(qrUrl) + '"></iframe>'
       } else {
         qrFrame.className = 'qr-frame'

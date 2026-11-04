@@ -189,6 +189,49 @@ export function refuseForeignNavigation(origin: string): (event: NavigationAttem
   }
 }
 
+/**
+ * 钉钉官方授权页默认落在「账号登录」Tab，扫码入口在第二个 Tab。客户端登录卡
+ * 只做扫码，所以子 frame 加载完成后把官方页的「QR Code」Tab 选中；只点击官方
+ * 页自己的 Tab，不读取/改写任何数据，也不替用户点授权同意。
+ */
+export function preferDingTalkQrTab(webContents: Electron.WebContents): void {
+  const inject = `(() => {
+    const pick = () => {
+      const tab = [...document.querySelectorAll('[role="tab"]')]
+        .find((el) => (el.textContent || '').trim() === 'QR Code')
+      if (tab === undefined) return false
+      if (tab.getAttribute('aria-selected') !== 'true') tab.click()
+      return true
+    }
+    if (pick()) return true
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      if (pick() || attempts >= 20) clearInterval(timer)
+    }, 250)
+    return true
+  })()`
+  const tryFrame = (): boolean => {
+    let frames: Electron.WebFrameMain[] = []
+    try {
+      frames = webContents.mainFrame.framesInSubtree
+    } catch {
+      return false
+    }
+    const frame = frames.find((candidate) => /^https:\/\/login\.dingtalk\.com\/oauth2\//u.test(candidate.url))
+    if (frame === undefined) return false
+    void frame.executeJavaScript(inject, true).catch(() => {})
+    return true
+  }
+  if (tryFrame()) return
+  let attempts = 0
+  const timer = setInterval(() => {
+    attempts += 1
+    if (tryFrame() || attempts >= 20) clearInterval(timer)
+  }, 250)
+  setTimeout(() => { clearInterval(timer) }, 6_000)
+}
+
 function isZoomShortcut(input: Electron.Input): 'in' | 'out' | 'reset' | undefined {
   if (input.type !== 'keyDown' || input.alt || (!input.control && !input.meta)) return undefined
   if (input.key === '+' || input.key === '=') return 'in'
@@ -1328,6 +1371,10 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     window.webContents.on('will-navigate', refuseNavigation)
     window.webContents.on('will-frame-navigate', refuseNavigation)
     window.webContents.on('will-redirect', refuseNavigation)
+    // 钉钉官方授权页是跨域 iframe，登录卡只能通过宿主在子 frame 里选中扫码 Tab。
+    window.webContents.on('did-frame-finish-load', (_event, isMainFrame) => {
+      if (isMainFrame === false) preferDingTalkQrTab(window.webContents)
+    })
     window.webContents.on('render-process-gone', (_event, details) => {
       this.logError(`dsh-plugin-desktop: renderer process gone (reason: ${details.reason}, exitCode: ${formatDesktopExitCode(details.exitCode)})`)
       // P0-6/D8:渲染进程崩溃也要进错误上报(reason/exitCode 作为 tag)。

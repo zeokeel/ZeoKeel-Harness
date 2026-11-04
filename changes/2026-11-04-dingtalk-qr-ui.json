@@ -1,0 +1,55 @@
+{
+  "id": "2026-11-04-dingtalk-qr-ui",
+  "status": "verified",
+  "intent": {
+    "zh": "钉钉扫码登录的官方授权页默认落在「账号登录」Tab，且客户端 iframe 固定 320x380 会触发内部滚动条、把二维码裁掉。为钉钉单独放宽卡片尺寸并在子 frame 加载后自动选中官方页的「QR Code」Tab，让登录卡直接显示完整二维码；只点击官方页自己的 Tab，不读取/改写数据，也不代替用户同意授权。",
+    "en": "DingTalk's official auth page defaults to the account tab and the fixed 320x380 iframe clipped the QR with an inner scrollbar. Give DingTalk a taller card and select the official page's QR Code tab after the subframe loads; only click the tab, never read/rewrite data or auto-consent."
+  },
+  "modules": [
+    "packages/host/enterprise/src/auth-gate.ts",
+    "packages/host/desktop/src/electron-runtime.ts",
+    "packages/host/desktop/tests/electron-runtime.spec.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "钉钉官方页子 frame 加载后只对 login.dingtalk.com/oauth2 注入选中 QR Code Tab，其他 frame 不受影响",
+      "evidence": "test",
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run tests/electron-runtime.spec.ts"
+    },
+    {
+      "criterion": "desktop 类型检查通过",
+      "evidence": "test",
+      "command": "corepack yarn workspace dsh-plugin-desktop typecheck"
+    },
+    {
+      "criterion": "客户端登录页 QR 用例与 enterprise 类型检查通过",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts"
+    },
+    {
+      "criterion": "231 本地客户端钉钉登录页：自动选中 QR Code，二维码完整、无 iframe 内部滚动条",
+      "evidence": "manual",
+      "command": "231 Xvfb 钉钉扫码页截图"
+    }
+  ],
+  "risk": "只对 login.dingtalk.com/oauth2 子 frame 做一次 Tab 点击；官方页改版导致 Tab 文案变化时注入会找不到 Tab（不点击、不报错），需跟随官方文案更新。iframe 高度增大后登录卡更高，窄窗口下可能出现外层滚动。",
+  "rollback": "回滚本提交并重新打包客户端；不影响服务端登录流程。",
+  "verification": [
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run tests/electron-runtime.spec.ts",
+      "result": "exit 0；61 tests passed"
+    },
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop typecheck",
+      "result": "exit 0"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts",
+      "result": "exit 0；36 tests passed"
+    },
+    {
+      "command": "231 Xvfb 钉钉扫码页截图",
+      "result": "自动选中 QR Code；二维码四个角完整，无 iframe 内部滚动条"
+    }
+  ]
+}

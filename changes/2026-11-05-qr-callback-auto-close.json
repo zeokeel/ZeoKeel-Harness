@@ -1,0 +1,41 @@
+{
+  "id": "2026-11-05-qr-callback-auto-close",
+  "status": "implemented",
+  "intent": {
+    "zh": "企业微信/钉钉扫码成功后，浏览器停留在 callback 的静态「登录成功」页，需要手动关闭；改为展示成功提示、5 秒倒计时并尽力自动关闭标签页，浏览器不允许关闭时提示手动关闭。",
+    "en": "After a successful WeCom/DingTalk QR callback the browser tab stays on the static success page; add a success/countdown UI and best-effort auto-close, with a manual-close hint when browsers block window.close()."
+  },
+  "modules": [
+    "server/internal/serverauth/qr.go",
+    "server/internal/serverauth/qr_test.go"
+  ],
+  "acceptance": [
+    {
+      "criterion": "callback 成功页仍为静态 HTML，不反射 code/state、无外链/外部资源；包含登录成功、返回客户端、5 秒倒计时与 window.close 脚本，并带严格 CSP",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth -run TestQRStartCallbackPollEndToEnd -count=1"
+    },
+    {
+      "criterion": "serverauth 全量用例通过（失败仍走 JSON 信封）",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth -count=1"
+    },
+    {
+      "criterion": "231 生产服务替换二进制后健康检查通过，扫码成功页能自动收起/提示手动关闭",
+      "evidence": "manual",
+      "command": "231 systemctl restart zeokeel-rbac + 扫码验证"
+    }
+  ],
+  "risk": "部分浏览器禁止脚本关闭非脚本打开的标签页，此时页面保留「请手动关闭」提示，不会把成功状态误报为失败。替换服务端二进制前已备份，可回滚。",
+  "rollback": "恢复 /opt/zeokeel-rbac/zeokeel-server 的上一个备份并 systemctl restart zeokeel-rbac。",
+  "verification": [
+    {
+      "command": "cd server && go test ./internal/serverauth -run TestQRStartCallbackPollEndToEnd -count=1",
+      "result": "exit 0；callback 成功页文案/脚本/CSP/无反射断言通过"
+    },
+    {
+      "command": "cd server && go test ./internal/serverauth -count=1",
+      "result": "exit 0"
+    }
+  ]
+}

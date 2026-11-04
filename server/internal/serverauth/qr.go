@@ -24,8 +24,9 @@ package serverauth
 //   - token 只在**首次** poll(done) 响应里出现一次，绝不落日志、绝不进 URL。
 //
 // HTML 例外：本文件里的回调**成功页**是全包唯一的非 JSON 响应，属产品 HTML 面
-// （设计文档 §4 明确列为唯一例外；与 `/`、`/portal` 同类）：常量字符串、
-// 无脚本、无外链、无图片，不拼接任何请求数据。所有**失败**仍走统一的 JSON
+// （设计文档 §4 明确列为唯一例外；与 `/`、`/portal` 同类）：静态字符串、
+// 无外链、无图片、不拼接任何请求数据；唯一脚本是本地倒计时与尽力关闭标签页。
+// 所有**失败**仍走统一的 JSON
 // 错误信封（serverauth.WriteError）。
 
 import (
@@ -73,20 +74,56 @@ const (
 
 // qrCallbackSuccessHTML 是手机扫码落地页（产品 HTML 面，见文件头）。
 //
-// 刻意保持极简：无脚本、无外链、无外部资源、无任何请求数据插值 ⇒ 不存在
-// XSS/开放重定向面。桌面客户端不渲染它（客户端只渲染 PNG），它只给手机浏览器看。
+// 边界：静态字符串，无外链/无外部资源/无任何请求数据插值；唯一脚本是本地
+// 倒计时与尽力而为的 window.close()，供扫码完成后自动收起标签页。浏览器
+// 不允许脚本关闭非脚本打开的标签页时，页面保留“请手动关闭”提示。
 const qrCallbackSuccessHTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>登录成功</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f6f8; color: #1f2329; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  main { text-align: center; padding: 32px; }
+  .ok { width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 50%; background: #e8f7ee; color: #1f9d55; font-size: 28px; line-height: 52px; font-weight: 700; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 12px; }
+  p { font-size: 15px; color: #646a73; margin: 0; }
+  .hint { margin-top: 20px; font-size: 13px; color: #8a9099; }
+  button { margin-top: 18px; padding: 8px 18px; border: 1px solid #d0d3d9; border-radius: 8px; background: #fff; color: #1f2329; font-size: 14px; cursor: pointer; }
+</style>
 </head>
-<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f5f6f8;color:#1f2329;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-<main style="text-align:center;padding:32px">
-<h1 style="font-size:22px;font-weight:600;margin:0 0 12px">登录成功</h1>
-<p style="font-size:15px;color:#646a73;margin:0">请返回客户端继续使用。</p>
+<body>
+<main>
+<div class="ok" aria-hidden="true">✓</div>
+<h1>登录成功</h1>
+<p>请返回客户端继续使用。</p>
+<p class="hint" id="close-hint">窗口将在 5 秒后自动关闭</p>
+<button type="button" id="close-btn">立即关闭</button>
 </main>
+<script>
+(function () {
+  var left = 5
+  var hint = document.getElementById('close-hint')
+  var btn = document.getElementById('close-btn')
+  function closeTab() {
+    try { window.close() } catch (e) {}
+  }
+  btn.addEventListener('click', closeTab)
+  var timer = setInterval(function () {
+    left -= 1
+    if (left > 0) {
+      hint.textContent = '窗口将在 ' + left + ' 秒后自动关闭'
+      return
+    }
+    clearInterval(timer)
+    hint.textContent = '请手动关闭此标签页'
+    closeTab()
+  }, 1000)
+})()
+</script>
 </body>
 </html>
 `
@@ -701,8 +738,9 @@ func (a *API) qrCallbackHandler(name string) gin.HandlerFunc {
 		// token 只进内存流程，等首次 poll 取走；不写日志、不进 URL。
 		a.qrFlows.markDone(flow, token, user)
 		_ = serverstore.AuditLog(a.DB, user.Username, "login_success", name+" ip="+c.ClientIP())
-		// 唯一的 text/html 响应（产品 HTML 面，见文件头）：无脚本、无外链、
-		// 无插值；失败分支仍走 JSON 信封。
+		// 唯一的 text/html 响应（产品 HTML 面，见文件头）：静态字符串、无外链、
+		// 无请求数据插值；唯一脚本是本地倒计时/尽力关闭，故 CSP 只放行 inline。
+		c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(qrCallbackSuccessHTML))
 	}
 }

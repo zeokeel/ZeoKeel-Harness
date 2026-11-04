@@ -302,7 +302,8 @@ func TestQRStartCallbackPollEndToEnd(t *testing.T) {
 		t.Fatalf("poll pending = %d %v", w.Code, out)
 	}
 
-	// callback（手机浏览器）→ 200 text/html 极简成功页
+	// callback（手机浏览器）→ 200 text/html 成功页；静态倒计时脚本允许，
+	// 但不得出现外链/外部资源/请求数据插值（设计 §4.4 的安全边界）。
 	w := qrCallback(r, "wecom", "CODE-1", fake.lastState)
 	if w.Code != http.StatusOK {
 		t.Fatalf("callback = %d %s", w.Code, w.Body.String())
@@ -310,12 +311,20 @@ func TestQRStartCallbackPollEndToEnd(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Fatalf("callback Content-Type = %q, want text/html", ct)
 	}
-	page := w.Body.String()
-	if !strings.Contains(page, "登录成功") {
-		t.Fatalf("成功页缺少文案: %s", page)
+	if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'none'") {
+		t.Fatalf("callback CSP = %q, want default-src 'none'", csp)
 	}
-	// 唯一的 HTML 面：无脚本、无外链、无外部资源（设计 §4.4）。
-	for _, banned := range []string{"<script", "javascript:", "http://", "https://", "<img", "<link"} {
+	page := w.Body.String()
+	for _, want := range []string{"登录成功", "请返回客户端继续使用", "window.close", "setInterval"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("成功页缺少 %q：%s", want, page)
+		}
+	}
+	// 成功页不得反射 code/state；脚本里也不得出现外部资源。
+	if strings.Contains(page, "CODE-1") || strings.Contains(page, fake.lastState) {
+		t.Fatalf("成功页反射了请求数据：%s", page)
+	}
+	for _, banned := range []string{"http://", "https://", "<img", "<link"} {
 		if strings.Contains(strings.ToLower(page), banned) {
 			t.Fatalf("成功页不得包含 %q：%s", banned, page)
 		}

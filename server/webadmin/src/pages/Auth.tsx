@@ -1,17 +1,27 @@
 import { useCallback, useEffect, useId, useState } from 'react'
+import { Check, Copy } from 'lucide-react'
 import { request, ADMIN_API } from '../api'
 import { Button } from '../components/ui/button'
+import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { SecretInput } from '../components/secret-input'
 import { PageHeader } from '../components/page-header'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Switch } from '../components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useFlash } from '../lib/use-flash'
+import { copyText } from '../lib/clipboard'
 
 // 认证配置页(v3b): Tab 分区 + 启用绑定配置 + hide_local。
 // 登录面矩阵: 客户端 = 全部已启用方式(local 可被 hide_local 隐藏);
-// 管理后台 = 恒仅本地账户(SSO/LDAP 一律不进后台, 服务端强制)。
+// 管理后台 = 恒仅本地账户(SSO/LDAP/扫码一律不进后台, 服务端强制)。
+//
+// 2026-11-03: 新增企业微信/钉钉扫码登录(设计 docs/planning/
+// 2026-11-03-wecom-dingtalk-qr-login.md §6)。两页的「回调地址」由 location.origin
+// 推导并配复制按钮 —— 该值必须与管理员在服务商后台登记的回调地址逐字一致,
+// 手抄错一个字符, 手机扫码后的回调就会 404 或 state 校验失败。
 
 interface AuthConfig {
   mode?: string
@@ -22,6 +32,46 @@ interface AuthConfig {
   ldap?: Record<string, string>
   oidc?: Record<string, string>
   openid?: Record<string, string>
+  /** 企业微信扫码(设计 §3): corp_id/agent_id/secret/redirect_url; secret 读面掩码 ***。 */
+  wecom?: Record<string, string>
+  /** 钉钉扫码(设计 §3): client_id/client_secret/redirect_url; client_secret 读面掩码 ***。 */
+  dingtalk?: Record<string, string>
+  /**
+   * 外部权限源(RBAC, 2026-11-03): 扫码登录后由服务端向 RBAC 解析 uid/状态/部门。
+   * 默认关闭；关闭时扫码仍走现有直连逻辑。token 读面为 *** 掩码。
+   */
+  identity?: {
+    enabled?: boolean
+    endpoint?: string
+    token?: string
+    methods?: string
+    timeout_ms?: number
+    sync_groups?: boolean
+    /** 已以 RBAC uid 建立的外部用户数；>0 时关闭开关需要显式确认。 */
+    rbac_user_count?: number
+  }
+}
+
+/** 外部权限源(RBAC)的本地表单状态。token 单独走 SecretField，不与 provider 字段混放。 */
+interface IdentityForm {
+  enabled: boolean
+  endpoint: string
+  token: string
+  methods: QrMethod[]
+  timeoutMs: number
+  syncGroups: boolean
+  /** 服务端读回的「已有 RBAC 用户数」，只读，用来做关闭保护。 */
+  rbacUserCount: number
+}
+
+/** POST /auth/test（type=identity）的返回。 */
+interface IdentityTestResult {
+  ok: boolean
+  message?: string
+  uid?: string
+  name?: string
+  status?: number
+  departments?: string[]
 }
 
 interface FormState {
@@ -29,7 +79,13 @@ interface FormState {
   ldap: Record<string, string>
   oidc: Record<string, string>
   openid: Record<string, string>
+  wecom: Record<string, string>
+  dingtalk: Record<string, string>
 }
+
+type MethodKey = 'local' | 'ldap' | 'oidc' | 'openid' | 'wecom' | 'dingtalk'
+type IdpKey = Exclude<MethodKey, 'local'>
+type QrMethod = 'wecom' | 'dingtalk'
 
 // 测试连接返回(ldap 目录统计)
 interface ConnTestResult {
@@ -45,20 +101,73 @@ const EMPTY_FORM: FormState = {
   ldap: {},
   oidc: {},
   openid: {},
+  wecom: {},
+  dingtalk: {},
+}
+
+// 外部权限源默认值: 关闭 + 默认两种扫码方式都适用 + 3s 超时 + 同步部门为组。
+const EMPTY_IDENTITY: IdentityForm = {
+  enabled: false,
+  endpoint: '',
+  token: '',
+  methods: ['wecom', 'dingtalk'],
+  timeoutMs: 3000,
+  syncGroups: true,
+  rbacUserCount: 0,
+}
+
+const RBAC_METHODS: QrMethod[] = ['wecom', 'dingtalk']
+
+function parseIdentityMethods(raw?: string): QrMethod[] {
+  // 未下发 = 默认两种都适用(新部署); 显式空串 = 用户清空了全部方式(保存时会被拒绝)。
+  if (raw === undefined) return [...RBAC_METHODS]
+  const picked = raw.split(',').map((s) => s.trim()).filter((s): s is QrMethod => s === 'wecom' || s === 'dingtalk')
+  return picked
 }
 
 // 各 IdP 必填项判定(未配齐 → 启用开关禁用)
-const REQUIRED: Record<'ldap' | 'oidc' | 'openid', string[]> = {
+const REQUIRED: Record<IdpKey, string[]> = {
   ldap: ['server_url', 'bind_dn', 'base_dn'],
   oidc: ['issuer', 'client_id', 'redirect_url'],
   openid: ['issuer', 'client_id', 'redirect_url'],
+  wecom: ['corp_id', 'agent_id', 'secret', 'redirect_url'],
+  dingtalk: ['client_id', 'client_secret', 'redirect_url'],
 }
 
-const METHOD_META: Record<'local' | 'ldap' | 'oidc' | 'openid', { label: string; desc: string }> = {
+// 密钥字段 → 表单字段名 / secrets 状态键。启用判定必须认「已存掩码」:
+// 读配置时 *** 只标记已设置、不回填输入框, 只看表单值会把已配好的方式误判成不完整。
+const SECRET_FIELD: Partial<Record<IdpKey, string>> = {
+  ldap: 'bind_password',
+  oidc: 'client_secret',
+  openid: 'client_secret',
+  wecom: 'secret',
+  dingtalk: 'client_secret',
+}
+const SECRET_STATE: Partial<Record<IdpKey, string>> = {
+  ldap: 'ldap_password',
+  oidc: 'oidc_secret',
+  openid: 'openid_secret',
+  wecom: 'wecom_secret',
+  dingtalk: 'dingtalk_secret',
+}
+
+const METHOD_META: Record<MethodKey, { label: string; desc: string }> = {
   local: { label: '本地账号', desc: '后台恒启用; 客户端可隐藏' },
   ldap: { label: 'LDAP', desc: '企业目录认证(仅员工面)' },
   oidc: { label: 'OIDC', desc: '浏览器跳转登录(仅客户端)' },
   openid: { label: 'OpenID', desc: '浏览器跳转登录(仅客户端)' },
+  wecom: { label: '企业微信', desc: '扫码登录(仅客户端)' },
+  dingtalk: { label: '钉钉', desc: '扫码登录(仅客户端)' },
+}
+
+// 「测试连接」只对有发现/绑定握手的方式有意义; 扫码方式没有可探测端点(设计 §6 未定义)。
+const TESTABLE_TABS = new Set<string>(['ldap', 'oidc', 'openid'])
+
+// 扫码回调地址(客户端面): 服务商后台登记的 redirect_uri 必须与它逐字一致。
+// 取 location.origin 而不是已保存的 redirect_url: 管理员此刻打开管理端用的就是
+// 对外地址, 复制这一份最不容易错(服务端保存时仍会校验 https/回环 http)。
+function callbackUrl(method: QrMethod): string {
+  return `${location.origin}/api/client/v2/auth/${method}/callback`
 }
 
 export default function Auth() {
@@ -83,6 +192,20 @@ export default function Auth() {
   const [secrets, setSecrets] = useState<Record<string, 'has-value' | 'unset'>>({})
   // 用户显式"清空"的密钥(保存时提交空串覆盖)
   const [clearedSecrets, setClearedSecrets] = useState<Record<string, boolean>>({})
+  // 回调地址复制回执(按方式区分, 切页不串台; 定时器由 useFlash 统一清理)。
+  const [copiedTag, flashCopied] = useFlash(2500)
+  const [copyErr, setCopyErr] = useState('')
+  // 外部权限源(RBAC): 表单 + 服务端原始开关(判断「从开改关」是否需要二次确认)。
+  const [identity, setIdentity] = useState<IdentityForm>(EMPTY_IDENTITY)
+  const [identityWasEnabled, setIdentityWasEnabled] = useState(false)
+  const [confirmDisable, setConfirmDisable] = useState(false)
+  // 「测试解析」面板: provider + 渠道身份 + 结果。
+  const [testProvider, setTestProvider] = useState<QrMethod>('wecom')
+  const [testProviderUserID, setTestProviderUserID] = useState('')
+  const [testUnionID, setTestUnionID] = useState('')
+  const [testMobile, setTestMobile] = useState('')
+  const [identityTesting, setIdentityTesting] = useState(false)
+  const [identityTestResult, setIdentityTestResult] = useState<IdentityTestResult | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -97,12 +220,31 @@ export default function Auth() {
         ldap: nonSecret(a.ldap ?? {}),
         oidc: nonSecret(a.oidc ?? {}),
         openid: nonSecret(a.openid ?? {}),
+        wecom: nonSecret(a.wecom ?? {}),
+        dingtalk: nonSecret(a.dingtalk ?? {}),
       })
+      // 外部权限源(RBAC): token 与其它密钥同语义(*** = 已存,不回填)。
+      const ident = a.identity ?? {}
+      setIdentity({
+        enabled: ident.enabled ?? false,
+        endpoint: ident.endpoint ?? '',
+        token: '',
+        methods: parseIdentityMethods(ident.methods),
+        timeoutMs: ident.timeout_ms || 3000,
+        syncGroups: ident.sync_groups ?? true,
+        rbacUserCount: ident.rbac_user_count ?? 0,
+      })
+      setIdentityWasEnabled(ident.enabled ?? false)
+      setConfirmDisable(false)
+      setIdentityTestResult(null)
       // 服务端对已配置的密钥返回 *** → 标记「已设置」,输入框显示占位
       setSecrets({
         ldap_password: isSet(a.ldap?.bind_password),
         oidc_secret: isSet(a.oidc?.client_secret),
         openid_secret: isSet(a.openid?.client_secret),
+        wecom_secret: isSet(a.wecom?.secret),
+        dingtalk_secret: isSet(a.dingtalk?.client_secret),
+        identity_token: isSet(ident.token),
       })
       setCfgLoaded(true) // WEB-2:读到真配置才解锁写面
     } catch (err: any) {
@@ -127,20 +269,85 @@ export default function Auth() {
     return v === '***' ? 'has-value' : 'unset'
   }
 
-  const isReady = (key: 'local' | 'ldap' | 'oidc' | 'openid'): boolean => {
-    if (key === 'local') return true
-    const need = REQUIRED[key] ?? []
-    return need.every((f) => (form[key]?.[f] ?? '').trim() !== '')
+  // 密钥字段:输入框有新值 → 齐;否则看服务端「已存且未被显式清空」。
+  const secretReady = (key: IdpKey): boolean => {
+    const field = SECRET_FIELD[key]
+    if (field && (form[key][field] ?? '').trim() !== '') return true
+    const stateKey = SECRET_STATE[key]
+    if (!stateKey || clearedSecrets[stateKey]) return false
+    return secrets[stateKey] === 'has-value'
   }
 
-  const toggle = (key: 'local' | 'ldap' | 'oidc' | 'openid', on: boolean) => {
+  const isReady = (key: MethodKey): boolean => {
+    if (key === 'local') return true
+    return (REQUIRED[key] ?? []).every((f) =>
+      SECRET_FIELD[key] === f ? secretReady(key) : (form[key][f] ?? '').trim() !== '',
+    )
+  }
+
+  const toggle = (key: MethodKey, on: boolean) => {
     if (key === 'local') return // 恒启用
     setEnabled((prev) => on ? [...prev.filter((x) => x !== key), key] : prev.filter((x) => x !== key))
+  }
+
+  // ---- 外部权限源(RBAC) ----
+  // 密钥语义与 OIDC/LDAP 完全一致: 新输入 → 提交新值; 已存且未清空/未重输 → ***
+  // 保持现值; 显式清空 → 空串。顺序不能反: 用户「先清空、又输入新值」时必须提交新值。
+  const identityTokenForSave = (): string => {
+    if (identity.token.trim() !== '') return identity.token
+    if (clearedSecrets.identity_token) return ''
+    return secrets.identity_token === 'has-value' ? '***' : ''
+  }
+  const identityTokenReady = (): boolean =>
+    identity.token.trim() !== '' || (!clearedSecrets.identity_token && secrets.identity_token === 'has-value')
+  const identityTimeoutValid = (): boolean =>
+    Number.isFinite(identity.timeoutMs) && identity.timeoutMs >= 200 && identity.timeoutMs <= 10000
+  const identityReady = (): boolean =>
+    identity.endpoint.trim() !== '' && identity.methods.length > 0 && identityTokenReady() && identityTimeoutValid()
+  // 从「已启用」改成「关闭」且已有 RBAC 用户 → 必须显式勾选确认，否则拒绝保存。
+  // 服务端还有一道 409 IDENTITY_USERS_EXIST 兜底（并发/绕过前端时）。
+  const needsDisableConfirm = (): boolean =>
+    identityWasEnabled && !identity.enabled && identity.rbacUserCount > 0
+  // 「测试解析」用**已保存**的 endpoint/令牌(测试接口不接收 token 字段)。
+  // 刻意不要求 enabled=true：管理员应先测通再启用；未保存令牌时才禁用，
+  // 避免把「测试失败」误读成配置错误。
+  const canTestIdentity = (): boolean =>
+    identity.endpoint.trim() !== '' &&
+    secrets.identity_token === 'has-value' && !clearedSecrets.identity_token
+  const toggleIdentityMethod = (m: QrMethod, on: boolean) => {
+    setIdentity((prev) => ({
+      ...prev,
+      methods: on ? [...prev.methods.filter((x) => x !== m), m] : prev.methods.filter((x) => x !== m),
+    }))
   }
 
   const [testMsg, setTestMsg] = useState('')
   const [testDetail, setTestDetail] = useState<ConnTestResult | null>(null)
   const [testing, setTesting] = useState(false)
+
+  // 测试解析: 只把渠道身份发给服务端(服务端用已保存的 endpoint/令牌去查 RBAC)。
+  async function testIdentity() {
+    if (!canTestIdentity() || identityTesting) return
+    setIdentityTesting(true)
+    setIdentityTestResult(null)
+    try {
+      const r = await request(`${ADMIN_API}/auth/test`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'identity',
+          provider: testProvider,
+          provider_user_id: testProviderUserID.trim(),
+          union_id: testUnionID.trim(),
+          mobile: testMobile.trim(),
+        }),
+      }) as IdentityTestResult
+      setIdentityTestResult(r)
+    } catch (e: any) {
+      setIdentityTestResult({ ok: false, message: e.message })
+    } finally {
+      setIdentityTesting(false)
+    }
+  }
 
   // v3b §1.2: 测试当前 Tab 提供方连接(不保存)。LDAP 传完整配置(含
   // 过滤器),密码留空/占位 = 用已保存的(服务端回读),不再把 *** 当密码。
@@ -169,6 +376,19 @@ export default function Auth() {
     } finally { setTesting(false) }
   }
 
+  // 复制回调地址: 走 lib/clipboard(内网 http 没有 navigator.clipboard 时回落
+  // execCommand)。失败必须明说"请手动复制", 不能假装成功。
+  async function copyCallback(method: QrMethod) {
+    const ok = await copyText(callbackUrl(method))
+    if (ok) {
+      setCopyErr('')
+      flashCopied(method)
+      return
+    }
+    flashCopied('')
+    setCopyErr('复制失败(浏览器未授予剪贴板权限):请手动选择上面的地址复制。')
+  }
+
   async function saveAuth() {
     if (busy) return
     // WEB-2:没读到真配置时,表单里那份空初值不是"当前配置" —— 原地拒绝,
@@ -180,10 +400,20 @@ export default function Auth() {
     setAuthErr('')
     // 启用中的 IdP 必须配置完整(前端校验; 服务端亦有校验)
     for (const key of enabled.filter((k) => k !== 'local')) {
-      if (!isReady(key as 'ldap' | 'oidc' | 'openid')) {
-        setAuthErr(`${METHOD_META[key as 'local' | 'ldap' | 'oidc' | 'openid']?.label} 配置不完整, 请完成必填项后再保存`)
+      if (!isReady(key as IdpKey)) {
+        setAuthErr(`${METHOD_META[key as MethodKey]?.label} 配置不完整, 请完成必填项后再保存`)
         return
       }
+    }
+    // 外部权限源: 启用时 endpoint/令牌/至少一种方式必填, 超时 200–10000ms。
+    if (identity.enabled && !identityReady()) {
+      setAuthErr('外部权限源(RBAC)配置不完整: endpoint、服务令牌、至少一种适用方式必填, 超时需在 200–10000ms 之间')
+      return
+    }
+    // 关闭保护: 已有 RBAC 用户时必须显式确认(服务端 409 是第二道防线)。
+    if (needsDisableConfirm() && !confirmDisable) {
+      setAuthErr(`已有 ${identity.rbacUserCount} 个用户以 RBAC uid 建立; 关闭外部权限源后他们将无法再用扫码登录, 请勾选「我确认关闭」后再保存`)
+      return
     }
     setBusy(true)
     try {
@@ -202,6 +432,21 @@ export default function Auth() {
       const ldapBody = { ...form.ldap, bind_password: secretField(form.ldap.bind_password ?? '', secrets.ldap_password, !!clearedSecrets.ldap_password) }
       const oidcBody = { ...form.oidc, client_secret: secretField(form.oidc.client_secret ?? '', secrets.oidc_secret, !!clearedSecrets.oidc_secret) }
       const openidBody = { ...form.openid, client_secret: secretField(form.openid.client_secret ?? '', secrets.openid_secret, !!clearedSecrets.openid_secret) }
+      // 企业微信/钉钉与 oidc 完全同一套密钥语义(*** = 保持现值, 空串 = 清空)。
+      const wecomBody = { ...form.wecom, secret: secretField(form.wecom.secret ?? '', secrets.wecom_secret, !!clearedSecrets.wecom_secret) }
+      const dingtalkBody = { ...form.dingtalk, client_secret: secretField(form.dingtalk.client_secret ?? '', secrets.dingtalk_secret, !!clearedSecrets.dingtalk_secret) }
+      // 外部权限源(RBAC): 关闭时把非法超时归一成默认值(避免「清空旧配置」被
+      // 超时校验挡住); 启用时上一段已保证 200–10000。
+      const identityBody: Record<string, unknown> = {
+        enabled: identity.enabled,
+        endpoint: identity.endpoint.trim(),
+        token: identityTokenForSave(),
+        methods: identity.methods.join(','),
+        timeout_ms: identityTimeoutValid() ? identity.timeoutMs : 3000,
+        sync_groups: identity.syncGroups,
+      }
+      // confirm_disable 只在「确实从开改关且已有 RBAC 用户」且用户勾选时提交。
+      if (needsDisableConfirm() && confirmDisable) identityBody.confirm_disable = true
       const body: any = {
         enabled: enabled.join(','),
         hide_local: form.hideLocal,
@@ -209,10 +454,14 @@ export default function Auth() {
         ldap: ldapBody,
         oidc: oidcBody,
         openid: openidBody,
+        wecom: wecomBody,
+        dingtalk: dingtalkBody,
+        identity: identityBody,
       }
       await request(`${ADMIN_API}/auth`, { method: 'PUT', body: JSON.stringify(body) })
       setAuthMsg('认证配置已保存(重启服务端后生效)')
       setClearedSecrets({})
+      setConfirmDisable(false)
       void load()
     } catch (err: any) {
       setAuthErr(err.message)
@@ -227,7 +476,7 @@ export default function Auth() {
     <div className="space-y-6">
       <PageHeader
         title="认证配置"
-        desc="员工登录方式(本地/LDAP/OpenID/OIDC); 管理后台恒仅本地账户(SSO/LDAP 不进后台)"
+        desc="员工登录方式(本地/LDAP/OIDC/OpenID/企业微信/钉钉扫码); 管理后台恒仅本地账户(SSO/LDAP 不进后台)"
       />
       <Card>
         <CardHeader>
@@ -248,7 +497,7 @@ export default function Auth() {
           <fieldset disabled={!cfgLoaded} className="space-y-4">
           <div className="flex flex-wrap gap-3 rounded-md border p-3">
             {Object.keys(METHOD_META).map((keyRaw) => {
-              const key = keyRaw as 'local' | 'ldap' | 'oidc' | 'openid'
+              const key = keyRaw as MethodKey
               const on = enabled.includes(key)
               const ready = isReady(key)
               return (
@@ -291,6 +540,9 @@ export default function Auth() {
               <TabsTrigger value="ldap">LDAP</TabsTrigger>
               <TabsTrigger value="oidc">OIDC</TabsTrigger>
               <TabsTrigger value="openid">OpenID</TabsTrigger>
+              <TabsTrigger value="wecom">企业微信扫码</TabsTrigger>
+              <TabsTrigger value="dingtalk">钉钉扫码</TabsTrigger>
+              <TabsTrigger value="identity">外部权限源</TabsTrigger>
             </TabsList>
 
             <TabsContent value="local" className="space-y-2">
@@ -355,10 +607,232 @@ export default function Auth() {
                 </div>
               </div>
             </TabsContent>
+
+            <TabsContent value="wecom" className="space-y-3">
+              <CallbackHint method="wecom" copied={copiedTag === 'wecom'} onCopy={() => void copyCallback('wecom')} error={copyErr} />
+              <div className="rounded-md border p-3">
+                <div className="mb-2 text-sm font-medium">企业微信配置(扫码登录, 仅客户端)</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field abbr="wecom" label="企业 ID(corp_id)" value={form.wecom.corp_id ?? ''} ph="ww1234567890abcdef" k="corp_id" set={(v) => setForm({ ...form, wecom: { ...form.wecom, corp_id: v } })} />
+                  <Field abbr="wecom" label="自建应用 AgentId" value={form.wecom.agent_id ?? ''} ph="1000002" k="agent_id" set={(v) => setForm({ ...form, wecom: { ...form.wecom, agent_id: v } })} />
+                  <SecretField label="自建应用 Secret(已设置=保持现值)" clearLabel="清空已保存密钥" preset={secrets.wecom_secret} value={form.wecom.secret ?? ''} onChange={(v) => setForm({ ...form, wecom: { ...form.wecom, secret: v } })} onClear={() => { setForm({ ...form, wecom: { ...form.wecom, secret: '' } }); setClearedSecrets({ ...clearedSecrets, wecom_secret: true }) }} />
+                  <Field abbr="wecom" label="回调地址(Redirect URL)" value={form.wecom.redirect_url ?? ''} ph={callbackUrl('wecom')} k="redirect_url" set={(v) => setForm({ ...form, wecom: { ...form.wecom, redirect_url: v } })} />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  在「企业微信管理后台 → 应用管理 → 自建应用 → 企业微信授权登录」里登记上面的回调地址;
+                  员工在客户端点「企业微信扫码登录」后, 手机扫码确认即可完成登录。
+                </p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="dingtalk" className="space-y-3">
+              <CallbackHint method="dingtalk" copied={copiedTag === 'dingtalk'} onCopy={() => void copyCallback('dingtalk')} error={copyErr} />
+              <div className="rounded-md border p-3">
+                <div className="mb-2 text-sm font-medium">钉钉配置(扫码登录, 仅客户端)</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field abbr="dingtalk" label="AppKey(Client ID)" value={form.dingtalk.client_id ?? ''} ph="dingxxxxxxxxxxxxxxxx" k="client_id" set={(v) => setForm({ ...form, dingtalk: { ...form.dingtalk, client_id: v } })} />
+                  <SecretField label="AppSecret(已设置=保持现值)" clearLabel="清空已保存密钥" preset={secrets.dingtalk_secret} value={form.dingtalk.client_secret ?? ''} onChange={(v) => setForm({ ...form, dingtalk: { ...form.dingtalk, client_secret: v } })} onClear={() => { setForm({ ...form, dingtalk: { ...form.dingtalk, client_secret: '' } }); setClearedSecrets({ ...clearedSecrets, dingtalk_secret: true }) }} />
+                  <Field abbr="dingtalk" label="回调地址(Redirect URL)" value={form.dingtalk.redirect_url ?? ''} ph={callbackUrl('dingtalk')} k="redirect_url" set={(v) => setForm({ ...form, dingtalk: { ...form.dingtalk, redirect_url: v } })} />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  在「钉钉开放平台 → 应用开发 → 登录与分享」里登记上面的回调地址;
+                  员工在客户端点「钉钉扫码登录」后, 手机扫码确认即可完成登录。
+                </p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="identity" className="space-y-3" data-testid="identity-panel">
+              <div className="space-y-3 rounded-md border p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">外部权限源(RBAC，可选)</div>
+                    <p className="text-xs text-muted-foreground">
+                      启用后，扫码登录以 RBAC 返回的 uid 作为用户名；RBAC 查不到/停用的用户将无法登录。
+                    </p>
+                  </div>
+                  <Switch
+                    checked={identity.enabled}
+                    onCheckedChange={(v) => {
+                      setIdentity({ ...identity, enabled: v })
+                      if (v) setConfirmDisable(false)
+                    }}
+                    aria-label="启用外部权限源"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Field
+                    abbr="identity"
+                    label="解析接口(endpoint)"
+                    value={identity.endpoint}
+                    ph="https://rbac.example.com/internal/v1/identity/resolve"
+                    k="endpoint"
+                    set={(v) => setIdentity({ ...identity, endpoint: v })}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="identity-timeout" className="text-xs text-muted-foreground">超时(毫秒, 200–10000)</Label>
+                    <Input
+                      id="identity-timeout"
+                      type="number"
+                      min={200}
+                      max={10000}
+                      value={identity.timeoutMs}
+                      onChange={(e) => setIdentity({ ...identity, timeoutMs: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+
+                <SecretField
+                  label="服务令牌(已设置=保持现值)"
+                  clearLabel="清空已保存令牌"
+                  preset={secrets.identity_token}
+                  value={identity.token}
+                  onChange={(v) => setIdentity({ ...identity, token: v })}
+                  onClear={() => {
+                    setIdentity({ ...identity, token: '' })
+                    setClearedSecrets({ ...clearedSecrets, identity_token: true })
+                  }}
+                />
+
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">适用方式(至少一个)</div>
+                  <div className="flex flex-wrap gap-4">
+                    {RBAC_METHODS.map((m) => (
+                      <label key={m} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          id={`identity-method-${m}`}
+                          aria-label={`适用方式：${METHOD_META[m].label}`}
+                          checked={identity.methods.includes(m)}
+                          onChange={(e) => toggleIdentityMethod(m, e.target.checked)}
+                        />
+                        {METHOD_META[m].label}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    只有勾选的扫码方式会走 RBAC 解析；未勾选的方式保持现有直连登录。
+                  </p>
+                  {identity.enabled && identity.methods.length === 0 && (
+                    <p className="text-xs text-destructive">至少选择一种适用方式。</p>
+                  )}
+                </div>
+
+                <div className="flex items-start gap-3 rounded-md border p-3">
+                  <Switch
+                    id="identity-sync-groups"
+                    checked={identity.syncGroups}
+                    onCheckedChange={(v) => setIdentity({ ...identity, syncGroups: v })}
+                    aria-label="用 RBAC 部门替换 ZeoKeel 组"
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="identity-sync-groups" className="text-[13px] text-foreground">
+                      用 RBAC 部门替换 ZeoKeel 组
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      开启后每次登录会用 RBAC 返回的部门全量替换该用户的组归属，会覆盖手工组；关闭则只登录、不动组。
+                    </p>
+                  </div>
+                </div>
+
+                {identity.rbacUserCount > 0 && (
+                  <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    当前已有 <span className="font-semibold text-foreground">{identity.rbacUserCount}</span> 个用户以 RBAC uid 建立。
+                    关闭外部权限源后，这些用户将无法再用扫码登录；如需关闭，请先迁移或确认已不再需要。
+                  </div>
+                )}
+
+                {needsDisableConfirm() && (
+                  <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+                    <p className="text-xs text-destructive">
+                      已关闭外部权限源，但仍有 {identity.rbacUserCount} 个 RBAC 用户。保存前请确认：关闭后这些用户将无法登录。
+                    </p>
+                    <label className="flex items-center gap-2 text-sm text-destructive">
+                      <Checkbox
+                        id="identity-confirm-disable"
+                        checked={confirmDisable}
+                        onChange={(e) => setConfirmDisable(e.target.checked)}
+                      />
+                      我确认关闭
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-md border p-3">
+                <div>
+                  <div className="text-sm font-medium">测试解析</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    用已保存的 endpoint 与服务令牌调用 RBAC；不会修改任何数据。
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="identity-test-provider" className="text-xs text-muted-foreground">渠道</Label>
+                    <Select value={testProvider} onValueChange={(v) => setTestProvider(v as QrMethod)}>
+                      <SelectTrigger id="identity-test-provider" aria-label="解析渠道">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="wecom">企业微信</SelectItem>
+                        <SelectItem value="dingtalk">钉钉</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Field
+                    abbr="identity-test"
+                    label="渠道用户 ID(企微 userid)"
+                    value={testProviderUserID}
+                    k="provider_user_id"
+                    set={setTestProviderUserID}
+                  />
+                  <Field
+                    abbr="identity-test"
+                    label="钉钉 unionId"
+                    value={testUnionID}
+                    k="union_id"
+                    set={setTestUnionID}
+                  />
+                  <Field
+                    abbr="identity-test"
+                    label="手机号(可选)"
+                    value={testMobile}
+                    k="mobile"
+                    set={setTestMobile}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void testIdentity()}
+                    disabled={identityTesting || !canTestIdentity()}
+                  >
+                    {identityTesting ? '解析中…' : '测试解析'}
+                  </Button>
+                  {!canTestIdentity() && (
+                    <span className="text-xs text-muted-foreground">
+                      请先填写 endpoint/令牌并保存后再测试（无需先启用）。
+                    </span>
+                  )}
+                </div>
+                {identityTestResult && (
+                  identityTestResult.ok ? (
+                    <div className="space-y-0.5 rounded-md border bg-muted/20 p-3 text-[13px]">
+                      <div>uid: <span className="font-mono font-medium">{identityTestResult.uid || '(空)'}</span></div>
+                      <div>姓名: {identityTestResult.name || '(空)'}</div>
+                      <div>状态: {identityTestResult.status === 1 ? '正常' : identityTestResult.status === 0 ? '停用' : '(未知)'}</div>
+                      <div>部门: {identityTestResult.departments?.length ? identityTestResult.departments.join('、') : '(无)'}</div>
+                    </div>
+                  ) : (
+                    <div className="text-[13px] text-red-600">✗ {identityTestResult.message || '解析失败'}</div>
+                  )
+                )}
+              </div>
+            </TabsContent>
           </Tabs>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={testConnection} disabled={testing || tab === 'local' || !cfgLoaded}>
+            <Button variant="outline" onClick={testConnection} disabled={testing || !TESTABLE_TABS.has(tab) || !cfgLoaded}>
               {testing ? '测试中…' : '测试连接'}
             </Button>
             <Button onClick={saveAuth} disabled={busy || !cfgLoaded}>{busy ? '保存中…' : '保存认证配置'}</Button>
@@ -400,6 +874,36 @@ export default function Auth() {
   )
 }
 
+/**
+ * 回调地址展示 + 复制(企业微信/钉钉两页共用):
+ * ① 地址由 location.origin 推导 —— 管理员打开管理端的对外地址就是手机扫码后
+ *    浏览器落地的地址; ② 复制失败必须明说"请手动复制", 不假装成功(同 lib/clipboard 约定)。
+ */
+function CallbackHint(props: {
+  method: QrMethod
+  copied: boolean
+  onCopy: () => void
+  error: string
+}) {
+  const url = callbackUrl(props.method)
+  return (
+    <div className="rounded-md border bg-muted/30 p-3">
+      <div className="text-sm font-medium">回调地址({METHOD_META[props.method].label})</div>
+      <div className="mt-1 flex items-center gap-2">
+        <code className="min-w-0 flex-1 break-all rounded border bg-background px-2 py-1 font-mono text-xs">{url}</code>
+        <Button type="button" variant="outline" size="sm" onClick={props.onCopy}>
+          {props.copied ? <Check /> : <Copy />}
+          {props.copied ? '已复制' : '复制'}
+        </Button>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        请到服务商后台登记该回调地址，值必须逐字一致(含协议、域名、端口、路径与大小写)。
+      </p>
+      {props.error && <p className="text-xs text-destructive">{props.error}</p>}
+    </div>
+  )
+}
+
 function Field(props: { label: string; value: string; ph?: string; k: string; abbr?: string; set: (v: string) => void }) {
   const id = `auth-field-${props.abbr ?? 'x'}-${props.k}`
   return (
@@ -414,6 +918,7 @@ function SecretField(props: {
   label: string
   value: string
   preset?: 'has-value' | 'unset'
+  clearLabel?: string
   onChange: (v: string) => void
   onClear?: () => void
 }) {
@@ -434,7 +939,7 @@ function SecretField(props: {
             onClick={props.onClear}
             className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
           >
-            清空已保存密码
+            {props.clearLabel ?? '清空已保存密码'}
           </button>
         )}
       </div>

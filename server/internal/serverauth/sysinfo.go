@@ -53,6 +53,12 @@ type sysinfoResponse struct {
 	// (本计数涨,要扩容/提示稍后重试)的唯一读数。同一次拒绝虽然也写一条审计
 	// (`oidc_flow_capacity`),但审计是**事后检索**面,不是探针面。
 	OIDC oidcFlowHealth `json:"oidc"`
+	// QR 是扫码登录(企业微信/钉钉,2026-11-03)流程启动面的平台容量拒绝证据。
+	//
+	// 与 OIDC 同款"子系统记账、这里只读":容量拒绝(流程表满 / 单 IP 在途配额满)
+	// 不计入失败预算,但运维必须能区分"平台容量打满"(要扩容/提示稍后重试)与
+	// "有人在暴力扫码"(失败预算涨,要拦)。唯一真源:QRFlowCapacityRejections()。
+	QR qrFlowHealth `json:"qr"`
 	// Audit 是审计链与审计写入的健康状态(FIX-12,审计 2026-09-12 P1)。
 	//
 	// 为什么挂在这里而不是新开一个 admin 端点:审计写入失败以前**完全不可
@@ -118,6 +124,13 @@ type oidcFlowHealth struct {
 	// CapacityRejections 是**因平台自身容量**被拒的流程启动次数(在途流程表满 /
 	// 单来源 IP 在途配额满)。它**不**计入失败预算 —— 见 oidc.go 的
 	// recordFlowCapacityRejection(容量拒绝不是攻击证据)。
+	CapacityRejections int64 `json:"capacity_rejections"`
+}
+
+// qrFlowHealth 是扫码登录流程启动面的平台容量读数(与 oidcFlowHealth 同款)。
+type qrFlowHealth struct {
+	// CapacityRejections 是因平台自身容量被拒的扫码流程启动次数(流程表满 /
+	// 单来源 IP 在途配额满)。它**不**计入失败预算(qrStartLimiter 只记真实失败)。
 	CapacityRejections int64 `json:"capacity_rejections"`
 }
 
@@ -217,6 +230,8 @@ func (a *AdminAPI) handleServerInfo(c *gin.Context) {
 	// 读的是 serverauth 自己的进程级计数(唯一真源,OIDCFlowCapacityRejections),
 	// 不是在这里另记一份 —— 与 Balance 同款"子系统记账、这里只读"。
 	resp.OIDC = oidcFlowHealth{CapacityRejections: OIDCFlowCapacityRejections()}
+	// 2026-11-03:扫码登录(企业微信/钉钉)同款容量读数,与 OIDC 并排看。
+	resp.QR = qrFlowHealth{CapacityRejections: QRFlowCapacityRejections()}
 
 	// 实时版本检查(2026-08-31):查询 GitHub Releases latest,对比当前版本。
 	// 结果失败时留 nil(JSON null),前端静默降级——版本提示是增强体验,

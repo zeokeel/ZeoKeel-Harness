@@ -260,6 +260,18 @@ const REPO_EXACT_ROUTE_POLICY: ReadonlyMap<string, ExactRouteRow> = new Map<stri
     gate: 'packages/host/enterprise/src/auth-gate.ts#proofOfPossession',
     localGate: '同上：`proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@zeokeel/dsh-host-locale/loopback`；本路由用 `required` 档（fence 缺席 fail-closed 503）。',
   }],
+  // 扫码登录（2026-11-03）：两条都会驱动宿主行为 —— start 创建服务端流程并缓存 flow_id，
+  // poll 在 done 时写本机会话；与 login 同口径用 `required` 持有性证明。
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/auth/qr/start\'', {
+    proof: 'all',
+    gate: 'packages/host/enterprise/src/auth-gate.ts#proofOfPossession',
+    localGate: '同上：`proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@zeokeel/dsh-host-locale/loopback`；本路由用 `required` 档（fence 缺席 fail-closed 503）。',
+  }],
+  ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/auth/qr/poll\'', {
+    proof: 'all',
+    gate: 'packages/host/enterprise/src/auth-gate.ts#proofOfPossession',
+    localGate: '同上：`proofOfPossession` 是 `apply()` 内的局部闭包（第三轮写的同形实现），尚未收敛到 `@zeokeel/dsh-host-locale/loopback`；本路由用 `required` 档（fence 缺席 fail-closed 503）。',
+  }],
   ['packages/host/enterprise/src/auth-gate.ts#\'/api/zeokeel/channel\'', {
     proof: 'none',
     reason: '纯读：回吐渠道内容（GET，登录页未登录时也要用），无状态变更。',

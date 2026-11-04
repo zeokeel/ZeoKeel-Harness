@@ -1,5 +1,7 @@
 package serverauth
 
+import "context"
+
 // UserInfo is the normalized identity returned by providers.
 type UserInfo struct {
 	Username    string
@@ -25,6 +27,15 @@ type UserInfo struct {
 	Source string
 	// ExternalSource 是哪套 IdP(ldap/oidc/openid);仅 external 有值。
 	ExternalSource string
+	// ProviderUserID / ProviderUnionID / Mobile 是**渠道原生身份**，只在
+	// 外部身份解析（identity.external.*，RBAC 定制客户）里使用：
+	//   - 企微：ProviderUserID = userid；
+	//   - 钉钉：ProviderUnionID = unionId（userid 会变，unionId 稳定）；
+	//   - Mobile：服务商返回的手机号，仅用于 RBAC 侧的兜底匹配，不落 ZeoKeel 库。
+	// 其它登录方式留空，不改变既有语义。
+	ProviderUserID  string
+	ProviderUnionID string
+	Mobile          string
 }
 
 // PasswordProvider authenticates via username/password (local/ldap).
@@ -32,6 +43,37 @@ type PasswordProvider interface {
 	Name() string
 	Authenticate(username, password string) (UserInfo, error)
 	Configure(cfg map[string]string) error
+}
+
+// QRProvider authenticates via a provider-hosted QR code scanned by a phone
+// (企业微信 / 钉钉).
+//
+// 与 BrowserProvider 的差异：没有浏览器重定向与 state cookie —— 二维码内容由
+// 服务端渲染成 PNG 交给客户端，手机扫码后服务商直接回调
+// `/api/client/v2/auth/<name>/callback`，服务端凭 state 找回内存流程并签发
+// token，桌面客户端轮询 poll 一次性取走（状态机见 qr.go）。
+type QRProvider interface {
+	Name() string
+	// AuthURL 返回服务商托管登录页（含 redirect_uri + state）。
+	//
+	// ⚠️ 不要把它的返回值直接编码成二维码：`login.work.weixin.qq.com/wwlogin/
+	// sso/login` 这类是**登录页**，扫出来的二维码会再打开一个需要二次扫码的
+	// 页面（2026-11-03 真机踩到）。能直接拿到官方二维码图片的 provider 必须
+	// 实现 QRImageProvider，由服务端返回图片；否则才退回把该 URL 编码成码。
+	AuthURL(state string) (string, error)
+	// Exchange 用回调 code 兑换外部身份。ctx 由调用方限时（qrExchangeTimeout），
+	// 实现必须把它传给每一次出站请求。
+	Exchange(ctx context.Context, code string) (UserInfo, error)
+	Configure(cfg map[string]string) error
+}
+
+// QRImageProvider 是可选能力：由服务端返回**服务商官方二维码图片**（PNG），
+// 而不是把登录页 URL 编码成二维码。
+//
+// 注册了此能力的 provider 在 qr/start 时优先走 QRImage；返回的字节必须是
+// 可解码的 PNG（调用方会再校验 PNG 签名与大小后才变成 data URL）。
+type QRImageProvider interface {
+	QRImage(ctx context.Context, state string) ([]byte, error)
 }
 
 // BrowserProvider authenticates via browser redirect flow (oidc).

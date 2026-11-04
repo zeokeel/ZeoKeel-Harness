@@ -127,6 +127,10 @@ const MAX_ZOOM_LEVEL = 4
  */
 export const APP_CONTENT_SECURITY_POLICY = [
   "default-src 'self' data: blob: ws:",
+  // 扫码登录页用 iframe 嵌服务商官方页面；页面成功后要跳到“当前登录服务端”
+  // 的 callback（域名运行时才知道），所以 frame-src 允许 https（登录页只创建
+  // 官方扫码 iframe，页面脚本本身受 script-src 约束）。
+  "frame-src 'self' https:",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
@@ -145,6 +149,8 @@ export interface NavigationAttempt {
   readonly url: string
   /** 阻止这次导航。 */
   preventDefault(): void
+  /** Electron 的 will-frame-navigate / will-redirect 会带；主框架为 true。 */
+  readonly isMainFrame?: boolean
 }
 
 /**
@@ -161,6 +167,16 @@ export interface NavigationAttempt {
  */
 export function refuseForeignNavigation(origin: string): (event: NavigationAttempt) => void {
   return (event) => {
+    // 扫码登录的 iframe 在手机确认后要跳到“当前登录服务端”的 callback（域名运行时
+    // 才知道）；只对**子 frame** 放行 https。顶层导航/顶层重定向仍严格拒绝，
+    // 因为主框架事件的 isMainFrame 不是 false；iframe 自身也由登录页 CSP 限定。
+    if (event.isMainFrame === false) {
+      try {
+        if (new URL(event.url).protocol === 'https:') return
+      } catch {
+        // 畸形 URL 继续走严格拒绝。
+      }
+    }
     let targetOrigin: string | undefined
     try {
       targetOrigin = new URL(event.url).origin
@@ -171,6 +187,49 @@ export function refuseForeignNavigation(origin: string): (event: NavigationAttem
     }
     if (targetOrigin !== origin) event.preventDefault()
   }
+}
+
+/**
+ * 钉钉官方授权页默认落在「账号登录」Tab，扫码入口在第二个 Tab。客户端登录卡
+ * 只做扫码，所以子 frame 加载完成后把官方页的「QR Code」Tab 选中；只点击官方
+ * 页自己的 Tab，不读取/改写任何数据，也不替用户点授权同意。
+ */
+export function preferDingTalkQrTab(webContents: Electron.WebContents): void {
+  const inject = `(() => {
+    const pick = () => {
+      const tab = [...document.querySelectorAll('[role="tab"]')]
+        .find((el) => (el.textContent || '').trim() === 'QR Code')
+      if (tab === undefined) return false
+      if (tab.getAttribute('aria-selected') !== 'true') tab.click()
+      return true
+    }
+    if (pick()) return true
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      if (pick() || attempts >= 20) clearInterval(timer)
+    }, 250)
+    return true
+  })()`
+  const tryFrame = (): boolean => {
+    let frames: Electron.WebFrameMain[] = []
+    try {
+      frames = webContents.mainFrame.framesInSubtree
+    } catch {
+      return false
+    }
+    const frame = frames.find((candidate) => /^https:\/\/login\.dingtalk\.com\/oauth2\//u.test(candidate.url))
+    if (frame === undefined) return false
+    void frame.executeJavaScript(inject, true).catch(() => {})
+    return true
+  }
+  if (tryFrame()) return
+  let attempts = 0
+  const timer = setInterval(() => {
+    attempts += 1
+    if (tryFrame() || attempts >= 20) clearInterval(timer)
+  }, 250)
+  setTimeout(() => { clearInterval(timer) }, 6_000)
 }
 
 function isZoomShortcut(input: Electron.Input): 'in' | 'out' | 'reset' | undefined {
@@ -1257,6 +1316,12 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       callback: (response: { responseHeaders?: Record<string, string[]> }) => void,
     ): void => {
       const url = details.url
+      // 第三方 iframe（扫码登录的官方页面）必须保留它自己的 CSP；套用 App CSP
+      // 会把页面脚本/样式全部拦掉，表现为 iframe 区域一片空白。
+      if (details.resourceType === 'subFrame') {
+        callback({})
+        return
+      }
       try {
         const parsed = new URL(url)
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'file:') {
@@ -1306,6 +1371,10 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     window.webContents.on('will-navigate', refuseNavigation)
     window.webContents.on('will-frame-navigate', refuseNavigation)
     window.webContents.on('will-redirect', refuseNavigation)
+    // 钉钉官方授权页是跨域 iframe，登录卡只能通过宿主在子 frame 里选中扫码 Tab。
+    window.webContents.on('did-frame-finish-load', (_event, isMainFrame) => {
+      if (isMainFrame === false) preferDingTalkQrTab(window.webContents)
+    })
     window.webContents.on('render-process-gone', (_event, details) => {
       this.logError(`dsh-plugin-desktop: renderer process gone (reason: ${details.reason}, exitCode: ${formatDesktopExitCode(details.exitCode)})`)
       // P0-6/D8:渲染进程崩溃也要进错误上报(reason/exitCode 作为 tag)。

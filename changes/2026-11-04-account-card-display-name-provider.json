@@ -1,0 +1,71 @@
+{
+  "id": "2026-11-04-account-card-display-name-provider",
+  "status": "verified",
+  "intent": {
+    "zh": "客户端左下角账号卡此前显示会话 username（RBAC uid，如 dingtalk:.../employee-a），不是员工真实姓名，也没有登录方式标识。登录 payload 已带 user.display_name；本变更把 display_name 与会话内登录方式（local/wecom/dingtalk）带到渲染层，账号卡显示真实姓名，并在姓名前显示企业微信/钉钉品牌图标（本地登录仍用首字母头像）。",
+    "en": "The bottom-left account row showed the session username (RBAC uid such as dingtalk:.../employee-a) instead of the employee's real name, and had no login-provider badge. Carry display_name and the login method (local/wecom/dingtalk) through the session and render the real name with a WeCom/DingTalk icon before it (local logins keep the initial avatar)."
+  },
+  "modules": [
+    "packages/host/gateway-client/src/config.ts",
+    "packages/host/gateway-client/src/auth.ts",
+    "packages/host/enterprise/src/auth-gate.ts",
+    "packages/host/enterprise/tests/auth-gate-qr-login.spec.ts",
+    "packages/client/account-card/src/client/AccountCard.tsx",
+    "packages/client/account-card/src/client/AccountCard.spec.tsx"
+  ],
+  "acceptance": [
+    {
+      "criterion": "扫码登录 done 的 user.display_name 进入 Session.displayName；QR 会话 provider=wecom/dingtalk；auth/state 下发 displayName/provider",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts tests/auth-gate-login.spec.ts tests/audit-r15b-password-and-identity.spec.ts"
+    },
+    {
+      "criterion": "会话映射覆盖 display_name/provider；不改变 sessionIdentity（余额归属仍按 serverURL+username）",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-gateway-client vitest run tests/gateway-client.spec.ts"
+    },
+    {
+      "criterion": "账号卡显示 displayName 而不是 username；wecom/dingtalk 在名字前显示品牌图标，缺失时回退首字母",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-account-card vitest run"
+    },
+    {
+      "criterion": "231 本地客户端顶部会话显示「钉钉图标 + 员工姓名」；构建与类型检查通过",
+      "evidence": "manual",
+      "command": "corepack yarn workspace dsh-plugin-desktop build"
+    },
+    {
+      "criterion": "231 本地客户端截图：左下角显示「品牌图标 + 真实姓名」",
+      "evidence": "manual",
+      "command": "231 Xvfb 本地客户端截图"
+    }
+  ],
+  "risk": "旧会话文件没有 displayName/provider，升级后会显示 username/首字母；重新登录一次即恢复。provider 只由宿主在登录时写入（local/wecom/dingtalk），不从不可信网关字段透传。",
+  "rollback": "回滚本提交并重新打包客户端；服务端 userJSON 未改，回滚不影响登录。",
+  "verification": [
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts tests/auth-gate-login.spec.ts tests/audit-r15b-password-and-identity.spec.ts",
+      "result": "exit 0；36 + 26 tests passed"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-gateway-client vitest run tests/gateway-client.spec.ts",
+      "result": "exit 0；14 tests passed"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-account-card vitest run",
+      "result": "exit 0；88 tests passed（含新增「真实姓名 + 品牌图标」用例）"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-account-card typecheck && corepack yarn workspace @zeokeel/dsh-gateway-client typecheck && corepack yarn workspace @zeokeel/dsh-enterprise typecheck",
+      "result": "exit 0"
+    },
+    {
+      "command": "231 Xvfb 本地客户端截图",
+      "result": "左下角显示钉钉图标 + 员工姓名（不是 dingtalk:...）"
+    },
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop build",
+      "result": "exit 0"
+    }
+  ]
+}

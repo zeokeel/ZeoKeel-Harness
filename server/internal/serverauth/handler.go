@@ -54,10 +54,17 @@ type API struct {
 	// loginIPLimiter + loginIPMaxAttempts)。每 API 实例专属,因此键里不需要
 	// dbLimiterScope(见 oidcFlowBudgetKeyForHost)。
 	oidcFlowLimiter *loginLimiter
+	// qrStartLimiter:扫码登录**流程启动**专用 IP 桶(2026-11-03)。
+	//
+	// 与 oidcFlowLimiter 同口径（只对真实失败记账、容量拒绝单独计数），但必须是
+	// **独立实例**：OIDC 与扫码是两条互不相干的登录面，共享预算会让扫码流量吃掉
+	// SSO 的失败预算（反之亦然）。每 API 实例专属 ⇒ 键里不需要 dbLimiterScope。
+	qrStartLimiter *loginLimiter
 
 	mu               sync.RWMutex
 	providers        map[string]PasswordProvider
 	browsers         map[string]BrowserProvider
+	qrs              map[string]QRProvider
 	enabledProviders map[string]bool
 	// providersConfigured 区分"**从未配置过**"与"配置成空集"(WEB-2 审计 2026-09-23)。
 	// `New()` 起 enabledProviders 就是非 nil 空 map ⇒ 判不了 nil;而空集在 fail-open
@@ -90,6 +97,10 @@ type API struct {
 	// 就已存在的对象，没有运行期变更的需求）。nil = 不回调（最小装配/测试）。
 	OnSessionRevoked      func(sessionKey string)
 	OnUserSessionsRevoked func(userID int64)
+
+	// qrFlows 是扫码登录的进程内流程表（TTL/容量/单 IP 配额见 qr.go）。
+	// 每 API 实例一份：进程重启即全部失效（无状态优先；流程本来就只活 5 分钟）。
+	qrFlows *qrFlowTable
 }
 
 // SessionKey 返回一把 bearer 对应的**会话键**（契约 §8.2）。
@@ -116,9 +127,12 @@ func New(db *sql.DB) *API {
 		loginIPLimiter:   sharedLoginIPLimiter(),
 		callbackLimiter:  newCallbackLimiter(),
 		oidcFlowLimiter:  newRateLimiter(oidcFlowStartMaxAttempts),
+		qrStartLimiter:   newRateLimiter(qrStartMaxAttempts),
 		providers:        map[string]PasswordProvider{},
 		browsers:         map[string]BrowserProvider{},
+		qrs:              map[string]QRProvider{},
 		enabledProviders: map[string]bool{},
+		qrFlows:          newQRFlowTable(),
 	}
 }
 
@@ -191,7 +205,7 @@ func (a *API) ReloadProviders(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	pwds, browsers, failures := configureProvidersFromSettings(settings, db)
+	pwds, browsers, qrs, failures := configureProvidersFromSettings(settings, db)
 	providers := make(map[string]PasswordProvider, len(pwds))
 	for _, p := range pwds {
 		providers[p.Name()] = p
@@ -200,6 +214,10 @@ func (a *API) ReloadProviders(db *sql.DB) error {
 	for _, b := range browsers {
 		bs[b.Name()] = b
 	}
+	qs := make(map[string]QRProvider, len(qrs))
+	for _, q := range qrs {
+		qs[q.Name()] = q
+	}
 	enabled := make(map[string]bool)
 	for _, n := range EnabledProviderNames(db) {
 		enabled[n] = true
@@ -207,20 +225,27 @@ func (a *API) ReloadProviders(db *sql.DB) error {
 	a.mu.Lock()
 	kept := make(map[string]bool, len(failures))
 	for _, f := range failures {
-		if f.Kind == kindBrowser {
+		switch f.Kind {
+		case kindBrowser:
 			if old := a.browsers[f.Name]; old != nil {
 				bs[f.Name] = old
 				kept[f.Name] = true
 			}
-			continue
-		}
-		if old := a.providers[f.Name]; old != nil {
-			providers[f.Name] = old
-			kept[f.Name] = true
+		case kindQR:
+			if old := a.qrs[f.Name]; old != nil {
+				qs[f.Name] = old
+				kept[f.Name] = true
+			}
+		default:
+			if old := a.providers[f.Name]; old != nil {
+				providers[f.Name] = old
+				kept[f.Name] = true
+			}
 		}
 	}
 	a.providers = providers
 	a.browsers = bs
+	a.qrs = qs
 	a.enabledProviders = enabled
 	a.providersConfigured = true // 空集从此是"配置成空"而不是"没配置过"
 	a.runtimeReady = true        // provider 集合已装载过 ⇒ 运行期视图可用
@@ -291,6 +316,20 @@ func (a *API) RegisterBrowser(p BrowserProvider) {
 	a.mu.Unlock()
 }
 
+// RegisterQR adds a QR provider (wecom/dingtalk).
+//
+// 与 RegisterBrowser 一样会置 runtimeReady：注册表不再是"从未装载过"，此时
+// `/auth/methods` 必须以注册表为准（未注册的扫码方式 = 此刻不可用）。
+func (a *API) RegisterQR(p QRProvider) {
+	a.mu.Lock()
+	if a.qrs == nil {
+		a.qrs = map[string]QRProvider{}
+	}
+	a.qrs[p.Name()] = p
+	a.runtimeReady = true
+	a.mu.Unlock()
+}
+
 // runtimeMethodCheck 返回"某登录方式此刻是否真的可用"的判据(R24-X4-B2)。
 //
 // 它是 `/auth/methods` 的 `configured` 的**运行期真源**,与登录路由自己解析
@@ -312,6 +351,9 @@ func (a *API) runtimeMethodCheck() func(name string) bool {
 		if _, ok := a.browsers[name]; ok {
 			return true
 		}
+		if _, ok := a.qrs[name]; ok {
+			return true
+		}
 		_, ok := a.providers[name]
 		return ok
 	}
@@ -322,6 +364,13 @@ func (a *API) browserProvider(name string) BrowserProvider {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.browsers[name]
+}
+
+// qrProvider 返回指定名称的扫码登录 provider(nil = 未配置/已禁用)。
+func (a *API) qrProvider(name string) QRProvider {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.qrs[name]
 }
 
 // passwordProvider 返回已注册的密码 provider(仅用于内部读取)。
@@ -474,6 +523,21 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 		name := p.Name()
 		g.GET("/"+name+"/login", a.handleOIDCLoginWith(p))
 		g.GET("/"+name+"/callback", a.handleOIDCCallbackWith(p))
+	}
+	// 扫码登录(wecom/dingtalk):固定三条路由,provider 在请求时动态解析。
+	// 生产路由由 internal/router 声明;这里只服务测试/自建路由树。
+	// 固定名恒挂(未配置时 404 JSON),与生产路由树同形 —— 否则"未配置 404"
+	// 会退化成 gin 的 NoRoute(响应形状不同)。
+	qrNames := map[string]bool{"wecom": true, "dingtalk": true}
+	a.mu.RLock()
+	for name := range a.qrs {
+		qrNames[name] = true
+	}
+	a.mu.RUnlock()
+	for name := range qrNames {
+		g.POST("/"+name+"/qr/start", a.qrStartHandler(name))
+		g.GET("/"+name+"/qr/poll", a.qrPollHandler(name))
+		g.GET("/"+name+"/callback", a.qrCallbackHandler(name))
 	}
 }
 
@@ -725,6 +789,11 @@ func (a *API) provisionUser(ui UserInfo) (*serverstore.User, error) {
 	return provisionUser(a.DB, ui)
 }
 
+// errUsernameLocalAccount 表示外部身份试图接管同名本地账号（安全边界）。
+// 单独成哨兵：外部身份解析（identity.external.*）启用时，上层要把这条失败
+// 映射成对客户端可操作的 IDENTITY_CONFLICT，而不是笼统的「用户创建失败」。
+var errUsernameLocalAccount = errors.New("username belongs to a local account")
+
 // provisionUser creates a local users row for an external (ldap/oidc) identity
 // on first login, and syncs group membership. An external identity whose
 // username collides with an existing local account is rejected — it must never
@@ -767,7 +836,7 @@ func provisionUser(db *sql.DB, ui UserInfo) (*serverstore.User, error) {
 	}
 	// 防提权:外部身份不得接管本地账号行
 	if ui.Source == "external" && u.Source != "external" {
-		return nil, errors.New("username belongs to a local account")
+		return nil, errUsernameLocalAccount
 	}
 	// P2-9(审计 2026-09-13):外部身份必须绑定到 **IdP 主体**(OIDC sub /
 	// LDAP DN),而不是只按用户名 —— 否则两套 IdP 之间(或允许自选用户名的

@@ -73,7 +73,7 @@ data/                  # 服务端运行时数据(0700,gitignore);数据库在 P
   - 失败:统一错误信封 `{"error":{"code":"ERR_CODE","message":"..."}}`(经 `serverauth.WriteError`);
   - **禁止** `c.HTML` / `c.String`(text/plain) / 无 body 响应作为 API 响应;
   - 404(NoRoute) 与 panic(Recovery) 也必须 JSON 信封——`mountAPIGuards` 已统一;
-  - 例外(产品 HTML 面,非 API):`/` `/portal`(门户首页)、`/admin/*`(webadmin SPA)、`/healthz`(JSON 探针);SSE(`text/event-stream`)与二进制归档下载(application/gzip)是流式/文件语义,不适用 JSON 约束。
+  - 例外(产品 HTML 面,非 API):`/` `/portal`(门户首页)、`/admin/*`(webadmin SPA)、`/healthz`(JSON 探针)、`/api/client/v2/auth/{wecom,dingtalk}/callback` 的**成功页**(扫码登录后手机浏览器落地页:无脚本/无外链/无插值;失败分支仍走 JSON 信封,见 `internal/serverauth/qr.go`);SSE(`text/event-stream`)与二进制归档下载(application/gzip)是流式/文件语义,不适用 JSON 约束。
 - **认证与权限**:客户端面 Bearer(`serverauth.BearerAuth`);管理面会话+CSRF + RBAC(`serverauth.AdminAuth` + `AdminRoute` 权限申报,fall-open 防护)。
 - **客户端调用面**:桌面客户端(enterprise)调 `/api/client/v2/*`;webadmin 调 `/api/server/admin/*` 与公开 `/api/client/v2/channel`。新增/修改端点时两端必须同步(见 §8 检查)。
 

@@ -1,0 +1,59 @@
+{
+  "id": "2026-11-04-wecom-qr-iframe-client",
+  "status": "verified",
+  "intent": {
+    "zh": "企业微信 qrConnect 的二维码依赖“打开着的官方页面”在手机确认后完成跳转；客户端此前只显示服务端抠出的二维码图片，手机端确认后没有任何页面回调，导致客户端永远 pending。本变更让 /qr/start 返回官方页面 qr_url，客户端用 iframe 嵌入并由页面自己完成回调；qrConnect URL 带 self_redirect=true，避免跨域时走 top.location 被客户端导航闸门拦截。客户端 CSP/导航闸门只对扫码 iframe 放行官方页面与 https 回调。",
+    "en": "WeCom qrConnect requires a live official page to complete the callback after phone confirmation; the client only rendered the extracted QR image, so no page redirected. Return the official qr_url from /qr/start and embed it in an iframe; add self_redirect=true so the page redirects inside the iframe instead of top.location. Relax client CSP/navigation only for the QR iframe and its https callback."
+  },
+  "modules": [
+    "server/internal/serverauth/qr.go",
+    "server/internal/serverauth/wecom.go",
+    "server/internal/serverauth/wecom_test.go",
+    "packages/host/enterprise/src/auth-gate.ts",
+    "packages/host/enterprise/tests/auth-gate-qr-login.spec.ts",
+    "packages/host/desktop/src/electron-runtime.ts",
+    "packages/host/desktop/tests/electron-runtime.spec.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "qr/start 返回官方 qr_url（含 state）并保留 qr_png；qrConnect URL 带 self_redirect=true；WeCom/QR 用例全绿",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth/ -run 'TestQR|TestWeCom' -count=1"
+    },
+    {
+      "criterion": "客户端登录页在 qr_url 合法时渲染 iframe，非法/缺失回落 PNG；页面与宿主路由用例全绿且类型检查通过",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts"
+    },
+    {
+      "criterion": "桌面运行时允许子 frame 的 https 回调（顶层仍严格拒绝），CSP 指令集合显式登记 frame-src 'self' https:；运行时用例全绿",
+      "evidence": "test",
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run tests/electron-runtime.spec.ts && corepack yarn workspace dsh-plugin-desktop typecheck"
+    },
+    {
+      "criterion": "231 本地真实客户端扫码点「登录」后：服务端收到 callback 200，RBAC resolve 成功，数据库出现 employee-a / external_source=rbac / external_id=rbac:employee-a，客户端进入应用",
+      "evidence": "manual",
+      "command": "231 Xvfb 真机扫码 + 企业微信点「登录」"
+    }
+  ],
+  "risk": "frame-src 允许 https 会放宽应用页 iframe 来源；扫码 iframe 由登录页脚本创建且 script-src 仍限本地，官方页面本身已受其 CSP 约束。导航闸门只对 isMainFrame=false 且 https 的 frame 放行；顶层导航/重定向仍严格拒绝。qr_url 非法时回落旧 PNG。",
+  "rollback": "回滚本提交并重新部署服务端/客户端；旧客户端仍按 qr_png 使用（但企微登录无法完成），需保留旧版回滚说明。",
+  "verification": [
+    {
+      "command": "cd server && go test ./internal/serverauth/ -run 'TestQR|TestWeCom' -count=1",
+      "result": "exit 0；ok github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts",
+      "result": "exit 0；36 tests passed"
+    },
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run tests/electron-runtime.spec.ts && corepack yarn workspace dsh-plugin-desktop typecheck",
+      "result": "exit 0；60 tests passed；typecheck exit 0"
+    },
+    {
+      "command": "231 Xvfb 真机扫码 + 企业微信点「登录」",
+      "result": "callback 200；users: <id> / employee-a / external_source=rbac / external_id=rbac:employee-a / display_name=员工姓名；客户端已进入应用"
+    }
+  ]
+}

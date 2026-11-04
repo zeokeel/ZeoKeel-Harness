@@ -147,6 +147,95 @@ export function assertServerURLAllowed(serverURL: string): void {
 }
 
 /**
+ * 服务端登录类响应里的用户字段（`Session` 的可选部分）。
+ *
+ * 密码登录（`/auth/login`）与扫码登录（`qr/poll` 的 `done`）返回的是**同一套**
+ * 字段；形状在这里只声明一次，`sessionFromLoginPayload()` 是唯一的构造点。
+ */
+export interface LoginPayloadUser {
+  username?: string
+  role?: string
+  source?: string
+  password_changeable?: boolean
+  /** 服务端 users.display_name；扫码登录的 RBAC 姓名也走这个字段。 */
+  display_name?: string
+}
+
+/**
+ * 服务端登录类响应的共享形状：`token` + `user` + `must_change_password`。
+ *
+ * 扫码 `done` 的 `user` 是必给语义（设计文档 §4.3），但类型上仍可选：这个接口
+ * 描述的是**线上载荷**，客户端必须自己校验缺字段，而不是假设服务端一定给。
+ */
+export interface LoginPayload {
+  token?: string
+  user?: LoginPayloadUser
+  must_change_password?: boolean
+}
+
+/**
+ * 用服务端登录载荷构造会话（**唯一**实现）。
+ *
+ * 为什么必须共享：密码登录与扫码登录各拼一份 `Session` 会漂移。最容易漏的是
+ * `must_change_password` —— 管理员重置密码后，服务端会对白名单外的每个接口回
+ * 403，客户端漏掉这个标记就会跳过强制改密页，用户进应用后处处失败却看不出原因。
+ *
+ * @param serverURL - 服务端地址（尾部斜杠会被归一）。
+ * @param data - 服务端响应（`token` + `user` + `must_change_password`）。
+ * @param username - 显式账号。密码登录传用户输入（保持历史行为：服务端回显的
+ *   `user.username` 可能只是规范化后的值）；扫码登录没有输入账号，缺省取载荷里的
+ *   `user.username`。
+ * @returns 已建立的会话。
+ */
+export function sessionFromLoginPayload(
+  serverURL: string, data: LoginPayload, username?: string, provider?: string,
+): Session {
+  const server = normalizeServerURL(serverURL)
+  if (!data.token) throw new AuthError('server_error', 'missing token in response')
+  const resolved = username ?? data.user?.username
+  if (resolved === undefined || resolved === '') throw new AuthError('server_error', 'missing username in response')
+  const sess: Session = { serverURL: server, username: resolved, token: data.token }
+  if (data.user?.role) sess.role = data.user.role
+  // 0057: 来源/可改密标志(客户端判断改密入口); 强制改密标记驱动登录后拦截。
+  // exactOptionalPropertyTypes: 仅在值存在时赋值, 不写 undefined。
+  if (data.user?.source !== undefined) sess.source = data.user.source
+  if (data.user?.password_changeable !== undefined) sess.passwordChangeable = data.user.password_changeable
+  if (data.must_change_password === true) sess.mustChangePassword = true
+  const displayName = data.user?.display_name?.trim() ?? ''
+  if (displayName !== '') sess.displayName = displayName
+  if (provider !== undefined && provider !== '') sess.provider = provider
+  return sess
+}
+
+/**
+ * 扫码登录 `done` → 会话（`qr/poll` 宿主路由的入口）。
+ *
+ * 参数按服务端 `done` 响应的三个字段拆开，调用方不需要（也不允许）自己拼
+ * `{ token, user, must_change_password }` 以外的形状。`token` 只在这里被消费，
+ * 绝不进 URL / 日志 / 页面（设计文档 §4.3）。
+ * @param serverURL - 服务端地址。
+ * @param token - 服务端签发的一次性登录令牌（只在首个 done 响应里出现）。
+ * @param user - 服务端返回的用户信息。
+ * @param mustChangePassword - 服务端要求先改密。
+ * @param username - 缺省账号（正常路径不需要：`done.user.username` 必给）。
+ * @returns 已建立的会话。
+ */
+export function loginWithToken(
+  serverURL: string,
+  token: string,
+  user?: LoginPayloadUser,
+  mustChangePassword?: boolean,
+  username?: string,
+  provider?: string,
+): Session {
+  return sessionFromLoginPayload(serverURL, {
+    token,
+    ...(user === undefined ? {} : { user }),
+    ...(mustChangePassword === undefined ? {} : { must_change_password: mustChangePassword }),
+  }, username, provider)
+}
+
+/**
  * 登录网关。`locale` 只影响**本地生成**的用户可见文案(账号或密码错误等);
  * 服务端下发的消息原样透出(服务端文案不在 i18n 范围内)。
  * @param serverURL - 服务端地址(尾部斜杠会被归一)。
@@ -182,20 +271,9 @@ export async function login(
       throw new AuthError('invalid_credentials', undefined, locale)
     }
     if (!res.ok) throw new AuthError('server_error', `HTTP ${res.status}`)
-    const data = (await res.json()) as {
-      token?: string
-      user?: { role?: string; source?: string; password_changeable?: boolean }
-      must_change_password?: boolean
-    }
-    if (!data.token) throw new AuthError('server_error', 'missing token in response')
-    const sess: Session = { serverURL: server, username, token: data.token }
-    if (data.user?.role) sess.role = data.user.role
-    // 0057: 来源/可改密标志(客户端判断改密入口); 强制改密标记驱动登录后拦截。
-    // exactOptionalPropertyTypes: 仅在值存在时赋值, 不写 undefined。
-    if (data.user?.source !== undefined) sess.source = data.user.source
-    if (data.user?.password_changeable !== undefined) sess.passwordChangeable = data.user.password_changeable
-    if (data.must_change_password === true) sess.mustChangePassword = true
-    return sess
+    // 会话构造与扫码登录共用 sessionFromLoginPayload()（见其注释：两份会漂移）。
+    // 账号取**用户输入**（传第三参），服务端回显的 username 不覆盖它。
+    return sessionFromLoginPayload(server, (await res.json()) as LoginPayload, username, 'local')
   } catch (e) {
     if (e instanceof AuthError) throw e
     if (controller.signal.aborted) throw new AuthError('network', 'timeout')

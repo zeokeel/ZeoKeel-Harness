@@ -35,19 +35,28 @@ func (f ProviderBuildFailure) Unwrap() error { return f.Err }
 const (
 	kindPassword = "password"
 	kindBrowser  = "browser"
+	// kindQR 是扫码登录方式（wecom/dingtalk）。与浏览器方式分开登记，因为
+	// 构建失败时"保留旧实例"的注册表是两张不同的表，报错文案也要能区分。
+	kindQR = "qr"
 )
 
 // ConfigureProviders reads auth settings and returns the password providers
 // and optional browser providers to register on the API. Settings:
 //
-//	auth.enabled      local,ldap,openid,oidc (逗号分隔;优先级高于 auth.mode)
+//	auth.enabled      local,ldap,openid,oidc,wecom,dingtalk (逗号分隔;优先级高于 auth.mode)
 //	auth.mode         local | ldap | both | oidc | openid (向后兼容,enabled 缺失时推导)
 //	ldap.*            server_url/bind_dn/bind_password/base_dn/user_filter/group_filter/group_attr
 //	oidc.*            issuer/client_id/client_secret/redirect_url
 //	openid.*          issuer/client_id/client_secret/redirect_url (独立两套 IdP)
+//	wecom.*           corp_id/agent_id/secret/redirect_url (扫码登录)
+//	dingtalk.*        client_id/client_secret/redirect_url (扫码登录)
 //
-// Unconfigured providers are omitted; a broken ldap/oidc/openid config
-// degrades to nothing rather than failing startup.
+// Unconfigured providers are omitted; a broken ldap/oidc/openid/wecom/dingtalk
+// config degrades to nothing rather than failing startup.
+//
+// 扫码方式（wecom/dingtalk）不出现在返回值里：它们由 NewConfiguredAPI 直接
+// 注册（动态解析路由，不需要像 browser 那样经装配接缝），失败原因同在
+// ProviderBuildFailure 列表里。
 //
 // 构建失败的登录方式**不在返回值里**,失败原因见 configureProvidersDetailed /
 // configureProvidersFromSettings —— 运行期热加载(API.ReloadProviders)必须
@@ -56,24 +65,24 @@ const (
 // 强制本地 admin:任何模式下都注册 local provider(管理员回退),保证
 // 切换认证方式后本地 admin 仍能登录管理后台(审计 2026-08-29)。
 func ConfigureProviders(db *sql.DB) ([]PasswordProvider, []BrowserProvider) {
-	pwds, browsers, _ := configureProvidersDetailed(db)
+	pwds, browsers, _, _ := configureProvidersDetailed(db)
 	return pwds, browsers
 }
 
 // configureProvidersDetailed 是 ConfigureProviders 的带错误版本(唯一实现)。
-// 读设置失败 ⇒ (nil, nil, nil):整表不可用由调用方处置(ReloadProviders 会
+// 读设置失败 ⇒ (nil, nil, nil, nil):整表不可用由调用方处置(ReloadProviders 会
 // 保留旧集合;启动期由 NewConfiguredAPI 记日志),这里不假装"没有配置"。
-func configureProvidersDetailed(db *sql.DB) ([]PasswordProvider, []BrowserProvider, []ProviderBuildFailure) {
+func configureProvidersDetailed(db *sql.DB) ([]PasswordProvider, []BrowserProvider, []QRProvider, []ProviderBuildFailure) {
 	settings, err := serverstore.GetAllSettings(db)
 	if err != nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	return configureProvidersFromSettings(settings, db)
 }
 
 // configureProvidersFromSettings 是纯函数形式(测试可注入 settings,不必真库);
 // db 只用于 local provider(它按用户名查 users 表)。
-func configureProvidersFromSettings(settings map[string]string, db *sql.DB) ([]PasswordProvider, []BrowserProvider, []ProviderBuildFailure) {
+func configureProvidersFromSettings(settings map[string]string, db *sql.DB) ([]PasswordProvider, []BrowserProvider, []QRProvider, []ProviderBuildFailure) {
 	mode := settings["auth.mode"]
 	if mode == "" {
 		mode = "local"
@@ -120,7 +129,24 @@ func configureProvidersFromSettings(settings map[string]string, db *sql.DB) ([]P
 			browsers = append(browsers, p)
 		}
 	}
-	return pwds, browsers, failures
+	// 扫码登录（企业微信/钉钉）：只用公开 API、无 discovery，构建失败通常是
+	// 必填项缺失或 redirect_url 不合法 —— 同样必须如实回报（R24-X4-B2）。
+	var qrs []QRProvider
+	if has("wecom") {
+		if p, err := wecomFromSettings(settings); err != nil {
+			failures = append(failures, ProviderBuildFailure{Name: "wecom", Kind: kindQR, Err: err})
+		} else {
+			qrs = append(qrs, p)
+		}
+	}
+	if has("dingtalk") {
+		if p, err := dingtalkFromSettings(settings); err != nil {
+			failures = append(failures, ProviderBuildFailure{Name: "dingtalk", Kind: kindQR, Err: err})
+		} else {
+			qrs = append(qrs, p)
+		}
+	}
+	return pwds, browsers, qrs, failures
 }
 
 // browserFromSettings builds a browser (OIDC) provider from settings with the
@@ -217,10 +243,17 @@ type ConfiguredAPI struct {
 // 错误回给保存接口,见 AdminAPI.setAuthConfig。
 func NewConfiguredAPI(db *sql.DB) *ConfiguredAPI {
 	api := New(db)
-	pwds, browsers, failures := configureProvidersDetailed(db)
+	pwds, browsers, qrs, failures := configureProvidersDetailed(db)
 	logProviderBuildFailures(failures)
 	for _, p := range pwds {
 		api.RegisterProvider(p)
+	}
+	// 扫码 provider 在构造期直接注册：路由是固定三条（wecom/dingtalk），
+	// handler 在请求时按名字从运行期注册表解析 —— 这里漏注册 ⇒ settings 已启用
+	// 但请求恒 404，且只有管理员保存一次认证配置（触发 ReloadProviders）才恢复
+	// （R24-X4-B2 的同族形态，必须避免）。
+	for _, p := range qrs {
+		api.RegisterQR(p)
 	}
 	// 客户端登录只允许 auth.enabled 里的密码方式(2026-09-08 P1-5);
 	// local provider 仍注册,供管理后台回退(AuthenticateConfiguredAdmin)。

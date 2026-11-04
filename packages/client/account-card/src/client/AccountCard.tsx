@@ -10,6 +10,10 @@ import type { UsagePayload } from '../usage-contract.ts'
 interface AuthState {
   loggedIn: boolean
   username?: string
+  /** 员工真实姓名（服务端 user.display_name）；缺省回退 username。 */
+  displayName?: string
+  /** 本次登录方式：wecom / dingtalk / local；用于姓名前的品牌图标。 */
+  provider?: string
   serverURL?: string
   /**
    * 会话身份的稳定串（`serverURL + username`，R15B-04 起下发；唯一实现在
@@ -269,9 +273,50 @@ const ATTENTION_DOT: CSSProperties = {
   pointerEvents: 'none',
 }
 
-/** Initials: first character of the username, uppercased. */
+/** Initials: first character of the display name/username, uppercased. */
 function initial(username: string | undefined): string {
   return (username ?? '?').slice(0, 1).toUpperCase()
+}
+
+type LoginProvider = 'wecom' | 'dingtalk'
+
+function providerLabel(provider: string | undefined): string {
+  return provider === 'wecom' ? '企业微信' : provider === 'dingtalk' ? '钉钉' : ''
+}
+
+/**
+ * 扫码登录方式的品牌图标：放在账号名之前，替代本地账号的首字母头像。
+ * 只认 wecom/dingtalk；未知/本地登录回退首字母头像。
+ */
+function ProviderIcon({ provider, size }: { provider: LoginProvider, size: number }): JSX.Element {
+  if (provider === 'wecom') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label="企业微信" data-provider="wecom">
+        <rect x="0.5" y="0.5" width="23" height="23" rx="5" fill="#2B7FFF" />
+        <path d="M6.6 7.2h10.8a2.1 2.1 0 0 1 2.1 2.1v4.2a2.1 2.1 0 0 1-2.1 2.1h-4.7L8.2 18v-2.4H6.6a2.1 2.1 0 0 1-2.1-2.1V9.3a2.1 2.1 0 0 1 2.1-2.1z" fill="#fff" />
+        <circle cx="8.6" cy="11.4" r="0.9" fill="#2B7FFF" />
+        <circle cx="12" cy="11.4" r="0.9" fill="#2B7FFF" />
+        <circle cx="15.4" cy="11.4" r="0.9" fill="#2B7FFF" />
+      </svg>
+    )
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label="钉钉" data-provider="dingtalk">
+      <rect x="0.5" y="0.5" width="23" height="23" rx="5" fill="#1677FF" />
+      <path d="M5.8 15.8 11.9 4.4l1.5 5.1 4.8-1.25-6.1 12.15-1.45-5.35z" fill="#fff" />
+    </svg>
+  )
+}
+
+function avatarNode(provider: string | undefined, name: string, style: CSSProperties): JSX.Element {
+  if (provider === 'wecom' || provider === 'dingtalk') {
+    return (
+      <span style={{ ...style, background: 'transparent', borderRadius: 5 }} title={providerLabel(provider)}>
+        <ProviderIcon provider={provider} size={style.width as number} />
+      </span>
+    )
+  }
+  return <span style={style} aria-hidden="true">{initial(name)}</span>
 }
 
 /** Guard: value is a finite number (excludes null/undefined/NaN/Infinity). */
@@ -633,6 +678,8 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
   if (anchor === null || auth === null || !auth.loggedIn) return null
 
   const username = auth.username ?? '?'
+  const displayName = (auth.displayName ?? '').trim() || username
+  const provider = (auth.provider ?? '').trim()
   const data = usage?.data ?? null
   // 审计 2026-09-12 P1-5:旧判据 `state === 'error' && data === null` 要求 data
   // 恰好为 null —— 而失败路径**保留旧快照**(`{...this.snapshot}`),有旧数据
@@ -689,7 +736,7 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
       : balanceMoney === null
         ? (admin ? t('account.admin') : t('account.notActivated'))
         : formatMoney(balanceMoney)
-  const rowLabel = t(low ? 'account.rowLabelLow' : 'account.rowLabel', { username, balance: balanceStateText })
+  const rowLabel = t(low ? 'account.rowLabelLow' : 'account.rowLabel', { username: displayName, balance: balanceStateText })
   // 行内已经是金额时不需要 tooltip；`—`（取数失败/未开通）与余额不足才需要文字解释。
   const rowTitle = stale || low || balanceMoney === null ? rowLabel : undefined
 
@@ -709,13 +756,13 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
     >
       {wide ? (
         <>
-          <span style={ROW_AVATAR} aria-hidden="true">{initial(username)}</span>
-          <span style={ROW_USERNAME}>{username}</span>
+          {avatarNode(provider, displayName, ROW_AVATAR)}
+          <span style={ROW_USERNAME}>{displayName}</span>
           <span style={ROW_SEPARATOR} aria-hidden="true">·</span>
           <span style={{ ...ROW_BALANCE, color: rowBalanceColor }}>{rowBalanceText}</span>
           <span style={ROW_CHEVRON}><Chevron open={open} /></span>
         </>
-      ) : initial(username)}
+      ) : avatarNode(provider, displayName, ROW_AVATAR)}
       {low && <span data-attention="true" style={ATTENTION_DOT} aria-hidden="true" />}
     </button>
   )
@@ -787,8 +834,8 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
           {/* 用户信息行:用户名 + 退出登录 置于卡片底部(刷新按钮之下) */}
           <div style={HEAD}>
             <div style={USER}>
-              <span style={AVATAR}>{initial(username)}</span>
-              <span style={USERNAME} title={username}>{username}</span>
+              {avatarNode(provider, displayName, AVATAR)}
+              <span style={USERNAME} title={displayName}>{displayName}</span>
             </div>
             <button
               type="button"
@@ -810,7 +857,7 @@ export function AccountCard({ wide }: PropsRuntime<'sidebar.footer.action'>) {
   if (!wide) {
     return createPortal(
       <>
-        <Tooltip label={username} delayMs={500} disabled={open}>
+        <Tooltip label={displayName} delayMs={500} disabled={open}>
           {row}
         </Tooltip>
         {popover}

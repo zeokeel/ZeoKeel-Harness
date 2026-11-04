@@ -63,8 +63,22 @@ const QR_FUNCTIONS = [
   'function esc(s)',
   'function methodLabel(name)',
   'function isQrMethod(name)',
+  'function isBrowserMethod(name)',
   'function isPngDataURL(value)',
   'function isAllowedQrFrameUrl(value)',
+  'function qrMethodList()',
+  'function showLanding(show)',
+  'function setPrimaryBusy(busy)',
+  'function renderProviderPicker()',
+  'function renderOtherLogins()',
+  'function stopBrowserQrTimers()',
+  'function resetBrowserQr()',
+  'function browserQrFailureText(code, message)',
+  'function finishBrowserQr(message)',
+  'function copyLoginUrl()',
+  'function fallbackCopyLoginUrl(done)',
+  'function startBrowserQr()',
+  'function startBrowserQrPoll(generation, server, method, flowId)',
   'function qrMessage(data)',
   'function stopQrTimers()',
   'function hideQrCard()',
@@ -102,10 +116,21 @@ interface PageHarness {
   hideQrCard: () => void
   renderMethodButtons: (methods: unknown[]) => void
   setMethod: (method: string) => void
-  state: () => { currentMethod: string, qrFlowId: string | null, qrMethod: string | null }
+  state: () => {
+    currentMethod: string
+    qrFlowId: string | null
+    qrMethod: string | null
+    browserQrFlowId: string | null
+    browserQrUrl: string
+    browserQrBusy: boolean
+  }
   get: (id: string) => ElementStub
   fetchCalls: FetchCall[]
   location: { reload: ReturnType<typeof vi.fn> }
+  windowOpen: ReturnType<typeof vi.fn>
+  clipboardWrite: ReturnType<typeof vi.fn>
+  startBrowserQr: () => void
+  copyLoginUrl: () => void
   script: string
 }
 
@@ -140,6 +165,8 @@ function bootLoginPage(options: {
   server?: string
   /** 页面语言（默认 zh；en 用于验证失败文案按 code 本地化）。 */
   locale?: 'zh' | 'en'
+  /** 旧内嵌二维码用例：updateFields 后自动进入内嵌 QR（新落地页用例传 false）。 */
+  legacyQr?: boolean
   respond: (url: string) => { status: number, body: unknown }
 }): PageHarness {
   const script = loginScript(options.locale ?? 'zh')
@@ -169,6 +196,13 @@ function bootLoginPage(options: {
       }
       return element
     },
+    createElement: () => ({
+      style: {},
+      value: '',
+      select: () => {},
+    }),
+    body: { appendChild: () => {}, removeChild: () => {} },
+    execCommand: () => true,
   }
 
   const fetchCalls: FetchCall[] = []
@@ -179,9 +213,14 @@ function bootLoginPage(options: {
     return { ok: status >= 200 && status < 300, status, json: async () => body }
   }))
   const location = { reload: vi.fn() }
+  const windowOpen = vi.fn(() => null)
+  const windowStub = { open: windowOpen }
+  const clipboardWrite = vi.fn(async () => {})
+  const navigatorStub = { clipboard: { writeText: clipboardWrite } }
 
-  const factory = new Function('document', 'location', `
+  const factory = new Function('document', 'location', 'window', 'navigator', `
     var T = ${tLiteral}
+    var PROVIDER_ICONS = {}
     var currentMethod = ${JSON.stringify(options.method ?? 'wecom')}
     var currentMethods = ${JSON.stringify(options.methods)}
     var methodsBox = document.getElementById('methods')
@@ -194,6 +233,27 @@ function bootLoginPage(options: {
     var qrTitle = document.getElementById('qr-title')
     var qrHint = document.getElementById('qr-hint')
     var qrRefreshBtn = document.getElementById('qr-refresh')
+    var loginLanding = document.getElementById('login-landing')
+    var providerPicker = document.getElementById('provider-picker')
+    var loginPrimary = document.getElementById('login-primary')
+    var loginHint = document.getElementById('login-hint')
+    var loginFallback = document.getElementById('login-fallback')
+    var copyLoginBtn = document.getElementById('copy-login-link')
+    var retryLoginBtn = document.getElementById('retry-login')
+    var localToggleBtn = document.getElementById('local-toggle')
+    var qrFallbackBtn = document.getElementById('qr-fallback')
+    var qrBackBrowserBtn = document.getElementById('qr-back-browser')
+    var otherLoginBox = document.getElementById('other-login')
+    var localBackBtn = document.getElementById('local-back')
+    var browserQrGeneration = 0
+    var browserQrTimer = null
+    var browserQrTick = null
+    var browserQrFlowId = null
+    var browserQrUrl = ''
+    var browserQrMethod = null
+    var browserQrPolling = false
+    var browserQrBusy = false
+    var browserQrDeadline = 0
     var qrTimer = null
     var qrTick = null
     var qrFlowId = null
@@ -207,17 +267,32 @@ function bootLoginPage(options: {
       hideQrCard: hideQrCard,
       renderMethodButtons: renderMethodButtons,
       setMethod: function (m) { currentMethod = m },
-      state: function () { return { currentMethod: currentMethod, qrFlowId: qrFlowId, qrMethod: qrMethod } },
+      startBrowserQr: startBrowserQr,
+      copyLoginUrl: copyLoginUrl,
+      state: function () { return { currentMethod: currentMethod, qrFlowId: qrFlowId, qrMethod: qrMethod, browserQrFlowId: browserQrFlowId, browserQrUrl: browserQrUrl, browserQrBusy: browserQrBusy } },
+      isQrMethod: isQrMethod,
       get: function (id) { return document.getElementById(id) },
     }
   `) // eslint-disable-line no-new-func
 
-  return {
-    ...factory(fakeDocument, location) as Omit<PageHarness, 'fetchCalls' | 'location' | 'script'>,
+  const page = {
+    ...factory(fakeDocument, location, windowStub, navigatorStub) as Omit<PageHarness, 'fetchCalls' | 'location' | 'script' | 'windowOpen' | 'clipboardWrite'> & { isQrMethod: (name: string) => boolean },
     fetchCalls,
     location,
+    windowOpen,
+    clipboardWrite,
     script,
   }
+  // 旧的内嵌二维码用例在 updateFields 之后断言 host start；新登录落地页默认不再
+  // 自动取码，所以用例侧用 legacyQr 显式保留旧路径（新流程用例传 false）。
+  if (options.legacyQr !== false) {
+    const rawUpdate = page.updateFields
+    page.updateFields = function () {
+      rawUpdate()
+      if (page.isQrMethod(page.state().currentMethod)) page.enterQrLogin()
+    }
+  }
+  return page
 }
 
 describe('登录页：扫码登录（企业微信/钉钉）', () => {
@@ -512,7 +587,7 @@ describe('登录页：扫码登录（企业微信/钉钉）', () => {
     page.updateFields()
     expect(page.get('qr-card').style.display).toBe('none')
     expect(page.get('qr-frame').innerHTML).toBe('')
-    expect(page.get('browser-btn').style.display).not.toBe('none')
+    expect(page.get('login-landing').style.display).not.toBe('none')
     expect(page.state().qrFlowId).toBeNull()
 
     const before = page.fetchCalls.length
@@ -690,6 +765,101 @@ function stubGateway(
   }))
   return calls
 }
+
+  // ---- WorkBuddy 式浏览器扫码落地页 ----
+  const QR_URL = 'https://open.work.weixin.qq.com/connect/qrconnect?appid=ww-test&state=abc'
+
+  it('默认落地页不自动取码；主按钮 + 企微/钉钉选择器 + 本地入口都在', () => {
+    const page = bootLoginPage({
+      methods: [LOCAL, WECOM, DINGTALK],
+      method: 'wecom',
+      legacyQr: false,
+      respond: () => ({ status: 200, body: {} }),
+    })
+    page.updateFields()
+    expect(page.fetchCalls).toHaveLength(0)
+    expect(page.get('login-primary').textContent).toBe('登录')
+    expect(page.get('provider-picker').innerHTML).toContain('企业微信')
+    expect(page.get('provider-picker').innerHTML).toContain('钉钉')
+    expect(page.get('local-toggle').style.display).not.toBe('none')
+  })
+
+  it('点登录 → 取 flow、系统浏览器打开官方页、显示转圈与兜底，poll done 自动 reload', async () => {
+    vi.useFakeTimers()
+    let done = false
+    const page = bootLoginPage({
+      methods: [WECOM, DINGTALK, LOCAL],
+      method: 'wecom',
+      legacyQr: false,
+      respond: (url) => {
+        if (url === '/api/zeokeel/auth/qr/start') {
+          return { status: 200, body: { flow_id: FLOW_ID, qr_png: PNG, qr_url: QR_URL, expires_in: 300 } }
+        }
+        if (url.startsWith('/api/zeokeel/auth/qr/poll')) {
+          return { status: 200, body: { status: done ? 'done' : 'pending' } }
+        }
+        return { status: 200, body: {} }
+      },
+    })
+    page.updateFields()
+    page.startBrowserQr()
+    await vi.advanceTimersByTimeAsync(0)
+
+    const start = page.fetchCalls.find((c) => c.url === '/api/zeokeel/auth/qr/start')
+    expect(start?.method).toBe('POST')
+    expect(JSON.parse(start?.body ?? '{}')).toMatchObject({ method: 'wecom', server: 'https://harness.example' })
+    expect(page.windowOpen).toHaveBeenCalledWith(QR_URL, '_blank', 'noopener')
+    expect(page.get('login-primary').innerHTML).toContain('登录中')
+    expect(page.get('login-fallback').style.display).toBe('')
+    expect(page.state().browserQrBusy).toBe(true)
+    expect(page.state().browserQrFlowId).toBe(FLOW_ID)
+
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(page.fetchCalls.some((c) => c.url.startsWith('/api/zeokeel/auth/qr/poll'))).toBe(true)
+    expect(page.location.reload).not.toHaveBeenCalled()
+
+    done = true
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(page.location.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('浏览器页不返回 qr_url 时退出转圈并给出可重试错误', async () => {
+    vi.useFakeTimers()
+    const page = bootLoginPage({
+      methods: [WECOM],
+      method: 'wecom',
+      legacyQr: false,
+      respond: (url) => url === '/api/zeokeel/auth/qr/start'
+        ? { status: 200, body: { flow_id: FLOW_ID, qr_png: PNG, expires_in: 300 } }
+        : { status: 200, body: { status: 'pending' } },
+    })
+    page.updateFields()
+    page.startBrowserQr()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(page.windowOpen).not.toHaveBeenCalled()
+    expect(page.state().browserQrBusy).toBe(false)
+    expect(page.get('login-fallback').style.display).toBe('')
+    expect(page.get('login-hint').textContent).toContain('扫码登录失败')
+  })
+
+  it('复制登录链接使用 qr_url，并提示已复制', async () => {
+    vi.useFakeTimers()
+    const page = bootLoginPage({
+      methods: [WECOM],
+      method: 'wecom',
+      legacyQr: false,
+      respond: (url) => url === '/api/zeokeel/auth/qr/start'
+        ? { status: 200, body: { flow_id: FLOW_ID, qr_png: PNG, qr_url: QR_URL, expires_in: 300 } }
+        : { status: 200, body: { status: 'pending' } },
+    })
+    page.updateFields()
+    page.startBrowserQr()
+    await vi.advanceTimersByTimeAsync(0)
+    page.copyLoginUrl()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(page.clipboardWrite).toHaveBeenCalledWith(QR_URL)
+    expect(page.get('login-hint').textContent).toContain('已复制')
+  })
 
 describe('宿主路由：/api/zeokeel/auth/qr/start', () => {
   afterEach(() => { vi.unstubAllGlobals() })

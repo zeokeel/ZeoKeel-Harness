@@ -1,0 +1,54 @@
+{
+  "id": "2026-11-04-browser-qr-login-page",
+  "status": "implemented",
+  "intent": {
+    "zh": "登录页此前把企业微信/钉钉二维码内嵌在客户端，页面元素多、缺少主视觉和明确的等待反馈；参考 WorkBuddy 的「点登录 → 系统浏览器扫码 → 客户端自动进入」体验，改为品牌主视觉 + 主登录按钮 + 企微/钉钉图标选择 + 复制链接/重试兜底，并保留本地账号与内嵌二维码兜底。",
+    "en": "Replace the inline QR login surface with a WorkBuddy-style landing: hero, one primary sign-in button, WeCom/DingTalk provider icons, browser QR flow, spinner, copy-link/retry fallback, while keeping local account and inline-QR fallbacks."
+  },
+  "modules": [
+    "packages/host/enterprise/src/auth-gate.ts",
+    "packages/host/enterprise/tests/auth-gate-qr-login.spec.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "登录落地页默认不取码；主按钮、企微/钉钉选择器、本地账号入口都在，点击登录后调用 /qr/start、window.open 官方页、显示转圈/倒计时和复制/重试兜底",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts"
+    },
+    {
+      "criterion": "浏览器流程 poll done 自动 reload；不返回 qr_url 时退出转圈并可重试；复制链接使用 qr_url；旧内嵌二维码/本地账号/OIDC 路径不回归",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts tests/auth-gate-login.spec.ts tests/auth-gate-browser-login-pending.spec.ts tests/auth-gate-i18n.spec.ts tests/audit-r15b-password-and-identity.spec.ts"
+    },
+    {
+      "criterion": "enterprise 类型检查与 desktop 构建通过",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise typecheck && corepack yarn prebuild && corepack yarn workspace dsh-plugin-desktop build"
+    },
+    {
+      "criterion": "231 本地客户端登录页显示 WorkBuddy 式落地页，点登录进入「Signing in…」+ 倒计时 + 复制/重试；本地账号与内嵌扫码 fallback 可切换",
+      "evidence": "manual",
+      "command": "231 Xvfb 登录页截图"
+    }
+  ],
+  "risk": "系统浏览器未安装/被拦截时无法自动打开，需要用户点「复制登录链接」；真实服务商扫码确认仍依赖官方页，客户端只负责轮询和落地。浏览器流程的 host poll 超时/取消时会暴露重试入口，不会无限转圈。",
+  "rollback": "回滚本提交并重新构建客户端；auth-gate 的旧内嵌二维码代码仍保留，可随时恢复。",
+  "verification": [
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts",
+      "result": "exit 0；40 tests passed（含 4 条浏览器落地页用例）"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts tests/auth-gate-login.spec.ts tests/auth-gate-browser-login-pending.spec.ts tests/auth-gate-i18n.spec.ts tests/audit-r15b-password-and-identity.spec.ts",
+      "result": "exit 0；93 tests passed"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise typecheck && corepack yarn prebuild && corepack yarn workspace dsh-plugin-desktop build",
+      "result": "exit 0"
+    },
+    {
+      "command": "231 Xvfb 登录页截图",
+      "result": "落地页主按钮/服务商图标/本地入口正常；点击后显示 Signing in…、倒计时、Copy sign-in link、Restart sign-in"
+    }
+  ]
+}

@@ -86,6 +86,17 @@ interface LoginCopy {
   qrIdentityAmbiguous: string
   qrIdentityProviderUnavailable: string
   qrIdentityConflict: string
+  /** 浏览器扫码落地页主按钮/等待/兜底文案。 */
+  loginPrimary: string
+  browserWaiting: string
+  browserOpenHint: string
+  copyLoginLink: string
+  retryBrowserLogin: string
+  copiedLoginLink: string
+  localToggle: string
+  backToQr: string
+  scanInClient: string
+  otherMethods: string
 }
 
 const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
@@ -132,6 +143,16 @@ const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
     qrIdentityAmbiguous: '你的身份在 RBAC 中不唯一，请联系管理员处理',
     qrIdentityProviderUnavailable: '身份服务暂不可用，请稍后重试',
     qrIdentityConflict: '该用户名已被本地账号占用，请联系管理员',
+    loginPrimary: '登录',
+    browserWaiting: '登录中…',
+    browserOpenHint: '已在浏览器打开登录页，请完成扫码；完成后这里会自动进入。',
+    copyLoginLink: '复制登录链接',
+    retryBrowserLogin: '重新发起登录',
+    copiedLoginLink: '登录链接已复制',
+    localToggle: '本地账号登录',
+    backToQr: '返回扫码登录',
+    scanInClient: '无法打开浏览器？在客户端内扫码',
+    otherMethods: '其他登录方式',
   },
   en: {
     titleSuffix: 'Sign in',
@@ -176,6 +197,16 @@ const LOGIN_COPY: Readonly<Record<HostLocale, LoginCopy>> = {
     qrIdentityAmbiguous: 'Your identity is ambiguous in RBAC. Contact your administrator.',
     qrIdentityProviderUnavailable: 'The identity service is temporarily unavailable. Please try again later.',
     qrIdentityConflict: 'This username is already taken by a local account. Contact your administrator.',
+    loginPrimary: 'Sign in',
+    browserWaiting: 'Signing in…',
+    browserOpenHint: 'The browser sign-in page is open. Complete the scan there; this page continues automatically.',
+    copyLoginLink: 'Copy sign-in link',
+    retryBrowserLogin: 'Restart sign-in',
+    copiedLoginLink: 'Sign-in link copied',
+    localToggle: 'Local account sign-in',
+    backToQr: 'Back to QR sign-in',
+    scanInClient: "Can't open a browser? Scan inside the client",
+    otherMethods: 'Other sign-in methods',
   },
 }
 
@@ -346,6 +377,22 @@ export function renderLoginPage(locale: HostLocale): string {
   .qr-frame-dingtalk { width: 380px; height: 600px; }
   .qr-frame-dingtalk .qr-web { width: 380px; height: 600px; }
   .qr-card button { margin-top: 4px; }
+  /* ---- 登录落地页（WorkBuddy 式：主按钮 → 浏览器扫码 → 自动进入） ---- */
+  .login-landing { display: flex; flex-direction: column; gap: 12px; align-items: stretch; margin-top: 2px; }
+  .provider-picker { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .provider-btn { width: auto; display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: transparent; color: var(--fg); font-size: 13px; font-weight: 500; padding: 7px 12px; border-radius: 9px; }
+  .provider-btn.active { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .provider-btn svg { width: 18px; height: 18px; display: block; }
+  .login-primary { height: 46px; font-size: 15px; position: relative; }
+  .login-primary.loading { opacity: 0.75; cursor: default; }
+  .login-primary .spinner { width: 15px; height: 15px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: inline-block; vertical-align: -2px; margin-right: 8px; animation: login-spin 0.8s linear infinite; }
+  @keyframes login-spin { to { transform: rotate(360deg); } }
+  .login-fallback { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .login-fallback button.secondary { width: auto; padding: 7px 12px; font-size: 12px; font-weight: 500; background: transparent; color: var(--fg); border: 1px solid var(--border); }
+  .link-button { width: auto; align-self: center; background: transparent; color: var(--accent); border: none; font-size: 12px; font-weight: 500; padding: 4px 8px; }
+  .other-login { display: flex; flex-direction: column; gap: 4px; align-items: center; font-size: 12px; opacity: 0.8; }
+  .other-login .link-button { font-size: 12px; }
+  .brand img, .brand .fallback { width: 96px; height: 96px; margin-bottom: 10px; }
 </style>
 </head>
 <body>
@@ -365,21 +412,35 @@ export function renderLoginPage(locale: HostLocale): string {
   <div id="step2" class="stage">
     __BACK_BUTTON__
     <div class="brand" id="brand-area"></div>
+    <!-- 登录落地页：主按钮 → 系统浏览器扫码 → 宿主 poll 到 done 后自动重载。 -->
+    <div id="login-landing" class="login-landing">
+      <div id="provider-picker" class="provider-picker"></div>
+      <button type="button" id="login-primary" class="login-primary">${c.loginPrimary}</button>
+      <div class="hint" id="login-hint"></div>
+      <div id="login-fallback" class="login-fallback" style="display:none">
+        <button type="button" id="copy-login-link" class="secondary">${c.copyLoginLink}</button>
+        <button type="button" id="retry-login" class="secondary">${c.retryBrowserLogin}</button>
+      </div>
+      <button type="button" id="local-toggle" class="link-button">${c.localToggle}</button>
+      <button type="button" id="qr-fallback" class="link-button" style="display:none">${c.scanInClient}</button>
+      <div id="other-login" class="other-login"></div>
+    </div>
     <div id="methods" class="methods"></div>
     <form id="f2" style="display:none">
       <input id="username" placeholder="${c.usernamePlaceholder}" autocomplete="username" style="display:none">
       <input id="password" type="password" placeholder="${c.passwordPlaceholder}" autocomplete="current-password" style="display:none">
-      <button type="submit" id="btn" style="display:none">${c.signIn}</button>
+      <button type="submit" id="btn">${c.signIn}</button>
+      <button type="button" id="local-back" class="link-button">${c.backToQr}</button>
     </form>
     <button type="button" id="browser-btn" style="display:none">${c.browserSignIn}</button>
     <div class="hint" id="waiting" style="display:none">${c.waiting}</div>
-    <!-- 扫码登录卡片（wecom/dingtalk，即 /auth/methods 里 qr:true 的方式）：
-         标题/提示/二维码都由页面脚本按当前方式填，静态文本只有刷新按钮。 -->
+    <!-- 内嵌二维码保留为「浏览器打不开」时的兜底，不再是默认登录面。 -->
     <div id="qr-card" class="qr-card" style="display:none">
       <div class="qr-title" id="qr-title"></div>
       <div class="qr-frame" id="qr-frame"></div>
       <div class="hint" id="qr-hint"></div>
       <button type="button" id="qr-refresh" style="display:none">${c.qrRefresh}</button>
+      <button type="button" id="qr-back-browser" class="link-button">${c.backToQr}</button>
     </div>
     <div class="err" id="err-step2"></div>
   </div>
@@ -408,6 +469,18 @@ export function renderLoginPage(locale: HostLocale): string {
   var qrTitle = document.getElementById('qr-title')
   var qrHint = document.getElementById('qr-hint')
   var qrRefreshBtn = document.getElementById('qr-refresh')
+  var loginLanding = document.getElementById('login-landing')
+  var providerPicker = document.getElementById('provider-picker')
+  var loginPrimary = document.getElementById('login-primary')
+  var loginHint = document.getElementById('login-hint')
+  var loginFallback = document.getElementById('login-fallback')
+  var copyLoginBtn = document.getElementById('copy-login-link')
+  var retryLoginBtn = document.getElementById('retry-login')
+  var localToggleBtn = document.getElementById('local-toggle')
+  var qrFallbackBtn = document.getElementById('qr-fallback')
+  var qrBackBrowserBtn = document.getElementById('qr-back-browser')
+  var otherLoginBox = document.getElementById('other-login')
+  var localBackBtn = document.getElementById('local-back')
   var currentMethod = 'local'
   var currentMethods = []
   var currentChannel = null
@@ -426,6 +499,16 @@ export function renderLoginPage(locale: HostLocale): string {
   // 每次换码/切换方式/返回 Step1 自增：迟到的 start/poll 响应按代号丢弃，
   // 否则旧流程会在新二维码上更新状态、甚至把已经切走的页面刷掉。
   var qrGeneration = 0
+  // 浏览器扫码登录状态（与内嵌二维码 fallback 分开，避免两套 poll 互相覆盖）。
+  var browserQrGeneration = 0
+  var browserQrTimer = null
+  var browserQrTick = null
+  var browserQrFlowId = null
+  var browserQrUrl = ''
+  var browserQrMethod = null
+  var browserQrPolling = false
+  var browserQrBusy = false
+  var browserQrDeadline = 0
   // 去除服务端地址尾部一个或多个斜杠(兼容带/不带 / 的用户输入)。
   // 纯字符串实现,禁用带反斜杠的正则:正斜杠转义(如 replace(反斜杠+/+$))
   // 中的反斜杠会被本页所在的 TS 模板字面量求值吃掉,浏览器收到的脚本变成
@@ -439,6 +522,11 @@ export function renderLoginPage(locale: HostLocale): string {
   // rect:透明底 + 自带彩色渐变,不做任何 token/currentColor 染色)。任何 logo 兜底
   // 都必须与 logo.svg 的 mark 一致,禁止字母 P 等编造图形(旧版 P 字 logo 已退役)。
   var BRAND_MARK_SVG = ${JSON.stringify(brandMarkSvg())}
+  // 登录服务商图标（与账号卡同一套简化品牌 mark；不引入外部图片/版权素材）。
+  var PROVIDER_ICONS = {
+    wecom: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="0.5" y="0.5" width="23" height="23" rx="5" fill="#2B7FFF"/><path d="M6.6 7.2h10.8a2.1 2.1 0 0 1 2.1 2.1v4.2a2.1 2.1 0 0 1-2.1 2.1h-4.7L8.2 18v-2.4H6.6a2.1 2.1 0 0 1-2.1-2.1V9.3a2.1 2.1 0 0 1 2.1-2.1z" fill="#fff"/><circle cx="8.6" cy="11.4" r="0.9" fill="#2B7FFF"/><circle cx="12" cy="11.4" r="0.9" fill="#2B7FFF"/><circle cx="15.4" cy="11.4" r="0.9" fill="#2B7FFF"/></svg>',
+    dingtalk: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="0.5" y="0.5" width="23" height="23" rx="5" fill="#1677FF"/><path d="M5.8 15.8 11.9 4.4l1.5 5.1 4.8-1.25-6.1 12.15-1.45-5.35z" fill="#fff"/></svg>',
+  }
 
   // 随包分发的品牌文案(channel.json 的 identity/copy,由 profile 组装期注入)。
   // 登录页要在这里就显示品牌 —— 此刻还没有服务端可问。__BRAND_JSON__ 由
@@ -511,26 +599,22 @@ export function renderLoginPage(locale: HostLocale): string {
     if (serverInput.value.trim() === '') return
     var ok = await connect(serverInput.value.trim())
     if (!ok) return
-    // 只有浏览器方式可用(纯 OIDC/OpenID 部署)时直接发起跳转,员工不必再点一次。
-    var hasPassword = currentMethods.some(function (m) {
-      return m.name === 'local' || m.name === 'ldap'
-    })
-    if (!hasPassword && currentMethods.length > 0 && browserBtn.style.display !== 'none') {
-      browserBtn.click()
-    } else {
-      var username = document.getElementById('username')
-      if (username && username.style.display !== 'none') username.focus()
-    }
+    // 登录页不再自动打开浏览器：WorkBuddy 式流程由员工点主按钮发起。
+    var username = document.getElementById('username')
+    if (username && username.style.display !== 'none') username.focus()
   }
   void autoConnect()
 
   function showStep2(methods) {
     currentMethods = methods.filter(function (m) { return !m.hidden })
     // 渠道区
+    methodsBox.style.display = 'none'
     brandArea.innerHTML = renderChannel(currentChannel)
     // 方式选择器
     currentMethod = pickDefault(currentMethods)
     renderMethodButtons(currentMethods)
+    renderProviderPicker()
+    renderOtherLogins()
     updateFields()
     document.getElementById('step1').classList.remove('active')
     document.getElementById('step2').classList.add('active')
@@ -567,7 +651,13 @@ export function renderLoginPage(locale: HostLocale): string {
   }
 
   function pickDefault(methods) {
-    // 密码方式优先(local/ldap); 否则首个可用浏览器方式。
+    // 有扫码方式时优先扫码（默认企业微信），这是登录页的主路径；否则密码优先，
+    // 最后回退到首个可用浏览器方式/本地。
+    var qr = methods.filter(function (m) { return isQrMethod(m.name) })
+    if (qr.length) {
+      var wecom = qr.find(function (m) { return m.name === 'wecom' })
+      return (wecom || qr[0]).name
+    }
     var pw = methods.filter(function (m) { return m.name === 'local' || m.name === 'ldap' })
     if (pw.length) return pw[0].name
     if (methods.length) return methods[0].name
@@ -607,25 +697,270 @@ export function renderLoginPage(locale: HostLocale): string {
     return !!m && m.browser === true
   }
 
+  function qrMethodList() {
+    return currentMethods.filter(function (m) { return isQrMethod(m.name) && m.configured !== false })
+  }
+
+  function showLanding(show) {
+    loginLanding.style.display = show ? '' : 'none'
+  }
+
+  function setPrimaryBusy(busy) {
+    browserQrBusy = busy
+    loginPrimary.disabled = busy
+    loginPrimary.className = busy ? 'login-primary loading' : 'login-primary'
+    if (busy) {
+      loginPrimary.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + esc(T.browserWaiting)
+    }
+  }
+
+  function renderProviderPicker() {
+    var list = qrMethodList()
+    providerPicker.innerHTML = ''
+    if (list.length < 2) return
+    providerPicker.innerHTML = list.map(function (m) {
+      var name = esc(m.name)
+      var active = m.name === currentMethod ? ' active' : ''
+      return '<button type="button" class="provider-btn' + active + '" data-method="' + name + '" title="' + esc(methodLabel(m.name)) + '">' +
+        (PROVIDER_ICONS[m.name] || '') + '<span>' + esc(methodLabel(m.name)) + '</span></button>'
+    }).join('')
+    providerPicker.querySelectorAll('.provider-btn').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var next = b.getAttribute('data-method')
+        if (!next || next === currentMethod) return
+        resetBrowserQr()
+        hideQrCard()
+        currentMethod = next
+        updateFields()
+      })
+    })
+  }
+
+  function renderOtherLogins() {
+    var list = currentMethods.filter(function (m) {
+      return m.name !== 'local' && m.name !== 'ldap' && !isQrMethod(m.name) && m.configured !== false
+    })
+    otherLoginBox.innerHTML = ''
+    if (list.length === 0) return
+    otherLoginBox.innerHTML = '<div class="hint">' + esc(T.otherMethods) + '</div>' + list.map(function (m) {
+      var name = esc(m.name)
+      return '<button type="button" class="link-button" data-method="' + name + '">' + esc(T.signInWith.replace('{method}', function () { return methodLabel(m.name) })) + '</button>'
+    }).join('')
+    otherLoginBox.querySelectorAll('button[data-method]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var next = b.getAttribute('data-method')
+        if (!next) return
+        resetBrowserQr()
+        currentMethod = next
+        updateFields()
+        void browserLogin()
+      })
+    })
+  }
+
+  function stopBrowserQrTimers() {
+    if (browserQrTimer) { clearInterval(browserQrTimer); browserQrTimer = null }
+    if (browserQrTick) { clearInterval(browserQrTick); browserQrTick = null }
+  }
+
+  function resetBrowserQr() {
+    browserQrGeneration++
+    stopBrowserQrTimers()
+    browserQrPolling = false
+    browserQrBusy = false
+    browserQrFlowId = null
+    browserQrUrl = ''
+    browserQrMethod = null
+    browserQrDeadline = 0
+    loginPrimary.disabled = false
+    loginPrimary.className = 'login-primary'
+    loginFallback.style.display = 'none'
+    loginHint.textContent = ''
+    if (currentMethod === 'local' || currentMethod === 'ldap') loginPrimary.textContent = T.loginPrimary
+  }
+
+  function browserQrFailureText(code, message) {
+    var copy = {
+      IDENTITY_NOT_BOUND: T.qrIdentityNotBound,
+      IDENTITY_DISABLED: T.qrIdentityDisabled,
+      IDENTITY_AMBIGUOUS: T.qrIdentityAmbiguous,
+      IDENTITY_PROVIDER_UNAVAILABLE: T.qrIdentityProviderUnavailable,
+      IDENTITY_CONFLICT: T.qrIdentityConflict,
+    }
+    if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(copy, code)) return copy[code]
+    return message || T.qrSignInFailed
+  }
+
+  function finishBrowserQr(message) {
+    browserQrGeneration++
+    stopBrowserQrTimers()
+    browserQrPolling = false
+    browserQrBusy = false
+    browserQrFlowId = null
+    loginPrimary.disabled = false
+    loginPrimary.className = 'login-primary'
+    loginPrimary.textContent = T.loginPrimary
+    loginHint.textContent = message
+    loginFallback.style.display = ''
+  }
+
+  function copyLoginUrl() {
+    if (browserQrUrl === '') return
+    var done = function () { loginHint.textContent = T.copiedLoginLink }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(browserQrUrl).then(done, function () { fallbackCopyLoginUrl(done) })
+        return
+      }
+    } catch (e) {}
+    fallbackCopyLoginUrl(done)
+  }
+
+  function fallbackCopyLoginUrl(done) {
+    try {
+      var ta = document.createElement('textarea')
+      ta.value = browserQrUrl
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      done()
+    } catch (e) {
+      loginHint.textContent = browserQrUrl
+    }
+  }
+
+  function startBrowserQr() {
+    if (browserQrBusy) return
+    var method = currentMethod
+    if (!isQrMethod(method)) return
+    var server = trimServer(document.getElementById('server').value.trim())
+    if (!server) { err2.textContent = T.needServerFirst; return }
+    resetBrowserQr()
+    var generation = browserQrGeneration
+    browserQrMethod = method
+    browserQrBusy = true
+    loginPrimary.disabled = true
+    loginPrimary.className = 'login-primary loading'
+    loginPrimary.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + esc(T.browserWaiting)
+    loginHint.textContent = T.browserOpenHint
+    loginFallback.style.display = ''
+    err2.textContent = ''
+    void (async function () {
+      try {
+        var res = await fetch('/api/zeokeel/auth/qr/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ server: server, method: method }),
+        })
+        var data = await res.json().catch(function () { return null })
+        if (generation !== browserQrGeneration) return
+        if (!res.ok || !data || typeof data.flow_id !== 'string' || data.flow_id === '' || !isAllowedQrFrameUrl(data.qr_url)) {
+          finishBrowserQr(browserQrFailureText(data && data.code, qrMessage(data)) || T.qrStartFailed)
+          return
+        }
+        browserQrFlowId = data.flow_id
+        browserQrUrl = data.qr_url
+        // Electron 的 setWindowOpenHandler 会把 http(s) 交给系统浏览器；window.open
+        // 返回 null 不代表失败，兜底区始终提供「复制登录链接」。
+        try { window.open(browserQrUrl, '_blank', 'noopener') } catch (e) {}
+        var seconds = Math.floor(Number(data.expires_in))
+        if (!isFinite(seconds) || seconds <= 0) seconds = 300
+        browserQrDeadline = Date.now() + seconds * 1000
+        if (browserQrTick) clearInterval(browserQrTick)
+        browserQrTick = setInterval(function () {
+          if (generation !== browserQrGeneration) return
+          var left = Math.round((browserQrDeadline - Date.now()) / 1000)
+          if (left <= 0) { finishBrowserQr(T.qrExpired); return }
+          loginHint.textContent = T.browserOpenHint + ' ' + T.qrRemaining.replace('{seconds}', function () { return left })
+        }, 1000)
+        startBrowserQrPoll(generation, server, method, browserQrFlowId)
+      } catch (e) {
+        if (generation === browserQrGeneration) finishBrowserQr(T.networkError)
+      }
+    })()
+  }
+
+  function startBrowserQrPoll(generation, server, method, flowId) {
+    if (browserQrTimer) clearInterval(browserQrTimer)
+    browserQrPolling = false
+    browserQrTimer = setInterval(async function () {
+      if (generation !== browserQrGeneration || browserQrPolling) return
+      browserQrPolling = true
+      try {
+        var r = await fetch('/api/zeokeel/auth/qr/poll?server=' + encodeURIComponent(server) +
+          '&method=' + encodeURIComponent(method) + '&flow_id=' + encodeURIComponent(flowId))
+        var d = await r.json().catch(function () { return null })
+        if (generation !== browserQrGeneration) return
+        if (!r.ok) {
+          if (r.status === 404 || r.status === 410) { finishBrowserQr(T.qrExpired); return }
+          finishBrowserQr(browserQrFailureText(d && d.code, qrMessage(d)))
+          return
+        }
+        var status = d && d.status
+        if (status === 'done') {
+          browserQrGeneration++
+          stopBrowserQrTimers()
+          browserQrBusy = false
+          location.reload()
+          return
+        }
+        if (status === 'expired') { finishBrowserQr(T.qrExpired); return }
+        if (status === 'failed') { finishBrowserQr(browserQrFailureText(d && d.code, qrMessage(d))); return }
+      } catch (e) {
+        // 网络抖动继续轮询；由倒计时兜底。
+      } finally {
+        browserQrPolling = false
+      }
+    }, 2000)
+  }
+
   function updateFields() {
     var isPassword = currentMethod === 'local' || currentMethod === 'ldap'
-    // 扫码方式（qr:true 的 wecom/dingtalk）不走浏览器跳转：选中后直接进二维码卡片，
-    // 不显示浏览器登录按钮与 waiting 文案（设计文档 §7）。
     var isQr = !isPassword && isQrMethod(currentMethod)
+    var isBrowser = !isPassword && !isQr && isBrowserMethod(currentMethod)
     document.getElementById('username').style.display = isPassword ? '' : 'none'
     document.getElementById('password').style.display = isPassword ? '' : 'none'
     if (isPassword) document.getElementById('username').placeholder = currentMethod === 'ldap' ? T.ldapUsername : T.usernamePlaceholder
     document.getElementById('btn').style.display = isPassword ? '' : 'none'
     f2.style.display = isPassword ? '' : 'none'
-    browserBtn.style.display = isPassword || isQr ? 'none' : ''
+    localBackBtn.style.display = isPassword ? '' : 'none'
+    browserBtn.style.display = 'none'
     browserBtn.textContent = T.signInWith.replace('{method}',() => (methodLabel(currentMethod)))
     waiting.style.display = 'none'
+    loginHint.textContent = ''
+    loginFallback.style.display = 'none'
+    providerPicker.innerHTML = ''
+    otherLoginBox.innerHTML = ''
+    qrFallbackBtn.style.display = 'none'
+    localToggleBtn.style.display = 'none'
+    hideQrCard()
     if (isQr) {
-      enterQrLogin()
+      showLanding(true)
+      renderProviderPicker()
+      renderOtherLogins()
+      qrFallbackBtn.style.display = ''
+      localToggleBtn.style.display = ''
+      setPrimaryBusy(false)
+      loginPrimary.style.display = ''
+      loginPrimary.textContent = T.loginPrimary
+    } else if (isBrowser) {
+      showLanding(true)
+      renderOtherLogins()
+      localToggleBtn.style.display = ''
+      // OIDC/OpenID uses the existing browser button (it owns the waiting copy);
+      // the primary button is reserved for the QR flow so the two do not fight
+      // over one loading state.
+      loginPrimary.style.display = 'none'
+      browserBtn.style.display = ''
+      browserBtn.textContent = T.signInWith.replace('{method}',() => (methodLabel(currentMethod)))
     } else {
-      // 切到密码/浏览器方式（或返回 Step1）必须停止扫码轮询并复位，否则旧流程的
-      // 迟到响应会把页面刷走、或在新方式上显示二维码状态。
-      hideQrCard()
+      // Password/local mode shows the form directly; local-back returns to the QR landing.
+      showLanding(false)
+      f2.style.display = ''
+      if (localBackBtn) localBackBtn.style.display = ''
     }
   }
 
@@ -843,6 +1178,9 @@ export function renderLoginPage(locale: HostLocale): string {
   }
 
   function enterQrLogin() {
+    // 内嵌二维码是「浏览器打不开」时的兜底：停掉浏览器流程并收起落地页。
+    resetBrowserQr()
+    showLanding(false)
     // 同一种方式重复 updateFields（例如再点一次当前按钮）不重开流程。
     if (qrMethod === currentMethod && qrFlowId !== null) { qrCard.style.display = ''; return }
     hideQrCard()
@@ -862,6 +1200,7 @@ export function renderLoginPage(locale: HostLocale): string {
     // 复位浏览器授权守卫(2026-09-01 深挖):返回 Step1 时若 OIDC 授权尚未
     // 完成,按钮 disabled 与轮询需复位,否则用户只能重启应用再登录。
     resetBrowserLogin()
+    resetBrowserQr()
     // 扫码流程同样必须停掉：否则回到 Step1 后仍在轮询旧 flow_id。
     hideQrCard()
   })
@@ -937,6 +1276,35 @@ export function renderLoginPage(locale: HostLocale): string {
   }
 
   browserBtn.addEventListener('click', browserLogin)
+
+  loginPrimary.addEventListener('click', function () {
+    if (browserQrBusy) return
+    if (isQrMethod(currentMethod)) { void startBrowserQr(); return }
+    if (isBrowserMethod(currentMethod)) { void browserLogin() }
+  })
+  copyLoginBtn.addEventListener('click', copyLoginUrl)
+  retryLoginBtn.addEventListener('click', function () {
+    resetBrowserQr()
+    void startBrowserQr()
+  })
+  localToggleBtn.addEventListener('click', function () {
+    resetBrowserQr()
+    currentMethod = 'local'
+    updateFields()
+    var username = document.getElementById('username')
+    if (username && username.style.display !== 'none') username.focus()
+  })
+  localBackBtn.addEventListener('click', function () {
+    currentMethod = pickDefault(currentMethods)
+    resetBrowserQr()
+    updateFields()
+  })
+  qrFallbackBtn.addEventListener('click', function () { enterQrLogin() })
+  qrBackBrowserBtn.addEventListener('click', function () {
+    hideQrCard()
+    showLanding(true)
+    updateFields()
+  })
 
   // 「刷新二维码」：停掉旧流程（含倒计时/轮询）后重新 start，不复用旧 flow_id
   //（服务端终态即失效）。

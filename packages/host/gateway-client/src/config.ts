@@ -4,6 +4,10 @@ export interface Session {
   token: string
   /** RBAC role from the server login response (v3b §4.4); undefined = 未返回. */
   role?: string
+  /** 员工真实姓名（服务端 user.display_name）；缺省时界面回退到 username。 */
+  displayName?: string
+  /** 本次登录方式：local / wecom / dingtalk（账号卡据此显示品牌图标）。 */
+  provider?: string
   /** 0057: 账号来源('local'|'external'); external=LDAP/OIDC 由 IdP 管理密码. */
   source?: string
   /** 0057: 是否可自助改密(本地认证且启用); 客户端据此渲染改密入口. */

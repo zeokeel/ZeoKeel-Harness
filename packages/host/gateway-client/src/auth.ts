@@ -157,6 +157,8 @@ export interface LoginPayloadUser {
   role?: string
   source?: string
   password_changeable?: boolean
+  /** 服务端 users.display_name；扫码登录的 RBAC 姓名也走这个字段。 */
+  display_name?: string
 }
 
 /**
@@ -186,7 +188,7 @@ export interface LoginPayload {
  * @returns 已建立的会话。
  */
 export function sessionFromLoginPayload(
-  serverURL: string, data: LoginPayload, username?: string,
+  serverURL: string, data: LoginPayload, username?: string, provider?: string,
 ): Session {
   const server = normalizeServerURL(serverURL)
   if (!data.token) throw new AuthError('server_error', 'missing token in response')
@@ -199,6 +201,9 @@ export function sessionFromLoginPayload(
   if (data.user?.source !== undefined) sess.source = data.user.source
   if (data.user?.password_changeable !== undefined) sess.passwordChangeable = data.user.password_changeable
   if (data.must_change_password === true) sess.mustChangePassword = true
+  const displayName = data.user?.display_name?.trim() ?? ''
+  if (displayName !== '') sess.displayName = displayName
+  if (provider !== undefined && provider !== '') sess.provider = provider
   return sess
 }
 
@@ -221,12 +226,13 @@ export function loginWithToken(
   user?: LoginPayloadUser,
   mustChangePassword?: boolean,
   username?: string,
+  provider?: string,
 ): Session {
   return sessionFromLoginPayload(serverURL, {
     token,
     ...(user === undefined ? {} : { user }),
     ...(mustChangePassword === undefined ? {} : { must_change_password: mustChangePassword }),
-  }, username)
+  }, username, provider)
 }
 
 /**
@@ -267,7 +273,7 @@ export async function login(
     if (!res.ok) throw new AuthError('server_error', `HTTP ${res.status}`)
     // 会话构造与扫码登录共用 sessionFromLoginPayload()（见其注释：两份会漂移）。
     // 账号取**用户输入**（传第三参），服务端回显的 username 不覆盖它。
-    return sessionFromLoginPayload(server, (await res.json()) as LoginPayload, username)
+    return sessionFromLoginPayload(server, (await res.json()) as LoginPayload, username, 'local')
   } catch (e) {
     if (e instanceof AuthError) throw e
     if (controller.signal.aborted) throw new AuthError('network', 'timeout')

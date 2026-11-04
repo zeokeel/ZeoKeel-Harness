@@ -254,6 +254,41 @@ describe('行内余额状态（spec §6）', () => {
     expect(row.getAttribute('aria-label')).toContain('¥89.65')
   })
 
+  it('扫码登录：行显示员工真实姓名，姓名前是企业微信/钉钉品牌图标', async () => {
+    routes.set(`GET ${AUTH_PATH}`, {
+      body: {
+        loggedIn: true,
+        username: 'rbac:user001',
+        displayName: '张三',
+        provider: 'wecom',
+        serverURL: 'https://gw.example',
+        identity: 'https://gw.example\u0000rbac:user001',
+      },
+    })
+    await renderCard()
+    const row = rowButton()
+    expect(row.textContent).toContain('张三')
+    expect(row.textContent).not.toContain('rbac:user001')
+    expect(row.querySelector('[data-provider="wecom"]')).not.toBeNull()
+
+    routes.set(`GET ${AUTH_PATH}`, {
+      body: {
+        loggedIn: true,
+        username: 'rbac:user002',
+        displayName: '李四',
+        provider: 'dingtalk',
+        serverURL: 'https://gw.example',
+        identity: 'https://gw.example\u0000rbac:user002',
+      },
+    })
+    await act(async () => { root.unmount() })
+    root = createRoot(container)
+    await renderCard()
+    const next = rowButton()
+    expect(next.textContent).toContain('李四')
+    expect(next.querySelector('[data-provider="dingtalk"]')).not.toBeNull()
+  })
+
   it('余额为 0：金额用错误色 + 行上出现警示圆点 + aria-label 说明余额不足', async () => {
     routes.set(`GET ${USAGE_PATH}`, usageReply({ balance_money: 0 }))
     await renderCard()

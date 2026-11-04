@@ -2001,6 +2001,10 @@ export function apply(ctx: Context, config: Config): void {
             : {
                 loggedIn: true,
                 username: current.username,
+                // 员工真实姓名 + 登录方式：账号卡显示「企业微信/钉钉图标 + 姓名」，
+                // 不再用 username（RBAC uid，如 dingtalk:...）当显示名。
+                displayName: current.displayName ?? '',
+                provider: current.provider ?? '',
                 serverURL: current.serverURL,
                 role: current.role ?? '',
                 // 0057: 账号来源与可改密标志(客户端设置-账号页据此渲染改密入口)。
@@ -2242,6 +2246,8 @@ export function apply(ctx: Context, config: Config): void {
                   data.token,
                   data.user,
                   data.must_change_password === true,
+                  undefined,
+                  method,
                 )
                 ctx.zeokeelSession.setSession(sess)
               } catch (error) {

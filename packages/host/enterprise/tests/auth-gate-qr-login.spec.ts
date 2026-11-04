@@ -807,7 +807,7 @@ describe('宿主路由：/api/zeokeel/auth/qr/poll', () => {
       body: {
         status: 'done',
         token: 'tok-once',
-        user: { username: 'zhangsan', role: 'user', source: 'external', password_changeable: false },
+        user: { username: 'zhangsan', display_name: '张三', role: 'user', source: 'external', password_changeable: false },
         must_change_password: false,
       },
     }))
@@ -824,6 +824,8 @@ describe('宿主路由：/api/zeokeel/auth/qr/poll', () => {
       role: 'user',
       source: 'external',
       passwordChangeable: false,
+      displayName: '张三',
+      provider: 'wecom',
     })
   })
 

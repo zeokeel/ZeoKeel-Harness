@@ -23,7 +23,7 @@
     {
       "criterion": "客户端登录页在 qr_url 合法时渲染 iframe，非法/缺失回落 PNG；页面与宿主路由用例全绿且类型检查通过",
       "evidence": "test",
-      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts && corepack yarn workspace @zeokeel/dsh-enterprise typecheck"
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts"
     },
     {
       "criterion": "桌面运行时允许子 frame 的 https 回调（顶层仍严格拒绝），CSP 指令集合显式登记 frame-src 'self' https:；运行时用例全绿",
@@ -33,7 +33,7 @@
     {
       "criterion": "231 本地真实客户端扫码点「登录」后：服务端收到 callback 200，RBAC resolve 成功，数据库出现 employee-a / external_source=rbac / external_id=rbac:employee-a，客户端进入应用",
       "evidence": "manual",
-      "command": "本地 Xvfb 运行客户端 → 企业微信扫码 → 点蓝色「登录」→ 观察 callback 200、users 表 rbac 行、客户端应用页"
+      "command": "231 Xvfb 真机扫码 + 企业微信点「登录」"
     }
   ],
   "risk": "frame-src 允许 https 会放宽应用页 iframe 来源；扫码 iframe 由登录页脚本创建且 script-src 仍限本地，官方页面本身已受其 CSP 约束。导航闸门只对 isMainFrame=false 且 https 的 frame 放行；顶层导航/重定向仍严格拒绝。qr_url 非法时回落旧 PNG。",

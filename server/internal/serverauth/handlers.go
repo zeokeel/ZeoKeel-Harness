@@ -37,6 +37,10 @@ type ClientHandlers struct {
 	QRStart    func(name string) gin.HandlerFunc
 	QRPoll     func(name string) gin.HandlerFunc
 	QRCallback func(name string) gin.HandlerFunc
+	// QRLaunch 是浏览器扫码登录的 302 中转：把外部打开的标签页先落到本服务，
+	// 再跳到官方登录页，保证 callback 页的 history.length 仍为 1（浏览器才允许
+	// window.close()）。
+	QRLaunch func(name string) gin.HandlerFunc
 	// PublicMethods 是登录方式发现(公开、未登录可访问)。与管理端共用同一份
 	// 判定实现(publicAuthMethods),区别是这里带**运行期视图**(R24-X4-B2):
 	// `configured` 以本 API 实例的 provider 注册表为真源,settings 只决定
@@ -82,6 +86,7 @@ func (a *API) Handlers() *ClientHandlers {
 		QRStart:         a.qrStartHandler,
 		QRPoll:          a.qrPollHandler,
 		QRCallback:      a.qrCallbackHandler,
+		QRLaunch:        a.qrLaunchHandler,
 		PublicMethods:   a.publicMethodsHandler(),
 	}
 }

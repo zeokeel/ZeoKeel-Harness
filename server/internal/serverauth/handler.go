@@ -537,6 +537,7 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 	for name := range qrNames {
 		g.POST("/"+name+"/qr/start", a.qrStartHandler(name))
 		g.GET("/"+name+"/qr/poll", a.qrPollHandler(name))
+		g.GET("/"+name+"/qr/launch", a.qrLaunchHandler(name))
 		g.GET("/"+name+"/callback", a.qrCallbackHandler(name))
 	}
 }

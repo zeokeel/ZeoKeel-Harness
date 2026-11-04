@@ -502,6 +502,36 @@ func authRedirectURLAllowed(raw string) bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
+// qrLaunchAllowedHosts 是中转目标的白名单（唯一实现）：只允许对应 provider
+// 的官方 HTTPS 登录页。任何其他 host/协议/带 userinfo 的目标一律 400，避免
+// 这个 GET 面变成开放重定向。
+var qrLaunchAllowedHosts = map[string]map[string]bool{
+	"wecom": {
+		"open.work.weixin.qq.com":  true,
+		"login.work.weixin.qq.com": true,
+	},
+	"dingtalk": {
+		"login.dingtalk.com": true,
+	},
+}
+
+// qrLaunchTargetAllowed 校验 302 中转目标。
+func qrLaunchTargetAllowed(name, raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || len(raw) > 4096 {
+		return false
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.User != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "" || (u.Port() != "" && u.Port() != "443") {
+		return false
+	}
+	return qrLaunchAllowedHosts[name][host]
+}
+
 // qrStartBudgetKey 是扫码流程启动限流桶的**唯一键构造点**。
 //
 // 与 oidcFlowBudgetKey 同形，但用的是独立的 limiter 实例（每 API 一个，见
@@ -513,6 +543,28 @@ func qrStartBudgetKey(c *gin.Context) string {
 // ---------------------------------------------------------------------------
 // HTTP handlers
 // ---------------------------------------------------------------------------
+
+// qrLaunchHandler 处理浏览器扫码登录的 302 中转。
+//
+// 外部程序直接打开官方登录页时，官方页导航到 callback 会让标签页出现 2 条
+// 历史，Chrome/Edge 便拒绝页面的 window.close()（MDN: 浏览器 UI 打开的标签页
+// 只有在未导航/history.length=1 时才可脚本关闭）。先落到本服务再 302，官方页
+// 替换掉中转页，callback 页仍是唯一历史条目，扫码成功页才能自动关闭。
+func (a *API) qrLaunchHandler(name string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if a.qrProvider(name) == nil {
+			writeError(c, http.StatusNotFound, "AUTH_METHOD_DISABLED", "登录方式未启用")
+			return
+		}
+		target := strings.TrimSpace(c.Query("target"))
+		if !qrLaunchTargetAllowed(name, target) {
+			writeError(c, http.StatusBadRequest, "INVALID_TARGET", "无效的扫码登录地址")
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.Redirect(http.StatusFound, target)
+	}
+}
 
 // qrStartHandler 处理 `POST /api/client/v2/auth/<name>/qr/start`。
 //

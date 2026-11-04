@@ -279,6 +279,47 @@ func TestQRFlowTableCapacity(t *testing.T) {
 // 端到端：start → callback → poll（真 DB，含 provision + token 签发 + 审计）
 // ---------------------------------------------------------------------------
 
+func TestQRBrowserLaunchRedirectsOnlyOfficialTargets(t *testing.T) {
+	fake := &fakeQRProvider{name: "wecom"}
+	r, _ := newQRTestServer(t, fake)
+
+	// 官方登录页：302 到白名单目标，且不缓存。
+	target := "https://open.work.weixin.qq.com/wwopen/sso/qrConnect?appid=ww-test&state=abc"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet,
+		"/api/client/v2/auth/wecom/qr/launch?target="+url.QueryEscape(target), nil))
+	if w.Code != http.StatusFound || w.Header().Get("Location") != target {
+		t.Fatalf("launch = %d location=%q, want 302 %q", w.Code, w.Header().Get("Location"), target)
+	}
+	if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Fatalf("launch Cache-Control = %q, want no-store", cc)
+	}
+
+	for _, bad := range []string{
+		"",
+		"http://open.work.weixin.qq.com/x",
+		"https://evil.example/x",
+		"https://login.dingtalk.com/oauth2/auth", // 属于另一个 provider
+		"https://user:pass@open.work.weixin.qq.com/x",
+		"https://open.work.weixin.qq.com:8443/x",
+	} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet,
+			"/api/client/v2/auth/wecom/qr/launch?target="+url.QueryEscape(bad), nil))
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("launch target %q = %d, want 400", bad, w.Code)
+		}
+	}
+
+	// 未注册的 provider：404 JSON 信封。
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet,
+		"/api/client/v2/auth/dingtalk/qr/launch?target="+url.QueryEscape("https://login.dingtalk.com/x"), nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("unregistered launch = %d, want 404", w.Code)
+	}
+}
+
 func TestQRStartCallbackPollEndToEnd(t *testing.T) {
 	fake := &fakeQRProvider{name: "wecom", ui: UserInfo{
 		Username: "zhangsan", DisplayName: "张三", Email: "zhangsan@example.com",

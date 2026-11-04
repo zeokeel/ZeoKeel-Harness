@@ -232,6 +232,7 @@ func registerClientV2(cli *gin.RouterGroup, d Deps) {
 	for _, name := range []string{"wecom", "dingtalk"} {
 		ag.POST("/"+name+"/qr/start", d.Auth.QRStart(name))
 		ag.GET("/"+name+"/qr/poll", d.Auth.QRPoll(name))
+		ag.GET("/"+name+"/qr/launch", d.Auth.QRLaunch(name))
 		ag.GET("/"+name+"/callback", d.Auth.QRCallback(name))
 	}
 

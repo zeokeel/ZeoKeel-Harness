@@ -7,13 +7,28 @@
   },
   "modules": [
     "server/internal/serverauth/qr.go",
-    "server/internal/serverauth/qr_test.go"
+    "server/internal/serverauth/qr_test.go",
+    "server/internal/serverauth/handler.go",
+    "server/internal/serverauth/handlers.go",
+    "server/internal/router/router.go",
+    "packages/host/enterprise/src/auth-gate.ts",
+    "packages/host/enterprise/tests/auth-gate-qr-login.spec.ts"
   ],
   "acceptance": [
     {
       "criterion": "callback 成功页仍为静态 HTML，不反射 code/state、无外链/外部资源；包含登录成功、返回客户端、5 秒倒计时与 window.close 脚本，并带严格 CSP",
       "evidence": "test",
       "command": "cd server && go test ./internal/serverauth -run TestQRStartCallbackPollEndToEnd -count=1"
+    },
+    {
+      "criterion": "浏览器登录先走同源 302 中转，官方页替换中转页，callback 页 history.length 仍为 1；中转仅允许对应 provider 的官方 HTTPS host",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth -run 'TestQRBrowserLaunchRedirectsOnlyOfficialTargets|TestQRStartCallbackPollEndToEnd' -count=1"
+    },
+    {
+      "criterion": "客户端浏览器扫码打开的是中转 URL（不是官方页直开），复制登录链接也是中转 URL",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts"
     },
     {
       "criterion": "serverauth 全量用例通过（失败仍走 JSON 信封）",
@@ -30,12 +45,20 @@
   "rollback": "恢复 /opt/zeokeel-rbac/zeokeel-server 的上一个备份并 systemctl restart zeokeel-rbac。",
   "verification": [
     {
-      "command": "cd server && go test ./internal/serverauth -run TestQRStartCallbackPollEndToEnd -count=1",
-      "result": "exit 0；callback 成功页文案/脚本/CSP/无反射断言通过"
+      "command": "cd server && go test ./internal/serverauth -run 'TestQRBrowserLaunchRedirectsOnlyOfficialTargets|TestQRStartCallbackPollEndToEnd' -count=1",
+      "result": "exit 0；launch 302/白名单/页面脚本断言通过"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/auth-gate-qr-login.spec.ts",
+      "result": "exit 0；40 tests passed（含中转 URL 用例）"
     },
     {
       "command": "cd server && go test ./internal/serverauth -count=1",
       "result": "exit 0"
+    },
+    {
+      "command": "231 systemctl restart zeokeel-rbac + healthz",
+      "result": "active；health-ok；live /qr/launch 返回 302 到官方页"
     }
   ]
 }

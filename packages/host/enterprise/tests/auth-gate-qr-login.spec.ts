@@ -66,6 +66,7 @@ const QR_FUNCTIONS = [
   'function isBrowserMethod(name)',
   'function isPngDataURL(value)',
   'function isAllowedQrFrameUrl(value)',
+  'function qrBrowserLaunchUrl(server, method, qrUrl)',
   'function qrMethodList()',
   'function showLanding(show)',
   'function setPrimaryBusy(busy)',
@@ -808,7 +809,9 @@ function stubGateway(
     const start = page.fetchCalls.find((c) => c.url === '/api/zeokeel/auth/qr/start')
     expect(start?.method).toBe('POST')
     expect(JSON.parse(start?.body ?? '{}')).toMatchObject({ method: 'wecom', server: 'https://harness.example' })
-    expect(page.windowOpen).toHaveBeenCalledWith(QR_URL, '_blank')
+    const opened = page.windowOpen.mock.calls[0]?.[0]
+    expect(opened).toContain('/api/client/v2/auth/wecom/qr/launch?target=')
+    expect(opened).toContain(encodeURIComponent(QR_URL))
     expect(page.get('login-primary').innerHTML).toContain('登录中')
     expect(page.get('login-fallback').style.display).toBe('')
     expect(page.state().browserQrBusy).toBe(true)
@@ -857,7 +860,7 @@ function stubGateway(
     await vi.advanceTimersByTimeAsync(0)
     page.copyLoginUrl()
     await vi.advanceTimersByTimeAsync(0)
-    expect(page.clipboardWrite).toHaveBeenCalledWith(QR_URL)
+    expect(page.clipboardWrite).toHaveBeenCalledWith(expect.stringContaining('/api/client/v2/auth/wecom/qr/launch?target='))
     expect(page.get('login-hint').textContent).toContain('已复制')
   })
 

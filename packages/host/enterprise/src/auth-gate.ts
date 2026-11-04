@@ -862,7 +862,9 @@ export function renderLoginPage(locale: HostLocale): string {
           return
         }
         browserQrFlowId = data.flow_id
-        browserQrUrl = data.qr_url
+        // 先打开 ZeoKeel 服务端的中转 URL（302 → 官方登录页），而不是直开官方页：
+        // 这样 callback 页 history.length 仍为 1，成功页的 window.close() 才生效。
+        browserQrUrl = qrBrowserLaunchUrl(server, method, data.qr_url)
         // Electron 的 setWindowOpenHandler 会把 http(s) 交给系统浏览器；window.open
         // 返回 null 不代表失败，兜底区始终提供「复制登录链接」。
         try { window.open(browserQrUrl, '_blank') } catch (e) {}
@@ -1015,6 +1017,13 @@ export function renderLoginPage(locale: HostLocale): string {
   function qrMessage(data) {
     if (!data || typeof data.message !== 'string') return ''
     return data.message
+  }
+
+  // 浏览器扫码不走官方页直开：先落到服务端 302 中转，保证 callback 页的
+  // history.length 仍为 1，成功页才允许 window.close() 自动关闭标签页。
+  function qrBrowserLaunchUrl(server, method, qrUrl) {
+    return trimServer(server) + '/api/client/v2/auth/' + encodeURIComponent(method) +
+      '/qr/launch?target=' + encodeURIComponent(qrUrl)
   }
 
   function stopQrTimers() {

@@ -1,6 +1,6 @@
 {
   "id": "2026-11-04-browser-qr-login-page",
-  "status": "implemented",
+  "status": "verified",
   "intent": {
     "zh": "登录页此前把企业微信/钉钉二维码内嵌在客户端，页面元素多、缺少主视觉和明确的等待反馈；参考 WorkBuddy 的「点登录 → 系统浏览器扫码 → 客户端自动进入」体验，改为品牌主视觉 + 主登录按钮 + 企微/钉钉图标选择 + 复制链接/重试兜底，并保留本地账号与内嵌二维码兜底。",
     "en": "Replace the inline QR login surface with a WorkBuddy-style landing: hero, one primary sign-in button, WeCom/DingTalk provider icons, browser QR flow, spinner, copy-link/retry fallback, while keeping local account and inline-QR fallbacks."
@@ -29,6 +29,11 @@
       "criterion": "231 本地客户端登录页显示 WorkBuddy 式落地页，点登录进入「Signing in…」+ 倒计时 + 复制/重试；本地账号与内嵌扫码 fallback 可切换",
       "evidence": "manual",
       "command": "231 Xvfb 登录页截图"
+    },
+    {
+      "criterion": "真实企业微信扫码：浏览器官方页扫码确认后，客户端不点任何按钮自动进入主界面，左下角仍显示「企微图标 + 员工姓名」",
+      "evidence": "manual",
+      "command": "231 浏览器扫码 → 客户端自动进入"
     }
   ],
   "risk": "系统浏览器未安装/被拦截时无法自动打开，需要用户点「复制登录链接」；真实服务商扫码确认仍依赖官方页，客户端只负责轮询和落地。浏览器流程的 host poll 超时/取消时会暴露重试入口，不会无限转圈。",
@@ -49,6 +54,10 @@
     {
       "command": "231 Xvfb 登录页截图",
       "result": "落地页主按钮/服务商图标/本地入口正常；点击后显示 Signing in…、倒计时、Copy sign-in link、Restart sign-in"
+    },
+    {
+      "command": "231 浏览器扫码 → 客户端自动进入",
+      "result": "真实企业微信扫码成功；客户端从 Signing in… 自动切到主界面，左下角显示企微图标 + 员工姓名"
     }
   ]
 }

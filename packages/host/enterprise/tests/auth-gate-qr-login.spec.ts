@@ -808,7 +808,7 @@ function stubGateway(
     const start = page.fetchCalls.find((c) => c.url === '/api/zeokeel/auth/qr/start')
     expect(start?.method).toBe('POST')
     expect(JSON.parse(start?.body ?? '{}')).toMatchObject({ method: 'wecom', server: 'https://harness.example' })
-    expect(page.windowOpen).toHaveBeenCalledWith(QR_URL, '_blank', 'noopener')
+    expect(page.windowOpen).toHaveBeenCalledWith(QR_URL, '_blank')
     expect(page.get('login-primary').innerHTML).toContain('登录中')
     expect(page.get('login-fallback').style.display).toBe('')
     expect(page.state().browserQrBusy).toBe(true)

@@ -865,7 +865,7 @@ export function renderLoginPage(locale: HostLocale): string {
         browserQrUrl = data.qr_url
         // Electron 的 setWindowOpenHandler 会把 http(s) 交给系统浏览器；window.open
         // 返回 null 不代表失败，兜底区始终提供「复制登录链接」。
-        try { window.open(browserQrUrl, '_blank', 'noopener') } catch (e) {}
+        try { window.open(browserQrUrl, '_blank') } catch (e) {}
         var seconds = Math.floor(Number(data.expires_in))
         if (!isFinite(seconds) || seconds <= 0) seconds = 300
         browserQrDeadline = Date.now() + seconds * 1000

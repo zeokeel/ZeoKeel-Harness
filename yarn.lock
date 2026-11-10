@@ -3233,6 +3233,25 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@deepseek-ai/dsh-ptc-runtime-node@patch:@deepseek-ai/dsh-ptc-runtime-node@npm%3A0.2.1-rc.2#./patches/dsh-ptc-runtime-node@0.2.1-rc.2.patch::locator=zeokeel-harness%40workspace%3A.":
+  version: 0.2.1-rc.2
+  resolution: "@deepseek-ai/dsh-ptc-runtime-node@patch:@deepseek-ai/dsh-ptc-runtime-node@npm%3A0.2.1-rc.2#./patches/dsh-ptc-runtime-node@0.2.1-rc.2.patch::version=0.2.1-rc.2&hash=b86e87&locator=zeokeel-harness%40workspace%3A."
+  dependencies:
+    "@deepseek-ai/dsh-util-values": "npm:0.2.1-rc.2"
+    "@deepseek-ai/schemastery": "npm:~3.18.5"
+  peerDependencies:
+    "@deepseek-ai/cordis": ~4.0.5
+    "@deepseek-ai/dsh-fs": 0.2.1-rc.2
+    "@deepseek-ai/dsh-ptc-runtime": 0.2.1-rc.2
+    "@deepseek-ai/dsh-sandbox": 0.2.1-rc.2
+    "@deepseek-ai/dsh-sandbox-policy": 0.2.1-rc.2
+    "@deepseek-ai/dsh-session": 0.2.1-rc.2
+    "@deepseek-ai/dsh-subprocess": 0.2.1-rc.2
+    "@deepseek-ai/dsh-timeout": 0.2.1-rc.2
+  checksum: 10c0/227aabcf4e4f858822743f01c3fa85126c901f084c4c48e80a8386ec81fa64dedc126bb371013d6a324b610412c2d626d055cbaa27a60de4c9d9a3004a74b6a4
+  languageName: node
+  linkType: hard
+
 "@deepseek-ai/dsh-ptc-runtime@npm:0.2.1-rc.2":
   version: 0.2.1-rc.2
   resolution: "@deepseek-ai/dsh-ptc-runtime@npm:0.2.1-rc.2"

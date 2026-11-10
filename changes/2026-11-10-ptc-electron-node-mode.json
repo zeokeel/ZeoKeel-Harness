@@ -1,0 +1,64 @@
+{
+  "id": "2026-11-10-ptc-electron-node-mode",
+  "status": "verified",
+  "intent": {
+    "zh": "打包后的 Electron 桌面端里，PTC（run_code）默认用 process.execPath 启动 worker，而它剥离了 ELECTRON_RUN_AS_NODE：worker 于是按 GUI 应用启动，被 macOS 单实例锁当成第二个实例并立刻以 0 退出，模型侧每次调用都得到 `worker-exit: Node process exited before completing (0)`。桌面补丁只给 subprocess runner 自己注入该变量、明确不泄漏给被执行的命令，因此 PTC 的 worker 无人覆盖 —— 这是 Tooling 面全量不可用，必须修在 PTC 一侧。",
+    "en": "In the packaged Electron desktop the PTC (run_code) runtime starts its worker from process.execPath while stripping ELECTRON_RUN_AS_NODE: the worker then boots as a GUI app, is treated as a second instance by the macOS single-instance lock and exits 0 immediately, so every model-side call fails with `worker-exit: Node process exited before completing (0)`. The desktop subprocess patch only injects the selector into the runner and deliberately does not leak it to executed commands, leaving the PTC worker uncovered — this breaks the whole tool surface and must be fixed on the PTC side."
+  },
+  "modules": [
+    "patches/dsh-ptc-runtime-node@0.2.1-rc.2.patch",
+    "package.json",
+    "yarn.lock",
+    "changes/2026-11-10-ptc-electron-node-mode.json"
+  ],
+  "acceptance": [
+    {
+      "criterion": "补丁在仓库外对 0.2.1-rc.2 pristine tarball 干净应用、无 fuzz，且安装树两份 dsh-ptc-runtime-node 副本都等于 pristine+补丁（逐字节）",
+      "evidence": "guard",
+      "command": "node scripts/verify-patches.mjs"
+    },
+    {
+      "criterion": "每个已安装的补丁目标副本都含补丁新增锚点 `env.ELECTRON_RUN_AS_NODE = \"1\"`（两份副本各命中 2 处），且补丁目标版本等于 upstream.json 的 runtimePackageVersion",
+      "evidence": "guard",
+      "command": "node scripts/check-patch-pin.mjs"
+    },
+    {
+      "criterion": "resolutions 的 exact/`^` 键成对登记并指向同一补丁文件，仓库外 pristine dry-run 通过",
+      "evidence": "guard",
+      "command": "node scripts/verify-patch-resolutions.mjs"
+    },
+    {
+      "criterion": "本记录通过 changes/ 契约判据（status/acceptance/verification 齐全）",
+      "evidence": "guard",
+      "command": "node scripts/check-change-intent.mjs"
+    }
+  ],
+  "risk": "注入只在 process.versions.electron 存在时发生（命令行 Node 宿主不受影响）；PTC worker 以 Node 模式启动后进程内 process.env 仍带该变量，但 bootstrap 会在求值模型代码前清空程序可见环境。若上游后续自行修复或升级 pin，补丁会因版本不匹配被 check-patch-pin/verify-patches 拦下，不会静默失效。",
+  "rollback": "删除 patches/dsh-ptc-runtime-node@0.2.1-rc.2.patch、package.json 里两条 resolutions 键，执行 yarn install 重新生成 yarn.lock 并还原 node_modules。",
+  "verification": [
+    {
+      "command": "node scripts/verify-patches.mjs",
+      "result": "exit 0；15 个补丁在仓库外 pristine 树上全部干净应用（无 fuzz/无反向），新补丁 1 个文件段、见证 cache 封存副本，交付物侧 2/2 份安装副本逐字节一致"
+    },
+    {
+      "command": "node scripts/check-patch-pin.mjs",
+      "result": "exit 0；28 条 DSH patch resolution、14 个包绑定 pin 0.2.1-rc.2；内容级锚点校验覆盖 16 份拷贝 × 225 条锚点（新补丁的 `env.ELECTRON_RUN_AS_NODE = \"1\"` 在两份 dsh-ptc-runtime-node 副本各命中 2 处）"
+    },
+    {
+      "command": "node scripts/verify-patch-resolutions.mjs",
+      "result": "exit 0；15 个补丁包的 exact + ^ resolution 键与 patches/ 一一对应（新包 @deepseek-ai/dsh-ptc-runtime-node@0.2.1-rc.2 exact + ^）"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs",
+      "result": "exit 0；18 条变更记录全部合规"
+    },
+    {
+      "command": "node scripts/check-install-integrity.mjs",
+      "result": "exit 0；提交后 package.json 工作树与 HEAD 一致，判据执行体 218 条、manifest 22 个通过"
+    },
+    {
+      "command": "TMPDIR=$(cd $(getconf DARWIN_USER_TEMP_DIR) && pwd -P)/ node scripts/check-no-real-domains.mjs",
+      "result": "exit 0；零命中（扫描 3412 个文件，提交信息区间 origin/master..HEAD 0 条提交、0 命中）。注：直接运行需真实路径 TMPDIR，因为 macOS 的 /var → /private/var 软链会让守卫自检的根解析失败（与本改动无关）"
+    }
+  ]
+}

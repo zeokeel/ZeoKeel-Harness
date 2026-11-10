@@ -69,7 +69,8 @@ describe('bootstrap sync', () => {
     try {
       applyBootstrap(ctx)
       await onHandler(SAMPLE_SESSION)
-      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2))
+      // 现象：进程内异步状态传播（事件/回调派发后的断言）；vitest 缺省的 1s 在 CI 4 vCPU 负载下不够（R11-B-02）。
+      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2), { timeout: 10_000 })
       expect(settings.update).toHaveBeenCalledWith(GATEWAY_LLM_ROW_ID, expect.objectContaining({
         modelProtocols: {
           'openai-model': 'openai',
@@ -98,7 +99,8 @@ describe('bootstrap sync', () => {
     try {
       applyBootstrap(ctx)
       await onHandler(SAMPLE_SESSION)
-      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2))
+      // 现象：进程内异步状态传播（事件/回调派发后的断言）；vitest 缺省的 1s 在 CI 4 vCPU 负载下不够（R11-B-02）。
+      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2), { timeout: 10_000 })
       expect(settings.update).toHaveBeenCalledWith('web-search-deepseek', expect.objectContaining({ baseURL: '' }))
     } finally { globalThis.fetch = original }
   })
@@ -114,10 +116,12 @@ describe('bootstrap sync', () => {
     try {
       applyBootstrap(ctx)
       await onHandler(SAMPLE_SESSION)
-      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2))
+      // 现象：进程内异步状态传播（事件/回调派发后的断言）；vitest 缺省的 1s 在 CI 4 vCPU 负载下不够（R11-B-02）。
+      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2), { timeout: 10_000 })
       protocols = undefined
       await onHandler({ ...SAMPLE_SESSION, token: 'tok-2' })
-      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(4))
+      // 现象：进程内异步状态传播（事件/回调派发后的断言）；vitest 缺省的 1s 在 CI 4 vCPU 负载下不够（R11-B-02）。
+      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(4), { timeout: 10_000 })
       expect(settings.update.mock.calls.filter(call => call[0] === GATEWAY_LLM_ROW_ID).at(-1)?.[1])
         .toMatchObject({ modelProtocols: { 'deepseek-chat': 'anthropic' } })
     } finally { globalThis.fetch = original }

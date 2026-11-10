@@ -1,5 +1,6 @@
 import { fetchJSON } from './auth.ts'
 import type { BootstrapConfig, Session } from './config.ts'
+import { usableGatewayModels } from '../model-protocol.ts'
 
 export const EMPTY: BootstrapConfig = { models: [], skills: [], mcp: [], web: {}, default_model: '' }
 
@@ -34,11 +35,13 @@ export function validateBootstrap(cfg: BootstrapConfig | null | undefined): Boot
   if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.models) || cfg.models.length === 0) {
     return { config: EMPTY, fellBack: true, fallback: 'empty' }
   }
-  if (cfg.models.some((m) => m.id === cfg.default_model)) {
-    return { config: cfg, fellBack: false, fallback: 'ok' }
+  const models = usableGatewayModels(cfg.models)
+  if (models.length === 0) return { config: EMPTY, fellBack: true, fallback: 'empty' }
+  if (models.some((m) => m.id === cfg.default_model)) {
+    return { config: { ...cfg, models }, fellBack: false, fallback: 'ok' }
   }
   return {
-    config: { ...cfg, default_model: cfg.models[0]!.id },
+    config: { ...cfg, models, default_model: models[0]!.id },
     fellBack: true,
     fallback: 'default_model_substituted',
   }

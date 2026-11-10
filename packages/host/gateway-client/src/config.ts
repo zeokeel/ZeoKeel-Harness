@@ -16,6 +16,9 @@ export interface Session {
   mustChangePassword?: boolean
 }
 
+/** 网关可为客户端转发的协议；上游地址与密钥不随目录下发。 */
+export type GatewayProtocol = 'openai' | 'anthropic'
+
 export interface BootstrapModel {
   id: string
   display_name: string
@@ -23,6 +26,8 @@ export interface BootstrapModel {
   default_params?: string
   /** 0058: 模型接受的输入模态('text'/'image');缺失 = 仅 text(客户端 schema 缺省)。 */
   input_modalities?: string[]
+  /** 同名上游的可用协议并集；旧服务端缺省时保持 Anthropic 行为。 */
+  protocols?: GatewayProtocol[]
 }
 
 export interface BootstrapConfig {

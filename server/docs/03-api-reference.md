@@ -323,7 +323,7 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 ```json
 {
   "default_model": "deepseek-chat",
-  "models": [{ "id": "deepseek-chat", "display_name": "DeepSeek Chat", "input_modalities": ["text"] }],
+  "models": [{ "id": "deepseek-chat", "display_name": "DeepSeek Chat", "input_modalities": ["text"], "protocols": ["openai"] }],
   "skills": [{ "name": "invoice-helper", "version": "1.0.0", "description": "..." }],
   "web": { "default_thinking_level": "max" },
   "connectors": [{ "id": "example-mcp", "name": "示例 MCP 智能体", "auth_mode": "oauth", "definition": { ... } }]
@@ -331,6 +331,10 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 ```
 
 `models[].input_modalities`(0058)为模型接受的输入模态数组(`text`/`image`),客户端据此允许/拒绝图片上传;缺省/非法值客户端回落仅 `text`。`/v1/models` 同字段。
+
+`models[].protocols` 为该模型可用的网关协议数组(`openai`/`anthropic`)，由启用上游的 `protocol` 配置生成；`both` 展开为 `["anthropic","openai"]`。同名模型合并成一项，协议取并集并固定 Anthropic 优先；显示名、默认参数保留模型 ID 最小的候选行，输入模态取所有有效同名候选的交集，避免多上游能力不一致时虚报图片支持。没有共同输入能力的同名模型不展示；默认模型因此移除时回退到首个可用模型，空目录时默认模型为空。停用上游、目录缺失模型及未知/空协议不参与目录或能力合并。`/v1/models` 同样返回这些字段。
+
+桌面客户端根据所选模型自动选择 Anthropic Messages 或 OpenAI Chat Completions；两个协议都可用时优先 Anthropic。旧服务端缺少 `protocols` 字段时，新客户端保留历史 Anthropic 行为；旧客户端忽略新增字段。客户端仅访问当前登录服务端的网关，目录不包含上游地址或密钥。
 
 客户端 `BootstrapConfig` 与之严格对齐;`default_model` 不在启用模型时自动回退到第一个可用模型。`connectors`(0042 起)为服务端连接器目录,客户端按目录渲染连接器中心(glitchtip 0045 已下架,不下发)。
 

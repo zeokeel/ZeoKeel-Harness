@@ -86,6 +86,17 @@ make -f Makefile.agent arch-go
 | `@fission-ai/openspec` | `1.15.0` | 规格/变更框架（`validate` 可进 CI） | `corepack yarn dlx @fission-ai/openspec@1.15.0` | 团队决定采用 spec-first 时；否则用本仓 `changes/` |
 | OpenSpec 之外的 SDD 工具 | — | 规格前置 | 各自 CLI | **不建议**在本仓引入：本仓已有更硬的判据，且实测 markdown 体量会拖慢评审 |
 
+### 3.1 企业网关的协议适配依赖
+
+企业包直接声明 `@deepseek-ai/dsh-llm-pi-ai@0.2.1-rc.2` 和
+`@earendil-works/pi-ai`（`yarn.lock` 锁定 `1.3.0`），复用公开的 OpenAI Chat Completions
+转换器；Anthropic 继续使用锁定上游的 DeepSeek 适配器。不导入上游内部路径，
+不修改子模块，也不启用 pi-ai 插件自己的供应商登录或环境密钥发现。
+`@deepseek-ai/dsh-agent@0.2.1-rc.2` 仅作为类型与测试依赖，验证公开的 Agent 请求配置投影接缝。
+
+验证：`corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/gateway-model-protocol.spec.ts`，
+应全绿；它通过真 HTTP 请求验证模型级协议、工具调用、流式与令牌边界，不证明任何外部供应商可用性。
+
 ## 4. 明确"暂不引入"（附理由）
 
 | 工具 | 结论 | 理由 |

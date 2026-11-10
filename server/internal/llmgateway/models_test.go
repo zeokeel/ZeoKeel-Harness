@@ -60,8 +60,8 @@ func TestModelsList(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
 	}
-	// {"models":[{"id":"gpt-4o","display_name":"GPT-4o","default_params":"{}","input_modalities":["text"]}]} — disabled provider excluded
-	want := `{"models":[{"id":"gpt-4o","display_name":"GPT-4o","default_params":"{}","input_modalities":["text"]}]}`
+	// 停用上游不出现在目录，启用上游的协议能力随模型下发。
+	want := `{"models":[{"id":"gpt-4o","display_name":"GPT-4o","default_params":"{}","input_modalities":["text"],"protocols":["openai"]}]}`
 	if w.Body.String() != want {
 		t.Fatalf("body = %s", w.Body.String())
 	}
@@ -91,7 +91,7 @@ func TestModelsListInputModalities(t *testing.T) {
 	r := gin.New()
 	RegisterRoutes(r, db)
 	w := getModels(t, r, token)
-	want := `{"models":[{"id":"vision-model","display_name":"Vision","default_params":"{}","input_modalities":["text","image"]}]}`
+	want := `{"models":[{"id":"vision-model","display_name":"Vision","default_params":"{}","input_modalities":["text","image"],"protocols":["openai"]}]}`
 	if w.Code != http.StatusOK || w.Body.String() != want {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}

@@ -50,8 +50,10 @@
 # 用 `registerDeepSeekProvider(..., { resolveAuth })` 决定。上游的
 # `@deepseek-ai/dsh-llm-deepseek-api-key` 硬编码 `x-api-key`（对只认 Bearer 的网关
 # 必然 401，且没有换头的接缝），所以本组合**禁用它那一行**，改插自研的
-# `@zeokeel/dsh-enterprise/gateway-llm`（同 Config 形状、同 provider 路由
+# `@zeokeel/dsh-enterprise/gateway-llm`（兼容 Config 形状、同 provider 路由
 # `deepseek-official`，令牌取自 credentials 服务并作为 `Authorization: Bearer` 发出）。
+# 2026-11-10：自研行按 bootstrap 模型 protocols 选择 Messages 或 Chat Completions；
+# 选择由 modelProtocols 映射承载，不恢复上游已删除的顶层 protocol 键。
 #
 # 这两行必须成对：只禁用不插入 ⇒ 没有任何插件注册 `deepseek-official` ⇒ bootstrap 的
 # `agent-default-model` 指向不存在的路由，模型面全灭；只插入不禁用 ⇒ 两个适配器抢同一个

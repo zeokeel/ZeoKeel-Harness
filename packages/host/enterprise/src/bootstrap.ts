@@ -6,6 +6,7 @@ import { getBootstrap } from './server-connector/bootstrap.ts'
 import { AuthError } from './server-connector/auth.ts'
 import { GATEWAY_LLM_ROW_ID, TOKEN_ENV } from './gateway-contract.ts'
 import type { Session } from './server-connector/config.ts'
+import { gatewayProtocol, gatewayProtocols } from './model-protocol.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'bootstrap'
@@ -87,6 +88,8 @@ export function apply(ctx: Context): void {
       // 这是实际生效点;同时写 agent-default-model 保持 UI 展示一致。
       const reasoningEffort = cfg.web?.default_thinking_level
       await ctx.settings.update(GATEWAY_LLM_NS, {
+        // 每次给全部模型写入选择，旧服务端目录也覆盖同名模型的旧协议。
+        modelProtocols: Object.fromEntries(cfg.models.map(model => [model.id, gatewayProtocol(model)])),
         models: cfg.models.map((m) => {
           const maxTokens = maxOutputFromDefaultParams(m.default_params)
           const inputModalities = resolveInputModalities(m.input_modalities)
@@ -102,29 +105,24 @@ export function apply(ctx: Context): void {
         ...reasoningEffort ? { reasoningEffort } : {},
       })
       if (!epochs.isCurrent(epoch)) return
+      const defaultModel = cfg.models.find(model => model.id === cfg.default_model)
+      const defaultReasoningEffort = defaultModel !== undefined && gatewayProtocol(defaultModel) === 'anthropic'
+        ? reasoningEffort : undefined
       await ctx.settings.replace(AGENT_DEFAULT_MODEL_NS, {
         provider: DEEPSEEK_PROVIDER,
         model: cfg.default_model,
-        ...reasoningEffort ? { reasoningEffort } : {},
+        ...defaultReasoningEffort ? { reasoningEffort: defaultReasoningEffort } : {},
       })
       if (!epochs.isCurrent(epoch)) return
-      // web_search 服务端代理(0043):搜索也走网关 /v1/messages,官方 key
-      // 不下发客户端。apiKeyEnv 指向网关 token(与 chat 同一凭据),baseURL
-      // 指向网关路由前缀(provider 追加 /messages 即 /v1/messages),model 与
-      // chat 同用服务端 default_model(该模型名由服务端 anthropic 协议
-      // provider 承载,与 openai 协议 provider 可同名共存)。
-      //
-      // 0.1.7 复核（这条链路是**第二处**，历史上与 chat 一起踩过 401）：
-      // `web-search-deepseek` **没有** `protocol`（0.1.6/0.1.7 都没有，删除面只涉及
-      // `llm-deepseek`），`apiKeyEnv`/`baseURL`/`model` 三个键在 0.1.7 仍存在且都是
-      // volatile（`web-search-deepseek/src/index.ts`），而它的请求头本来就**同时**发
-      // `x-api-key` 与 `authorization: Bearer`（`provider.ts:228-231`）⇒ 网关的
-      // BearerAuth 能通过，无需改动。组装期 `cordis.patch.yml` 把 `apiKeyEnv` 从
-      // base bundle 的 `DEEPSEEK_API_KEY` 覆盖成同一个网关令牌引用，那条仍然有效。
+      // 原生网页搜索是独立的 Messages 服务，不支持 Chat Completions 的原生搜索工具。
+      // 优先默认模型，否则选择可用的 Anthropic 模型；没有时用不可解析端点使
+      // provider.available() 为 false，避免错误协议请求或回落官方端点携带网关令牌。
+      const searchModel = cfg.models.find(model => model.id === cfg.default_model && gatewayProtocols(model.protocols).includes('anthropic'))
+        ?? cfg.models.find(model => gatewayProtocols(model.protocols).includes('anthropic'))
       await ctx.settings.update(WEB_SEARCH_DEEPSEEK_NS, {
         apiKeyEnv: TOKEN_ENV,
-        baseURL: `${session.serverURL.replace(/\/+$/, '')}/v1`,
-        model: cfg.default_model,
+        baseURL: searchModel === undefined ? '' : `${session.serverURL.replace(/\/+$/, '')}/v1`,
+        model: searchModel?.id ?? cfg.default_model,
       })
     } catch (cause) {
       // 迟到的失败同样不能落地（否则一次早已作废的 bootstrap 失败会把当前会话的

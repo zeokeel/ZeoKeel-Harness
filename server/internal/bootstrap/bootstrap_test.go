@@ -99,6 +99,10 @@ func TestBootstrap(t *testing.T) {
 	}
 	// 0058:输入模态随清单下发(缺省仅 text;视觉模型为 text+image)
 	m0 := models[0].(map[string]any)
+	protocols, ok := m0["protocols"].([]any)
+	if !ok || len(protocols) != 1 || protocols[0] != "openai" {
+		t.Fatalf("model protocols = %v, want [openai]", m0["protocols"])
+	}
 	mods, ok := m0["input_modalities"].([]any)
 	if !ok || len(mods) != 1 || mods[0] != "text" {
 		t.Fatalf("model input_modalities = %v, want [text]", m0["input_modalities"])
@@ -114,6 +118,41 @@ func TestBootstrap(t *testing.T) {
 	// no token → 401
 	if w, _ := getJSON(t, r, "/api/client/v2/config/bootstrap", ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("no token status = %d", w.Code)
+	}
+}
+
+func TestBootstrapModelProtocols(t *testing.T) {
+	r, db := setup(t)
+	for _, protocol := range []string{"anthropic", "both"} {
+		pid, err := serverstore.AddGatewayProvider(db, &serverstore.GatewayProvider{
+			Name: protocol + "-provider", BaseURL: "https://upstream.example.com", Enabled: 1, Protocol: protocol,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := serverstore.AddModel(db, &serverstore.Model{Name: "deepseek-chat", ProviderID: pid}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	u, err := serverstore.GetUserByUsername(db, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := serverauth.IssueToken(db, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, out := getJSON(t, r, "/api/client/v2/config/bootstrap", token)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	models := out["models"].([]any)
+	if len(models) != 1 || out["default_model"] != "deepseek-chat" {
+		t.Fatalf("同名模型应去重且默认模型不变: %s", w.Body.String())
+	}
+	protocols, ok := models[0].(map[string]any)["protocols"].([]any)
+	if !ok || len(protocols) != 2 || protocols[0] != "anthropic" || protocols[1] != "openai" {
+		t.Fatalf("model protocols=%v, want [anthropic openai]", protocols)
 	}
 }
 
@@ -147,6 +186,43 @@ func TestBootstrapInputModalitiesImage(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != "text" || got[1] != "image" {
 		t.Fatalf("vision input_modalities = %v, want [text image]", got)
+	}
+}
+
+func TestBootstrapDisjointModelModalities(t *testing.T) {
+	r, db := setup(t)
+	pid, err := serverstore.AddGatewayProvider(db, &serverstore.GatewayProvider{
+		Name: "image-provider", BaseURL: "https://upstream.example.com", Enabled: 1, Protocol: "anthropic",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := serverstore.AddModel(db, &serverstore.Model{Name: "deepseek-chat", ProviderID: pid, InputModalities: []string{"image"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := serverstore.SetSetting(db, "gateway.default_model", "deepseek-chat"); err != nil {
+		t.Fatal(err)
+	}
+	u, err := serverstore.GetUserByUsername(db, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := serverauth.IssueToken(db, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, out := getJSON(t, r, "/api/client/v2/config/bootstrap", token)
+	models, ok := out["models"].([]any)
+	if w.Code != http.StatusOK || !ok || len(models) != 0 || out["default_model"] != "" {
+		t.Fatalf("没有公共输入能力时应返回空目录和空默认模型: %s", w.Body.String())
+	}
+	if _, err := serverstore.AddModel(db, &serverstore.Model{Name: "usable-model", ProviderID: pid, InputModalities: []string{"text", "image"}}); err != nil {
+		t.Fatal(err)
+	}
+	w, out = getJSON(t, r, "/api/client/v2/config/bootstrap", token)
+	models, ok = out["models"].([]any)
+	if w.Code != http.StatusOK || !ok || len(models) != 1 || out["default_model"] != "usable-model" {
+		t.Fatalf("默认模型移除后应回退到其他可用模型: %s", w.Body.String())
 	}
 }
 

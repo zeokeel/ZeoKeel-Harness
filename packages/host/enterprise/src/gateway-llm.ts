@@ -1,5 +1,5 @@
 /**
- * 网关模型 provider（DSH 0.1.7 引入、**0.2.1-rc.2 复核仍成立**的注册面）。
+ * 企业网关模型 provider：固定路由身份，根据服务端模型目录选择协议。
  *
  * 背景（两层，缺一不可）：
  *  · **0.1.6**：上游给 `llm-deepseek` 加了 `protocol`（缺省 `messages`），messages 适配器
@@ -15,9 +15,11 @@
  *    ⚠️ 这两条 claim 的锚点是**行为**不是版本号：升级上游时按"守卫是否仍在 / 请求头是否仍由
  *    `resolveAuth` 决定"复核（当前 pin `dsh-v0.2.1-rc.2` = 687f282e，三条都还在原位）。
  *
- * 所以本插件取代上游的 `@deepseek-ai/dsh-llm-deepseek-api-key`（它的 `resolveAuth` 硬编码
+ * 本插件取代上游的 `@deepseek-ai/dsh-llm-deepseek-api-key`（它的 `resolveAuth` 硬编码
  * `x-api-key`，对只认 Bearer 的网关必然 401，且没有任何换头的接缝），用同一份 Config 形状
  * 注册同一个 provider 路由 `deepseek-official`，把**会话令牌作为 Bearer** 交给请求。
+ * `modelProtocols` 是本插件拥有的逐模型元数据；旧目录缺失时走 Messages，OpenAI 模型
+ * 复用公开 pi-ai 适配器。上游已删除的顶层 `protocol` 键仍拒绝，未修改上游 Config。
  * 组装期 `cordis.patch.yml` 把上游那一行 `disabled` 掉并插入本行（id `zeokeel-gateway-llm`）。
  *
  * 令牌来源是 `credentials` 服务（`gateway-model.ts` 在会话变化时写入 `TOKEN_ENV`），
@@ -25,15 +27,31 @@
  * 复核：`src/config.ts` 零命中 `apiKeyEnv`），而 `SettingsForms.write` 对非 volatile 字段
  * 会直接抛 `Config field "apiKeyEnv" is not volatile`。
  */
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import type {} from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import { assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
+import { assertUsableApiKey, LlmError, ReasoningEffortId, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
+import { getOrCreateAnonymousUserId, type AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { catalogModelInfo, Config, plainOptions, registerDeepSeekProvider, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
+import z from '@deepseek-ai/schemastery'
+import { catalogModelInfo, deepSeekConfigFields, DeepSeekAdapter, plainOptions, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
+import type { Config as DeepSeekConfig } from '@deepseek-ai/dsh-llm-deepseek'
 import { GATEWAY_LLM_ROW_ID, TOKEN_ENV } from './gateway-contract.ts'
+import { GatewayAdapter, gatewayModelProtocol, type GatewayProtocol } from './gateway-adapter.ts'
+import { createGatewayOpenAiAdapter } from './gateway-openai.ts'
 
-export { Config, GATEWAY_LLM_ROW_ID, TOKEN_ENV }
+export { GATEWAY_LLM_ROW_ID, TOKEN_ENV }
+
+export interface Config extends DeepSeekConfig {
+  /** 模型协议由 bootstrap 下发；缺失保持旧服务端的 Messages 行为。 */
+  modelProtocols: Volatile<Record<string, GatewayProtocol>>
+}
+
+export const Config = z.object({
+  ...deepSeekConfigFields,
+  modelProtocols: z.dict(z.union(['openai', 'anthropic'] as const)).default({}).volatile(),
+})
 
 /** Stable Cordis plugin name. */
 export const name = 'gateway-llm'
@@ -135,7 +153,7 @@ export function rowIdFailure(entryId: string | undefined): string | undefined {
 }
 
 /**
- * Register the gateway as the `deepseek-official` Messages provider.
+ * Register the gateway as the `deepseek-official` provider with per-model wire dispatch.
  *
  * `baseURL`/`models`/`reasoningEffort` stay exactly where 0.1.6 put them — the
  * row's own settings section, written by `gateway-model.ts` (login) and
@@ -144,14 +162,43 @@ export function rowIdFailure(entryId: string | undefined): string | undefined {
 export function apply(ctx: Context, config: Config): void {
   const rowFailure = rowIdFailure(ctx.fiber.entry?.options.id)
   if (rowFailure !== undefined) throw new Error(rowFailure)
-  const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
+  const options = () => {
+    const raw = plainOptions(config) as ReturnType<typeof plainOptions> & { modelProtocols?: unknown }
+    const modelProtocols = raw.modelProtocols ?? {}
+    if (typeof modelProtocols !== 'object' || modelProtocols === null || Array.isArray(modelProtocols)) {
+      throw new Error('gateway-llm: model protocols must be an object')
+    }
+    for (const [model, protocol] of Object.entries(modelProtocols)) {
+      if (protocol !== 'openai' && protocol !== 'anthropic') {
+        throw new Error(`gateway-llm: unsupported protocol for model "${model}"`)
+      }
+    }
+    return {
+      ...resolveAdapterOptions(raw, launchEnvironmentOf(ctx)),
+      modelProtocols: Object.fromEntries(Object.entries(modelProtocols)) as Record<string, GatewayProtocol>,
+    }
+  }
   // 组装期即解析一次：配置非法（例如有人把删除掉的 `protocol` 加回来）在装载时就响亮失败，
   // 而不是等到第一次对话。
   options()
+  const projectedEfforts = new Set<string>()
+  ctx.on('agent/request', async (_payload, next) => {
+    const resolved = await next()
+    if (resolved.provider !== PROVIDER || resolved.reasoningEffort === undefined || resolved.reasoningEffort === 'off'
+      || gatewayModelProtocol(options().modelProtocols, resolved.model) !== 'openai') return resolved
+    // 存量会话可能保存了旧 Messages 的 high/max；在能力校验前投影为新协议默认，
+    // 不篡改持久化选择，也不向未知能力的 OpenAI 模型虚报执行了思考强度。
+    const key = `${resolved.model}\u0000${resolved.reasoningEffort}`
+    if (!projectedEfforts.has(key)) {
+      projectedEfforts.add(key)
+      ctx.logger.warn(`gateway-llm: OpenAI model "${resolved.model}" has no declared reasoning capability; using provider default instead of stored effort "${resolved.reasoningEffort}"`)
+    }
+    return { ...resolved, reasoningEffort: ReasoningEffortId('off') }
+  }, { prepend: true })
   const ref = credentialRef(TOKEN_ENV)
   // 失败语义：抛出的错误由适配器透传（`LlmError` 原样上抛，其它被包成 TRANSPORT），
   // 请求**不会**发出去 —— 缺令牌时是"没有请求"而不是"一个无凭据的请求"。
-  const resolveAuth = async (connection: { baseURL?: string }): Promise<{ headers: Record<string, string> }> => {
+  const resolveToken = async (connection: { baseURL?: string }): Promise<string> => {
     // 硬边界先于凭据解析：端点不对时**连令牌都不读**（读也不发，但少一次凭据面接触）。
     const session = ctx.get('zeokeelSession')?.getSession?.() ?? null
     const refusal = endpointMismatch(connection?.baseURL, allowedGatewayEndpoint(session?.serverURL))
@@ -164,14 +211,56 @@ export function apply(ctx: Context, config: Config): void {
         'MISSING_CREDENTIAL',
       )
     }
-    const token = assertUsableApiKey(hit.value, 'gateway-llm', ref)
-    return { headers: { Authorization: `Bearer ${token}` } }
+    return assertUsableApiKey(hit.value, 'gateway-llm', ref)
   }
-  registerDeepSeekProvider(ctx, PROVIDER, {
+  // 对齐上游 registerDeepSeekProvider 的 Host 接线，协议适配器由本行统一注册。
+  ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
+  let userId: AnonymousUserId | undefined
+  const degradedReplays = new Set<string>()
+  const omittedRoutes = new Set<string>()
+  const unacceptedRoutes = new Set<string>()
+  const anthropic = new DeepSeekAdapter({
     options,
     providerName: 'DeepSeek',
-    resolveAuth,
+    resolveAuth: async connection => ({ headers: { Authorization: `Bearer ${await resolveToken(connection)}` } }),
     discoverModels: provider => Promise.resolve(options().models.map(model => catalogModelInfo(provider, model))),
+    resolveUserId: () => userId ??= getOrCreateAnonymousUserId(),
+    resolveAttachments: () => ctx.get('attachments'),
+    resolveImageAccess: (attachments, image) => resolveImageAttachmentAccess(
+      attachments, hostPath => ctx.get('fs')?.processPathFromHostPath(hostPath), image,
+    ),
+    prepareExtensions: request => ctx.get('deepseekLlmApiExtensions')?.prepare(request)
+      ?? Promise.resolve({ fields: {}, accept: () => Promise.resolve() }),
+    onReplayDegrade: ({ provider, model, reason }) => {
+      const key = `${provider}/${model}\u0000${reason}`
+      if (degradedReplays.has(key)) return
+      degradedReplays.add(key)
+      ctx.logger.warn(`gateway-llm: unusable Messages replay state for route "${provider}/${model}"; sending provider-neutral content (${reason})`)
+    },
+    onExtensionsOmitted: ({ provider, model, fields, error }) => {
+      const route = `${provider}/${model}`
+      if (omittedRoutes.has(route)) return
+      omittedRoutes.add(route)
+      ctx.logger.warn(`gateway-llm: sending route "${route}" without request extension fields ${fields.join(', ')} because they failed to serialize: %o`, error)
+    },
+    onExtensionsUnaccepted: ({ provider, model, error }) => {
+      const route = `${provider}/${model}`
+      if (unacceptedRoutes.has(route)) return
+      unacceptedRoutes.add(route)
+      ctx.logger.warn(`gateway-llm: route "${route}" request extension acceptance failed; contributors resend on a later request: %o`, error)
+    },
+  })
+  const openai = createGatewayOpenAiAdapter(ctx, PROVIDER, options, resolveToken)
+  const adapter = new GatewayAdapter(anthropic, openai, () => options().modelProtocols)
+  const registration = ctx.llm.registerAdapter([PROVIDER], adapter)
+  let registeredPolicy = options().retryPolicy
+  ctx.on('loader/volatile-update', () => {
+    let policy: typeof registeredPolicy
+    try { policy = options().retryPolicy }
+    catch (error) { ctx.logger.warn(error); return }
+    if (JSON.stringify(policy) === JSON.stringify(registeredPolicy)) return
+    registration.replace([PROVIDER])
+    registeredPolicy = policy
   })
   // 与上游 api-key 行同面：把 provider 关联到**本行**的设置表单（表单值就是行 config）。
   ctx.llm.registerConfigurableProviders([

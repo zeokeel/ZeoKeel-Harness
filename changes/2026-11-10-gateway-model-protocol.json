@@ -1,0 +1,66 @@
+{
+  "id": "2026-11-10-gateway-model-protocol",
+  "status": "implemented",
+  "intent": {
+    "zh": "客户端固定使用 Anthropic 请求导致 OpenAI 上游模型不可用，需要按服务端模型能力选择协议。",
+    "en": "A fixed Anthropic client transport makes OpenAI-only gateway models unusable."
+  },
+  "modules": ["server/internal/llmgateway", "server/internal/bootstrap", "packages/host/gateway-client", "packages/host/enterprise", "packages/host/desktop/tests"],
+  "acceptance": [
+    {
+      "criterion": "真实 HTTP 伪网关验证按所选模型发送 Messages 或 Chat Completions，工具与流式正常，两种协议均维持 Bearer 和会话端点硬边界，旧目录回退 Anthropic。",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/gateway-llm-auth-header.spec.ts tests/gateway-model-protocol.spec.ts tests/bootstrap.spec.ts"
+    },
+    {
+      "criterion": "真实 PostgreSQL 用例验证合法上游协议下发、both 展开、同名模型去重、停用与缺失模型过滤，bootstrap 保持兼容字段。",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/llmgateway ./internal/bootstrap -count=1 -v"
+    },
+    {
+      "criterion": "根门禁与服务端门禁退出码为 0，架构基线没有新增违规。",
+      "evidence": "guard",
+      "command": "corepack yarn check && make -C server check-fast && make -f Makefile.agent arch-go"
+    }
+  ],
+  "risk": "协议分派影响网关模型调用；必须保留鉴权、会话隔离、取消和已准备请求的配置快照，不下发上游密钥。",
+  "rollback": "回退本次提交；无数据库迁移。旧客户端忽略新增模型字段，新客户端遇旧服务端继续使用 Anthropic。",
+  "verification": [
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/gateway-llm-auth-header.spec.ts tests/gateway-model-protocol.spec.ts tests/bootstrap.spec.ts",
+      "result": "PASS：最终 3 文件 50 项通过。新协议回归 22 项也由独立审计代理实跑通过；初版固定 Messages、思考字段和默认输出上限问题均先取得有效 RED 再修为 GREEN。本机 HTTP 需要监听权限；Node 测试显式配置不可用 Electron 路径以避免自动下载，不代表打包版 Electron 验收。"
+    },
+    {
+      "command": "cd server && go test ./internal/llmgateway ./internal/bootstrap -count=1 -json",
+      "result": "PASS：临时真实 PostgreSQL，1076 项通过、0 失败、0 跳过，两包均 PASS。包含协议目录、实际路由匹配、同名输入能力空交集与敌对 search_path 回归。"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise check",
+      "result": "PARTIAL：构建与类型通过；全包 1277 PASS、4 FAIL、1 SKIP。4 失败均来自未改动的 audit-r20-skill-library.spec.ts 对 Linux 挂载表及 /dev/shm 的假设，在本机 macOS 不成立；该测试和依赖的技能安装实现与 HEAD 无差异。"
+    },
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run tests/llm-gateway-protocol-pin.spec.ts",
+      "result": "PASS：真实桌面组合 4 项通过；没有恢复删除的顶层 protocol 配置，没有重复注册网关 Provider。"
+    },
+    {
+      "command": "make -C server check-fast",
+      "result": "FAIL：未改动的 wasmapp/compile/isolate_other.go 在 macOS 引用仅声明于 isolate_linux.go 的 isolationAvailability，vet 编译失败；没有为本次任务修改平台隔离实现。"
+    },
+    {
+      "command": "make -f Makefile.agent arch-go",
+      "result": "PASS：No warnings found，Go 架构配置未改动。"
+    },
+    {
+      "command": "cd server/webadmin && npm test",
+      "result": "PASS：62 文件 1040 项通过。"
+    },
+    {
+      "command": "corepack yarn check --full-output",
+      "result": "FAIL：计划 37 项、实跑 29 项，25 通过、4 失败、8 因依赖跳过。check:ci-scripts 与 check:wasm-client-only 遇到 Bash/GNU 与 macOS BSD 工具差异；host-home 的既有测试硬断言 /etc，而 macOS realpath 为 /private/etc；dsh-memory-evolve 本次失败，完整输出截断，尚未定位具体失败原因。TS 架构及其余根守卫通过；没有修改守卫或放宽基线。完整验收未完成，记录保留 implemented。"
+    },
+    {
+      "command": "corepack yarn install --immutable; node scripts/check-no-real-domains.mjs; node scripts/check-change-intent.mjs; git diff --check",
+      "result": "PASS：依赖锁文件一致，公开仓域名扫描零命中，变更记录契约与 diff 空白检查通过。"
+    }
+  ]
+}

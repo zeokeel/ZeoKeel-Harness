@@ -3,6 +3,7 @@ import { apply as applyBootstrap, maxOutputFromDefaultParams, resolveInputModali
 import { GATEWAY_LLM_ROW_ID } from '../src/gateway-contract.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '../src/server-connector/config.ts'
+import { validateBootstrap } from '../src/server-connector/bootstrap.ts'
 
 const SAMPLE_SESSION: Session = {
   serverURL: 'https://gateway.example',
@@ -52,6 +53,76 @@ function stubCtx(restored?: Session | null): {
 }
 
 describe('bootstrap sync', () => {
+  it('按每个模型下发协议，双协议优先 Anthropic，旧目录回退 Anthropic', async () => {
+    const { ctx, settings, onHandler } = stubCtx()
+    const original = globalThis.fetch
+    globalThis.fetch = vi.fn(async () => Response.json({
+      ...SAMPLE_BOOTSTRAP,
+      default_model: 'openai-model',
+      models: [
+        { id: 'openai-model', display_name: 'OpenAI', protocols: ['openai'] },
+        { id: 'anthropic-model', display_name: 'Anthropic', protocols: ['anthropic'] },
+        { id: 'dual-model', display_name: 'Dual', protocols: ['openai', 'anthropic'] },
+        { id: 'legacy-model', display_name: 'Legacy' },
+      ],
+    })) as typeof fetch
+    try {
+      applyBootstrap(ctx)
+      await onHandler(SAMPLE_SESSION)
+      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2))
+      expect(settings.update).toHaveBeenCalledWith(GATEWAY_LLM_ROW_ID, expect.objectContaining({
+        modelProtocols: {
+          'openai-model': 'openai',
+          'anthropic-model': 'anthropic',
+          'dual-model': 'anthropic',
+          'legacy-model': 'anthropic',
+        },
+      }))
+      // 原生网页搜索仍需要 Messages，不能跟随纯 OpenAI 对话模型。
+      expect(settings.update).toHaveBeenCalledWith('web-search-deepseek', expect.objectContaining({
+        model: 'anthropic-model', baseURL: 'https://gateway.example/v1',
+      }))
+      expect(settings.replace).toHaveBeenCalledWith('agent-default-model', {
+        provider: 'deepseek-official', model: 'openai-model',
+      })
+    } finally { globalThis.fetch = original }
+  })
+
+  it('仅 OpenAI 目录使原生 Messages 搜索不可用，避免发送错误协议请求', async () => {
+    const { ctx, settings, onHandler } = stubCtx()
+    const original = globalThis.fetch
+    globalThis.fetch = vi.fn(async () => Response.json({
+      ...SAMPLE_BOOTSTRAP,
+      models: [{ id: 'deepseek-chat', display_name: 'Chat', protocols: ['openai'] }],
+    })) as typeof fetch
+    try {
+      applyBootstrap(ctx)
+      await onHandler(SAMPLE_SESSION)
+      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2))
+      expect(settings.update).toHaveBeenCalledWith('web-search-deepseek', expect.objectContaining({ baseURL: '' }))
+    } finally { globalThis.fetch = original }
+  })
+
+  it('新会话的旧服务端目录覆盖相同模型原有的 OpenAI 协议', async () => {
+    const { ctx, settings, onHandler } = stubCtx()
+    const original = globalThis.fetch
+    let protocols: string[] | undefined = ['openai']
+    globalThis.fetch = vi.fn(async () => Response.json({
+      ...SAMPLE_BOOTSTRAP,
+      models: [{ id: 'deepseek-chat', display_name: 'Chat', ...protocols ? { protocols } : {} }],
+    })) as typeof fetch
+    try {
+      applyBootstrap(ctx)
+      await onHandler(SAMPLE_SESSION)
+      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(2))
+      protocols = undefined
+      await onHandler({ ...SAMPLE_SESSION, token: 'tok-2' })
+      await vi.waitFor(() => expect(settings.update).toHaveBeenCalledTimes(4))
+      expect(settings.update.mock.calls.filter(call => call[0] === GATEWAY_LLM_ROW_ID).at(-1)?.[1])
+        .toMatchObject({ modelProtocols: { 'deepseek-chat': 'anthropic' } })
+    } finally { globalThis.fetch = original }
+  })
+
   it('maps the gateway token and base URL onto web-search-deepseek (0043 proxy)', async () => {
     const { ctx, settings, onHandler } = stubCtx()
     // 模拟 getBootstrap:注入一次成功响应
@@ -148,6 +219,60 @@ describe('bootstrap sync', () => {
     await vi.waitFor(() => { expect(settings.replace).toHaveBeenCalled() }, { timeout: 10_000 })
     expect(settings.replace).toHaveBeenCalledWith(expect.anything(), {})
     expect(settings.replace).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('bootstrap 模型协议目录兼容', () => {
+  it('合并同名模型协议，保守交集图片能力，默认模型仍可用', () => {
+    const result = validateBootstrap({
+      ...SAMPLE_BOOTSTRAP,
+      models: [
+        { id: 'deepseek-chat', display_name: 'First', protocols: ['openai'], input_modalities: ['text', 'image'] },
+        { id: 'deepseek-chat', display_name: 'Second', protocols: ['anthropic'], input_modalities: ['text'] },
+      ],
+    } as never)
+    expect(result.fallback).toBe('ok')
+    expect(result.config.models).toEqual([{
+      id: 'deepseek-chat', display_name: 'First', protocols: ['anthropic', 'openai'], input_modalities: ['text'],
+    }])
+  })
+
+  it('显式无支持协议模型不回退 Messages，替换不可用默认模型且保留 web 配置', () => {
+    const result = validateBootstrap({
+      ...SAMPLE_BOOTSTRAP,
+      models: [
+        { id: 'deepseek-chat', display_name: 'Unsupported', protocols: ['unknown'] },
+        { id: 'usable', display_name: 'Usable', protocols: ['openai'] },
+      ],
+    } as never)
+    expect(result.fallback).toBe('default_model_substituted')
+    expect(result.config.default_model).toBe('usable')
+    expect(result.config.models).toHaveLength(1)
+    expect(result.config.web).toEqual(SAMPLE_BOOTSTRAP.web)
+  })
+
+  it('同名上游没有共同输入模态时不虚报 text 能力', () => {
+    const result = validateBootstrap({
+      ...SAMPLE_BOOTSTRAP,
+      models: [
+        { id: 'deepseek-chat', display_name: 'Text', input_modalities: ['text'] },
+        { id: 'deepseek-chat', display_name: 'Image', input_modalities: ['image'] },
+      ],
+    })
+    expect(result.fallback).toBe('empty')
+    expect(result.config.models).toEqual([])
+  })
+
+  it('第三个同名上游不能把前两项的空输入交集恢复为 text', () => {
+    const result = validateBootstrap({
+      ...SAMPLE_BOOTSTRAP,
+      models: [
+        { id: 'deepseek-chat', display_name: 'Image', input_modalities: ['image'] },
+        { id: 'deepseek-chat', display_name: 'Text', input_modalities: ['text'] },
+        { id: 'deepseek-chat', display_name: 'Another', input_modalities: ['text'] },
+      ],
+    })
+    expect(result.fallback).toBe('empty')
   })
 })
 
@@ -257,7 +382,7 @@ describe('会话代际守卫（Z2-01）：迟到的 bootstrap 响应不得落地
         '迟到响应改写了当前会话（B）的模型配置：凭据是新服务端的令牌，baseURL/模型目录却是旧服务端的',
       ).toEqual({
         search: { apiKeyEnv: 'ZEOKEEL_GATEWAY_TOKEN', baseURL: 'https://server-b.example.com/v1', model: 'model-of-B' },
-        catalog: { models: [{ id: 'model-of-B', name: 'model-of-B' }] },
+        catalog: { models: [{ id: 'model-of-B', name: 'model-of-B' }], modelProtocols: { 'model-of-B': 'anthropic' } },
         defaultModel: { provider: 'deepseek-official', model: 'model-of-B' },
       })
     } finally {

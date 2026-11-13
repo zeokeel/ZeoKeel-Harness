@@ -178,13 +178,6 @@ function normalizeFieldValues(record: ConnectorCredential): void {
 }
 
 export interface ConnectorCredential {
-  /**
-   * Login account this credential was written for (when the write path knows
-   * it — silent/auto authorization does). It is belt-and-braces on top of the
-   * per-(account, server) directory: a mismatch means the credential must not
-   * be used for the current session.
-   */
-  account?: string
   /** OAuth access token. */
   accessToken?: string
   /** OAuth refresh token. */
@@ -487,7 +480,22 @@ export class ConnectorStore {
     }
   }
 
-  async updateCredential(id: string, patch: Partial<ConnectorCredential>): Promise<ConnectorCredential> {
+  /**
+   * Merge-write one credential.
+   *
+   * @param patch - fields to set (a spread merge, so an absent key means "keep
+   *   the stored value").
+   * @param clear - optional field names to REMOVE after the merge. A spread
+   *   merge cannot express "delete": the silent-authorization write needs to
+   *   drop a `clientSecret` left by an older dynamic registration (a different,
+   *   now-unused client), and an explicit removal list keeps that intent typed
+   *   instead of relying on `undefined` values with exactOptionalProperties.
+   */
+  async updateCredential(
+    id: string,
+    patch: Partial<ConnectorCredential>,
+    clear: readonly (keyof ConnectorCredential)[] = [],
+  ): Promise<ConnectorCredential> {
     // 读-改-写必须在同一段独占区里：否则两个并发 update 会互相覆盖（写后补偿的
     // 复核把这条竞态也一并暴露出来）。
     return await this.exclusive(async () => {
@@ -504,6 +512,7 @@ export class ConnectorStore {
       const base = Number.isSafeInteger(current.updatedAt) && current.updatedAt >= 0 ? current.updatedAt : 0
       const updatedAt = now > base ? now : base + 1
       const next: ConnectorCredential = { ...current, ...patch, updatedAt }
+      for (const key of clear) delete next[key]
       await this.writeCredentialUnlocked(id, next)
       return next
     })

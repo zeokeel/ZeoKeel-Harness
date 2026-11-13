@@ -34,6 +34,17 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
 }
 
+function assertionResponse(overrides: Record<string, unknown> = {}): Response {
+  return jsonResponse({
+    assertion: 'header.payload.signature',
+    token_endpoint: TOKEN_URL,
+    client_id: 'zeokeel-connector',
+    scope: 'mcp.read',
+    resource: MCP_URL,
+    ...overrides,
+  })
+}
+
 describe('silent connector authorization', () => {
   beforeEach(() => {
     vi.mocked(outboundFetch).mockReset()
@@ -44,13 +55,7 @@ describe('silent connector authorization', () => {
   })
 
   it('exchanges a server assertion for the current user credential', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      assertion: 'header.payload.signature',
-      token_endpoint: TOKEN_URL,
-      client_id: 'zeokeel-connector',
-      scope: 'mcp.read',
-      resource: MCP_URL,
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(assertionResponse())
     vi.stubGlobal('fetch', fetchMock)
     vi.mocked(outboundFetch).mockResolvedValue(jsonResponse({
       access_token: 'access-1',
@@ -59,9 +64,8 @@ describe('silent connector authorization', () => {
     }))
 
     const patch = await trySilentAuth(def(), {
-      session: { serverURL: 'https://server.example.com', token: 'session-token', username: 'user-a' },
+      session: { serverURL: 'https://server.example.com', token: 'session-token' },
       locale: 'zh',
-      username: 'user-a',
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -78,45 +82,82 @@ describe('silent connector authorization', () => {
     expect(form.get('scope')).toBe('mcp.read')
     expect(form.get('resource')).toBe(MCP_URL)
     expect(fetchOptions).toEqual(expect.objectContaining({ locale: 'zh' }))
-    expect(patch).toMatchObject({
+    // The credential document carries no account marker: the per-(account,
+    // server) store directory is the scope authority (single source of truth).
+    expect(patch).toEqual({
       accessToken: 'access-1',
       refreshToken: 'refresh-1',
       clientId: 'zeokeel-connector',
-      account: 'user-a',
+      expiresAt: expect.any(Number),
     })
-    expect(patch?.expiresAt).toBeTypeOf('number')
   })
 
-  it('refuses a token endpoint different from the definition authority', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      assertion: 'a.b.c',
+  it('reports a diagnostic classification without mutating any state on a refused endpoint', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(assertionResponse({
       token_endpoint: 'https://evil.example.com/oauth2/token',
-      client_id: 'zeokeel-connector',
-      scope: 'mcp.read',
-      resource: MCP_URL,
     })))
+    const failures: unknown[] = []
+
+    const patch = await trySilentAuth(def(), {
+      session: { serverURL: 'https://server.example.com', token: 'session-token' },
+      locale: 'zh',
+      onFailure: failure => { failures.push(failure) },
+    })
+
+    expect(patch).toBeNull()
+    expect(outboundFetch).not.toHaveBeenCalled()
+    expect(failures).toEqual([{ step: 'endpoint', reason: 'endpoint-mismatch' }])
+  })
+
+  it('refuses a token endpoint that carries URL credentials', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(assertionResponse({
+      token_endpoint: 'https://user:pass@rbac.example.com/oauth2/token',
+    })))
+    const failures: unknown[] = []
+
+    expect(await trySilentAuth(def(), {
+      session: { serverURL: 'https://server.example.com', token: 'session-token' },
+      locale: 'zh',
+      onFailure: failure => { failures.push(failure) },
+    })).toBeNull()
+    expect(outboundFetch).not.toHaveBeenCalled()
+    expect(failures).toEqual([{ step: 'endpoint', reason: 'endpoint-mismatch' }])
+  })
+
+  it('accepts the same token endpoint with a trailing slash (normalization)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(assertionResponse({ token_endpoint: `${TOKEN_URL}/` })))
+    vi.mocked(outboundFetch).mockResolvedValue(jsonResponse({ access_token: 'access-1' }))
 
     const patch = await trySilentAuth(def(), {
       session: { serverURL: 'https://server.example.com', token: 'session-token' },
       locale: 'zh',
     })
 
-    expect(patch).toBeNull()
-    expect(outboundFetch).not.toHaveBeenCalled()
+    expect(patch).toEqual({ accessToken: 'access-1', clientId: 'zeokeel-connector' })
   })
 
-  it('returns null without a session or for a rejected assertion', async () => {
+  it('returns null without a session or for a rejected assertion, and reports why', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
+    const failures: unknown[] = []
 
-    expect(await trySilentAuth(def(), { session: null, locale: 'zh' })).toBeNull()
+    expect(await trySilentAuth(def(), {
+      session: null,
+      locale: 'zh',
+      onFailure: failure => { failures.push(failure) },
+    })).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
 
     fetchMock.mockResolvedValue(new Response('no', { status: 401 }))
     expect(await trySilentAuth(def(), {
       session: { serverURL: 'https://server.example.com', token: 'session-token' },
       locale: 'zh',
+      onFailure: failure => { failures.push(failure) },
     })).toBeNull()
+    expect(failures).toEqual([
+      { step: 'session', reason: 'no-session' },
+      { step: 'assertion', reason: 'http-401' },
+    ])
   })
 
   it('does not attempt anything for a definition without a token endpoint', async () => {
@@ -133,7 +174,7 @@ describe('silent connector authorization', () => {
 })
 
 describe('server catalog auto-auth fields', () => {
-  it('parses auto_auth/auto_connect without losing the definition', () => {
+  it('parses the row flags and keeps the rest of the definition', () => {
     const [parsed] = parseServerConnectors([{
       id: 'hr-data',
       name: 'hr',
@@ -161,6 +202,25 @@ describe('server catalog auto-auth fields', () => {
       definition: JSON.stringify({ auth: { tokenUrl: TOKEN_URL }, mcp: [{ serverName: 'hr', transport: 'streamable-http', url: MCP_URL }] }),
       auto_auth: 'something-else',
     }])
+    expect(parsed?.autoAuth).toBeUndefined()
+    expect(parsed?.autoConnect).toBeUndefined()
+  })
+
+  it('never takes the opt-ins from definition JSON (row is the only source)', () => {
+    const [parsed] = parseServerConnectors([{
+      id: 'hr-data',
+      name: 'hr',
+      description: '',
+      auth_mode: 'oauth',
+      definition: JSON.stringify({
+        auth: { tokenUrl: TOKEN_URL },
+        mcp: [{ serverName: 'hr', transport: 'streamable-http', url: MCP_URL }],
+        // Untrusted payload: a definition must not be able to opt itself in.
+        autoAuth: 'rbac-assertion',
+        autoConnect: true,
+      }),
+    }])
+
     expect(parsed?.autoAuth).toBeUndefined()
     expect(parsed?.autoConnect).toBeUndefined()
   })

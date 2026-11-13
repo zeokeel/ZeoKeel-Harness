@@ -119,12 +119,17 @@ export interface ConnectorDef {
    * `auto_auth=rbac-assertion`, the runtime may obtain the credential from the
    * signed-in session (ZeoKeel assertion -> RBAC token exchange) BEFORE falling
    * back to the interactive OAuth flow. Absent on older servers/clients.
+   *
+   * TRUST POINT: only the bootstrap catalog ROW may set this. A definition JSON
+   * that carries the same property is ignored by `parseServerConnectors` — the
+   * opt-in has exactly one source (the server's allowlist flag), never two.
    */
   autoAuth?: 'rbac-assertion'
   /**
    * Server-issued opt-in for connecting this connector automatically once a
    * session is established (login/startup), without a user click. Only the
-   * server-side allowlist sets this; the manual connect path stays available.
+   * server-side allowlist (its bootstrap ROW) sets this; a definition JSON value
+   * is ignored, and the manual connect path stays available.
    */
   autoConnect?: boolean
   /** Token form fields when authMode is 'token'. */

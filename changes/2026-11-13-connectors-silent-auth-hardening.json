@@ -1,0 +1,62 @@
+{
+  "id": "2026-11-13-connectors-silent-auth-hardening",
+  "status": "implemented",
+  "intent": {
+    "zh": "登录会话静默授权与自动连接的首版在会话切换/登出时不能取消在途交换，且自动连接会覆盖恢复阶段的可操作状态、弹表单、在不可续期的旧凭据上永久「已连接」；需要在不改管理面契约的前提下加固为可取消、零交互、按需求断言的行为。",
+    "en": "The first silent-authorization/auto-connect cut cannot cancel an in-flight exchange on session change, and its automatic attempt overwrites actionable restore state, may surface a form, and can leave an unrefreshable silent credential 'connected' forever; this hardens the client without changing the server-facing contract."
+  },
+  "modules": [
+    "packages/host/connectors/src/index.ts",
+    "packages/host/connectors/src/silent-auth.ts",
+    "packages/host/connectors/src/store.ts",
+    "packages/host/connectors/src/types.ts",
+    "packages/host/connectors/tests/silent-auth.spec.ts",
+    "packages/host/connectors/tests/silent-auth-auto-connect.spec.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "会话切换/登出同步取消在途自动静默交换：断言请求被 abort，之后不再发生 token exchange、不写凭据、不注册 MCP；自动连接不再被 lifecycle transition 队列 await（登出后行状态回到 disconnected）。",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-connectors vitest run tests/silent-auth-auto-connect.spec.ts"
+    },
+    {
+      "criterion": "silentOnly 失败保留 restoreAll 写入的 unauthorized/auth-required 与错误文案；required settings / 需本地审批 stdio 的自动连接不发布表单、不进入 connecting；无 refreshToken 或已过期的 connected 凭据在启动时重新走静默授权；auth_mode=auto 的定义不进入静默路径（不得出现「connected 但无 transport provider」）。",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-connectors vitest run tests/silent-auth-auto-connect.spec.ts"
+    },
+    {
+      "criterion": "bootstrap 的 auto_auth/auto_connect 只从目录 row 读取，definition JSON 夹带同名键被剥离；token_endpoint 归一化与 userinfo 拒绝、诊断分类（step/reason、不含断言/token）均有单测。",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-connectors vitest run tests/silent-auth.spec.ts"
+    },
+    {
+      "criterion": "包级门禁通过：类型检查、构建与全量容器测试绿；根守卫中仅既存的子模块 origin 环境判据失败（与本改动无关）。",
+      "evidence": "guard",
+      "command": "node scripts/check-workspaces.mjs --only @zeokeel/dsh-connectors"
+    }
+  ],
+  "risk": "改动集中在客户端连接器运行时：会话事件现在同步 abort 一个 per-session signal 并作为 runAuth/registerMcp 的附加取消源，自动连接改为不阻塞 lifecycle 队列。最坏情况是自动连接在会话切换后不再补做（可手动点连接），或某条手动授权流程被会话事件提前取消；凭据作用域/目录布局与服务端契约未改。",
+  "rollback": "回退本提交即可；无数据库迁移、无服务端字段变更、无配置开关变化。已写入的凭据文件不受影响（旧客户端/新客户端都按原格式读取）。",
+  "verification": [
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-connectors typecheck",
+      "result": "PASS：exit 0。"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-connectors test",
+      "result": "PASS：73 个测试文件、594 项通过（新增 silent-auth-auto-connect.spec.ts 7 项与 silent-auth.spec.ts 扩展 3 项；既有 584 项无回归）。"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-connectors vitest run tests/silent-auth-auto-connect.spec.ts tests/silent-auth.spec.ts",
+      "result": "PASS：16 项通过（7 项集成回归 + 9 项单元）。"
+    },
+    {
+      "command": "node scripts/check-workspaces.mjs --only @zeokeel/dsh-connectors",
+      "result": "PARTIAL：@zeokeel/dsh-connectors 任务 PASS（51.8s）；根守卫 19/21 通过，失败项为 check:layout 与 check:wasm-client-only，均来自本机 deepseek-harness 子模块 origin 与 upstream.json 不一致的既存环境问题（与本改动无关）。"
+    },
+    {
+      "command": "node scripts/check-no-real-domains.mjs; node scripts/check-change-intent.mjs; git diff --check",
+      "result": "PASS：公开仓域名扫描零命中，变更记录契约合法，diff 无空白错误。"
+    }
+  ]
+}

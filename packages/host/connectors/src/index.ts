@@ -10,7 +10,7 @@ import { ConnectorStore, credentialScopeKey, CredentialReadError, sameCredential
 import { ConnectorError, connectorErrorCodeOf } from './connector-error.ts'
 import { hostLocaleOf, hostT, type HostCopyKey, type HostLocale } from './host-copy.ts'
 import { runAuth } from './auth.ts'
-import { trySilentAuth } from './silent-auth.ts'
+import { trySilentAuth, type SilentAuthFailure } from './silent-auth.ts'
 import { createOAuthProvider, isTerminalRefreshReason, resolveAuthorizationServer, resolveStaticAuthorizationServer, TokenRefresher, tokenNeedsRefresh, type RefreshedTokens, type RefreshFailure, type RefreshOutcome } from './mcp-oauth-provider.ts'
 import type { McpTransportAuthProvider, OAuthTarget } from './mcp-oauth-provider.ts'
 import { REFRESH_LEAD_MS, REFRESH_SWEEP_INTERVAL_MS } from './token-lifetime.ts'
@@ -218,10 +218,14 @@ export interface ServerConnectorItem {
  * up in the child environment) are all validated here, so a definition that
  * would hand `spawn` an unchecked executable, a protected env key, or a
  * non-public URL never enters the catalog at all.
+ *
+ * The silent-authorization opt-ins are read ONLY from the catalog row: the
+ * server expresses them as its own flags (`auto_auth`/`auto_connect`), and a
+ * definition JSON that happens to carry `autoAuth`/`autoConnect` must not become
+ * a second (and less scrutinised) switch. It is stripped below.
  */
-function autoAuthForItem(item: ServerConnectorItem, raw: ConnectorDef): 'rbac-assertion' | undefined {
-  if (item.auto_auth === 'rbac-assertion' || raw.autoAuth === 'rbac-assertion') return 'rbac-assertion'
-  return undefined
+function autoAuthForItem(item: ServerConnectorItem): 'rbac-assertion' | undefined {
+  return item.auto_auth === 'rbac-assertion' ? 'rbac-assertion' : undefined
 }
 
 export function parseServerConnectors(items: ServerConnectorItem[]): ConnectorDef[] {
@@ -259,14 +263,20 @@ export function parseServerConnectors(items: ServerConnectorItem[]): ConnectorDe
       const rawName = typeof raw.name === 'string' ? raw.name : ''
       const itemDescription = typeof item.description === 'string' ? item.description : ''
       const rawDescription = typeof raw.description === 'string' ? raw.description : ''
+      // Definition JSON is server-managed payload, not a trust decision: strip
+      // the two opt-in keys so the row flags below are their only source.
+      const definition: ConnectorDef = { ...raw }
+      delete (definition as { autoAuth?: unknown }).autoAuth
+      delete (definition as { autoConnect?: unknown }).autoConnect
+      const autoAuth = autoAuthForItem(item)
       out.push({
-        ...raw,
+        ...definition,
         id: item.id,
         name: itemName !== '' ? itemName : rawName,
         description: itemDescription !== '' ? itemDescription : rawDescription,
         authMode: authMode as ConnectorDef['authMode'],
-        ...(autoAuthForItem(item, raw) === undefined ? {} : { autoAuth: 'rbac-assertion' as const }),
-        ...(item.auto_connect === true || raw.autoConnect === true ? { autoConnect: true } : {}),
+        ...(autoAuth === undefined ? {} : { autoAuth }),
+        ...(item.auto_connect === true ? { autoConnect: true } : {}),
       })
     } catch {
       // 单条定义非法:跳过,不影响其他连接器。
@@ -516,6 +526,33 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
    * loop (the manual button stays available).
    */
   const autoConnectAttempted = new Set<string>()
+  /**
+   * Per-session abort for work whose result belongs to the CURRENT session.
+   *
+   * `zeokeel/session-changed` aborts it **synchronously**, before the serialized
+   * lifecycle queue runs: that queue can be parked on a network round trip
+   * (bootstrap sync, `restoreAll` refreshes), and work that answers after the
+   * session moved on must not write a credential or register an MCP transport
+   * for the old one. Every await in the automatic silent-authorization path
+   * re-checks it; `startConnect` combines it with the per-connect intent signal
+   * for `trySilentAuth` / `runAuth` / `registerMcp`.
+   *
+   * Replaced immediately by a fresh controller: work started after the event
+   * (the new session's restore and automatic connect) must not inherit the
+   * abort. A no-op for compositions where the session never changes.
+   */
+  let sessionAbort = new AbortController()
+  const currentSessionSignal = (): AbortSignal => sessionAbort.signal
+  const beginSessionChange = (): void => {
+    sessionAbort.abort(new Error(copy('flow.userSwitchedRegistration')))
+    sessionAbort = new AbortController()
+  }
+  /**
+   * One diagnostic line per (credential scope, connector) per session for the
+   * silent path. Kept scope-keyed because the fact is about one account's
+   * attempt, and cleared by `teardownAll` so the next session can report again.
+   */
+  const silentAuthFailureReported = new Set<string>()
   /**
    * Ids whose STORED credential currently carries a refresh token — i.e. exactly
    * the fact behind the panel's "refresh now" affordance.
@@ -1463,6 +1500,9 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     pendingFieldRequestKind.clear()
     states.clear()
     autoConnectAttempted.clear()
+    // A new session may report its own silent-authorization failures (the dedupe
+    // key includes the credential scope, but this set is bounded per session).
+    silentAuthFailureReported.clear()
     // ...and the row projection that makes the panel offer "refresh now"
     // (R13-B-P2-4). `restoreAll` re-derives it from the NEW account's
     // credentials, so the next account starts from its own facts and never from
@@ -1560,6 +1600,12 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   // current server directory (defs are server-issued now).
   ctx.on('zeokeel/session-changed', (next: unknown) => {
     const eventServerURL = (next as { serverURL?: string } | null)?.serverURL ?? null
+    // First thing, synchronously: cancel the previous session's in-flight work.
+    // The lifecycle queue below can stay parked on a network round trip, and an
+    // automatic silent exchange that answers during that window must not write a
+    // credential or register an MCP transport for a session that is already
+    // gone (the old account's tools would briefly run under the new login).
+    beginSessionChange()
     // R16B-04：闸门必须在**会话事件一开始**就落下（同步、早于任何 await）——
     // 生命周期任务里的 `reconfigureUser()` 要等一次网络往返，这段窗口里 `store`
     // 还是上一个账号的目录。判定只看目标键，所以这里置位、`reconfigureUser()`
@@ -1581,7 +1627,9 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       }
       if (next !== null) {
         await restoreAll(epoch)
-        await autoConnectEligible(epoch)
+        // NOT awaited: see `autoConnectEligible` (the transition queue must not
+        // be parked on an automatic, best-effort network flow).
+        scheduleAutoConnect(epoch)
       }
     }).catch((cause: unknown) => {
       ctx.logger?.error('zeokeel-connectors: session change handling failed', cause)
@@ -2998,6 +3046,80 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     setState(id, { status: 'connecting', error: undefined, errorCode: undefined })
   }
 
+  /**
+   * Report ONE silent-authorization failure per (credential scope, connector)
+   * per session. The classification is a fixed shape (`step` + `reason`);
+   * nothing about the assertion, the token, a response body or a definition URL
+   * is logged, so operating the shortcut does not turn a credential path into a
+   * log source while an operator can still see why it is unusable.
+   */
+  const reportSilentAuthFailure = (id: string, failure: SilentAuthFailure): void => {
+    const key = credentialScopeKey(store.dir, id)
+    if (silentAuthFailureReported.has(key)) return
+    silentAuthFailureReported.add(key)
+    ctx.logger?.warn?.(`zeokeel-connectors: silent-auth unavailable id=${id} step=${failure.step} reason=${failure.reason}`)
+  }
+
+  /**
+   * Is silent authorization applicable to this definition?
+   *
+   * Only a STATIC OAuth definition (declared `auth.tokenUrl`) has the exact
+   * authorization-server contract this flow needs: the assertion names the token
+   * endpoint and the client checks it against the definition. An `auto`-mode
+   * definition derives its OAuth facts by endpoint discovery instead — its
+   * `auth` may carry only a token URL, which `oauthTargetOf`/`registerMcp` cannot
+   * turn into a live provider; silently "connecting" it would produce a row with
+   * no Authorization header (every tool call 401s), so it never takes the silent
+   * path.
+   */
+  const silentAuthEligible = (def: ConnectorDef): boolean => {
+    if (def.autoAuth !== 'rbac-assertion') return false
+    // `auto` deliberately excluded even though it can classify as OAuth: that
+    // mode derives the authorization server through endpoint discovery, so its
+    // declared `tokenUrl` alone may not be the authorization server the refresh
+    // engine (and the transport provider) actually use. A silent exchange there
+    // would report "connected" without a provider that can send a token.
+    if (def.authMode !== 'oauth') return false
+    if (resolveAuthMode(def) !== 'oauth') return false
+    const auth = def.auth as { tokenUrl?: unknown } | undefined
+    return typeof auth?.tokenUrl === 'string' && auth.tokenUrl.trim() !== ''
+  }
+
+  /** Does this definition contain a local (stdio) server? */
+  const hasStdioServers = (def: ConnectorDef): boolean =>
+    def.mcp.some(server => (server.transport ?? 'stdio') === 'stdio')
+
+  /** Required pre-connect settings this credential does not provide yet. */
+  const missingRequiredSettings = (def: ConnectorDef, credential: ConnectorCredential | null): boolean => {
+    if (!def.settings?.length) return false
+    return def.settings.some((field) => {
+      const value = credential?.fields?.[field.key]
+      return field.required === true && (typeof value !== 'string' || value.trim() === '')
+    })
+  }
+
+  /**
+   * Can the stored credential keep itself alive without a further silent
+   * authorization? A refresh token lets the sweep / 401 self-heal renew it, and
+   * an unexpired `expiresAt` gives those paths the time to do so. This decides
+   * whether an automatically restored row may skip the silent re-authorization:
+   * a silent credential that never got a refresh token would otherwise stay
+   * "connected" after its access token expired and never be renewed.
+   */
+  const credentialSelfMaintaining = async (target: ConnectorStore, id: string): Promise<boolean> => {
+    let credential: ConnectorCredential | null
+    try {
+      credential = await target.readCredential(id)
+    } catch {
+      // A read fault is already reported by the store; re-authorizing reads the
+      // same unreadable file, so leave the row to the operator-visible fault.
+      return true
+    }
+    if (credential === null) return false
+    if (credential.refreshToken === undefined) return false
+    return credential.expiresAt === undefined || credential.expiresAt - REFRESH_LEAD_MS > Date.now()
+  }
+
   /** Start the auth flow for a connector (background for poll-based modes). */
   const startConnect = async (id: string, opts: { silentOnly?: boolean } = {}): Promise<void> => {
     const def = getDef(id)
@@ -3016,9 +3138,25 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     // disconnect that lands while this call is parked in the credential read
     // invalidates it instead of letting it publish a form for a dead request.
     const intent = beginIntent(id)
+    // The session generation this work belongs to. `zeokeel/session-changed`
+    // aborts it SYNCHRONOUSLY (see `beginSessionChange`), so the network legs
+    // below unwind as soon as the session moves on — before the queued teardown
+    // even starts.
+    const session = currentSessionSignal()
     try {
       const existing = await store.readCredential(id)
-      if (!intentLive(id, intent)) return
+      if (!intentLive(id, intent) || session.aborted) return
+      // What the restore pass (or a previous attempt) left on the row. A
+      // silent-only failure restores this snapshot: an automatic attempt is an
+      // optimization and must not erase the actionable "unauthorized /
+      // re-authorization required" state that restoreAll just produced.
+      const previousState = states.get(id)
+      const settingsMissing = missingRequiredSettings(def, existing)
+      // Automatic connect is zero-interaction BY CONTRACT: a definition that
+      // still needs a required pre-connect setting (or a local stdio approval we
+      // would have to ask for) is left exactly as restoreAll left it — no form,
+      // no QR, and not even the transient 'connecting' row.
+      if (opts.silentOnly && (settingsMissing || (options.requestApproval === undefined && hasStdioServers(def)))) return
       // 进入 connecting 必须把上一次的失败文案与分类一起清掉（2026-09-17 S04-3
       // 复核 P4：这是同一条规则漏掉的**唯一**一处状态写入点）。客户端
       // `client/ConnectorsSection.tsx` 对任何非 connected 状态都渲染 `error`
@@ -3030,92 +3168,110 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         error: undefined,
         errorCode: undefined,
       })
-
-      // Pre-connect settings: if required fields are missing, emit the form and
-      // wait for auth-submit before starting the actual auth flow.
-      if (def.settings?.length) {
-        const missing = def.settings.filter((field) => {
-          const value = existing?.fields?.[field.key]
-          return field.required === true && (typeof value !== 'string' || value.trim() === '')
-        })
-        if (missing.length > 0) {
-          if (!intentLive(id, intent)) return
-          pendingFieldRequestKind.set(id, 'settings')
-          emitRequest({ connectorId: id, fields: def.settings })
-          return
-        }
-      }
-      // Token connectors never run an authorization flow: once the declared
-      // fields are present they register directly (settings above are only a
-      // pre-connect gate). This also guarantees the token form is shown when a
-      // required field is missing, even when settings and tokenFields coexist.
-      // `auto` counts here when it declares credential fields — that is the
-      // static-key MCP shape (a `${FIELD}` header the user fills in), and it
-      // must not be sent through an authorization flow it has no endpoint for.
-      if (resolveAuthMode(def) === 'token') {
-        if (missingDeclaredFields(def, existing).length > 0) {
-          if (!intentLive(id, intent)) return
-          requestDeclaredFields(id, def)
-          return
-        }
-        if (!intentLive(id, intent)) return
-        const outcome = await registerMcp(def, { signal: intentSignal(intent) })
-        if (outcome.superseded === true) return
-        if (outcome.pendingApproval !== undefined) {
-          setState(id, { status: 'unauthorized', everConnected: true, error: undefined, errorCode: undefined })
-          return
-        }
-        if (outcome.rejected.length > 0) {
-          pendingRequests.delete(id)
-          setState(id, { status: 'error', everConnected: true, error: outcome.rejected.join('; '), errorCode: undefined })
-          return
-        }
-        pendingRequests.delete(id)
-        pendingFieldRequestKind.delete(id)
-        setState(id, { status: 'connected', everConnected: true, connectedAt: Date.now(), error: undefined, errorCode: undefined })
-        return
-      }
-      // The auth flow reuses the intent's controller: /cancel, disconnect and a
-      // newer connect all have exactly one signal to abort (BUG-02).
+      // Token mode never runs an authorization flow; the settings gate below
+      // handles it, and the silent path does not apply (see `silentAuthEligible`).
       pendingFieldRequestKind.delete(id)
       pendingRequests.delete(id)
-      if (!intentLive(id, intent)) return
+      if (!intentLive(id, intent) || session.aborted) return
+      // The auth flow reuses the intent's controller: /cancel, disconnect and a
+      // newer connect all have exactly one signal to abort (BUG-02). The session
+      // signal is combined in so a session change cancels the flow without
+      // waiting for the queued teardown to run.
       const controller = intent.controller
+      const flowSignal = AbortSignal.any([intentSignal(intent), session])
       pendingFlows.set(id, controller)
       try {
       let patch: Partial<ConnectorCredential> | undefined
+      let silentUsed = false
       // Silent authorization (server-enabled): the signed-in session is the
       // identity source, so a login can authorize this connector without a
       // second scan. It is attempted for both the automatic and the manual
       // path; a manual click still falls back to the interactive flow below.
-      if (def.autoAuth === 'rbac-assertion') {
+      // It runs BEFORE the settings form gate: silent auth does not need those
+      // settings (the server names the exchange client), so an automatic attempt
+      // for a connector whose settings were already stored does not pay a form.
+      if (silentAuthEligible(def)) {
         const zeokeel = ctx.get('zeokeelSession') as {
-          getSession?: () => { serverURL?: string; token?: string; username?: string } | null
+          getSession?: () => { serverURL?: string; token?: string } | null
         } | undefined
         const silent = await trySilentAuth(def, {
           session: zeokeel?.getSession?.() ?? null,
           locale: locale(),
-          signal: controller.signal,
-          username: currentUser(),
+          signal: flowSignal,
+          onFailure: (failure) => {
+            // A cancelled run is not a diagnosis: the session moved on or the
+            // user cancelled. The line exists for "silent auth is not usable".
+            if (session.aborted || controller.signal.aborted) return
+            reportSilentAuthFailure(id, failure)
+          },
         })
-        if (!intentLive(id, intent) || intent.store !== store) return
-        if (silent !== null) patch = silent
+        if (!intentLive(id, intent) || intent.store !== store || session.aborted) return
+        if (silent !== null) {
+          patch = silent
+          silentUsed = true
+        }
       }
       if (patch === undefined) {
         if (opts.silentOnly) {
-          // Automatic connect must never open a browser/QR. Leave the row
-          // disconnected (the manual button is the explicit retry/fallback).
-          setState(id, {
-            status: 'disconnected',
-            everConnected: Boolean(states.get(id)?.everConnected),
-            error: undefined,
-            errorCode: undefined,
-          })
+          // Automatic connect must never open a browser/QR and must not rewrite
+          // a verdict the restore pass already explained: unauthorized/error
+          // rows keep their message, a fresh row becomes disconnected.
+          if (previousState === undefined) {
+            setState(id, {
+              status: 'disconnected',
+              everConnected: Boolean(states.get(id)?.everConnected),
+              error: undefined,
+              errorCode: undefined,
+            })
+          } else {
+            states.set(id, previousState)
+          }
           return
         }
+        // Pre-connect settings (manual path): if required fields are missing,
+        // emit the form and wait for auth-submit before starting the actual auth
+        // flow. The silent attempt above runs first because it does not need
+        // them.
+        if (settingsMissing) {
+          if (!intentLive(id, intent)) return
+          pendingFieldRequestKind.set(id, 'settings')
+          emitRequest({ connectorId: id, fields: def.settings ?? [] })
+          return
+        }
+        // Token connectors never run an authorization flow: once the declared
+        // fields are present they register directly (settings above are only a
+        // pre-connect gate). This also guarantees the token form is shown when a
+        // required field is missing, even when settings and tokenFields coexist.
+        // `auto` counts here when it declares credential fields — that is the
+        // static-key MCP shape (a `${FIELD}` header the user fills in), and it
+        // must not be sent through an authorization flow it has no endpoint for.
+        if (resolveAuthMode(def) === 'token') {
+          if (missingDeclaredFields(def, existing).length > 0) {
+            if (!intentLive(id, intent)) return
+            requestDeclaredFields(id, def)
+            return
+          }
+          if (!intentLive(id, intent)) return
+          const outcome = await registerMcp(def, { signal: flowSignal })
+          if (outcome.superseded === true) return
+          if (outcome.pendingApproval !== undefined) {
+            setState(id, { status: 'unauthorized', everConnected: true, error: undefined, errorCode: undefined })
+            return
+          }
+          if (outcome.rejected.length > 0) {
+            pendingRequests.delete(id)
+            setState(id, { status: 'error', everConnected: true, error: outcome.rejected.join('; '), errorCode: undefined })
+            return
+          }
+          pendingRequests.delete(id)
+          pendingFieldRequestKind.delete(id)
+          setState(id, { status: 'connected', everConnected: true, connectedAt: Date.now(), error: undefined, errorCode: undefined })
+          return
+        }
+        if (!intentLive(id, intent)) return
         patch = await runAuth(def, {
           onRequest: emitRequest,
-          signal: controller.signal,
+          signal: flowSignal,
           ...(existing?.fields ? { fields: existing.fields } : {}),
           ...(options.clientName === undefined ? {} : { clientName: options.clientName }),
           ...(options.outboundTimeoutMs === undefined ? {} : { outboundTimeoutMs: options.outboundTimeoutMs }),
@@ -3130,9 +3286,17 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       // after it) — a disconnect that landed during the token round-trip must
       // not leave a fresh credential behind for the next restore to resurrect.
       const current = await store.readCredential(id)
-      if (!intentLive(id, intent) || intent.store !== store) return
-      const merged = await store.updateCredential(id, { ...current, ...patch })
-      if (!intentLive(id, intent)) {
+      if (!intentLive(id, intent) || intent.store !== store || session.aborted) return
+      // The silent exchange is a PUBLIC-CLIENT exchange: a client secret left by
+      // an older dynamic registration belongs to a different client and would
+      // make the next refresh fail with invalid_client. The merge-write cannot
+      // delete a key, so the removal is explicit (`clear`).
+      const merged = await store.updateCredential(
+        id,
+        { ...(current ?? {}), ...patch },
+        silentUsed ? ['clientSecret'] : [],
+      )
+      if (!intentLive(id, intent) || session.aborted) {
         await undoStaleCredentialWrite(id, intent, merged)
         return
       }
@@ -3159,7 +3323,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       // conn-1: the flow may have been overtaken (logout / user switch) while
       // the token round-trip was in flight — never register for a session that
       // is already gone.
-      if (!intentLive(id, intent)) return
+      if (!intentLive(id, intent) || session.aborted) return
       // Retire the PREVIOUS registration only now that the new authorization
       // succeeded: doing it before the flow meant a failed re-authorization
       // (server unreachable, user cancelled the browser step) silently removed
@@ -3167,8 +3331,8 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       // this only covers the case where the new credential cannot register
       // (e.g. stdio approval pending) and keeps the old one from lingering
       // across users.
-      const outcome = await registerMcp(def, { signal: intentSignal(intent) })
-      if (outcome.superseded === true || !intentLive(id, intent)) return
+      const outcome = await registerMcp(def, { signal: flowSignal })
+      if (outcome.superseded === true || !intentLive(id, intent) || session.aborted) return
       if (outcome.pendingApproval !== undefined) {
         // FIX-02: the credential is stored, but the server-issued stdio
         // command still needs a local decision — nothing was spawned and the
@@ -3193,6 +3357,9 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       // A newer connect took over: it owns the row now, so this unwinding flow
       // must not stamp 'disconnected' or an error over its 'connecting' state.
       if (supersededByNewerIntent(id, intent)) return
+      // A session change cancels this work; the queued transition clears the
+      // row, so unwinding here must not stamp an error onto the next session.
+      if (session.aborted) return
       const message = error instanceof Error ? error.message : String(error)
       // Classification is by the stable, locale-independent code the producer
       // attached — never by substrings of a (now translatable) message.
@@ -3317,6 +3484,75 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   }
 
   /**
+   * Connect the server-allowlisted connectors automatically after a session is
+   * established. Runs after `restoreAll` (which handles the credentials that
+   * already exist) and only for definitions that opted in via the bootstrap row.
+   *
+   * Deliberately NOT awaited by the lifecycle transition that restored the
+   * catalog (see {@link scheduleAutoConnect}): the transition queue must never
+   * be parked on an automatic, best-effort network flow — that would delay the
+   * NEXT session's teardown/restore and keep the credential-scope gate closed.
+   * Cancellation comes from the per-session signal (`currentSessionSignal`),
+   * aborted synchronously by `zeokeel/session-changed`; the epoch check catches
+   * a transition superseded without a new event.
+   *
+   * The three eligibility rules are permission facts, not preferences:
+   *  - the definition must be a STATIC OAuth connector (see
+   *    {@link silentAuthEligible}) — anything else would report "connected"
+   *    without a credential the transport can send;
+   *  - it must be in the server allowlist (`autoConnect`, row-sourced only);
+   *  - at most once per session, and only while nothing else restored it.
+   *
+   * A row that restoreAll registered as `connected` still gets re-authorized when
+   * its stored credential cannot maintain itself (no refresh token, or an
+   * already-expired access token): such a credential would otherwise stay
+   * "connected" with no code path left that renews it.
+   */
+  const autoConnectEligible = async (epoch: number): Promise<void> => {
+    const signal = currentSessionSignal()
+    if (currentUser() === null) return
+    // ONE store snapshot for the whole pass: if the session moves, the store is
+    // replaced and this pass must stop rather than read the next account's file.
+    const sessionStore = store
+    for (const def of defs) {
+      if (epoch !== transitionEpoch || signal.aborted || sessionStore !== store) return
+      if (credentialScopeSwitching()) return
+      if (!silentAuthEligible(def) || def.autoConnect !== true) continue
+      if (autoConnectAttempted.has(def.id)) continue
+      if (states.get(def.id)?.status === 'connected') {
+        if (await credentialSelfMaintaining(sessionStore, def.id)) continue
+        if (epoch !== transitionEpoch || signal.aborted || sessionStore !== store) return
+      }
+      autoConnectAttempted.add(def.id)
+      try {
+        await startConnect(def.id, { silentOnly: true })
+      } catch (error) {
+        // Automatic connect is an optimization; a failure must never become a
+        // startup error or an unhandled rejection. The silent path itself
+        // reports its classification once through `reportSilentAuthFailure`.
+        const message = error instanceof Error ? error.message : String(error)
+        ctx.logger?.warn?.(`zeokeel-connectors: auto-connect failed for ${def.id}: ${message}`)
+      }
+      if (epoch !== transitionEpoch || signal.aborted) return
+    }
+  }
+
+  /**
+   * Kick the automatic-connect pass after the restore that justifies it.
+   *
+   * NOT awaited by the caller: see {@link autoConnectEligible}. The catch exists
+   * only so an unexpected throw cannot surface as an unhandled rejection (the
+   * desktop host treats those as fatal); every expected failure is already
+   * classified inside the pass.
+   */
+  const scheduleAutoConnect = (epoch: number): void => {
+    void autoConnectEligible(epoch).catch((cause: unknown) => {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      ctx.logger?.warn?.(`zeokeel-connectors: auto-connect pass failed: ${message}`)
+    })
+  }
+
+  /**
    * Restore all connector MCP registrations for the CURRENT user.
    *
    * conn-1: every await in here can be overtaken by a logout/user switch, so
@@ -3324,30 +3560,6 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
    * no longer the newest transition must stop instead of registering (or
    * reporting) anything for the previous user.
    */
-  /**
-   * Connect the server-allowlisted connectors automatically after a session is
-   * established. Runs after `restoreAll` (which handles the credentials that
-   * already exist) and only for definitions that opted in via bootstrap.
-   */
-  const autoConnectEligible = async (epoch: number): Promise<void> => {
-    if (currentUser() === null) return
-    for (const def of defs) {
-      if (epoch !== transitionEpoch) return
-      if (def.autoAuth !== 'rbac-assertion' || def.autoConnect !== true) continue
-      if (autoConnectAttempted.has(def.id)) continue
-      if (states.get(def.id)?.status === 'connected') continue
-      autoConnectAttempted.add(def.id)
-      try {
-        await startConnect(def.id, { silentOnly: true })
-      } catch (error) {
-        // Automatic connect is an optimization; a failure must never become a
-        // startup error or an unhandled rejection.
-        const message = error instanceof Error ? error.message : String(error)
-        ctx.logger?.warn?.(`zeokeel-connectors: auto-connect failed for ${def.id}: ${message}`)
-      }
-    }
-  }
-
   const restoreAll = async (epoch: number): Promise<void> => {
     /** True once a NEWER lifecycle transition superseded this task. */
     const stale = (): boolean => epoch !== transitionEpoch
@@ -3471,6 +3683,10 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       // Supersede any queued/running lifecycle task: a restore that resolves
       // after teardown must not re-register MCP servers (P2-23).
       transitionEpoch++
+      // …and every flow/automatic pass that carries the session signal stops
+      // with the plugin (a lingering silent exchange would otherwise write a
+      // credential after unload).
+      sessionAbort.abort(new Error(copy('flow.pluginUnloadConnect')))
       // conn-1: …and a registration already awaiting must stop spawning.
       teardownController.abort(new Error(copy('flow.pluginUnloadRegistration')))
       liveProviders.clear()
@@ -4042,7 +4258,8 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     const epoch = transitionEpoch
     await syncServerDefs()
     await restoreAll(epoch)
-    await autoConnectEligible(epoch)
+    // NOT awaited: see `autoConnectEligible` / `scheduleAutoConnect`.
+    scheduleAutoConnect(epoch)
   }).catch((cause: unknown) => {
     ctx.logger?.error('zeokeel-connectors: initial restore failed', cause)
   })

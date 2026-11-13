@@ -454,6 +454,52 @@ func TestAssertionSigningMaterialMissing(t *testing.T) {
 	}
 }
 
+// TestAssertionClaimClientIDBindsConfig：断言里的 client_id 必须**跟随配置并绑定进
+// 签名载荷**（RBAC 将强制它与令牌交换请求里的 client_id 相等）。
+//
+// 威胁模型：公共客户端白名单下，任何拿到断言的一方都能自己发起 token exchange；
+// 若断言不绑定 client_id，攻击者可以换成自己的 client 去冒用（跨客户端冒用）。
+// 所以 client_id 必须签发进**不可篡改**的载荷，且与响应值同源；配置为空时端点
+// 已由 503 分支拒绝签发。
+func TestAssertionClaimClientIDBindsConfig(t *testing.T) {
+	f := newAssertionFixture(t)
+	f.configure("60s")
+
+	check := func(want string) {
+		t.Helper()
+		w := f.postAsRBAC()
+		if w.Code != http.StatusOK {
+			t.Fatalf("签发 = %d, want 200（body=%s）", w.Code, w.Body.String())
+		}
+		body := decodeAssertionResponse(t, w)
+		if got := body["client_id"]; got != want {
+			t.Fatalf("响应 client_id = %v, want %q", got, want)
+		}
+		claims := verifyAssertion(t, body["assertion"].(string), assertionTestSecret)
+		if got := claims["client_id"]; got != want {
+			t.Fatalf("claim client_id = %v, want %q", got, want)
+		}
+		if got, wantBody := claims["client_id"], body["client_id"]; got != wantBody {
+			t.Fatalf("claim client_id = %v 与响应 client_id = %v 不一致（客户端会拿响应值去交换）", got, wantBody)
+		}
+	}
+	check(assertionTestClientID)
+
+	// 改配置 ⇒ 断言里的 client_id 随之变化（不是硬编码/启动快照：热更新键每次请求解析）。
+	setAssertionSetting(t, f.db, "connector.assertion.client_id", "another-client")
+	check("another-client")
+
+	// 配置为空 ⇒ 503：拒绝签发，而不是签一份空 client_id 的断言让 RBAC 侧去猜。
+	setAssertionSetting(t, f.db, "connector.assertion.client_id", "")
+	w := f.postAsRBAC()
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("client_id 配置为空 = %d, want 503（body=%s）", w.Code, w.Body.String())
+	}
+	if code := assertionErrorCode(t, w); code != "SERVER" {
+		t.Fatalf("client_id 配置为空 error.code = %q, want SERVER", code)
+	}
+}
+
 // TestAssertionIssueSuccess：成功路径的完整契约 —— 响应字段、缓存头、
 // claims 与签名（含 sub 去 rbac: 前缀）、expires_in 与 TTL 一致。
 func TestAssertionIssueSuccess(t *testing.T) {
@@ -498,11 +544,17 @@ func TestAssertionIssueSuccess(t *testing.T) {
 		"scope":        assertionTestScopes,
 		"resource":     assertionTestResource,
 		"connector_id": assertionTestConnectorID,
-		"ver":          "v1",
+		// client_id 必须在**签名载荷**里（RBAC 强制断言 client_id == 请求 client_id，
+		// 防公共客户端白名单下的跨客户端冒用；只靠请求参数不可信）。
+		"client_id": assertionTestClientID,
+		"ver":       "v1",
 	} {
 		if got := claims[claim]; got != want {
 			t.Fatalf("claim %s = %v, want %q", claim, got, want)
 		}
+	}
+	if got, want := claims["client_id"], body["client_id"]; got != want {
+		t.Fatalf("claim client_id = %v 与响应 client_id = %v 不一致（客户端会拿响应值去交换）", got, want)
 	}
 	if jti, _ := claims["jti"].(string); jti == "" {
 		t.Fatalf("claim jti 缺失：%v", claims["jti"])

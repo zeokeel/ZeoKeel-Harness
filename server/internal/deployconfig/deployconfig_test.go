@@ -94,6 +94,9 @@ func TestParseKinds(t *testing.T) {
 	profile := MustKey("wasm.memory_profile")
 	hosts := MustKey("deploy.trusted_hosts")
 	assertionTTL := MustKey("connector.assertion.ttl")
+	// TTL 用例开头先清环境变量：宿主/CI 若残留 ZEOKEEL_CONNECTOR_ASSERTION_TTL，
+	// 任何走 Resolve 的断言会拿到非默认值 —— 环境相关的假红/假绿都要在源头挡住。
+	t.Setenv(assertionTTL.Env, "")
 
 	cases := []struct {
 		name    string
@@ -237,6 +240,9 @@ func TestDurationMaxBounds(t *testing.T) {
 	// 断言是"一次性短时凭证"，TTL 超过 5 分钟就不再成立；Parse 必须拒绝，
 	// Resolve 对库里/环境里的非法值回落到默认（读路径不阻断服务，控制台保存路径拒绝）。
 	ttl := MustKey("connector.assertion.ttl")
+	// 下面会走 Resolve(nil, ttl)：先清宿主环境里的同名覆盖口，避免"机器上碰巧设了
+	// ZEOKEEL_CONNECTOR_ASSERTION_TTL"导致默认值断言假红。
+	t.Setenv(ttl.Env, "")
 	if _, err := ttl.Parse("5m"); err != nil {
 		t.Fatalf("上限边界 5m 应合法：%v", err)
 	}

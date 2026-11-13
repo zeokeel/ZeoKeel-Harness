@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
 )
@@ -61,7 +63,7 @@ func newAssertionFixture(t *testing.T) *assertionFixture {
 	// （或上一个用例）里残留的 ZEOKEEL_CONNECTOR_* 污染。
 	t.Setenv("ZEOKEEL_MASTER_KEY", "0123456789abcdef0123456789abcdef")
 	for _, env := range []string{
-		assertionSecretEnv, assertionIssuerEnv,
+		assertionSecretEnv, clientrelease.PublicBaseURLEnv,
 		keyAutoAuthEnabled.Env, keyAutoAuthConnectors.Env,
 		// auto_connect 不是签发端点的输入（它只影响 bootstrap 下发），但同一组
 		// ZEOKEEL_CONNECTOR_* 前缀的残留值仍应在每个用例开始前清干净。
@@ -178,6 +180,13 @@ func verifyAssertion(t *testing.T, raw, secret string) map[string]any {
 	if header["alg"] != "HS256" || header["typ"] != "JWT" {
 		t.Fatalf("header = %v，期望 alg=HS256 typ=JWT", header)
 	}
+	// P0 跨服务契约：RBAC 在验签**之前**从 header 读 ver；缺失/非 v1 ⇒ 400
+	// invalid_grant。只断言 alg/typ 会让"ver 只在 claims 里"的回归静默通过
+	//（真实跨仓探针已复现该 400）。
+	if header["ver"] != "v1" {
+		t.Fatalf("header.ver = %v，期望 v1 —— RBAC 会直接 400 invalid_grant"+
+			"（契约位在 header，不在 claims；见 assertionHeaderJSON）", header["ver"])
+	}
 	mac := hmac.New(sha256.New, []byte(secret))
 	if _, err := mac.Write([]byte(parts[0] + "." + parts[1])); err != nil {
 		t.Fatalf("计算签名: %v", err)
@@ -238,6 +247,59 @@ func TestAutoAuthModeContractMatchesBootstrap(t *testing.T) {
 		t.Fatalf("签发面 auto_auth=%q 与 bootstrap 下发面 %q 不一致 —— 客户端会看到"+
 			"auto_auth 却拿不到可签发的端点（或反之）",
 			AutoAuthModeRBACAssertion, bootstrap.ConnectorAutoAuthModeRBACAssertion)
+	}
+}
+
+// TestAssertionHeaderContractVectors：JWT header 是跨服务契约的**固定向量**。
+//
+// 依据（真实跨仓探针，RBAC 9210d04 真 handler）：同一份 claims、只差 header 有没有
+// `"ver":"v1"` —— 无 ver 的形态回 400 `invalid_grant` "ver 必须是 v1"（整条静默
+// 授权不可用），补上 ver 回 200 并签发 access_token。本用例把"ZeoKeel 签出的 header"
+// 钉成 fixture，并把旧形态（只有 alg/typ）作为反例：改回旧 header ⇒ 本用例红，
+// 不必等联调才发现。
+func TestAssertionHeaderContractVectors(t *testing.T) {
+	// fixture：与 RBAC 验签前的 header 判据逐字对齐（alg HS256 + ver v1）。
+	const wantHeader = `{"alg":"HS256","typ":"JWT","ver":"v1"}`
+	if assertionHeaderJSON != wantHeader {
+		t.Fatalf("断言 header fixture = %s，期望 %s（RBAC 从 header 读 ver）",
+			assertionHeaderJSON, wantHeader)
+	}
+
+	// 生产签名函数的实际输出必须与 fixture 逐字节一致（不是"注释里写着"）。
+	raw, err := signAssertion(assertionTestSecret, assertionClaims{Issuer: "iss", Version: assertionVersion})
+	if err != nil {
+		t.Fatalf("签名: %v", err)
+	}
+	parts := strings.Split(raw, ".")
+	gotHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatalf("解 header: %v", err)
+	}
+	if string(gotHeader) != wantHeader {
+		t.Fatalf("实际签出的 header = %s，期望 %s", gotHeader, wantHeader)
+	}
+
+	// RBAC 验签前的 header 判据最小复刻：alg 必须 HS256、ver 必须 v1。
+	rbacAcceptsHeader := func(headerJSON string) bool {
+		var h map[string]any
+		if err := json.Unmarshal([]byte(headerJSON), &h); err != nil {
+			return false
+		}
+		return h["alg"] == "HS256" && h["ver"] == "v1"
+	}
+	for _, vector := range []struct {
+		name   string
+		header string
+		want   bool
+	}{
+		{"现行契约（header 带 ver）", wantHeader, true},
+		{"旧形态：缺 ver（P0 现场，RBAC 实测 400）", `{"alg":"HS256","typ":"JWT"}`, false},
+		{"ver 非 v1", `{"alg":"HS256","typ":"JWT","ver":"v2"}`, false},
+		{"alg 非 HS256", `{"alg":"none","typ":"JWT","ver":"v1"}`, false},
+	} {
+		if got := rbacAcceptsHeader(vector.header); got != vector.want {
+			t.Fatalf("%s：header %s 被接受=%v，期望 %v", vector.name, vector.header, got, vector.want)
+		}
 	}
 }
 
@@ -355,6 +417,31 @@ func TestAssertionRequiresRBACIdentity(t *testing.T) {
 	if w := f.post(assertionTestConnectorID, oidcToken); w.Code != http.StatusConflict {
 		t.Fatalf("OIDC 账号 = %d, want 409（body=%s）", w.Code, w.Body.String())
 	}
+
+	// 双条件隔离（P2）：ExternalSource=rbac **但 ExternalID 没有 `rbac:` 前缀** ——
+	// 这是历史/错误绑定形态；若只判 source，断言 sub 会变成非 RBAC uid（换不出 token
+	// 或换出别人的身份），所以必须 409。两个条件（source + 前缀）缺一不可。
+	if _, err := serverstore.CreateUserWithPassword(f.db, "halfrbac", "pw123456"); err != nil {
+		t.Fatalf("建半绑定用户: %v", err)
+	}
+	half, err := serverstore.GetUserByUsername(f.db, "halfrbac")
+	if err != nil {
+		t.Fatalf("读半绑定用户: %v", err)
+	}
+	if err := serverstore.BindExternalIdentity(f.db, half.ID, "alice-uid-no-prefix", "rbac"); err != nil {
+		t.Fatalf("绑定半 Rbac 身份: %v", err)
+	}
+	halfToken, err := serverauth.IssueToken(f.db, half.ID)
+	if err != nil {
+		t.Fatalf("签发半绑定用户令牌: %v", err)
+	}
+	w = f.post(assertionTestConnectorID, halfToken)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("source=rbac 但 ExternalID 无 rbac: 前缀 = %d, want 409（body=%s）", w.Code, w.Body.String())
+	}
+	if code := assertionErrorCode(t, w); code != "CONFLICT" {
+		t.Fatalf("半绑定账号 error.code = %q, want CONFLICT", code)
+	}
 }
 
 // TestAssertionDefinitionMustSelfDescribeEndpoints：定义缺 tokenUrl / scopes /
@@ -431,7 +518,7 @@ func TestAssertionSigningMaterialMissing(t *testing.T) {
 	}
 
 	// ③ issuer 从对外地址 env 兜底；尾斜杠必须被归一化（iss 是精确字符串契约）。
-	f.t.Setenv(assertionIssuerEnv, assertionTestIssuer+"/")
+	f.t.Setenv(clientrelease.PublicBaseURLEnv, assertionTestIssuer+"/")
 	w = f.postAsRBAC()
 	if w.Code != http.StatusOK {
 		t.Fatalf("issuer 走 PUBLIC_BASE_URL 兜底 = %d, want 200（body=%s）", w.Code, w.Body.String())
@@ -446,11 +533,107 @@ func TestAssertionSigningMaterialMissing(t *testing.T) {
 	}
 
 	// ④ 缺 client_id（issuer 走设置，恢复原样）。
-	f.t.Setenv(assertionIssuerEnv, "")
+	f.t.Setenv(clientrelease.PublicBaseURLEnv, "")
 	setAssertionSetting(t, f.db, "connector.assertion.issuer", assertionTestIssuer)
 	setAssertionSetting(t, f.db, "connector.assertion.client_id", "")
 	if w := f.postAsRBAC(); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("缺 client_id = %d, want 503（body=%s）", w.Code, w.Body.String())
+	}
+}
+
+// TestAssertionIssuerFallback：issuer 解析顺序是**部署契约**：
+// connector.assertion.issuer → 对外地址（ZEOKEEL_PUBLIC_BASE_URL env，其次
+// settings server.base_url）。对外地址的读取/规范化必须复用 clientrelease 的唯一
+// 实现（拒绝 query/fragment/userinfo；https 或回环 http）。
+//
+// 现场最常见的部署形态是"只在控制台「网关」页配了对外访问地址"（settings
+// server.base_url，main 把它注入 clientrelease.PublicBaseResolver）—— 此时也必须能签发
+// （此前只读 env，导致这类部署恒 503，是 P1）。
+func TestAssertionIssuerFallback(t *testing.T) {
+	f := newAssertionFixture(t)
+	f.configure("60s")
+	// 关掉显式 issuer：模拟"没配 connector.assertion.issuer"的部署。
+	setAssertionSetting(t, f.db, "connector.assertion.issuer", "")
+
+	prevResolver := clientrelease.PublicBaseResolver
+	t.Cleanup(func() { clientrelease.PublicBaseResolver = prevResolver })
+	clientrelease.PublicBaseResolver = func() string { return "https://console.example.com/" }
+
+	// ① 仅控制台 server.base_url 配置 ⇒ 签发成功，尾斜杠归一化。
+	w := f.postAsRBAC()
+	if w.Code != http.StatusOK {
+		t.Fatalf("仅 server.base_url 配置 = %d, want 200（body=%s）", w.Code, w.Body.String())
+	}
+	body := decodeAssertionResponse(t, w)
+	if got := body["issuer"]; got != "https://console.example.com" {
+		t.Fatalf("issuer = %v, want https://console.example.com（尾斜杠应归一化）", got)
+	}
+	if claims := verifyAssertion(t, body["assertion"].(string), assertionTestSecret); claims["iss"] != "https://console.example.com" {
+		t.Fatalf("claim iss = %v, want 控制台对外地址", claims["iss"])
+	}
+
+	// ② env 优先于 settings（存量部署的覆盖口语义）。
+	f.t.Setenv(clientrelease.PublicBaseURLEnv, "https://env.example.com/")
+	body = decodeAssertionResponse(t, f.postAsRBAC())
+	if got := body["issuer"]; got != "https://env.example.com" {
+		t.Fatalf("env 应压过 settings：issuer = %v, want https://env.example.com", got)
+	}
+
+	// ③ 显式 env 非法（带 userinfo / 带 query）⇒ 503（fail-closed，不回落到 settings
+	//     —— 否则"配错了反而静默用上另一个旧配置"）。
+	for _, invalid := range []string{
+		"https://user:pass@env.example.com",
+		"https://env.example.com/?token=1",
+	} {
+		f.t.Setenv(clientrelease.PublicBaseURLEnv, invalid)
+		if w := f.postAsRBAC(); w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("非法 env %q = %d, want 503（body=%s）", invalid, w.Code, w.Body.String())
+		}
+	}
+
+	// ④ env 清空后，控制台配置非法（带 query）⇒ 503。
+	f.t.Setenv(clientrelease.PublicBaseURLEnv, "")
+	clientrelease.PublicBaseResolver = func() string { return "https://console.example.com/?token=1" }
+	if w := f.postAsRBAC(); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("非法 server.base_url = %d, want 503（body=%s）", w.Code, w.Body.String())
+	}
+}
+
+// TestAssertionGapLogRateLimited：501/503（部署配置缺项）必须有**限频**日志，
+// 只点名连接器 id 与缺项，便于现场定位；且不得出现任何配置取值/密钥。
+func TestAssertionGapLogRateLimited(t *testing.T) {
+	// 复位限频表 + 替换日志出口（同包变量；测试串行执行，恢复后不影响其它用例）。
+	assertionGapLogMu.Lock()
+	prevLast := assertionGapLogLast
+	assertionGapLogLast = map[string]time.Time{}
+	assertionGapLogMu.Unlock()
+	prevLogf := assertionGapLogf
+	var got []string
+	assertionGapLogf = func(format string, args ...any) { got = append(got, fmt.Sprintf(format, args...)) }
+	t.Cleanup(func() {
+		assertionGapLogf = prevLogf
+		assertionGapLogMu.Lock()
+		assertionGapLogLast = prevLast
+		assertionGapLogMu.Unlock()
+	})
+
+	f := newAssertionFixture(t)
+	f.configure("60s")
+	setAssertionSetting(t, f.db, "connector.assertion.client_id", "")
+	for i := 0; i < 3; i++ {
+		if w := f.postAsRBAC(); w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("缺 client_id = %d, want 503", w.Code)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("同一 (连接器,缺项) 一秒内 3 次 503 应只打 1 条日志，实得 %d 条：%v", len(got), got)
+	}
+	if !strings.Contains(got[0], assertionTestConnectorID) || !strings.Contains(got[0], "client_id") {
+		t.Fatalf("告警必须点名连接器 id 与缺项：%s", got[0])
+	}
+	joined := strings.Join(got, "\n")
+	if strings.Contains(joined, assertionTestSecret) || strings.Contains(joined, assertionTestIssuer) {
+		t.Fatalf("告警不得包含配置取值：%s", joined)
 	}
 }
 

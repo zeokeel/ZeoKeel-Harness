@@ -219,6 +219,7 @@ deps:
 
   connectors:
     mayDependOn:
+      - clientrelease
       - deployconfig
       - serverauth
       - serverstore

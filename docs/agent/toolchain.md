@@ -64,7 +64,7 @@ make -f Makefile.agent arch-go
 ```
 
 - **判什么**：Go 包级依赖方向（components + `mayDependOn`）。判据本体 =
-  `server/.go-arch-lint.yml`（schema version 3，64 个组件 / 198 条允许边，机械生成）。
+  `server/.go-arch-lint.yml`（schema version 3，64 个组件 / 201 条允许边，机械生成）。
 - **当前状态：已启用（基线即配置）**。配置冻结的是**当前生产 import 图**，不是理想分层：
   **生产 import 图是 DAG（无环）**，环只出现在 `*_test.go` 里（4 个测试侧 SCC）；配置用
   `excludeFiles: ^.*_test\.go$` 排除测试依赖 —— 代价诚实记账：**含测试会多 87 条违规命中**

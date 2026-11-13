@@ -10,6 +10,7 @@ import { ConnectorStore, credentialScopeKey, CredentialReadError, sameCredential
 import { ConnectorError, connectorErrorCodeOf } from './connector-error.ts'
 import { hostLocaleOf, hostT, type HostCopyKey, type HostLocale } from './host-copy.ts'
 import { runAuth } from './auth.ts'
+import { trySilentAuth } from './silent-auth.ts'
 import { createOAuthProvider, isTerminalRefreshReason, resolveAuthorizationServer, resolveStaticAuthorizationServer, TokenRefresher, tokenNeedsRefresh, type RefreshedTokens, type RefreshFailure, type RefreshOutcome } from './mcp-oauth-provider.ts'
 import type { McpTransportAuthProvider, OAuthTarget } from './mcp-oauth-provider.ts'
 import { REFRESH_LEAD_MS, REFRESH_SWEEP_INTERVAL_MS } from './token-lifetime.ts'
@@ -196,6 +197,13 @@ export interface ServerConnectorItem {
   description: string
   auth_mode: string
   definition: string
+  /**
+   * Server-issued silent-authorization opt-in. Older servers omit it (treated
+   * as "not available"), so the client keeps its previous behavior verbatim.
+   */
+  auto_auth?: string
+  /** Server-issued opt-in for connecting automatically after login/startup. */
+  auto_connect?: boolean
 }
 
 /**
@@ -211,6 +219,11 @@ export interface ServerConnectorItem {
  * would hand `spawn` an unchecked executable, a protected env key, or a
  * non-public URL never enters the catalog at all.
  */
+function autoAuthForItem(item: ServerConnectorItem, raw: ConnectorDef): 'rbac-assertion' | undefined {
+  if (item.auto_auth === 'rbac-assertion' || raw.autoAuth === 'rbac-assertion') return 'rbac-assertion'
+  return undefined
+}
+
 export function parseServerConnectors(items: ServerConnectorItem[]): ConnectorDef[] {
   const out: ConnectorDef[] = []
   for (const item of items) {
@@ -252,6 +265,8 @@ export function parseServerConnectors(items: ServerConnectorItem[]): ConnectorDe
         name: itemName !== '' ? itemName : rawName,
         description: itemDescription !== '' ? itemDescription : rawDescription,
         authMode: authMode as ConnectorDef['authMode'],
+        ...(autoAuthForItem(item, raw) === undefined ? {} : { autoAuth: 'rbac-assertion' as const }),
+        ...(item.auto_connect === true || raw.autoConnect === true ? { autoConnect: true } : {}),
       })
     } catch {
       // 单条定义非法:跳过,不影响其他连接器。
@@ -494,6 +509,13 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     }).dir
   }
   const states = new Map<string, ConnectorState>()
+  /**
+   * Connectors whose automatic (session-start) connect was attempted for the
+   * current session. Cleared by `teardownAll`, so a logout/user switch retries
+   * for the next account; within one session a failure is not retried in a
+   * loop (the manual button stays available).
+   */
+  const autoConnectAttempted = new Set<string>()
   /**
    * Ids whose STORED credential currently carries a refresh token — i.e. exactly
    * the fact behind the panel's "refresh now" affordance.
@@ -1440,6 +1462,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     pendingApprovals.clear()
     pendingFieldRequestKind.clear()
     states.clear()
+    autoConnectAttempted.clear()
     // ...and the row projection that makes the panel offer "refresh now"
     // (R13-B-P2-4). `restoreAll` re-derives it from the NEW account's
     // credentials, so the next account starts from its own facts and never from
@@ -1556,7 +1579,10 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
         // 最坏情况只是"连接器显示未连接、可手动重连"，而不是"全部操作被拒"。
         reconfigureUser(eventServerURL)
       }
-      if (next !== null) await restoreAll(epoch)
+      if (next !== null) {
+        await restoreAll(epoch)
+        await autoConnectEligible(epoch)
+      }
     }).catch((cause: unknown) => {
       ctx.logger?.error('zeokeel-connectors: session change handling failed', cause)
     })
@@ -2973,7 +2999,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
   }
 
   /** Start the auth flow for a connector (background for poll-based modes). */
-  const startConnect = async (id: string): Promise<void> => {
+  const startConnect = async (id: string, opts: { silentOnly?: boolean } = {}): Promise<void> => {
     const def = getDef(id)
     if (!def) throw new Error(`unknown connector: ${id}`)
     // R16B-04（纵深防御）：路由面已经用过同一条闸门，但 `startConnect` 还有别的
@@ -3057,16 +3083,47 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
       const controller = intent.controller
       pendingFlows.set(id, controller)
       try {
-      const patch = await runAuth(def, {
-        onRequest: emitRequest,
-        signal: controller.signal,
-        ...(existing?.fields ? { fields: existing.fields } : {}),
-        ...(options.clientName === undefined ? {} : { clientName: options.clientName }),
-        ...(options.outboundTimeoutMs === undefined ? {} : { outboundTimeoutMs: options.outboundTimeoutMs }),
-        // The locale of the user who clicked connect: the callback page, the
-        // thrown errors and the refresh text below all follow it.
-        locale: locale(),
-      })
+      let patch: Partial<ConnectorCredential> | undefined
+      // Silent authorization (server-enabled): the signed-in session is the
+      // identity source, so a login can authorize this connector without a
+      // second scan. It is attempted for both the automatic and the manual
+      // path; a manual click still falls back to the interactive flow below.
+      if (def.autoAuth === 'rbac-assertion') {
+        const zeokeel = ctx.get('zeokeelSession') as {
+          getSession?: () => { serverURL?: string; token?: string; username?: string } | null
+        } | undefined
+        const silent = await trySilentAuth(def, {
+          session: zeokeel?.getSession?.() ?? null,
+          locale: locale(),
+          signal: controller.signal,
+          username: currentUser(),
+        })
+        if (!intentLive(id, intent) || intent.store !== store) return
+        if (silent !== null) patch = silent
+      }
+      if (patch === undefined) {
+        if (opts.silentOnly) {
+          // Automatic connect must never open a browser/QR. Leave the row
+          // disconnected (the manual button is the explicit retry/fallback).
+          setState(id, {
+            status: 'disconnected',
+            everConnected: Boolean(states.get(id)?.everConnected),
+            error: undefined,
+            errorCode: undefined,
+          })
+          return
+        }
+        patch = await runAuth(def, {
+          onRequest: emitRequest,
+          signal: controller.signal,
+          ...(existing?.fields ? { fields: existing.fields } : {}),
+          ...(options.clientName === undefined ? {} : { clientName: options.clientName }),
+          ...(options.outboundTimeoutMs === undefined ? {} : { outboundTimeoutMs: options.outboundTimeoutMs }),
+          // The locale of the user who clicked connect: the callback page, the
+          // thrown errors and the refresh text below all follow it.
+          locale: locale(),
+        })
+      }
       // Token mode returned above; only OAuth/device/server-side reach this.
       // BUG-02: the credential write is the point of no return for a cancelled
       // flow, so the intent is re-checked immediately before it (and compensated
@@ -3267,6 +3324,30 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
    * no longer the newest transition must stop instead of registering (or
    * reporting) anything for the previous user.
    */
+  /**
+   * Connect the server-allowlisted connectors automatically after a session is
+   * established. Runs after `restoreAll` (which handles the credentials that
+   * already exist) and only for definitions that opted in via bootstrap.
+   */
+  const autoConnectEligible = async (epoch: number): Promise<void> => {
+    if (currentUser() === null) return
+    for (const def of defs) {
+      if (epoch !== transitionEpoch) return
+      if (def.autoAuth !== 'rbac-assertion' || def.autoConnect !== true) continue
+      if (autoConnectAttempted.has(def.id)) continue
+      if (states.get(def.id)?.status === 'connected') continue
+      autoConnectAttempted.add(def.id)
+      try {
+        await startConnect(def.id, { silentOnly: true })
+      } catch (error) {
+        // Automatic connect is an optimization; a failure must never become a
+        // startup error or an unhandled rejection.
+        const message = error instanceof Error ? error.message : String(error)
+        ctx.logger?.warn?.(`zeokeel-connectors: auto-connect failed for ${def.id}: ${message}`)
+      }
+    }
+  }
+
   const restoreAll = async (epoch: number): Promise<void> => {
     /** True once a NEWER lifecycle transition superseded this task. */
     const stale = (): boolean => epoch !== transitionEpoch
@@ -3961,6 +4042,7 @@ export function apply(ctx: Context, options: ConnectorsOptions = {}): void {
     const epoch = transitionEpoch
     await syncServerDefs()
     await restoreAll(epoch)
+    await autoConnectEligible(epoch)
   }).catch((cause: unknown) => {
     ctx.logger?.error('zeokeel-connectors: initial restore failed', cause)
   })

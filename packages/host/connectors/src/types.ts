@@ -114,6 +114,19 @@ export interface ConnectorDef {
   icon?: string
   authMode: ConnectorAuthMode
   auth?: OAuthAuthConfig | DeviceAuthConfig | ServerSideAuthConfig
+  /**
+   * Server-issued opt-in for silent authorization: when the catalog row carries
+   * `auto_auth=rbac-assertion`, the runtime may obtain the credential from the
+   * signed-in session (ZeoKeel assertion -> RBAC token exchange) BEFORE falling
+   * back to the interactive OAuth flow. Absent on older servers/clients.
+   */
+  autoAuth?: 'rbac-assertion'
+  /**
+   * Server-issued opt-in for connecting this connector automatically once a
+   * session is established (login/startup), without a user click. Only the
+   * server-side allowlist sets this; the manual connect path stays available.
+   */
+  autoConnect?: boolean
   /** Token form fields when authMode is 'token'. */
   tokenFields?: TokenField[]
   /** Pre-connect settings the user must fill before auth starts (e.g. OAuth client id). */

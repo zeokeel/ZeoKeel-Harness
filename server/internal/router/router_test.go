@@ -203,7 +203,11 @@ func TestNamespaces(t *testing.T) {
 		},
 		{
 			module: features.ModuleConnectors, enabled: features.HasConnectors(),
-			keys: []string{"GET " + nsServer + "/admin/connectors"},
+			keys: []string{
+				"GET " + nsServer + "/admin/connectors",
+				// 员工面静默授权断言（2026-11）：登录会话 → RBAC MCP token 的入口。
+				"POST " + nsClient + "/connectors/:id/assertion",
+			},
 		},
 	} {
 		for _, want := range group.keys {

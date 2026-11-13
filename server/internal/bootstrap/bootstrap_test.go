@@ -375,6 +375,85 @@ func TestBootstrapConnectors(t *testing.T) {
 	}
 }
 
+// TestBootstrapConnectorAutoAuth：连接器静默授权的下发契约（2026-11）。
+//
+// 默认全关（字段 omitempty 不下发 ⇒ 旧部署/旧客户端行为逐字节不变）；只有
+// 「开关打开 + 连接器 id 在白名单」时下发 auto_auth="rbac-assertion"；
+// auto_connect 还要 connector.auto_auth.auto_connect 打开。判定与
+// internal/connectors/assertion.go 的签发端点同源（同一组 deployconfig 键）。
+func TestBootstrapConnectorAutoAuth(t *testing.T) {
+	for _, env := range []string{
+		"ZEOKEEL_CONNECTOR_AUTO_AUTH_ENABLED",
+		"ZEOKEEL_CONNECTOR_AUTO_AUTH_CONNECTORS",
+		"ZEOKEEL_CONNECTOR_AUTO_AUTH_AUTO_CONNECT",
+	} {
+		t.Setenv(env, "")
+	}
+	r, db := setup(t)
+	u, _ := serverstore.GetUserByUsername(db, "alice")
+	token, _ := serverauth.IssueToken(db, u.ID)
+
+	connectorsByID := func() map[string]map[string]any {
+		t.Helper()
+		_, out := getJSON(t, r, "/api/client/v2/config/bootstrap", token)
+		byID := map[string]map[string]any{}
+		for _, c := range out["connectors"].([]any) {
+			m := c.(map[string]any)
+			byID[m["id"].(string)] = m
+		}
+		return byID
+	}
+	assertAbsent := func(byID map[string]map[string]any, why string) {
+		t.Helper()
+		for id, item := range byID {
+			if _, ok := item["auto_auth"]; ok {
+				t.Fatalf("%s：%s 不应下发 auto_auth（%v）", why, id, item)
+			}
+			if _, ok := item["auto_connect"]; ok {
+				t.Fatalf("%s：%s 不应下发 auto_connect（%v）", why, id, item)
+			}
+		}
+	}
+
+	// ① 默认全关：两个字段都不出现。
+	assertAbsent(connectorsByID(), "默认关闭")
+
+	// ② 只开总开关、白名单为空：仍不下发（白名单才是逐连接器同意）。
+	if err := serverstore.SetSetting(db, "connector.auto_auth.enabled", "true"); err != nil {
+		t.Fatal(err)
+	}
+	assertAbsent(connectorsByID(), "白名单为空")
+
+	// ③ 白名单命 example-mcp：只它下发 auto_auth；auto_connect 缺省不下发。
+	if err := serverstore.SetSetting(db, "connector.auto_auth.connectors", "example-mcp"); err != nil {
+		t.Fatal(err)
+	}
+	byID := connectorsByID()
+	if got := byID["example-mcp"]["auto_auth"]; got != ConnectorAutoAuthModeRBACAssertion {
+		t.Fatalf("example-mcp auto_auth = %v, want %q", got, ConnectorAutoAuthModeRBACAssertion)
+	}
+	if _, ok := byID["example-mcp"]["auto_connect"]; ok {
+		t.Fatalf("auto_connect 缺省不应下发：%v", byID["example-mcp"])
+	}
+	if _, ok := byID["sales-easy"]["auto_auth"]; ok {
+		t.Fatalf("白名单外的 sales-easy 不应下发 auto_auth：%v", byID["sales-easy"])
+	}
+
+	// ④ auto_connect 打开：白名单命中项下发 true。
+	if err := serverstore.SetSetting(db, "connector.auto_auth.auto_connect", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if got := connectorsByID()["example-mcp"]["auto_connect"]; got != true {
+		t.Fatalf("auto_connect = %v, want true", got)
+	}
+
+	// ⑤ 总开关关回去：白名单与 auto_connect 都还在，但不下发（总闸优先）。
+	if err := serverstore.SetSetting(db, "connector.auto_auth.enabled", "false"); err != nil {
+		t.Fatal(err)
+	}
+	assertAbsent(connectorsByID(), "总开关关闭")
+}
+
 // TestInjectGlitchTipDefaults: 服务端配置的 GlitchTip 地址/组织合成进
 // tokenFields 的 defaultValue(0045 下架后仍保留该注入逻辑,重新启用
 // GlitchTip 连接器时客户端表单自动预填)。

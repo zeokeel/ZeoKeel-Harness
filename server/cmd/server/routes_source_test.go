@@ -137,8 +137,11 @@ var optionalModuleRoutePrefixes = map[string][]string{
 		"/api/client/v2/apps/wasm",
 		"/api/server/admin/wasm-apps",
 	},
-	// 连接器面：连接器目录的管理端写面（客户端目录读面属基础面，随 bootstrap 下发）。
+	// 连接器面：管理端连接器目录写面 + 员工面静默授权断言（2026-11）。
+	// 后者不在 `/api/server/admin` 下 —— 只登记管理面前缀会让"关闭态在客户端命名空间
+	// 下残留断言路由"静默漏扫（关闭态承诺覆盖该模块的**全部**命名空间与 method）。
 	features.ModuleConnectors: {
+		"/api/client/v2/connectors",
 		"/api/server/admin/connectors",
 	},
 }

@@ -205,6 +205,7 @@ deps:
 
   bootstrap:
     mayDependOn:
+      - deployconfig
       - llmgateway
       - serverauth
       - serverstore
@@ -218,6 +219,7 @@ deps:
 
   connectors:
     mayDependOn:
+      - deployconfig
       - serverauth
       - serverstore
 

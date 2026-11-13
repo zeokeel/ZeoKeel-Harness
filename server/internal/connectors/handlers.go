@@ -20,16 +20,20 @@ type Handlers struct {
 	Update     gin.HandlerFunc // PUT /:id
 	Remove     gin.HandlerFunc // DELETE /:id
 	SetEnabled gin.HandlerFunc // PUT /:id/enabled
+
+	// 客户端面 /api/client/v2/connectors（BearerAuth 由 router 申报）。
+	IssueAssertion gin.HandlerFunc // POST /:id/assertion
 }
 
 // NewHandlers 返回连接器 handler 集合(db 注入)。
 func NewHandlers(db *sql.DB) *Handlers {
 	return &Handlers{
-		List:       list(db),
-		Get:        get(db),
-		Create:     create(db),
-		Update:     update(db),
-		Remove:     remove(db),
-		SetEnabled: setEnabled(db),
+		List:           list(db),
+		Get:            get(db),
+		Create:         create(db),
+		Update:         update(db),
+		Remove:         remove(db),
+		SetEnabled:     setEnabled(db),
+		IssueAssertion: issueAssertion(db),
 	}
 }

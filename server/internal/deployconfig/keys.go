@@ -88,6 +88,13 @@ type Key struct {
 	Max *int64
 	// MinDuration 是 KindDuration 的下限；0 = 不限制（但仍必须 > 0）。
 	MinDuration time.Duration
+	// MaxDuration 是 KindDuration 的上限；0 = 不限制。
+	//
+	// 为什么需要上限：有的时长键的取值域是**业务契约**而不是资源预算 —— 连接器
+	// 断言 JWT 的有效期（connector.assertion.ttl）越长，被窃取后的重放窗口越大，
+	// 而 RBAC 令牌交换要求它在"够客户端完成一次交换"与"短到泄露可忽略"之间。
+	// 只设下限挡不住把 TTL 填成 24h（控制台能存进去 ⇒ 安全假设静默失效）。
+	MaxDuration time.Duration
 	// Choices 是 KindChoice 的候选（按展示顺序；比较大小写不敏感）。
 	Choices []string
 	// AppliesAt 是生效时机（AppliesHot / AppliesRestart）。
@@ -242,6 +249,74 @@ var registry = []Key{
 		AppliesAt:   AppliesRestart,
 		Description: "require = 隔离不可用即拒绝启动（生产推荐）；auto = 可用则启用、不可用则大声记日志后继续（默认）；off = 关闭（仅测试）。配错 require 会让服务端起不来。",
 	},
+	// ---- 连接器静默授权（2026-11）----
+	// 这一组把"登录会话 → 连接器授权"从扫码/跳转改成一个服务端签发的短时断言：
+	// 客户端拿断言去 RBAC 令牌端点换 MCP token（RFC 8693 token exchange）。默认全关：
+	// 不配置任何东西的部署行为与之前完全一致，管理端逐个连接器放行。
+	{
+		Setting:     "connector.auto_auth.enabled",
+		Env:         "ZEOKEEL_CONNECTOR_AUTO_AUTH_ENABLED",
+		Title:       "连接器静默授权开关",
+		Category:    "连接器",
+		Kind:        KindBool,
+		Default:     "false",
+		AppliesAt:   AppliesHot,
+		Description: "开启后，白名单内的连接器允许已登录客户端静默换取 MCP 授权（服务端签发断言 → RBAC 令牌交换），不再扫码/跳转；关闭 = 端点不签发、客户端走原交互流程。",
+	},
+	{
+		Setting:     "connector.auto_auth.connectors",
+		Env:         "ZEOKEEL_CONNECTOR_AUTO_AUTH_CONNECTORS",
+		Title:       "静默授权连接器白名单",
+		Category:    "连接器",
+		Kind:        KindCSV,
+		Default:     "",
+		AppliesAt:   AppliesHot,
+		Description: "允许静默授权的连接器 id（逗号分隔，如 example-mcp）；留空 = 一个都不允许。只对 enabled 且持有 RBAC 员工身份的登录会话生效。",
+	},
+	{
+		Setting:     "connector.auto_auth.auto_connect",
+		Env:         "ZEOKEEL_CONNECTOR_AUTO_AUTH_AUTO_CONNECT",
+		Title:       "登录后自动连接",
+		Category:    "连接器",
+		Kind:        KindBool,
+		Default:     "false",
+		AppliesAt:   AppliesHot,
+		Description: "开启后，白名单内且支持静默授权的连接器在客户端登录/启动时自动连接一次（失败静默回落为未连接，不弹二维码；手动按钮仍可重试）。",
+	},
+	{
+		Setting:     "connector.assertion.issuer",
+		Env:         "ZEOKEEL_CONNECTOR_ASSERTION_ISSUER",
+		Title:       "断言签发者（iss）",
+		Category:    "连接器",
+		Kind:        KindString,
+		Default:     "",
+		AppliesAt:   AppliesHot,
+		Description: "连接器断言 JWT 的 iss，也是客户端信任锚的一部分（形如 https://harness.example.com）。留空 = 回落到 ZEOKEEL_PUBLIC_BASE_URL；两者都为空时端点返回 503（拒绝签发）。",
+	},
+	{
+		Setting:  "connector.assertion.ttl",
+		Env:      "ZEOKEEL_CONNECTOR_ASSERTION_TTL",
+		Title:    "断言有效期",
+		Category: "连接器",
+		Kind:     KindDuration,
+		Default:  "60s",
+		// 10s~300s 是业务契约：短于 10s 客户端来不及完成一次令牌交换（网络抖动即失败）；
+		// 长于 300s 则"一次性短时凭证"不再成立（泄露后的重放窗口过大）。
+		MinDuration: 10 * time.Second,
+		MaxDuration: 300 * time.Second,
+		AppliesAt:   AppliesHot,
+		Description: "连接器断言 JWT 的有效期（Go duration，如 60s / 2m）。取值范围 10s~300s：太短客户端来不及换 token，太长破坏短时凭证的安全假设。",
+	},
+	{
+		Setting:     "connector.assertion.client_id",
+		Env:         "ZEOKEEL_CONNECTOR_ASSERTION_CLIENT_ID",
+		Title:       "令牌交换 client_id",
+		Category:    "连接器",
+		Kind:        KindString,
+		Default:     "",
+		AppliesAt:   AppliesHot,
+		Description: "客户端拿断言到 RBAC 令牌端点做交换时使用的 client_id（RBAC 侧登记的客户端标识）；留空 = 端点返回 503（拒绝签发）。它不是秘密，但必须与 RBAC 配置逐字一致。",
+	},
 }
 
 // Keys 返回注册表的副本（规范顺序）。调用方不得依赖返回切片可写。
@@ -324,6 +399,9 @@ func (k Key) Parse(raw string) (string, error) {
 		}
 		if k.MinDuration > 0 && d < k.MinDuration {
 			return "", fmt.Errorf("%s 不能小于 %s（收到 %s）", k.Title, k.MinDuration, d)
+		}
+		if k.MaxDuration > 0 && d > k.MaxDuration {
+			return "", fmt.Errorf("%s 不能大于 %s（收到 %s）", k.Title, k.MaxDuration, d)
 		}
 		return d.String(), nil
 	case KindCSV:

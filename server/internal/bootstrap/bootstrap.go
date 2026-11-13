@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverauth"
 	"github.com/zeokeel/zeokeel-harness/server/internal/serverstore"
@@ -100,6 +101,54 @@ type ConnectorItem struct {
 	AuthMode    string `json:"auth_mode"`
 	// 完整定义 JSON:客户端 parse 后覆盖内置(无内置,仅此下发)。
 	Definition string `json:"definition"`
+	// AutoAuth 是服务端签发的静默授权方式（2026-11）。空 = 该连接器不支持静默
+	// 授权（旧客户端忽略未知字段；新客户端据此决定是否先尝试"登录会话换 token"）。
+	// 唯一取值见 ConnectorAutoAuthModeRBACAssertion。
+	AutoAuth string `json:"auto_auth,omitempty"`
+	// AutoConnect 表示该连接器可以在客户端登录/启动后自动连接一次。仅在服务端
+	// 白名单命中且部署开关打开时为 true；旧客户端忽略。
+	AutoConnect bool `json:"auto_connect,omitempty"`
+}
+
+// ConnectorAutoAuthModeRBACAssertion 是 bootstrap 下发的 auto_auth 唯一取值
+// （跨语言契约：客户端 `ConnectorDef.autoAuth === 'rbac-assertion'` 逐字比对）。
+//
+// 与 `internal/connectors/assertion.go` 的 AutoAuthModeRBACAssertion 是同一个契约值：
+// 这里必须再声明一次（bootstrap 是基础面，不能 import 可选模块 connectors）；
+// 两处各有判据钉住字面量，改一侧就红。
+const ConnectorAutoAuthModeRBACAssertion = "rbac-assertion"
+
+// 连接器静默授权的部署配置键（热更新；与 internal/connectors 的断言端点解析同一组键）。
+var (
+	keyConnectorAutoAuthEnabled     = deployconfig.MustKey("connector.auto_auth.enabled")
+	keyConnectorAutoAuthConnectors  = deployconfig.MustKey("connector.auto_auth.connectors")
+	keyConnectorAutoAuthAutoConnect = deployconfig.MustKey("connector.auto_auth.auto_connect")
+)
+
+// connectorAutoAuthState 是一次 bootstrap 构建用的静默授权快照。
+//
+// 为什么在 Build 里**解析一次**而不是逐连接器 Resolve：一次 bootstrap 要处理整个
+// 目录，逐项解析会重复读同一组键（每项 3 次 settings 查询）；而热更新语义不受影响
+// —— 每次 bootstrap 请求都会重新解析。
+type connectorAutoAuthState struct {
+	enabled     bool
+	autoConnect bool
+	connectors  map[string]bool
+}
+
+// resolveConnectorAutoAuthState 解析部署开关 + 白名单（开关关闭时白名单无意义）。
+func resolveConnectorAutoAuthState(db *sql.DB) connectorAutoAuthState {
+	state := connectorAutoAuthState{enabled: deployconfig.Bool(db, keyConnectorAutoAuthEnabled)}
+	if !state.enabled {
+		return state
+	}
+	state.autoConnect = deployconfig.Bool(db, keyConnectorAutoAuthAutoConnect)
+	ids := deployconfig.CSV(db, keyConnectorAutoAuthConnectors)
+	state.connectors = make(map[string]bool, len(ids))
+	for _, id := range ids {
+		state.connectors[id] = true
+	}
+	return state
 }
 
 // buildBootstrapHandler 返回 bootstrap 端点 handler;闭包在每次调用时新建,
@@ -196,11 +245,22 @@ func Build(db *sql.DB, user *serverstore.User) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 静默授权（2026-11）：部署开关 + 逐连接器白名单决定是否下发 auto_auth/auto_connect。
+	// 判定必须与 internal/connectors/assertion.go 的签发端点**同源**（同一组
+	// deployconfig 键）：bootstrap 下发了捷径而端点拒绝签发 ⇒ 客户端白试一次；
+	// 端点能签发但 bootstrap 不下发 ⇒ 功能静默不可用。
+	autoAuth := resolveConnectorAutoAuthState(db)
 	connectorItems := make([]ConnectorItem, 0, len(connectors))
 	for _, c := range connectors {
 		item := ConnectorItem{ID: c.ID, Name: c.Name, Description: c.Description, AuthMode: c.AuthMode, Definition: c.Definition}
 		if c.ID == "glitchtip" {
 			item.Definition = injectGlitchTipDefaults(c.Definition, web.GlitchTipBaseURL, web.GlitchTipOrganization)
+		}
+		if autoAuth.enabled && autoAuth.connectors[c.ID] {
+			item.AutoAuth = ConnectorAutoAuthModeRBACAssertion
+			// 没有静默授权就没有"自动连接"（自动连接只能是静默的：绝不自动弹
+			// 浏览器/二维码）；两者都满足才下发 auto_connect。
+			item.AutoConnect = autoAuth.autoConnect
 		}
 		connectorItems = append(connectorItems, item)
 	}

@@ -93,6 +93,7 @@ func TestParseKinds(t *testing.T) {
 	ldap := MustKey("auth.ldap_allow_plaintext")
 	profile := MustKey("wasm.memory_profile")
 	hosts := MustKey("deploy.trusted_hosts")
+	assertionTTL := MustKey("connector.assertion.ttl")
 
 	cases := []struct {
 		name    string
@@ -112,6 +113,12 @@ func TestParseKinds(t *testing.T) {
 		{"时长过短", interval, "500ms", "", true},
 		{"时长非法", interval, "1 hour", "", true},
 		{"时长非正", interval, "-1h", "", true},
+		// 连接器断言 TTL 的取值域是业务契约（10s~300s）：只判下限时，控制台可以把
+		// "一次性短时凭证"存成 24h，安全假设静默失效。上下限都必须被 Parse 拦住。
+		{"断言 TTL 低于下限", assertionTTL, "9s", "", true},
+		{"断言 TTL 下限边界", assertionTTL, "10s", "10s", false},
+		{"断言 TTL 上限边界", assertionTTL, "5m", "5m0s", false},
+		{"断言 TTL 超过上限", assertionTTL, "5m1s", "", true},
 		{"choice 规范化", profile, " SMALL ", "small", false},
 		{"choice 未知", profile, "medium", "", true},
 		{"csv 去空去重", hosts, " a.example.com, ,b.example.com,a.example.com ", "a.example.com,b.example.com", false},
@@ -161,6 +168,9 @@ func TestResolveFixedValues(t *testing.T) {
 		"ZEOKEEL_TELEMETRY_MAX_PER_SKILL_PER_MIN", "ZEOKEEL_TELEMETRY_ERROR_REPORTING_MAX_PER_MIN",
 		"ZEOKEEL_AUDIT_CHAIN_INTERVAL", "ZEOKEEL_APPS_EXTRA_RESERVED",
 		"ZEOKEEL_WASM_MEMORY_PROFILE", "ZEOKEEL_COMPILE_ISOLATION",
+		"ZEOKEEL_CONNECTOR_AUTO_AUTH_ENABLED", "ZEOKEEL_CONNECTOR_AUTO_AUTH_CONNECTORS",
+		"ZEOKEEL_CONNECTOR_AUTO_AUTH_AUTO_CONNECT", "ZEOKEEL_CONNECTOR_ASSERTION_ISSUER",
+		"ZEOKEEL_CONNECTOR_ASSERTION_TTL", "ZEOKEEL_CONNECTOR_ASSERTION_CLIENT_ID",
 	} {
 		t.Setenv(env, "")
 	}
@@ -174,6 +184,9 @@ func TestResolveFixedValues(t *testing.T) {
 		"audit.chain_interval":                  "1h0m0s",
 		"wasm.memory_profile":                   "default",
 		"wasm.compile_isolation":                "auto",
+		"connector.auto_auth.enabled":           "false",
+		"connector.auto_auth.auto_connect":      "false",
+		"connector.assertion.ttl":               "1m0s",
 	}
 	for setting, expected := range want {
 		v := Resolve(nil, MustKey(setting))
@@ -218,6 +231,20 @@ func TestDurationMaxBounds(t *testing.T) {
 	}
 	if d := Resolve(nil, k).AsDuration(); d != time.Hour {
 		t.Fatalf("默认间隔=%s，期望 1h", d)
+	}
+
+	// 上限（connector.assertion.ttl，10s~300s）：这条键的取值域是**安全契约** ——
+	// 断言是"一次性短时凭证"，TTL 超过 5 分钟就不再成立；Parse 必须拒绝，
+	// Resolve 对库里/环境里的非法值回落到默认（读路径不阻断服务，控制台保存路径拒绝）。
+	ttl := MustKey("connector.assertion.ttl")
+	if _, err := ttl.Parse("5m"); err != nil {
+		t.Fatalf("上限边界 5m 应合法：%v", err)
+	}
+	if _, err := ttl.Parse("301s"); err == nil {
+		t.Fatal("超过 MaxDuration 必须拒绝")
+	}
+	if d := Resolve(nil, ttl).AsDuration(); d != time.Minute {
+		t.Fatalf("断言 TTL 默认=%s，期望 60s", d)
 	}
 }
 

@@ -165,10 +165,22 @@ services:
       # fail-closed、容器反复重启。首选在控制台改;这一行是"控制台进不去时"的逃生口
       # (启动闸门类配置写错就起不来,只有容器外的开关能救)。
       ZEOKEEL_WASM_MEMORY_PROFILE: ${ZEOKEEL_WASM_MEMORY_PROFILE:-}
+      # 连接器静默授权(connector.*,默认全关):登录会话 → RBAC 断言 → MCP token。
+      # 主入口同样是控制台「系统配置」;白名单与 issuer/client_id/TTL 见各键说明。
+      ZEOKEEL_CONNECTOR_AUTO_AUTH_ENABLED: ${ZEOKEEL_CONNECTOR_AUTO_AUTH_ENABLED:-}
+      ZEOKEEL_CONNECTOR_AUTO_AUTH_CONNECTORS: ${ZEOKEEL_CONNECTOR_AUTO_AUTH_CONNECTORS:-}
+      ZEOKEEL_CONNECTOR_AUTO_AUTH_AUTO_CONNECT: ${ZEOKEEL_CONNECTOR_AUTO_AUTH_AUTO_CONNECT:-}
+      ZEOKEEL_CONNECTOR_ASSERTION_ISSUER: ${ZEOKEEL_CONNECTOR_ASSERTION_ISSUER:-}
+      ZEOKEEL_CONNECTOR_ASSERTION_TTL: ${ZEOKEEL_CONNECTOR_ASSERTION_TTL:-}
+      ZEOKEEL_CONNECTOR_ASSERTION_CLIENT_ID: ${ZEOKEEL_CONNECTOR_ASSERTION_CLIENT_ID:-}
 
       # ---- ④ 仍留在环境变量的部署旋钮（有意不入库，理由见决策文档）----
       # 数据库连接池上限(留空 = 服务端按实例数推导的默认;见 serverstore/db.go)。
       ZEOKEEL_DB_MAX_OPEN_CONNS: ${ZEOKEEL_DB_MAX_OPEN_CONNS:-}
+      # 连接器断言的 HS256 签名密钥(**秘密**,因此不入库:进库等于把秘密复制进它保护的
+      # 库)。带它做的部署必须显式设置;留空时断言端点返回 503(拒绝签发,不是静默降级)。
+      # 轮换方式:改 .env → 重建容器;已签发的断言最长活 5 分钟,轮换后自然过期。
+      ZEOKEEL_CONNECTOR_ASSERTION_SECRET: ${ZEOKEEL_CONNECTOR_ASSERTION_SECRET:-}
       # 启动期迁移执行器的两条有界等锁预算与一条慢迁移告警阈值(毫秒;
       # 缺省 5min / 5min / 5s)。语义:预算打满即 fail-loud(点名迁移号 + SQLSTATE)
       # ⇒ 容器退出、旧实例继续服务("受得了失败、受不了挂住")。运维口径见

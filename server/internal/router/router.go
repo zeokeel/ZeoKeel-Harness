@@ -262,6 +262,10 @@ func registerClientV2(cli *gin.RouterGroup, d Deps) {
 	// 路由连同 handler 类型一起从产物里消失 —— 绝不留"注册了但 handler 为 nil"。
 	registerSkillsClientRoutes(cli, d)
 
+	// 连接器面（connectors）：静默授权断言（登录会话 → RBAC MCP token）。
+	// 关闭 connectors 时同样是编译期 no-op。
+	registerConnectorClientRoutes(cli, d)
+
 	// 遥测
 	cli.POST("/telemetry/skill-call", serverauth.BearerAuth(d.DB), d.Telemetry.ReportSkillCall)
 	// 客户端错误上报状态(P1-3/D7):客户端回报自身 error-reporting 初始化结果,

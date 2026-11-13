@@ -178,6 +178,13 @@ function normalizeFieldValues(record: ConnectorCredential): void {
 }
 
 export interface ConnectorCredential {
+  /**
+   * Login account this credential was written for (when the write path knows
+   * it — silent/auto authorization does). It is belt-and-braces on top of the
+   * per-(account, server) directory: a mismatch means the credential must not
+   * be used for the current session.
+   */
+  account?: string
   /** OAuth access token. */
   accessToken?: string
   /** OAuth refresh token. */

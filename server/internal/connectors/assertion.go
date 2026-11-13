@@ -96,12 +96,16 @@ var (
 
 // assertionClaims 是断言 JWT 的载荷。字段顺序即序列化顺序（便于人工比对）。
 //
-//	iss     签发者（部署对外地址/控制台配置）
-//	aud     令牌端点 —— RBAC 只接受发给自己的断言
-//	sub     RBAC 员工 uid（ExternalID 去掉 `rbac:` 前缀）
-//	scope   授权范围（来自连接器定义的 auth.scopes）
-//	resource 目标 MCP 端点（来自 mcp[0].url，防断言被换到别的资源）
-//	ver     载荷版本（RBAC 侧按它解释）
+//	iss       签发者（部署对外地址/控制台配置）
+//	aud       令牌端点 —— RBAC 只接受发给自己的断言
+//	sub       RBAC 员工 uid（ExternalID 去掉 `rbac:` 前缀）
+//	scope     授权范围（来自连接器定义的 auth.scopes）
+//	resource  目标 MCP 端点（来自 mcp[0].url，防断言被换到别的资源）
+//	client_id 令牌交换客户端（= 响应里的同一值；RBAC **强制**它与请求的
+//	          client_id 相等 —— 否则公共客户端白名单下，拿到断言的一方可以把
+//	          断言拿去给另一个 client 换 token（跨客户端冒用）。这是服务端
+//	          签进**不可篡改载荷**里的绑定，不能只依赖请求参数）
+//	ver       载荷版本（RBAC 侧按它解释）
 type assertionClaims struct {
 	Issuer      string `json:"iss"`
 	Audience    string `json:"aud"`
@@ -109,6 +113,7 @@ type assertionClaims struct {
 	Scope       string `json:"scope"`
 	Resource    string `json:"resource"`
 	ConnectorID string `json:"connector_id"`
+	ClientID    string `json:"client_id"`
 	JTI         string `json:"jti"`
 	IssuedAt    int64  `json:"iat"`
 	ExpiresAt   int64  `json:"exp"`
@@ -277,6 +282,7 @@ func issueAssertion(db *sql.DB) gin.HandlerFunc {
 			Scope:       endpoints.Scopes,
 			Resource:    endpoints.Resource,
 			ConnectorID: id,
+			ClientID:    clientID,
 			JTI:         jti,
 			IssuedAt:    now.Unix(),
 			ExpiresAt:   now.Add(ttl).Unix(),

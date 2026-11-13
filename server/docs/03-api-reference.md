@@ -73,7 +73,7 @@
 | POST | `/api/server/admin/tokens/:id/revoke` | 吊销指定 token |
 | GET | `/api/server/admin/usage` | 用量汇总(按用户/模型/时间;`group=user` 展示用户名) |
 | GET | `/api/server/admin/server-info` | 版本/数据库驱动(PG)/迁移版本/运行环境摘要 + `update_check`(实时更新服务器版本检查:current/latest/update_available/image_tag/manifest_url,失败为 null) |
-| GET | `/api/server/admin/config` | **部署运行期配置**(2026-10-23,`config:read`,页面 = webadmin「系统配置」):`{items:[…], env_overrides:[…]}`,每项 `{key, env, title, description, category, kind, value, source(default\|setting\|env), default, applies_at(hot\|restart), min, max, choices, env_value, setting_value, invalid}`。键的唯一真源是 `internal/deployconfig` 注册表(12 项:登录失败上限/明文 LDAP/更新清单地址/OIDC 回跳信任主机/单用户并发上限/三项遥测限流/审计链间隔/应用保留名/内存档位/编译隔离);`source=env` 表示被 `.env` 覆盖(控制台改不动) |
+| GET | `/api/server/admin/config` | **部署运行期配置**(2026-10-23,`config:read`,页面 = webadmin「系统配置」):`{items:[…], env_overrides:[…]}`,每项 `{key, env, title, description, category, kind, value, source(default\|setting\|env), default, applies_at(hot\|restart), min, max, choices, env_value, setting_value, invalid}`。键的唯一真源是 `internal/deployconfig` 注册表(18 项:登录失败上限/明文 LDAP/更新清单地址/OIDC 回跳信任主机/单用户并发上限/三项遥测限流/审计链间隔/应用保留名/内存档位/编译隔离/连接器静默授权开关与白名单/连接器自动连接/断言 issuer/断言 TTL/令牌交换 client_id);`source=env` 表示被 `.env` 覆盖(控制台改不动) |
 | PUT | `/api/server/admin/config` | 写部署运行期配置(`config:write`;`auditor` 不给):body `{values:{key:value}}` → `{saved:[…], warnings:[…]}`。只接受注册表认识的键(未知键 400 VALIDATION);值用 `Key.Parse` 校验(非法 400);**空串 = 删除该 settings 行**(回落 env/默认);写库 + 审计(`action=deploy_config`,detail `key: old→new`)同事务;生效值来自环境变量的键在 `warnings` 里点名。`applies_at=restart` 的键保存后需 `docker compose up -d server` 重建容器才生效 |
 | GET | `/api/server/admin/concurrency` | 按模型并发状态(2026-08-31):当前 in-flight + 90 天峰值(`model_concurrency_stats`)+ 目标(`default_params.concurrency_target`),扩容申请依据 |
 | GET | `/api/server/admin/providers` | 网关上游列表(含 `protocol`:openai/anthropic/both) |
@@ -326,7 +326,8 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
   "models": [{ "id": "deepseek-chat", "display_name": "DeepSeek Chat", "input_modalities": ["text"], "protocols": ["openai"] }],
   "skills": [{ "name": "invoice-helper", "version": "1.0.0", "description": "..." }],
   "web": { "default_thinking_level": "max" },
-  "connectors": [{ "id": "example-mcp", "name": "示例 MCP 智能体", "auth_mode": "oauth", "definition": { ... } }]
+  "connectors": [{ "id": "example-mcp", "name": "示例 MCP 智能体", "auth_mode": "oauth", "definition": { ... },
+                   "auto_auth": "rbac-assertion", "auto_connect": true }]
 }
 ```
 
@@ -337,6 +338,15 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 桌面客户端根据所选模型自动选择 Anthropic Messages 或 OpenAI Chat Completions；两个协议都可用时优先 Anthropic。旧服务端缺少 `protocols` 字段时，新客户端保留历史 Anthropic 行为；旧客户端忽略新增字段。客户端仅访问当前登录服务端的网关，目录不包含上游地址或密钥。
 
 客户端 `BootstrapConfig` 与之严格对齐;`default_model` 不在启用模型时自动回退到第一个可用模型。`connectors`(0042 起)为服务端连接器目录,客户端按目录渲染连接器中心(glitchtip 0045 已下架,不下发)。
+
+`connectors[]` 的静默授权字段(2026-11,**默认不下发**):
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `auto_auth` | string | 服务端签发的静默授权方式。唯一取值 `"rbac-assertion"`:客户端先用**当前登录会话**调 `POST /api/client/v2/connectors/:id/assertion` 取短时断言,再到连接器定义的 `auth.tokenUrl` 做 RFC 8693 token exchange(RBAC 侧换 MCP token)。缺省(旧服务端/未放行)= 客户端走原交互式授权 |
+| `auto_connect` | bool | 该连接器可在客户端登录/启动后**自动连接一次**(只走静默授权,失败静默回落为未连接、不弹二维码;手动按钮仍可重试) |
+
+下发条件(服务端逐连接器判定,读同一组热更新配置):`connector.auto_auth.enabled=true` **且**该连接器 id 命中 `connector.auto_auth.connectors` 白名单 → 下发 `auto_auth`;另有 `connector.auto_auth.auto_connect=true` 才同时下发 `auto_connect`。旧客户端忽略未知字段,行为不变;详见 §12 的断言端点与 [`DEPLOY.md`](DEPLOY.md) §4。
 
 ## 10. 其他
 
@@ -459,7 +469,7 @@ handler `internal/wasmapp/api/{deployments,admin_retirement,lifecycle_actions,ad
 `wasm_app_limits_change` / `wasm_release_purge_stale`(组织级) / `wasm_app_delete` / `wasm_app_freeze`;
 `actor_role` ∈ `owner`(作者自己) / `super_admin`(超管兜底) / `admin_session`(管理面会话)。
 
-## 12. 连接器(admin)
+## 12. 连接器(admin + 员工面断言)
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -469,5 +479,36 @@ handler `internal/wasmapp/api/{deployments,admin_retirement,lifecycle_actions,ad
 | PUT | `/api/server/admin/connectors/:id` | 更新连接器 |
 | PUT | `/api/server/admin/connectors/:id/enabled` | 下架/上架 |
 | DELETE | `/api/server/admin/connectors/:id` | 删除连接器 |
+| POST | `/api/client/v2/connectors/:id/assertion` | **员工面静默授权断言**(Bearer;2026-11) |
 
-员工面不直接调连接器端点:目录经 bootstrap `connectors[]` 下发;OAuth/设备/令牌授权由客户端本地代理(`/api/zeokeel/connectors/...`,loopback guard)与服务端 `serverauth` 会话协同。
+`POST /api/client/v2/connectors/:id/assertion`(员工 Bearer,无请求体)为已登录会话签发一份
+**短时 HS256 JWT 断言**,供客户端到连接器定义的 `auth.tokenUrl` 做 RFC 8693 token exchange
+(`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`、`subject_token_type=urn:ietf:params:oauth:token-type:jwt`)。
+
+响应 `{assertion, token_endpoint, client_id, scope, resource, issuer, expires_in}`,`Cache-Control: no-store`。
+断言 header 固定 `{"alg":"HS256","typ":"JWT","ver":"v1"}`(**RBAC 在验签前校验 header 的 ver**,缺省即 400);
+claims:`iss`(签发者)、`aud`(= `auth.tokenUrl`)、`sub`(RBAC 员工 uid,即 `external_id` 去掉 `rbac:`)、
+`scope`(定义里的 `auth.scopes`)、`resource`(定义里的 `mcp[0].url`)、`connector_id`、`client_id`
+(RBAC 对公共客户端强制它与令牌交换请求的 `client_id` 相等)、`jti`、`iat`、`exp`、`ver`(镜像,契约位在 header)。
+
+校验顺序与错误(均 `{"error":{"code","message"}}`,不泄露 secret/断言):
+
+| 条件 | HTTP |
+|------|------|
+| 未认证 | 401 `AUTH_REQUIRED` |
+| `connector.auto_auth.enabled=false`、连接器不存在/已停用 | 404 `NOT_FOUND` |
+| 连接器不在 `connector.auto_auth.connectors` 白名单 | 403 `FORBIDDEN` |
+| 登录身份不是 RBAC 员工(`external_source≠rbac` 或无 `rbac:` 前缀) | 409 `CONFLICT` |
+| 定义缺 `auth.tokenUrl`/`auth.scopes`/`mcp[0].url` | 501 `NOT_IMPLEMENTED` |
+| 缺签名密钥 / issuer(控制台键与对外地址都不可用)/ `client_id` | 503 `SERVER` |
+
+配置(`deployconfig` 热更新,控制台「系统配置 → 连接器」):
+`connector.auto_auth.{enabled,connectors,auto_connect}`、`connector.assertion.{issuer,ttl,client_id}`
+(TTL 10s~300s,缺省 60s);签名密钥 `ZEOKEEL_CONNECTOR_ASSERTION_SECRET` 是**秘密**,只从环境变量来
+(不进库;留空 = 端点 503 拒绝签发)。issuer 解析顺序:`connector.assertion.issuer` →
+`ZEOKEEL_PUBLIC_BASE_URL` env → settings `server.base_url`(统一按"对外地址"规范化:拒绝
+query/fragment/userinfo,https 或回环 http)。
+
+员工面其余连接器能力:目录经 bootstrap `connectors[]` 下发;OAuth/设备/令牌授权由客户端本地代理
+(`/api/zeokeel/connectors/...`,loopback guard)与服务端 `serverauth` 会话协同。
+

@@ -490,6 +490,29 @@ func configuredBaseURL() string {
 	return base
 }
 
+// PublicBaseURL 返回**显式配置的对外地址**：优先 `ZEOKEEL_PUBLIC_BASE_URL`
+// (存量部署的覆盖口)，其次 settings `server.base_url`(经 PublicBaseResolver 注入)。
+//
+// 复用本包唯一的规范化/安全判据：拒绝 query/fragment/userinfo/相对地址；只接受
+// https 或回环 http；去掉尾斜杠（允许子路径）。未配置返回空；**显式配了但非法也
+// 返回空（fail-closed）** —— 不回落到下一来源，避免"配错了反而静默用上另一个旧配置"。
+//
+// 与 RequestOrigin 的区别：这里**不做请求推导**（不读 Host / X-Forwarded-Proto）。
+// 调用方（连接器断言的 issuer）要的是一个稳定的部署身份 —— 它会被签进 HMAC 载荷，
+// 不能随每次请求的 Host 漂移（否则同一部署签出的 iss 会变，验签方配置永远对不上）。
+func PublicBaseURL() string {
+	if raw := strings.TrimSpace(os.Getenv(PublicBaseURLEnv)); raw != "" {
+		base, ok := normalizeBaseURL(raw)
+		if !ok || !isSecureBase(base) {
+			// 与 resolveOrigin 对 env 的口径一致：显式配置非法就是"用不了"，
+			// 不猜下一来源（告警由调用方/本包既有出口负责，文案不含原始取值）。
+			return ""
+		}
+		return base
+	}
+	return configuredBaseURL()
+}
+
 // originInput 是来源判定所需的请求事实(与 gin 解耦,便于表驱动测试)。
 type originInput struct {
 	// ForwardedProto 反代声明的协议(X-Forwarded-Proto)。判定必须走

@@ -138,9 +138,11 @@ compose 按 `./Caddyfile.${TLS_MODE:-manual}` 挂载模板，三种模式命名�
 见 `server/.env.example`）。**运行期可调项在管理端「系统配置」页**：
 
 - 页面对应 `GET/PUT /api/server/admin/config`（权限 `config:read` / `config:write`），
-  键的唯一真源是 `server/internal/deployconfig` 的注册表（12 项：登录失败上限、明文 LDAP、
+  键的唯一真源是 `server/internal/deployconfig` 的注册表（18 项：登录失败上限、明文 LDAP、
   更新清单地址、OIDC 回跳信任主机、单用户并发上限、三项遥测限流、审计链间隔、
-  应用保留名、内存档位、编译隔离）；
+  应用保留名、内存档位、编译隔离、连接器静默授权开关/白名单/自动连接、断言 issuer/TTL/
+  令牌交换 client_id）。连接器静默授权的签名密钥 `ZEOKEEL_CONNECTOR_ASSERTION_SECRET`
+  是**秘密**，刻意不入库、只能走环境变量（留空 = 断言端点返回 503 拒绝签发）；
 - 优先级：**显式环境变量（非空） > 控制台保存值 > 内置默认**。存量部署 `.env` 里的同名键
   仍然生效且**优先**，启动日志会点名被覆盖的键 —— 想交还控制台就删掉 `.env` 里那一行；
 - 生效时机：多数键**保存即生效**；`restart` 类（审计链间隔 / 应用保留名 / 内存档位 /

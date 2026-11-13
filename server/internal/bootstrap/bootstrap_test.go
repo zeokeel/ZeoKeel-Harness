@@ -439,12 +439,25 @@ func TestBootstrapConnectorAutoAuth(t *testing.T) {
 		t.Fatalf("白名单外的 sales-easy 不应下发 auto_auth：%v", byID["sales-easy"])
 	}
 
-	// ④ auto_connect 打开：白名单命中项下发 true。
+	// ④ auto_connect 打开：白名单命中项下发 true；**白名单外一项都不得带**（P2：
+	// 此前只断言命中项，把"不判白名单、只判总开关"的 mutation 放过去了）。
 	if err := serverstore.SetSetting(db, "connector.auto_auth.auto_connect", "true"); err != nil {
 		t.Fatal(err)
 	}
-	if got := connectorsByID()["example-mcp"]["auto_connect"]; got != true {
-		t.Fatalf("auto_connect = %v, want true", got)
+	byID = connectorsByID()
+	if got := byID["example-mcp"]["auto_connect"]; got != true {
+		t.Fatalf("example-mcp auto_connect = %v, want true", got)
+	}
+	if got := byID["example-mcp"]["auto_auth"]; got != ConnectorAutoAuthModeRBACAssertion {
+		t.Fatalf("example-mcp auto_auth = %v, want %q", got, ConnectorAutoAuthModeRBACAssertion)
+	}
+	for _, outside := range []string{"sales-easy"} {
+		if _, ok := byID[outside]["auto_auth"]; ok {
+			t.Fatalf("白名单外的 %s 不应下发 auto_auth：%v", outside, byID[outside])
+		}
+		if _, ok := byID[outside]["auto_connect"]; ok {
+			t.Fatalf("白名单外的 %s 不应下发 auto_connect：%v", outside, byID[outside])
+		}
 	}
 
 	// ⑤ 总开关关回去：白名单与 auto_connect 都还在，但不下发（总闸优先）。

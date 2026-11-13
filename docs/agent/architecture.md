@@ -136,7 +136,7 @@ Go 基线的地位是"**已启用、但未门禁化**"，别把它读成"已被 
 
 ### 当前基线的形状（2026-10-26 机械生成）
 
-- **198 条允许边**（64 个组件 = 1 个 `cmd` + 51 个有出边 + 12 个纯叶子；叶子：`archiveutil`、`channel`、`clientrelease`、
+- **201 条允许边**（64 个组件 = 1 个 `cmd` + 51 个有出边 + 12 个纯叶子；叶子：`archiveutil`、`channel`、`clientrelease`、
   `features`、`limits`、`util`、`wasmapp-apperr`、`wasmapp-cachetrust`、
   `wasmapp-refapp-{sockprobe,stdprobe,wasiprobe}`、`webadmin`）；`cmd` 走 `anyProjectDeps`。
 - 扇入集中：`serverstore` 被 **24** 个组件依赖（+`cmd`）、`limits` 22、`serverauth` 14、`util` 13；

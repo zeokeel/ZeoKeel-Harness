@@ -194,6 +194,7 @@ describe('automatic silent connect', () => {
 
     login(harness)
 
+    // 等自动连接真正发起：预算 10s 只防调度抖动，不改变行为判据。
     await vi.waitFor(() => {
       expect(tokenServer.requests).toHaveLength(1)
       expect(harness.configs).toHaveLength(1)
@@ -226,13 +227,16 @@ describe('automatic silent connect', () => {
     const { harness, dir } = await makeHarness()
 
     login(harness)
+    // 断言请求已被测试桩接管：10s 上限仅防 CI 调度抖动。
     await vi.waitFor(() => { expect(assertionSignal).toBeDefined() }, { timeout: 10_000 })
     expect(assertionSignal?.aborted).toBe(false)
 
     // Logout while the automatic exchange is still waiting on the assertion.
     harness.emitSession(null)
 
+    // 登出必须同步取消在途交换：10s 上限仅防调度抖动。
     await vi.waitFor(() => { expect(assertionSignal?.aborted).toBe(true) }, { timeout: 10_000 })
+    // 取消后行状态必须回到 disconnected：10s 上限仅防调度抖动。
     await vi.waitFor(async () => { expect((await rowOf(harness))?.status).toBe('disconnected') }, { timeout: 10_000 })
     expect(tokenServer.requests).toHaveLength(0)
     expect(harness.configs).toHaveLength(0)
@@ -258,6 +262,7 @@ describe('automatic silent connect', () => {
     })
 
     login(harness)
+    // 保留 restore 写入的 unauthorized：10s 上限仅防调度抖动。
     await vi.waitFor(async () => { expect((await rowOf(harness))?.status).toBe('unauthorized') }, { timeout: 10_000 })
 
     const row = await rowOf(harness)
@@ -288,7 +293,10 @@ describe('automatic silent connect', () => {
     const { harness } = await makeHarness()
 
     login(harness)
+    // 等 bootstrap 目录建立即可判定：预算取 10s，避免把 CI 调度抖动误判成行为失败。
+    // 先等 bootstrap 目录建立，再断言“不应发生”的行为：10s 上限仅防调度抖动。
     await vi.waitFor(() => { expect(calls.some(call => call.url.includes('/bootstrap'))).toBe(true) }, { timeout: 10_000 })
+    // 给异步派发一个固定的观察窗口（200ms 是现象下限，不是性能假设）。
     await new Promise(resolve => setTimeout(resolve, 200))
 
     const row = await rowOf(harness)
@@ -318,7 +326,9 @@ describe('automatic silent connect', () => {
     cleanups.push(() => { harness.dispose() })
 
     login(harness)
+    // 先等 bootstrap 目录建立，再断言“不应发生”的行为：10s 上限仅防调度抖动。
     await vi.waitFor(() => { expect(calls.some(call => call.url.includes('/bootstrap'))).toBe(true) }, { timeout: 10_000 })
+    // 给异步派发一个固定的观察窗口（200ms 是现象下限，不是性能假设）。
     await new Promise(resolve => setTimeout(resolve, 200))
 
     expect(calls.filter(call => call.url.includes('/assertion'))).toHaveLength(0)
@@ -346,7 +356,9 @@ describe('automatic silent connect', () => {
     })
 
     login(harness)
+    // 等静默兑换完成：10s 上限仅防调度抖动。
     await vi.waitFor(() => { expect(tokenServer.requests).toHaveLength(1) }, { timeout: 10_000 })
+    // 等无 refresh/过期凭据被重新授权：10s 上限仅防调度抖动。
     await vi.waitFor(async () => {
       expect(await readCredential(dir)).toMatchObject({ accessToken: 'access-1' })
     }, { timeout: 10_000 })
@@ -379,7 +391,9 @@ describe('automatic silent connect', () => {
     const { harness } = await makeHarness()
 
     login(harness)
+    // 先等 bootstrap 目录建立，再断言 auto 模式不进入静默路径：10s 上限仅防调度抖动。
     await vi.waitFor(() => { expect(calls.some(call => call.url.includes('/bootstrap'))).toBe(true) }, { timeout: 10_000 })
+    // 给异步派发一个固定的观察窗口（200ms 是现象下限，不是性能假设）。
     await new Promise(resolve => setTimeout(resolve, 200))
 
     expect(calls.filter(call => call.url.includes('/assertion'))).toHaveLength(0)

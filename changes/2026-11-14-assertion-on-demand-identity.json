@@ -1,6 +1,6 @@
 {
   "id": "2026-11-14-assertion-on-demand-identity",
-  "status": "implemented",
+  "status": "verified",
   "intent": {
     "zh": "生产历史企微用户的 external_source=wecom，而连接器断言端点只认 identity.external 登录后的 rbac 身份；直接启用全局外部身份源会让未绑定 RBAC 的员工登录失败，因此需要在断言端点按需解析 RBAC 身份，保证登录链路不变、未绑定员工回退扫码。",
     "en": "Historic WeCom users are external_source=wecom while the connector assertion endpoint only accepts RBAC identities created by global identity.external; enabling the login gate now would lock out unbound employees, so the assertion endpoint needs an on-demand RBAC lookup that leaves login untouched and falls back to QR for unbound users."
@@ -35,6 +35,14 @@
     {
       "command": "cd server && go vet ./... && go test ./internal/serverauth/... ./internal/connectors/... ./internal/router/... -count=1",
       "result": "passed"
+    },
+    {
+      "command": "生产热部署后：webadmin 保存 identity endpoint/token（enabled=false）；用已绑定企微用户的会话令牌调用 /api/client/v2/connectors/hr-data/assertion",
+      "result": "200，断言 sub=RBAC uid；随后 RBAC token exchange 200，access_token 的 sub/emp_no 正确"
+    },
+    {
+      "command": "用未绑定企微用户的会话令牌调用断言端点",
+      "result": "409 CONFLICT，客户端回退扫码；登录不受影响"
     }
   ]
 }

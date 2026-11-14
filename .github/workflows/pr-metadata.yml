@@ -30,6 +30,10 @@ jobs:
           PUBLIC_TEXT_DENYLIST: ${{ secrets.PUBLIC_TEXT_DENYLIST }}
         run: |
           set -euo pipefail
+          if [ ! -f scripts/check-public-text.mjs ]; then
+            echo "::warning::base branch does not yet contain scripts/check-public-text.mjs; bootstrap PR, skipping public metadata guard"
+            exit 0
+          fi
           if [ -z "${PUBLIC_TEXT_DENYLIST:-}" ]; then
             echo "::error::PUBLIC_TEXT_DENYLIST secret is required for the public metadata guard"
             exit 1

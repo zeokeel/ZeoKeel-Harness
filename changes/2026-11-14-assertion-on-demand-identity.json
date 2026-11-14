@@ -1,0 +1,40 @@
+{
+  "id": "2026-11-14-assertion-on-demand-identity",
+  "status": "implemented",
+  "intent": {
+    "zh": "生产历史企微用户的 external_source=wecom，而连接器断言端点只认 identity.external 登录后的 rbac 身份；直接启用全局外部身份源会让未绑定 RBAC 的员工登录失败，因此需要在断言端点按需解析 RBAC 身份，保证登录链路不变、未绑定员工回退扫码。",
+    "en": "Historic WeCom users are external_source=wecom while the connector assertion endpoint only accepts RBAC identities created by global identity.external; enabling the login gate now would lock out unbound employees, so the assertion endpoint needs an on-demand RBAC lookup that leaves login untouched and falls back to QR for unbound users."
+  },
+  "modules": [
+    "server/internal/serverauth/identity.go",
+    "server/internal/connectors/assertion.go",
+    "server/internal/serverauth/identity_test.go",
+    "server/internal/connectors/assertion_test.go",
+    "server/docs/03-api-reference.md"
+  ],
+  "acceptance": [
+    {
+      "criterion": "identity.external.enabled=false 但 endpoint/token 已保存时，LookupExternalIdentity 仍能解析已绑定用户；未配置/404/超时返回错误且不发起登录请求。",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/serverauth/ -run 'TestLookupExternalIdentity' -count=1"
+    },
+    {
+      "criterion": "external_source=wecom 且 ExternalID=wecom:<corp>:<userid> 的用户，在按需解析成功后断言 sub=RBAC uid；解析失败回 409 且不影响登录。",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/connectors/ -run 'TestAssertionOnDemandWecomIdentity|TestAssertionRequiresRBACIdentity' -count=1"
+    },
+    {
+      "criterion": "生产配置 identity endpoint/token（enabled=false）后，已绑定用户自动授权、未绑定用户正常登录并回退扫码。",
+      "evidence": "manual",
+      "command": "在 webadmin「认证配置→外部权限源」保存 endpoint/token 但保持 enabled=false；分别用已绑定与未绑定员工登录 2.11.1 客户端，检查连接器状态与登录结果"
+    }
+  ],
+  "risk": "断言端点新增一次只读 RBAC 解析，超时/失败只影响本次自动授权并回退扫码，不影响登录；endpoint token 是服务令牌，只加密存储、只走 Header。",
+  "rollback": "恢复旧 server 二进制/镜像；清空 identity endpoint/token（enabled 保持 false）；必要时把 connector.auto_auth.enabled 设为 false。无数据库迁移。",
+  "verification": [
+    {
+      "command": "cd server && go vet ./... && go test ./internal/serverauth/... ./internal/connectors/... ./internal/router/... -count=1",
+      "result": "passed"
+    }
+  ]
+}

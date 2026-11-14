@@ -163,6 +163,65 @@ func loadExternalIdentitySettings(s map[string]string) (externalIdentitySettings
 	return cfg, nil
 }
 
+// ExternalIdentity 是按需解析的只读身份视图（连接器断言端点用）。
+type ExternalIdentity struct {
+	UID         string
+	Name        string
+	Email       string
+	Mobile      string
+	Status      int
+	Departments []string
+}
+
+// ErrExternalIdentityUnavailable 表示解析服务当前不可用/未配置。
+var ErrExternalIdentityUnavailable = errors.New("identity resolve unavailable")
+
+// LookupExternalIdentity 在**不启用** identity.external 登录闸门的前提下，按需调用
+// RBAC 只读解析接口。连接器自动授权用它把“企微已登录用户”映射到 RBAC uid：
+//   - 未启用/未配置 endpoint·token ⇒ ErrExternalIdentityUnavailable（调用方回退扫码）；
+//   - 404/409/停用/超时/坏 JSON ⇒ 同样按不可用处理（绝不阻断登录，只在本次断言请求上回退）；
+//   - 成功返回 uid/姓名/状态/部门；调用方必须再检查 Status==1。
+//
+// 该函数只读、不写库、不改变登录链路；token 只走 Header，不落日志。
+func LookupExternalIdentity(ctx context.Context, db *sql.DB, provider, providerUserID string) (ExternalIdentity, error) {
+	if db == nil {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	settings, err := serverstore.GetAllSettings(db)
+	if err != nil {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	cfg, err := loadExternalIdentitySettings(settings)
+	if err != nil {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	// loadExternalIdentitySettings 在 enabled=false 时提前返回，不校验 endpoint/token；
+	// 断言的按需解析必须在“登录闸门关闭”时也能用，所以这里自己校验运行期配置。
+	if strings.TrimSpace(cfg.endpoint) == "" || !authRedirectURLAllowed(cfg.endpoint) || cfg.token == "" {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	if cfg.timeout < identityMinTimeoutMS*time.Millisecond || cfg.timeout > identityMaxTimeoutMS*time.Millisecond {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	if provider != "wecom" && provider != "dingtalk" {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	if len(cfg.methods) > 0 && !cfg.methods[provider] {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	if strings.TrimSpace(providerUserID) == "" {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	resp, err := callIdentityResolve(ctx, cfg, provider, providerUserID, "", "")
+	if err != nil {
+		return ExternalIdentity{}, ErrExternalIdentityUnavailable
+	}
+	return ExternalIdentity{
+		UID: resp.UID, Name: resp.Name, Email: resp.Email, Mobile: resp.Mobile,
+		Status: resp.Status, Departments: resp.Departments,
+	}, nil
+}
+
 // enrichExternalIdentity 在扫码 provider 兑换出身份后调用。
 //
 // 未启用 / 当前方式不在 methods 中 / API 未装配 DB 时原样返回 (ui, nil)，

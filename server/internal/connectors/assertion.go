@@ -36,6 +36,7 @@
 package connectors
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -237,6 +238,45 @@ func normalizeIssuer(raw string) string {
 	return strings.TrimRight(strings.TrimSpace(raw), "/")
 }
 
+// lookupExternalIdentity 是服务端按需解析 RBAC 身份的注入点（测试可替换；
+// 生产实现 = serverauth.LookupExternalIdentity）。只读、不写库。
+var lookupExternalIdentity = serverauth.LookupExternalIdentity
+
+// rbacUIDForAssertion 把“当前登录用户”映射到可签发的 RBAC uid：
+//   - 已经是 identity.external 登录的用户：ExternalSource=rbac，直接去前缀；
+//   - 生产的历史企微用户：ExternalSource=wecom + ExternalID=wecom:<corp>:<userid>，
+//     用登录会话里的渠道身份按需向 RBAC 解析一次（不启用全局外部身份源，未绑定
+//     员工仍能正常登录，只是本次连接器回退扫码）。
+//   - 解析失败/停用/非企微：返回 false，调用方统一 409（客户端静默回退）。
+func rbacUIDForAssertion(ctx context.Context, db *sql.DB, u *serverstore.User) (string, bool) {
+	if u == nil {
+		return "", false
+	}
+	if u.ExternalSource == "rbac" {
+		uid := strings.TrimPrefix(u.ExternalID, "rbac:")
+		if uid == "" || uid == u.ExternalID {
+			return "", false
+		}
+		return uid, true
+	}
+	if u.ExternalSource != "wecom" {
+		return "", false
+	}
+	parts := strings.SplitN(u.ExternalID, ":", 3)
+	if len(parts) != 3 || parts[0] != "wecom" || parts[1] == "" || parts[2] == "" {
+		return "", false
+	}
+	ident, err := lookupExternalIdentity(ctx, db, "wecom", parts[2])
+	if err != nil || ident.Status != 1 {
+		return "", false
+	}
+	uid := strings.TrimSpace(ident.UID)
+	if uid == "" {
+		return "", false
+	}
+	return uid, true
+}
+
 // issueAssertion 构造 POST /api/client/v2/connectors/:id/assertion 的 handler。
 //
 // 校验顺序见文件头注释：开关 → 连接器存在/启用 → 白名单 → RBAC 身份 →
@@ -274,15 +314,17 @@ func issueAssertion(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// 4) 只有 RBAC 员工身份可换（断言 sub 是 RBAC uid）。本地账号/其它 IdP 用户
-		//    即使登录了也没有可交换的 RBAC 主体 ⇒ 409（客户端静默回落）。
+		// 4) 断言 sub 必须是 RBAC uid：
+		//    - 已用 identity.external 登录的用户直接使用 rbac: 前缀后的 uid；
+		//    - 历史企微用户（external_source=wecom）按需向 RBAC 解析一次；
+		//    - 解析不到/停用/非企微 ⇒ 409，客户端静默回退（登录本身不受影响）。
 		u := serverauth.CurrentUser(c)
 		if u == nil {
 			serverauth.WriteError(c, http.StatusUnauthorized, "AUTH_REQUIRED", "未认证")
 			return
 		}
-		rbacUID := strings.TrimPrefix(u.ExternalID, "rbac:")
-		if u.ExternalSource != "rbac" || rbacUID == "" || rbacUID == u.ExternalID {
+		rbacUID, ok := rbacUIDForAssertion(c.Request.Context(), db, u)
+		if !ok {
 			serverauth.WriteError(c, http.StatusConflict, "CONFLICT", "当前登录身份不是 RBAC 员工身份")
 			return
 		}

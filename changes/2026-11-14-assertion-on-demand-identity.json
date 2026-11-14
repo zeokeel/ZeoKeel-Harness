@@ -33,16 +33,20 @@
   "rollback": "恢复旧 server 二进制/镜像；清空 identity endpoint/token（enabled 保持 false）；必要时把 connector.auto_auth.enabled 设为 false。无数据库迁移。",
   "verification": [
     {
+      "command": "cd server && go test ./internal/serverauth/ -run 'TestLookupExternalIdentity' -count=1",
+      "result": "ok github.com/zeokeel/zeokeel-harness/server/internal/serverauth (0.767s)"
+    },
+    {
+      "command": "cd server && go test ./internal/connectors/ -run 'TestAssertionOnDemandWecomIdentity|TestAssertionRequiresRBACIdentity' -count=1",
+      "result": "ok github.com/zeokeel/zeokeel-harness/server/internal/connectors (1.740s)"
+    },
+    {
+      "command": "在 webadmin「认证配置→外部权限源」保存 endpoint/token 但保持 enabled=false；分别用已绑定与未绑定员工登录 2.11.1 客户端，检查连接器状态与登录结果",
+      "result": "已绑定员工断言 200 且 RBAC token exchange 200；未绑定员工断言 409 并回退扫码，登录正常"
+    },
+    {
       "command": "cd server && go vet ./... && go test ./internal/serverauth/... ./internal/connectors/... ./internal/router/... -count=1",
       "result": "passed"
-    },
-    {
-      "command": "生产热部署后：webadmin 保存 identity endpoint/token（enabled=false）；用已绑定企微用户的会话令牌调用 /api/client/v2/connectors/hr-data/assertion",
-      "result": "200，断言 sub=RBAC uid；随后 RBAC token exchange 200，access_token 的 sub/emp_no 正确"
-    },
-    {
-      "command": "用未绑定企微用户的会话令牌调用断言端点",
-      "result": "409 CONFLICT，客户端回退扫码；登录不受影响"
     }
   ]
 }

@@ -12,6 +12,7 @@ package connectors
 // secret / 断言。
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
@@ -802,5 +803,61 @@ func TestAssertionJTIUnique(t *testing.T) {
 	c2 := verifyAssertion(t, second["assertion"].(string), assertionTestSecret)
 	if c1["jti"] == c2["jti"] {
 		t.Fatalf("两次签发的 jti 相同（%v）—— 断言可被当作同一凭证重放", c1["jti"])
+	}
+}
+
+// TestAssertionOnDemandWecomIdentity：历史企微用户（external_source=wecom）没有
+// identity.external 登录闸门，但 RBAC 里已有绑定；断言端点按需解析一次后仍应签发
+// （sub=RBAC uid）。解析失败则 409，不影响登录。
+func TestAssertionOnDemandWecomIdentity(t *testing.T) {
+	f := newAssertionFixture(t)
+	f.configure("60s")
+
+	if _, err := serverstore.CreateUserWithPassword(f.db, "wecom-user", "pw123456"); err != nil {
+		t.Fatalf("建企微用户: %v", err)
+	}
+	row := f.db.QueryRow(`SELECT id FROM users WHERE username = 'wecom-user'`)
+	var id int64
+	if err := row.Scan(&id); err != nil {
+		t.Fatalf("读企微用户 id: %v", err)
+	}
+	if err := serverstore.BindExternalIdentity(f.db, id, "wecom:corp:u1", "wecom"); err != nil {
+		t.Fatalf("绑定企微身份: %v", err)
+	}
+	tok, err := serverauth.IssueToken(f.db, id)
+	if err != nil {
+		t.Fatalf("签发企微用户令牌: %v", err)
+	}
+
+	old := lookupExternalIdentity
+	t.Cleanup(func() { lookupExternalIdentity = old })
+	lookupExternalIdentity = func(_ context.Context, _ *sql.DB, provider, providerUserID string) (serverauth.ExternalIdentity, error) {
+		if provider != "wecom" || providerUserID != "u1" {
+			return serverauth.ExternalIdentity{}, fmt.Errorf("unexpected lookup %s/%s", provider, providerUserID)
+		}
+		return serverauth.ExternalIdentity{UID: "wecom-rbac-uid", Status: 1}, nil
+	}
+
+	w := f.post(assertionTestConnectorID, tok)
+	if w.Code != http.StatusOK {
+		t.Fatalf("企微按需解析后应 200，实际 %d（body=%s）", w.Code, w.Body.String())
+	}
+	var body struct {
+		Assertion string `json:"assertion"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body.Assertion == "" {
+		t.Fatalf("响应断言解析失败: %v body=%s", err, w.Body.String())
+	}
+	claims := verifyAssertion(t, body.Assertion, assertionTestSecret)
+	if claims["sub"] != "wecom-rbac-uid" {
+		t.Fatalf("sub = %v, want wecom-rbac-uid", claims["sub"])
+	}
+
+	// 解析不到（status=0 或 error）→ 409，客户端回退；登录链路不受影响。
+	lookupExternalIdentity = func(context.Context, *sql.DB, string, string) (serverauth.ExternalIdentity, error) {
+		return serverauth.ExternalIdentity{}, fmt.Errorf("not found")
+	}
+	if w := f.post(assertionTestConnectorID, tok); w.Code != http.StatusConflict {
+		t.Fatalf("解析失败应 409，实际 %d（body=%s）", w.Code, w.Body.String())
 	}
 }

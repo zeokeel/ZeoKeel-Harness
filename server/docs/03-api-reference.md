@@ -487,6 +487,11 @@ handler `internal/wasmapp/api/{deployments,admin_retirement,lifecycle_actions,ad
 
 响应 `{assertion, token_endpoint, client_id, scope, resource, issuer, expires_in}`,`Cache-Control: no-store`。
 断言 header 固定 `{"alg":"HS256","typ":"JWT","ver":"v1"}`(**RBAC 在验签前校验 header 的 ver**,缺省即 400);
+身份解析顺序:已是 `external_source=rbac` 的登录会话直接使用 `rbac:` 前缀后的 uid;历史企微会话
+(`external_source=wecom`, `external_id=wecom:<corp>:<userid>`)在**不启用**全局
+`identity.external` 登录闸门的前提下,按需调用已配置的 `identity.external.endpoint`
+解析一次;解析失败/停用/非企微返回 409,客户端回退交互式授权,登录本身不受影响。
+
 claims:`iss`(签发者)、`aud`(= `auth.tokenUrl`)、`sub`(RBAC 员工 uid,即 `external_id` 去掉 `rbac:`)、
 `scope`(定义里的 `auth.scopes`)、`resource`(定义里的 `mcp[0].url`)、`connector_id`、`client_id`
 (RBAC 对公共客户端强制它与令牌交换请求的 `client_id` 相等)、`jti`、`iat`、`exp`、`ver`(镜像,契约位在 header)。
@@ -498,7 +503,7 @@ claims:`iss`(签发者)、`aud`(= `auth.tokenUrl`)、`sub`(RBAC 员工 uid,即 `
 | 未认证 | 401 `AUTH_REQUIRED` |
 | `connector.auto_auth.enabled=false`、连接器不存在/已停用 | 404 `NOT_FOUND` |
 | 连接器不在 `connector.auto_auth.connectors` 白名单 | 403 `FORBIDDEN` |
-| 登录身份不是 RBAC 员工(`external_source≠rbac` 或无 `rbac:` 前缀) | 409 `CONFLICT` |
+| 登录身份无法映射到 RBAC uid(本地账号/其它 IdP/企微未绑定/解析失败) | 409 `CONFLICT` |
 | 定义缺 `auth.tokenUrl`/`auth.scopes`/`mcp[0].url` | 501 `NOT_IMPLEMENTED` |
 | 缺签名密钥 / issuer(控制台键与对外地址都不可用)/ `client_id` | 503 `SERVER` |
 

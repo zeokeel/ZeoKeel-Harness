@@ -482,3 +482,59 @@ func TestAdminAuthConfigIdentity(t *testing.T) {
 		t.Fatalf("enable without token = %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestLookupExternalIdentityWhenLoginGateDisabled(t *testing.T) {
+	db := mustDB(t)
+	var calls atomic.Int64
+	var gotAuth string
+	srv := fakeRBAC(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		gotAuth = r.Header.Get("Authorization")
+		identityOK(w, "rbac-uid", "研发部")
+	})
+	saveIdentitySettings(t, db, srv.URL+"/internal/v1/identity/resolve", "lookup-token", false, "wecom", true, 3000)
+
+	ident, err := LookupExternalIdentity(context.Background(), db, "wecom", "u1")
+	if err != nil {
+		t.Fatalf("lookup err = %v", err)
+	}
+	if calls.Load() != 1 || gotAuth != "Bearer lookup-token" {
+		t.Fatalf("calls=%d auth=%q", calls.Load(), gotAuth)
+	}
+	if ident.UID != "rbac-uid" || ident.Status != 1 || len(ident.Departments) != 1 {
+		t.Fatalf("identity = %+v", ident)
+	}
+}
+
+func TestLookupExternalIdentityUnavailableAndNotFound(t *testing.T) {
+	db := mustDB(t)
+	srv := fakeRBAC(t, func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	})
+	saveIdentitySettings(t, db, srv.URL+"/internal/v1/identity/resolve", "tok", false, "wecom", true, 3000)
+	if _, err := LookupExternalIdentity(context.Background(), db, "wecom", "u1"); err == nil {
+		t.Fatal("404 must be reported as unavailable")
+	}
+
+	// endpoint/token 缺失时不得发起请求（未配置 = 回退扫码，不是登录失败）。
+	emptyDB := mustDB(t)
+	if _, err := LookupExternalIdentity(context.Background(), emptyDB, "wecom", "u1"); err == nil {
+		t.Fatal("empty settings must be unavailable")
+	}
+}
+
+func TestLookupExternalIdentityStatusZero(t *testing.T) {
+	db := mustDB(t)
+	srv := fakeRBAC(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"uid": "rbac-uid", "status": 0})
+	})
+	saveIdentitySettings(t, db, srv.URL+"/internal/v1/identity/resolve", "tok", false, "wecom", true, 3000)
+	ident, err := LookupExternalIdentity(context.Background(), db, "wecom", "u1")
+	if err != nil {
+		t.Fatalf("lookup err = %v", err)
+	}
+	if ident.Status != 0 {
+		t.Fatalf("status = %d, want 0", ident.Status)
+	}
+}

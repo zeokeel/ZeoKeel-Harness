@@ -1,0 +1,48 @@
+{
+  "id": "2026-11-14-public-text-guard",
+  "status": "verified",
+  "intent": {
+    "zh": "一次 PR 描述把客户员工英文名写进公开面；现有 check-no-real-domains 只扫文件和 commit message，扫不到 GitHub PR 标题/描述/评论/编辑历史，规则已写但没有执行面。补一个私有 denylist 驱动的公开面文本守卫，并在 CI 上对所有同仓 PR 强制执行。",
+    "en": "A PR description leaked a customer employee name into a public surface; check-no-real-domains only scans files and commits, not GitHub PR metadata or its edit history. This adds a private-denylist text guard and enforces it in CI for every same-repository PR."
+  },
+  "modules": [
+    "scripts/check-public-text.mjs",
+    "AGENTS.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/pr-metadata.yml",
+    "scripts/check-workflows.mjs"
+  ],
+  "acceptance": [
+    {
+      "criterion": "私有 denylist 命中公开面文本时脚本 exit 1 且只输出 source:line term#N（不回显命中词）；干净文本 exit 0；无 denylist 时 fail-closed exit 2。",
+      "evidence": "test",
+      "command": "tmp=$(mktemp); printf 'blockedvalue\\n' > \"$tmp\"; node scripts/check-public-text.mjs --text blockedvalue --denylist \"$tmp\"; test $? -eq 1"
+    },
+    {
+      "criterion": "PR 模式同时扫描当前标题/描述/评论/review 以及 GitHub 公开的编辑历史 userContentEdits；历史里含命中词时同样 exit 1。",
+      "evidence": "test",
+      "command": "tmp=$(mktemp); printf 'blockedvalue\\n' > \"$tmp\"; printf '%s' '{\"title\":\"ok\",\"userContentEdits\":{\"nodes\":[{\"diff\":\"blockedvalue\"}]}}' | node scripts/check-public-text.mjs --stdin-json --denylist \"$tmp\"; test $? -eq 1"
+    },
+    {
+      "criterion": "工作流门禁接受新 workflow 且 CI 对同仓 PR 执行公开面扫描。",
+      "evidence": "guard",
+      "command": "node scripts/check-workflows.mjs"
+    }
+  ],
+  "risk": "denylist 只存本机/CI secret，不进仓库；脚本 fail-closed，缺 denylist 时 CI 直接失败而不是静默放行；不读取/不打印命中词。",
+  "rollback": "移除 pr-metadata workflow 与脚本；恢复 AGENTS 旧自检段落；删除 PUBLIC_TEXT_DENYLIST secret。",
+  "verification": [
+    {
+      "command": "tmp=$(mktemp); printf 'blockedvalue\\n' > \"$tmp\"; node scripts/check-public-text.mjs --text blockedvalue --denylist \"$tmp\"; test $? -eq 1",
+      "result": "exit 1；仅输出 source:line term#N，不回显命中词"
+    },
+    {
+      "command": "tmp=$(mktemp); printf 'blockedvalue\\n' > \"$tmp\"; printf '%s' '{\"title\":\"ok\",\"userContentEdits\":{\"nodes\":[{\"diff\":\"blockedvalue\"}]}}' | node scripts/check-public-text.mjs --stdin-json --denylist \"$tmp\"; test $? -eq 1",
+      "result": "exit 1；stdin-json 的 userContentEdits.diff 被扫到"
+    },
+    {
+      "command": "node scripts/check-workflows.mjs",
+      "result": "OK — 4 个 workflow, 83 个 shell run 块全部通过"
+    }
+  ]
+}

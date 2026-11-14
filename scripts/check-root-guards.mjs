@@ -191,7 +191,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // 预算登记表** `CI_JOB_BUDGET_MINUTES = { server: 60 }` —— 预算被静默削低（60→45，
   // 此前 exit 0）现在当场判红，合成负例 `b14-timeout-budget-below-registered` 是这条
   // 判据的钉子。⇒ 该守卫脚本内容变了，摘要按本表上方的纪律在同一批里复算更新。
-  ['check:workflows', { script: 'node scripts/check-workflows.mjs', argvTail: [], digest: 'bc64a06badbf6bcdf889c92efef7a15958f79fc2dd447da2f384ed840db91430' }],
+  ['check:workflows', { script: 'node scripts/check-workflows.mjs', argvTail: [], digest: '7d5847a9f65302d76096aa66f5dc362d2fdaa34b842ff106f2c824e314405e2e' }],
   // 2026-10-26（渠道品牌字节判据）：`check-channel-json.mjs` 新增"公共渠道素材必须是
   // brands/official/* 的逐字节副本"⇒ 本守卫的夹具跟着改（1. SVG 扫描用例改用品牌渠道、
   // 2. 官方模板夹具补 logo-dark.svg）⇒ 脚本内容变了，摘要按 `sha256sum` 复算同步。
@@ -252,7 +252,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // 2026-10-26（F-12）：install-integrity 补登 `integration-tests/capability-lifecycle.py`
   // ⇒ 本文件内嵌的 install-integrity 摘要更新 ⇒ 本判据脚本自身内容再变，摘要同步
   // （取值 = 工作树那份：`sha256sum scripts/check-guard-parser-integrity.mjs`）。
-  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: '83454406be691a0d34d7f19f3639f46d8aa45a0b96c516fce40d8f6dd1dc4844' }],
+  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: 'b974e29dcd96c28fabf6720a2f8ba05e38741690dfe6754cc67059877922d489' }],
 ])
 
 /**

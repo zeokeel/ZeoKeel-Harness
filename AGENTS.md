@@ -20,22 +20,45 @@
 - 客户自有或被投递环境的**真实域名、主机名、IP、目录名、容器名、镜像 tag、`.env` 取值**；
 - 上面的名字出现在**示例、夹具、断言、注释、脚本默认值、文档正文、表格、代码块、URL** 里。
 
-**同样适用于 git 提交信息（subject 与 body）与 GitHub PR / Release 文案** —— 提交信息是公开且
-可检索的，泄露面与文件正文完全相同。写提交信息用中性表述：「某客户渠道」「第二个渠道栈」
-「渠道 A」；需要具体身份时指向私有仓，不写名字。
+**同样适用于所有 GitHub 公开面**：git 提交信息（subject 与 body）、分支名、PR 标题 / 描述 /
+评论 / review 评论、Issue / Discussion、Release 文案、workflow 日志、截图、文件名与测试夹具。
+这些字面量与文件正文的泄露面完全相同，而且 **PR 描述/评论还会被 GitHub 的公开 API 与编辑历史保留**。
+
+**员工/客户联系人姓名（含英文名、昵称、拼音）同样属于客户身份**，即使只有一个名字、没有手机号/
+工号/域名，也禁止出现在公开面。写文案只用中性角色：「某客户渠道」「未绑定员工」「渠道 A」；
+需要具体身份时指向私有仓，不写名字。
 
 **唯一允许的写法**：占位符（`harness.example.com`）、环境变量（`{$DOMAIN}`、`REAL_SERVER`）、
 角色化表述（「品牌渠道」「客户渠道」「同机第二栈」）。
 
-**自检（改任何含渠道/域名/URL 的文件或写提交信息之前）**：
+**强制自检（写文件、commit、PR/Issue/Release 文案之前）**：
 
 ```bash
-node scripts/check-no-real-domains.mjs          # 白名单式前向守卫，未登记 host 一律失败
-git log -1 --format=%B | grep -inE '<渠道名1>|<渠道名2>'   # 渠道名清单见私有仓
+node scripts/check-no-real-domains.mjs          # 仓库文件/commit message：白名单式 host 守卫
+node scripts/check-public-text.mjs --file /tmp/public-text.md   # 公开面文本：私有 denylist
 ```
 
+PR / Issue / Release 文案的固定流程：
+
+1. **先写临时文件**（不要用 `--body "..."` 直接把字符串交给 `gh`，shell 历史/日志也是公开面）；
+2. 用私有 denylist 扫描：`node scripts/check-public-text.mjs --file /tmp/public-text.md`；
+3. 通过后用 `--body-file` 提交：`gh pr create --body-file /tmp/public-text.md ...`；
+4. 创建/编辑后再扫一次（含 GitHub 的编辑历史）：
+   `node scripts/check-public-text.mjs --pr <number>`。
+
+私有 denylist 只存在本机/CI secret，**绝不提交到本仓**。默认路径
+`~/.config/zeokeel/public-text-denylist.txt`，也支持 `PUBLIC_TEXT_DENYLIST_FILE` 或
+`PUBLIC_TEXT_DENYLIST` 环境变量；每行一个词条（# 开头为注释）。脚本 fail-closed：
+denylist 不存在/为空直接报错，不静默跳过。命中时只打印 `source:line term#N`，不回显命中词或原文。
+
+**事故与边界（2026-11-14）**：一次 PR 描述直接写了客户员工英文名；`check-no-real-domains`
+只覆盖仓库文件与 commit message，**扫不到 GitHub PR 元数据**，且当时没有“客户姓名 denylist”
+工具，导致规则虽写在本文档却没有执行面。本节的 `check-public-text.mjs` + CI 公开面守卫
+就是为此补上的；任何“规则已写”不等于“已执行”，公开面文案必须留下扫描命令的输出/CI 记录。
+
 **为什么是第 0 条**：这条一旦违反，泄露不可逆（公开仓历史会被镜像与索引，清理需改写历史 +
-强推 + 通知所有克隆）。代价远大于任何功能收益，所以它是唯一"拿不准时按算处理"的规则。
+强推 + 通知所有克隆；GitHub 的 PR 编辑历史还需要 Support 处理）。代价远大于任何功能收益，
+所以它是唯一"拿不准时按算处理"的规则。
 
 ---
 

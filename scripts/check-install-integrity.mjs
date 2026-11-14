@@ -194,6 +194,7 @@ export const INSTALL_INTEGRITY_REGISTERED_HOOKS = [
 /** 必须存在于 HEAD 的判据执行体（缺失 ⇒ 判据输入缺席 ⇒ 退出码 2）。 */
 const REQUIRED_JUDGE_BODIES = [
   'scripts/check-install-integrity.mjs',
+  'scripts/check-public-text.mjs',
   'scripts/check-guard-parser-integrity.mjs',
   'scripts/check-root-guards.mjs',
   'scripts/check-workspaces.mjs',
@@ -384,6 +385,7 @@ export const EXECUTION_FACE_REGISTRY = [
   'scripts/check-no-leftover-mutants.mjs',
   'scripts/check-no-real-domains.mjs',
   'scripts/check-patch-pin.mjs',
+  'scripts/check-public-text.mjs',
   // 「发布说明的迁移清单 ↔ git diff」判据（2026-10-05，E-01/E-02）：它是按需执行的只读判据
   // （需要区间两端的 tag，CI 的缺省 checkout 取不到 ⇒ 不进 `yarn check`），但**内容被改写
   // 就等于改写判据本体** ⇒ 形状族枚举到它，这里显式登记。
@@ -456,6 +458,7 @@ export const CI_REFERENCED_EXECUTION_REGISTRY = [
   'scripts/check-go-build-tags.mjs',
   'scripts/check-guard-parser-integrity.mjs',
   'scripts/check-install-integrity.mjs',
+  'scripts/check-public-text.mjs',
   'scripts/check-release-notes-migrations.mjs',
   'scripts/check-root-guards.mjs',
   'scripts/check-verdict-credential.mjs',

@@ -5392,7 +5392,7 @@ const REMOTE_WRITE_REGISTERED = [
  * `event_name == 'workflow_dispatch'` 这类收窄都会红)。正当的条件型 `if:` 不是被禁,
  * 而是必须**显式登记 + 写明依据**。
  */
-const REGISTERED_WORKFLOW_FILES = ['ci.yml', 'codeql.yml', 'notary-probe.yml']
+const REGISTERED_WORKFLOW_FILES = ['ci.yml', 'codeql.yml', 'notary-probe.yml', 'pr-metadata.yml']
 const REGISTERED_JOBS = [
   {
     file: 'ci.yml',
@@ -5483,6 +5483,14 @@ const REGISTERED_JOBS = [
     job: 'probe',
     ifPolicy: 'never',
     why: '公证历史查询(workflow_dispatch 触发):任何一次手动触发都必须真的跑',
+  },
+  {
+    file: 'pr-metadata.yml',
+    job: 'scan',
+    ifPolicy: 'exact',
+    ifValue: 'github.event.pull_request.head.repo.full_name == github.repository',
+    why: '公开面文本守卫:所有同仓 PR(包括编辑标题/描述)都必须跑；'
+      + 'fork PR 不共享私有 denylist secret，跳过由分支保护口径承担',
   },
 ]
 /**

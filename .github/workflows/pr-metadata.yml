@@ -1,0 +1,41 @@
+name: PR metadata guard
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Public metadata guard
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout trusted base guard
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Scan PR title/body/edit history against private denylist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PUBLIC_TEXT_DENYLIST: ${{ secrets.PUBLIC_TEXT_DENYLIST }}
+        run: |
+          set -euo pipefail
+          if [ ! -f scripts/check-public-text.mjs ]; then
+            echo "::warning::base branch does not yet contain scripts/check-public-text.mjs; bootstrap PR, skipping public metadata guard"
+            exit 0
+          fi
+          if [ -z "${PUBLIC_TEXT_DENYLIST:-}" ]; then
+            echo "::error::PUBLIC_TEXT_DENYLIST secret is required for the public metadata guard"
+            exit 1
+          fi
+          node scripts/check-public-text.mjs --pr "$PR_NUMBER"

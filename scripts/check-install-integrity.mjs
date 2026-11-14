@@ -458,6 +458,7 @@ export const CI_REFERENCED_EXECUTION_REGISTRY = [
   'scripts/check-go-build-tags.mjs',
   'scripts/check-guard-parser-integrity.mjs',
   'scripts/check-install-integrity.mjs',
+  'scripts/check-public-text.mjs',
   'scripts/check-release-notes-migrations.mjs',
   'scripts/check-root-guards.mjs',
   'scripts/check-verdict-credential.mjs',

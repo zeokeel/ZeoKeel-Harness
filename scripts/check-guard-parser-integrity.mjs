@@ -403,7 +403,7 @@ const REGISTERED_INSTALL_INTEGRITY_BODIES = [
     // 2026-10-26（F-12 跨层能力生命周期 E2E）：`EXECUTION_POINT_REGISTRY` 补登
     // `integration-tests/capability-lifecycle.py`（守卫的扩展名集合把 `integration-tests/**/*.py`
     // 派生成执行点）⇒ 本件内容再次变化，摘要按同一条口径同步。
-    sha256: 'eb5b0d27fe97361bca4e6a6cb48affa557e4ce6077fdaaaa1c7a5f9186a874ee',
+    sha256: '87954e24a3a720034dce96bac8b712dd011043780f7ba8d4a28c70d7b97ad0fb',
     methods: [
       'judge-body-bytes-equal-head',
       'yarnrc-forbidden-keys',

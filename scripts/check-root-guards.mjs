@@ -252,7 +252,7 @@ const REGISTERED_GUARD_ENTRIES = new Map([
   // 2026-10-26（F-12）：install-integrity 补登 `integration-tests/capability-lifecycle.py`
   // ⇒ 本文件内嵌的 install-integrity 摘要更新 ⇒ 本判据脚本自身内容再变，摘要同步
   // （取值 = 工作树那份：`sha256sum scripts/check-guard-parser-integrity.mjs`）。
-  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: '12abff975ab5ac17603ca7ccf39136fc5e497253edfd7f730d71e608aa15e713' }],
+  ['check:guard-parser-integrity', { script: 'node scripts/check-guard-parser-integrity.mjs', argvTail: [], digest: 'b974e29dcd96c28fabf6720a2f8ba05e38741690dfe6754cc67059877922d489' }],
 ])
 
 /**

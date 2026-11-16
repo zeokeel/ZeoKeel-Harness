@@ -130,7 +130,12 @@ export const APP_CONTENT_SECURITY_POLICY = [
   // 扫码登录页用 iframe 嵌服务商官方页面；页面成功后要跳到“当前登录服务端”
   // 的 callback（域名运行时才知道），所以 frame-src 允许 https（登录页只创建
   // 官方扫码 iframe，页面脚本本身受 script-src 约束）。
-  "frame-src 'self' https:",
+  //
+  // 右栏交互式 HTML 预览使用 `<iframe src=blob:… sandbox="allow-scripts">`：
+  // 这是上游 documentpreview 的 HtmlFrame 路径，不能用 default-src 的 blob:
+  // 兜底（frame-src 显式声明后只认本指令）。缺 blob: 的表现是：关闭“显示代码
+  // 工作视图”走 srcDoc 静态预览正常，开启后 Blob iframe 加载被拦、右侧白屏。
+  "frame-src 'self' https: blob:",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",

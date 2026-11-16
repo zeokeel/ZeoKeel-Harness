@@ -331,7 +331,9 @@ const APPROVED_CSP_CAPABILITIES: Record<string, readonly string[]> = {
   // 白标渠道的 logo/favicon 由客户自己的服务器下发 ⇒ 必须放行 http/https 图源。
   'img-src': ["'self'", 'data:', 'blob:', 'http:', 'https:'],
   // 扫码 iframe 成功后要跳到当前登录服务端的 callback（运行时域名），放行 https frame。
-  'frame-src': ["'self'", 'https:'],
+  // 右栏交互式 HTML 预览是 blob: iframe；frame-src 显式声明后 default-src 的 blob:
+  // 不再兜底，缺失会让“显示代码工作视图”开启时白屏。
+  'frame-src': ["'self'", 'https:', 'blob:'],
   'font-src': ["'self'", 'data:'],
   // 出站必须**显式**声明：少了它出站就受 default-src 支配，改一处会静默放开另一处。
   'connect-src': ["'self'", 'ws:', 'wss:', 'http:', 'https:'],
@@ -1616,6 +1618,7 @@ describe('Electron compatibility runtime', () => {
     // 白标渠道图源必须放行 http/https；Blob-URL Worker 必须放行；脚本仍限本地。
     expect(csp).toContain("img-src 'self' data: blob: http: https:")
     expect(csp).toContain("worker-src 'self' blob:")
+    expect(csp).toContain("frame-src 'self' https: blob:")
     expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'")
     expect(csp).toContain("default-src 'self' data: blob: ws:")
 

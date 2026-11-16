@@ -1,0 +1,45 @@
+{
+  "id": "2026-11-16-html-preview-blob-csp",
+  "status": "implemented",
+  "intent": {
+    "zh": "开启“显示代码工作视图”时，右栏交互式 HTML 预览使用 Blob URL iframe；应用 CSP 的 frame-src 未放行 blob:，导致 macOS 客户端白屏，而关闭该视图后的 srcDoc 静态预览正常。补上 blob:，同时保持扫码登录等既有 https frame 能力不变。",
+    "en": "With the code-work view enabled, the right-side interactive HTML preview uses a Blob URL iframe; the app CSP frame-src did not allow blob:, so the preview was blank on macOS while the srcDoc static preview worked. Allow blob: while preserving existing https frame capability."
+  },
+  "modules": [
+    "packages/host/desktop/src/electron-runtime.ts",
+    "packages/host/desktop/tests/electron-runtime.spec.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "CSP 能力测试全绿，frame-src 同时含 'self'、https:、blob:；移除 blob: 后同一能力判据必须失败。",
+      "evidence": "test",
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run tests/electron-runtime.spec.ts"
+    },
+    {
+      "criterion": "desktop 全量类型检查退出码为 0。",
+      "evidence": "test",
+      "command": "corepack yarn workspace dsh-plugin-desktop typecheck:tests"
+    },
+    {
+      "criterion": "macOS 客户端开启“显示代码工作视图”后，同一 HTML 文件右栏正常显示；关闭视图后的静态预览仍正常；扫码登录/其他 https iframe 不受影响。",
+      "evidence": "manual",
+      "command": "在 macOS 客户端打开报告文件，切换“显示代码工作视图”两次并对比渲染结果"
+    }
+  ],
+  "risk": "frame-src 增加 blob: 会允许应用创建的 Blob URL 作为 iframe 源；这些 iframe 已带 sandbox=allow-scripts 且无 allow-same-origin，不能访问父页面。不改变脚本源、worker 源、网络源或登录 https frame 范围。",
+  "rollback": "从 frame-src 删除 blob:，同步回滚测试能力表与正向锚点；无需数据迁移。",
+  "verification": [
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run tests/electron-runtime.spec.ts",
+      "result": "61 tests passed"
+    },
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop typecheck:tests",
+      "result": "exit 0"
+    },
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run",
+      "result": "149 files: 148 passed, 1 skipped; 1838 tests: 1823 passed, 15 skipped"
+    }
+  ]
+}

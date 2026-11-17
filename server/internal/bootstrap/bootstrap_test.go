@@ -262,6 +262,25 @@ func TestBootstrapWebSettings(t *testing.T) {
 	if web["default_thinking_level"] != "high" {
 		t.Fatalf("default_thinking_level = %v, want high", web["default_thinking_level"])
 	}
+	if web["search_provider"] != serverstore.SearchProviderAuto {
+		t.Fatalf("default search_provider = %v, want auto", web["search_provider"])
+	}
+	if err := serverstore.SetSetting(db, serverstore.SearchProviderSetting, serverstore.SearchProviderBailian); err != nil {
+		t.Fatal(err)
+	}
+	_, out = getJSON(t, r, "/api/client/v2/config/bootstrap", token)
+	web = out["web"].(map[string]any)
+	if web["search_provider"] != serverstore.SearchProviderBailian {
+		t.Fatalf("bailian search_provider = %v", web["search_provider"])
+	}
+	if err := serverstore.SetSetting(db, serverstore.SearchProviderSetting, "invalid"); err != nil {
+		t.Fatal(err)
+	}
+	_, out = getJSON(t, r, "/api/client/v2/config/bootstrap", token)
+	web = out["web"].(map[string]any)
+	if web["search_provider"] != serverstore.SearchProviderAuto {
+		t.Fatalf("invalid search_provider = %v, want auto fallback", web["search_provider"])
+	}
 }
 
 func TestBootstrapDefaultThinkingLevelFallback(t *testing.T) {

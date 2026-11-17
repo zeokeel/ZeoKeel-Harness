@@ -84,6 +84,9 @@ var auditSettingInventory = map[string]auditSettingWrite{
 	"usage.search_price_per_1k": {
 		why: "数值（web_search 按次单价，元/千次成功请求），不是 URL/凭据。",
 	},
+	"web.search_provider": {
+		why: "枚举 auto|bailian|off（搜索提供方），不是 URL/凭据。",
+	},
 	"usage.retention_months": {
 		why: "整数（明细保留月数），不是 URL/凭据。",
 	},
@@ -716,6 +719,8 @@ func constantSettingKey(name string) string {
 		return "usage.peak_windows"
 	case "SearchPriceSetting":
 		return "usage.search_price_per_1k"
+	case "SearchProviderSetting":
+		return "web.search_provider"
 	case "RetentionMonthsSetting":
 		return "usage.retention_months"
 	default:

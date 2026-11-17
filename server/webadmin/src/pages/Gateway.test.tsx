@@ -591,6 +591,8 @@ describe('Gateway 保存面(F-07)', () => {
       'retention_months',
       // 0085:web_search 按次单价(元/千次,0=不计费)。
       'search_price_per_1k',
+      // 2026-11:后台搜索提供方 auto|bailian|off。
+      'search_provider',
       'server_base_url',
       // R17A-06:未定价模型的准入策略(缺省 reject)也是本页的正常字段。
       'unpriced_model_policy',
@@ -633,6 +635,36 @@ describe('Gateway 保存面(F-07)', () => {
     await screen.findByText('已保存')
     expect(puts).toHaveLength(1)
     expect(puts[0]!.search_price_per_1k).toBe('5')
+  })
+
+  // 2026-11:后台搜索提供方。读取服务端值 → 保存时提交；页面只允许三个合法值。
+  it('搜索提供方:读取服务端值、保存时提交', async () => {
+    const puts: Array<Record<string, unknown>> = []
+    mockRequest.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/server/admin/gateway' && init?.method === 'PUT') {
+        puts.push(JSON.parse(String(init.body)) as Record<string, unknown>)
+        return { ok: true }
+      }
+      if (path === '/api/server/admin/gateway') {
+        return {
+          default_model: 'qwen3.8-flash', rate_limit: '0', peak_windows: '',
+          search_price_per_1k: '0', search_provider: 'bailian', retention_months: '6',
+          default_thinking_level: 'max', server_base_url: '', max_file_refs: '600',
+          body_parse_budget_mb: '128', file_expiry_days: '7', unpriced_model_policy: 'reject',
+        }
+      }
+      return baseImpl(path, init)
+    })
+    render(<Gateway />)
+    await waitForGatewayLoaded()
+    const select = screen.getByLabelText('搜索提供方') as HTMLSelectElement
+    expect(select.value).toBe('bailian')
+
+    fireEvent.change(select, { target: { value: 'off' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await screen.findByText('已保存')
+    expect(puts).toHaveLength(1)
+    expect(puts[0]!.search_provider).toBe('off')
   })
 
   // 2026-09-22:服务端把每用户限流缺省从 60 改成 **0 = 不限制**(与官方口径一致:

@@ -164,6 +164,25 @@ describe('bootstrap sync', () => {
     }
   })
 
+  it('closes the native search provider when the server sends search_provider=off', async () => {
+    const { ctx, settings, onHandler } = stubCtx()
+    const original = globalThis.fetch
+    globalThis.fetch = vi.fn(async () => Response.json({
+      ...SAMPLE_BOOTSTRAP,
+      web: { ...SAMPLE_BOOTSTRAP.web, search_provider: 'off' },
+    })) as typeof fetch
+    try {
+      applyBootstrap(ctx)
+      await onHandler(SAMPLE_SESSION)
+      // 现象：进程内异步状态传播（事件/回调派发后的断言）；vitest 缺省的 1s 在 CI 4 vCPU 负载下不够（R11-B-02）。
+      await vi.waitFor(() => { expect(settings.update).toHaveBeenCalled() }, { timeout: 10_000 })
+      expect(settings.update).toHaveBeenCalledWith('web-search-deepseek', expect.objectContaining({
+        apiKeyEnv: 'ZEOKEEL_GATEWAY_TOKEN',
+        baseURL: '',
+      }))
+    } finally { globalThis.fetch = original }
+  })
+
   it('maps the vision model input modalities onto the catalog (0058)', async () => {
     const { ctx, settings, onHandler } = stubCtx()
     const origFetch = globalThis.fetch

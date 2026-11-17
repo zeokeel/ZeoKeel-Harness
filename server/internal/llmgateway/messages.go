@@ -509,6 +509,7 @@ func (a *API) forwardAnthropic(c *gin.Context, up *Upstream, body outboundBody, 
 	if err != nil {
 		return nil, err
 	}
+	clean = a.addSearchProviderMarker(clean, up)
 	url := upstreamURLFor(anthropicBaseURL(up.BaseURL, up.Protocol), "/messages")
 	client := a.client
 	if stream {

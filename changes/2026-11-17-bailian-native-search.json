@@ -24,7 +24,7 @@
     {
       "criterion": "bailian 或 auto+百炼 host 的 web_search 请求向 system 注入 billing 标识；off、非百炼 host、无 web_search、已有标识均不改变 body；system 字符串/数组/缺省三种形态均保留原文。",
       "evidence": "test",
-      "command": "cd server && go test ./internal/llmgateway -run 'TestSearchProviderMarker' -count=1"
+      "command": "cd server && go test ./internal/llmgateway -run 'TestSearchProviderMarker|TestMessagesSearchProviderMarkerE2E' -count=1"
     },
     {
       "criterion": "客户端 off 时 web-search provider baseURL 为空，auto/bailian 仍指向网关；webadmin 读写 search_provider。",

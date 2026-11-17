@@ -1,6 +1,7 @@
 package llmgateway
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -26,8 +27,12 @@ func TestMessagesSearchProviderMarkerE2E(t *testing.T) {
 	}
 	got, _ := f.gotBody.Load("/v1/messages")
 	upstreamBody, _ := got.(string)
-	if !strings.Contains(upstreamBody, bailianSearchBillingMarker) {
-		t.Fatalf("bailian search request did not reach upstream with marker: %s", upstreamBody)
+	var upstream map[string]any
+	if err := json.Unmarshal([]byte(upstreamBody), &upstream); err != nil {
+		t.Fatalf("upstream body is not JSON: %v (%s)", err, upstreamBody)
+	}
+	if !systemContains(upstream, bailianSearchBillingMarker) {
+		t.Fatalf("bailian marker was not in system: %s", upstreamBody)
 	}
 	if !strings.Contains(upstreamBody, `"web_search_20250305"`) {
 		t.Fatalf("web_search tool was lost: %s", upstreamBody)
@@ -48,4 +53,15 @@ func TestMessagesSearchProviderMarkerE2E(t *testing.T) {
 	if !strings.Contains(offBody, fmt.Sprintf(`"model":%q`, "deepseek-v4-flash")) {
 		t.Fatalf("off request lost model: %s", offBody)
 	}
+}
+
+func systemContains(body map[string]any, marker string) bool {
+	system, _ := body["system"].([]any)
+	for _, item := range system {
+		block, _ := item.(map[string]any)
+		if text, _ := block["text"].(string); strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }

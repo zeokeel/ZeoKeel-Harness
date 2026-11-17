@@ -85,8 +85,9 @@ func isBailianHost(rawURL string) bool {
 }
 
 // hasWebSearchTool reports whether the request advertises an Anthropic native
-// web_search tool. Both name and type are checked because clients may send a
-// dated type (web_search_20250305) and older/newer variants.
+// web_search tool. The type prefix is authoritative: a custom function named
+// "web_search" is not the server-side search tool and must not trigger the
+// provider-specific system marker.
 func hasWebSearchTool(body map[string]any) bool {
 	tools, ok := body["tools"].([]any)
 	if !ok {

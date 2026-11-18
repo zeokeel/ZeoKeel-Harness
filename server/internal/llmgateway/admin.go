@@ -1350,11 +1350,13 @@ func getGatewayConfig(c *gin.Context, db *sql.DB) {
 	if searchPrice == "" {
 		searchPrice = "0"
 	}
+	searchProvider := serverstore.NormalizeSearchProvider(settings[serverstore.SearchProviderSetting])
 	c.JSON(http.StatusOK, gin.H{
 		"default_model":             settings["gateway.default_model"],
 		"rate_limit":                rateLimit,
 		"peak_windows":              settings[serverstore.PeakWindowsSetting], // 高峰时段 JSON;空 = 无峰谷价
 		"search_price_per_1k":       searchPrice,                              // 0085:web_search 按次单价(元/千次,0=不计费)
+		"search_provider":           searchProvider,                           // auto|bailian|off
 		"retention_months":          retention,                                // usage 明细保留月数(0=永久,默认 6)
 		"error_reporting_dsn":       settings["web.error_reporting_dsn"],
 		"error_reporting_enabled":   settings["web.error_reporting_enabled"] == "true",
@@ -1429,6 +1431,8 @@ func setGatewayConfig(c *gin.Context, db *sql.DB) {
 		FileExpiryDays          *FlexibleString `json:"file_expiry_days"`
 		// 0085：web_search 按次单价（元/千次成功请求，0 = 不计费）。
 		SearchPricePer1K *FlexibleString `json:"search_price_per_1k"`
+		// 搜索提供方：auto|bailian|off。缺省（未提供）= 不覆盖。
+		SearchProvider *string `json:"search_provider"`
 		// R17A-06：未定价模型的准入策略（reject | allow）。缺省（未提供）= 不覆盖。
 		UnpricedModelPolicy *string `json:"unpriced_model_policy"`
 	}
@@ -1623,6 +1627,10 @@ func setGatewayConfig(c *gin.Context, db *sql.DB) {
 			return
 		}
 	}
+	if req.SearchProvider != nil && !serverstore.ValidSearchProvider(*req.SearchProvider) {
+		serverauth.WriteError(c, http.StatusBadRequest, "VALIDATION", "search_provider 必须是 auto|bailian|off")
+		return
+	}
 	// 2026-09-19(审计 P2-1):以下 12 处写库收进**单一事务**,任一字段写失败
 	// 整体回滚 —— 旧实现逐键 SetSetting,500 路径会留下"半套已生效配置"且
 	// 零审计(AuditLog 只在函数末尾调一次),而其中 retention_months 之后紧跟
@@ -1696,6 +1704,12 @@ func setGatewayConfig(c *gin.Context, db *sql.DB) {
 	// 价格设置一样"改价只影响之后产生的 usage 行"（cost 记录时固化）。
 	if req.SearchPricePer1K != nil {
 		if err := auditSetSettingTx(tx, db, serverstore.SearchPriceSetting, "Search 按次计费", string(*req.SearchPricePer1K), &changes); err != nil {
+			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
+			return
+		}
+	}
+	if req.SearchProvider != nil {
+		if err := auditSetSettingTx(tx, db, serverstore.SearchProviderSetting, "搜索提供方", *req.SearchProvider, &changes); err != nil {
 			serverauth.WriteError(c, http.StatusInternalServerError, "INTERNAL", "保存失败")
 			return
 		}

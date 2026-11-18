@@ -157,7 +157,7 @@ export default function Gateway() {
   const [providers, setProviders] = useState<Provider[]>([])
   const [models, setModels] = useState<Model[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
-  const [cfg, setCfg] = useState({ default_model: '', rate_limit: '0', peak_windows: '', search_price_per_1k: '0', retention_months: '6', default_thinking_level: 'max', server_base_url: '', max_file_refs: '600', body_parse_budget_mb: '128', file_expiry_days: '7', unpriced_model_policy: 'reject' })
+  const [cfg, setCfg] = useState({ default_model: '', rate_limit: '0', peak_windows: '', search_price_per_1k: '0', search_provider: 'auto', retention_months: '6', default_thinking_level: 'max', server_base_url: '', max_file_refs: '600', body_parse_budget_mb: '128', file_expiry_days: '7', unpriced_model_policy: 'reject' })
   const [peakList, setPeakList] = useState<PeakWindowRow[]>([])
   // 审计 2026-09-12 P1-2:服务端存的 peak_windows 无法解析时为 true →
   // 禁止把空列表当成「清空」写回去(那是静默破坏计费口径)。管理员显式
@@ -226,6 +226,7 @@ export default function Gateway() {
         peak_windows: g.peak_windows ?? '',
         // 0085:web_search 按次单价(元/千次);服务端缺省返回 "0"
         search_price_per_1k: String(g.search_price_per_1k ?? '0'),
+        search_provider: String(g.search_provider ?? 'auto'),
         retention_months: g.retention_months ?? '6',
         default_thinking_level: g.default_thinking_level ?? 'max',
         server_base_url: g.server_base_url ?? '',
@@ -336,6 +337,7 @@ export default function Gateway() {
         file_expiry_days: cfg.file_expiry_days,
         unpriced_model_policy: cfg.unpriced_model_policy,
         search_price_per_1k: cfg.search_price_per_1k,
+        search_provider: cfg.search_provider,
         peak_windows: peaked.length ? JSON.stringify(peaked) : '',
       }
       const res = await request(`${ADMIN_API}/gateway`, { method: 'PUT', body: JSON.stringify(body) })
@@ -992,6 +994,24 @@ export default function Gateway() {
           <section className="space-y-1">
             <h3 className="text-sm font-medium text-muted-foreground">计费（峰谷 / 按次）</h3>
             <div className="space-y-2">
+              <div className="space-y-1">
+                <Label htmlFor="search-provider">搜索提供方</Label>
+                <select
+                  id="search-provider"
+                  aria-label="搜索提供方"
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={cfg.search_provider}
+                  onChange={(e) => setCfg({ ...cfg, search_provider: e.target.value })}
+                >
+                  <option value="auto">自动（推荐）</option>
+                  <option value="bailian">百炼原生</option>
+                  <option value="off">关闭</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  自动：保留现有行为，仅在上游识别为百炼时补齐百炼原生 search 标识；
+                  百炼原生：显式按百炼 Anthropic 兼容 web_search 处理；关闭：客户端不提供搜索。
+                </p>
+              </div>
               <div className="space-y-1">
                 <Label htmlFor="search-price-per-1k">Search 按次计费(元/千次)</Label>
                 <Input id="search-price-per-1k" type="number" min={0} max={1000} step="0.01"

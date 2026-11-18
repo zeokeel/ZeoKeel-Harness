@@ -43,6 +43,7 @@ var audit0919ConfigKeys = []string{
 	"web.glitchtip_base_url",
 	"web.glitchtip_organization",
 	"web.default_thinking_level",
+	"web.search_provider",
 	"server.base_url",
 }
 

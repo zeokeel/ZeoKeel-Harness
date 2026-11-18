@@ -85,8 +85,8 @@
 | POST | `/api/server/admin/models` | 创建模型 `{name, provider_id, display_name?, default_params?, input_modalities?(['text'/'image' 数组,0058,缺省仅 text]), input_price_per_1m?, output_price_per_1m?, cache_input_price_per_1m?, offpeak_discount?}`(价格 = 元/百万 token,缺省 = 未定价;0029 缓存命中输入价) |
 | PUT | `/api/server/admin/models/:id` | 更新模型(价格/折扣留空不覆盖;修改只影响之后产生的费用)。`input_modalities`(0058)显式数组 = 设置、缺省 = 不覆盖;name 改名受保护(有用量记录/渠道同步模型拒绝);`offpeak_discount` 0<d≤1 |
 | DELETE | `/api/server/admin/models/:id` | 删除模型 |
-| GET | `/api/server/admin/gateway` | 网关配置:`{rate_limit, peak_windows, search_price_per_1k, retention_months, default_model, default_thinking_level, server_base_url, error_reporting_dsn/enabled/level/heartbeat, glitchtip_base_url, glitchtip_organization, unpriced_model_policy}`(`search_price_per_1k` 2026-10 起:web_search 按次单价,元/千次成功搜索,缺省 `"0"` = 不计费;最后一项 2026-09-25 起:未定价模型的准入策略,缺省 `reject`)(**2026-09-11 起不含 `monthly_quota`/`monthly_quota_money`** —— 员工配额已下线) |
-| PUT | `/api/server/admin/gateway` | 写网关配置(settings:`gateway.rate_limit`、`gateway.default_model`、`usage.peak_windows`、`usage.search_price_per_1k`、`usage.retention_months`、`gateway.unpriced_model_policy`、`web.default_thinking_level`、`server.base_url`、`web.error_reporting_*`、`web.glitchtip_*`)。`search_price_per_1k` 接受数字或字符串,取值 0~1000(空串 = 0 = 关闭按次计费),非法值 400 且不写库。**2026-09-25 起配置与审计同事务**(审计写不进去即整体回滚 + 500,不再出现"配置已生效、审计 0 行")。⚠️ 请求体里的 `monthly_quota`/`monthly_quota_money`(旧文档曾写作 `usage.monthly_quota*`)**已不在请求结构里 ⇒ 被 JSON 绑定直接忽略:返回 200 但零写入** —— 保留这些键的说法只是为了不砸旧客户端;控额度请用余额端点(`PUT /balance`、`POST /users/:id/balance`)。`peak_windows` 的 `weekdays` 三态不可混淆(2026-09-25,R18C-04):**键缺省/null = 每天**(老数据)、显式数组 = 只在这些天生效;**显式空数组/全非法值一律 400 VALIDATION**(那种取值过去被静默当成"每天都是高峰",会把空闲折扣整体反转掉) |
+| GET | `/api/server/admin/gateway` | 网关配置:`{rate_limit, peak_windows, search_price_per_1k, search_provider, retention_months, default_model, default_thinking_level, server_base_url, error_reporting_dsn/enabled/level/heartbeat, glitchtip_base_url, glitchtip_organization, unpriced_model_policy}`(`search_price_per_1k` 2026-10 起:web_search 按次单价,元/千次成功搜索,缺省 `"0"` = 不计费;最后一项 2026-09-25 起:未定价模型的准入策略,缺省 `reject`)(**2026-09-11 起不含 `monthly_quota`/`monthly_quota_money`** —— 员工配额已下线) |
+| PUT | `/api/server/admin/gateway` | 写网关配置(settings:`gateway.rate_limit`、`gateway.default_model`、`usage.peak_windows`、`usage.search_price_per_1k`、`usage.retention_months`、`gateway.unpriced_model_policy`、`web.default_thinking_level`、`server.base_url`、`web.error_reporting_*`、`web.glitchtip_*`)。`search_price_per_1k` 接受数字或字符串,取值 0~1000(空串 = 0 = 关闭按次计费),非法值 400 且不写库;`search_provider` 接受 `auto|bailian|off`(缺省 auto,百炼原生搜索由网关补齐 billing 标识)。**2026-09-25 起配置与审计同事务**(审计写不进去即整体回滚 + 500,不再出现"配置已生效、审计 0 行")。⚠️ 请求体里的 `monthly_quota`/`monthly_quota_money`(旧文档曾写作 `usage.monthly_quota*`)**已不在请求结构里 ⇒ 被 JSON 绑定直接忽略:返回 200 但零写入** —— 保留这些键的说法只是为了不砸旧客户端;控额度请用余额端点(`PUT /balance`、`POST /users/:id/balance`)。`peak_windows` 的 `weekdays` 三态不可混淆(2026-09-25,R18C-04):**键缺省/null = 每天**(老数据)、显式数组 = 只在这些天生效;**显式空数组/全非法值一律 400 VALIDATION**(那种取值过去被静默当成"每天都是高峰",会把空闲折扣整体反转掉) |
 | GET | `/api/server/admin/channels` | 渠道列表 |
 | GET | `/api/server/admin/connectors` | 连接器目录列表(0042;示例企业/sales-easy 等定义服务端下发) |
 | GET | `/api/server/admin/connectors/:id` | 单个连接器详情 |
@@ -325,7 +325,7 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
   "default_model": "deepseek-chat",
   "models": [{ "id": "deepseek-chat", "display_name": "DeepSeek Chat", "input_modalities": ["text"], "protocols": ["openai"] }],
   "skills": [{ "name": "invoice-helper", "version": "1.0.0", "description": "..." }],
-  "web": { "default_thinking_level": "max" },
+  "web": { "default_thinking_level": "max", "search_provider": "auto" },
   "connectors": [{ "id": "example-mcp", "name": "示例 MCP 智能体", "auth_mode": "oauth", "definition": { ... },
                    "auto_auth": "rbac-assertion", "auto_connect": true }]
 }

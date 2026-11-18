@@ -1,0 +1,72 @@
+{
+  "id": "2026-11-17-bailian-native-search",
+  "status": "implemented",
+  "intent": {
+    "zh": "客户端默认搜索走 DeepSeek Messages 适配器，部署无法在后台选择百炼原生联网搜索；百炼 Anthropic 兼容 web_search 还要求 system 中带 billing 标识。增加后台 search_provider 开关并下发，网关仅对百炼搜索请求补该标识。",
+    "en": "The client defaulted to the DeepSeek Messages search adapter with no deployment-level choice, and Bailian's Anthropic-compatible web_search requires a billing marker in system. Add an admin search_provider setting delivered through bootstrap, and inject the marker only for Bailian search requests."
+  },
+  "modules": [
+    "server/internal/serverstore/search_provider.go",
+    "server/internal/bootstrap/bootstrap.go",
+    "server/internal/llmgateway/admin.go",
+    "server/internal/llmgateway/search_provider.go",
+    "server/internal/llmgateway/messages.go",
+    "server/webadmin/src/pages/Gateway.tsx",
+    "packages/host/gateway-client/src/config.ts",
+    "packages/host/enterprise/src/bootstrap.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "后台 search_provider 仅接受 auto|bailian|off，GET 缺省 auto，非法值 400 且不写库，写入带审计；bootstrap 下发并回落 auto。",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/llmgateway/... ./internal/bootstrap/... -count=1"
+    },
+    {
+      "criterion": "bailian 或 auto+百炼 host 的 web_search 请求向 system 注入 billing 标识；off、非百炼 host、无 web_search、已有标识均不改变 body；system 字符串/数组/缺省三种形态均保留原文。",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/llmgateway -run 'TestSearchProviderMarker|TestMessagesSearchProviderMarkerE2E' -count=1"
+    },
+    {
+      "criterion": "客户端 off 时 web-search provider baseURL 为空，auto/bailian 仍指向网关；webadmin 读写 search_provider。",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/bootstrap.spec.ts && cd server/webadmin && npm test -- --run Gateway.test.tsx"
+    },
+    {
+      "criterion": "真机（或真实网关注入探针）确认百炼 Qwen3.8 Flash 搜索请求带 x-anthropic-billing-header，且能返回搜索来源；后台 off 后搜索不可用。",
+      "evidence": "manual",
+      "command": "后台选择百炼原生，客户端使用 qwen3.8-flash 触发 web_search；抓取网关出站 body 检查 system，再查页面来源"
+    }
+  ],
+  "risk": "auto 缺省对非百炼上游逐字不变；百炼上游的 web_search 请求会追加 system 文本。仅影响 Anthropic Messages 的搜索请求，不改变鉴权、密钥、计费、普通聊天或其他端点。若百炼模型不支持 web_search，会按上游错误返回而不是静默降级；off 是客户端能力开关，不是服务端拒绝第三方 web_search 请求的安全边界。",
+  "rollback": "后台把 web.search_provider 改为 auto；或回退服务端镜像。无数据库迁移。",
+  "verification": [
+    {
+      "command": "cd server && go test ./internal/llmgateway/... ./internal/bootstrap/... -count=1",
+      "result": "PASS：llmgateway 166.2s / channels 0.015s / bootstrap 5.7s"
+    },
+    {
+      "command": "cd server && go vet ./internal/llmgateway/... ./internal/bootstrap/...",
+      "result": "PASS"
+    },
+    {
+      "command": "node scripts/check-no-real-domains.mjs",
+      "result": "零命中 ✅（登记百炼托管域为厂商公共注册域）"
+    },
+    {
+      "command": "node scripts/check-change-intent.mjs",
+      "result": "23 条记录全部合规"
+    },
+    {
+      "command": "corepack yarn workspace dsh-plugin-desktop vitest run tests/wait-budget-contract.spec.ts",
+      "result": "48/48 passed"
+    },
+    {
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/bootstrap.spec.ts && corepack yarn workspace @zeokeel/dsh-enterprise typecheck",
+      "result": "18/18 passed；typecheck exit 0"
+    },
+    {
+      "command": "cd server/webadmin && npm test -- --run Gateway.test.tsx && npm run typecheck",
+      "result": "44/44 passed；typecheck exit 0"
+    }
+  ]
+}

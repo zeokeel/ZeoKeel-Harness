@@ -119,9 +119,13 @@ export function apply(ctx: Context): void {
       // provider.available() 为 false，避免错误协议请求或回落官方端点携带网关令牌。
       const searchModel = cfg.models.find(model => model.id === cfg.default_model && gatewayProtocols(model.protocols).includes('anthropic'))
         ?? cfg.models.find(model => gatewayProtocols(model.protocols).includes('anthropic'))
+      const searchProvider = cfg.web?.search_provider ?? 'auto'
+      // 搜索关闭时把 baseURL 置空:web-search-deepseek 的 available() 要求
+      // URL.canParse(baseURL),空串会让 provider 明确不可用,而不是回落官方端点。
+      const searchEnabled = searchProvider !== 'off' && searchModel !== undefined
       await ctx.settings.update(WEB_SEARCH_DEEPSEEK_NS, {
         apiKeyEnv: TOKEN_ENV,
-        baseURL: searchModel === undefined ? '' : `${session.serverURL.replace(/\/+$/, '')}/v1`,
+        baseURL: searchEnabled ? `${session.serverURL.replace(/\/+$/, '')}/v1` : '',
         model: searchModel?.id ?? cfg.default_model,
       })
     } catch (cause) {

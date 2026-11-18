@@ -67,5 +67,10 @@ export interface BootstrapConfig {
     error_reporting_heartbeat?: boolean
     /** 服务端下发的默认思考强度(默认模型 reasoningEffort);缺省不覆盖用户设置 */
     default_thinking_level?: string
+    /**
+     * 服务端搜索提供方:auto|bailian|off。
+     * 缺省(旧服务端)按 auto 处理;off 会让客户端搜索 provider 不可用。
+     */
+    search_provider?: 'auto' | 'bailian' | 'off'
   }
 }

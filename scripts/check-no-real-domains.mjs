@@ -122,7 +122,7 @@ const ALLOWED_DOMAINS = {
     'deepseek.com', 'openai.com', 'anthropic.com', 'claude.com', 'x.ai', 'z.ai',
     'google.com', 'google.dev', 'googleapis.com', 'googleblog.com', 'google.internal',
     'azure.com', 'azuremarketplace.microsoft.com', 'amazon.com', 'amazonaws.com',
-    'alibabacloud.com', 'aliyun.com', 'volcengine.com', 'tencentcloud.com', 'tencent.com',
+    'alibabacloud.com', 'aliyun.com', 'maas.aliyuncs.com', 'dashscope.aliyuncs.com', 'dashscope-intl.aliyuncs.com', 'volcengine.com', 'tencentcloud.com', 'tencent.com',
     'mistral.ai', 'fireworks.ai', 'moonshot.ai', 'kimi.ai', 'together.ai', 'sambanova.ai',
     'nebius.com', 'openrouter.ai', 'deepgram.com', 'elevenlabs.io', 'cerebras.ai', 'groq.com',
     'perplexity.ai', 'cohere.com', 'deepinfra.com', 'meta.ai', 'meta.com', 'bfl.ai',

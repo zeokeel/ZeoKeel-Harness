@@ -46,6 +46,9 @@ type WebConfig struct {
 	// 默认思考强度(2026-08):客户端默认模型的 reasoningEffort,
 	// off|low|high|max(与客户端 llm-deepseek 适配器支持档位一致);默认 max。
 	DefaultThinkingLevel string `json:"default_thinking_level"`
+	// 搜索提供方:auto|bailian|off。客户端据此启用/停用搜索;
+	// auto 保留原行为,百炼由网关在出站请求中补 billing 标识。
+	SearchProvider string `json:"search_provider"`
 }
 
 // validThinkingLevels 是合法的思考强度值(与客户端 llm-deepseek
@@ -237,6 +240,8 @@ func Build(db *sql.DB, user *serverstore.User) (*Response, error) {
 	if lv := settings["web.default_thinking_level"]; lv != "" && validThinkingLevels[lv] {
 		web.DefaultThinkingLevel = lv
 	}
+	// 搜索提供方是部署策略,不是模型能力;存量非法值按 auto 回落。
+	web.SearchProvider = serverstore.NormalizeSearchProvider(settings[serverstore.SearchProviderSetting])
 
 	// 连接器目录(0042):只下发 enabled 连接器;GlitchTip 的 BASE_URL/ORGANIZATION
 	// 默认值由 web.glitchtip_base_url / web.glitchtip_organization 合成注入

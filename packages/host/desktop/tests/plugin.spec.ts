@@ -42,6 +42,13 @@ interface PluginHarness {
   setThemeSource: ReturnType<typeof vi.fn<(source: ThemePreference) => void>>
   rendererBoot: ReturnType<typeof vi.fn<(report: RendererBootReport) => void>>
   pickDirectory: ReturnType<typeof vi.fn<() => Promise<string | null>>>
+  /** `ctx.inject` 替身：记录依赖，并同步把最小 scope 交给回调。 */
+  inject: ReturnType<typeof vi.fn<(deps: string[], callback: (scope: unknown) => void) => void>>
+  /** 上游 native 目录选择能力替身（macOS 下应被桌面壳接管 `pick`）。 */
+  nativeCapability: {
+    kind: 'native'
+    pick: ReturnType<typeof vi.fn<(signal: AbortSignal) => Promise<string | null>>>
+  }
   route(path: string): WebRoute | undefined
   /** Emit one `settings/document-updated` revision for a profile entry id. */
   publish(namespace: string): Promise<void>
@@ -62,6 +69,18 @@ function createHarness(platform: DesktopRuntime['platform'] = 'darwin'): PluginH
   const setThemeSource = vi.fn<(source: ThemePreference) => void>()
   const rendererBoot = vi.fn<(report: RendererBootReport) => void>()
   const pickDirectory = vi.fn(async () => null)
+  const nativeCapability = {
+    kind: 'native' as const,
+    pick: vi.fn(async (_signal: AbortSignal): Promise<string | null> => null),
+  }
+  const inject = vi.fn((_deps: string[], callback: (scope: unknown) => void) => {
+    // 真实 cordis 会在依赖（directoryPicker）就绪后回调；替身立即给出一个
+    // 只含该服务与 effect 的最小 scope，macOS 接管逻辑只用到这两样。
+    callback({
+      directoryPicker: { capability: () => nativeCapability },
+      effect: (register: () => unknown) => register(),
+    })
+  })
   const routes = new Map<string, WebRoute>()
   // R4-RV3a：写面的 BrowserAuth 持有性证明替身（与上游 requestRejection 同判据）。
   const fence = {
@@ -149,6 +168,7 @@ function createHarness(platform: DesktopRuntime['platform'] = 'darwin'): PluginH
       return () => {}
     }),
     effect: vi.fn((register: () => unknown) => register()),
+    inject,
     on: vi.fn((event: string, listener: (namespace: unknown) => void) => {
       if (event === 'settings/document-updated') settingsUpdated.add(listener)
       return () => { settingsUpdated.delete(listener) }
@@ -170,6 +190,8 @@ function createHarness(platform: DesktopRuntime['platform'] = 'darwin'): PluginH
     setThemeSource,
     rendererBoot,
     pickDirectory,
+    inject,
+    nativeCapability,
     route: path => routes.get(path),
     publish: async (namespace) => {
       for (const listener of settingsUpdated) listener(namespace)
@@ -340,6 +362,28 @@ describe('desktop Host plugin', () => {
     expect(harness.pickDirectory).toHaveBeenCalledOnce()
     expect(res.statusCode).toBe(200)
     expect(JSON.parse(body)).toEqual({ path: 'C:\\Work' })
+  })
+
+  it('adopts the Electron chooser for the macOS native picker', async () => {
+    const harness = createHarness('darwin')
+    harness.pickDirectory.mockResolvedValue('/Users/example/Work')
+    apply(harness.ctx, config)
+
+    // 上游 native 选择器在 macOS 上用 osascript 面板，激活竞态导致点击不响应；
+    // 桌面壳把它换成 Electron 对话框（同一个 native 能力，只换 `pick`）。
+    expect(harness.inject).toHaveBeenCalledWith(['directoryPicker'], expect.any(Function))
+    await expect(harness.nativeCapability.pick(new AbortController().signal))
+      .resolves.toBe('/Users/example/Work')
+    expect(harness.pickDirectory).toHaveBeenCalledOnce()
+  })
+
+  it('leaves the upstream native picker alone off macOS', () => {
+    const harness = createHarness('win32')
+
+    apply(harness.ctx, config)
+
+    expect(harness.inject).not.toHaveBeenCalled()
+    expect(harness.nativeCapability.pick).not.toHaveBeenCalled()
   })
 
   it.each(['win32', 'linux'] as const)(

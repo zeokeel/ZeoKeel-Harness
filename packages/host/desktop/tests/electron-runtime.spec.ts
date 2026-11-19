@@ -597,6 +597,27 @@ describe('Electron compatibility runtime', () => {
     await release()
   })
 
+  it('opens one parented macOS folder chooser with a New Folder button', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    electron.dialog.showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/Users/example/Work'] })
+    const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
+    const runtime = new ElectronDesktopRuntime(async () => {})
+    const release = runtime.schedule(spec)
+    await runtime.mountScheduled()
+
+    await expect(runtime.pickDirectory()).resolves.toBe('/Users/example/Work')
+    expect(electron.dialog.showOpenDialog).toHaveBeenCalledWith(
+      electron.browserWindows[0],
+      {
+        title: 'Select Workspace Directory',
+        // macOS 的上游原生面板带「新建文件夹」，Electron 要显式打开该属性。
+        properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'],
+      },
+    )
+
+    await release()
+  })
+
   it('logs renderer crashes with the Windows exception code', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')

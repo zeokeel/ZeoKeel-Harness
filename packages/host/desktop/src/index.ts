@@ -55,6 +55,7 @@ import {
   handleBrandAssetRequest,
 } from './brand-web-route.ts'
 import { readDesktopChannelProfile } from './desktop-channel.ts'
+import { adoptElectronDirectoryChooser } from './native-directory-picker.ts'
 import type { ConnectionTrustFence, WriteProofDeps } from './write-proof.ts'
 import type { DesktopLocale, DesktopShellMode } from './runtime.ts'
 import { desktopLocaleFromPreference } from './desktop-locale.ts'
@@ -483,6 +484,13 @@ export function apply(ctx: Context, config: Config): void {
       }),
       'dsh-plugin-desktop: native directory picker route',
     )
+  }
+  // macOS：上游 native 选择器用 osascript 弹 NSOpenPanel，面板在模态循环启动前
+  // 请求激活（pin 的 0.2.1-rc.2 如此，0.2.2-alpha.2 才修）⇒ 面板常以非活动窗口
+  // 出现，点文件夹没反应、要点很多下。桌面壳改用自己的 Electron 对话框（附着在
+  // 主窗口上的 sheet），在能力对象上接管 `pick`；服务与 `kind` 不变。
+  if (runtime.platform === 'darwin') {
+    adoptElectronDirectoryChooser(ctx, () => runtime.pickDirectory())
   }
   ctx.effect(() => {
     let pending: ReturnType<typeof setImmediate> | undefined

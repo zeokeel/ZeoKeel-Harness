@@ -25,6 +25,8 @@ const Audit = lazy(() => import('./pages/Audit'))
 const ServerInfo = lazy(() => import('./pages/ServerInfo'))
 // 2026-10-23:部署期配置注册表(「系统配置」页;读写 /api/server/admin/config)。
 const SystemConfig = lazy(() => import('./pages/SystemConfig'))
+// 2026-11-22:全局客户端插件分发(「插件」页;上传 .tgz / 启停 / 删除)。
+const Plugins = lazy(() => import('./pages/Plugins'))
 
 // ---------------------------------------------------------------------------
 // 模块页(P3 变体,契约 docs/decisions/2026-10-14-webadmin-feature-variant.md)
@@ -423,6 +425,7 @@ export default function App() {
                   )}
                   <Route path="/audit" element={<Audit />} />
                   <Route path="/system-config" element={<SystemConfig />} />
+                  <Route path="/plugins" element={<Plugins />} />
                   <Route path="/server-info" element={<ServerInfo />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>

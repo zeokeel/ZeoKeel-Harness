@@ -19,6 +19,7 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
 	"github.com/zeokeel/zeokeel-harness/server/internal/capabilities"
 	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientplugins"
 	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
 	"github.com/zeokeel/zeokeel-harness/server/internal/connectors"
 	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
@@ -164,7 +165,13 @@ var productionOnlyAdminRoutes = map[string]string{
 	// `serverauth.NewDeployConfigAdminHandlers(db)` 单独供给，不经 serverauth 的
 	// RegisterAdminRoutes 镜像（那个镜像只建登录/会话/RBAC/用户/部门/审计面）。
 	"GET " + NamespaceServer + "/admin/config": "系统配置注册表读：serverauth 镜像不建这组后台配置路由",
-	"PUT " + NamespaceServer + "/admin/config": "系统配置注册表写（同上）",
+	// 客户端插件目录（0091）：clientplugins 只有 Handlers（无镜像函数），
+	// 四条管理面路由全部是生产独有。
+	"GET " + NamespaceServer + "/admin/plugins":             "客户端插件目录：clientplugins 只有 Handlers（无镜像函数）",
+	"POST " + NamespaceServer + "/admin/plugins":            "客户端插件目录上传（同上）",
+	"PUT " + NamespaceServer + "/admin/plugins/:id/enabled": "客户端插件目录启停（同上）",
+	"DELETE " + NamespaceServer + "/admin/plugins/:id":      "客户端插件目录删除（同上）",
+	"PUT " + NamespaceServer + "/admin/config":              "系统配置注册表写（同上）",
 }
 
 // productionOnlyReasonFor 返回该生产独有路由的登记理由；未登记返回 ok=false（判红）。
@@ -182,6 +189,7 @@ func productionTestDeps(t *testing.T) Deps {
 		Admin:         (&serverauth.AdminAPI{DB: nil}).Handlers(),
 		Appstore:      appstore.NewHandlers(nil),
 		Bootstrap:     bootstrap.NewHandlers(nil),
+		ClientPlugins: clientplugins.NewHandlers(nil),
 		ClientRelease: clientrelease.NewHandlers(func() string { return "test" }, "official"),
 		Channel:       channel.NewHandlers(),
 		PortalAdmin:   portal.NewAdminHandlers(nil),

@@ -7,6 +7,7 @@ import { AuthError } from './server-connector/auth.ts'
 import { GATEWAY_LLM_ROW_ID, TOKEN_ENV } from './gateway-contract.ts'
 import type { Session } from './server-connector/config.ts'
 import { gatewayProtocol, gatewayProtocols } from './model-protocol.ts'
+import { syncClientPlugins } from './client-plugin-provisioning.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'bootstrap'
@@ -128,6 +129,11 @@ export function apply(ctx: Context): void {
         baseURL: searchEnabled ? `${session.serverURL.replace(/\/+$/, '')}/v1` : '',
         model: searchModel?.id ?? cfg.default_model,
       })
+      // 全局客户端插件（2026-11）：设置写完之后再触发，且**不等待** —— 下载 + pnpm
+      // 安装可能要几秒，不能挡住模型/bootstrap 设置流程。模块内部吞掉所有失败并
+      // 记日志（下次登录重试）；这里的 catch 只是最后一道保险。
+      if (!epochs.isCurrent(epoch)) return
+      void syncClientPlugins(ctx, session, cfg.plugins).catch((cause) => ctx.logger.error(cause))
     } catch (cause) {
       // 迟到的失败同样不能落地（否则一次早已作废的 bootstrap 失败会把当前会话的
       // 状态改掉，甚至清掉别人的会话）。

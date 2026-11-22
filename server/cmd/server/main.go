@@ -23,6 +23,7 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/auditretention"
 	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
 	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientplugins"
 	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
 	"github.com/zeokeel/zeokeel-harness/server/internal/deployconfig"
 	"github.com/zeokeel/zeokeel-harness/server/internal/limits"
@@ -731,6 +732,8 @@ func registerProductionRoutes(r *gin.Engine, d productionDeps) {
 		Admin:     d.Admin,
 		Appstore:  appstore.NewHandlers(d.DB),
 		Bootstrap: bootstrap.NewHandlers(d.DB),
+		// 全员统一下发的客户端插件目录（0091）。
+		ClientPlugins: clientplugins.NewHandlers(d.DB),
 		// 客户端安装包随镜像发布:服务端把它所在的镜像目录直接对外提供
 		// (GET /api/client/v2/updates/manifest 与 /updates/client/<file>)。
 		ClientRelease: clientrelease.NewHandlers(func() string { return d.Version }, d.ChannelID),

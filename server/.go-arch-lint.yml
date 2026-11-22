@@ -61,6 +61,8 @@ components:
     in: internal/channel
   clientrelease:
     in: internal/clientrelease
+  clientplugins:
+    in: internal/clientplugins
   cmd:
     in: cmd/**
   connectors:
@@ -223,6 +225,11 @@ deps:
       - deployconfig
       - serverauth
       - serverstore
+  clientplugins:
+    mayDependOn:
+      - serverauth
+      - serverstore
+
 
   deployconfig:
     mayDependOn:
@@ -268,6 +275,7 @@ deps:
       - bootstrap
       - capabilities
       - channel
+      - clientplugins
       - clientrelease
       - connectors
       - llmgateway

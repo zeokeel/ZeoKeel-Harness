@@ -19,6 +19,7 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
 	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
 	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientplugins"
 	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
 	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
 	"github.com/zeokeel/zeokeel-harness/server/internal/portal"
@@ -47,6 +48,8 @@ type Deps struct {
 	Admin     *serverauth.AdminHandlers
 	Appstore  *appstore.Handlers
 	Bootstrap *bootstrap.Handlers
+	// ClientPlugins 全员统一下发的桌面客户端插件目录（0091）。
+	ClientPlugins *clientplugins.Handlers
 	// ClientRelease 客户端安装包下发(随镜像发布,见 internal/clientrelease)。
 	ClientRelease *clientrelease.Handlers
 	// Channel 渠道内容下发(登录页/客户端界面/门户共用一份渠道配置)。
@@ -148,6 +151,7 @@ var largeBodyRoutes = map[string]struct{}{
 	// 归档以 base64 JSON 上传（~33% 膨胀 ⇒ 24MB body），handler 内自套
 	// MaxBytesReader + 先查 Content-Length；外层 1MB 中间件必须豁免，否则内层上限失效。
 	"POST " + NamespaceServer + "/admin/shared-skills/:name/archive": {}, // sharedskills 24MB
+	"POST " + NamespaceServer + "/admin/plugins":                     {}, // client plugin .tgz base64（≤24MiB 解码）
 	"POST " + NamespaceServer + "/admin/agent-presets/:name/archive": {}, // agentshare 24MB
 	// WASM 应用上传：.wasm ≤ 32 MiB、base64 后请求体 ≤ 48 MiB（§4.2/R21）。
 	// handler 内必须自己再套 http.MaxBytesReader(48<<20) 并先查 Content-Length。
@@ -237,6 +241,12 @@ func registerClientV2(cli *gin.RouterGroup, d Deps) {
 
 	// 启动配置
 	cli.GET("/config/bootstrap", serverauth.BearerAuth(d.DB), d.Bootstrap.Bootstrap)
+
+	// 客户端插件包（0091）：登录员工可下载；只从当前服务端取，清单里的 url
+	// 是服务端相对路径。没有按人/部门分配 —— 所有员工同一份目录。
+	if d.ClientPlugins != nil {
+		cli.GET("/plugins/:id/:version/bundle", serverauth.BearerAuth(d.DB), d.ClientPlugins.Bundle)
+	}
 
 	// 渠道内容(公开:客户端登录页在未登录时就要拿名称/标语/logo)
 	cli.GET("/channel", d.Channel.PublicChannel)
@@ -450,6 +460,15 @@ func registerServer(srv *gin.RouterGroup, d Deps) {
 
 	// 连接器管理（connectors）：关闭时整片不注册（编译期 no-op）。
 	registerConnectorAdminRoutes(authed, d)
+
+	// 客户端插件目录管理（0091）：上传 .tgz / 启停 / 删除。
+	// 复用 capability:read/write，避免新增权限点；管理动作全部进审计。
+	if d.ClientPlugins != nil {
+		serverauth.AdminRoute(authed, "GET", "/plugins", serverauth.PermCapabilityRead, d.ClientPlugins.List)
+		serverauth.AdminRoute(authed, "POST", "/plugins", serverauth.PermCapabilityWrite, d.ClientPlugins.Upload)
+		serverauth.AdminRoute(authed, "PUT", "/plugins/:id/enabled", serverauth.PermCapabilityWrite, d.ClientPlugins.SetEnabled)
+		serverauth.AdminRoute(authed, "DELETE", "/plugins/:id", serverauth.PermCapabilityWrite, d.ClientPlugins.Remove)
+	}
 
 	// 门户管理(2026-09-10:品牌管理面已删除 —— 名称/文案/标识来自渠道配置,
 	// 改内容 = 改渠道配置并重新构建镜像,因此没有在线编辑端点)

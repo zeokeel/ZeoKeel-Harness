@@ -121,6 +121,58 @@ func TestBootstrap(t *testing.T) {
 	}
 }
 
+func TestBootstrapClientPlugins(t *testing.T) {
+	r, db := setup(t)
+	u, err := serverstore.GetUserByUsername(db, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := serverauth.IssueToken(db, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := serverstore.UpsertClientPlugin(db, &serverstore.ClientPlugin{
+		ID:          "demo-plugin",
+		PackageName: "@example/dsh-demo-plugin",
+		DisplayName: "@example/dsh-demo-plugin",
+		Version:     "1.0.0",
+		Sha256:      "abc123",
+		Size:        4,
+		Content:     []byte("tgz!"),
+		Enabled:     true,
+		UpdatedBy:   "admin",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	w, out := getJSON(t, r, "/api/client/v2/config/bootstrap", token)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+	}
+	plugins, ok := out["plugins"].([]any)
+	if !ok || len(plugins) != 1 {
+		t.Fatalf("plugins = %v", out["plugins"])
+	}
+	p := plugins[0].(map[string]any)
+	if p["id"] != "demo-plugin" || p["package_name"] != "@example/dsh-demo-plugin" || p["version"] != "1.0.0" {
+		t.Fatalf("plugin = %v", p)
+	}
+	if p["url"] != "/api/client/v2/plugins/demo-plugin/1.0.0/bundle" {
+		t.Fatalf("url = %v", p["url"])
+	}
+	if p["sha256"] != "abc123" {
+		t.Fatalf("sha256 = %v", p["sha256"])
+	}
+
+	// disabled rows are not sent (and an empty list omits the field entirely)
+	if err := serverstore.SetClientPluginEnabled(db, "demo-plugin", false); err != nil {
+		t.Fatal(err)
+	}
+	_, out = getJSON(t, r, "/api/client/v2/config/bootstrap", token)
+	if _, exists := out["plugins"]; exists {
+		t.Fatalf("disabled plugin still sent: %v", out["plugins"])
+	}
+}
+
 func TestBootstrapModelProtocols(t *testing.T) {
 	r, db := setup(t)
 	for _, protocol := range []string{"anthropic", "both"} {

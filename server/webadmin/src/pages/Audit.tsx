@@ -222,6 +222,10 @@ export const ACTION_LABEL: Record<string, string> = {
   // `PENDING_SERVER_ACTIONS` 自证判据强制把这一条从"待落地"桶里挪走。
   wasm_app_limits_change: '应用限流覆盖变更',
   wasm_review_switch: '应用更新审批开关',
+  // 客户端插件目录（0091）：全员统一下发的插件上传/启停/删除。
+  client_plugin_upload: '上传客户端插件',
+  client_plugin_enabled: '客户端插件启停变更',
+  client_plugin_delete: '删除客户端插件',
 }
 // 注:quota_change / dept_budget_change / quota_default_change 随配额与部门预算
 // 下线一并移除(2026-09-11),不再有新数据产生。

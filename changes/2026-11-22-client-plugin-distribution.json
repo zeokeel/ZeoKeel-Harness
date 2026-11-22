@@ -1,0 +1,103 @@
+{
+  "id": "2026-11-22-client-plugin-distribution",
+  "status": "implemented",
+  "intent": {
+    "zh": "企业的客户端 UI 插件（DSH bundle）目前只能逐台手动安装或随客户端预置，webadmin 没有目录、bootstrap 不下发，管理员无法把全员都要用的插件统一发放。增加一个全局插件目录：管理员上传 .tgz，服务端随 bootstrap 下发给全部登录员工，客户端用现有 profile 插件管理器安装，重启生效。",
+    "en": "Client UI plugins (DSH bundles) could only be installed per machine or shipped with the client; webadmin had no catalog and bootstrap did not deliver them, so admins could not roll out a plugin everyone needs. Add a global catalog: an admin uploads a .tgz, the server sends it through bootstrap to every signed-in employee, and the client installs it with the existing profile plugin manager (restart required)."
+  },
+  "modules": [
+    "server/internal/clientplugins/",
+    "server/internal/serverstore/client_plugins.go",
+    "server/internal/serverstore/client_plugins_test.go",
+    "server/internal/serverstore/migrations-pg/0091_client_plugins.sql",
+    "server/internal/serverstore/migrations-checksums.json",
+    "server/internal/bootstrap/bootstrap.go",
+    "server/internal/bootstrap/bootstrap_test.go",
+    "server/internal/router/router.go",
+    "server/internal/router/router_test.go",
+    "server/internal/router/parity_test.go",
+    "server/cmd/server/main.go",
+    "server/.go-arch-lint.yml",
+    "server/webadmin/src/pages/Plugins.tsx",
+    "server/webadmin/src/pages/Plugins.test.tsx",
+    "server/webadmin/src/App.tsx",
+    "server/webadmin/src/lib/nav.ts",
+    "server/webadmin/src/lib/nav.test.ts",
+    "packages/host/enterprise/src/client-plugin-provisioning.ts",
+    "packages/host/enterprise/src/server-connector/bootstrap.ts",
+    "packages/host/enterprise/src/bootstrap.ts",
+    "packages/host/enterprise/tests/client-plugin-provisioning.spec.ts",
+    "server/docs/03-api-reference.md",
+    "server/docs/06-database.md",
+    "server/docs/08-development.md",
+    "server/README.md",
+    "server/AGENTS.md",
+    "site/src/content/docs/plugin-ecosystem.md",
+    "site/src/content/docs/architecture.md",
+    "site/src/content/docs/deployment/compose.md",
+    "site/src/content/docs/deployment/upgrade.md",
+    "site/src/content/docs/en/architecture.md",
+    "site/src/content/docs/en/deployment/compose.md",
+    "site/src/content/docs/en/deployment/upgrade.md",
+    "server/webadmin/src/pages/Audit.tsx"
+  ],
+  "acceptance": [
+    {
+      "criterion": "服务端 clientplugins：合法 .tgz 上传后可 list/bootstrap/下载；停用或版本变化后客户端下载 404；同版本重传 409；带安装期脚本、符号链接、越界路径、无 dsh.bundle.patch 的包被拒；管理动作有审计。",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/clientplugins/... ./internal/bootstrap/... ./internal/serverstore/... -run 'ClientPlugin|TestBootstrapClientPlugins' -count=1"
+    },
+    {
+      "criterion": "路由/权限：管理面 4 条路由与员工面 1 条下载路由挂在正确命名空间；非管理员访问管理面 403；条件注册/镜像对拍/大请求体豁免判据全绿。",
+      "evidence": "test",
+      "command": "cd server && go test ./internal/router/... -count=1 && cd server && go test -tags 'skills connectors apps' ./internal/router/... -count=1"
+    },
+    {
+      "criterion": "webadmin「插件」页：列表/上传 base64/启停/删除可用；只读账号无写入口；页面与导航守卫通过。",
+      "evidence": "test",
+      "command": "cd server/webadmin && npx vitest run src/pages/Plugins.test.tsx src/lib/nav.test.ts"
+    },
+    {
+      "criterion": "客户端 provisioning：同版本跳过、缺失/版本变化安装、sha256 错拒绝、无 pluginManager 与旧服务端（无 plugins）no-op；重启提示只在 restart-required 时出现。",
+      "evidence": "test",
+      "command": "corepack yarn workspace @zeokeel/dsh-enterprise vitest run tests/client-plugin-provisioning.spec.ts"
+    },
+    {
+      "criterion": "真机：管理员上传一个测试插件并启用；新版客户端登录后自动下载安装并提示重启；重启后插件出现在界面；管理端删除/停用后客户端下次登录不再安装。",
+      "evidence": "manual",
+      "command": "webadmin 上传 .tgz → 新客户端登录 → 观察安装/重启提示 → 重启验证插件；删除后再次登录确认不再下发"
+    }
+  ],
+  "risk": "客户端插件与宿主同进程、没有插件沙箱；本 cut 只靠 TLS + 管理员 RBAC + sha256，没有签名。恶意/错误包会影响所有员工机器；首次安装需要重启一次；旧客户端不消费该字段（继续手动安装），不会自动获得插件。服务端 DB 新增一张 bytea 表（≤24MB/包），随 PG 备份增长。",
+  "rollback": "webadmin 停用/删除插件即停止下发（已安装的不自动卸载）；回滚服务端镜像后旧二进制忽略 client_plugins 表与 bootstrap.plugins 字段（迁移保留，不删 version=91 行也可启动）；客户端回滚后不再 provisioning，插件仍留在 profile 直到手动移除。",
+  "verification": [
+    {
+      "command": "cd server && go test ./internal/clientplugins/... ./internal/bootstrap/... ./internal/serverstore/... -run 'ClientPlugin|TestBootstrapClientPlugins' -count=1",
+      "result": "PASS（含 PG 测试模板：上传/列表/下载/停用/同版本 409/坏包拒绝/生命周期/bootstrap 字段）"
+    },
+    {
+      "command": "cd server && go test ./internal/router/... -count=1 && go test -tags 'skills connectors' ./internal/router/... -count=1",
+      "result": "PASS（基础面 + skills/connectors 变体；新路由与镜像/条件注册对拍一致）"
+    },
+    {
+      "command": "cd server/webadmin && npx vitest run src/pages/Plugins.test.tsx src/pages/Audit.test.tsx src/lib/nav.test.ts src/lib/features.test.ts src/lib/routes.test.ts",
+      "result": "PASS（全量套件复跑确认 1054 用例；插件页 11、审计 25、导航 24、变体/路由对拍通过）"
+    },
+    {
+      "command": "DSH_AGENTS_HOME=/tmp/dsh-agents-empty corepack yarn workspace @zeokeel/dsh-enterprise vitest run",
+      "result": "PASS（109 files / 1292 tests；隔离本地用户技能根后无环境性失败）"
+    },
+    {
+      "command": "node scripts/check-migration-range.mjs && node scripts/check-doc-claims.mjs && node scripts/check-change-intent.mjs && node scripts/check-no-real-domains.mjs",
+      "result": "PASS（迁移区间 0001–0091 / 83 个文件哈希、文档数字真源、变更记录、公开面域名零命中）"
+    },
+    {
+      "command": "node scripts/check-public-text.mjs --file <changed files>",
+      "result": "PASS（无私有 denylist 命中）"
+    },
+    {
+      "command": "make -f Makefile.agent arch-ts",
+      "result": "PASS（1268 modules / 4809 dependencies，架构基线未增长）"
+    }
+  ]
+}

@@ -464,10 +464,10 @@ func registerServer(srv *gin.RouterGroup, d Deps) {
 	// 客户端插件目录管理（0091）：上传 .tgz / 启停 / 删除。
 	// 复用 capability:read/write，避免新增权限点；管理动作全部进审计。
 	if d.ClientPlugins != nil {
-		serverauth.AdminRoute(authed, "GET", "/plugins", serverauth.PermCapabilityRead, d.ClientPlugins.List)
-		serverauth.AdminRoute(authed, "POST", "/plugins", serverauth.PermCapabilityWrite, d.ClientPlugins.Upload)
-		serverauth.AdminRoute(authed, "PUT", "/plugins/:id/enabled", serverauth.PermCapabilityWrite, d.ClientPlugins.SetEnabled)
-		serverauth.AdminRoute(authed, "DELETE", "/plugins/:id", serverauth.PermCapabilityWrite, d.ClientPlugins.Remove)
+		serverauth.AdminRoute(authed, "GET", "/plugins", serverauth.PermPluginRead, d.ClientPlugins.List)
+		serverauth.AdminRoute(authed, "POST", "/plugins", serverauth.PermPluginWrite, d.ClientPlugins.Upload)
+		serverauth.AdminRoute(authed, "PUT", "/plugins/:id/enabled", serverauth.PermPluginWrite, d.ClientPlugins.SetEnabled)
+		serverauth.AdminRoute(authed, "DELETE", "/plugins/:id", serverauth.PermPluginWrite, d.ClientPlugins.Remove)
 	}
 
 	// 门户管理(2026-09-10:品牌管理面已删除 —— 名称/文案/标识来自渠道配置,

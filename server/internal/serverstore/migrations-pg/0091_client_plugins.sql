@@ -8,7 +8,7 @@
 -- content 走 bytea（典型 UI bundle 约 2.3MB；上限由 handler 的 MaxBytesReader 兜住）。
 -- 回滚口径：删 version=91 行 + 换旧镜像；DDL 留着对旧二进制无影响
 -- （旧二进制不读本表；bootstrap 的 plugins 字段对旧客户端是未知字段）。
-CREATE TABLE client_plugins (
+CREATE TABLE IF NOT EXISTS client_plugins (
   id            text PRIMARY KEY,
   package_name  text NOT NULL UNIQUE,
   display_name  text NOT NULL,

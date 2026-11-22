@@ -1178,6 +1178,7 @@ var calendarSkipScanDirRegistry = []string{
 	"../capabilities",
 	"../channel",
 	"../clientrelease",
+	"../clientplugins",
 	"../connectors",
 	"../deployconfig",
 	"../features",

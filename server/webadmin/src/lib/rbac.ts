@@ -48,6 +48,9 @@ export const PERM_CAP_READ = 'capability:read'
 /** 能力中心写面(审批/上下架/归属转移等处置动作;应用中心复用同一点,见 §13)。 */
 export const PERM_CAP_WRITE = 'capability:write'
 export const PERM_CONNECTOR_READ = 'connector:read'
+/** 客户端插件目录（0091）：读面进入「插件」页；写面在页内按 plugin:write 收敛。 */
+export const PERM_PLUGIN_READ = 'plugin:read'
+export const PERM_PLUGIN_WRITE = 'plugin:write'
 export const PERM_SERVERINFO_READ = 'server-info:read'
 export const PERM_AUDIT_READ = 'audit:read'
 /**

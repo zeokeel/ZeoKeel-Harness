@@ -15,7 +15,7 @@ import Plugins from './Plugins'
 //      不是 multipart、不是裸字节；
 //   ③ 启停是 PUT …/:id/enabled + `{"enabled":bool}`；
 //   ④ 删除必须先弹确认框，确认后才发 DELETE；
-//   ⑤ 只读账号（无 capability:write）看得到列表，但上传/启停/删除入口一个都不渲染；
+//   ⑤ 只读账号（无 plugin:write）看得到列表，但上传/启停/删除入口一个都不渲染；
 //   ⑥ 服务端失败原因（ApiError.message）必须显示出来。
 // ---------------------------------------------------------------------------
 
@@ -76,9 +76,9 @@ const callsOf = (calls: Call[], predicate: (c: Call) => boolean): Call[] => call
 
 beforeEach(() => {
   mockRequest.mockReset()
-  // 写面默认给全：个别用例（只读）自己覆盖成 capability:read。rbac 的当前管理员是
+  // 写面默认给全：个别用例（只读）自己覆盖成 plugin:read。rbac 的当前管理员是
   // 模块级快照，必须在每个用例前复位，否则写权限会泄漏给后面的只读用例。
-  setCurrentAdmin({ role: 'super_admin', permissions: ['capability:read', 'capability:write'] })
+  setCurrentAdmin({ role: 'super_admin', permissions: ['plugin:read', 'plugin:write'] })
 })
 
 describe('插件分发页', () => {
@@ -188,8 +188,8 @@ describe('插件分发页', () => {
     await waitFor(() => expect(callsOf(calls, (c) => c.path === LIST_PATH && c.method === 'GET').length).toBeGreaterThanOrEqual(2))
   })
 
-  it('只读账号（无 capability:write）：能看到列表，但没有上传/启停/删除入口', async () => {
-    setCurrentAdmin({ role: 'super_admin', permissions: ['capability:read'] })
+  it('只读账号（无 plugin:write）：能看到列表，但没有上传/启停/删除入口', async () => {
+    setCurrentAdmin({ role: 'super_admin', permissions: ['plugin:read'] })
     installMock()
     render(<Plugins />)
 
@@ -206,8 +206,8 @@ describe('插件分发页', () => {
     expect(screen.getByRole('button', { name: '刷新' })).toBeInTheDocument()
   })
 
-  it('持有 capability:write 时上传/启停/删除入口可见（正向夹具）', async () => {
-    setCurrentAdmin({ role: 'super_admin', permissions: ['capability:read', 'capability:write'] })
+  it('持有 plugin:write 时上传/启停/删除入口可见（正向夹具）', async () => {
+    setCurrentAdmin({ role: 'super_admin', permissions: ['plugin:read', 'plugin:write'] })
     installMock()
     render(<Plugins />)
 

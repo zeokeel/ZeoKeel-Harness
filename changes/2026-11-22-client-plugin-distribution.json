@@ -39,7 +39,11 @@
     "site/src/content/docs/en/architecture.md",
     "site/src/content/docs/en/deployment/compose.md",
     "site/src/content/docs/en/deployment/upgrade.md",
-    "server/webadmin/src/pages/Audit.tsx"
+    "server/webadmin/src/pages/Audit.tsx",
+    "server/internal/serverauth/rbac.go",
+    "server/webadmin/src/lib/rbac.ts",
+    "server/internal/serverstore/audit_r13gh3_searchpath_serverface_test.go",
+    "server/internal/serverstore/audit_s6_calendar_skip_guard_test.go"
   ],
   "acceptance": [
     {
@@ -72,32 +76,28 @@
   "rollback": "webadmin 停用/删除插件即停止下发（已安装的不自动卸载）；回滚服务端镜像后旧二进制忽略 client_plugins 表与 bootstrap.plugins 字段（迁移保留，不删 version=91 行也可启动）；客户端回滚后不再 provisioning，插件仍留在 profile 直到手动移除。",
   "verification": [
     {
-      "command": "cd server && go test ./internal/clientplugins/... ./internal/bootstrap/... ./internal/serverstore/... -run 'ClientPlugin|TestBootstrapClientPlugins' -count=1",
-      "result": "PASS（含 PG 测试模板：上传/列表/下载/停用/同版本 409/坏包拒绝/生命周期/bootstrap 字段）"
+      "command": "cd server && go test ./... -count=1",
+      "result": "PASS（全量 Go：clientplugins/bootstrap/serverstore/router/cmd/server/appstore 等；GO_EXIT=0）"
     },
     {
-      "command": "cd server && go test ./internal/router/... -count=1 && go test -tags 'skills connectors' ./internal/router/... -count=1",
-      "result": "PASS（基础面 + skills/connectors 变体；新路由与镜像/条件注册对拍一致）"
-    },
-    {
-      "command": "cd server/webadmin && npx vitest run src/pages/Plugins.test.tsx src/pages/Audit.test.tsx src/lib/nav.test.ts src/lib/features.test.ts src/lib/routes.test.ts",
-      "result": "PASS（全量套件复跑确认 1054 用例；插件页 11、审计 25、导航 24、变体/路由对拍通过）"
+      "command": "cd server/webadmin && npx vitest run --maxWorkers=2",
+      "result": "PASS：63 files / 1054 tests"
     },
     {
       "command": "DSH_AGENTS_HOME=/tmp/dsh-agents-empty corepack yarn workspace @zeokeel/dsh-enterprise vitest run",
-      "result": "PASS（109 files / 1292 tests；隔离本地用户技能根后无环境性失败）"
+      "result": "PASS：109 files / 1292 tests"
+    },
+    {
+      "command": "xvfb-run -a corepack yarn check",
+      "result": "32/34 包级任务通过；唯一代码相关失败 check:migration-range 是当时 0091/checksums 尚未提交（提交后已复验通过）；dsh-plugin-desktop 在本机 headless X 下 Electron smoke 起不来（Missing X server/$DISPLAY，环境限制，CI 的 Xvfb 不受影响）"
     },
     {
       "command": "node scripts/check-migration-range.mjs && node scripts/check-doc-claims.mjs && node scripts/check-change-intent.mjs && node scripts/check-no-real-domains.mjs",
-      "result": "PASS（迁移区间 0001–0091 / 83 个文件哈希、文档数字真源、变更记录、公开面域名零命中）"
-    },
-    {
-      "command": "node scripts/check-public-text.mjs --file <changed files>",
-      "result": "PASS（无私有 denylist 命中）"
+      "result": "PASS（迁移区间/83 个哈希、文档真源、变更记录、公开面域名零命中）"
     },
     {
       "command": "make -f Makefile.agent arch-ts",
-      "result": "PASS（1268 modules / 4809 dependencies，架构基线未增长）"
+      "result": "PASS（架构基线未增长）"
     }
   ]
 }

@@ -41,11 +41,16 @@ const (
 	PermCapabilityWrite = "capability:write" // 能力中心审批
 	PermConnectorRead   = "connector:read"   // 连接器
 	PermConnectorWrite  = "connector:write"
-	PermAuditRead       = "audit:read"            // 审计日志
-	PermAuditRetention  = "audit:retention:write" // 审计保留策略(仅 super_admin)
-	PermPortalRead      = "portal:read"           // 门户首页
-	PermPortalWrite     = "portal:write"
-	PermServerInfoRead  = "server-info:read" // 服务器信息(含错误监控配置面,2026-09-08:删除零消费的 error-monitoring:read)
+	// 客户端插件目录（0091）：全员统一下发的 DSH bundle 目录。
+	// 独立权限点而不是复用 capability:read：可选模块关闭的变体里 capability 面
+	// 整片不注册，复用会让「无入口的保留权限点」守卫误判（R13GE）。
+	PermPluginRead     = "plugin:read"
+	PermPluginWrite    = "plugin:write"
+	PermAuditRead      = "audit:read"            // 审计日志
+	PermAuditRetention = "audit:retention:write" // 审计保留策略(仅 super_admin)
+	PermPortalRead     = "portal:read"           // 门户首页
+	PermPortalWrite    = "portal:write"
+	PermServerInfoRead = "server-info:read" // 服务器信息(含错误监控配置面,2026-09-08:删除零消费的 error-monitoring:read)
 	// PermConfigRead / PermConfigWrite 是**部署期配置注册表**
 	// （internal/deployconfig，「系统配置」页）的读写面（2026-10-23）。
 	//
@@ -72,6 +77,7 @@ var AllPermissions = []string{
 	PermMarketRead, PermMarketWrite,
 	PermCapabilityRead, PermCapabilityWrite,
 	PermConnectorRead, PermConnectorWrite,
+	PermPluginRead, PermPluginWrite,
 	PermAuditRead, PermAuditRetention,
 	PermPortalRead, PermPortalWrite,
 	PermServerInfoRead,

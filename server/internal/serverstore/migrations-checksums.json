@@ -500,8 +500,8 @@
     {
       "version": "0091",
       "file": "0091_client_plugins.sql",
-      "bytes": 1182,
-      "sha256": "4c7a165d9ccd20964334f50eef28665d456e242f9cd56139d3b8ceeacaba1930"
+      "bytes": 1196,
+      "sha256": "dd4b1b3d6f0a586e4105f8f143efe77b2a663a662e479fedc432e6ab2d7d7a59"
     }
   ]
 }

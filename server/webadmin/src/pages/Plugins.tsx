@@ -12,7 +12,7 @@ import { Label } from '../components/ui/label'
 import { Skeleton } from '../components/ui/skeleton'
 import { Switch } from '../components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
-import { hasPermission, PERM_CAP_WRITE } from '../lib/rbac'
+import { hasPermission, PERM_PLUGIN_WRITE } from '../lib/rbac'
 import { useFlash } from '../lib/use-flash'
 
 /**
@@ -28,7 +28,7 @@ import { useFlash } from '../lib/use-flash'
  *      服务端按 JSON 解析并在同一次请求里解码/校验 tar；
  *   ② 列表接口**永不返回 content**，所以页面只展示元数据；`sha256` 只显示前 12 位
  *      （完整值挂 title），它是客户端校验下载包的唯一指纹；
- *   ③ 读权限 `capability:read` 能看列表；上传/启停/删除都按 `capability:write`
+ *   ③ 读权限 `plugin:read` 能看列表；上传/启停/删除都按 `plugin:write`
  *      收敛（体验层；服务端 RequirePermission 才是护栏，缺权限会拿到 403）。
  *
  * 为什么列表读失败要清空旧行：行内的启停/删除都是对**某一版包**的写动作，刷新失败时
@@ -124,7 +124,7 @@ export default function Plugins() {
 
   const [confirmDel, setConfirmDel] = useState<PluginRow | null>(null)
 
-  const canWrite = hasPermission(PERM_CAP_WRITE)
+  const canWrite = hasPermission(PERM_PLUGIN_WRITE)
 
   const load = useCallback(async () => {
     setLoading(true)

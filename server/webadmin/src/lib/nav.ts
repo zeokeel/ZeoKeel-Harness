@@ -21,6 +21,7 @@ import {
   PERM_DEPT_READ,
   PERM_GATEWAY_READ,
   PERM_MARKET_READ,
+  PERM_PLUGIN_READ,
   PERM_SERVERINFO_READ,
   PERM_USAGE_READ,
   PERM_USER_READ,
@@ -66,9 +67,9 @@ const CORE_NAV_ENTRIES_HEAD: NavEntry[] = [
   { to: '/departments', label: '部门', icon: Network, section: '管理', perms: [PERM_DEPT_READ] },
   { to: '/auth', label: '认证', icon: KeyRound, section: '管理', perms: [PERM_AUTH_READ] },
   // 2026-11-22：全局客户端插件分发（上传/启停/删除 DSH 插件包，全员 bootstrap 下发）。
-  // 读权限复用 capability:read（与服务端路由申报的权限点一致）；写动作在页面内按
-  // capability:write 收敛（体验层，服务端 RequirePermission 才是护栏）。
-  { to: '/plugins', label: '插件', icon: Package, section: '管理', perms: [PERM_CAP_READ] },
+  // 读权限 plugin:read（与服务端路由申报的权限点一致）；写动作在页面内按
+  // plugin:write 收敛（体验层，服务端 RequirePermission 才是护栏）。
+  { to: '/plugins', label: '插件', icon: Package, section: '管理', perms: [PERM_PLUGIN_READ] },
   // 运维分区(super_admin; auditor 仅有 usage:read)
   { to: '/gateway', label: '网关', icon: Settings2, section: '运维', perms: [PERM_GATEWAY_READ] },
   // 2026-09-22:上游 Files 配额是每 API key(全组织共享),这里给管理员一个

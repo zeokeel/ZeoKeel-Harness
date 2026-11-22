@@ -661,7 +661,7 @@ const PERM_ARG_POSITIVE_FIXTURES: PermArgPositiveFixture[] = [
   { rel: 'pages/GatewayFiles.tsx', arg: 'PERM_GATEWAY_WRITE', testFile: 'pages/GatewayFiles.test.tsx', testName: '写面收敛：持有 gateway:write 时删除/清理入口可见', kind: 'behavior' },
   { rel: 'pages/SystemConfig.tsx', arg: 'PERM_CONFIG_WRITE', testFile: 'pages/SystemConfig.test.tsx', testName: '持有 config:write 时保存按钮可用（正向夹具）', kind: 'behavior' },
 
-  { rel: 'pages/Plugins.tsx', arg: 'PERM_CAP_WRITE', testFile: 'pages/Plugins.test.tsx', testName: '持有 capability:write 时上传/启停/删除入口可见（正向夹具）', kind: 'behavior' },
+  { rel: 'pages/Plugins.tsx', arg: 'PERM_PLUGIN_WRITE', testFile: 'pages/Plugins.test.tsx', testName: '持有 plugin:write 时上传/启停/删除入口可见（正向夹具）', kind: 'behavior' },
 
   { rel: 'pages/Marketplace.tsx', arg: 'PERM_MARKET_READ', testFile: 'pages/Marketplace.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
   { rel: 'pages/Marketplace.tsx', arg: 'PERM_CAP_READ', testFile: 'pages/Marketplace.test.tsx', testName: 'F-48 正向夹具:持有 market:write/capability:write 时写入口可见', kind: 'behavior' },
@@ -720,6 +720,7 @@ const PERM_WITHOUT_NAV_ENTRY: Record<string, string> = {
   'connector:write': '写面：连接器页（connector:read 进入）内的动作',
   'audit:retention:write': '写面：审计页（audit:read 进入）内的保留策略卡片',
   'config:write': '写面：系统配置页（config:read 进入）内的保存动作',
+  'plugin:write': '写面：插件页（plugin:read 进入）内的上传/启停/删除动作',
   'portal:read': '门户页无独立管理入口（相关配置在「服务器信息」页）',
   'portal:write': '写面：门户配置动作',
 }
@@ -1040,7 +1041,7 @@ describe('导航权限过滤(P2-43)', () => {
     // **期望按变体给**（`withVariant` 从 FEATURE_NAV_ENTRIES 派生路径→模块，不另抄清单）：
     // 关掉 skills/apps 时这两条自然落到空集，边界本身不变。
     expect(paths({ role: 'auditor', permissions: ['capability:read'] }))
-      .toEqual(['/plugins', ...withVariant(['/capabilities', '/app-center'])])
+      .toEqual(withVariant(['/capabilities', '/app-center']))
     expect(paths({ role: 'auditor', permissions: ['market:read'] }))
       .toEqual(withVariant(['/capabilities']))
     // 自证：全开变体下这组期望必须真的是两条（否则上面的 filter 塌成恒空集）。
@@ -1072,14 +1073,14 @@ describe('导航权限过滤(P2-43)', () => {
     expect(isNavVisible(entry, employee)).toBe(false)
   })
 
-  it('插件页:capability:read 可见,审计员/普通员工不可见(管理分区)', () => {
-    // 2026-11-22 新增「插件」条目（全局客户端插件分发）：读面与能力中心/应用中心
-    // 复用同一个权限点 `capability:read`，写动作在页内按 capability:write 收敛。
+  it('插件页:plugin:read 可见,审计员/普通员工不可见(管理分区)', () => {
+    // 2026-11-22 新增「插件」条目（全局客户端插件分发）：独立权限点 plugin:read，
+    // 写动作在页内按 plugin:write 收敛。
     const entry = NAV_ENTRIES.find((n) => n.to === '/plugins')!
     expect(entry.section).toBe('管理')
-    expect(entry.perms).toEqual(['capability:read'])
+    expect(entry.perms).toEqual(['plugin:read'])
     expect(isNavVisible(entry, superAdmin)).toBe(true)
-    expect(isNavVisible(entry, { role: 'auditor', permissions: ['capability:read'] })).toBe(true)
+    expect(isNavVisible(entry, { role: 'auditor', permissions: ['plugin:read'] })).toBe(true)
     expect(isNavVisible(entry, auditor)).toBe(false) // auditor = audit/usage/user:read
     expect(isNavVisible(entry, employee)).toBe(false)
   })

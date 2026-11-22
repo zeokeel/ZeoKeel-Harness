@@ -118,6 +118,7 @@ var searchPathRelations = map[string]searchPathRelation{
 	"admin_mfa_challenges":          {searchPathRelNonFamily, "MFA 票据：遮蔽读 ⇒ 第二因子校验可见地失败（拒绝登录，不静默放行）"},
 	"ldap_synced_users":             {searchPathRelNonFamily, "LDAP 同步台账：遮蔽读 ⇒ 同步差异计数偏移，不参与金额"},
 	"connectors":                    {searchPathRelNonFamily, "连接器配置：遮蔽读 ⇒ 面板可见地空/失败"},
+	"client_plugins":                {searchPathRelNonFamily, "客户端插件目录：遮蔽读 ⇒ bootstrap 目录可见地空/下载 404，不参与金额与审计链"},
 	"client_error_reporting_status": {searchPathRelNonFamily, "客户端错误上报开关状态：遮蔽读 ⇒ 探针读数可见地异常"},
 	"apps":                          {searchPathRelNonFamily, "应用主表（能力中心）：遮蔽读 ⇒ 目录可见地空/404"},
 	"app_releases":                  {searchPathRelNonFamily, "应用版本：同上"},
@@ -218,6 +219,7 @@ var searchPathGuardPackages = map[string]searchPathPkgClass{
 	"internal/capabilities":  searchPathPkgNoFamilySQL,
 	"internal/channel":       searchPathPkgNoFamilySQL,
 	"internal/clientrelease": searchPathPkgNoFamilySQL,
+	"internal/clientplugins": searchPathPkgNoFamilySQL,
 	"internal/connectors":    searchPathPkgNoFamilySQL,
 	// P1 第一片（2026-10-14）：可选模块的编译期开关包（`-tags` 面）。它**只有常量与
 	// 纯函数**（模块名 / Enabled / Has），不碰数据库，因此 no-family-sql。

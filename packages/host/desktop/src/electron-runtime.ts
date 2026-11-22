@@ -450,7 +450,10 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
 
   /** @inheritdoc */
   async pickDirectory(): Promise<string | null> {
-    if (this.platform !== 'win32') {
+    // macOS 同样由 Electron 提供对话框（附着在主窗口上的 sheet）。上游 DSH 在
+    // macOS 走的是 osascript/NSOpenPanel，面板可能以非活动窗口出现、点击不响应；
+    // 桌面壳在 `native-directory-picker.ts` 里用它接管那条链路。
+    if (this.platform !== 'win32' && this.platform !== 'darwin') {
       throw new Error(`dsh-plugin-desktop: native workspace picker is unavailable on ${this.platform}`)
     }
     if (this.directoryPickTask !== undefined) return await this.directoryPickTask
@@ -469,7 +472,11 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   private async showDirectoryPicker(): Promise<string | null> {
     const options: Electron.OpenDialogOptions = {
       title: this.currentLocale === 'zh' ? '选择工作区目录' : 'Select Workspace Directory',
-      properties: ['openDirectory', 'dontAddToRecent'],
+      // macOS 的 NSOpenPanel 默认带「新建文件夹」；Electron 要显式打开
+      // `createDirectory`，否则面板里少了这个按钮（与上游原生选择器对齐）。
+      properties: this.platform === 'darwin'
+        ? ['openDirectory', 'createDirectory', 'dontAddToRecent']
+        : ['openDirectory', 'dontAddToRecent'],
     }
     const window = this.window
     const result = window === undefined || window.isDestroyed()

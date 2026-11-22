@@ -13,8 +13,10 @@ package bootstrap
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
 
@@ -68,6 +70,11 @@ type Response struct {
 	// 每项 = 客户端 ConnectorDef 对齐的 JSON(definition 字段内嵌),
 	// 服务端管理员经 webadmin 管理;客户端凭证仍只存本地,不随下发。
 	Connectors []ConnectorItem `json:"connectors"`
+	// Plugins 是全员统一下发的桌面客户端插件目录（0091）。没有按人/部门分配；
+	// 客户端拿到的清单是当前所有 enabled 行，自行下载、校验、安装。
+	// 字段对旧客户端是未知字段（JSON 忽略），因此可与旧客户端混跑。
+	Plugins []ClientPluginItem `json:"plugins,omitempty"`
+
 	// ServerVersion 是**服务端构建版本标识**（编译期注入，值 = serverauth.BuildVersion()）。
 	//
 	// 诚实口径（R3-A A-13）：这一栏曾经写着"客户端据此发现『服务端已升级、本机客户端
@@ -92,6 +99,20 @@ type Response struct {
 	// 谁把"客户端据此提示升级"这类承诺写回来，或者真加了客户端消费方却没同步口径，
 	// 用例都会红。
 	ServerVersion string `json:"server_version"`
+}
+
+// ClientPluginItem 是 bootstrap 下发的客户端插件条目。
+//
+// URL 是服务端相对路径（客户端拼 session.serverURL），客户端只从当前服务端下载，
+// 不接受清单里的任意外部地址。sha256/size 用于下载后校验；package_name 用于
+// 与已安装 profile bundle 比对版本（id 只是目录键/URL 段）。
+type ClientPluginItem struct {
+	ID          string `json:"id"`
+	PackageName string `json:"package_name"`
+	Version     string `json:"version"`
+	Sha256      string `json:"sha256"`
+	Size        int64  `json:"size"`
+	URL         string `json:"url"`
 }
 
 // ConnectorItem 是下发到客户端的连接器定义(与客户端 ConnectorDef 对齐)。
@@ -270,12 +291,30 @@ func Build(db *sql.DB, user *serverstore.User) (*Response, error) {
 		connectorItems = append(connectorItems, item)
 	}
 
+	// 客户端插件目录（0091，全员统一下发）：没有用户/部门过滤；enabled 才下发。
+	plugins, err := serverstore.ListEnabledClientPlugins(db)
+	if err != nil {
+		return nil, err
+	}
+	pluginItems := make([]ClientPluginItem, 0, len(plugins))
+	for _, p := range plugins {
+		pluginItems = append(pluginItems, ClientPluginItem{
+			ID:          p.ID,
+			PackageName: p.PackageName,
+			Version:     p.Version,
+			Sha256:      p.Sha256,
+			Size:        p.Size,
+			URL:         fmt.Sprintf("/api/client/v2/plugins/%s/%s/bundle", url.PathEscape(p.ID), url.PathEscape(p.Version)),
+		})
+	}
+
 	return &Response{
 		DefaultModel:  defaultModel,
 		Models:        models,
 		Skills:        skillItems,
 		Web:           web,
 		Connectors:    connectorItems,
+		Plugins:       pluginItems,
 		ServerVersion: serverauth.BuildVersion(),
 	}, nil
 }

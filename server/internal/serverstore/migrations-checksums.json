@@ -496,6 +496,12 @@
       "file": "0090_app_grants_grantee_index_and_quality_check.sql",
       "bytes": 2264,
       "sha256": "8edd8c6066ecdea8294325b46a942ae88a93a0550e958c6f718deefbbfda7bf8"
+    },
+    {
+      "version": "0091",
+      "file": "0091_client_plugins.sql",
+      "bytes": 1182,
+      "sha256": "4c7a165d9ccd20964334f50eef28665d456e242f9cd56139d3b8ceeacaba1930"
     }
   ]
 }

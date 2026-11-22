@@ -94,6 +94,12 @@
 | PUT | `/api/server/admin/connectors/:id` | 更新连接器 |
 | PUT | `/api/server/admin/connectors/:id/enabled` | 连接器上架/下架 |
 | DELETE | `/api/server/admin/connectors/:id` | 删除连接器 |
+| DELETE | `/api/server/admin/connectors/:id` | 删除连接器 |
+| GET | `/api/server/admin/plugins` | 全员客户端插件目录(0091;`capability:read`):`{plugins:[{id,package_name,display_name,description,version,sha256,size,enabled,updated_by,updated_at}]}`,不返回包体 |
+| POST | `/api/server/admin/plugins` | 上传/覆盖 DSH bundle `.tgz`(`capability:write`;body `{bundle_base64,id?}`;解码后 ≤24MiB;校验 `package.json`/`dsh.bundle.patch`、拒绝安装期脚本/链接/越界路径;同版本重传 409;写审计) |
+| PUT | `/api/server/admin/plugins/:id/enabled` | 启用/停用(`{enabled:bool}`;停用后 bootstrap 不下发、下载 404) |
+| DELETE | `/api/server/admin/plugins/:id` | 删除(停止下发;已安装的包不自动卸载) |
+| GET | `/api/client/v2/plugins/:id/:version/bundle` | 员工 Bearer;下载**已启用**版本的 `.tgz`(`application/gzip`,`Content-Length`,`X-Checksum-Sha256`);无按人/部门分配;停用或版本不符 404 |
 | GET | `/api/server/admin/audit` | 审计日志分页 `?page=&size=&action=&username=`(默认保留 180 天,settings `audit.retention_days` 可配;0048 起哈希链) |
 | GET/PUT | `/api/server/admin/auth`、`POST /auth/test` | 认证配置(脱敏读/写/连接测试;LDAP 测试连接返回目录统计 `{ok, message, users, groups, sample[5]}`;密码传 `***`/空 = 用已保存值测试)。2026-11-03 起含扫码登录:`wecom{corp_id,agent_id,secret,redirect_url}`、`dingtalk{client_id,client_secret,redirect_url}`,secret 加密存储、读面掩码 `***`、写回 `***` = 保持现值;`auth.enabled` 合法值增加 `wecom`/`dingtalk`。同一响应增加 `identity{enabled,endpoint,token,methods,timeout_ms,sync_groups,rbac_user_count}`(默认关闭),PUT 的 `identity` 为可选对象;已有 RBAC 用户时关闭必须带 `confirm_disable=true`,否则 409 `IDENTITY_USERS_EXIST`;`POST /auth/test` 增加 `type:"identity"` 实测解析 |
 
@@ -327,7 +333,9 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
   "skills": [{ "name": "invoice-helper", "version": "1.0.0", "description": "..." }],
   "web": { "default_thinking_level": "max", "search_provider": "auto" },
   "connectors": [{ "id": "example-mcp", "name": "示例 MCP 智能体", "auth_mode": "oauth", "definition": { ... },
-                   "auto_auth": "rbac-assertion", "auto_connect": true }]
+                   "auto_auth": "rbac-assertion", "auto_connect": true }],
+  "plugins": [{ "id": "demo-plugin", "package_name": "@example/dsh-demo-plugin", "version": "1.0.0",
+               "sha256": "<hex>", "size": 1024, "url": "/api/client/v2/plugins/demo-plugin/1.0.0/bundle" }]
 }
 ```
 
@@ -338,6 +346,8 @@ DeepSeek Files API 直通。**用途**:桌面客户端默认把会话里的图�
 桌面客户端根据所选模型自动选择 Anthropic Messages 或 OpenAI Chat Completions；两个协议都可用时优先 Anthropic。旧服务端缺少 `protocols` 字段时，新客户端保留历史 Anthropic 行为；旧客户端忽略新增字段。客户端仅访问当前登录服务端的网关，目录不包含上游地址或密钥。
 
 客户端 `BootstrapConfig` 与之严格对齐;`default_model` 不在启用模型时自动回退到第一个可用模型。`connectors`(0042 起)为服务端连接器目录,客户端按目录渲染连接器中心(glitchtip 0045 已下架,不下发)。
+
+`plugins`(0091 起)为**全员统一下发的桌面客户端插件目录**:管理员在 webadmin 上传 DSH bundle 的 `.tgz`(npm pack),所有登录员工拿到同一份清单;客户端下载后校验 `sha256`/`size`/包名/版本,再用 profile 插件管理器安装,重启客户端生效。没有按人/部门分配、状态上报或签名;停用/删除只改变下发清单(已安装的不会自动卸载)。旧服务端不下发该字段,旧客户端忽略它。
 
 `connectors[]` 的静默授权字段(2026-11,**默认不下发**):
 

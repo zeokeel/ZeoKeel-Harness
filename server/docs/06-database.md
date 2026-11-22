@@ -3,7 +3,7 @@
 ## 1. 服务端(PostgreSQL,PG-only 2026-08)
 
 > 2026-08 起 SQLite 已全面下线:服务端数据库为 PostgreSQL(内置容器或外部实例)。
-> 迁移在 `internal/serverstore/migrations-pg/`(0001–0090（0088 起 `apps` 增加 `data_cleaned_at`：真删两阶段，purged_at 先行、数据目录清理可重试；0089 起 `wasm_call_events` 增加 `version`：诊断按执行版本聚合）;0007 已废弃;0028 下线
+> 迁移在 `internal/serverstore/migrations-pg/`(0001–0091（0088 起 `apps` 增加 `data_cleaned_at`：真删两阶段，purged_at 先行、数据目录清理可重试；0089 起 `wasm_call_events` 增加 `version`：诊断按执行版本聚合；0091 起 `client_plugins`：全员客户端插件目录）;0007 已废弃;0028 下线
 > 知识库/MCP 表并独立审计表 audit_logs;0039 usage 按月原生分区 + 日/月账本;
 > 0040/0041 归档直存 DB;0042 connectors;0043/0044 provider protocol;
 > 0045 glitchtip 下架;0046 rbac 角色;0047 brand 快照;0048 审计哈希链;
@@ -401,6 +401,10 @@ idx_usage_user_cost`。写路径 `RecordUsage*` 先 ensure 当月分区。
 
 ### brand_snapshots(0047)
 `id, created_at, data`——每次 brand_update 保存前一版配置 JSON(保留最近 10 份),供「恢复上一版本」。
+
+### client_plugins(0091)
+
+`id`(URL-safe slug,主键)、`package_name`(npm 包名,唯一)、`display_name`、`description`、`version`、`sha256`、`size`、`content bytea`(npm-pack `.tgz`)、`enabled`、`updated_by`、`updated_at`——**全员客户端插件目录**。管理员在 webadmin 上传后，服务端把 `enabled` 行随 bootstrap `plugins[]` 发给全部登录员工；客户端自行下载、校验 sha256/size/包名/版本后用 profile 插件管理器安装。没有按人/部门分配表，也没有版本历史：同 `id` 再上传即覆盖（`version` 必须变化），删除即停止下发。回滚：停用/删除；旧二进制不读本表。
 
 ### connectors(0042)
 `id, name, description, auth_mode(oauth|device|token|server-side), definition JSON, enabled, updated_at, created_at`——连接器唯一目录源,经 bootstrap `connectors[]` 下发;种子 example-mcp/sales-easy(glitchtip 0045 下架,不再下发;2026-09-29 第三十轮 FIX-45 ⑤ 校正:此处曾写中性化改名前的旧 id `example-org`，真源是迁移 0042 的 `example-mcp`)。

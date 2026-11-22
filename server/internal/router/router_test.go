@@ -12,6 +12,7 @@ import (
 	"github.com/zeokeel/zeokeel-harness/server/internal/appstore"
 	"github.com/zeokeel/zeokeel-harness/server/internal/bootstrap"
 	"github.com/zeokeel/zeokeel-harness/server/internal/channel"
+	"github.com/zeokeel/zeokeel-harness/server/internal/clientplugins"
 	"github.com/zeokeel/zeokeel-harness/server/internal/clientrelease"
 	"github.com/zeokeel/zeokeel-harness/server/internal/features"
 	"github.com/zeokeel/zeokeel-harness/server/internal/llmgateway"
@@ -44,6 +45,7 @@ func testRouterDeps(t *testing.T) Deps {
 		Admin:         (&serverauth.AdminAPI{}).Handlers(),
 		Appstore:      appstore.NewHandlers(nil),
 		Bootstrap:     bootstrap.NewHandlers(nil),
+		ClientPlugins: clientplugins.NewHandlers(nil),
 		Channel:       channel.NewHandlers(),
 		PortalAdmin:   portal.NewAdminHandlers(nil),
 		ClientRelease: clientrelease.NewHandlers(func() string { return "2.7.0" }, "official"),
@@ -93,6 +95,12 @@ func TestNamespaces(t *testing.T) {
 	for _, want := range []string{
 		"POST " + nsClient + "/auth/login",
 		"GET " + nsClient + "/config/bootstrap",
+		// 0091: 全员统一下发的客户端插件目录 + 包下载
+		"GET " + nsClient + "/plugins/:id/:version/bundle",
+		"GET " + nsServer + "/admin/plugins",
+		"POST " + nsServer + "/admin/plugins",
+		"PUT " + nsServer + "/admin/plugins/:id/enabled",
+		"DELETE " + nsServer + "/admin/plugins/:id",
 		"GET " + nsClient + "/channel",
 		// 素材三个独立端点(浅色 logo / 暗色 logo / favicon);
 		// HEAD 与 GET 同挂(浏览器/图床探测会发 HEAD)。

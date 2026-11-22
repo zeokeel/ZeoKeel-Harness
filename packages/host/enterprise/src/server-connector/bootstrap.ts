@@ -2,7 +2,33 @@ import { fetchJSON } from './auth.ts'
 import type { BootstrapConfig, Session } from './config.ts'
 import { usableGatewayModels } from '../model-protocol.ts'
 
-export const EMPTY: BootstrapConfig = { models: [], skills: [], mcp: [], web: {}, default_model: '' }
+/**
+ * 全局客户端插件（2026-11）：服务端 bootstrap `plugins[]` 的形状。
+ *
+ * 类型刻意声明在 enterprise 包内而不是改 `@zeokeel/dsh-gateway-client` 的
+ * `BootstrapConfig`：企业特性只改 packages/host/enterprise/ 与 server/（AGENTS §5），
+ * 共享的 gateway-client 是另一条泳道。`BootstrapConfigWithPlugins` 是它的超集，
+ * 旧服务端没有该字段、旧客户端忽略它。
+ */
+export interface ClientPluginItem {
+  /** URL-safe slug，与服务端 client_plugins.id 一致（日志/通知用）。 */
+  id: string
+  /** npm 包名；客户端用它判断"已安装同版本"。 */
+  package_name: string
+  version: string
+  /** .tgz 字节的 sha256（hex）。 */
+  sha256: string
+  /** .tgz 字节长度。 */
+  size: number
+  /** 相对服务端根的下载路径，客户端拼 session.serverURL。 */
+  url: string
+}
+
+export interface BootstrapConfigWithPlugins extends BootstrapConfig {
+  plugins?: ClientPluginItem[]
+}
+
+export const EMPTY: BootstrapConfigWithPlugins = { models: [], skills: [], mcp: [], web: {}, default_model: '', plugins: [] }
 
 /**
  * 回退**种类**(2026-09-16,GlitchTip 收集为空缺陷回修)。
@@ -24,14 +50,14 @@ export const EMPTY: BootstrapConfig = { models: [], skills: [], mcp: [], web: {}
 export type BootstrapFallback = 'ok' | 'empty' | 'default_model_substituted'
 
 export interface BootstrapValidation {
-  config: BootstrapConfig
+  config: BootstrapConfigWithPlugins
   /** 兼容字段:是否发生过任何一种回退(`ok` 之外都为 true)。 */
   fellBack: boolean
   /** 回退种类;`ok` = 未回退。 */
   fallback: BootstrapFallback
 }
 
-export function validateBootstrap(cfg: BootstrapConfig | null | undefined): BootstrapValidation {
+export function validateBootstrap(cfg: BootstrapConfigWithPlugins | null | undefined): BootstrapValidation {
   if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.models) || cfg.models.length === 0) {
     return { config: EMPTY, fellBack: true, fallback: 'empty' }
   }
@@ -48,6 +74,6 @@ export function validateBootstrap(cfg: BootstrapConfig | null | undefined): Boot
 }
 
 export async function getBootstrap(session: Session): Promise<BootstrapValidation> {
-  const data = (await fetchJSON(session.serverURL, '/api/client/v2/config/bootstrap', { token: session.token })) as BootstrapConfig
+  const data = (await fetchJSON(session.serverURL, '/api/client/v2/config/bootstrap', { token: session.token })) as BootstrapConfigWithPlugins
   return validateBootstrap(data)
 }

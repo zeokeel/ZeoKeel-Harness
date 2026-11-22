@@ -43,7 +43,11 @@
     "server/internal/serverauth/rbac.go",
     "server/webadmin/src/lib/rbac.ts",
     "server/internal/serverstore/audit_r13gh3_searchpath_serverface_test.go",
-    "server/internal/serverstore/audit_s6_calendar_skip_guard_test.go"
+    "server/internal/serverstore/audit_s6_calendar_skip_guard_test.go",
+    "scripts/check-release-notes-migrations.mjs",
+    "package.json",
+    "packages/host/desktop/package.json",
+    "docs/releases/v2.11.4.md"
   ],
   "acceptance": [
     {

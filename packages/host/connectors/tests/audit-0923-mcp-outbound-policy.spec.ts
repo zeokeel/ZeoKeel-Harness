@@ -401,8 +401,8 @@ describe('CN-2 (provider invariant): no discovery facts ⇒ no refresh token is 
   })
 })
 
-describe('CN-9: a NAME that resolves into a non-public range is refused like its literal', () => {
-  it('refuses before the request when the resolver answers a private address, and proceeds for a public one', async () => {
+describe('CN-9: resolved non-public addresses are no longer rejected by the outbound gate', () => {
+  it('proceeds for a private answer and for a public one, while an unverifiable name is still refused', async () => {
     const fetched: string[] = []
     vi.stubGlobal('fetch', async (input: unknown) => {
       fetched.push(String(input))
@@ -412,30 +412,26 @@ describe('CN-9: a NAME that resolves into a non-public range is refused like its
       outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
         resolve: async () => ['10.0.0.5'],
       }),
-      'a name resolving into RFC1918 must be refused',
-    ).rejects.toBeInstanceOf(OutboundUrlBlockedError)
-    expect(fetched, 'nothing may be fetched after the resolution gate refused').toHaveLength(0)
+      'a resolved RFC1918 address is delivered to the pinned transport',
+    ).resolves.toBeInstanceOf(Response)
+    expect(fetched).toHaveLength(1)
 
     await expect(
       outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
         resolve: async () => ['93.184.216.34'],
       }),
     ).resolves.toBeInstanceOf(Response)
-    expect(fetched).toHaveLength(1)
+    expect(fetched).toHaveLength(2)
 
-    // A resolver that cannot answer is NOT a pass any more: "could not verify"
-    // refuses like a non-public answer does, and reports itself as an
-    // unverified NAME (its own error class/code) instead of as a blocked
-    // address — audit C3-06 (2026-10-04). The full matrix of the three
-    // unverifiable shapes and the kept fast paths lives in
-    // `tests/audit-1004-outbound-resolution-gate.spec.ts`; this case is the one
-    // the pre-C3-06 version of this file asserted backwards (it required the
-    // request to proceed), which is why it is the only assertion that changed.
+    // A resolver that cannot answer is still NOT a pass: "could not verify"
+    // reports itself as an unverified NAME (its own error class/code), and the
+    // request must not leave the process. Only the two resolved answers above
+    // reached the transport.
     const unverified = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
       resolve: async () => { throw new Error('ENOTFOUND') },
     }).catch((error: unknown) => error)
     expect(unverified).toBeInstanceOf(OutboundResolutionUnverifiedError)
     expect((unverified as OutboundResolutionUnverifiedError).code).toBe('resolution-failed')
-    expect(fetched, 'an unverifiable name must not reach the network (only the public one did)').toHaveLength(1)
+    expect(fetched, 'an unverifiable name must not reach the network').toHaveLength(2)
   })
 })

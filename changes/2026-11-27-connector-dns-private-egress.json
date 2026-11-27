@@ -1,0 +1,32 @@
+{
+  "id": "2026-11-27-connector-dns-private-egress",
+  "status": "implemented",
+  "intent": {
+    "zh": "连接器出站校验把 DNS 解析到私网的结果一律拒绝，导致只在内部 DNS 下可达的 MCP 服务无法连接；按部署要求移除 DNS 地址类别拒绝，只保留 URL 字面地址、协议、凭据和校验失败拦截。",
+    "en": "Connector outbound validation rejected every DNS name resolving to a private address, so MCP services reachable only through internal DNS could not connect. Remove the resolved-address class check while keeping URL literal, protocol, credential, and verification-failure guards."
+  },
+  "modules": [
+    "packages/host/connectors/src/outbound.ts",
+    "packages/host/connectors/tests/audit-0923-mcp-outbound-policy.spec.ts",
+    "packages/host/connectors/tests/audit-1004-outbound-resolution-gate.spec.ts",
+    "package.json",
+    "packages/host/desktop/package.json",
+    "docs/releases/v2.11.5.md",
+    "scripts/check-release-notes-migrations.mjs"
+  ],
+  "acceptance": [
+    {
+      "criterion": "DNS 解析到 192.168.88.71 时 outboundFetch 放行并交给 pinned transport；字面私网 IP、metadata 主机名、http 非 loopback 仍拒绝；解析失败仍 fail-closed。",
+      "evidence": "test",
+      "command": "yarn workspace @zeokeel/dsh-connectors test"
+    },
+    {
+      "criterion": "connectors 包构建成功，客户端产物可继续打包。",
+      "evidence": "guard",
+      "command": "yarn workspace @zeokeel/dsh-connectors build"
+    }
+  ],
+  "risk": "移除后所有连接器域名解析到私网/回环/链路本地都会放行，扩大 SSRF 面；仅适合受控内网部署，并需网络侧 ACL 兜底。",
+  "rollback": "回退 outbound.ts 中 resolveOutboundTarget 的改动用 git revert，并重新构建/发布客户端。",
+  "verification": []
+}

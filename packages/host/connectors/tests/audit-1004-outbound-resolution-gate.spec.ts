@@ -170,7 +170,16 @@ describe('C3-06: an unverifiable NAME is refused, and nothing is fetched', () =>
     expect(requested).toHaveLength(0)
   })
 
-  it('still allows a NAME that resolves to a public address (the fix is not "refuse everything")', async () => {
+  it('allows a NAME that resolves to a private address after DNS-address rejection is removed', async () => {
+    const requested = stubFetch()
+    const response = await outboundFetch('https://mcp.example.com/rbac/mcp', 'MCP 端点', {}, {
+      resolve: async () => ['192.168.88.71'],
+    })
+    expect(response.status).toBe(200)
+    expect(requested).toEqual(['https://mcp.example.com/rbac/mcp'])
+  })
+
+  it('still allows a NAME that resolves to a public address', async () => {
     const requested = stubFetch()
     const response = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
       resolve: async () => ['93.184.216.34'],
@@ -179,23 +188,19 @@ describe('C3-06: an unverifiable NAME is refused, and nothing is fetched', () =>
     expect(requested).toEqual(['https://idp.example.com/token'])
   })
 
-  it('keeps the two refusal classes distinguishable (blocked address vs unverified name)', async () => {
-    stubFetch()
-    const blocked = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
+  it('delivers a private answer to the pinned transport while an unverified name is still refused', async () => {
+    const requested = stubFetch()
+    const allowedPrivate = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
       resolve: async () => ['10.0.0.5'],
     }).catch((cause: unknown) => cause)
     const unverified = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
       resolve: async () => { throw new Error('SERVFAIL') },
     }).catch((cause: unknown) => cause)
 
-    expect(blocked).toBeInstanceOf(OutboundUrlBlockedError)
-    expect(blocked, 'a blocked ADDRESS is not an unverified NAME').not.toBeInstanceOf(OutboundResolutionUnverifiedError)
+    expect(allowedPrivate).toBeInstanceOf(Response)
+    expect(requested).toEqual(['https://idp.example.com/token'])
     expect(unverified).toBeInstanceOf(OutboundResolutionUnverifiedError)
-    expect(unverified, 'an unverified NAME is not a blocked ADDRESS').not.toBeInstanceOf(OutboundUrlBlockedError)
-    expect((blocked as Error).message).not.toBe((unverified as Error).message)
-    for (const message of [(blocked as Error).message, (unverified as Error).message]) {
-      expect(message).toContain('idp.example.com')
-    }
+    expect((unverified as Error).message).toContain('idp.example.com')
   })
 })
 
@@ -240,20 +245,20 @@ describe('C3-06: the fence call site (every MCP transport request) shares the sa
       .rejects.toBeInstanceOf(OutboundResolutionUnverifiedError)
     expect(seen, 'the transport must not reach the base fetch').toHaveLength(0)
 
-    // Control A — the mock really is the resolver this gate consults: an answer
-    // of 10.0.0.5 must be judged (and refused as a blocked ADDRESS, the other
-    // class), which cannot happen if the gate never looked at the answer.
+    // Control A — the mock really is the resolver this gate consults: a private
+    // answer is now delivered to the pinned transport, which cannot happen if
+    // the gate never looked at the answer.
     dnsState.fail = null
     dnsState.answer = [{ address: '10.0.0.5', family: 4 }]
-    await expect(fenced('https://unverifiable.example/mcp', { method: 'GET' }))
-      .rejects.toBeInstanceOf(OutboundUrlBlockedError)
-    expect(seen).toHaveLength(0)
-
-    // Control B — with a public answer the very same wrapper lets the request
-    // through, so the refusals above are the verdict and not a broken wrapper.
-    dnsState.answer = [{ address: '93.184.216.34', family: 4 }]
     await expect(fenced('https://unverifiable.example/mcp', { method: 'GET' })).resolves.toBeInstanceOf(Response)
     expect(seen).toEqual(['https://unverifiable.example/mcp'])
+
+    // Control B — with a public answer the very same wrapper lets the request
+    // through too, so the unverified refusal above is the verdict and not a
+    // broken wrapper.
+    dnsState.answer = [{ address: '93.184.216.34', family: 4 }]
+    await expect(fenced('https://unverifiable.example/mcp', { method: 'GET' })).resolves.toBeInstanceOf(Response)
+    expect(seen).toEqual(['https://unverifiable.example/mcp', 'https://unverifiable.example/mcp'])
   })
 })
 
@@ -376,7 +381,7 @@ describe('C3-06 gap ②: an unreadable ANSWER SHAPE is refused as unverified, ne
     expect(requested, 'a refusal must happen before the request').toHaveLength(0)
   })
 
-  it('keeps the malformed refusal distinguishable from an empty answer and from a blocked address', async () => {
+  it('keeps malformed and empty answers distinguishable while a private answer is delivered', async () => {
     stubFetch()
     const malformed = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
       resolve: async () => ['not-an-ip'],
@@ -384,21 +389,20 @@ describe('C3-06 gap ②: an unreadable ANSWER SHAPE is refused as unverified, ne
     const empty = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
       resolve: async () => [],
     }).catch((cause: unknown) => cause)
-    const blocked = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
+    const allowedPrivate = await outboundFetch('https://idp.example.com/token', 'OAuth token 端点', {}, {
       resolve: async () => ['10.0.0.5'],
     }).catch((cause: unknown) => cause)
 
-    const codes = [malformed, empty, blocked].map((error: unknown) => (error as { code?: string }).code)
-    expect(codes, 'three different facts, three different reports').toEqual([
+    const codes = [malformed, empty].map((error: unknown) => (error as { code?: string }).code)
+    expect(codes, 'two unreadable answers, two different reports').toEqual([
       'resolution-malformed',
       'resolution-empty',
-      undefined, // OutboundUrlBlockedError carries no `code`
     ])
     for (const error of [malformed, empty]) {
       expect(error).toBeInstanceOf(OutboundResolutionUnverifiedError)
       expect(error).not.toBeInstanceOf(OutboundUrlBlockedError)
     }
-    expect(blocked).toBeInstanceOf(OutboundUrlBlockedError)
+    expect(allowedPrivate).toBeInstanceOf(Response)
   })
 
   it('keeps the exported predicate fail-closed for a value it cannot read', () => {

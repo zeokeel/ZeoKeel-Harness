@@ -588,10 +588,12 @@ const LOOPBACK_PIN_ADDRESSES: readonly string[] = ['127.0.0.1', '::1']
  * let a hostile name through exactly when its DNS made THIS query fail or run
  * late (the attacker's own resolver decides). The four unverifiable shapes
  * (resolver error, resolution deadline, empty answer, unreadable answer shape)
- * now throw {@link OutboundResolutionUnverifiedError} with a stable `code`,
- * which is a different error class from the "resolution succeeded and the
- * address is non-public" verdict ({@link OutboundUrlBlockedError}) so the two
- * are distinguishable by message, by class and by code.
+ * now throw {@link OutboundResolutionUnverifiedError} with a stable `code`.
+ *
+ * Address-class rejection was removed from this gate on 2026-11-27: a name that
+ * resolves into a private/link-local/loopback range is now delivered to the
+ * pinned transport. The syntax/literal checks in {@link assertOutboundUrlAllowed}
+ * and the fail-closed resolution errors above remain in force.
  *
  * Fast paths kept (they are verdicts, not "could not verify"): an IP literal is
  * pinned to itself, and `localhost`/`*.localhost` is pinned to loopback — see
@@ -606,8 +608,8 @@ const LOOPBACK_PIN_ADDRESSES: readonly string[] = ['127.0.0.1', '::1']
  *   (never empty in direct mode, always IP literals; deliberately empty in proxy
  *   mode, where the proxy resolves the name) and the route the transport must
  *   take.
- * @throws {OutboundUrlBlockedError} when the URL is malformed, outside the
- *   syntax policy or resolving onto a non-public address.
+ * @throws {OutboundUrlBlockedError} when the URL is malformed or outside the
+ *   syntax policy (literal private IP, metadata hostname, credentials, etc.).
  * @throws {OutboundResolutionUnverifiedError} when the name's addresses could
  *   not be established (resolver error, deadline, empty answer) or the answer
  *   could not be read as a list of address literals (`resolution-malformed`).
@@ -692,13 +694,7 @@ export async function resolveOutboundTarget(
       detail: `[${malformedIndex}] ${describeResolutionAnswer(answer[malformedIndex])}`,
     }))
   }
-  const blocked = addresses.find(address => isBlockedResolvedAddress(address))
-  if (blocked === undefined) return { url, addresses, route }
-  throw new OutboundUrlBlockedError(hostT(locale, 'outbound.blockedResolved', {
-    what: label,
-    target: url.host,
-    address: blocked,
-  }))
+  return { url, addresses, route }
 }
 
 /**
